@@ -1,4 +1,126 @@
-/* Reset & Base Styles */
+:root {
+  --font-sans: 'Default', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'Mono', 'SF Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  
+  /* Animation Variables */
+  --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-medium: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  --bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+  --font-bold: 600;
+  --font-normal: 500;
+  
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+
+body.light-theme {
+  --bg: #FFFFFF; /* done: background paling belakang, base */
+  --bg-secondary: #F0F4F9; /* done, sidebar dan code bg */
+  --fg: #1f1f1f; /* done: font paling kontras */
+  --fg-muted: #575B60; /* done: font redup, di sidebar, dan di form */
+  --surface: #FFFFFF; /* done: input chat */
+  --surface-secondary: #E9EEF6; /* done: bubble user */
+  --border: #C4C7C5; /* done: HR atau separator */
+  --border-light: #C6C9C7; /* done: for button */
+  --border-input: #c4c7c5; /* done: border input container */
+  --input-bg: #F0F5F9; /* done: search input or other */
+  --primary: #0842a0; /* done: for accent like text */
+  --primary-light: #D3E3FD; /* done: for session list */
+  
+  --hover-bg: #e4e8ed; /* done; for lists or button hover */
+  --shadow-color: rgba(255, 255, 255, 0.15); /* for shadow in input container */
+  --icon: #444746; /* done: icon or symbols */
+  --icon-primary: #0842a0;
+
+  --danger: #e81123;
+  --danger-hover: #c22f25ff;
+  --danger-light: #fce8e6;
+  --success: #25bd4dff;
+  --warning: #fbbc04;
+
+  /* dari prism */
+  --prism-comment: #a0a1a7; /* Abu-abu untuk komentar */
+  --prism-punctuation: #383a42; /* Hitam lembut untuk tanda baca */
+  --prism-tag-property-constant: #e45649; /* Merah untuk tag, properti */
+  --prism-number-boolean: #a626a4; /* Ungu untuk angka, boolean */
+  --prism-string-selector-attr-name: #50a14f; /* Hijau untuk string, selector */
+  --prism-operator-entity-url-variable: #383a42; /* Hitam lembut */
+  --prism-function-classname-atrule: #c18401; /* Oranye/kuning tua untuk fungsi */
+  --prism-keyword: #0184bc; /* Biru untuk keyword */
+  --prism-regex-important: #50a14f; /* Hijau tua */
+  --prism-css-string: #a626a4; /* Ungu, agar kontras di CSS */
+}
+
+/* Dark Theme */
+body.dark-theme {
+  --bg: #1b1c1d; /* done: background paling belakang, base */
+  --bg-secondary: #282A2C; /* done, sidebar dan code bg */
+  --fg: #FCFCFC; /* done: font paling kontras */
+  --fg-muted: #BDC1C6; /* done: font di sidebar atau form */
+  --surface: #1f1f1f; /* done: input chat */
+  --surface-secondary: #333537; /* done: bubble user */
+  --border: #4a5050; /* done */
+  --border-light: #4a5050; /* done */
+  --border-input: #4a5050; /* done */
+  --input-bg: #282A2D; /* done */
+  --primary: #D3E3FD; /* done */
+  --primary-light: #1e3a8a; /* done */
+  
+  --hover-bg: #323537; /* done */
+  --shadow-color: rgba(0, 0, 0, 0.3); /* done */
+  --icon: #C4C7C5; /* done */
+
+  --danger: #e81123;
+  --danger-hover: #c22f25ff;
+  --danger-light: #3d1a00;
+  --success: #57e112ff;
+  --warning: #f8e44aff;
+
+  --prism-comment: #8292a2;
+  --prism-punctuation: #f8f8f2;
+  --prism-tag-property-constant: #f92672;
+  --prism-number-boolean: #ae81ff;
+  --prism-string-selector-attr-name: #a6e22e;
+  --prism-operator-entity-url-variable: #f8f8f2;
+  --prism-function-classname-atrule: #e6db74;
+  --prism-keyword: #66d9ef;
+  --prism-regex-important: #fd971f;
+  --prism-css-string: #f8f8f2;
+}
+
+@font-face {
+  font-family: 'Default';
+  src: url('../public/fonts/OpenAISansVariableVF.woff') format('woff');
+  font-style: normal;
+  font-weight: 100 1000;
+}
+
+@font-face {
+  font-family: 'Mono';
+  src: url('../public/fonts/GoogleSansCode.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -60,134 +182,6 @@ pre code *::selection {
   color: white !important;
 }
 
-@font-face {
-  font-family: 'Default';
-  src: url('../public/fonts/OpenAISansVariableVF.woff') format('woff');
-  font-style: normal;
-  font-weight: 100 1000;
-}
-
-@font-face {
-  font-family: 'Mono';
-  src: url('../public/fonts/GoogleSansCode.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-}
-
-:root {
-  --font-sans: 'Default', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'Mono', 'SF Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-  
-  /* Animation Variables */
-  --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-medium: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  --bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  
-  /* Spacing */
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 12px;
-  --spacing-lg: 16px;
-  --spacing-xl: 20px;
-  --spacing-2xl: 24px;
-  --font-bold: 600;
-  --font-normal: 500;
-  
-  /* Border Radius */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-full: 9999px;
-  
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-}
-
-body.light-theme {
-  --bg: #FFFFFF; /* done: background paling belakang, base */
-  --bg-secondary: #F0F4F9; /* done, sidebar dan code bg */
-  --fg: #1f1f1f; /* done: font paling kontras */
-  --fg-muted: #575B60; /* done: font redup, di sidebar, dan di form */
-  --surface: #FFFFFF; /* done: input chat */
-  --surface-secondary: #E9EEF6; /* done: bubble user */
-  --border: #C4C7C5; /* done: HR atau separator */
-  --border-light: #C6C9C7; /* done: for button */
-  --border-input: #c4c7c5; /* done: border input container */
-  --input-bg: #F0F5F9; /* done: search input or other */
-  --primary: #0842a0; /* done: for accent like text */
-  --primary-light: #D3E3FD; /* done: for session list */
-  
-  --hover-bg: rgba(27, 28, 29, 0.1); /* done; for lists or button hover */
-  --shadow-color: rgba(255, 255, 255, 0.15); /* for shadow in input container */
-  --icon: #444746; /* done: icon or symbols */
-  --icon-primary: #0842a0;
-
-
-  --danger: #ea4335;
-  --danger-hover: #d93025;
-  --danger-light: #fce8e6;
-  --success: #26ad4aff;
-  --warning: #fbbc04;
-
-  /* dari prism */
-  /* dari prism */
-  --prism-comment: #a0a1a7; /* Abu-abu untuk komentar */
-  --prism-punctuation: #383a42; /* Hitam lembut untuk tanda baca */
-  --prism-tag-property-constant: #e45649; /* Merah untuk tag, properti */
-  --prism-number-boolean: #a626a4; /* Ungu untuk angka, boolean */
-  --prism-string-selector-attr-name: #50a14f; /* Hijau untuk string, selector */
-  --prism-operator-entity-url-variable: #383a42; /* Hitam lembut */
-  --prism-function-classname-atrule: #c18401; /* Oranye/kuning tua untuk fungsi */
-  --prism-keyword: #0184bc; /* Biru untuk keyword */
-  --prism-regex-important: #50a14f; /* Hijau tua */
-  --prism-css-string: #a626a4; /* Ungu, agar kontras di CSS */
-}
-
-/* Dark Theme */
-body.dark-theme {
-  --bg: #1b1c1d; /* done: background paling belakang, base */
-  --bg-secondary: #282A2C; /* done, sidebar dan code bg */
-  --fg: #FCFCFC; /* done: font paling kontras */
-  --fg-muted: #BDC1C6; /* done: font di sidebar atau form */
-  --surface: #1f1f1f; /* done: input chat */
-  --surface-secondary: #333537; /* done: bubble user */
-  --border: #4a5050; /* done */
-  --border-light: #4a5050; /* done */
-  --border-input: #4a5050; /* done */
-  --input-bg: #282A2D; /* done */
-  --primary: #D3E3FD; /* done */
-  --primary-light: #1e3a8a; /* done */
-  
-  --hover-bg: #262829; /* done */
-  --shadow-color: rgba(0, 0, 0, 0.3); /* done */
-  --icon: #C4C7C5; /* done */
-
-  --danger: #f28b82;
-  --danger-hover: #f6aea9;
-  --danger-light: #3d1a00;
-  --success: #81c995;
-  --warning: #fdd663;
-
-  
-
-
-  --prism-comment: #8292a2;
-  --prism-punctuation: #f8f8f2;
-  --prism-tag-property-constant: #f92672;
-  --prism-number-boolean: #ae81ff;
-  --prism-string-selector-attr-name: #a6e22e;
-  --prism-operator-entity-url-variable: #f8f8f2;
-  --prism-function-classname-atrule: #e6db74;
-  --prism-keyword: #66d9ef;
-  --prism-regex-important: #fd971f;
-  --prism-css-string: #f8f8f2;
-}
-
 /* Base Styles */
 *::selection {
   background: #0a7393ff !important;
@@ -205,12 +199,23 @@ html, body {
 }
 
 hr {
+  width: 100%;
   display: block;
   height: 1.5px;
   border: 0;
   border-top: 1px solid var(--border);
   padding: 0;
   margin: 10px 0 20px 0;
+}
+
+.modal-card hr {
+  width: 100%;
+  display: block;
+  height: 1.5px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  padding: 0;
+  margin: 0 !important;
 }
 
 /* App Layout */
@@ -1097,14 +1102,15 @@ textarea::-webkit-scrollbar {
 }
 
 .send-button {
-  width: 36px;
-  height: 36px;
+  width: 39px;
+  height: 39px;
   border: none;
   background: transparent;
   fill: none !important;
-  border-radius: 10px;
+  border-radius: 100px;
   cursor: pointer;
-  padding-left: 10px;
+  padding-right: 10px;
+  margin-right: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1117,10 +1123,8 @@ textarea::-webkit-scrollbar {
   stroke: var(--icon) !important;
   align-items: center;
   justify-content: center;
-  right: 14px;
-  bottom: 14px;
+  padding-right: 0x;
   display: flex;
-  position: absolute;
   flex-shrink: 0;
   width: 24px;
   height: 24px;
@@ -1212,7 +1216,10 @@ textarea::-webkit-scrollbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-2xl) var(--spacing-2xl) 0;
+  background: var(--bg-secondary);
+  border-top-left-radius: var(--radius-xl);
+  border-top-right-radius: var(--radius-xl);
+  padding: var(--spacing-md) var(--spacing-xl) var(--spacing-md) var(--spacing-xl);
 }
 
 .modal-header h2 {
@@ -1227,7 +1234,7 @@ textarea::-webkit-scrollbar {
   cursor: pointer;
   color: var(--fg-muted);
   padding: var(--spacing-xs);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   transition: var(--transition-fast);
 }
 
@@ -1238,13 +1245,32 @@ textarea::-webkit-scrollbar {
 }
 
 .modal-body {
-  padding: var(--spacing-xl) var(--spacing-2xl);
+  padding: var(--spacing-md) var(--spacing-xl) var(--spacing-sm) var(--spacing-xl);
 }
 
 .modal-body p {
   color: var(--fg);
   margin-bottom: var(--spacing-lg);
   line-height: 1.6;
+}
+
+.inline-loader[data-state="slow"] .dot {
+    animation-duration: 2s;
+    background: var(--warning, #ffa500);
+}
+
+.reconnect-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--fg-muted);
+    border-radius: 50%;
+    border-top-color: var(--accent);
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 /* Form Elements */
@@ -1877,7 +1903,7 @@ textarea:focus-visible {
   border-top-right-radius: var(--radius-lg);
 
   position: sticky;
-  top: 12px;
+  top: 8px;
 
   filter: drop-shadow(0 -12px 0 var(--bg))    
         drop-shadow(12px 0 0 var(--bg))     
@@ -1991,4 +2017,36 @@ textarea:focus-visible {
     opacity: 1;
     transform: translateX(0);
   }
+}
+
+/* === Fix: Send/Interrupt button centering & loader ring === */
+.send-button {
+  position: relative;
+  padding: 0; /* keep icon truly centered */
+}
+.send-button svg { 
+  display: block;
+}
+
+/* When updateInputState toggles primary-btn/danger-btn for color,
+   force the circular shape to remain consistent */
+.send-button.primary-btn,
+.send-button.danger-btn {
+  width: 39px !important;
+  height: 39px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+}
+
+.send-button .loader-ring {
+  stroke-dasharray: 60 28;
+  stroke-linecap: round;
+  animation: spinDash 1.5s cubic-bezier(.4,0,.2,1) infinite;
+}
+
+/* Fallback for environments that don't like dash animation */
+@keyframes spinDash {
+  0%   { stroke-dashoffset: 0;   opacity: .9; }
+  50%  { stroke-dashoffset: -44; opacity: .7; }
+  100% { stroke-dashoffset: -88; opacity: .9; }
 }

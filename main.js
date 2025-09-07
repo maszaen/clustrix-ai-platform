@@ -4,10 +4,13 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 
+const logFile = path.join(app.getPath('userData'), 'app.log');
+let lastTokenStreamId = null; 
+
 function createWindow(){
   console.log('Data disimpan di:', path.join(app.getPath('userData'), 'chat_data.json'));
   const win = new BrowserWindow({
-    width: 1200, height: 800,
+    width: 1600, height: 800,
     frame: false,
     minWidth: 850,
     minHeight: 400,
@@ -16,7 +19,43 @@ function createWindow(){
       contextIsolation: true, nodeIntegration: false
     }
   });
+  
+  win.webContents.openDevTools(); // Remove in Production
 
+  // Logging
+  ipcMain.on('log:write', (_event, logData) => {
+    const { timestamp, context, func, message, details } = logData;
+    const d = new Date(timestamp);
+    const time = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}:${d.getMilliseconds().toString().padStart(3, '0')}`;
+
+    if (func === 'onToken' && details && details.streamId) {
+      if (details.streamId === lastTokenStreamId) {
+        try {
+          fs.appendFileSync(logFile, `- [${time}] token: ${details.token || '(empty)'}\n`);
+        } catch (e) { /* silent fail */ }
+        return;
+      }
+      
+      lastTokenStreamId = details.streamId;
+    } else {
+      lastTokenStreamId = null;
+    }
+
+    let logLine = `[${context} - ${time}] ${func}() → ${message}`;
+    if (details && Object.keys(details).length > 0) {
+      for (const [key, value] of Object.entries(details)) {
+        const valueString = (typeof value === 'object' && value !== null) ? JSON.stringify(value) : String(value);
+        logLine += `\n- ${key}: ${valueString}`;
+      }
+    }
+
+    try {
+      fs.appendFileSync(logFile, logLine + '\n\n', 'utf-8');
+    } catch (e) {
+      console.error('Gagal menulis ke file log:', e);
+    }
+  });
+  
   ipcMain.on('window:minimize', () => win.minimize());
   ipcMain.on('window:maximize', () => {
     if (win.isMaximized()) win.unmaximize();

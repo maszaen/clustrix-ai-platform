@@ -23,7 +23,12 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.send('chat:stream-start', { reqId:id, messages, model });
       return { cancel: () => { cleanup(); ipcRenderer.send('chat:stream-cancel', id); } };
     },
-    titleSuggest: (text, model='glm-4.5-flash') => ipcRenderer.invoke('chat:title', { text, model })
+    titleSuggest: (text, model='glm-4.5-flash') => ipcRenderer.invoke('chat:title', { text, model }),
+  },
+  logging: {
+    write: (logData) => ipcRenderer.send('log:write', logData),
+    getPath: () => ipcRenderer.invoke('log:getPath'),
+    clear: () => ipcRenderer.invoke('log:clear'),
   },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

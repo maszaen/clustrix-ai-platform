@@ -29,25 +29,12 @@ const streamManager = {
   },
   
   gcZombies() {
-    // Jangan mematikan stream hanya karena AI node-nya offscreen / tidak ada di DOM.
-    // Matikan hanya kalau node-nya jelas "salah stream" (dataset.streamId mismatch).
     for (const id in this.activeStreams) {
       const s = this.activeStreams[id];
-
-      // Kalau node ada tapi menunjuk id lain → itu memang salah, cancel & delete.
-      const wrongNode = s?.aiNode && s.aiNode.dataset?.streamId && s.aiNode.dataset.streamId !== id;
-      if (wrongNode) {
+      const dead = !s?.aiNode || !document.contains(s.aiNode) || (s.aiNode.dataset?.streamId && s.aiNode.dataset.streamId !== id);
+      if (dead) {
         try { s.controller?.cancel?.(); } catch {}
         delete this.activeStreams[id];
-        continue;
-      }
-
-      // Node tidak ada / tidak di DOM: tandai offscreen, JANGAN cancel.
-      const offscreen = !s?.aiNode || !document.contains(s.aiNode);
-      if (offscreen) {
-        s.offscreen = true; // hint buat handler
-        // Biarkan stream tetap hidup; handler akan buffer ke s.fullResponse.
-        continue;
       }
     }
   },
@@ -272,11 +259,11 @@ function scheduleThinkingText(aiNode, { shortDelay = 500, longDelay = 2000 } = {
   if (!textEl) return;
   const shortId = setTimeout(() => {
     const currentTextEl = aiNode.querySelector(".thinking-text");
-    if (currentTextEl) currentTextEl.textContent = "Thinking...";
+    if (currentTextEl) currentTextEl.textContent = "Sending message...";
   }, shortDelay);
   const longId = setTimeout(() => {
     const currentTextEl = aiNode.querySelector(".thinking-text");
-    if (currentTextEl) currentTextEl.textContent = "Littlebit complex response, thinking longer...";
+    if (currentTextEl) currentTextEl.textContent = "Analyzing the query...";
   }, longDelay);
   THINKING_TIMER.set(aiNode, { shortId, longId });
 }
@@ -871,40 +858,22 @@ async function save() {
 function updateInputState() {
   const isStreaming = streamManager.isStreamingInSession(current);
   const isCurrentNull = !current;
+  const isDisabled = isStreaming || isCurrentNull;
 
-  const msgEl = $("#msg");
-  msgEl.disabled = isCurrentNull;
+  log("UI", 0, "updateInputState", `Input state updated. Form Disabled: ${isDisabled}`, {
+    isStreamingInSession: isStreaming,
+    isCurrentSessionNull: isCurrentNull,
+    session: current?.name || "null (Welcome Screen)",
+  });
+
+  $("#msg").disabled = isDisabled;
+  $("#send").disabled = isDisabled;
   if (isCurrentNull) {
-    msgEl.placeholder = "Select a session to start";
+    $("#msg").placeholder = "Select a session to start";
   } else if (isStreaming) {
-    msgEl.placeholder = "Model is responding…";
+    $("#msg").placeholder = "Wait until response complete...";
   } else {
-    msgEl.placeholder = "Ask anything";
-  }
-
-  const sendBtn = $("#send");
-  sendBtn.disabled = isCurrentNull;
-  
-  if (isStreaming) {
-    sendBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="interrupt-icon">
-        <rect x="6" y="6" width="12" height="12" rx="1"/>
-        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3" class="loader-ring" style="animation: organicSpin 2s infinite ease-in-out; transform-origin: center;"/>
-      </svg>
-    `;
-    sendBtn.classList.remove("primary-btn");
-    sendBtn.classList.add("danger-btn");
-    sendBtn.title = "Interrupt response";
-  } else {
-    sendBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-icon lucide-arrow-up">
-        <path d="m5 12 7-7 7 7"/>
-        <path d="M12 19V5"/>
-      </svg>
-    `;
-    sendBtn.classList.remove("danger-btn");
-    sendBtn.classList.add("primary-btn");
-    sendBtn.title = "Send message";
+    $("#msg").placeholder = "Ask anything";
   }
 
   const msgCentral = $("#msg-central");
@@ -951,155 +920,287 @@ async function generateAndSetTitle(session) {
 
 // Stream Handling
 function createStreamHandler(streamId, text, isFirstInteraction = false) {
-  log("STREAM", 2, "createStreamHandler", "Stream handler created", { streamId, isFirstInteraction });
   let fullResponse = "";
+  let softTimer = null, hardTimer = null;
   let sawEnd = false;
-  let seenMeaningfulToken = false;
-  let finalized = false;
-
+  let resumeAttempts = 0;
+  let lastActivityTime = Date.now();
+  let networkState = "connected";
+  let isResuming = false;
+  let seenFirstToken = false;      // <- gate biar gak autoResume sebelum token pertama
+  let lastResumeAt = 0;
+  const MAX_RESUME = 3;
+  const RESUME_COOLDOWN = 7000;    // throttle autoResume 7s
   const END_RX = /<!--\s*\[\/END\]\s*-->[\s]*$/;
   const trimEnd = (s) => s.replace(/\s*<!--\s*\[\/END\]\s*-->\s*$/, "");
 
-  const getState = () => streamManager.activeStreams?.[streamId] || null;
+  const getStream = () => streamManager.activeStreams[streamId] || null;
 
-  const cleanupStream = () => {
-    const st = streamManager.activeStreams?.[streamId];
-    if (st) {
-      st.fullResponse = fullResponse;
-      st.sawEnd = true;
-      delete streamManager.activeStreams[streamId];
-      for (const k in streamManager.byKey) if (streamManager.byKey[k] === streamId) delete streamManager.byKey[k];
+  const ensureOwner = () => {
+    const s = getStream();
+    if (!s) {
+      // Debounce error log biar gak ribuan
+      if (!window.__lastEnsureOwnerMiss || Date.now() - window.__lastEnsureOwnerMiss > 1000) {
+        log("STREAM", 1, "ensureOwner", "Stream not found in active streams.", { streamId });
+        window.__lastEnsureOwnerMiss = Date.now();
+      }
+      return null;
     }
-    updateInputState?.();
+    if (!s.aiNode || !document.contains(s.aiNode)) return null;
+    if (s.aiNode.dataset?.streamId && s.aiNode.dataset.streamId !== streamId) return null;
+    return s;
   };
 
-  const showThinking = () => {
-    const s = getState(); if (!s) return;
-    if (!s.aiNode || !document.contains(s.aiNode)) return;
+  const detectNetworkState = () => {
+    const dt = Date.now() - lastActivityTime;
+    if (navigator && navigator.onLine === false) networkState = "offline";
+    else if (dt > 15000) networkState = "slow";
+    else if (dt > 8000) networkState = "moderate";
+    else networkState = "connected";
+    return networkState;
+  };
+
+  // Loader idempotent (jangan reset animasi kalau state sama)
+  const showLoader = (state = "thinking") => {
+    const s = ensureOwner(); if (!s) return;
     let el = s.aiNode.querySelector(".inline-loader");
     if (!el) {
       el = document.createElement("div");
       el.className = "inline-loader";
       s.aiNode.appendChild(el);
     }
-    if (el.dataset.state !== "thinking") {
-      el.innerHTML = `<span class="dot"></span><span class="dot"></span><span class="dot"></span>`;
-      el.dataset.state = "thinking";
+    const tpl = {
+      thinking: `<span class="dot"></span><span class="dot"></span><span class="dot"></span>`,
+      reconnecting: `<span class="reconnect-spinner"></span> Reconnecting...`,
+      slow: `<span class="dot slow"></span><span class="dot slow"></span><span class="dot slow"></span> Network slow...`,
+    };
+    if (el.dataset.state !== state) {
+      el.innerHTML = tpl[state] || tpl.thinking;
+      el.dataset.state = state;
     }
   };
+
   const hideLoader = () => {
-    const s = getState(); if (!s) return;
-    if (!s.aiNode || !document.contains(s.aiNode)) return;
+    const s = ensureOwner(); if (!s) return;
     const el = s.aiNode.querySelector(".inline-loader");
     if (el?.parentNode) el.parentNode.removeChild(el);
   };
 
-  function renderContinuePlaceholder(aiNode, session, messageIndex, seedText, opts = {}) {
-    const { disabledMs = 3000, interrupted = false } = opts;
-    if (!aiNode || !document.contains(aiNode)) return;
+  const disarm = () => {
+    if (softTimer) { clearTimeout(softTimer); softTimer = null; }
+    if (hardTimer) { clearTimeout(hardTimer); hardTimer = null; }
+  };
 
-    let footer = aiNode.querySelector(".message-footer");
-    if (!footer) {
-      footer = document.createElement("div");
-      footer.className = "message-footer";
-      aiNode.appendChild(footer);
-    }
-    footer.innerHTML = "";
+  // Timeout dinamis, makin santai setelah resume
+  const getTimeouts = () => {
+    const base = networkState === "slow" ? { soft: 12000, hard: 30000 } : { soft: 7000, hard: 20000 };
+    const mul = Math.pow(1.5, resumeAttempts);
+    return { soft: Math.min(base.soft * mul, 20000), hard: Math.min(base.hard * mul, 45000) };
+  };
 
-    const btn = document.createElement("button");
-    btn.className = "primary-btn continue-fragment";
-    btn.textContent = interrupted ? "Continue (interrupted)" : "Continue";
-    btn.disabled = true;
+  // Arm timeouts HANYA setelah token pertama terlihat
+  const armSoft = () => {
+    if (!seenFirstToken) return;
+    const { soft } = getTimeouts();
+    if (softTimer) clearTimeout(softTimer);
+    softTimer = setTimeout(() => autoResume("soft"), soft);
+  };
+  const armHard = () => {
+    if (!seenFirstToken) return;
+    const { hard } = getTimeouts();
+    if (hardTimer) clearTimeout(hardTimer);
+    hardTimer = setTimeout(() => autoResume("hard"), hard);
+  };
 
-    const hint = document.createElement("span");
-    hint.style.marginLeft = "8px";
-    hint.style.color = "var(--fg-muted)";
-    hint.style.fontSize = "12px";
-    hint.textContent = interrupted
-      ? "Stream terhenti. Lanjutkan dari titik terakhir."
-      : "Tidak ada end marker; klik untuk lanjut.";
+  const onActivity = () => {
+    isResuming = false;
+    lastActivityTime = Date.now();
+    networkState = "connected";
+    armSoft(); armHard();
+  };
 
-    footer.appendChild(btn);
-    footer.appendChild(hint);
-
-    setTimeout(() => { btn.disabled = false; }, Math.max(0, disabledMs));
-
-    btn.addEventListener("click", () => {
-      footer.innerHTML = "";
-
-      session.messages[messageIndex] = ["ai", seedText];
-
-      const msgs = buildResumeMessagesFromSession(session, messageIndex, seedText);
-
-      const textEl = aiNode.querySelector(".message-text");
-      if (textEl) {
-        textEl.innerHTML = getThinkingMarkup();
-        scheduleThinkingText(aiNode);
-      }
-
-      startStream(session, "[System] Resume", aiNode, messageIndex, false, msgs);
-      updateInputState?.();
-    });
-  }
-
-  const finalize = ({ interrupted = false } = {}) => {
-    log("STREAM", 2, "finalize", "Finalizing stream", { streamId, interrupted, sawEnd, hasContent: fullResponse.trim().length > 0 });
-    if (finalized) return;
-    finalized = true;
-
-    const s = getState(); if (!s) return;
-    const { session, aiNode, messageIndex } = s;
-
-    const hasContent = fullResponse.trim().length > 0;
-    const display = trimEnd(fullResponse);
-    const hasEnd = END_RX.test(fullResponse) || sawEnd;
-
-    if (hasContent) session.messages[messageIndex] = ["ai", display];
-
-    if (aiNode && document.contains(aiNode)) {
-      hideLoader();
-      const div = aiNode.querySelector(".message-text");
-      if (div) {
-        div.innerHTML = md(display || (interrupted ? "*[Response interrupted]*" : ""));
-        if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
-      }
-
-      const footer = aiNode.querySelector(".message-footer");
-      if (footer) footer.innerHTML = "";
-
-      if (hasContent && !hasEnd && !interrupted) {
-        renderContinuePlaceholder(aiNode, session, messageIndex, display, { disabledMs: 1200, interrupted: false });
-      }
-
-      renderAiFinalActions(aiNode, display, messageIndex);
-    }
-
-    s.fullResponse = fullResponse;
-    s.sawEnd = hasEnd;
-    s.endSeen = hasEnd;
-    cleanupStream();
-
-    try { renderSessions?.(); } catch {}
-    try { updateChatHeader?.(); } catch {}
-    try { save?.(); } catch {}
-
-    if (hasContent && (!session.name || /untitled/i.test(session.name))) {
-      try { generateAndSetTitle?.(session); } catch {}
+  // Pre-seed helper: pastikan bubble gak “kehapus” saat resume
+  const preSeedDisplay = (seed) => {
+    const s = ensureOwner(); if (!s) return;
+    const div = s.aiNode.querySelector(".message-text");
+    if (div && seed && !div.__seededOnce) {
+      div.innerHTML = md(seed);
+      div.__seededOnce = true;
     }
   };
 
-  showThinking();
+  const autoResume = (kind) => {
+    const s = ensureOwner(); if (!s) return;
+
+    // Jangan autoResume sebelum token pertama (biar gak reconnecting di awal stream normal)
+    if (!seenFirstToken) return;
+
+    const now = Date.now();
+    if (isResuming) return;
+    if (now - lastResumeAt < RESUME_COOLDOWN) return;
+    isResuming = true; lastResumeAt = now;
+
+    if (END_RX.test(fullResponse) || sawEnd) { finalize({ reason: "done" }); return; }
+    if (resumeAttempts >= MAX_RESUME) { finalize({ reason: "giveup" }); return; }
+
+    resumeAttempts += 1;
+    detectNetworkState();
+
+    const msgs = buildMessagesUpTo(s.messageIndex - 1);
+
+    const existingContent = s.session.messages[s.messageIndex]?.[1] || "";
+    const contentForResume = fullResponse.length > 0 ? fullResponse : existingContent;
+
+    // Pre-seed DOM & session (hindari “hapus dari awal”)
+    if (contentForResume) {
+      preSeedDisplay(contentForResume);
+      s.session.messages[s.messageIndex][1] = contentForResume;
+    }
+
+    // Prompt resume super ketat, anti preamble/ulang
+    const contextPrompt =
+      `[System] Continue EXACTLY where the last assistant message stopped. ` +
+      `Do NOT repeat any previous text. No greetings, no restating the task, no meta-talk. ` +
+      `Output only the continuation text (same style/format), starting from the next characters.`;
+
+    // Susunan pesan: berikan fragment asisten → lalu instruksi lanjutan
+    msgs.push({ role: "assistant", content: contentForResume });
+    msgs.push({ role: "user", content: contextPrompt });
+
+    showLoader(networkState === "slow" ? "slow" : "reconnecting");
+
+    // Stop stream lama biar gak ada handler dobel & spam log
+    try { streamManager.stopStream(streamId); } catch {}
+
+    // Mulai stream baru; DOM sudah di-seed, jadi token berikutnya tinggal nambah
+    startStream(s.session, contextPrompt, s.aiNode, s.messageIndex, false, msgs);
+  };
+
+  const finalize = (arg = null) => {
+    const s = ensureOwner();
+    if (!s) { try { streamManager.stopStream(streamId); } catch {} return; }
+
+    const { session, aiNode, messageIndex } = s;
+    const reason = arg?.reason || "unknown";
+    const hasContent = fullResponse.trim().length > 0;
+    const hasEnd = END_RX.test(fullResponse) || sawEnd;
+    const display = trimEnd(fullResponse);
+
+    log("STREAM", 1, "finalize", `Finalizing stream ${streamId}`, {
+      reason, hasContent, hasEnd, contentLength: fullResponse.length, resumeAttempts, networkState,
+    });
+
+    try {
+      // Kalau error → tetap tampilkan loader reconnecting (biar user ngerti sedang recovery)
+      if (reason === "done" || reason === "giveup" || hasEnd) hideLoader();
+      else if (reason === "error") showLoader("reconnecting");
+
+      if (reason === "done" || (hasContent && hasEnd)) {
+        session.messages[messageIndex] = ["ai", display];
+
+        if (isFirstInteraction && display.length > 50) generateAndSetTitle(session);
+
+        const div = aiNode.querySelector(".message-text");
+        if (div) {
+          div.innerHTML = md(display);
+          if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
+        }
+        addActionButtons(aiNode, display, messageIndex);
+
+      } else if (reason === "giveup") {
+        if (hasContent && display.length > 20) {
+          session.messages[messageIndex] = ["ai", display + "\n\n*[Response incomplete due to connection issues]*"];
+          const div = aiNode.querySelector(".message-text");
+          if (div) div.innerHTML = md(display + "\n\n*[Response incomplete due to connection issues]*");
+          addActionButtons(aiNode, display, messageIndex);
+        } else {
+          session.messages[messageIndex] = ["ai_cancelled", "Response interrupted due to connection issues."];
+          aiNode.className = "message ai_cancelled";
+          const div = aiNode.querySelector(".message-text");
+          if (div) {
+            div.innerHTML = `
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <span style="color:var(--fg-muted);font-style:italic;">Response interrupted due to connection issues.</span>
+                <button class="primary-btn regenerate-cancelled"
+                        data-session-created="${session.created_at}"
+                        data-message-index="${messageIndex}"
+                        style="height:32px;font-size:13px;">Retry?</button>
+              </div>`;
+          }
+        }
+      } else {
+        // Reason lain (mis. soft/hard) → biarkan autoResume yang handle
+        return;
+      }
+    } catch (e) {
+      log("STREAM", 4, "finalize", "Error during stream finalization.", { error: e, streamId });
+      session.messages[messageIndex] = ["ai", "Maaf, ada error saat memproses respons."];
+      const div = aiNode.querySelector(".message-text");
+      if (div) div.innerHTML = md("Maaf, ada error saat memproses respons.");
+    } finally {
+      // Disarm timers & bereskan stream ini
+      if (softTimer) clearTimeout(softTimer);
+      if (hardTimer) clearTimeout(hardTimer);
+      try {
+        const s2 = getStream?.();
+        if (s2?.session) {
+          const key = streamManager.makeKey(s2.session, s2.messageIndex);
+          streamManager.stopAllForKey(key);
+        }
+      } catch {}
+    }
+  };
+
+  const addActionButtons = (aiNode, content, messageIndex) => {
+    const actions = aiNode.querySelector(".message-actions"); if (!actions) return;
+    actions.innerHTML = "";
+
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "copy-btn";
+    copyBtn.title = "Copy text";
+    copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" ...></svg>`;
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(content).then(() => {
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => (copyBtn.textContent = "Copy"), 1200);
+      });
+    });
+
+    const regenBtn = document.createElement("button");
+    regenBtn.className = "regen-btn";
+    regenBtn.title = "Regenerate this response";
+    regenBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" ...></svg>`;
+    regenBtn.addEventListener("click", () => {
+      if (!streamManager.isStreamingInSession(current)) {
+        regenerateFromIndex(messageIndex);
+      }
+    });
+
+    actions.appendChild(copyBtn);
+    actions.appendChild(regenBtn);
+  };
+
+  // ------- Handler utama token -------
+  showLoader("thinking");
 
   return (evt) => {
-    const s = getState(); if (!s) return;
+    const s = ensureOwner(); if (!s) return;
 
     const isDone =
       evt === null ||
       evt === "[DONE]" ||
       (typeof evt === "object" && (evt.done === true || evt.type === "done" || evt.event === "done"));
 
-    if (isDone) { finalize(); return; }
-    if (evt?.error) { finalize({ interrupted: true }); return; }
+    if (isDone) { finalize({ reason: "done" }); return; }
+
+    if (evt?.error) {
+      // Klasifikasi error jaringan: treat as offline untuk backoff beneran
+      const err = String(evt.error || "");
+      if (/ENOTFOUND|ECONN|network/i.test(err)) networkState = "offline";
+      s.lastError = err;
+      finalize({ reason: "error" });
+      return;
+    }
 
     let token = "";
     if (typeof evt === "string") token = evt;
@@ -1110,47 +1211,54 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         evt.content ||
         (typeof evt.data === "string" ? evt.data : "");
     }
-    if (!token) return;
 
-    if (!seenMeaningfulToken && /\S/.test(token)) {
-      seenMeaningfulToken = true;
-      if (s.aiNode && document.contains(s.aiNode)) hideLoader();
-    }
+    const div = s.aiNode.querySelector(".message-text");
+    if (!div) return;
 
-    if (s.aiNode && document.contains(s.aiNode)) {
-      const div = s.aiNode.querySelector(".message-text");
-      if (div && !div.__seededOnce && s.session.messages[s.messageIndex]?.[1]) {
-        const seed = s.session.messages[s.messageIndex][1];
-        if (seed) {
-          div.innerHTML = md(seed);
-          div.__seededOnce = true;
-          fullResponse = seed;
-        }
+    if (token && token.length) {
+      // First meaningful token → matikan loader reconnecting & start timers
+      if (!seenFirstToken && token.trim().length > 0) {
+        seenFirstToken = true;
+        hideLoader();
+        armSoft(); armHard();
       }
-    }
 
-    fullResponse += String(token);
-    const gotEnd = END_RX.test(fullResponse);
-    if (gotEnd) sawEnd = true;
+      fullResponse += String(token);
 
-    if (s.aiNode && document.contains(s.aiNode)) {
-      const div = s.aiNode.querySelector(".message-text");
-      if (div) {
-        const display = trimEnd(fullResponse);
-        div.innerHTML = md(display);
-        if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
+      // Tandai end
+      if (END_RX.test(fullResponse)) sawEnd = true;
+
+      const display = trimEnd(fullResponse);
+
+      // Render tanpa nge-wipe (pre-seed + append)
+      if (!div.__seededOnce && s.session.messages[s.messageIndex]?.[1]) {
+        div.innerHTML = md(s.session.messages[s.messageIndex][1]);
+        div.__seededOnce = true;
       }
+      div.innerHTML = md(display);
+
+      if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
+
+      // Update registry buat debugging
+      const st = getStream();
+      if (st) { st.fullResponse = fullResponse; st.lastActivity = Date.now(); }
+
+      cancelThinkingText(s.aiNode);
+      log("STREAM", 5, "onToken", `${streamId} Token received`, {
+        streamId, tokenLength: token.length, totalLength: fullResponse.length, sawEnd, networkState,
+      });
+
+      onActivity();
+      scrollToBottom();
+    } else {
+      // Heartbeat kosong → jangan dianggap macet
+      onActivity();
     }
-
-    s.fullResponse = fullResponse;
-    s.sawEnd = sawEnd;
-    s.lastActivity = Date.now();
-
-    if (gotEnd) finalize();
   };
 }
 
-async function startStream(session, text, aiNode, aiMessageIndex, isFirstInteraction = false, overrideMessages = null, initialFullResponse = "") {
+
+async function startStream(session, text, aiNode, aiMessageIndex, isFirstInteraction = false, overrideMessages = null) {
   const nonce = Math.random().toString(36).slice(2);
   const streamId = `${session.created_at}-${aiMessageIndex}-${nonce}`;
   if (aiNode && aiNode.dataset) aiNode.dataset.streamId = streamId;
@@ -1199,7 +1307,6 @@ async function startStream(session, text, aiNode, aiMessageIndex, isFirstInterac
       messageIndex: aiMessageIndex,
       messages,
       contextPrompt: text,
-      fullResponse: initialFullResponse,
     });
   } else {
     const controller = window.api.chat.stream(messages, "glm-4.5-flash", handler);
@@ -1209,48 +1316,8 @@ async function startStream(session, text, aiNode, aiMessageIndex, isFirstInterac
       messageIndex: aiMessageIndex,
       messages,
       contextPrompt: text,
-      fullResponse: initialFullResponse, 
     });
   }
-}
-
-function renderAiFinalActions(aiNode, content, messageIndex) {
-  if (!aiNode || !document.contains(aiNode)) return;
-  const actions = aiNode.querySelector(".message-actions");
-  if (!actions) return;
-
-  actions.innerHTML = "";
-
-  const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
-  const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
-  const regenIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>`;
-
-  const copyBtn = document.createElement("button");
-  copyBtn.className = "copy-btn";
-  copyBtn.title = "Copy text";
-  copyBtn.innerHTML = copyIconSVG;
-  copyBtn.addEventListener("click", () => {
-    navigator.clipboard.writeText(content).then(() => {
-      copyBtn.innerHTML = checkIconSVG;
-      copyBtn.style.color = "var(--success)";
-      setTimeout(() => {
-        copyBtn.innerHTML = copyIconSVG;
-        copyBtn.style.color = "var(--fg-muted)";
-      }, 1500);
-    }).catch((err) => log("UI", 4, "renderAiFinalActions:copy", "Copy failed", { error: err }));
-  });
-  actions.appendChild(copyBtn);
-
-  const regenBtn = document.createElement("button");
-  regenBtn.className = "regen-btn";
-  regenBtn.title = "Regenerate this response";
-  regenBtn.innerHTML = regenIconSVG;
-  regenBtn.addEventListener("click", () => {
-    if (streamManager.isStreamingInSession(current)) return;
-    const idx = parseInt(aiNode.dataset.index || "-1", 10);
-    if (Number.isInteger(idx) && idx >= 0) regenerateFromIndex(idx);
-  });
-  actions.appendChild(regenBtn);
 }
 
 async function send() {
@@ -1291,7 +1358,7 @@ async function sendFromWelcome() {
     messageExcerpt: text.substring(0, 60) + "...",
   });
 
-  if (!text) return;
+  if (!text || streamManager.isStreaming()) return;
 
   const s = {
     name: null,
@@ -1313,7 +1380,6 @@ async function sendFromWelcome() {
   scheduleThinkingText(aiNode);
   startStream(s, text, aiNode, aiMessageIndex, true);
 }
-
 
 async function regenerateFromIndex(aiIndex) {
   if (!current || streamManager.isStreamingInSession(current)) return;
@@ -1398,7 +1464,7 @@ function deleteSession(sessionToDelete) {
 
 function deleteCurrentSession() {
   if (!current) return;
-    log("UI", 1, "deleteCurrentSession", "Opening confirmation modal to delete current session", { sessionName: current?.name });  showConfirmationModal("Delete Current Session", `Are you sure you want to delete "${current.name}"?`, () =>
+  showConfirmationModal("Delete Current Session", `Are you sure you want to delete "${current.name}"?`, () =>
     deleteSession(current),
   );
 }
@@ -1406,7 +1472,6 @@ function deleteCurrentSession() {
 
 // Theme and UI
 function applyTheme(theme) {
-  log("UI", 2, "applyTheme", "Applying new theme", { theme });
   document.body.className = theme === "dark" ? "dark-theme" : "light-theme";
   $("#theme-slider").checked = theme === "dark";
   $("#theme-label").textContent = theme === "dark" ? "Dark" : "Light";
@@ -1514,32 +1579,18 @@ function setupEventListeners() {
     window.api?.window.close();
   });
 
-  (function wireWelcomeInputs() {
-    const msgCentral = $("#msg-central");
-    if (msgCentral) {
-      const newMsgCentral = msgCentral.cloneNode(true);
-      msgCentral.parentNode.replaceChild(newMsgCentral, msgCentral);
-      newMsgCentral.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          log("UI", 0, "event:msg-central-keydown", "Enter pressed on welcome screen to start chat", {
-            key: e.key, shift: e.shiftKey
-          });
-          sendFromWelcome();
-        }
-      });
+  $("#msg").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      log("UI", 0, "event:msg-keydown", "Enter key pressed to send message", { key: e.key, shift: e.shiftKey });
+      send();
     }
+  });
 
-    const sendCentral = $("#send-central");
-    if (sendCentral) {
-      const newSendCentral = sendCentral.cloneNode(true);
-      sendCentral.parentNode.replaceChild(newSendCentral, sendCentral);
-      newSendCentral.addEventListener("click", () => {
-        log("UI", 0, "event:send-central-click", "Send button clicked on welcome screen");
-        sendFromWelcome();
-      });
-    }
-  })();
+  $("#send").addEventListener("click", () => {
+    log("UI", 0, "event:send-click", "Send button clicked");
+    send();
+  });
 
   $("#new-chat").addEventListener("click", () => {
     log("UI", 0, "event:new-chat-click", "New chat button clicked");
@@ -1602,6 +1653,7 @@ function setupEventListeners() {
       await save();
       $("#settings-modal").classList.add("hidden");
       showWelcomeScreen();
+
       log("SETTINGS", 2, "delete-all:completed", "All sessions have been deleted", { sessionsCount: state.sessions.length });
     });
   });
@@ -1636,92 +1688,35 @@ function setupEventListeners() {
     }
   });
 
-  $("#msg").addEventListener("keydown", (e) => {
+  $("#msg-central").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
-      if (streamManager.isStreamingInSession(current)) {
-        e.preventDefault();
-        return;
-      }
       e.preventDefault();
-      send();
+      log("UI", 0, "event:msg-central-keydown", "Enter pressed on welcome screen to start chat", { key: e.key, shift: e.shiftKey });
+      sendFromWelcome();
     }
   });
 
-  $("#send").addEventListener("click", () => {
-    if (!current) return;
-    
+  $("#send-central").addEventListener("click", () => {
+    log("UI", 0, "event:send-central-click", "Send button clicked on welcome screen");
+    sendFromWelcome();
+  });
 
-    const isStreaming = streamManager.isStreamingInSession(current);
-    if (!isStreaming) {
-      send();
-      return;
-    }
+  window.addEventListener('offline', () => {
+    log("UI", 0, "offline", "The system is offline");
+    try { streamManager?.markAwaitingResume?.(); } catch {}
+    try { 
+      showLoader?.('reconnecting'); 
+    } catch {}
+  });
 
-    log("STREAM", 3, "interrupt:click", "User clicked Interrupt button", { session: current.name });
-    let interrupted = false;
-    for (const id in streamManager.activeStreams) {
-      const st = streamManager.activeStreams[id];
-      if (st.session !== current) continue;
-
-      interrupted = true;
-      const { aiNode, session, messageIndex } = st;
-
-      try { st.controller?.cancel?.(); } catch {}
-      try { streamManager.stopStream(id); } catch {}
-
-      const partial = (st.fullResponse || "").trim();
-      session.messages[messageIndex] = ["ai", partial];
-
-      const div = aiNode.querySelector(".message-text");
-      if (div) {
-        div.innerHTML = md(partial || "*[Response interrupted]*");
-        if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
+  window.addEventListener('online', () => {
+    if (onlineResumeTimer) return;
+    onlineResumeTimer = setTimeout(() => {
+      try { streamManager?.kickSoftResume?.('online'); } finally {
+        onlineResumeTimer = null;
+        try { hideLoader?.('reconnecting'); } catch {}
       }
-
-      let footer = aiNode.querySelector(".message-footer");
-      if (!footer) {
-        footer = document.createElement("div");
-        footer.className = "message-footer";
-        aiNode.appendChild(footer);
-      }
-      footer.innerHTML = "";
-
-      const contBtn = document.createElement("button");
-      contBtn.className = "primary-btn continue-fragment";
-      contBtn.textContent = "Continue";
-      contBtn.disabled = true;
-      footer.appendChild(contBtn);
-
-      const hint = document.createElement("span");
-      hint.style.marginLeft = "8px";
-      hint.style.color = "var(--fg-muted)";
-      hint.style.fontSize = "12px";
-      hint.textContent = "Response interrupted.";
-      footer.appendChild(hint);
-
-      setTimeout(() => { contBtn.disabled = false; }, 1500);
-
-      contBtn.addEventListener("click", () => {
-        log("STREAM", 2, "continue:interrupted:click", "User clicked 'Continue' after manual interruption", { session: session.created_at, messageIndex });
-
-        contBtn.disabled = true;
-        footer.innerHTML = "";
-
-        const msgs = buildMessagesUpTo(messageIndex - 1);
-        
-        msgs.push({ role: "assistant", content: partial });
-        
-        const contextPrompt = `[System] Continue EXACTLY where the last assistant message stopped. Do NOT repeat previous text or acknowledge this instruction. Just provide the continuation.`;
-        msgs.push({ role: "user", content: contextPrompt });
-        
-        startStream(session, contextPrompt, aiNode, messageIndex, false, msgs, partial);
-        updateInputState();
-      });
-
-      break;
-    }
-
-    if (interrupted) updateInputState();
+    }, 300);
   });
 
   document.addEventListener("click", (event) => {
@@ -1729,9 +1724,12 @@ function setupEventListeners() {
     if (copyBtn) {
       const block = copyBtn.closest(".code-block-container");
       const codeEl = block?.querySelector("pre code");
+
       const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
       const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+
       if (!codeEl) return;
+
       const originalLabel = copyBtn.querySelector("span")?.textContent || "Copy";
       navigator.clipboard
         .writeText(codeEl.textContent)
@@ -1762,7 +1760,6 @@ function setupEventListeners() {
     }
   });
 }
-
 
 function initializeApp() {
   log("APP", 2, "initializeApp", "Initializing application.");

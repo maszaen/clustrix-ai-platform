@@ -236,6 +236,22 @@ hr {
   margin: 10px 0 20px 0;
 }
 
+.hr-custom {
+  width: 100%;
+  display: block;
+  height: 1.5px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  padding: 0;
+  margin: 10px 0 20px 0 !important;
+}
+
+.row-center {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
 .link {
   color: var(--link);
   text-decoration: underline;

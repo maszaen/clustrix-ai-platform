@@ -352,11 +352,18 @@ function normalizeProviderModels(list) {
   return arr.map(m => typeof m === 'string' ? ({ id: m }) : m).filter(Boolean);
 }
 
-function persistModels(conf) {
+async function persistModels(conf) {
   state.settings.models = conf;
   localStorage.setItem('models-conf', JSON.stringify(conf));
-  // kalau ada bridge ke main, simpan juga supaya persist di appData:
-  try { if (!DEBUG_MODE) window.api?.models?.save?.(conf); } catch {}
+  
+  try {
+    if (!DEBUG_MODE) {
+      await window.api?.models?.save?.(conf); 
+    }
+  } catch (err) {
+    console.error("Gagal menyimpan models:", err);
+  }
+  
   updateModelHeader?.();
 }
 
@@ -371,6 +378,7 @@ function closeModelMgmt() {
 }
 
 $("#mgmt-close").addEventListener("click", closeModelMgmt);
+$("#mgmt-close").textContent = 'Close';
 $("#close-mgmt").addEventListener("click", closeModelMgmt);
 $("#model-mgmt-modal .modal-overlay").addEventListener("click", closeModelMgmt);
 
@@ -440,23 +448,30 @@ function renderMgmtProvider(pkey) {
   $("#mgmt-title").textContent = pkey;
   $("#mgmt-back").style.visibility = 'visible';
   $("#mgmt-back").onclick = renderMgmtProviders;
+  $("#mgmt-close").textContent = 'Close';
 
   const body = $("#mgmt-body");
   body.innerHTML = `
-    <div class="form-group">
-      <label>API Key</label>
-      <input type="text" id="prov-api" value="${prov.apiKey||''}">
-    </div>
-    <div class="form-group">
-      <label>Base URL</label>
-      <input type="text" id="prov-base" value="${prov.baseUrl||''}">
+    <div style="padding: 8px 16px; border-bottom: 1px solid var(--border)">
+      <div class="form-group">
+        <label>API Key</label>
+        <input type="text" id="prov-api" value="${prov.apiKey||''}">
+      </div>
+      <div class="form-group">
+        <label>Base URL</label>
+        <input type="text" id="prov-base" value="${prov.baseUrl||''}">
+      </div>
+      <button style="display:flex; margin-left: auto;" id="save-prov" class="primary-btn">Save provider</button>
     </div>
 
     <div class="form-group">
-      <label>Models</label>
-      <div id="model-list">
+      <div style="display: flex; gap: 8px; padding-left: 16px; padding-top: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);" class="row-center">
+        <label>Models</label>
+        <svg id="add-model" style="margin-bottom: 8px; cursor: pointer;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-plus-icon lucide-circle-plus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+      </div>
+      <div id="model-list" style="max-height: 400px; overflow: auto;">
         ${list.map(m => `
-          <div class="menu-item" data-mid="${m.id}" style="width:100%;justify-content:space-between">
+          <div class="menu-item no-padding" data-mid="${m.id}" style="width:100%; justify-content:space-between; padding: 8px 16px !important; border-radius: none !important;">
             <span>${m.label || m.id}</span>
             <button class="icon-btn danger" data-del="${m.id}" title="Delete">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -464,12 +479,7 @@ function renderMgmtProvider(pkey) {
           </div>
         `).join('')}
       </div>
-    </div>
-
-    <div class="modal-actions" style="justify-content:space-between">
-      <button id="save-prov" class="primary-btn">Save provider</button>
-      <button id="add-model" class="primary-btn">Add model</button>
-    </div>
+    </div>    
   `;
 
   $("#save-prov").onclick = () => {
@@ -533,8 +543,8 @@ function renderMgmtModel(pkey, mid) {
 
   $("#mgmt-title").textContent = meta.label || meta.id;
   $("#mgmt-back").style.visibility = 'visible';
-  $("#mgmt-back").onclick = () => renderMgmtProvider(pkey);
-
+  $("#mgmt-close").textContent = 'Save and Close';
+  
   const body = $("#mgmt-body");
   body.innerHTML = `
     <div class="form-group">
@@ -559,28 +569,32 @@ function renderMgmtModel(pkey, mid) {
       <label>Notes</label>
       <textarea id="mm-note" rows="3" placeholder="Catatan model...">${meta.note || ''}</textarea>
     </div>
-    <div class="modal-actions">
-      <button id="mm-save" class="primary-btn">Save model</button>
-    </div>
   `;
 
   $("#mm-think").value = meta.think || 'off';
 
-  $("#mm-save").onclick = () => {
+  $("#mgmt-close").onclick = async () => {
     const label = $("#mm-label").value.trim();
     const note  = $("#mm-note").value.trim();
     const think = $("#mm-think").value;
     const conf2 = state.settings.models || defaultModels();
     const arr2  = normalizeProviderModels(conf2.providers?.[pkey]?.models||[]);
     const i = arr2.findIndex(m => m.id === mid);
+    
     if (i >= 0) {
       arr2[i] = { ...arr2[i], label, note, think };
     } else {
       arr2.unshift({ id: mid, label, note, think });
     }
+    
     conf2.providers[pkey].models = arr2;
-    persistModels(conf2);
-    if (conf2.active?.platform === pkey && conf2.active?.model === mid) updateModelHeader?.();
+    await persistModels(conf2);
+    
+    if (conf2.active?.platform === pkey && conf2.active?.model === mid) {
+      updateModelHeader?.();
+    }
+
+    renderMgmtProvider(pkey);
   };
 }
 

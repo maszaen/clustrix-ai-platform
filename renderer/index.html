@@ -63,6 +63,11 @@
               <span>Customize ZenAI</span>
             </button>
 
+            <button id="open-model-mgmt" class="menu-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevrons-left-right-ellipsis-icon lucide-chevrons-left-right-ellipsis"><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="m17 7 5 5-5 5"/><path d="m7 7-5 5 5 5"/><path d="M8 12h.01"/></svg>
+              <span>Model Lists</span>
+            </button>
+
             <button id="open-model-switcher" class="menu-item">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M4 7h16M4 12h16M4 17h16"/>
@@ -318,6 +323,55 @@
         <div class="action-group">
           <button id="cancel-models" class="primary-btn">Cancel</button>
           <button id="save-models" class="primary-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Model Management (Edit List) -->
+  <div id="model-mgmt-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card" style="max-width:780px;">
+      <div class="modal-header">
+        <h2 id="mgmt-title">Model Management</h2>
+        <button id="close-mgmt" class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+          </svg>
+        </button>
+      </div>
+      <hr />
+      <div class="modal-body">
+        <!-- dynamic content -->
+        <div id="mgmt-body"></div>
+      </div>
+      <div class="modal-actions">
+        <button id="mgmt-back" class="primary-btn" style="visibility:hidden">Back</button>
+        <div class="action-group">
+          <button id="mgmt-close" class="primary-btn">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tiny modal untuk Add Provider / Add Model -->
+  <div id="mini-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card" style="max-width:480px;">
+      <div class="modal-header">
+        <h2 id="mini-title">Add</h2>
+        <button id="mini-close" class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+          </svg>
+        </button>
+      </div>
+      <hr />
+      <div class="modal-body" id="mini-body"></div>
+      <div class="modal-actions">
+        <div class="action-group">
+          <button id="mini-cancel" class="primary-btn">Cancel</button>
+          <button id="mini-save" class="primary-btn">Save</button>
         </div>
       </div>
     </div>

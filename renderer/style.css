@@ -1367,10 +1367,60 @@ textarea::-webkit-scrollbar {
   padding: var(--spacing-md) var(--spacing-xl) var(--spacing-sm) var(--spacing-xl);
 }
 
+.modal-body:has(.no-padding) {
+  padding: 0 !important;
+}
+
 .modal-body p {
   color: var(--fg);
   margin-bottom: var(--spacing-lg);
   line-height: 1.6;
+}
+
+.prov-list {
+  max-height: 300px;
+  overflow: auto;
+}
+
+.modal-menu-item {
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-xl);
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 14px;
+}
+
+.modal-menu-item:hover {
+  background: var(--hover-bg);
+  /* transform: translateX(2px); */
+}
+
+.add-item {
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-xl);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 14px;
+}
+
+.add-item:hover {
+  background: var(--hover-bg);
+  /* transform: translateX(2px); */
 }
 
 .inline-loader[data-state="slow"] .dot {
@@ -2205,7 +2255,7 @@ textarea:focus-visible {
   max-height: 500px;
   overflow: auto;
   margin-top: 8px;
-  padding: var(--spacing-xs) 0 var(--spacing-lg) 0;
+  padding: var(--spacing-xs) 0 var(--spacing-2xl) 0;
 }
 
 .message.ai .thinking-body.expanded::before {
@@ -2226,7 +2276,7 @@ textarea:focus-visible {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 10px;
+  height: 30px;
   background: linear-gradient(to top, var(--bg), transparent);
   z-index: 1;
   pointer-events: none;
@@ -2236,16 +2286,24 @@ textarea:focus-visible {
   color: var(--fg-muted);
   font-size: 15px;
   line-height: 1.45;
-  padding-top: 6px;
+  /* padding-top: 6px; */
+  padding: 0 var(--spacing-sm);
   white-space: pre-wrap;
 }
 
 .thinking-container {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-md);
   min-height: 24px;
+  vertical-align: middle;
 }
+
+/* .thinking-text:empty, .thinking-container:empty {
+  flex: 0 0 0;
+  height: 0;
+  overflow: hidden;
+} */
 
 @keyframes fadeInScale {
   from {
@@ -2261,12 +2319,30 @@ textarea:focus-visible {
 .thinking-text {
   color: var(--fg-muted);
   font-family: var(--font-sans);
-  padding: var(--spacing-sm);
+  align-items: center;
+  min-height: 0;
+  min-width: 0;
+  
   transform-origin: left center;
+  position: relative;
+  overflow: hidden;
+  
+  background: linear-gradient(90deg, 
+    transparent 0%,           
+    transparent 40%,          
+    rgba(255, 255, 255, 0.85) 50%,  
+    transparent 60%,         
+    transparent 100%         
+  );
+  
+  background-size: 200% 100%;
+  
+  -webkit-background-clip: text;
+  background-clip: text;
   
   animation: 
-    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    pulse-opacity 2s 0.4s infinite ease-in-out;
+    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+    shimmer 4s 0.4s infinite ease-in-out;          
 }
 
 .thinking-text-indicator {
@@ -2274,18 +2350,51 @@ textarea:focus-visible {
   color: var(--fg-muted);
   font-style: italic;
   transform-origin: left center;
+  padding: var(--spacing-sm);
+  display: 
+  position: relative;
+  overflow: hidden;
+  
+  /* Shimmer gradient setup */
+  background: linear-gradient(90deg, 
+    transparent 0%,           /* Mulai transparan */
+    transparent 40%,          /* Tetap transparan sampai 40% */
+    rgba(255, 255, 255, 0.74) 50%,  /* Peak brightness di tengah - ubah opacity ini untuk intensitas */
+    transparent 60%,          /* Kembali transparan di 60% */
+    transparent 100%          /* Sampai akhir transparan */
+  );
+  
+  /* Background size 200% biar bisa gerak smooth */
+  background-size: 200% 100%;
+  
+  /* Clip background ke text aja */
+  -webkit-background-clip: text;
+  background-clip: text;
   
   animation: 
-    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    pulse-opacity 2s 0.4s infinite ease-in-out;
+    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1),  /* Initial fade in */
+    shimmer 3s 0.4s infinite ease-in-out;           /* Shimmer loop - ubah 2s untuk speed */
 }
 
-@keyframes pulse-opacity {
-  0%, 100% {
-    opacity: 1;
+/* Shimmer animation - gerakin background dari kiri ke kanan */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;  /* Mulai dari luar kiri */
   }
-  50% {
-    opacity: 0.8;
+  100% {
+    background-position: -200% 0;   /* Sampai ke luar kanan */
+  }
+}
+
+/* Initial fade in animation */
+@keyframes fadeInScale {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 

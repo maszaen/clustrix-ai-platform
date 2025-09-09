@@ -338,13 +338,274 @@ function bumpToken(session, messageIndex) {
   } catch {}
 }
 
+// function normalizeProviderModels(list) {
+//   if (!Array.isArray(list)) return [];
+//   return list.map((m) => {
+//     if (typeof m === 'string') return { id: m, label: m, note: '' };
+//     const id = m?.id || '';
+//     return { id, label: m?.label || id, note: m?.note || '' };
+//   });
+// }
+
 function normalizeProviderModels(list) {
-  if (!Array.isArray(list)) return [];
-  return list.map((m) => {
-    if (typeof m === 'string') return { id: m, label: m, note: '' };
-    const id = m?.id || '';
-    return { id, label: m?.label || id, note: m?.note || '' };
+  const arr = Array.isArray(list) ? list : [];
+  return arr.map(m => typeof m === 'string' ? ({ id: m }) : m).filter(Boolean);
+}
+
+function persistModels(conf) {
+  state.settings.models = conf;
+  localStorage.setItem('models-conf', JSON.stringify(conf));
+  // kalau ada bridge ke main, simpan juga supaya persist di appData:
+  try { if (!DEBUG_MODE) window.api?.models?.save?.(conf); } catch {}
+  updateModelHeader?.();
+}
+
+function openModelMgmt() {
+  renderMgmtProviders();
+  $("#model-mgmt-modal").classList.remove("hidden");
+  $("#mgmt-back").style.visibility = 'hidden';
+}
+
+function closeModelMgmt() {
+  $("#model-mgmt-modal").classList.add("hidden");
+}
+
+$("#mgmt-close").addEventListener("click", closeModelMgmt);
+$("#close-mgmt").addEventListener("click", closeModelMgmt);
+$("#model-mgmt-modal .modal-overlay").addEventListener("click", closeModelMgmt);
+
+function renderMgmtProviders() {
+  const conf = state.settings.models || defaultModels();
+  const body = $("#mgmt-body");
+  $("#mgmt-title").textContent = "Model Management";
+  $("#mgmt-back").style.visibility = 'hidden';
+
+  const provs = conf.providers || {};
+  const items = Object.keys(provs).sort();
+
+  body.innerHTML = `
+    <div class="form-group no-padding">
+      <div id="prov-list" class="prov-list">
+        <button id="add-prov" class="add-item" style="width:100%;justify-content:center">
+            <span style="display:flex;align-items:center;gap:10px;text-transform:capitalize;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-plus-icon lucide-circle-plus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+              Add new provider
+            </span>
+            <span class="help-text" style="color: var(--fg-muted)"></span>
+          </button>
+        ${items.map(p => `
+          <button class="modal-menu-item" data-prov="${p}" style="width:100%;justify-content:space-between">
+            <span style="display:flex;align-items:center;gap:10px;text-transform:capitalize;">
+              ${p}
+            </span>
+            <span class="help-text" style="color: var(--fg-muted)">${(provs[p].models||[]).length} models</span>
+          </button>
+        `).join('')}
+          
+      </div>
+    </div>
+  `;
+
+  body.querySelectorAll('#prov-list .modal-menu-item').forEach(btn => {
+    btn.addEventListener('click', () => renderMgmtProvider(btn.dataset.prov));
   });
+
+  $("#add-prov").onclick = () => openMiniModal({
+    title: "Add Provider",
+    fields: [
+      { id:"prov-id", label:"Provider ID", placeholder:"mis. openrouter" },
+      { id:"prov-base", label:"Base URL",   placeholder:"https://..." },
+      { id:"prov-key",  label:"API Key",    placeholder:"..." }
+    ],
+    onSave: (vals) => {
+      const id = vals["prov-id"].trim();
+      if (!id) return;
+      const conf2 = state.settings.models || defaultModels();
+      if (!conf2.providers) conf2.providers = {};
+      conf2.providers[id] = conf2.providers[id] || { baseUrl:"", apiKey:"", models:[] };
+      if (vals["prov-base"].trim()) conf2.providers[id].baseUrl = vals["prov-base"].trim();
+      if (vals["prov-key"].trim())  conf2.providers[id].apiKey  = vals["prov-key"].trim();
+      persistModels(conf2);
+      populateTitleModelOptions?.(id);
+      renderMgmtProviders();
+    }
+  });
+}
+
+function renderMgmtProvider(pkey) {
+  const conf = state.settings.models || defaultModels();
+  const prov = conf.providers?.[pkey] || { baseUrl:"", apiKey:"", models:[] };
+  const list = normalizeProviderModels(prov.models);
+
+  $("#mgmt-title").textContent = pkey;
+  $("#mgmt-back").style.visibility = 'visible';
+  $("#mgmt-back").onclick = renderMgmtProviders;
+
+  const body = $("#mgmt-body");
+  body.innerHTML = `
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="text" id="prov-api" value="${prov.apiKey||''}">
+    </div>
+    <div class="form-group">
+      <label>Base URL</label>
+      <input type="text" id="prov-base" value="${prov.baseUrl||''}">
+    </div>
+
+    <div class="form-group">
+      <label>Models</label>
+      <div id="model-list">
+        ${list.map(m => `
+          <div class="menu-item" data-mid="${m.id}" style="width:100%;justify-content:space-between">
+            <span>${m.label || m.id}</span>
+            <button class="icon-btn danger" data-del="${m.id}" title="Delete">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="modal-actions" style="justify-content:space-between">
+      <button id="save-prov" class="primary-btn">Save provider</button>
+      <button id="add-model" class="primary-btn">Add model</button>
+    </div>
+  `;
+
+  $("#save-prov").onclick = () => {
+    const base = $("#prov-base").value.trim();
+    const key  = $("#prov-api").value.trim();
+    const conf2 = state.settings.models || defaultModels();
+    conf2.providers[pkey] = conf2.providers[pkey] || { baseUrl:"", apiKey:"", models:[] };
+    conf2.providers[pkey].baseUrl = base;
+    conf2.providers[pkey].apiKey  = key;
+    persistModels(conf2);
+  };
+
+  body.querySelectorAll('[data-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mid = btn.dataset.del;
+      const conf2 = state.settings.models || defaultModels();
+      const arr = normalizeProviderModels(conf2.providers?.[pkey]?.models||[]);
+      conf2.providers[pkey].models = arr.filter(x => x.id !== mid);
+      if (conf2.active?.platform === pkey && conf2.active?.model === mid) {
+        conf2.active = { platform: pkey, model: arr.find(x=>x.id!==mid)?.id || "" };
+      }
+      persistModels(conf2);
+      renderMgmtProvider(pkey);
+      populateTitleModelOptions?.(pkey);
+    });
+  });
+
+  body.querySelectorAll('#model-list .menu-item').forEach(it => {
+    it.addEventListener('click', (e) => {
+      if (e.target.closest('[data-del]')) return;
+      renderMgmtModel(pkey, it.dataset.mid);
+    });
+  });
+
+  $("#add-model").onclick = () => openMiniModal({
+    title: `Add Model to ${pkey}`,
+    fields: [
+      { id:"mod-id",    label:"Model ID", placeholder:"mis. deepseek/deepseek-chat-v3.1:free" },
+      { id:"mod-label", label:"Label (optional)", placeholder:"mis. Deepseek v3.1" }
+    ],
+    onSave: (vals) => {
+      const id = vals["mod-id"].trim();
+      if (!id) return;
+      const label = vals["mod-label"].trim();
+      const conf2 = state.settings.models || defaultModels();
+      const arr = normalizeProviderModels(conf2.providers?.[pkey]?.models||[]);
+      if (!arr.find(x=>x.id===id)) arr.unshift({ id, label });
+      conf2.providers[pkey].models = arr;
+      persistModels(conf2);
+      renderMgmtProvider(pkey);
+      populateTitleModelOptions?.(pkey);
+    }
+  });
+}
+
+function renderMgmtModel(pkey, mid) {
+  const conf = state.settings.models || defaultModels();
+  const prov = conf.providers?.[pkey] || { models:[] };
+  const arr  = normalizeProviderModels(prov.models);
+  const meta = arr.find(m => m.id === mid) || { id: mid };
+
+  $("#mgmt-title").textContent = meta.label || meta.id;
+  $("#mgmt-back").style.visibility = 'visible';
+  $("#mgmt-back").onclick = () => renderMgmtProvider(pkey);
+
+  const body = $("#mgmt-body");
+  body.innerHTML = `
+    <div class="form-group">
+      <label>Model ID</label>
+      <input type="text" id="mm-id" value="${meta.id}" disabled>
+    </div>
+    <div class="form-group">
+      <label>Label</label>
+      <input type="text" id="mm-label" value="${meta.label || ''}" placeholder="Deepseek v3.1">
+    </div>
+    <div class="form-group">
+      <label>Think capability</label>
+      <select id="mm-think">
+        <option value="off">Off</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+        <option value="auto">Auto</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="mm-note" rows="3" placeholder="Catatan model...">${meta.note || ''}</textarea>
+    </div>
+    <div class="modal-actions">
+      <button id="mm-save" class="primary-btn">Save model</button>
+    </div>
+  `;
+
+  $("#mm-think").value = meta.think || 'off';
+
+  $("#mm-save").onclick = () => {
+    const label = $("#mm-label").value.trim();
+    const note  = $("#mm-note").value.trim();
+    const think = $("#mm-think").value;
+    const conf2 = state.settings.models || defaultModels();
+    const arr2  = normalizeProviderModels(conf2.providers?.[pkey]?.models||[]);
+    const i = arr2.findIndex(m => m.id === mid);
+    if (i >= 0) {
+      arr2[i] = { ...arr2[i], label, note, think };
+    } else {
+      arr2.unshift({ id: mid, label, note, think });
+    }
+    conf2.providers[pkey].models = arr2;
+    persistModels(conf2);
+    if (conf2.active?.platform === pkey && conf2.active?.model === mid) updateModelHeader?.();
+  };
+}
+
+function openMiniModal({ title, fields, onSave }) {
+  $("#mini-title").textContent = title || 'Add';
+  const form = fields.map(f => `
+    <div class="form-group">
+      <label for="${f.id}">${f.label||f.id}</label>
+      <input type="text" id="${f.id}" placeholder="${f.placeholder||''}">
+    </div>
+  `).join('');
+  $("#mini-body").innerHTML = form;
+
+  const close = () => $("#mini-modal").classList.add("hidden");
+  $("#mini-close").onclick = close;
+  $("#mini-cancel").onclick = close;
+  $("#mini-modal .modal-overlay").onclick = close;
+  $("#mini-save").onclick = () => { 
+    const vals = {};
+    for (const f of fields) vals[f.id] = document.getElementById(f.id).value;
+    onSave?.(vals); 
+    close(); 
+  };
+
+  $("#mini-modal").classList.remove("hidden");
 }
 
 function getModelMeta(conf, platform, modelId) {
@@ -510,19 +771,38 @@ function getChatScroller() {
   return document.querySelector(".chat-log-container");
 }
 
-function scheduleThinkingText(aiNode, { shortDelay = 500, longDelay = 2000 } = {}) {
+
+function scheduleThinkingText(aiNode, { 
+  delay1 = 500, 
+  delay2 = 2000, 
+  delay3 = 3500, 
+  delay4 = 5000 
+} = {}) {
   cancelThinkingText(aiNode);
   const textEl = aiNode.querySelector(".thinking-text");
   if (!textEl) return;
-  const shortId = setTimeout(() => {
+  
+  const timer1 = setTimeout(() => {
     const currentTextEl = aiNode.querySelector(".thinking-text");
-    if (currentTextEl) currentTextEl.textContent = "Processing prompt";
-  }, shortDelay);
-  const longId = setTimeout(() => {
+    if (currentTextEl) currentTextEl.textContent = "Reading your request";
+  }, delay1);
+  
+  const timer2 = setTimeout(() => {
     const currentTextEl = aiNode.querySelector(".thinking-text");
-    if (currentTextEl) currentTextEl.textContent = "Analyzing user request";
-  }, longDelay);
-  THINKING_TIMER.set(aiNode, { shortId, longId });
+    if (currentTextEl) currentTextEl.textContent = "Processing thoughts";
+  }, delay2);
+  
+  const timer3 = setTimeout(() => {
+    const currentTextEl = aiNode.querySelector(".thinking-text");
+    if (currentTextEl) currentTextEl.textContent = "Organizing response";
+  }, delay3);
+  
+  const timer4 = setTimeout(() => {
+    const currentTextEl = aiNode.querySelector(".thinking-text");
+    if (currentTextEl) currentTextEl.textContent = "Almost ready";
+  }, delay4);
+  
+  THINKING_TIMER.set(aiNode, { timer1, timer2, timer3, timer4 });
 }
 
 function cancelThinkingText(aiNode) {
@@ -556,6 +836,25 @@ function getThinkingMarkup() {
     <span class="thinking-text-indicator"></span>
   </div>`;
 }
+
+
+// function testThinking() {
+//   const target = document.querySelector('.message-ai') || document.querySelector('[class*="message"]');
+//   if (!target) return console.log('❌ Target not found');
+//   target.innerHTML = '';
+//   const html = `<div class="thinking-container">
+//   <div class="typing-indicator"><span></span><span></span><span></span></div>
+//   <span class="thinking-text-indicator"></span>
+//   </div>`;
+//   scheduleThinkingText($(`#chat-log .message.ai`));
+//   target.insertAdjacentHTML('beforeend', html);
+//   const target2 = document.querySelector('.thinking-text-indicator') || document.querySelector('[class*="thinking-text-indicator"]');
+//   target2.innerHTML = '';
+//   const text = `<div>Thinking</div>`;
+  
+//   target2.insertAdjacentHTML('beforeend', text);
+//   console.log('✅ Done with insertAdjacentHTML!');
+// }
 
 function getRelativeDateGroup(dateString) {
   const date = new Date(dateString);
@@ -1277,7 +1576,6 @@ function hydrateThinkingIfAny(aiNode, session, messageIndex) {
   const el = aiNode._thinkingEl;
   if (el) {
     el.text.innerHTML = renderWithExistingFormatter(think);
-    // default: collapsed atau expanded — pilih salah satu
     el.body.classList.add('expanded');
     el.toggle.setAttribute('aria-expanded', 'true');
   }
@@ -1322,6 +1620,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       el.dataset.state = "thinking";
     }
   };
+
   const hideLoader = () => {
     const s = getState(); if (!s) return;
     if (!s.aiNode || !document.contains(s.aiNode)) return;
@@ -1522,6 +1821,72 @@ async function startStream(
   const handler = createStreamHandler(streamId, text, isFirstInteraction);
 
   if (DEBUG_MODE) {
+    let interval;
+    let timeout;
+    const simulatedController = {
+      cancel: () => {
+        clearTimeout(timeout);
+        clearInterval(interval);
+        handler(null);
+      }
+    };
+
+    streamManager.startStream(streamId, {
+      controller: simulatedController,
+      aiNode,
+      session,
+      messageIndex: aiMessageIndex,
+      messages,
+      contextPrompt: text,
+      fullResponse: initialFullResponse,
+    });
+    
+    const startDemoStreaming = (response, delay) => {
+      const chunks = response.split(" ");
+      let i = 0;
+      interval = setInterval(() => {
+        if (i < chunks.length) {
+          handler(chunks[i] + " ");
+          i++;
+        } else {
+          clearInterval(interval);
+          handler(null);
+        }
+      }, delay);
+    };
+
+    if (text === 'think-indicator') {
+      log("DEBUG", 2, "startStream", "Mode Debug: think-indicator (50s wait)");
+      timeout = setTimeout(() => {
+        startDemoStreaming(DEMO_RESPONSE, 80);
+      }, 50000);
+      return;
+
+    } else if (text === 'think-indicator&think-mode') {
+      log("DEBUG", 2, "startStream", "Mode Debug: think-indicator&think-mode");
+      const thinkingTextEl = aiNode.querySelector(".thinking-text-indicator");
+      
+      timeout = setTimeout(() => {
+        if (thinkingTextEl) {
+          typewriterEffect(thinkingTextEl, DEMO_RESPONSE, { speed: 10, punctuationDelay: 100 });
+        }
+        
+        const thinkingDuration = DEMO_RESPONSE.length * 15;
+        setTimeout(() => {
+          if (thinkingTextEl) thinkingTextEl.innerHTML = '';
+          
+          const div = aiNode.querySelector(".message-text");
+          if (div) {
+              div.innerHTML = '';
+          }
+          
+          startDemoStreaming(DEMO_RESPONSE, 80);
+        }, thinkingDuration + 500);
+
+      }, 3000);
+      return;
+    }
+
     const isSlow = /slow/.test(text);
     const isImmediateError = /error/.test(text) && !/\d+error/.test(text);
     const errorMatch = text.match(/(\d+)error/);
@@ -1529,14 +1894,6 @@ async function startStream(
 
     if (isImmediateError) {
       setTimeout(() => handler({ error: "Simulated failure." }), 500);
-      streamManager.startStream(streamId, {
-        controller: { cancel() {} },
-        aiNode,
-        session,
-        messageIndex: aiMessageIndex,
-        messages,
-        contextPrompt: text,
-      });
       return;
     }
 
@@ -1545,7 +1902,7 @@ async function startStream(
     const failAtIndex = failAtPercent ? Math.floor(chunks.length * (failAtPercent / 100)) : -1;
     let i = 0;
 
-    const interval = setInterval(() => {
+    interval = setInterval(() => {
       if (failAtIndex !== -1 && i >= failAtIndex) {
         clearInterval(interval);
         handler({ error: "Simulated failure." });
@@ -1559,17 +1916,9 @@ async function startStream(
         handler(null);
       }
     }, delay);
+    
+    simulatedController.cancel = () => clearInterval(interval);
 
-    const simulatedController = { cancel: () => clearInterval(interval) };
-    streamManager.startStream(streamId, {
-      controller: simulatedController,
-      aiNode,
-      session,
-      messageIndex: aiMessageIndex,
-      messages,
-      contextPrompt: text,
-      fullResponse: initialFullResponse,
-    });
     return;
   }
 
@@ -1577,17 +1926,17 @@ async function startStream(
   const thinkMode = (state.settings?.think?.mode) || 'off';
 
   const controller = window.api.chat.stream(
-  messages,
-  act.model || 'glm-4.5-flash',
-  { provider: act.platform || 'openrouter', baseUrl: act.baseUrl, apiKey: act.apiKey, thinkMode },
-  (evt) => {
-    if (evt && typeof evt === 'object') {
-      if (evt.error) { handler(evt); return; }
-      if (evt.think) { appendThinking(aiNode, evt.think, session, aiMessageIndex); return; }
+    messages,
+    act.model || 'glm-4.5-flash',
+    { provider: act.platform || 'openrouter', baseUrl: act.baseUrl, apiKey: act.apiKey, thinkMode },
+    (evt) => {
+      if (evt && typeof evt === 'object') {
+        if (evt.error) { handler(evt); return; }
+        if (evt.think) { appendThinking(aiNode, evt.think, session, aiMessageIndex); return; }
+      }
+      handler(evt);
     }
-    handler(evt);
-  }
-);
+  );
 
   log('REQ', 2, 'chat:stream-start', `Request to AI using ${act.model} model.`);
 
@@ -1935,6 +2284,11 @@ function setupEventListeners() {
       });
     }
   })();
+
+  $("#open-model-mgmt").addEventListener("click", () => {
+    openModelMgmt();
+    $("#settings-menu").classList.add("hidden");
+  });
 
   $("#open-model-switcher").addEventListener("click", () => {
     const modelsConf = state.settings.models || defaultModels();

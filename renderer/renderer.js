@@ -387,6 +387,7 @@ function renderMgmtProviders() {
   const body = $("#mgmt-body");
   $("#mgmt-title").textContent = "Model Management";
   $("#mgmt-back").style.visibility = 'hidden';
+  $("#mgmt-close").textContent = 'Close';
 
   const provs = conf.providers || {};
   const items = Object.keys(provs).sort();
@@ -543,6 +544,7 @@ function renderMgmtModel(pkey, mid) {
 
   $("#mgmt-title").textContent = meta.label || meta.id;
   $("#mgmt-back").style.visibility = 'visible';
+  $("#mgmt-back").onclick = () => renderMgmtProvider(pkey);
   $("#mgmt-close").textContent = 'Save and Close';
   
   const body = $("#mgmt-body");
@@ -593,8 +595,6 @@ function renderMgmtModel(pkey, mid) {
     if (conf2.active?.platform === pkey && conf2.active?.model === mid) {
       updateModelHeader?.();
     }
-
-    renderMgmtProvider(pkey);
   };
 }
 
@@ -776,6 +776,20 @@ function showWelcomeScreen() {
   $(".chat-area").classList.add("welcome-active");
   $("#chat-title").textContent = "New Chat";
   $("#chat-title").title = "New Chat, ask anything";
+  $("#zenai-logo").innerHTML = `
+              <div style="--i: 1"></div>
+              <div style="--i: 2"></div>
+              <div style="--i: 3"></div>
+              <div style="--i: 4"></div>
+              <div style="--i: 5"></div>
+              <div style="--i: 6"></div>
+              <div style="--i: 7"></div>
+              <div style="--i: 8"></div>
+              <div style="--i: 9"></div>
+              <div style="--i: 10"></div>
+              <div style="--i: 11"></div>
+              <div style="--i: 12"></div>
+  `
   renderSessions();
   updateInputState();
   log("UI", 2, "showWelcomeScreen", "Switched to Welcome Screen", { currentSession: null });
@@ -1412,6 +1426,7 @@ function setCurrent(s) {
       }
     }
   }
+  $("#zenai-logo").innerHTML = ``
   renderSessions();
   updateChatHeader();
   updateInputState();
@@ -2017,9 +2032,14 @@ async function send() {
 
   ensureTokenFields(current);
 
+  current.created_at = nowISO();
+
   current.messages.push(["user", text]);
   const userIndex = current.messages.length - 1;
   await save();
+
+  state.sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  renderSessions();
 
   addMessage("user", text, { final: true, index: userIndex });
 

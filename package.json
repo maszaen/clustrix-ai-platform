@@ -9,12 +9,18 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win",
+    "build-mac": "electron-builder --mac",
+    "build-linux": "electron-builder --linux",
     "dist": "electron-builder",
+    "pack": "electron-builder --dir",
     "node": "cross-env BASE_URL=https://api.z.ai/api/paas/v4/ Z_API_KEY=b7f88f50fbeb465b8318ae2270473c80.rWD9EyijW0zniHA1 npm run start"
   },
   "devDependencies": {
     "electron": "^29.4.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "cross-env": "^7.0.3"
   },
   "dependencies": {
     "marked": "^16.2.1"
@@ -22,9 +28,15 @@
   "build": {
     "appId": "com.maszaen.zenai",
     "productName": "ZenAI",
+    "directories": {
+      "output": "dist"
+    },
     "files": [
       "**/*",
-      "!node_modules/**/*"
+      "!node_modules/**/*",
+      "!src/**/*",
+      "!.git/**/*",
+      "!dist/**/*"
     ],
     "win": {
       "target": [
@@ -41,13 +53,44 @@
           ]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "public/images/favicon.ico"
+    },
+    "mac": {
+      "icon": "public/images/favicon.ico",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "public/images/favicon.ico",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ZenAI"
     }
   }
 }

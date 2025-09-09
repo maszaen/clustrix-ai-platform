@@ -1,4 +1,3 @@
-// Main process: window, persistence, streaming via https (bypass CORS), title suggest, settings.
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -16,12 +15,12 @@ function defaultModelsConf() {
       platform: 'openrouter',
       model: 'deepseek/deepseek-chat-v3.1:free',
       baseUrl: 'https://openrouter.ai/api/v1',
-      apiKey: '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'
+      apiKey: ''
     },
     providers: {
       openrouter: {
         baseUrl: 'https://openrouter.ai/api/v1',
-        apiKey: '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',
+        apiKey: '',
         models: [
           'deepseek/deepseek-chat-v3.1:free',
           'meta-llama/llama-3.1-8b-instruct',
@@ -40,7 +39,7 @@ function defaultModelsConf() {
       },
       groq: {
         baseUrl: 'https://api.groq.com/openai/v1',
-        apiKey: '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',
+        apiKey: '',
         models: ['llama3-8b-8192','mixtral-8x7b-32768','gemma2-9b-it', 'openai/gpt-oss-120b']
       },
       gemini: {
@@ -80,9 +79,8 @@ ipcMain.handle('models:save', async (_evt, conf) => {
 });
 
 function createWindow(){
-  console.log('Data disimpan di:', path.join(app.getPath('userData'), 'chat_data.json'));
   const win = new BrowserWindow({
-    width: 1600, height: 800,
+    width: 1200, height: 800,
     frame: false,
     minWidth: 850,
     minHeight: 400,
@@ -92,7 +90,7 @@ function createWindow(){
     }
   });
   
-  win.webContents.openDevTools(); // Remove in Production
+  // win.webContents.openDevTools();
 
   // Logging
   ipcMain.on('log:write', (_event, logData) => {
@@ -182,37 +180,112 @@ function joinEndpoint(base, p){
 }
 
 // ---------- Streaming from MAIN (SSE) ----------
-const activeStreams = new Map(); // id -> req
+const activeStreams = new Map();
 ipcMain.on('chat:stream-start', (event, payload) => {
   const reqId = payload.reqId;
   const messages = payload.messages || [];
   const model = payload.model || 'glm-4.5-flash';
+  const provider = (payload.provider || 'openrouter').toLowerCase();
 
-  const BASE_URL = process.env.BASE_URL || 'https://api.z.ai/api/paas/v4/';
-  const API_KEY  = process.env.Z_API_KEY || process.env.OPENAI_API_KEY || '';
+  let BASE_URL =
+    (payload.baseUrl || '') ||
+    (provider === 'openrouter' ? 'https://openrouter.ai/api/v1' :
+    provider === 'groq'      ? 'https://api.groq.com/openai/v1' :
+    provider === 'gemini'    ? 'https://generativelanguage.googleapis.com/v1beta' :
+    provider === 'zai'       ? 'https://api.z.ai/api/paas/v4/' :
+                                (process.env.BASE_URL || 'https://api.z.ai/api/paas/v4/'));
+
+  let API_KEY =
+    (payload.apiKey || '') ||
+    (provider === 'openrouter' ? (process.env.OPENROUTER_API_KEY || '') :
+    provider === 'groq'      ? (process.env.GROQ_API_KEY || '') :
+    provider === 'gemini'    ? (process.env.GEMINI_API_KEY || '') :
+    provider === 'zai'       ? (process.env.Z_API_KEY || '') :
+                                (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || ''));
+
+
+  function sendDone(){ event.sender.send(`chat:done-${reqId}`); activeStreams.delete(reqId); }
+  function sendErr(msg){ event.sender.send(`chat:error-${reqId}`, msg); activeStreams.delete(reqId); }
+
+  if (provider === 'gemini') {
+    try {
+      const url = new URL(`${BASE_URL.replace(/\/+$/,'')}/models/${encodeURIComponent(model)}:generateContent`);
+      if (API_KEY) url.searchParams.set('key', API_KEY);
+
+      const contents = [];
+      for (const m of messages) {
+        const role = m.role === 'assistant' ? 'model' : 'user';
+        contents.push({ role, parts: [{ text: String(m.content || '') }] });
+      }
+
+      const body = JSON.stringify({ contents });
+      const opts = {
+        method: 'POST',
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        protocol: url.protocol,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Content-Length': Buffer.byteLength(body)
+        }
+      };
+
+      const req = https.request(opts, (res) => {
+        let acc = '';
+        res.setEncoding('utf8');
+        res.on('data', d => acc += d);
+        res.on('end', () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            return sendErr(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc.slice(0,200)}`);
+          }
+          try {
+            const j = JSON.parse(acc);
+            const text = (j.candidates?.[0]?.content?.parts || [])
+              .map(p => p.text || '').join('');
+            if (text) event.sender.send(`chat:chunk-${reqId}`, text);
+            sendDone();
+          } catch (e) {
+            sendErr('Bad JSON from Gemini');
+          }
+        });
+      });
+      req.on('error', e => sendErr(e.message || String(e)));
+      req.write(body); req.end();
+      activeStreams.set(reqId, req);
+    } catch (e) {
+      sendErr(e.message || String(e));
+    }
+    return;
+  }
+
   const url = new URL(joinEndpoint(BASE_URL, 'chat/completions'));
-
   const body = JSON.stringify({ model, messages, stream: true });
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'text/event-stream',
+    'Content-Length': Buffer.byteLength(body)
+  };
+  if (API_KEY) headers['Authorization'] = `Bearer ${API_KEY}`;
+  if (provider === 'openrouter') {
+    headers['HTTP-Referer'] = 'https://zenai.local';
+    headers['X-Title'] = 'ZenAI Desktop';
+  }
+
   const options = {
     method: 'POST',
     hostname: url.hostname,
     path: url.pathname + url.search,
     protocol: url.protocol,
-    headers: {
-      'Authorization': `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-      'Accept': 'text/event-stream',
-      'Content-Length': Buffer.byteLength(body)
-    }
+    headers
   };
 
   const req = https.request(options, (res) => {
     if (res.statusCode < 200 || res.statusCode >= 300){
       let err = '';
       res.on('data', d => err += d.toString('utf-8'));
-      res.on('end', () => {
-        event.sender.send(`chat:error-${reqId}`, `HTTP ${res.statusCode} ${res.statusMessage} — ${err.slice(0,200)}`);
-      });
+      res.on('end', () => sendErr(`HTTP ${res.statusCode} ${res.statusMessage} — ${err.slice(0,200)}`));
       return;
     }
     res.setEncoding('utf8');
@@ -228,24 +301,21 @@ ipcMain.on('chat:stream-start', (event, payload) => {
           if (!line || line === '[DONE]') continue;
           try{
             const j = JSON.parse(line);
-            const delta = j?.choices?.[0]?.delta?.content;
+            const delta =
+              j?.choices?.[0]?.delta?.content ||
+              j?.delta?.content || j?.content || '';
             if (delta) event.sender.send(`chat:chunk-${reqId}`, delta);
           }catch{}
         }
       }
     });
-    res.on('end', () => {
-      event.sender.send(`chat:done-${reqId}`);
-      activeStreams.delete(reqId);
-    });
+    res.on('end', sendDone);
   });
-  req.on('error', e => {
-    event.sender.send(`chat:error-${reqId}`, e.message || String(e));
-    activeStreams.delete(reqId);
-  });
+  req.on('error', e => sendErr(e.message || String(e)));
   req.write(body); req.end();
   activeStreams.set(reqId, req);
 });
+
 ipcMain.on('chat:stream-cancel', (event, reqId) => {
   const r = activeStreams.get(reqId);
   if (r){ try{ r.destroy(new Error('Cancelled')); }catch{} activeStreams.delete(reqId); }
@@ -254,36 +324,108 @@ ipcMain.on('chat:stream-cancel', (event, reqId) => {
 
 // ---------- Title suggestion (non-stream) ----------
 ipcMain.handle('chat:title', async (_evt, payload) => {
-  const text = (payload && payload.text) || '';
-  const model = (payload && payload.model) || 'glm-4.5-flash';
-  const messages = [
-    { role: 'system', content: 'You are a title generator. Create a specific, 3-6 word title in Title Case for the following user query. Do not use quotes or periods. Your response must not exceed 6 words, you can simply summarize what the user said into a title, your response is just a title. If the query contains code, summarize the code\'s purpose instead of including any code in the title.' },
-    { role: 'user', content: text }
-  ];
-  const BASE_URL = process.env.BASE_URL || 'https://api.z.ai/api/paas/v4/';
-  const API_KEY  = process.env.Z_API_KEY || process.env.OPENAI_API_KEY || '';
-  const url = new URL(joinEndpoint(BASE_URL, 'chat/completions'));
-  const body = JSON.stringify({ model, messages, stream: false });
+  const text     = payload?.text  || '';
+  const model    = payload?.model || 'glm-4.5-flash';
+  const provider = String(payload?.provider || '').toLowerCase();
+  const extraHdr = payload?.headers || {};
 
-  const options = {
-    method: 'POST', hostname: url.hostname, path: url.pathname + url.search, protocol: url.protocol,
-    headers: { 'Authorization': `Bearer ${API_KEY}`, 'Content-Type': 'application/json', 'Accept': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+  // default base URL per provider
+  const defBase = (p) =>
+    p === 'openrouter' ? 'https://openrouter.ai/api/v1' :
+    p === 'groq'       ? 'https://api.groq.com/openai/v1' :
+    p === 'gemini'     ? 'https://generativelanguage.googleapis.com/v1beta' :
+                          'https://api.z.ai/api/paas/v4/';
+
+  const BASE_URL = (payload?.baseUrl || '').trim() || defBase(provider);
+  const API_KEY  = (payload?.apiKey  || '').trim()
+                || (provider === 'openrouter' ? (process.env.OPENROUTER_API_KEY || '') :
+                    provider === 'groq'       ? (process.env.GROQ_API_KEY || '') :
+                    provider === 'gemini'     ? (process.env.GEMINI_API_KEY || '') :
+                                                (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || ''));
+
+  const sys = 'You are a title generator. Create a specific, 3-6 word title in Title Case for the following user query. Do not use quotes or periods. Your response must not exceed 6 words. If the query contains code, summarize the code’s purpose instead of including code.';
+
+  // --- Gemini (non-OpenAI style)
+  if (provider === 'gemini') {
+    const url = new URL(`${BASE_URL.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent`);
+    if (API_KEY) url.searchParams.set('key', API_KEY);
+    const body = JSON.stringify({
+      contents: [
+        { role: 'user', parts: [{ text: `${sys}\n\n${text}` }] }
+      ]
+    });
+
+    const title = await new Promise((resolve, reject) => {
+      const req = https.request({
+        method: 'POST',
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        protocol: url.protocol,
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+      }, (res) => {
+        let acc=''; res.setEncoding('utf8');
+        res.on('data', d => acc += d);
+        res.on('end', () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc.slice(0,200)}`));
+          try {
+            const j = JSON.parse(acc);
+            const t = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
+            resolve(t || text.split(/\s+/).slice(0,6).join(' '));
+          } catch { resolve(text.split(/\s+/).slice(0,6).join(' ')); }
+        });
+      });
+      req.on('error', reject); req.write(body); req.end();
+    });
+
+    return title;
+  }
+
+  // --- OpenAI-style (OpenRouter/Groq/Z AI/Custom)
+  const u = new URL(BASE_URL.replace(/\/+$/, '') + '/chat/completions');
+  const body = JSON.stringify({
+    model,
+    stream: false,
+    messages: [
+      { role: 'system', content: sys },
+      { role: 'user', content: text }
+    ]
+  });
+
+  const headers = {
+    'Authorization': API_KEY ? `Bearer ${API_KEY}` : '',
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'Content-Length': Buffer.byteLength(body),
+    ...extraHdr
   };
+  if (provider === 'openrouter') {
+    headers['HTTP-Referer'] = headers['HTTP-Referer'] || 'https://zenai.local';
+    headers['X-Title'] = headers['X-Title'] || 'ZenAI Desktop';
+  }
+
   const resText = await new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
+    const req = https.request({
+      method: 'POST',
+      hostname: u.hostname,
+      path: u.pathname + u.search,
+      protocol: u.protocol,
+      headers
+    }, (res) => {
       let acc=''; res.setEncoding('utf8');
-      res.on('data', d => acc += d); res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) resolve(acc);
-        else reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc.slice(0,200)}`));
+      res.on('data', d => acc += d);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) return resolve(acc);
+        reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc.slice(0,200)}`));
       });
     });
     req.on('error', reject); req.write(body); req.end();
   });
-  try{
+
+  try {
     const j = JSON.parse(resText);
-    const title = j?.choices?.[0]?.message?.content?.trim();
-    return title || text.split(/\s+/).slice(0,6).join(' ') || 'New Chat';
-  }catch{
+    const t = j?.choices?.[0]?.message?.content?.trim();
+    return t || text.split(/\s+/).slice(0,6).join(' ') || 'New Chat';
+  } catch {
     return text.split(/\s+/).slice(0,6).join(' ') || 'New Chat';
   }
 });

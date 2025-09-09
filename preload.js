@@ -7,8 +7,12 @@ contextBridge.exposeInMainWorld('api', {
     save: (data) => ipcRenderer.invoke('sessions:save', data),
   },
   chat: {
-    stream(messages, model='glm-4.5-flash', onEvent){
+    stream(messages, model='glm-4.5-flash', optionsOrCb, maybeCb){
       const id = rid();
+      const isFn = typeof optionsOrCb === 'function';
+      const onEvent = isFn ? optionsOrCb : (typeof maybeCb === 'function' ? maybeCb : () => {});
+      const options = isFn ? {} : (optionsOrCb || {});
+
       const onChunk = (_e, t) => { try{ onEvent(t); }catch{} };
       const onDone  = (_e) => { cleanup(); try{ onEvent(null); }catch{} };
       const onErr   = (_e, m) => { cleanup(); try{ onEvent({error:m}); }catch{} };
@@ -20,10 +24,20 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on(`chat:chunk-${id}`, onChunk);
       ipcRenderer.once(`chat:done-${id}`, onDone);
       ipcRenderer.once(`chat:error-${id}`, onErr);
-      ipcRenderer.send('chat:stream-start', { reqId:id, messages, model });
+
+      ipcRenderer.send('chat:stream-start', {
+        reqId: id, messages, model,
+        provider: options.provider,
+        baseUrl: options.baseUrl,
+        apiKey: options.apiKey
+      });
       return { cancel: () => { cleanup(); ipcRenderer.send('chat:stream-cancel', id); } };
     },
-    titleSuggest: (text, model='glm-4.5-flash') => ipcRenderer.invoke('chat:title', { text, model }),
+    titleSuggest: (text, model = 'glm-4.5-flash', opts = {}) => ipcRenderer.invoke('chat:title', { text, model, ...opts }),
+  },
+  models: {
+    load: () => ipcRenderer.invoke('models:load'),
+    save: (conf) => ipcRenderer.invoke('models:save', conf),
   },
   logging: {
     write: (logData) => ipcRenderer.send('log:write', logData),

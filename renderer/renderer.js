@@ -29,12 +29,9 @@ const streamManager = {
   },
   
   gcZombies() {
-    // Jangan mematikan stream hanya karena AI node-nya offscreen / tidak ada di DOM.
-    // Matikan hanya kalau node-nya jelas "salah stream" (dataset.streamId mismatch).
     for (const id in this.activeStreams) {
       const s = this.activeStreams[id];
 
-      // Kalau node ada tapi menunjuk id lain → itu memang salah, cancel & delete.
       const wrongNode = s?.aiNode && s.aiNode.dataset?.streamId && s.aiNode.dataset.streamId !== id;
       if (wrongNode) {
         try { s.controller?.cancel?.(); } catch {}
@@ -42,11 +39,9 @@ const streamManager = {
         continue;
       }
 
-      // Node tidak ada / tidak di DOM: tandai offscreen, JANGAN cancel.
       const offscreen = !s?.aiNode || !document.contains(s.aiNode);
       if (offscreen) {
-        s.offscreen = true; // hint buat handler
-        // Biarkan stream tetap hidup; handler akan buffer ke s.fullResponse.
+        s.offscreen = true;
         continue;
       }
     }
@@ -161,7 +156,7 @@ const streamManager = {
 };
 
 
-// Ultility Functions
+// Utility Functions
 function nowISO() {
   return new Date().toISOString();
 }
@@ -186,30 +181,21 @@ function esc(s) {
     .replaceAll("'", "&#39;");
 }
 
-/**
- * Mencatat pesan terstruktur ke konsol DAN mengirimkannya ke file log via main process.
- * @param {string} context - Konteks modul (e.g., 'UI', 'STREAM', 'SESSION').
- * @param {number} level  - 0 TRACE, 1 DEBUG, 2 INFO, 3 WARN, 4 ERROR.
- * @param {string} contextFunc - Nama fungsi pemanggil.
- * @param {string} message - Pesan log.
- * @param {object} [details={}] - Data tambahan untuk inspeksi.
- */
 function log(context, level, contextFunc, message, details = {}) {
-  // Bagian ini tetap sama untuk menjaga fungsionalitas console
   if (!LOGGING) return;
 
   const USE_CONSOLE_INFO = false;
   const config = {
-    0: { label: 'TRACE', color: '#8a2be2', out: 'log',   detailOut: 'log'   },
-    1: { label: 'DEBUG', color: '#e1e1e1ff', out: 'log',   detailOut: 'log'   },
+    0: { label: 'TRACE', color: '#8a2be2', out: 'log', detailOut: 'log' },
+    1: { label: 'DEBUG', color: '#e1e1e1ff', out: 'log', detailOut: 'log' },
     2: { label: 'INFO',  color: '#3498db', out: USE_CONSOLE_INFO ? 'info' : 'log', detailOut: USE_CONSOLE_INFO ? 'info' : 'log' },
-    3: { label: 'WARN',  color: '#f39c12', out: 'warn',  detailOut: 'warn'  },
+    3: { label: 'WARN',  color: '#f39c12', out: 'warn',  detailOut: 'warn' },
     4: { label: 'ERROR', color: '#e74c3c', out: 'error', detailOut: 'error' },
   };
   const { label, color, out, detailOut } = config[level] || {
     label: 'LOG', color: '#95a5a6', out: 'log', detailOut: 'log'
   };
-  const time = new Date().toISOString(); // Menggunakan ISO string standar
+  const time = new Date().toISOString();
   const hasDetails = details && Object.keys(details).length > 0;
   const logMessage = `%c[${String(context).toUpperCase()} → ${label}, ${time}] ${contextFunc}() → ${message}`;
   const logStyle   = `color: ${color}; font-weight: bold;`;
@@ -219,7 +205,6 @@ function log(context, level, contextFunc, message, details = {}) {
     });
   };
   
-  // Logika console yang sudah ada (tidak diubah)
   if (level === 5) {
     console.log(`${contextFunc} → ${message}`)
   } else if (level === 0) {
@@ -345,7 +330,7 @@ function defaultModels() {
       },
       groq: {
         baseUrl: 'https://api.groq.com/openai/v1',
-        apiKey: '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',
+        apiKey: '',
         models: [
           'llama3-8b-8192',
           'mixtral-8x7b-32768',
@@ -440,7 +425,7 @@ function showWelcomeScreen() {
   current = null;
   $(".chat-area").classList.add("welcome-active");
   $("#chat-title").textContent = "New Chat";
-  $("#chat-tokens").textContent = "no tokens used";
+  $("#chat-title").title = "New Chat, ask anything";
   renderSessions();
   updateInputState();
   log("UI", 2, "showWelcomeScreen", "Switched to Welcome Screen", { currentSession: null });
@@ -456,11 +441,11 @@ function scheduleThinkingText(aiNode, { shortDelay = 500, longDelay = 2000 } = {
   if (!textEl) return;
   const shortId = setTimeout(() => {
     const currentTextEl = aiNode.querySelector(".thinking-text");
-    if (currentTextEl) currentTextEl.textContent = "Thinking...";
+    if (currentTextEl) currentTextEl.textContent = "Processing prompt";
   }, shortDelay);
   const longId = setTimeout(() => {
     const currentTextEl = aiNode.querySelector(".thinking-text");
-    if (currentTextEl) currentTextEl.textContent = "Littlebit complex response, thinking longer...";
+    if (currentTextEl) currentTextEl.textContent = "Analyzing user request";
   }, longDelay);
   THINKING_TIMER.set(aiNode, { shortId, longId });
 }
@@ -587,6 +572,12 @@ function enhancedMarkdownParse(src) {
     const line = lines[i];
     const trimmedLine = line.trim();
     if (!trimmedLine) {
+      const nextLine = lines[i + 1] ? lines[i + 1].trim() : "";
+      
+      if (listStack.length > 0 && (nextLine.match(/^(\s*)[*-]\s+/) || nextLine.match(/^(\s*)\d+\.\s+/))) {
+        continue;
+      }
+      
       closeOpenBlocks();
       continue;
     }
@@ -598,6 +589,7 @@ function enhancedMarkdownParse(src) {
     const codeMatch = trimmedLine.startsWith("__CODEBLOCK_");
     const nextLine = lines[i + 1] ? lines[i + 1].trim() : "";
     const isTableHeader = trimmedLine.includes("|") && !listMatch && !hMatch;
+    const bqMatch = line.match(/^\s*>\s?(.*)/);
     const isNextLineSeparator =
       isTableHeader && nextLine.includes("|") && nextLine.includes("-") && !/[^|:-\s]/.test(nextLine);
     if (isTableHeader && isNextLineSeparator) {
@@ -637,6 +629,7 @@ function enhancedMarkdownParse(src) {
       const number = olMatch ? parseInt(olMatch[2], 10) : null;
       const content = olMatch ? listMatch[3] : ulMatch[2];
       const lastList = listStack.length > 0 ? listStack[listStack.length - 1] : null;
+      
       if (type === "ul" && lastList?.type === "ul" && lastList.implicit && indent < lastList.indent)
         indent = lastList.indent;
       else if (type === "ul" && lastList?.type === "ol" && indent <= lastList.indent) indent = lastList.indent + 2;
@@ -659,6 +652,18 @@ function enhancedMarkdownParse(src) {
         listStack.push({ type, indent, implicit: isImplicit });
       }
       html += `<li>${parseInlineMarkdown(content)}</li>`;
+    } else if (bqMatch) {
+      closeOpenBlocks();
+      const bqBlockLines = [line];
+      while (i + 1 < lines.length && lines[i + 1].trim().startsWith(">")) {
+        i++;
+        bqBlockLines.push(lines[i]);
+      }
+      const nestedContent = bqBlockLines
+        .map(l => l.replace(/^\s*>\s?/, ''))
+        .join('\n');
+      
+      html += `<blockquote>${enhancedMarkdownParse(nestedContent)}</blockquote>`;
     } else if (hMatch || hrMatch || codeMatch) {
       closeOpenBlocks();
       if (hMatch) html += `<h${hMatch[1].length}>${parseInlineMarkdown(hMatch[2])}</h${hMatch[1].length}>`;
@@ -679,20 +684,33 @@ function enhancedMarkdownParse(src) {
 
 function parseInlineMarkdown(text) {
   if (!text) return "";
-  let html = esc(text);
+  let html = text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+  const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
+  html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
+  const linkRegex = /\[(.*?)\]\((.*?)\)/g;
+  html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
+  
   const inlineCodeBlocks = [];
   html = html.replace(/`([^`]+?)`/g, (match, content) => {
     const placeholder = `__INLINE_CODE_${inlineCodeBlocks.length}__`;
     inlineCodeBlocks.push(`<code>${content}</code>`);
     return placeholder;
   });
-  const linkRegex = /(\b(https?:\/\/|www\.)[^\s<>"'()]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}(\/[^\s<>"'()]*)*)/g;
-  html = html.replace(linkRegex, (url) => {
+
+  const autoLinkRegex = /(\b(https?:\/\/|www\.)[^\s<>"'()]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}(\/[^\s<>"'()]*)*)/g;
+  html = html.replace(autoLinkRegex, (url) => {
+    if (html.includes(`href="${url}"`) || html.includes(`src="${url}"`)) {
+        return url;
+    }
     let href = url;
     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
-    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
   });
+
   html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
   html = html
     .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
@@ -700,6 +718,7 @@ function parseInlineMarkdown(text) {
   html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>");
   html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>");
   html = html.replace(/~~(.*?)~~/g, "<del>$1</del>");
+  
   return html;
 }
 
@@ -742,15 +761,6 @@ function findOverlap(existing, newToken) {
   }
   return 0;
 }
-
-// function trace(action, meta = {}) {
-//   try {
-//     const base = { ts: new Date().toISOString(), ...meta };
-//     console.log(`[UI] ${action}`, base);
-//   } catch {
-//     console.log(`[UI] ${action}`);
-//   }
-// }
 
 
 // Persona and Messages
@@ -798,7 +808,6 @@ function buildResumeMessagesFromSession(session, messageIndex, fullResponseSoFar
     { role: 'assistant', content: fullResponseSoFar || '' },
   ];
 }
-
 
 
 // Session Rendering
@@ -871,6 +880,8 @@ function renderSessions() {
       </div>
     `;
 
+    // try { li.querySelector('.tokens').textContent = `${s.tokens_used || 0} tokens`; } catch {}
+
     li.addEventListener("click", () => setCurrent(s));
     li.querySelector("button").addEventListener("click", (ev) => {
       ev.stopPropagation();
@@ -884,10 +895,10 @@ function renderSessions() {
 function updateChatHeader() {
   if (current?.name) {
     $("#chat-title").textContent = current.name;
-    $("#chat-tokens").textContent = `${current.tokens_used || 0} tokens`;
+    $("#chat-title").title = `${current.tokens_used || 0} tokens`;
   } else {
-    $("#chat-title").textContent = "ZenAI Chat";
-    $("#chat-tokens").textContent = "no tokens used";
+    $("#chat-title").textContent = "New Chat";
+    $("#chat-title").title = "no token used";
   }
 }
 
@@ -1024,6 +1035,7 @@ async function load() {
     if (data) {
       state.sessions = data.sessions || [];
       state.settings = { ...state.settings, ...(data.settings || {}) };
+      state.sessions.forEach(ensureTokenFields);
     }
   } catch (e) {
     log("APP", 4, "load", "Failed to load data.", { error: e });
@@ -1032,7 +1044,9 @@ async function load() {
   state.sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   log("APP", 2, "load", "Successfully loaded data.", { sessionCount: state.sessions.length });
   applyTheme(state.settings.theme || "light");
+  await loadModelsConf();
   renderSessions();
+  updateModelHeader();
   showWelcomeScreen();
   typewriterEffect($("#welcome-message"), welcomeMessages[Math.floor(Math.random() * welcomeMessages.length)]);
   await save();
@@ -1061,7 +1075,7 @@ function updateInputState() {
   if (isCurrentNull) {
     msgEl.placeholder = "Select a session to start";
   } else if (isStreaming) {
-    msgEl.placeholder = "Model is responding…";
+    msgEl.placeholder = "Ask anything";
   } else {
     msgEl.placeholder = "Ask anything";
   }
@@ -1071,13 +1085,8 @@ function updateInputState() {
   
   if (isStreaming) {
     sendBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="interrupt-icon">
-        <rect x="6" y="6" width="12" height="12" rx="1"/>
-        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3" class="loader-ring" style="animation: organicSpin 2s infinite ease-in-out; transform-origin: center;"/>
-      </svg>
-    `;
-    sendBtn.classList.remove("primary-btn");
-    sendBtn.classList.add("danger-btn");
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 18 18" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-icon lucide-square"><rect width="12" height="12" x="3" y="3" rx="2"/></svg>`;
+    sendBtn.classList.add("interrupt");  
     sendBtn.title = "Interrupt response";
   } else {
     sendBtn.innerHTML = `
@@ -1086,8 +1095,7 @@ function updateInputState() {
         <path d="M12 19V5"/>
       </svg>
     `;
-    sendBtn.classList.remove("danger-btn");
-    sendBtn.classList.add("primary-btn");
+    sendBtn.classList.remove("interrupt");
     sendBtn.title = "Send message";
   }
 
@@ -1100,36 +1108,76 @@ function updateInputState() {
   }
 }
 
-async function generateAndSetTitle(session) {
-  if (!session || !session.messages || session.messages.length < 2) return;
+async function generateAndSetTitle(session){
+  if(!session || !session.messages || session.messages.length < 2) return;
+  const userPrompt = session.messages.find(m => m[0]==='user')?.[1] || '';
+  if(!userPrompt) return;
 
-  try {
-    const userPrompt = session.messages.find((m) => m[0] === "user")?.[1] || "";
-    if (!userPrompt) return;
-
-    let generatedTitle;
-    if (DEBUG_MODE) {
-      generatedTitle = `Debug: ${userPrompt.substring(0, 20)}`;
+  try{
+    if (DEBUG_MODE){
+      session.name = `Debug: ${userPrompt.substring(0, 20)}`;
     } else {
-      generatedTitle = await window.api.chat.titleSuggest(userPrompt, "glm-4.5-flash");
+      const cfg = getTitleGenConfig();
+      log("TITLE", 2, "generateAndSetTitle", "Requesting title suggestion from model", {
+        userPrompt,
+        model: cfg.model,
+        provider: cfg.provider,
+        baseUrl: cfg.baseUrl
+      });
+      let title = await window.api.chat.titleSuggest(
+        userPrompt,
+        cfg.model,
+        { provider: cfg.provider, baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, headers: cfg.headers }
+      );
+      if (!title || !title.trim()) {
+        const fall = getActiveChatConfig();
+        title = await window.api.chat.titleSuggest(
+          userPrompt,
+          fall.model,
+          { provider: fall.provider, baseUrl: fall.baseUrl, apiKey: fall.apiKey, headers: fall.headers }
+        );
+      }
+      session.name = (title || 'New Chat').slice(0, 70);
     }
-
-    if (generatedTitle) {
-      session.name = generatedTitle.replace(/^(Title:\s*)|["']/g, "").trim();
-
-      updateChatHeader();
-      renderSessions();
-      await save();
-    }
-  } catch (e) {
-    log("API", 4, "generateAndSetTitle", "Failed to generate title from API", { error: e, sessionCreatedAt: session.created_at });
-    if (session.name === null) {
-      session.name = "Untitled Chat";
-      updateChatHeader();
-      renderSessions();
-      await save();
-    }
+  } catch(e){
+    session.name = (userPrompt.split(/\s+/).slice(0,6).join(' ') || 'New Chat').slice(0,70);
   }
+  await save();
+  renderSessions();
+}
+
+function populateTitleModelOptions(platform) {
+  const sel = document.getElementById('title-model-select');
+  if (!sel) return;
+  const models = (state.settings.models?.providers?.[platform]?.models || [])
+    .filter(m => !m.paid);
+  const prov = state.settings.models?.providers?.[platform] || {};
+  const list = normalizeProviderModels(prov.models || []);
+  const preserve = sel.value;
+  sel.innerHTML = '<option value="__default__">Default (using current model)</option>' +
+    models.map(m => `<option value="${m.id}">${m.label || m.id}</option>`).join('');
+  if ([...sel.options].some(o => o.value === preserve)) sel.value = preserve;
+  else sel.value = '__default__';
+
+  log('TITLE', 2, 'populateTitleModelOptions', platform, list.map(m=>m.id));
+}
+
+function saveSwitchModelForm() {
+  const platform = document.getElementById('platform-select').value;
+  const activeModel = document.getElementById('model-select').value;
+
+  const titleSel = document.getElementById('title-model-select').value;
+
+  state.settings.models.activePlatform = platform;
+  state.settings.models.activeModel    = activeModel;
+
+  state.settings.models.titleGenerator = {
+    useDefault: (titleSel === '__default__'),
+    platform: document.getElementById('platform-select').value,
+    model: (titleSel === '__default__') ? null : titleSel,
+  };
+
+  save();
 }
 
 
@@ -1186,25 +1234,34 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     if (!footer) {
       footer = document.createElement("div");
       footer.className = "message-footer";
-      aiNode.appendChild(footer);
+      const messageContent = aiNode.querySelector(".message-content");
+      if (messageContent) {
+        messageContent.appendChild(footer);
+      } else {
+        aiNode.appendChild(footer);
+      }
     }
     footer.innerHTML = "";
 
-    const btn = document.createElement("button");
-    btn.className = "primary-btn continue-fragment";
-    btn.textContent = interrupted ? "Continue (interrupted)" : "Continue";
-    btn.disabled = true;
+    const placeholderCard = document.createElement("div");
+    placeholderCard.className = "continue-placeholder";
 
     const hint = document.createElement("span");
-    hint.style.marginLeft = "8px";
-    hint.style.color = "var(--fg-muted)";
-    hint.style.fontSize = "12px";
+    hint.className = "placeholder-hint";
     hint.textContent = interrupted
-      ? "Stream terhenti. Lanjutkan dari titik terakhir."
-      : "Tidak ada end marker; klik untuk lanjut.";
+      ? "Response interrupted by user"
+      : "Do you see incomplete response?";
 
-    footer.appendChild(btn);
-    footer.appendChild(hint);
+    const btn = document.createElement("button");
+    btn.className = "primary-btn continue-fragment";
+    btn.textContent = interrupted ? "Continue" : "Continue";
+    btn.disabled = true;
+    if (interrupted) btn.title = "Continue from interrupted point";
+
+    placeholderCard.appendChild(hint);
+    placeholderCard.appendChild(btn);
+
+    footer.appendChild(placeholderCard);
 
     setTimeout(() => { btn.disabled = false; }, Math.max(0, disabledMs));
 
@@ -1244,7 +1301,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       hideLoader();
       const div = aiNode.querySelector(".message-text");
       if (div) {
-        div.innerHTML = md(display || (interrupted ? "*[Response interrupted]*" : ""));
+        div.innerHTML = md(display || (interrupted ? "*[System] Model not available or system error, try checking the connection or changing the AI model.*" : ""));
         if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
       }
 
@@ -1282,7 +1339,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       evt === "[DONE]" ||
       (typeof evt === "object" && (evt.done === true || evt.type === "done" || evt.event === "done"));
 
-    if (isDone) { finalize(); return; }
+    if (isDone) { 
+      
+      finalize();
+      return;
+    }
     if (evt?.error) { finalize({ interrupted: true }); return; }
 
     let token = "";
@@ -1295,6 +1356,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         (typeof evt.data === "string" ? evt.data : "");
     }
     if (!token) return;
+
+    try { bumpToken(s.session, s.messageIndex); } catch {}
 
     if (!seenMeaningfulToken && /\S/.test(token)) {
       seenMeaningfulToken = true;
@@ -1334,10 +1397,18 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
   };
 }
 
-async function startStream(session, text, aiNode, aiMessageIndex, isFirstInteraction = false, overrideMessages = null, initialFullResponse = "") {
+async function startStream(
+  session,
+  text,
+  aiNode,
+  aiMessageIndex,
+  isFirstInteraction = false,
+  overrideMessages = null,
+  initialFullResponse = ""
+) {
   const nonce = Math.random().toString(36).slice(2);
   const streamId = `${session.created_at}-${aiMessageIndex}-${nonce}`;
-  if (aiNode && aiNode.dataset) aiNode.dataset.streamId = streamId;
+  if (aiNode?.dataset) aiNode.dataset.streamId = streamId;
 
   const messages = overrideMessages ? overrideMessages : buildMessagesUpTo(aiMessageIndex - 1);
   const handler = createStreamHandler(streamId, text, isFirstInteraction);
@@ -1351,8 +1422,12 @@ async function startStream(session, text, aiNode, aiMessageIndex, isFirstInterac
     if (isImmediateError) {
       setTimeout(() => handler({ error: "Simulated failure." }), 500);
       streamManager.startStream(streamId, {
-        controller: { cancel(){} },
-        aiNode, session, messageIndex: aiMessageIndex, messages, contextPrompt: text,
+        controller: { cancel() {} },
+        aiNode,
+        session,
+        messageIndex: aiMessageIndex,
+        messages,
+        contextPrompt: text,
       });
       return;
     }
@@ -1361,6 +1436,7 @@ async function startStream(session, text, aiNode, aiMessageIndex, isFirstInterac
     const failAtPercent = errorMatch ? parseInt(errorMatch[1], 10) : null;
     const failAtIndex = failAtPercent ? Math.floor(chunks.length * (failAtPercent / 100)) : -1;
     let i = 0;
+
     const interval = setInterval(() => {
       if (failAtIndex !== -1 && i >= failAtIndex) {
         clearInterval(interval);
@@ -1379,24 +1455,37 @@ async function startStream(session, text, aiNode, aiMessageIndex, isFirstInterac
     const simulatedController = { cancel: () => clearInterval(interval) };
     streamManager.startStream(streamId, {
       controller: simulatedController,
-      aiNode, session,
+      aiNode,
+      session,
       messageIndex: aiMessageIndex,
       messages,
       contextPrompt: text,
       fullResponse: initialFullResponse,
     });
-  } else {
-    const controller = window.api.chat.stream(messages, "glm-4.5-flash", handler);
-    streamManager.startStream(streamId, {
-      controller,
-      aiNode, session,
-      messageIndex: aiMessageIndex,
-      messages,
-      contextPrompt: text,
-      fullResponse: initialFullResponse, 
-    });
+    return;
   }
+
+  const act = state.settings?.models?.active || {};
+  const controller = window.api.chat.stream(
+    messages,
+    act.model || 'glm-4.5-flash',
+    {
+      provider: act.platform || 'openrouter',
+      baseUrl:  act.baseUrl,
+      apiKey:   act.apiKey
+    },
+    (evt) => handler(evt)
+  );
+
+  streamManager.startStream(streamId, {
+    controller, aiNode, session,
+    messageIndex: aiMessageIndex,
+    messages, contextPrompt: text,
+    fullResponse: initialFullResponse,
+    startedAt: Date.now()
+  });
 }
+
 
 function renderAiFinalActions(aiNode, content, messageIndex) {
   if (!aiNode || !document.contains(aiNode)) return;
@@ -1441,12 +1530,15 @@ async function send() {
   const input = $("#msg");
   const text = (input.value || "").trim();
 
+  if (document.activeElement) document.activeElement.blur();
   log("SESSION", 2, "send", "Sending new message", {
     session: current?.name,
     messageExcerpt: text.substring(0, 60) + "...",
   });
 
   if (!text || !current || streamManager.isStreamingInSession(current)) return;
+
+  ensureTokenFields(current);
 
   current.messages.push(["user", text]);
   const userIndex = current.messages.length - 1;
@@ -1463,6 +1555,7 @@ async function send() {
   aiNode.dataset.index = String(aiMessageIndex);
 
   scheduleThinkingText(aiNode);
+  
   const isFirstInteraction = current.messages.filter((m) => m[0] === "ai" && m[1]).length === 0;
   startStream(current, text, aiNode, aiMessageIndex, isFirstInteraction);
 }
@@ -1482,6 +1575,8 @@ async function sendFromWelcome() {
     created_at: nowISO(),
     messages: [["user", text]],
     seeded: true,
+    tokens_used: 0,
+    tokens_by_message: {},
   };
   state.sessions.unshift(s);
 
@@ -1725,6 +1820,126 @@ function setupEventListeners() {
     }
   })();
 
+  $("#open-model-switcher").addEventListener("click", () => {
+    const modelsConf = state.settings.models || defaultModels();
+    const platformEl = $("#platform-select");
+    const modelSelEl = $("#model-select");
+    const baseUrlEl  = $("#base-url");
+    const apiKeyEl   = $("#api-key");
+    const labelEl    = $("#model-label");
+    const noteEl     = $("#model-note");
+    const notePrev   = $("#model-title");
+
+    function applyNotePreview(text) {
+      notePrev.title = text && text.trim() ? text.trim() : "—";
+    }
+
+    function fillForProvider(p, keepCurrent = false) {
+      const prov = modelsConf.providers?.[p] || { baseUrl: '', apiKey: '', models: [] };
+      const list = normalizeProviderModels(prov.models);
+
+      modelSelEl.innerHTML = "";
+      if (list.length) {
+        for (const m of list) {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.label || m.id;
+          modelSelEl.appendChild(opt);
+        }
+      } else {
+        const opt = document.createElement('option');
+        opt.value = ""; opt.textContent = "(ketik manual di bawah)";
+        modelSelEl.appendChild(opt);
+      }
+
+      const act = modelsConf.active || {};
+      if (keepCurrent && act.platform === p && act.model) {
+        modelSelEl.value = act.model;
+        if (!modelSelEl.value) modelSelEl.selectedIndex = 0;
+      } else {
+        modelSelEl.selectedIndex = 0;
+      }
+
+      baseUrlEl.value = prov.baseUrl || '';
+      apiKeyEl.value  = prov.apiKey  || '';
+
+      const selectedId = modelSelEl.value;
+      const meta = list.find(m => m.id === selectedId) || { id: selectedId, label: selectedId, note: '' };
+      labelEl.value = meta.label || selectedId;
+      noteEl.value  = meta.note  || '';
+      applyNotePreview(meta.note);
+    }
+
+    const act = modelsConf.active || {};
+    platformEl.value = act.platform || 'openrouter';
+    fillForProvider(platformEl.value, true);
+    populateTitleModelOptions(platformEl.value);
+
+    platformEl.onchange = (e) => {
+      const p = e.target.value;
+      fillForProvider(p, false);
+      populateTitleModelOptions(p);
+    }
+    modelSelEl.onchange = () => {
+      const p = platformEl.value;
+      const list = normalizeProviderModels(modelsConf.providers?.[p]?.models || []);
+      const meta = list.find(m => m.id === modelSelEl.value) || { id: modelSelEl.value, label: modelSelEl.value, note: '' };
+      $("#model-label").value = meta.label || meta.id;
+      $("#model-note").value  = meta.note || '';
+      notePrev.title    = meta.note?.trim() || '—';
+    };
+
+    // live note preview
+    $("#model-note").addEventListener("input", (e) => applyNotePreview(e.target.value));
+
+    $("#models-modal").classList.remove("hidden");
+    $("#settings-menu").classList.add("hidden");
+  });
+
+  $("#close-models").addEventListener("click", () => $("#models-modal").classList.add("hidden"));
+  $("#cancel-models").addEventListener("click", () => $("#models-modal").classList.add("hidden"));
+  $("#models-modal .modal-overlay").addEventListener("click", () => $("#models-modal").classList.add("hidden"));
+
+  $("#reset-models").addEventListener("click", () => {
+    state.settings.models = defaultModels();
+    localStorage.setItem('models-conf', JSON.stringify(state.settings.models));
+    updateModelHeader();
+  });
+
+  $("#save-models").addEventListener("click", async () => {
+    const platform = $("#platform-select").value;
+    const modelId  = $("#model-select").value.trim();
+    const baseUrl  = $("#base-url").value.trim();
+    const apiKey   = $("#api-key").value.trim();
+    const label    = $("#model-label").value.trim() || modelId;
+    const note     = $("#model-note").value.trim();
+
+    const conf = state.settings.models || defaultModels();
+    if (!conf.providers[platform]) conf.providers[platform] = { baseUrl: '', apiKey: '', models: [] };
+
+    conf.providers[platform].baseUrl = baseUrl;
+    conf.providers[platform].apiKey  = apiKey;
+
+    const list = normalizeProviderModels(conf.providers[platform].models);
+    const idx  = list.findIndex(m => m.id === modelId);
+    if (idx >= 0) {
+      list[idx].label = label;
+      list[idx].note  = note;
+    } else {
+      list.unshift({ id: modelId, label, note });
+    }
+    conf.providers[platform].models = list;
+
+    conf.active = { platform, model: modelId, baseUrl, apiKey, label };
+
+    state.settings.models = conf;
+    localStorage.setItem('models-conf', JSON.stringify(conf));
+    try { if (!DEBUG_MODE) await window.api.models.save(conf); } catch {}
+
+    updateModelHeader();
+    $("#models-modal").classList.add("hidden");
+  });
+
   $("#new-chat").addEventListener("click", () => {
     log("UI", 0, "event:new-chat-click", "New chat button clicked");
     showWelcomeScreen();
@@ -1858,7 +2073,7 @@ function setupEventListeners() {
 
       const div = aiNode.querySelector(".message-text");
       if (div) {
-        div.innerHTML = md(partial || "*[Response interrupted]*");
+        div.innerHTML = md(partial || "*[System] Model not available or system error, try checking the connection or changing the AI model.*");
         if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
       }
 
@@ -1866,42 +2081,63 @@ function setupEventListeners() {
       if (!footer) {
         footer = document.createElement("div");
         footer.className = "message-footer";
-        aiNode.appendChild(footer);
+        const messageContent = aiNode.querySelector(".message-content");
+        if (messageContent) messageContent.appendChild(footer);
+        else aiNode.appendChild(footer);
       }
       footer.innerHTML = "";
 
-      const contBtn = document.createElement("button");
-      contBtn.className = "primary-btn continue-fragment";
-      contBtn.textContent = "Continue";
-      contBtn.disabled = true;
-      footer.appendChild(contBtn);
+      const placeholderCard = document.createElement("div");
+      placeholderCard.className = "continue-placeholder";
 
       const hint = document.createElement("span");
-      hint.style.marginLeft = "8px";
-      hint.style.color = "var(--fg-muted)";
-      hint.style.fontSize = "12px";
-      hint.textContent = "Response interrupted.";
-      footer.appendChild(hint);
+      hint.className = "placeholder-hint";
+      hint.textContent = "Response interrupted by user";
 
-      setTimeout(() => { contBtn.disabled = false; }, 1500);
+      const btn = document.createElement("button");
+      btn.className = "primary-btn continue-fragment";
+      btn.textContent = "Continue";
+      btn.disabled = true;
+      btn.title = "Continue from interrupted point";
 
-      contBtn.addEventListener("click", () => {
-        log("STREAM", 2, "continue:interrupted:click", "User clicked 'Continue' after manual interruption", { session: session.created_at, messageIndex });
+      placeholderCard.appendChild(hint);
+      placeholderCard.appendChild(btn);
 
-        contBtn.disabled = true;
+      setTimeout(() => {
+        btn.disabled = false;
+      }, 1500);
+
+      btn.addEventListener("click", () => {
+        log(
+          "STREAM",
+          2,
+          "continue:interrupted:click",
+          "User clicked 'Continue' after manual interruption",
+          { session: session.created_at, messageIndex }
+        );
+
+        btn.disabled = true;
         footer.innerHTML = "";
 
         const msgs = buildMessagesUpTo(messageIndex - 1);
-        
         msgs.push({ role: "assistant", content: partial });
-        
+
         const contextPrompt = `[System] Continue EXACTLY where the last assistant message stopped. Do NOT repeat previous text or acknowledge this instruction. Just provide the continuation.`;
         msgs.push({ role: "user", content: contextPrompt });
-        
-        startStream(session, contextPrompt, aiNode, messageIndex, false, msgs, partial);
+
+        startStream(
+          session,
+          contextPrompt,
+          aiNode,
+          messageIndex,
+          false,
+          msgs,
+          partial
+        );
         updateInputState();
       });
 
+      footer.appendChild(placeholderCard);
       break;
     }
 
@@ -1952,6 +2188,7 @@ function initializeApp() {
   log("APP", 2, "initializeApp", "Initializing application.");
   setupEventListeners();
   setupMobileSidebar();
+  
   setupTextareaResize();
   setupTextareaCentralResize();
   setupResponsiveHandlers();

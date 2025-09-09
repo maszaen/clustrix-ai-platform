@@ -759,11 +759,11 @@ input:checked + .slider:before {
 }
 
 .welcome-content h2 {
-  font-size: 32px;
+  font-size: 34px;
   font-family: var(--font-display);
-  font-weight: var(--font-bold);
+  font-weight: var(--font-normal);
   color: var(--icon);
-  margin-bottom: var(--spacing-2xl);
+  margin-bottom: var(--spacing-md);
 }
 
 #central-input-container {
@@ -2133,55 +2133,6 @@ textarea:focus-visible {
   }
 }
 
-.thinking-container {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  min-height: 24px;
-}
-
-@keyframes fadeInScale {
-  from {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.thinking-text {
-  font-size: 15px;
-  color: var(--fg-muted);
-  font-style: italic;
-  transform-origin: left center;
-  
-  animation: 
-    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    pulse-opacity 2s 0.4s infinite ease-in-out;
-}
-
-@keyframes pulse-opacity {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
-
-@keyframes fadeInSlide {
-  from {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
 .continue-placeholder {
   width: 100%;
   display: flex;
@@ -2207,4 +2158,144 @@ textarea:focus-visible {
   height: 36px !important;
   font-size: 13px !important;
   flex-shrink: 0;
+}
+
+/* Think UI */
+.message.ai .thinking-wrap {
+  margin: 0 0 8px 0;
+  position: relative;
+}
+
+.message.ai .thinking-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--spacing-sm) 0 0 var(--spacing-sm);
+  font-size: 17px;
+  color: var(--fg-muted);
+  cursor: pointer;
+
+  /* reset default button */
+  background: transparent;
+  border: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.message.ai .thinking-toggle svg {
+  width: 14px; height: 14px;
+  transition: transform .2s ease;
+}
+
+.message.ai .thinking-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.message.ai .thinking-body {
+  transition: margin .4s ease;
+}
+
+.message.ai .thinking-body {
+  overflow: hidden;
+  transition: all .25s ease;
+  max-height: 0;
+}
+
+.message.ai .thinking-body.expanded {
+  max-height: 500px;
+  overflow: auto;
+  margin-top: 8px;
+  padding: var(--spacing-xs) 0 var(--spacing-lg) 0;
+}
+
+.message.ai .thinking-body.expanded::before {
+  content: "";
+  position: absolute;
+  top: 34px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: linear-gradient(to bottom, var(--bg), transparent);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.message.ai .thinking-body.expanded::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: linear-gradient(to top, var(--bg), transparent);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.message.ai .thinking-text {
+  color: var(--fg-muted);
+  font-size: 15px;
+  line-height: 1.45;
+  padding-top: 6px;
+  white-space: pre-wrap;
+}
+
+.thinking-container {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: 24px;
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.thinking-text {
+  color: var(--fg-muted);
+  font-family: var(--font-sans);
+  padding: var(--spacing-sm);
+  transform-origin: left center;
+  
+  animation: 
+    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    pulse-opacity 2s 0.4s infinite ease-in-out;
+}
+
+.thinking-text-indicator {
+  font-size: 15px;
+  color: var(--fg-muted);
+  font-style: italic;
+  transform-origin: left center;
+  
+  animation: 
+    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    pulse-opacity 2s 0.4s infinite ease-in-out;
+}
+
+@keyframes pulse-opacity {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }

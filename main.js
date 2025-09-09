@@ -80,7 +80,7 @@ ipcMain.handle('models:save', async (_evt, conf) => {
 
 function createWindow(){
   const win = new BrowserWindow({
-    width: 1200, height: 800,
+    width: 1200, height: 900,
     frame: false,
     minWidth: 850,
     minHeight: 400,
@@ -179,6 +179,41 @@ function joinEndpoint(base, p){
   return `${b}/${s}`;
 }
 
+function mapEffort(mode){
+  if (!mode || mode === 'off') return null;
+  if (mode === 'low') return 'low';
+  if (mode === 'medium') return 'medium';
+  if (mode === 'high') return 'high';
+  // auto => biarin null, provider decide
+  return null;
+}
+
+function applyThinkingHints({ provider, model, bodyObj, thinkMode }) {
+  const effort = mapEffort(thinkMode);
+  if (!effort && thinkMode !== 'auto') return;
+
+  // Hint generik untuk OpenAI-style
+  bodyObj.stream_options = Object.assign({}, bodyObj.stream_options, { include_reasoning: true });
+
+  // Banyak proxy/vendor mengikuti kunci ini:
+  if (effort) {
+    bodyObj.reasoning = Object.assign({}, bodyObj.reasoning, { effort }); // 'low' | 'medium' | 'high'
+  }
+
+  // Heuristik ringan untuk beberapa model (aman diabaikan kalau tak dikenal)
+  const mid = String(model || '').toLowerCase();
+  if (mid.includes('deepseek')) {
+    // beberapa adaptor memetakan ke internal "thoughts"; kita kasih hint token limit
+    if (!bodyObj.max_thought_tokens && effort) {
+      bodyObj.max_thought_tokens = effort === 'high' ? 2048 : effort === 'medium' ? 1024 : 512;
+    }
+    // tanda supaya server kirim stream thinking kalau bisa
+    bodyObj.stream_options.include_reasoning = true;
+  }
+
+  // Untuk OpenRouter/Groq/ZAI (OpenAI-style) ini aman—server akan abaikan jika tidak support.
+}
+
 // ---------- Streaming from MAIN (SSE) ----------
 const activeStreams = new Map();
 ipcMain.on('chat:stream-start', (event, payload) => {
@@ -260,7 +295,9 @@ ipcMain.on('chat:stream-start', (event, payload) => {
   }
 
   const url = new URL(joinEndpoint(BASE_URL, 'chat/completions'));
-  const body = JSON.stringify({ model, messages, stream: true });
+  let bodyObj = { model, messages, stream: true };
+  applyThinkingHints({ provider, model, bodyObj, thinkMode: payload.thinkMode });
+  const body = JSON.stringify(bodyObj);
 
   const headers = {
     'Content-Type': 'application/json',
@@ -288,27 +325,98 @@ ipcMain.on('chat:stream-start', (event, payload) => {
       res.on('end', () => sendErr(`HTTP ${res.statusCode} ${res.statusMessage} — ${err.slice(0,200)}`));
       return;
     }
+
+    const ctype = String(res.headers['content-type'] || '').toLowerCase();
+    const isSSE = ctype.includes('text/event-stream');
+
+    if (!isSSE) {
+      let acc = '';
+      res.setEncoding('utf8');
+      res.on('data', (d) => acc += d);
+      res.on('end', () => {
+        // ====> PASTE BLOK NON-SSE DI SINI (SEBELUM ambil text biasa)
+        try {
+          const j = JSON.parse(acc);
+
+          // 'thinking' / 'reasoning'
+          let think =
+            j?.choices?.[0]?.message?.reasoning_content ??
+            j?.choices?.[0]?.message?.reasoning ??
+            j?.reasoning_content ??
+            j?.reasoning ??
+            j?.thoughts ??
+            '';
+
+          if (Array.isArray(think)) think = think.map(p => (p?.text ?? p)).join('');
+          if (think) event.sender.send(`chat:chunk-${reqId}`, { think });
+
+          // text biasa
+          let text =
+            j?.choices?.[0]?.message?.content ??
+            j?.message?.content ??
+            j?.output_text ?? '';
+
+          if (Array.isArray(text)) text = text.map(p => (p?.text ?? p)).join('');
+          if (text) event.sender.send(`chat:chunk-${reqId}`, text);
+
+          sendDone();
+        } catch (e) {
+          sendErr(`JSON parse error (non-stream): ${e.message?.slice(0,100)}`);
+        }
+      });
+      return;
+    }
     res.setEncoding('utf8');
     let buffer = '';
-    res.on('data', chunk => {
+    res.on('data', (chunk) => {
       buffer += chunk;
-      let m;
-      while ((m = buffer.search(/\r?\n\r?\n/)) !== -1){
-        const piece = buffer.slice(0, m).trim();
-        buffer = buffer.slice(m + (buffer[m] === '\r' ? 4 : 2));
-        const lines = piece.split(/\r?\n/).map(l => l.replace(/^data:\s?/, ''));
-        for (const line of lines){
-          if (!line || line === '[DONE]') continue;
-          try{
-            const j = JSON.parse(line);
-            const delta =
-              j?.choices?.[0]?.delta?.content ||
-              j?.delta?.content || j?.content || '';
-            if (delta) event.sender.send(`chat:chunk-${reqId}`, delta);
-          }catch{}
+
+      let idx;
+      while ((idx = buffer.search(/\r?\n\r?\n/)) !== -1) {
+        const rawEvent = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + (buffer[idx] === '\r' ? 4 : 2));
+
+        const lines = rawEvent.split(/\r?\n/);
+        const dataLines = [];
+        let isDone = false;
+
+        for (const ln of lines) {
+          if (/^\s*data:\s*\[DONE\]\s*$/i.test(ln)) { isDone = true; break; }
+          const m = ln.match(/^\s*data:\s?(.*)$/);
+          if (m) dataLines.push(m[1]);
+        }
+        if (isDone) continue;
+        if (!dataLines.length) continue;
+
+        const payload = dataLines.join('\n');
+
+        try {
+          const j = JSON.parse(payload);
+
+          let rdelta =
+            j?.choices?.[0]?.delta?.reasoning_content ??
+            j?.choices?.[0]?.delta?.reasoning ??
+            j?.choices?.[0]?.delta?.thoughts ??
+            j?.delta?.thinking ??
+            j?.reasoning ??
+            '';
+
+          if (Array.isArray(rdelta)) rdelta = rdelta.map(p => (p?.text ?? p)).join('');
+          if (rdelta) event.sender.send(`chat:chunk-${reqId}`, { think: rdelta });
+
+          const delta =
+            j?.choices?.[0]?.delta?.content ??
+            j?.delta?.content ??
+            j?.content ?? '';
+
+          if (delta) event.sender.send(`chat:chunk-${reqId}`, delta);
+
+        } catch (e) {
+          console.log('[SSE BAD JSON]', payload.slice(0,200));
         }
       }
     });
+
     res.on('end', sendDone);
   });
   req.on('error', e => sendErr(e.message || String(e)));

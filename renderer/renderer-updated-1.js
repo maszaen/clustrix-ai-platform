@@ -553,7 +553,7 @@ function scrollToBottom({ force = false } = {}) {
 function getThinkingMarkup() {
   return `<div class="thinking-container">
     <div class="typing-indicator"><span></span><span></span><span></span></div>
-    <span class="thinking-text-indicator"></span>
+    <span class="thinking-text"></span>
   </div>`;
 }
 
@@ -898,7 +898,6 @@ function renderHistory() {
     const [role, content] = current.messages[i];
     const n = addMessage(role, content, { final: true, index: i });
     n.dataset.index = String(i);
-    if (role === 'ai') hydrateThinkingIfAny(n, current, i);
   }
   scrollToBottom({ force: true });
 }
@@ -1084,7 +1083,6 @@ function setCurrent(s) {
       const newNode = $(`#chat-log .message[data-index="${stream.messageIndex}"]`);
       if (newNode) {
         stream.aiNode = newNode;
-        hydrateThinkingIfAny(newNode, current, stream.messageIndex);
         const contentDiv = newNode.querySelector(".message-text");
         if (contentDiv) {
           if (stream.fullResponse && stream.fullResponse.trim() !== "") {
@@ -1329,12 +1327,6 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     if (el?.parentNode) el.parentNode.removeChild(el);
   };
 
-  function clearContinuePlaceholder(aiNode){
-    if (!aiNode) return;
-    const footer = aiNode.querySelector(".message-footer");
-    if (footer) footer.innerHTML = "";
-  }
-
   function renderContinuePlaceholder(aiNode, session, messageIndex, seedText, opts = {}) {
     const { disabledMs = 3000, interrupted = false } = opts;
     if (!aiNode || !document.contains(aiNode)) return;
@@ -1414,7 +1406,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
       }
 
-      clearContinuePlaceholder(aiNode);
+      const footer = aiNode.querySelector(".message-footer");
+      if (footer) footer.innerHTML = "";
 
       if (hasContent && !hasEnd && !interrupted) {
         renderContinuePlaceholder(aiNode, session, messageIndex, display, { disabledMs: 1200, interrupted: false });
@@ -1667,7 +1660,6 @@ async function send() {
   current.messages.push(["ai", ""]);
   const aiNode = addMessage("ai", "", { final: false, index: aiMessageIndex });
   aiNode.dataset.index = String(aiMessageIndex);
-  hydrateThinkingIfAny(aiNode, current, aiMessageIndex);
 
   scheduleThinkingText(aiNode);
   
@@ -1703,7 +1695,6 @@ async function sendFromWelcome() {
   s.messages.push(["ai", ""]);
   const aiNode = addMessage("ai", "", { final: false, index: aiMessageIndex });
   aiNode.dataset.index = String(aiMessageIndex);
-  hydrateThinkingIfAny(aiNode, current, aiMessageIndex);
 
   scheduleThinkingText(aiNode);
   startStream(s, text, aiNode, aiMessageIndex, true);

@@ -247,9 +247,193 @@ function log(context, level, contextFunc, message, details = {}) {
   }
 }
 
-function estimateTokens(s) {
-  if (!s) return 0;
-  return Math.ceil(s.length / 4);
+function ensureTokenFields(session) {
+  if (!session) return;
+  if (typeof session.tokens_used !== "number") session.tokens_used = 0;
+  if (!session.tokens_by_message || typeof session.tokens_by_message !== "object") {
+    session.tokens_by_message = {};
+  }
+}
+
+function updateTokensUI(session) {
+  try {
+    if (session === current) {
+      updateChatHeader();
+      // const activeTok = document.querySelector("#session-list li.active .tokens");
+      // if (activeTok) activeTok.textContent = `${session.tokens_used || 0} tokens`;
+    }
+  } catch {}
+}
+
+function bumpToken(session, messageIndex) {
+  if (!session) return;
+  ensureTokenFields(session);
+  session.tokens_used += 1;
+  if (typeof messageIndex === "number") {
+    session.tokens_by_message[messageIndex] = (session.tokens_by_message[messageIndex] || 0) + 1;
+  }
+  updateTokensUI(session);
+  try {
+    if (typeof save === "function" && (session.tokens_used % 25) === 0) save();
+  } catch {}
+}
+
+function normalizeProviderModels(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map((m) => {
+    if (typeof m === 'string') return { id: m, label: m, note: '' };
+    const id = m?.id || '';
+    return { id, label: m?.label || id, note: m?.note || '' };
+  });
+}
+
+function getModelMeta(conf, platform, modelId) {
+  const list = normalizeProviderModels(conf?.providers?.[platform]?.models || []);
+  const found = list.find(m => (m.id || m) === modelId);
+  if (found) return found;
+  if (typeof modelId === 'string') return { id: modelId, label: modelId, note: '' };
+  return { id: '', label: '', note: '' };
+}
+
+function resolveLabelForActive() {
+  const conf = state?.settings?.models;
+  if (!conf) return null;
+  const act = conf.active || {};
+  if (!act.platform || !act.model) return null;
+
+  if (act.label && act.label.trim()) return act.label.trim();
+
+  const meta = getModelMeta(conf, act.platform, act.model);
+  return meta.label || act.model || null;
+}
+
+function defaultBaseUrlFor(p){
+  if(p==='openrouter') return 'https://openrouter.ai/api/v1';
+  if(p==='groq')       return 'https://api.groq.com/openai/v1';
+  if(p==='gemini')     return 'https://generativelanguage.googleapis.com/v1beta';
+  if(p==='zai')        return 'https://api.z.ai/api/paas/v4/';
+  return 'https://api.z.ai/api/paas/v4/';
+}
+
+function defaultModels() {
+  return {
+    active: {
+      platform: 'openrouter',
+      model: 'deepseek/deepseek-chat-v3.1:free',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: ''
+    },
+    providers: {
+      openrouter: {
+        baseUrl: 'https://openrouter.ai/api/v1',
+        apiKey: '',
+        models: [
+          'deepseek/deepseek-chat-v3.1:free',
+          'meta-llama/llama-3.1-8b-instruct',
+          'mistralai/mistral-7b-instruct',
+          'deepseek/deepseek-chat',
+          'openai/gpt-oss-120b:free',
+          'openai/gpt-oss-20b:free',
+          'meta-llama/llama-4-maverick:free',
+          'microsoft/mai-ds-r1:free',
+          'google/gemini-2.0-flash-exp:free',
+          'qwen/qwen3-coder:free',
+          'qwen/qwen3-14b:free',
+          'qwen/qwen-2.5-coder-32b-instruct:free',
+          'openrouter/sonoma-sky-alpha',
+        ]
+      },
+      groq: {
+        baseUrl: 'https://api.groq.com/openai/v1',
+        apiKey: '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',
+        models: [
+          'llama3-8b-8192',
+          'mixtral-8x7b-32768',
+          'gemma2-9b-it',
+          'openai/gpt-oss-120b'
+        ]
+      },
+      gemini: {
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+        apiKey: '',
+        models: [
+          'gemini-1.5-flash',
+          'gemini-1.5-flash-8b'
+        ]
+      },
+      zai: {
+        baseUrl: 'https://api.z.ai/api/paas/v4/',
+        apiKey: '',
+        models: [
+          'glm-4.5-flash'
+        ]
+      },
+    }
+  };
+}
+
+async function loadModelsConf() {
+  try {
+    const conf = DEBUG_MODE
+      ? JSON.parse(localStorage.getItem('models-conf'))
+      : await window.api.models.load();
+
+    state.settings.models = conf || defaultModels();
+
+    const provs = state.settings.models.providers || {};
+    for (const p of Object.keys(provs)) {
+      provs[p].models = normalizeProviderModels(provs[p].models);
+    }
+  } catch {
+    state.settings.models = defaultModels();
+  }
+  localStorage.setItem('models-conf', JSON.stringify(state.settings.models));
+}
+
+function getActiveChatConfig(){
+  const m = state?.settings?.models || {};
+  const act = m.active || {};
+  const platform = act.platform || 'zai';
+  const prov = m.providers?.[platform] || {};
+  return {
+    provider: platform,
+    model: act.model || 'glm-4.5-flash',
+    baseUrl: act.baseUrl || prov.baseUrl || defaultBaseUrlFor(platform),
+    apiKey : act.apiKey  || prov.apiKey  || '',
+    headers: prov.headers || (platform==='openrouter' ? {'HTTP-Referer':'https://zenai.local','X-Title':'ZenAI Desktop'} : {})
+  };
+}
+
+function getTitleGenConfig(){
+  const m = state?.settings?.models || {};
+  const tg = m.titleGenerator || { useDefault: true };
+  if (tg.useDefault || !tg.model) return getActiveChatConfig();
+
+  const act = m.active || {};
+  const platform = act.platform || 'zai';
+  const prov = m.providers?.[platform] || {};
+  return {
+    provider: platform,
+    model: tg.model,
+    baseUrl: act.baseUrl || prov.baseUrl || defaultBaseUrlFor(platform),
+    apiKey : act.apiKey  || prov.apiKey  || '',
+    headers: prov.headers || (platform==='openrouter' ? {'HTTP-Referer':'https://zenai.local','X-Title':'ZenAI Desktop'} : {})
+  };
+}
+
+function updateModelHeader() {
+  const conf = state?.settings?.models;
+  const act  = conf?.active || {};
+  const label = resolveLabelForActive() || 'Default Model';
+  const title = `${label}`;
+  const prov = `${act.platform || 'unknown'}`;
+
+  const titleEl = document.querySelector('#model-title');
+  if (titleEl) titleEl.textContent = title;
+  if (titleEl) titleEl.title = prov; 
+
+  const tokensEl = document.querySelector('#chat-title');
+  if (tokensEl && !tokensEl.textContent) tokensEl.title = '';
 }
 
 function showWelcomeScreen() {

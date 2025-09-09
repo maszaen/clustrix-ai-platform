@@ -7,6 +7,78 @@ const https = require('https');
 const logFile = path.join(app.getPath('userData'), 'app.log');
 let lastTokenStreamId = null; 
 
+// ---------- Models Config (providers) ----------
+const modelsConfFile = path.join(app.getPath('userData'), 'ai-model.conf.json');
+
+function defaultModelsConf() {
+  return {
+    active: {
+      platform: 'openrouter',
+      model: 'deepseek/deepseek-chat-v3.1:free',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: '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'
+    },
+    providers: {
+      openrouter: {
+        baseUrl: 'https://openrouter.ai/api/v1',
+        apiKey: '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',
+        models: [
+          'deepseek/deepseek-chat-v3.1:free',
+          'meta-llama/llama-3.1-8b-instruct',
+          'mistralai/mistral-7b-instruct',
+          'deepseek/deepseek-chat',
+          'openai/gpt-oss-120b:free',
+          'openai/gpt-oss-20b:free',
+          'meta-llama/llama-4-maverick:free',
+          'microsoft/mai-ds-r1:free',
+          'google/gemini-2.0-flash-exp:free',
+          'qwen/qwen3-coder:free',
+          'qwen/qwen3-14b:free',
+          'qwen/qwen-2.5-coder-32b-instruct:free',
+          'openrouter/sonoma-sky-alpha',
+        ]
+      },
+      groq: {
+        baseUrl: 'https://api.groq.com/openai/v1',
+        apiKey: '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',
+        models: ['llama3-8b-8192','mixtral-8x7b-32768','gemma2-9b-it', 'openai/gpt-oss-120b']
+      },
+      gemini: {
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+        apiKey: '',
+        models: ['gemini-1.5-flash','gemini-1.5-flash-8b']
+      },
+      zai: {
+        baseUrl: 'https://api.z.ai/api/paas/v4/',
+        apiKey: '',
+        models: ['glm-4.5-flash']
+      },
+    }
+  };
+}
+
+ipcMain.handle('models:load', async () => {
+  try {
+    if (!fs.existsSync(modelsConfFile)) return defaultModelsConf();
+    const raw = fs.readFileSync(modelsConfFile, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : defaultModelsConf();
+  } catch (e) {
+    console.error('models:load error', e);
+    return defaultModelsConf();
+  }
+});
+
+ipcMain.handle('models:save', async (_evt, conf) => {
+  try {
+    fs.writeFileSync(modelsConfFile, JSON.stringify(conf, null, 2), 'utf-8');
+    return true;
+  } catch (e) {
+    console.error('models:save error', e);
+    return false;
+  }
+});
+
 function createWindow(){
   console.log('Data disimpan di:', path.join(app.getPath('userData'), 'chat_data.json'));
   const win = new BrowserWindow({

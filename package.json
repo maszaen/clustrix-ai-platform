@@ -53,10 +53,10 @@
           ]
         }
       ],
-      "icon": "public/images/favicon.ico"
+      "icon": "public/images/favicon.png"
     },
     "mac": {
-      "icon": "public/images/favicon.ico",
+      "icon": "public/images/favicon.png",
       "target": [
         {
           "target": "dmg",
@@ -68,7 +68,7 @@
       ]
     },
     "linux": {
-      "icon": "public/images/favicon.ico",
+      "icon": "public/images/favicon.png",
       "target": [
         {
           "target": "AppImage",

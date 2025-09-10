@@ -158,6 +158,7 @@ body.dark-theme {
 html {
   scrollbar-width: thin;
   scrollbar-color: var(--border-input) transparent;
+  border-radius: 10px !important;
 }
 
 .chat-log-container,
@@ -224,6 +225,7 @@ html, body {
   -webkit-font-smoothing: antialiased; 
   -moz-osx-font-smoothing: grayscale; 
   font-smooth: always;
+  border-radius: 10px;
 }
 
 hr {
@@ -776,7 +778,7 @@ input:checked + .slider:before {
 
 .welcome-content {
   width: 100%;
-  max-width: 750px;
+  max-width: 700px;
   text-align: center;
 }
 
@@ -2244,11 +2246,10 @@ textarea:focus-visible {
   align-items: center;
   gap: 8px;
   padding: var(--spacing-sm) 0 0 var(--spacing-sm);
-  font-size: 17px;
+  font-size: 15px;
   color: var(--fg-muted);
   cursor: pointer;
-
-  /* reset default button */
+  font-family: var(--font-display-italic);
   background: transparent;
   border: none;
   appearance: none;
@@ -2284,7 +2285,7 @@ textarea:focus-visible {
 .message.ai .thinking-body.expanded::before {
   content: "";
   position: absolute;
-  top: 34px;
+  top: 31px;
   left: 0;
   right: 0;
   height: 10px;
@@ -2306,6 +2307,15 @@ textarea:focus-visible {
 }
 
 .message.ai .thinking-text {
+  color: var(--fg-muted);
+  font-size: 15px;
+  line-height: 1.45;
+  /* padding-top: 6px; */
+  padding: 0 var(--spacing-sm);
+  white-space: pre-wrap;
+}
+
+.message.ai .thinking-text-indicator {
   color: var(--fg-muted);
   font-size: 15px;
   line-height: 1.45;
@@ -2369,34 +2379,32 @@ textarea:focus-visible {
 }
 
 .thinking-text-indicator {
-  font-size: 15px;
   color: var(--fg-muted);
-  font-style: italic;
+  font-family: var(--font-sans);
+  align-items: center;
+  min-height: 0;
+  min-width: 0;
+  
   transform-origin: left center;
-  padding: var(--spacing-sm);
-  display: 
   position: relative;
   overflow: hidden;
   
-  /* Shimmer gradient setup */
   background: linear-gradient(90deg, 
-    transparent 0%,           /* Mulai transparan */
-    transparent 40%,          /* Tetap transparan sampai 40% */
-    rgba(255, 255, 255, 0.74) 50%,  /* Peak brightness di tengah - ubah opacity ini untuk intensitas */
-    transparent 60%,          /* Kembali transparan di 60% */
-    transparent 100%          /* Sampai akhir transparan */
+    transparent 0%,           
+    transparent 40%,          
+    rgba(255, 255, 255, 0.85) 50%,  
+    transparent 60%,         
+    transparent 100%         
   );
   
-  /* Background size 200% biar bisa gerak smooth */
   background-size: 200% 100%;
   
-  /* Clip background ke text aja */
   -webkit-background-clip: text;
   background-clip: text;
   
   animation: 
-    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1),  /* Initial fade in */
-    shimmer 3s 0.4s infinite ease-in-out;           /* Shimmer loop - ubah 2s untuk speed */
+    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+    shimmer 4s 0.4s infinite ease-in-out;          
 }
 
 /* Shimmer animation - gerakin background dari kiri ke kanan */

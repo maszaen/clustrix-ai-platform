@@ -1,21 +1,39 @@
-const welcomeMessages = [
-  "Ready when you are. What's up?",
-  "Let's untangle this. Where to start?",
-  "Problem to solve, or idea to explore?",
-  "Alright, let's dive in. Topic today?",
-  "I'm all ears. Tell me.",
-  "What's that idea stuck in your head?",
-  "Need clarity or a spark?",
-  "No idea's too small. Share it.",
-  "Let's act on it. What's our quest?",
-  "Your thoughts, my focus. Go.",
-  "What's one thing to move forward?",
-  "Ready to build? Start me off.",
-  "Lay it on me. What's the challenge?",
-  "Let's find a breakthrough. Thoughts?",
-  "Circuits buzzing. What create today?",
-  "How can I help right now?",
-];
+const welcomeMessages = {
+  pagi: [
+    "Morning, [USERNAME]! What's up?",
+    "Rise and grind, [USERNAME]!",
+    "Good morning, [USERNAME]!",
+    "Morning check-in, [USERNAME]!",
+  ],
+  siang: [
+    "Afternoon, [USERNAME]!",
+    "Hey [USERNAME], what's good?",
+    "Midday check-in, [USERNAME]!",
+    "Afternoon vibes, [USERNAME]!",
+  ],
+  sore: [
+    "Evening, [USERNAME]!",
+    "Good evening, [USERNAME]!",
+    "Evening check-in, [USERNAME]!",
+    "Hey [USERNAME], what's up?",
+  ],
+  malam: [
+    "Night session, [USERNAME]!",
+    "Evening, [USERNAME]!",
+    "Late night work, [USERNAME]?",
+    "Night check-in, [USERNAME]!",
+  ],
+  anytime: [
+    "What's new, [USERNAME]?",
+    "Hey there, [USERNAME]!",
+    "Yo [USERNAME], what's the mission?",
+    "What's poppin', [USERNAME]?",
+    "Back again, [USERNAME]?",
+    "Let's get it, [USERNAME]!",
+    "Another day, another slay, [USERNAME]!",
+    "Ready to get things done, [USERNAME]?",
+  ],
+};
 
 const DEMO_RESPONSE = `# Arsitektur UI Chat Modern: Performa, Aksesibilitas, dan Skalabilitas 
 

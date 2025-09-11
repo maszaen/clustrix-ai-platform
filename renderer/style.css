@@ -282,14 +282,19 @@ hr {
 
 /* App Layout */
 #app {
-  display: grid;
-  grid-template-columns: 240px 1fr;
+  display: flex;
+  position: relative;
   height: 100vh;
-  transition: grid-template-columns var(--transition-medium);
+  transition: all var(--transition-medium);
 }
 
-#app.sidebar-collapsed {
-  grid-template-columns: 64px 1fr;
+#app.sidebar-collapsed .sidebar {
+  width: 64px;
+}
+
+#app.sidebar-collapsed .chat-area {
+  margin-left: 64px;
+  width: calc(100% - 64px);
 }
 
 /* Sidebar */
@@ -298,8 +303,16 @@ hr {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  position: relative;
-  transition: var(--transition-medium);
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  width: 240px;
+
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: width;
+  transform: translateZ(0);
 }
 
 .sidebar-header {
@@ -793,6 +806,23 @@ input:checked + .slider:before {
 }
 
 /* --- Logika Transisi Animasi --- */
+.chat-area {
+  /* Properti lama seperti display: flex, flex-direction, dll. tetap sama */
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  height: 100vh;
+  
+  /* Properti baru untuk layout dan animasi */
+  margin-left: 240px;
+  width: calc(100% - 240px); /* Pastikan lebarnya menyesuaikan */
+
+  /* --- INI BAGIAN PENTINGNYA --- */
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: margin-left, width; /* Petunjuk untuk browser */
+  transform: translateZ(0); /* Memicu akselerasi hardware (GPU) */
+}
+
 .chat-area.welcome-active #welcome-screen {
   opacity: 1;
   pointer-events: auto;
@@ -958,7 +988,6 @@ input:checked + .slider:before {
 }
 
 .window-controls {
-  -webkit-app-region: no-drag;
   display: flex;
   justify-content: end;
   height: 100%;
@@ -966,6 +995,7 @@ input:checked + .slider:before {
 }
 
 .window-btn {
+  -webkit-app-region: no-drag;
   border: none;
   width: 45px;
   height: 40px;
@@ -1845,6 +1875,7 @@ strong {
   
   .chat-area {
     width: 100vw;
+    margin-left: 0;
   }
   
   #chat-log {

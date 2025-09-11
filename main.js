@@ -217,7 +217,6 @@ function mapEffort(mode){
   if (mode === 'low') return 'low';
   if (mode === 'medium') return 'medium';
   if (mode === 'high') return 'high';
-  // auto => biarin null, provider decide
   return null;
 }
 
@@ -225,15 +224,12 @@ function applyThinkingHints({ provider, model, bodyObj, thinkMode }) {
   const effort = mapEffort(thinkMode);
   if (!effort && thinkMode !== 'auto') return;
 
-  // Hint generik untuk OpenAI-style
   bodyObj.stream_options = Object.assign({}, bodyObj.stream_options, { include_reasoning: true });
 
-  // Banyak proxy/vendor mengikuti kunci ini:
   if (effort) {
     bodyObj.reasoning = Object.assign({}, bodyObj.reasoning, { effort }); // 'low' | 'medium' | 'high'
   }
 
-  // Heuristik ringan untuk beberapa model (aman diabaikan kalau tak dikenal)
   const mid = String(model || '').toLowerCase();
   if (mid.includes('deepseek')) {
     if (!bodyObj.max_thought_tokens && effort) {
@@ -382,7 +378,6 @@ function runStandardStreaming(event, payload) {
       res.setEncoding('utf8');
       res.on('data', (d) => acc += d);
       res.on('end', () => {
-        // ====> PASTE BLOK NON-SSE DI SINI (SEBELUM ambil text biasa)
         try {
           const j = JSON.parse(acc);
 
@@ -601,7 +596,6 @@ async function runWebSearchChat(event, payload) {
   try {
     const userQuery = messages[messages.length - 1].content;
 
-    // --- LANGKAH 1: TRIAGE (PRA-ANALISIS) ---
     logHelper('WEB_CHAT', 'runWebSearchChat', 'Memulai tahap Pra-Analisis (Triage).', { query: userQuery });
     const triageMessages = [{ role: 'system', content: TRIAGE_SYSTEM_PROMPT }, { role: 'user', content: userQuery }];
     const triageResponse = await invokeLLM_nonStream(triageMessages, payload);
@@ -615,7 +609,6 @@ async function runWebSearchChat(event, payload) {
       return runStandardStreaming(event, payload);
     }
 
-    // --- LANGKAH 2: KEPUTUSAN & PERCABANGAN ---
     if (!decision.requires_search || !decision.search_queries || decision.search_queries.length === 0) {
       logHelper('WEB_CHAT', 'runWebSearchChat', 'Keputusan: Tidak perlu web search. Menjalankan chat standar.');
       return runStandardStreaming(event, payload);
@@ -623,7 +616,6 @@ async function runWebSearchChat(event, payload) {
     event.sender.send('search:status', { step: 'DECIDED', data: decision });
     logHelper('WEB_CHAT', 'runWebSearchChat', 'Keputusan: Web search diperlukan.');
 
-    // --- LANGKAH 3: PROSES PENCARIAN ---
     event.sender.send('chat-update', { type: 'SEARCHING', messageIndex: payload.aiMessageIndex, data: { summarizedQuery: decision.search_queries[0] } });
     logHelper('WEB_CHAT', 'performWebSearch', 'Memulai pencarian di internet...', { queries: decision.search_queries });
     const searchResults = await performWebSearch(decision.search_queries, payload.serpApiKey);
@@ -648,7 +640,6 @@ async function runWebSearchChat(event, payload) {
     event.sender.send('search:status', { step: 'PROCESSING', data: { count: nonEmptyContent.length } });
     event.sender.send('chat-update', { type: 'READING_COMPLETE', messageIndex: payload.aiMessageIndex, data: { pageCount: nonEmptyContent.length } });
 
-    // --- LANGKAH 4: FINAL PROMPT & SINTESIS ---
     let searchContext = "Use the following search results to answer the user's original query. The user's original query was: \"" + decision.user_prompt + "\". Base your answer on these facts and cite sources with markdown links `[Source: Title](URL)`.\n\n";
     nonEmptyContent.forEach((content, i) => {
       const result = searchResults[i];
@@ -667,10 +658,8 @@ async function runWebSearchChat(event, payload) {
   }
 }
 
-// Fungsi untuk memanggil LLM non-streaming (untuk Triage)
 function invokeLLM_nonStream(messages, options) {
   return new Promise((resolve, reject) => {
-    // Diadaptasi dari logika 'chat:title'
     const { model, provider, baseUrl, apiKey } = options;
     const u = new URL(joinEndpoint(baseUrl, 'chat/completions'));
     const body = JSON.stringify({ model, messages, stream: false });
@@ -708,7 +697,6 @@ function invokeLLM_nonStream(messages, options) {
   });
 }
 
-// Fungsi untuk melakukan pencarian
 async function performWebSearch(queries, serpApiKey) {
   if (!serpApiKey) {
     console.error("SERPAPI_KEY not set in environment variables.");
@@ -718,8 +706,8 @@ async function performWebSearch(queries, serpApiKey) {
     const promises = queries.map(q => getJson({ q, api_key: serpApiKey, hl: 'id', gl: 'id' }));
     const results = await Promise.all(promises);
     const organicResults = results.flatMap(r => r.organic_results || [])
-      .filter(r => r.link && !r.link.includes("youtube.com")) // Filter link aneh
-      .slice(0, 5); // Ambil 5 hasil unik teratas
+      .filter(r => r.link && !r.link.includes("youtube.com"))
+      .slice(0, 5);
     return organicResults;
   } catch (error) {
     console.error("SerpApi search failed:", error);
@@ -727,12 +715,11 @@ async function performWebSearch(queries, serpApiKey) {
   }
 }
 
-// Fungsi untuk scraping
 async function scrapeUrls(urls) {
   const MAX_CHARS_PER_PAGE = 2000;
   const scrapePromises = urls.map(url => new Promise(async (resolve) => {
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(5000) }); // Timeout 5 detik
+      const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
       if (!response.ok) return resolve("");
       const html = await response.text();
       const $ = cheerio.load(html);

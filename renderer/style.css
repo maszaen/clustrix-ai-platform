@@ -487,6 +487,7 @@ hr {
   flex: 1;
   overflow-y: auto;
   padding: 0 var(--spacing-xs);
+  transition: all 0.2s ease;
 }
 
 #session-list {
@@ -496,6 +497,7 @@ hr {
   overflow: auto;
   height: 100%;
   max-height: calc(100vh - 163px);
+  transition: all 0.2s ease;
 }
 
 #session-list li {
@@ -537,6 +539,7 @@ hr {
   opacity: 0;
   transition: opacity var(--transition-fast);
   margin-left: var(--spacing-sm);
+  transition: all 0.2s ease;
 }
 
 #session-list li:hover .menu {
@@ -917,6 +920,7 @@ input:checked + .slider:before {
 }
 
 .model-show {
+  /* -webkit-app-region: no-drag; */
   display: flex;
   flex-direction: column;
 }
@@ -2442,7 +2446,7 @@ textarea:focus-visible {
 
 figure {
   --size: 15vmin;
-  --duration: 6s;
+  --duration: 5s;
   --direction: 1;
   --pull: -0.15;
   perspective: 30rem;
@@ -2486,8 +2490,6 @@ figure:nth-child(3) {
   --l: 80%;
 }
 
-
-
 @keyframes diamonds {
   0%,
   20% {
@@ -2508,16 +2510,16 @@ figure:nth-child(3) {
 @keyframes spin-logo {
   0%,
   20% {
-    transform: rotate(0deg);
+    transform: translateY(0);
   }
 
   50% {
-    transform: rotate(180deg);
+    transform: translateY(20px);
   }
   
   80%,
   100% {
-    transform: rotate(360deg);
+    transform: translateY(0);
   }
 }
 

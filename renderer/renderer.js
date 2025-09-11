@@ -4,6 +4,8 @@ let collapsed = false;
 let loadedSessionCount = 0;
 let isAdvancedSearch = false;
 let onlineResumeTimer = null;
+let searchStatusQueue = [];
+let isProcessingQueue = false;
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -157,6 +159,92 @@ const streamManager = {
 
 
 // Utility Functions
+async function processSearchStatusQueue() {
+  if (isProcessingQueue) return;
+  isProcessingQueue = true;
+  log("UI_SEARCH", 1, "processSearchStatusQueue", "Starting queue V3.", { queue_length: searchStatusQueue.length });
+
+  const streamKey = Object.keys(streamManager.activeStreams)[0];
+  const s = streamManager.activeStreams[streamKey];
+  
+  if (!s || !s.aiNode) {
+    log("UI_SEARCH", 3, "processSearchStatusQueue", "Queue processing stopped: No active stream or aiNode found.");
+    isProcessingQueue = false;
+    return;
+  }
+  
+  const aiNode = s.aiNode;
+  ensureThinkingUI(aiNode); 
+  const thinkEl = aiNode._thinkingEl;
+
+  if (!thinkEl) {
+    log("UI_SEARCH", 4, "processSearchStatusQueue", "FATAL: ensureThinkingUI failed to create _thinkingEl.", { aiNode });
+    isProcessingQueue = false;
+    return;
+  }
+
+  const createTitleSpan = () => {
+    const span = document.createElement('span');
+    span.style.fontFamily = 'var(--font-display-italic)';
+    return span;
+  };
+
+  while (searchStatusQueue.length > 0) {
+    const status = searchStatusQueue.shift();
+    log("UI_SEARCH", 2, "processSearchStatusQueue", `Processing step: ${status.step}`);
+
+    switch (status.step) {
+      case 'DECIDED':
+        thinkEl.toggle.querySelector('span').textContent = `Searching for "${status.data.summary_key}"...`;
+        thinkEl.text.innerHTML = '';
+        if (!thinkEl.body.classList.contains('expanded')) {
+          thinkEl.toggle.click();
+        }
+
+        const reasoningTitle = createTitleSpan();
+        thinkEl.text.appendChild(reasoningTitle);
+        await typewriterEffectChunked(reasoningTitle, "Reasoning:", 100, 4);
+
+        thinkEl.text.appendChild(document.createElement('br'));
+        const reasoningContent = document.createElement('span');
+        thinkEl.text.appendChild(reasoningContent);
+        await typewriterEffectChunked(reasoningContent, status.data.reasoning, 1000);
+
+        thinkEl.text.innerHTML += '<br><br>';
+        const keywordsTitle = createTitleSpan();
+        thinkEl.text.appendChild(keywordsTitle);
+        await typewriterEffectChunked(keywordsTitle, "Keywords:", 200, 3);
+        
+        thinkEl.text.appendChild(document.createElement('br'));
+        const keywordsContent = document.createElement('span');
+        thinkEl.text.appendChild(keywordsContent);
+        await typewriterEffectChunked(keywordsContent, status.data.search_queries.join('\n'), 700);
+        break;
+        
+      case 'FOUND_URLS':
+        thinkEl.text.innerHTML += '<br><br>';
+        const urlsTitle = createTitleSpan();
+        thinkEl.text.appendChild(urlsTitle);
+        await typewriterEffectChunked(urlsTitle, "Found URLs:", 200, 3);
+
+        thinkEl.text.appendChild(document.createElement('br'));
+        const urlsContent = document.createElement('span');
+        thinkEl.text.appendChild(urlsContent);
+        await typewriterEffectChunked(urlsContent, status.data.map(r => r.link).join('\n'), 700);
+        break;
+        
+      case 'PROCESSING':
+        thinkEl.toggle.querySelector('span').textContent = `Reading ${status.data.count} pages & preparing answer...`;
+        await new Promise(r => setTimeout(r, 1000));
+        break;
+    }
+    scrollToBottom({ force: true });
+  }
+
+  isProcessingQueue = false;
+  log("UI_SEARCH", 1, "processSearchStatusQueue", "Queue V3 finished.");
+}
+
 function nowISO() {
   return new Date().toISOString();
 }
@@ -168,6 +256,33 @@ function newSessionName() {
 
 function formatUserMessage(content) {
   return esc(content).replace(/\n/g, "<br/>");
+}
+
+async function typewriterEffectChunked(element, text, totalDuration, chunkSize = 20) {
+  log("UI_EFFECT", 1, "typewriterEffectChunked", "Starting typewriter effect.", { text_length: text.length, duration_ms: totalDuration });
+  
+  const chunks = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.substring(i, i + chunkSize));
+  }
+
+  if (chunks.length === 0) return;
+
+  const delay = totalDuration / chunks.length;
+  let pauseCount = 0;
+  const maxPauses = 3;
+
+  for (const chunk of chunks) {
+    element.innerHTML += chunk.replaceAll('\n', '<br>');
+    scrollToBottom({ force: true });
+    await new Promise(r => setTimeout(r, delay));
+
+    if (pauseCount < maxPauses && Math.random() < 0.15) {
+      await new Promise(r => setTimeout(r, 100));
+      pauseCount++;
+    }
+  }
+  log("UI_EFFECT", 2, "typewriterEffectChunked", "Typewriter effect finished.");
 }
 
 function esc(s) {
@@ -218,28 +333,49 @@ function ensureThinkingUI(aiNode) {
 }
 
 function appendThinking(aiNode, chunk, session, messageIndex) {
-  if (!chunk) return;
+  if (!chunk || !aiNode || !session || messageIndex == null) return;
+  
   ensureThinkingUI(aiNode);
-
   session._x_think = session._x_think || {};
-  session._x_think[messageIndex] = (session._x_think[messageIndex] || '') + String(chunk);
-
-  const el = aiNode._thinkingEl;
-  if (el) {
-    if (!el.body.classList.contains('expanded')) {
-      el.body.classList.add('expanded');
-      el.toggle.setAttribute('aria-expanded', 'true');
-    }
-    el.text.innerHTML = renderWithExistingFormatter(session._x_think[messageIndex]);
-  }
-
+  
+  const prev = String(session._x_think[messageIndex] || '');
+  const chunkStr = String(chunk);
+  const combined = prev + chunkStr;
+  
+  session._x_think[messageIndex] = cleanLeadingWhitespace(combined);
+  
+  updateThinkingUI(aiNode, session._x_think[messageIndex]);
   saveThinkingDebounced();
 }
 
+function cleanLeadingWhitespace(text) {
+  if (!text || typeof text !== 'string') return '';
+  return text.replace(/^[\s\u200B\u200C\u200D\u2060\ufeff\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+/, '');
+}
+
+function updateThinkingUI(aiNode, content) {
+  const el = aiNode._thinkingEl;
+  if (!el) return;
+  
+  if (!el.body.classList.contains('expanded')) {
+    el.body.classList.add('expanded');
+    el.toggle.setAttribute('aria-expanded', 'true');
+  }
+  el.text.innerHTML = renderWithExistingFormatter(content);
+}
+
 function renderWithExistingFormatter(raw) {
-  const esc = (s) => String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  return esc(raw).replace(/\n/g, '<br/>');
+  if (raw == null) return '';
+  const cleaned = cleanLeadingWhitespace(String(raw));
+  const escapeHtml = (str) => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+  return escapeHtml(cleaned).replace(/\r?\n/g, '<br/>');
 }
 
 const saveThinkingDebounced = (() => {
@@ -1094,6 +1230,20 @@ function parseInlineMarkdown(text) {
     .replaceAll(">", "&gt;");
   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
   html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
+
+  const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
+  html = html.replace(footnoteGroupRegex, (match) => {
+    const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
+    const links = [];
+    let result;
+    while ((result = individualFootnoteRegex.exec(match)) !== null) {
+      const number = result[1];
+      const url = result[2];
+      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer">[${number}]</a>`);
+    }
+    return `<sup class="footnote-ref">${links.join(', ')}</sup>`;
+  });
+  
   const linkRegex = /\[(.*?)\]\((.*?)\)/g;
   html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
@@ -1135,6 +1285,70 @@ function md(src) {
   if (tempDiv.querySelector("pre code")) Prism.highlightAllUnder(tempDiv);
   attachCodeBlockCopyListeners(tempDiv);
   return tempDiv.innerHTML;
+}
+
+function formatErrorMessageForSaving(reason) {
+  log("FORMATTER", 1, "formatErrorMessageForSaving", "--- MEMULAI FORMATTING ERROR ---", { raw_reason: reason });
+
+  if (!reason || typeof reason !== 'string') {
+    const errorMsg = "*[System] An unknown error occurred (reason was null or not a string).*";
+    log("FORMATTER", 4, "formatErrorMessageForSaving", "KELUAR: Alasan tidak valid.", { final_output: errorMsg });
+    return errorMsg;
+  }
+
+  let parts = [];
+  let processingString = reason;
+  log("FORMATTER", 1, "formatErrorMessageForSaving", "State awal disiapkan.", { processingString });
+
+  const httpMatch = processingString.match(/HTTP\s+(\d+)\s?([a-zA-Z\s]+)(?:\s?[—|-]\s?)/i);
+  if (httpMatch) {
+    log("FORMATTER", 2, "formatErrorMessageForSaving", "LOG 1: Pola HTTP DITEMUKAN.", { match_result: httpMatch });
+    const code = httpMatch[1];
+    const statusText = httpMatch[2].trim();
+    parts.push(`Error code ${code}`);
+    parts.push(statusText);
+    processingString = processingString.substring(httpMatch[0].length).trim();
+    log("FORMATTER", 1, "formatErrorMessageForSaving", "LOG 2: Bagian HTTP diekstrak.", { parts_array: parts, sisa_string: processingString });
+  } else {
+    log("FORMATTER", 3, "formatErrorMessageForSaving", "LOG 1: Pola HTTP TIDAK ditemukan.");
+  }
+
+  const messageMatch = reason.match(/"message"\s*:\s*"(.*?)"/);
+  if (messageMatch && messageMatch[1]) {
+    log("FORMATTER", 2, "formatErrorMessageForSaving", "LOG 3: 'message' BERHASIL diekstrak dari JSON.", { message: messageMatch[1] });
+    parts.push(messageMatch[1]);
+  } else {
+    log("FORMATTER", 3, "formatErrorMessageForSaving", "LOG 3: GAGAL, 'message' tidak ditemukan di dalam string.");
+  }
+
+  if (parts.length === 0) {
+    parts.push(reason);
+    log("FORMATTER", 3, "formatErrorMessageForSaving", "LOG 4: Tidak ada bagian yang bisa diekstrak, menggunakan pesan asli.", { parts_array: parts });
+  }
+  
+  let finalMessage = parts.join(', ');
+  log("FORMATTER", 1, "formatErrorMessageForSaving", "LOG 5: Bagian-bagian digabung.", { sebelum_dibersihkan: finalMessage });
+
+  finalMessage = finalMessage
+    .replace(/:/g, '')
+    .replace(/-/g, ' ')
+    .replace(/\./g, ',')
+    .replace(/,\s*,/g, ',')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  log("FORMATTER", 1, "formatErrorMessageForSaving", "LOG 6: Pembersihan dan konversi ke lowercase selesai.", { setelah_dibersihkan: finalMessage });
+
+  if (finalMessage) {
+    if (finalMessage.endsWith(',')) {
+      finalMessage = finalMessage.slice(0, -1);
+    }
+    finalMessage = finalMessage.charAt(0).toUpperCase() + finalMessage.slice(1) + '.';
+  }
+  
+  log("FORMATTER", 2, "formatErrorMessageForSaving", "--- SELESAI FORMATTING ERROR ---", { final_output: finalMessage });
+  return finalMessage || "*[System] An error occurred.*";
 }
 
 function getWelcomeMessage() {
@@ -1193,7 +1407,8 @@ function findOverlap(existing, newToken) {
 // Persona and Messages
 function personaSystem() {
   const { name, work, prefs } = state.settings.persona || {};
-  let prompt = "You are ZenAI, a helpful and intelligent assistant.\n\n";
+  let prompt = "You are ZenAI, a helpful and intelligent assistant.\n";
+  prompt += "If the user asks you to search, or retry a search, but does not specify a topic, you MUST ask for clarification on what topic they want you to search for. Do not assume the previous topic.\n\n";
   
   prompt += "# SYSTEM REQUIREMENTS/INSTRUCTIONS:\n";
   prompt += "- MANDATORY: Always end the response with <!--[/END]--> in the new line because the ZenAI platform has a stream end detection system.\n";
@@ -1307,6 +1522,7 @@ function renderSessions() {
     if (s.name === null) {
       const placeholder = document.createElement("li");
       placeholder.className = s === current ? "active session-placeholder" : "session-placeholder";
+      placeholder.dataset.sessionId = s.created_at; // Use created_at as unique identifier
       placeholder.innerHTML = `<span class="name">Untitled chat</span><div class="spinner"></div>`;
       placeholder.addEventListener("click", () => setCurrent(s));
       ul.appendChild(placeholder);
@@ -1315,6 +1531,7 @@ function renderSessions() {
 
     const li = document.createElement("li");
     li.className = s === current ? "active" : "";
+    li.dataset.sessionId = s.created_at; // Use created_at as unique identifier
     li.innerHTML = `
       <span class="name">${esc(s.name)}</span>
       <div class="session-meta">
@@ -1339,12 +1556,91 @@ function renderSessions() {
   });
 }
 
+// Function to update only a specific session title with typewriter effect
+function updateSessionTitle(sessionId, newTitle, useTypewriter = true) {
+  const sessionElement = document.querySelector(`#session-list li[data-session-id="${sessionId}"]`);
+  if (!sessionElement) return;
+  
+  const nameElement = sessionElement.querySelector('.name');
+  if (!nameElement) return;
+  
+  if (useTypewriter) {
+    // Apply typewriter effect to session title
+    nameElement.textContent = "";
+    let i = 0;
+    const punctuation = ".,?!;:-–";
+    function type() {
+      if (i < newTitle.length) {
+        const char = newTitle.charAt(i);
+        nameElement.textContent += char;
+        i++;
+        let delay = 25 + Math.random() * 20; // Faster speed for session titles
+        if (punctuation.includes(char)) delay += 150; // Shorter punctuation delay
+        setTimeout(type, delay);
+      }
+    }
+    setTimeout(type, 50);
+  } else {
+    nameElement.textContent = newTitle; // Use textContent directly, no need to escape
+  }
+}
+
+// Function to convert session placeholder to full session item  
+function convertPlaceholderToSession(sessionId, sessionData) {
+  const sessionElement = document.querySelector(`#session-list li[data-session-id="${sessionId}"]`);
+  if (!sessionElement || !sessionElement.classList.contains('session-placeholder')) return;
+  
+  // Remove placeholder class and update structure
+  sessionElement.classList.remove('session-placeholder');
+  if (sessionData === current) {
+    sessionElement.className = 'active';
+  } else {
+    sessionElement.className = '';
+  }
+  
+  // Update the HTML structure to match normal session items
+  sessionElement.innerHTML = `
+    <span class="name">${esc(sessionData.name)}</span>
+    <div class="session-meta">
+      <span class="tokens"></span>
+      <span class="menu">
+        <button title="Delete Session">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </span>
+    </div>
+  `;
+  
+  // Re-add event listeners
+  sessionElement.addEventListener("click", () => setCurrent(sessionData));
+  sessionElement.querySelector("button").addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    showConfirmationModal("Delete Session", `Are you sure you want to delete "${sessionData.name}"?`, () => deleteSession(sessionData));
+  });
+}
+
+// Function to update active session state without full re-render
+function updateActiveSessionState(newActiveSession) {
+  // Remove active class from all sessions
+  document.querySelectorAll('#session-list li.active').forEach(li => {
+    li.classList.remove('active');
+  });
+  
+  // Add active class to new active session
+  if (newActiveSession) {
+    const activeElement = document.querySelector(`#session-list li[data-session-id="${newActiveSession.created_at}"]`);
+    if (activeElement) {
+      activeElement.classList.add('active');
+    }
+  }
+}
+
 function updateChatHeader() {
   if (current?.name) {
     $("#chat-title").textContent = current.name;
     $("#chat-title").title = `${current.tokens_used || 0} tokens`;
   } else {
-    $("#chat-title").textContent = "New Chat";
+    $("#chat-title").textContent = "Untitled chat";
     $("#chat-title").title = "no token used";
   }
 }
@@ -1361,12 +1657,12 @@ function addMessage(role, content, { final = false, index = -1 } = {}) {
   if (role === "user") {
     node.innerHTML = `<div class="message-row"><div class="message-content"><div class="message-text">${formatUserMessage(content)}</div>${baseActions}</div></div>`;
   } else if (role === "ai_cancelled") {
-    const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-chat.svg" alt="ZenAI Logo"></div>`;
+    const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="ZenAI Logo"></div>`;
     node.innerHTML = `<div class="message-row">${aiAvatar}<div class="message-content"><div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${content}</span><button class="primary-btn regenerate-cancelled" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate?</button></div></div></div></div>`;
   } else {
-    const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-chat.svg" alt="ZenAI Logo"></div>`;
+    const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="ZenAI Logo"></div>`;
     const thinking = `<div class="thinking-container"><div class="typing-indicator"><span></span><span></span><span></span></div><span class="thinking-text-indicator"></span></div>`;
-    node.innerHTML = `<div class="message-row">${aiAvatar}<div class="message-content"><div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
+    node.innerHTML = `<div class="message-row">${aiAvatar}<div class="message-content"><div class="web-search-indicator" style="display: none;"></div><div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
     if (role === "ai" && !final) {
       node.style.opacity = "0";
       node.style.transform = "translateY(20px)";
@@ -1480,7 +1776,9 @@ function setCurrent(s) {
 async function load() {
   if (!state.settings) state.settings = {}; 
   if (!state.settings.think) state.settings.think = { mode: 'off' };
+  if (!state.settings.serpApiKey) { state.settings.serpApiKey = ""; }
 
+  $('#serp-api-key').value = state.settings.serpApiKey || "";
   const thinkSel = document.getElementById('extended-thinking');
   if (thinkSel) {
     thinkSel.value = state.settings.think?.mode || 'off';
@@ -1503,7 +1801,12 @@ async function load() {
   }
 
   state.sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  if (typeof state.settings.webSearchEnabled !== 'boolean') {
+    state.settings.webSearchEnabled = false;
+  }
+  $('#web-search-switch').checked = state.settings.webSearchEnabled;
   log("APP", 2, "load", "Successfully loaded data.", { sessionCount: state.sessions.length });
+
   applyTheme(state.settings.theme || "light");
   await loadModelsConf();
   renderSessions();
@@ -1604,7 +1907,22 @@ async function generateAndSetTitle(session){
     session.name = (userPrompt.split(/\s+/).slice(0,6).join(' ') || 'New Chat').slice(0,70);
   }
   await save();
-  renderSessions();
+  
+  // Update chat header with typewriter effect if this is the current session
+  if (session === current) {
+    typewriterEffect($("#chat-title"), current.name);
+  }
+  
+  // Check if this session was a placeholder (name was null before)
+  const sessionElement = document.querySelector(`#session-list li[data-session-id="${session.created_at}"]`);
+  if (sessionElement && sessionElement.classList.contains('session-placeholder')) {
+    // Convert placeholder to full session item, then apply typewriter effect to title
+    convertPlaceholderToSession(session.created_at, session);
+    updateSessionTitle(session.created_at, session.name, true);
+  } else {
+    // Update only the specific session title in the sidebar with typewriter effect
+    updateSessionTitle(session.created_at, session.name, true);
+  }
 }
 
 function populateTitleModelOptions(platform) {
@@ -1774,25 +2092,36 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     });
   }
 
-  const finalize = ({ interrupted = false } = {}) => {
+  const finalize = ({ interrupted = false, reason = null } = {}) => {
     log("STREAM", 2, "finalize", "Finalizing stream", { streamId, interrupted, sawEnd, hasContent: fullResponse.trim().length > 0 });
     if (finalized) return;
     finalized = true;
 
-    const s = getState(); if (!s) return;
+    const s = getState();
+    if (!s) return;
     const { session, aiNode, messageIndex } = s;
 
-    const hasContent = fullResponse.trim().length > 0;
     const display = trimEnd(fullResponse);
+    const hasContent = display.length > 0;
     const hasEnd = END_RX.test(fullResponse) || sawEnd;
 
-    if (hasContent) session.messages[messageIndex] = ["ai", display];
+    let finalMessageToSave = display; 
+    if (interrupted) {
+      const formattedError = formatErrorMessageForSaving(reason);
+      finalMessageToSave = hasContent ? `${display}\n\n${formattedError}` : formattedError;
+    }
+    
+    if (finalMessageToSave) {
+      session.messages[messageIndex] = ["ai", finalMessageToSave];
+    } else if (interrupted) {
+      session.messages[messageIndex] = ["ai", formatErrorMessageForSaving(reason)];
+    }
 
     if (aiNode && document.contains(aiNode)) {
       hideLoader();
       const div = aiNode.querySelector(".message-text");
       if (div) {
-        div.innerHTML = md(display || (interrupted ? "*[System] Model not available or system error, try checking the connection or changing the AI model.*" : ""));
+        div.innerHTML = md(finalMessageToSave || "");
         if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
       }
 
@@ -1802,10 +2131,10 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         renderContinuePlaceholder(aiNode, session, messageIndex, display, { disabledMs: 1200, interrupted: false });
       }
 
-      renderAiFinalActions(aiNode, display, messageIndex);
+      renderAiFinalActions(aiNode, finalMessageToSave, messageIndex);
     }
-
-    s.fullResponse = fullResponse;
+    
+    s.fullResponse = finalMessageToSave;
     s.sawEnd = hasEnd;
     s.endSeen = hasEnd;
     cleanupStream();
@@ -1834,7 +2163,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       finalize();
       return;
     }
-    if (evt?.error) { finalize({ interrupted: true }); return; }
+    if (evt?.error) { 
+      log("IPC-RENDERER", "onEvent", "MENERIMA payload error dari main", { payload: evt.error });
+      finalize({ interrupted: true, reason: evt.error }); 
+      return;
+    }
 
     let token = "";
     if (typeof evt === "string") token = evt;
@@ -1870,7 +2203,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         finalizeThinkingUI(s.aiNode, durationSeconds);
         delete s.thinkStartTime;
       }
-      if (s.aiNode && document.contains(s.aiNode)) hideLoader();
+      if (s.aiNode && document.contains(s.aiNode)) {
+          const textDiv = s.aiNode.querySelector('.message-text');
+          if (textDiv) textDiv.innerHTML = '';
+          hideLoader();
+      }
     }
 
     if (s.aiNode && document.contains(s.aiNode)) {
@@ -2025,12 +2362,18 @@ async function startStream(
   }
 
   const act = state.settings?.models?.active || {};
-  const thinkMode = (state.settings?.think?.mode) || 'off';
+  const thinkMode = act.thinkMode || 'medium';
 
   const controller = window.api.chat.stream(
     messages,
     act.model || 'glm-4.5-flash',
-    { provider: act.platform || 'openrouter', baseUrl: act.baseUrl, apiKey: act.apiKey, thinkMode },
+    { provider: act.platform || 'openrouter',
+      baseUrl: act.baseUrl,
+      apiKey: act.apiKey,
+      thinkMode,
+      webSearchEnabled: state.settings.webSearchEnabled,
+      serpApiKey: state.settings.serpApiKey
+    },
     (evt) => {
       if (evt && typeof evt === 'object') {
         if (evt.error) { handler(evt); return; }
@@ -2096,6 +2439,17 @@ async function send() {
   const input = $("#msg");
   const text = (input.value || "").trim();
 
+  if (text === '/debugsearchui') {
+    log("DEBUG", 2, "send", "Search UI debug mode triggered.");
+    input.value = "";
+    input.style.height = "auto";
+    if (!current) { // Jika belum ada sesi, buat sesi dummy
+      current = { name: "Debug Session", created_at: nowISO(), messages: [] };
+    }
+    runSearchUIDebug();
+    return; // Hentikan eksekusi fungsi send
+  }
+  
   if (document.activeElement) document.activeElement.blur();
   log("SESSION", 2, "send", "Sending new message", {
     session: current?.name,
@@ -2261,7 +2615,7 @@ function applyTheme(theme) {
   log("UI", 2, "applyTheme", "Applying new theme", { theme });
   document.body.className = theme === "dark" ? "dark-theme" : "light-theme";
   $("#theme-slider").checked = theme === "dark";
-  $("#theme-label").textContent = theme === "dark" ? "Dark" : "Light";
+  // $("#theme-label").textContent = theme === "dark" ? "Dark" : "Light";
   state.settings.theme = theme;
 }
 
@@ -2404,18 +2758,26 @@ function setupEventListeners() {
     const modelSelEl = $("#model-select");
     const baseUrlEl  = $("#base-url");
     const apiKeyEl   = $("#api-key");
-    const labelEl    = $("#model-label");
-    const noteEl     = $("#model-note");
-    const notePrev   = $("#model-title");
+    // const labelEl    = $("#model-label"); // form dimatikan
+    // const noteEl     = $("#model-note");  // form dimatikan
+    const notePrev   = $("#model-note-preview");
+    const serpApi    = state.settings.serpApiKey;
+    
+    $("#serp-api-key").value = serpApi || '';
+
+    $("#extended-thinking").value = modelsConf.active?.thinkMode || 'off';
 
     function applyNotePreview(text) {
-      notePrev.title = text && text.trim() ? text.trim() : "—";
+      const t = text && String(text).trim() ? String(text).trim() : "—";
+      notePrev.textContent = t;
+      notePrev.title = t;
     }
 
     function fillForProvider(p, keepCurrent = false) {
       const prov = modelsConf.providers?.[p] || { baseUrl: '', apiKey: '', models: [] };
-      const list = normalizeProviderModels(prov.models);
+      const list = normalizeProviderModels(prov.models || []);
 
+      // isi dropdown pakai LABEL (fallback id)
       modelSelEl.innerHTML = "";
       if (list.length) {
         for (const m of list) {
@@ -2443,8 +2805,9 @@ function setupEventListeners() {
 
       const selectedId = modelSelEl.value;
       const meta = list.find(m => m.id === selectedId) || { id: selectedId, label: selectedId, note: '' };
-      labelEl.value = meta.label || selectedId;
-      noteEl.value  = meta.note  || '';
+
+      // if (labelEl) labelEl.value = meta.label || selectedId; // form dimatikan
+      // if (noteEl)  noteEl.value  = meta.note  || '';         // form dimatikan
       applyNotePreview(meta.note);
     }
 
@@ -2457,21 +2820,71 @@ function setupEventListeners() {
       const p = e.target.value;
       fillForProvider(p, false);
       populateTitleModelOptions(p);
-    }
-    modelSelEl.onchange = () => {
-      const p = platformEl.value;
-      const list = normalizeProviderModels(modelsConf.providers?.[p]?.models || []);
-      const meta = list.find(m => m.id === modelSelEl.value) || { id: modelSelEl.value, label: modelSelEl.value, note: '' };
-      $("#model-label").value = meta.label || meta.id;
-      $("#model-note").value  = meta.note || '';
-      notePrev.title    = meta.note?.trim() || '—';
     };
 
-    // live note preview
-    $("#model-note").addEventListener("input", (e) => applyNotePreview(e.target.value));
+    modelSelEl.onchange = () => {
+      const p = platformEl.value;
+      const list = normalizeProviderModels((modelsConf.providers?.[p]?.models) || []);
+      const meta = list.find(m => m.id === modelSelEl.value) || { id: modelSelEl.value, label: modelSelEl.value, note: '' };
+
+      // if (labelEl) labelEl.value = meta.label || meta.id; // form dimatikan
+      // if (noteEl)  noteEl.value  = meta.note  || '';      // form dimatikan
+      applyNotePreview(meta.note);
+    };
+
+    // $("#model-note").addEventListener("input", (e) => applyNotePreview(e.target.value)); // form dimatikan
 
     $("#models-modal").classList.remove("hidden");
     $("#settings-menu").classList.add("hidden");
+  });
+
+  $("#save-models").addEventListener("click", async () => {
+    const platform = $("#platform-select").value;
+    const modelId  = $("#model-select").value.trim();
+    const baseUrl  = $("#base-url").value.trim();
+    const apiKey   = $("#api-key").value.trim();
+    // const label    = $("#model-label").value.trim() || modelId; // form dimatikan
+    // const note     = $("#model-note").value.trim();             // form dimatikan
+    const thinkMode = $("#extended-thinking").value;
+    const serpApi = $("#serp-api-key");
+
+    state.settings.serpApiKey = serpApi.value.trim() 
+
+    const conf = state.settings.models || defaultModels();
+    conf.providers = conf.providers || {};
+
+    if (!conf.providers[platform]) conf.providers[platform] = { baseUrl: '', apiKey: '', models: [] };
+
+    conf.providers[platform].baseUrl = baseUrl;
+    conf.providers[platform].apiKey  = apiKey;
+
+    // normalisasi dan PERTAHANKAN label/note existing
+    const list = normalizeProviderModels(conf.providers[platform].models || []);
+    const idx  = list.findIndex(m => m.id === modelId);
+
+    if (idx >= 0) {
+      // JANGAN sentuh label/note. Cuma pastikan id tetap benar.
+      const existing = list[idx];
+      list[idx] = { ...existing, id: modelId };
+    } else {
+      // Entry baru → fallback label=id, note='', supaya preview jalan
+      list.unshift({ id: modelId, label: modelId, note: '' });
+    }
+    conf.providers[platform].models = list;
+
+    // set active tanpa merusak meta
+    conf.active = { platform, model: modelId, baseUrl, apiKey, thinkMode };
+
+    state.settings.models = conf;
+    localStorage.setItem('models-conf', JSON.stringify(conf));
+    try { 
+      if (!DEBUG_MODE) 
+        await window.api.models.save(conf); 
+        await save();
+    } catch {}
+
+    updateModelHeader();
+    $("#models-modal").classList.add("hidden");
   });
 
   $("#close-models").addEventListener("click", () => $("#models-modal").classList.add("hidden"));
@@ -2482,40 +2895,6 @@ function setupEventListeners() {
     state.settings.models = defaultModels();
     localStorage.setItem('models-conf', JSON.stringify(state.settings.models));
     updateModelHeader();
-  });
-
-  $("#save-models").addEventListener("click", async () => {
-    const platform = $("#platform-select").value;
-    const modelId  = $("#model-select").value.trim();
-    const baseUrl  = $("#base-url").value.trim();
-    const apiKey   = $("#api-key").value.trim();
-    const label    = $("#model-label").value.trim() || modelId;
-    const note     = $("#model-note").value.trim();
-
-    const conf = state.settings.models || defaultModels();
-    if (!conf.providers[platform]) conf.providers[platform] = { baseUrl: '', apiKey: '', models: [] };
-
-    conf.providers[platform].baseUrl = baseUrl;
-    conf.providers[platform].apiKey  = apiKey;
-
-    const list = normalizeProviderModels(conf.providers[platform].models);
-    const idx  = list.findIndex(m => m.id === modelId);
-    if (idx >= 0) {
-      list[idx].label = label;
-      list[idx].note  = note;
-    } else {
-      list.unshift({ id: modelId, label, note });
-    }
-    conf.providers[platform].models = list;
-
-    conf.active = { platform, model: modelId, baseUrl, apiKey, label };
-
-    state.settings.models = conf;
-    localStorage.setItem('models-conf', JSON.stringify(conf));
-    try { if (!DEBUG_MODE) await window.api.models.save(conf); } catch {}
-
-    updateModelHeader();
-    $("#models-modal").classList.add("hidden");
   });
 
   $("#new-chat").addEventListener("click", () => {
@@ -2592,6 +2971,12 @@ function setupEventListeners() {
     isAdvancedSearch = e.target.checked;
     log("UI", 0, "event:advanced-search-change", "Advanced search toggled", { checked: isAdvancedSearch });
     renderSessions();
+  });
+
+  $("#web-search-switch").addEventListener("change", (e) => {
+    state.settings.webSearchEnabled = e.target.checked;
+    save();
+    log("SETTINGS", 2, "event:web-search-change", "Web Search Toggled", { enabled: e.target.checked });
   });
 
   $("#theme-slider").addEventListener("change", () => {
@@ -2764,6 +3149,41 @@ function setupEventListeners() {
 
 function initializeApp() {
   log("APP", 2, "initializeApp", "Initializing application.");
+
+  if (window.api) {
+    window.api.on('chat-update', (payload) => {
+      const { type, messageIndex, data } = payload;
+      const bubbleNode = $(`#chat-log .message[data-index="${messageIndex}"]`);
+      if (!bubbleNode) return;
+
+      const indicator = bubbleNode.querySelector('.web-search-indicator');
+      const mainText = bubbleNode.querySelector('.message-text');
+
+      if (type === 'SEARCHING') {
+        mainText.innerHTML = '';
+        indicator.style.display = 'flex';
+        indicator.classList.add('searching');
+        indicator.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.54 12a9.5 9.5 0 1 1-9.5-9.5 9.5 9.5 0 0 1 9.5 9.5Z"/><path d="M22 12h-2"/></svg>
+          <span class="status-text">Searching for "${data.summarizedQuery}"...</span>`;
+        scrollToBottom();
+      } else if (type === 'READING_COMPLETE') {
+        indicator.classList.remove('searching');
+        indicator.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="m19 19-7-7 7-7"/></svg>
+          <span class="status-text">Read ${data.pageCount} web pages</span>
+          <span class="page-count-pill">${data.pageCount}</span>`;
+        mainText.innerHTML = getThinkingMarkup();
+        scrollToBottom();
+      }
+    });
+    window.api.on('search:status', (status) => {
+      searchStatusQueue.push(status);
+      log("UI_SEARCH", 1, "onSearchStatus", `Event '${status.step}' added to queue.`, { queue_length: searchStatusQueue.length });
+      processSearchStatusQueue();
+    });
+  }
+
   setupEventListeners();
   setupMobileSidebar();
   
@@ -2775,3 +3195,95 @@ function initializeApp() {
 }
 
 document.addEventListener("DOMContentLoaded", initializeApp);
+
+
+async function runSearchUIDebug() {
+  log("DEBUG", 2, "runSearchUIDebug", "--- MEMULAI SIMULASI UI WEB SEARCH ---");
+  
+  const aiMessageIndex = current ? current.messages.length : 0;
+  if (current) current.messages.push(["ai", ""]);
+  const aiNode = addMessage("ai", "", { final: false, index: aiMessageIndex });
+  aiNode.dataset.index = String(aiMessageIndex);
+  
+  ensureThinkingUI(aiNode);
+  const thinkEl = aiNode._thinkingEl;
+
+  const dummyData = {
+    decision: {
+      summary_key: "Nepal Protests 2025",
+      reasoning: "The user is asking about a serious protest in Nepal in 2025 and wants to know its causes. This refers to recent events that would require up-to-date information from the internet.",
+      search_queries: [
+        "protest Nepal 2025 causes",
+        "Nepal demonstration 2025 reasons",
+        "Nepal crisis 2025"
+      ]
+    },
+    urls: [
+      { link: "https://www.bbc.com/news/articles/example1" },
+      { link: "https://www.cnn.com/2025/09/09/asia/nepal-protests" },
+      { link: "https://www.hrw.org/news/2025/09/09/nepal-protest" }
+    ],
+    pageCount: 3
+  };
+
+
+  try {
+    const createTitleSpan = () => {
+      const span = document.createElement('span');
+      span.style.fontFamily = 'var(--font-display-italic)';
+      return span;
+    };
+    
+    log("DEBUG", 2, "runSearchUIDebug", "Adegan 1: Menampilkan status DECIDED");
+    thinkEl.toggle.querySelector('span').textContent = `Searching for "${dummyData.decision.summary_key}"...`;
+    
+    thinkEl.text.innerHTML = '';
+    if (!thinkEl.body.classList.contains('expanded')) thinkEl.toggle.click();
+    
+    const reasoningTitle = createTitleSpan();
+    thinkEl.text.appendChild(reasoningTitle);
+    await typewriterEffectChunked(reasoningTitle, "Reasoning:", 500, 1);
+
+    const reasoningContent = document.createElement('span');
+    thinkEl.text.appendChild(document.createElement('br'));
+    thinkEl.text.appendChild(reasoningContent);
+    await typewriterEffectChunked(reasoningContent, dummyData.decision.reasoning, 2500);
+
+    thinkEl.text.appendChild(document.createElement('br'));
+    thinkEl.text.appendChild(document.createElement('br'));
+
+    const keywordsTitle = createTitleSpan();
+    thinkEl.text.appendChild(keywordsTitle);
+    await typewriterEffectChunked(keywordsTitle, "Keywords:", 500, 1);
+
+    const keywordsContent = document.createElement('span');
+    thinkEl.text.appendChild(document.createElement('br'));
+    thinkEl.text.appendChild(keywordsContent);
+    await typewriterEffectChunked(keywordsContent, dummyData.decision.search_queries.join('\n'), 1500);
+
+    log("DEBUG", 2, "runSearchUIDebug", "Adegan 2: Menampilkan status FOUND_URLS");
+    thinkEl.text.appendChild(document.createElement('br'));
+    thinkEl.text.appendChild(document.createElement('br'));
+    
+    const urlsTitle = createTitleSpan();
+    thinkEl.text.appendChild(urlsTitle);
+    await typewriterEffectChunked(urlsTitle, "Found URLs:", 500, 1);
+
+    const urlsContent = document.createElement('span');
+    thinkEl.text.appendChild(document.createElement('br'));
+    thinkEl.text.appendChild(urlsContent);
+    await typewriterEffectChunked(urlsContent, dummyData.urls.map(r => r.link).join('\n'), 1500);
+
+    log("DEBUG", 2, "runSearchUIDebug", "Adegan 3: Menampilkan status PROCESSING");
+    thinkEl.toggle.querySelector('span').textContent = `Reading ${dummyData.pageCount} pages & preparing answer...`;
+    await new Promise(r => setTimeout(r, 3000));
+
+    log("DEBUG", 2, "runSearchUIDebug", "Adegan 4: Simulasi Selesai");
+    thinkEl.wrap.style.display = 'none';
+    const mainText = aiNode.querySelector('.message-text');
+    mainText.innerHTML = md("Ini adalah contoh hasil akhir setelah proses pencarian selesai.");
+
+  } catch (e) {
+    log("DEBUG", 4, "runSearchUIDebug", "Simulasi Gagal", { error: e.message });
+  }
+}

@@ -638,13 +638,7 @@ hr {
   border-top-color: transparent;
   border-radius: 100%;
   margin: 5.5px;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  animation: spin 0.5s linear infinite;
 }
 
 .menu-item {
@@ -1101,8 +1095,8 @@ input:checked + .slider:before {
 /* AI Avatar */
 .ai-avatar {
   display: flex;
-  width: 32px;
-  height: 32px;
+  width: 27px;
+  height: 27px;
   border-radius: var(--radius-md);
   align-items: center;
   justify-content: center;
@@ -1454,17 +1448,13 @@ textarea::-webkit-scrollbar {
 }
 
 .reconnect-spinner {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border: 2px solid var(--fg-muted);
-    border-radius: 50%;
-    border-top-color: var(--accent);
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    to { transform: rotate(360deg); }
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--fg-muted);
+  border-radius: 50%;
+  border-top-color: var(--accent);
+  animation: spin 1s linear infinite;
 }
 
 /* Form Elements */
@@ -1476,6 +1466,7 @@ textarea::-webkit-scrollbar {
   display: block;
   font-size: 14px;
   font-weight: 500;
+  padding-left: var(--spacing-sm);
   margin-bottom: var(--spacing-sm);
   color: var(--fg);
 }
@@ -1637,6 +1628,11 @@ li.bold-marker-item::marker {
 
 #app.sidebar-collapsed #session-list li .name {
   display: none;
+}
+
+#model-note-preview {
+  color: var(--fg-muted);
+  font-size
 }
 
 /* Markdown Content Styles */
@@ -2440,9 +2436,6 @@ textarea:focus-visible {
   }
 }
 
-
-
-
 /* Logo */
 @media (prefers-reduced-motion) {
 }
@@ -2458,7 +2451,7 @@ figure {
   place-items: center;
   inline-size: var(--size);
   aspect-ratio: 1;
-  animation: spin var(--duration) ease-in-out infinite;
+  animation: spin-logo var(--duration) ease-in-out infinite;
 }
 
 figure > * {
@@ -2493,17 +2486,7 @@ figure:nth-child(3) {
   --l: 80%;
 }
 
-@keyframes spin {
-  0%,
-  25% {
-    transform: scaleX(var(--direction)) rotate(0);
-  }
 
-  75%,
-  100% {
-    transform: scaleX(var(--direction)) rotate(1turn);
-  }
-}
 
 @keyframes diamonds {
   0%,
@@ -2520,4 +2503,90 @@ figure:nth-child(3) {
       )
       rotate(calc(var(--deg) + 90deg));
   }
+}
+
+@keyframes spin-logo {
+  0%,
+  20% {
+    transform: rotate(0deg);
+  }
+
+  50% {
+    transform: rotate(180deg);
+  }
+  
+  80%,
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.web-search-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: 14px;
+  color: var(--fg-muted);
+  font-family: var(--font-display-italic);
+  animation: fadeInSlide 0.5s ease-out;
+}
+
+.web-search-indicator svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--icon);
+}
+
+.web-search-indicator .status-text {
+  font-weight: 500;
+}
+
+.web-search-indicator .page-count-pill {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  margin-left: var(--spacing-xs);
+}
+
+/* Animasi untuk ikon search saat mencari */
+@keyframes spin-search-icon { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.web-search-indicator.searching svg {
+  animation: spin-search-icon 1.5s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.footnote-ref {
+  display: inline-block;
+  vertical-align: super;
+  font-size: 0.75em; /* Sedikit lebih kecil dari teks biasa */
+  line-height: 1;
+  margin: 0 2px;
+  position: relative;
+  top: -0.2em;
+}
+
+.footnote-ref a {
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--primary);
+  padding: 2px 0px;
+  transition: var(--transition-fast);
+}
+
+.footnote-ref a:hover {
+  background-color: var(--hover-bg);
+  border-color: var(--primary);
+  transform: translateY(1px);
 }

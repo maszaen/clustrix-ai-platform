@@ -2,6 +2,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 function rid(){ return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`; }
 
 contextBridge.exposeInMainWorld('api', {
+  on: (channel, callback) => {
+    const validChannels = ['chat-update', 'stats:update', 'search:status']; 
+    if (validChannels.includes(channel)) {
+      ipcRenderer.on(channel, (event, ...args) => callback(...args));
+    }
+  },
   sessions: {
     load: () => ipcRenderer.invoke('sessions:load'),
     save: (data) => ipcRenderer.invoke('sessions:save', data),
@@ -29,7 +35,10 @@ contextBridge.exposeInMainWorld('api', {
         reqId: id, messages, model,
         provider: options.provider,
         baseUrl: options.baseUrl,
-        apiKey: options.apiKey
+        apiKey: options.apiKey,
+        thinkMode: options.thinkMode, // hapus kalo error ye
+        webSearchEnabled: options.webSearchEnabled,
+        serpApiKey: options.serpApiKey
       });
       return { cancel: () => { cleanup(); ipcRenderer.send('chat:stream-cancel', id); } };
     },

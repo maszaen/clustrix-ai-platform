@@ -1,10 +1,42 @@
+require('dotenv').config();
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const cheerio = require('cheerio'); 
+const { getJson } = require('serpapi');
 
 const logFile = path.join(app.getPath('userData'), 'app.log');
+
+if (!process.env || Object.keys(process.env).length === 0) {
+  console.warn('Warning: No environment variables loaded. Check your .env file and dotenv setup.');
+}
+
+function logHelper(context, func, message, details = {}) {
+  const time = new Date().toISOString();
+  let logLine = `[${context.toUpperCase()} - ${time}] ${func}() → ${message}`;
+  if (Object.keys(details).length > 0) {
+    logLine += `\n${JSON.stringify(details, null, 2)}`;
+  }
+  try {
+    fs.appendFileSync(logFile, logLine + '\n\n', 'utf-8');
+  } catch (e) {
+    console.error('Gagal menulis ke file log:', e);
+  }
+}
+
+
 let lastTokenStreamId = null; 
+
+function parseTriageJson(rawText) {
+  const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  logHelper('JSON_PARSE', 'parseTriageJson', `Attempting to parse raw text`, { rawText });
+  if (jsonMatch && jsonMatch[1]) {
+    return JSON.parse(jsonMatch[1]);
+  } else {
+    return JSON.parse(rawText);
+  }
+}
 
 // ---------- Models Config (providers) ----------
 const modelsConfFile = path.join(app.getPath('userData'), 'ai-model.conf.json');
@@ -91,7 +123,7 @@ function createWindow(){
     }
   });
   
-  // win.webContents.openDevTools();
+  win.webContents.openDevTools();
 
   // Logging
   ipcMain.on('log:write', (_event, logData) => {
@@ -204,20 +236,32 @@ function applyThinkingHints({ provider, model, bodyObj, thinkMode }) {
   // Heuristik ringan untuk beberapa model (aman diabaikan kalau tak dikenal)
   const mid = String(model || '').toLowerCase();
   if (mid.includes('deepseek')) {
-    // beberapa adaptor memetakan ke internal "thoughts"; kita kasih hint token limit
     if (!bodyObj.max_thought_tokens && effort) {
       bodyObj.max_thought_tokens = effort === 'high' ? 2048 : effort === 'medium' ? 1024 : 512;
     }
-    // tanda supaya server kirim stream thinking kalau bisa
     bodyObj.stream_options.include_reasoning = true;
   }
 
-  // Untuk OpenRouter/Groq/ZAI (OpenAI-style) ini aman—server akan abaikan jika tidak support.
 }
 
 // ---------- Streaming from MAIN (SSE) ----------
 const activeStreams = new Map();
-ipcMain.on('chat:stream-start', (event, payload) => {
+ipcMain.on('chat:stream-start', async (event, payload) => {
+  if (!payload.webSearchEnabled) {
+    logHelper('ROUTER', 'chat:stream-start', 'Web search nonaktif. Menjalankan chat standar.');
+    return runStandardStreaming(event, payload);
+  }
+
+  try {
+    logHelper('ROUTER', 'chat:stream-start', 'Web search aktif. Memanggil alur web search.');
+    await runWebSearchChat(event, payload);
+  } catch (error) {
+    logHelper('ROUTER', 'chat:stream-start', 'FATAL ERROR di alur web search.', { error: error.message });
+    event.sender.send(`chat:error-${payload.reqId}`, error.message);
+  }
+});
+
+function runStandardStreaming(event, payload) {
   const reqId = payload.reqId;
   const messages = payload.messages || [];
   const model = payload.model || 'glm-4.5-flash';
@@ -241,7 +285,10 @@ ipcMain.on('chat:stream-start', (event, payload) => {
 
 
   function sendDone(){ event.sender.send(`chat:done-${reqId}`); activeStreams.delete(reqId); }
-  function sendErr(msg){ event.sender.send(`chat:error-${reqId}`, msg); activeStreams.delete(reqId); }
+  function sendErr(msg){ 
+    event.sender.send(`chat:error-${reqId}`, msg); 
+    activeStreams.delete(reqId); 
+  }
 
   if (provider === 'gemini') {
     try {
@@ -423,7 +470,7 @@ ipcMain.on('chat:stream-start', (event, payload) => {
   req.on('error', e => sendErr(e.message || String(e)));
   req.write(body); req.end();
   activeStreams.set(reqId, req);
-});
+}
 
 ipcMain.on('chat:stream-cancel', (event, reqId) => {
   const r = activeStreams.get(reqId);
@@ -475,7 +522,7 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
         let acc=''; res.setEncoding('utf8');
         res.on('data', d => acc += d);
         res.on('end', () => {
-          if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc.slice(0,200)}`));
+          if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc}`));
           try {
             const j = JSON.parse(acc);
             const t = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
@@ -524,7 +571,7 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
       res.on('data', d => acc += d);
       res.on('end', () => {
         if (res.statusCode >= 200 && res.statusCode < 300) return resolve(acc);
-        reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc.slice(0,200)}`));
+        reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc}`));
       });
     });
     req.on('error', reject); req.write(body); req.end();
@@ -538,3 +585,163 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
     return text.split(/\s+/).slice(0,6).join(' ') || 'New Chat';
   }
 });
+
+// Search capability
+const TRIAGE_SYSTEM_PROMPT = `You are a reasoning agent. Your first task is to analyze the user's query and decide if it requires real-time internet access. The current date is ${new Date().toISOString()}. Respond ONLY with a single JSON object. Do not add any text before or after it.
+JSON format: {"requires_search": boolean, "reasoning": "string", "user_prompt": "string", "search_queries": ["string", ...], "summary_key": "string"}
+Set "requires_search" to true if the query is about recent events (relative to the current date), specific facts, or explicitly asks to search. Otherwise, set it to false.
+"user_prompt" MUST be the exact original user query.
+"summary_key" MUST be a very short, 2-4 word summary of the user's query in English.
+If "requires_search" is true, provide 1-3 effective Google search queries relevant to the current date.`;
+
+async function runWebSearchChat(event, payload) {
+  const { reqId, messages } = payload;
+  logHelper('WEB_CHAT', 'runWebSearchChat', 'Alur Web Search dimulai.');
+
+  try {
+    const userQuery = messages[messages.length - 1].content;
+
+    // --- LANGKAH 1: TRIAGE (PRA-ANALISIS) ---
+    logHelper('WEB_CHAT', 'runWebSearchChat', 'Memulai tahap Pra-Analisis (Triage).', { query: userQuery });
+    const triageMessages = [{ role: 'system', content: TRIAGE_SYSTEM_PROMPT }, { role: 'user', content: userQuery }];
+    const triageResponse = await invokeLLM_nonStream(triageMessages, payload);
+    
+    let decision;
+    try {
+      decision = parseTriageJson(triageResponse);
+      logHelper('WEB_CHAT', 'runWebSearchChat', 'Pra-Analisis berhasil. Keputusan diterima.', { decision });
+    } catch (e) {
+      logHelper('WEB_CHAT', 'runWebSearchChat', 'ERROR: Gagal parse JSON Triage. Kembali ke mode standar.', { error: e.message, response: triageResponse });
+      return runStandardStreaming(event, payload);
+    }
+
+    // --- LANGKAH 2: KEPUTUSAN & PERCABANGAN ---
+    if (!decision.requires_search || !decision.search_queries || decision.search_queries.length === 0) {
+      logHelper('WEB_CHAT', 'runWebSearchChat', 'Keputusan: Tidak perlu web search. Menjalankan chat standar.');
+      return runStandardStreaming(event, payload);
+    }
+    event.sender.send('search:status', { step: 'DECIDED', data: decision });
+    logHelper('WEB_CHAT', 'runWebSearchChat', 'Keputusan: Web search diperlukan.');
+
+    // --- LANGKAH 3: PROSES PENCARIAN ---
+    event.sender.send('chat-update', { type: 'SEARCHING', messageIndex: payload.aiMessageIndex, data: { summarizedQuery: decision.search_queries[0] } });
+    logHelper('WEB_CHAT', 'performWebSearch', 'Memulai pencarian di internet...', { queries: decision.search_queries });
+    const searchResults = await performWebSearch(decision.search_queries, payload.serpApiKey);
+    
+    if (searchResults.length === 0) {
+      logHelper('WEB_CHAT', 'performWebSearch', 'Pencarian tidak menemukan hasil. Kembali ke mode standar.');
+      return runStandardStreaming(event, payload);
+    }
+    logHelper('WEB_CHAT', 'performWebSearch', `Pencarian berhasil. Ditemukan ${searchResults.length} hasil.`, { titles: searchResults.map(r => r.title) });
+    event.sender.send('search:status', { step: 'FOUND_URLS', data: searchResults });
+
+    const urlsToScrape = searchResults.map(r => r.link);
+    logHelper('WEB_CHAT', 'scrapeUrls', 'Memulai scraping...', { urls: urlsToScrape });
+    const scrapedContent = await scrapeUrls(urlsToScrape);
+    const nonEmptyContent = scrapedContent.filter(c => c.trim().length > 10);
+
+    if (nonEmptyContent.length === 0) {
+      logHelper('WEB_CHAT', 'scrapeUrls', 'Scraping tidak menghasilkan konten. Kembali ke mode standar.');
+      return runStandardStreaming(event, payload);
+    }
+    logHelper('WEB_CHAT', 'scrapeUrls', `Scraping selesai. ${nonEmptyContent.length} halaman berhasil dibaca.`);
+    event.sender.send('search:status', { step: 'PROCESSING', data: { count: nonEmptyContent.length } });
+    event.sender.send('chat-update', { type: 'READING_COMPLETE', messageIndex: payload.aiMessageIndex, data: { pageCount: nonEmptyContent.length } });
+
+    // --- LANGKAH 4: FINAL PROMPT & SINTESIS ---
+    let searchContext = "Use the following search results to answer the user's original query. The user's original query was: \"" + decision.user_prompt + "\". Base your answer on these facts and cite sources with markdown links `[Source: Title](URL)`.\n\n";
+    nonEmptyContent.forEach((content, i) => {
+      const result = searchResults[i];
+      searchContext += `--- Source ${i+1}: ${result.title} (${result.link}) ---\n${content}\n\n`;
+    });
+    
+    const finalMessages = [ ...messages ];
+    finalMessages.splice(messages.length - 1, 0, { role: 'system', content: searchContext });
+    
+    logHelper('WEB_CHAT', 'runWebSearchChat', 'Briefing final untuk LLM telah disiapkan. Memulai streaming jawaban.');
+    return runStandardStreaming(event, { ...payload, messages: finalMessages });
+
+  } catch (error) {
+    logHelper('WEB_CHAT', 'runWebSearchChat', 'FATAL ERROR dalam alur Web Search.', { error: error.message, stack: error.stack });
+    event.sender.send(`chat:error-${payload.reqId}`, error.message);
+  }
+}
+
+// Fungsi untuk memanggil LLM non-streaming (untuk Triage)
+function invokeLLM_nonStream(messages, options) {
+  return new Promise((resolve, reject) => {
+    // Diadaptasi dari logika 'chat:title'
+    const { model, provider, baseUrl, apiKey } = options;
+    const u = new URL(joinEndpoint(baseUrl, 'chat/completions'));
+    const body = JSON.stringify({ model, messages, stream: false });
+    const headers = {
+      'Authorization': apiKey ? `Bearer ${apiKey}` : '',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Content-Length': Buffer.byteLength(body)
+    };
+    if (provider === 'openrouter') {
+      headers['HTTP-Referer'] = 'https://zenai.local';
+      headers['X-Title'] = 'ZenAI Desktop';
+    }
+
+    const req = https.request({ method: 'POST', hostname: u.hostname, path: u.pathname, protocol: u.protocol, headers }, (res) => {
+      let acc = '';
+      res.setEncoding('utf8');
+      res.on('data', d => acc += d);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            const j = JSON.parse(acc);
+            resolve(j?.choices?.[0]?.message?.content?.trim() || '');
+          } catch (e) {
+            reject(new Error('Failed to parse non-stream LLM response.'));
+          }
+        } else {
+          reject(new Error(`HTTP ${res.statusCode} - ${acc}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// Fungsi untuk melakukan pencarian
+async function performWebSearch(queries, serpApiKey) {
+  if (!serpApiKey) {
+    console.error("SERPAPI_KEY not set in environment variables.");
+    return [];
+  }
+  try {
+    const promises = queries.map(q => getJson({ q, api_key: serpApiKey, hl: 'id', gl: 'id' }));
+    const results = await Promise.all(promises);
+    const organicResults = results.flatMap(r => r.organic_results || [])
+      .filter(r => r.link && !r.link.includes("youtube.com")) // Filter link aneh
+      .slice(0, 5); // Ambil 5 hasil unik teratas
+    return organicResults;
+  } catch (error) {
+    console.error("SerpApi search failed:", error);
+    return [];
+  }
+}
+
+// Fungsi untuk scraping
+async function scrapeUrls(urls) {
+  const MAX_CHARS_PER_PAGE = 2000;
+  const scrapePromises = urls.map(url => new Promise(async (resolve) => {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(5000) }); // Timeout 5 detik
+      if (!response.ok) return resolve("");
+      const html = await response.text();
+      const $ = cheerio.load(html);
+      $('script, style, nav, footer, header, aside, form').remove();
+      const text = $('body').text().replace(/\s\s+/g, ' ').trim();
+      resolve(text.substring(0, MAX_CHARS_PER_PAGE));
+    } catch (e) {
+      resolve("");
+    }
+  }));
+  return Promise.all(scrapePromises);
+}

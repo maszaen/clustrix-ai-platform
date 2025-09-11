@@ -82,13 +82,23 @@
                   <circle cx="12" cy="12" r="5"></circle>
                   <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
                 </svg>
-                <span>Theme</span>
+                <span>Dark Theme</span>
               </div>
               <label class="theme-switch">
                 <input type="checkbox" id="theme-slider">
                 <span class="slider"></span>
               </label>
-              <span id="theme-label">Light</span>
+            </div>
+
+            <div class="theme-switcher">
+              <div class="theme-info">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe-icon lucide-globe"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                <span>Web Search</span>
+              </div>
+              <label class="theme-switch">
+                <input type="checkbox" id="web-search-switch">
+                <span class="slider"></span>
+              </label>
             </div>
 
           </div>
@@ -290,6 +300,24 @@
           <select id="model-select"></select>
         </div>
 
+        <!-- <div class="form-group">
+          <label for="model-label">View Label</label>
+          <input type="text" id="model-label" placeholder="mis. Deepseek v3.1">
+        </div> -->
+
+        <div class="form-group">
+          <!-- <label for="model-note">Notes</label>
+          <textarea id="model-note" rows="2" placeholder="e.g. Model pintar, dan cepat"></textarea> -->
+          <p id="model-note-preview" class="help-text" style="margin-top:6px;">—</p>
+        </div>
+
+        <div class="form-group">
+          <label for="title-model-select">Model for Title Generator</label>
+          <select id="title-model-select">
+            <option value="__default__">Default (using current model)</option>
+          </select>
+        </div>
+
         <div class="form-group">
           <label for="extended-thinking">Extended thinking</label>
           <select id="extended-thinking">
@@ -299,17 +327,6 @@
             <option value="high">High</option>
             <option value="auto">Auto</option>
           </select>
-        </div>
-
-        <div class="form-group">
-          <label for="model-label">View Label</label>
-          <input type="text" id="model-label" placeholder="mis. Deepseek v3.1">
-        </div>
-
-        <div class="form-group">
-          <label for="model-note">Notes</label>
-          <textarea id="model-note" rows="2" placeholder="e.g. Model pintar, dan cepat"></textarea>
-          <!-- <p id="model-note-preview" class="help-text" style="margin-top:6px;">—</p> -->
         </div>
 
         <div class="form-group">
@@ -323,10 +340,8 @@
         </div>
 
         <div class="form-group">
-          <label for="title-model-select">Model for Title Generator</label>
-          <select id="title-model-select">
-            <option value="__default__">Default (using current model)</option>
-          </select>
+          <label for="serp-api-key">SerpApi API Key (for Web Search)</label>
+          <input type="text" id="serp-api-key" placeholder="SerpApi platform key...">
         </div>
 
         <p class="help-text" style="color: var(--fg-muted); font-size: 12px;">

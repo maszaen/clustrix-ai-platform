@@ -36,9 +36,9 @@ contextBridge.exposeInMainWorld('api', {
         provider: options.provider,
         baseUrl: options.baseUrl,
         apiKey: options.apiKey,
-        thinkMode: options.thinkMode, // hapus kalo error ye
+        thinkMode: options.thinkMode,
         webSearchEnabled: options.webSearchEnabled,
-        serpApiKey: options.serpApiKey
+        searchApiConfig: options.searchApiConfig
       });
       return { cancel: () => { cleanup(); ipcRenderer.send('chat:stream-cancel', id); } };
     },

@@ -84,6 +84,16 @@ function defaultModelsConf() {
         apiKey: '',
         models: ['glm-4.5-flash']
       },
+      cerebras: {
+        baseUrl: 'https://api.cerebras.ai/v1/chat/completions',
+        apiKey: '',
+        models: [
+          'gpt-oss-120b',
+          'qwen-3-coder-480b',
+          'qwen-3-235b-a22b-thinking-2507',
+          'llama-3.3-70b',
+        ]
+      }
     }
   };
 }
@@ -112,7 +122,7 @@ ipcMain.handle('models:save', async (_evt, conf) => {
 
 function createWindow(){
   const win = new BrowserWindow({
-    width: 1200, height: 900,
+    width: 1500, height: 900,
     frame: false,
     minWidth: 850,
     minHeight: 400,
@@ -269,6 +279,7 @@ function runStandardStreaming(event, payload) {
     provider === 'groq'      ? 'https://api.groq.com/openai/v1' :
     provider === 'gemini'    ? 'https://generativelanguage.googleapis.com/v1beta' :
     provider === 'zai'       ? 'https://api.z.ai/api/paas/v4/' :
+    provider === 'cerebras'  ? 'https://api.cerebras.ai/v1/' :
                                 (process.env.BASE_URL || 'https://api.z.ai/api/paas/v4/'));
 
   let API_KEY =
@@ -277,6 +288,7 @@ function runStandardStreaming(event, payload) {
     provider === 'groq'      ? (process.env.GROQ_API_KEY || '') :
     provider === 'gemini'    ? (process.env.GEMINI_API_KEY || '') :
     provider === 'zai'       ? (process.env.Z_API_KEY || '') :
+    provider === 'cerebras'  ? (process.env.CEREBRAS_API_KEY || '') :
                                 (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || ''));
 
 
@@ -597,6 +609,7 @@ async function runWebSearchChat(event, payload) {
     const userQuery = messages[messages.length - 1].content;
 
     logHelper('WEB_CHAT', 'runWebSearchChat', 'Memulai tahap Pra-Analisis (Triage).', { query: userQuery });
+    logHelper('WEB_CHAT', 'runWebSearchChat', `User menggunakan search API dari "${payload.searchApiConfig.provider}".`, { platform: payload.searchApiConfig });
     const triageMessages = [{ role: 'system', content: TRIAGE_SYSTEM_PROMPT }, { role: 'user', content: userQuery }];
     const triageResponse = await invokeLLM_nonStream(triageMessages, payload);
     
@@ -618,7 +631,7 @@ async function runWebSearchChat(event, payload) {
 
     event.sender.send('chat-update', { type: 'SEARCHING', messageIndex: payload.aiMessageIndex, data: { summarizedQuery: decision.search_queries[0] } });
     logHelper('WEB_CHAT', 'performWebSearch', 'Memulai pencarian di internet...', { queries: decision.search_queries });
-    const searchResults = await performWebSearch(decision.search_queries, payload.serpApiKey);
+    const searchResults = await performWebSearch(decision.search_queries, payload.searchApiConfig);
     
     if (searchResults.length === 0) {
       logHelper('WEB_CHAT', 'performWebSearch', 'Pencarian tidak menemukan hasil. Kembali ke mode standar.');
@@ -697,21 +710,87 @@ function invokeLLM_nonStream(messages, options) {
   });
 }
 
-async function performWebSearch(queries, serpApiKey) {
-  if (!serpApiKey) {
-    console.error("SERPAPI_KEY not set in environment variables.");
+async function performWebSearch(queries, config) {
+  if (!config || typeof config !== 'object') {
+    logHelper('WEB_SEARCH', 'performWebSearch', 'FATAL ERROR: Konfigurasi pencarian tidak valid atau hilang.', { receivedConfig: config });
     return [];
   }
-  try {
-    const promises = queries.map(q => getJson({ q, api_key: serpApiKey, hl: 'id', gl: 'id' }));
-    const results = await Promise.all(promises);
-    const organicResults = results.flatMap(r => r.organic_results || [])
-      .filter(r => r.link && !r.link.includes("youtube.com"))
-      .slice(0, 5);
-    return organicResults;
-  } catch (error) {
-    console.error("SerpApi search failed:", error);
-    return [];
+
+  const provider = config.provider || 'serpapi';
+  logHelper('WEB_SEARCH', 'performWebSearch', `Fungsi dipanggil dengan provider: ${provider}`, { queries });
+
+  if (provider === 'google') {
+    if (!config.googleApiKey || !config.googleCseId) {
+      logHelper('WEB_SEARCH', 'performWebSearch', 'ERROR: Google API Key atau CX (Search Engine ID) tidak diatur.');
+      return [];
+    }
+    try {
+      const promises = queries.map(q => new Promise((resolve, reject) => {
+        const url = new URL('https://www.googleapis.com/customsearch/v1');
+        url.searchParams.set('key', config.googleApiKey);
+        url.searchParams.set('cx', config.googleCseId);
+        url.searchParams.set('q', q);
+        url.searchParams.set('hl', 'id');
+        url.searchParams.set('gl', 'id');
+        
+        logHelper('WEB_SEARCH', 'performWebSearch', 'Membuat request ke Google CSE API', { url: url.toString() });
+
+        const req = https.get(url, (res) => {
+          let data = '';
+          res.on('data', (chunk) => data += chunk);
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(JSON.parse(data));
+            } else {
+              logHelper('WEB_SEARCH', 'performWebSearch', `Google API HTTP Error ${res.statusCode}`, { response: data });
+              resolve({ items: [] });
+            }
+          });
+        });
+        req.on('error', (err) => {
+          logHelper('WEB_SEARCH', 'performWebSearch', 'Google API Request Error', { error: err.message });
+          resolve({ items: [] });
+        });
+      }));
+
+      const results = await Promise.all(promises);
+      logHelper('WEB_SEARCH', 'performWebSearch', `Menerima ${results.length} respons dari Google CSE API.`);
+
+      const transformedResults = results.flatMap(res => res.items || [])
+        .map(item => ({
+          link: item.link,
+          title: item.title,
+          snippet: item.snippet
+        }))
+        .filter(r => r.link && !r.link.includes("youtube.com"))
+        .slice(0, 5);
+      
+      logHelper('WEB_SEARCH', 'performWebSearch', `Transformasi hasil Google selesai. Ditemukan ${transformedResults.length} hasil organik.`);
+      return transformedResults;
+
+    } catch (error) {
+      logHelper('WEB_SEARCH', 'performWebSearch', 'FATAL ERROR: Pencarian Google CSE API gagal.', { error: error.message });
+      return [];
+    }
+  } else {
+    if (!config.serpApiKey) {
+      logHelper('WEB_SEARCH', 'performWebSearch', 'ERROR: SerpAPI Key tidak diatur.');
+      return [];
+    }
+    try {
+      const promises = queries.map(q => getJson({ q, api_key: config.serpApiKey, hl: 'id', gl: 'id' }));
+      const results = await Promise.all(promises);
+      logHelper('WEB_SEARCH', 'performWebSearch', `Menerima ${results.length} respons dari SerpAPI.`);
+
+      const organicResults = results.flatMap(r => r.organic_results || [])
+        .filter(r => r.link && !r.link.includes("youtube.com"))
+        .slice(0, 5);
+      logHelper('WEB_SEARCH', 'performWebSearch', `Filter hasil SerpAPI selesai. Ditemukan ${organicResults.length} hasil organik.`);
+      return organicResults;
+    } catch (error) {
+      logHelper('WEB_SEARCH', 'performWebSearch', 'FATAL ERROR: Pencarian SerpApi gagal.', { error: error.message });
+      return [];
+    }
   }
 }
 

@@ -816,7 +816,8 @@ input:checked + .slider:before {
   /* Properti baru untuk layout dan animasi */
   margin-left: 240px;
   width: calc(100% - 240px); /* Pastikan lebarnya menyesuaikan */
-
+  background: var(--bg);
+  min-width: 0; 
   /* --- INI BAGIAN PENTINGNYA --- */
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: margin-left, width; /* Petunjuk untuk browser */
@@ -893,16 +894,6 @@ input:checked + .slider:before {
   stroke: currentColor !important;
   width: 14px;
   height: 14px;
-}
-
-/* Chat Area */
-.chat-area {
-  display: flex;
-  position: relative;
-  flex-direction: column;
-  height: 100vh;
-  min-width: 0; 
-  background: var(--bg);
 }
 
 /* Title Bar */
@@ -1505,6 +1496,10 @@ textarea::-webkit-scrollbar {
   color: var(--fg);
 }
 
+.no-padding-left {
+  padding-left: 0 !important;
+}
+
 .form-group input,
 .form-group textarea {
   width: 100%;
@@ -1629,6 +1624,63 @@ li.bold-marker-item::marker {
   font-weight: bold;
 }
 
+blockquote {
+  width: 100%;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) calc(var(--quote-pillar-left) + var(--quote-pillar-w) + 10px);
+  position: relative;
+  color: var(--fg-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0 !important;
+}
+
+.rel {
+  display: flex;
+  position: relative;
+}
+
+.mm-prov-title {
+  font-family: var(--font-display-italic)
+}
+
+blockquote::before {
+  content: '';
+  position: absolute;
+  left: var(--quote-pillar-left);
+  top: 8px;
+  bottom: 8px;
+  width: var(--quote-pillar-w);
+  background-color: var(--border);
+  border-radius: var(--radius-full);
+}
+
+blockquote blockquote,
+blockquote blockquote blockquote blockquote {
+  margin: 0;                    
+  margin-left: 0;
+  background: var(--bg);
+  padding-left: calc(var(--quote-indent) + 10px); 
+}
+
+blockquote blockquote blockquote,
+blockquote blockquote blockquote blockquote blockquote {
+  margin: 0;                    
+  margin-left: 0;
+  background: var(--bg-secondary);
+  padding-left: calc(var(--quote-indent) + 10px); 
+}
+
+blockquote blockquote::before,
+blockquote blockquote blockquote::before,
+blockquote blockquote blockquote blockquote::before {
+  background-color: var(--border);
+}
+
 #app.sidebar-collapsed .primary-btn span,
 #app.sidebar-collapsed .primary-btn-reversed span,
 #app.sidebar-collapsed .icon-btn2 span,
@@ -1664,9 +1716,23 @@ li.bold-marker-item::marker {
   display: none;
 }
 
+#mgmt-title {
+  text-transform: capitalize;
+}
+
+.mgmt-list {
+  padding: 0 var(--spacing-xl) !important;
+}
+
 #model-note-preview {
+  display: flex;
+  margin: 0 !important;
+  align-items: center;
   color: var(--fg-muted);
-  font-size
+}
+
+.model-note-label {
+  margin: 0 !important;
 }
 
 /* Markdown Content Styles */
@@ -2622,4 +2688,19 @@ figure:nth-child(3) {
   background-color: var(--hover-bg);
   border-color: var(--primary);
   transform: translateY(1px);
+}
+
+.message-actions .model-info-tag {
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--bg-secondary);
+  margin-left: 8px;
+  cursor: default;
+  white-space: nowrap;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

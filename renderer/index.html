@@ -75,6 +75,11 @@
               </svg>
               <span>Switch Model</span>
             </button>
+
+            <button id="open-search-api-settings" class="menu-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 9-2 2 2 2"/><path d="m13 13 2-2-2-2"/><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <span>Search API</span>
+            </button>
             
             <div class="theme-switcher">
               <div class="theme-info">
@@ -212,6 +217,46 @@
     </main>
   </div>
 
+  <!-- Search API Modal -->
+  <div id="search-api-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Search API Settings</h2>
+        <button id="close-search-api" class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <hr />
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="search-api-provider">Select Search API</label>
+          <select id="search-api-provider">
+            <option value="serpapi">SerpAPI</option>
+            <option value="google">Google API</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="search-api-key" id="search-api-key-label">API Key</label>
+          <input type="text" id="search-api-key" placeholder="API key for the selected service...">
+        </div>
+        <div class="form-group hidden" id="google-cse-id-group">
+          <label for="google-cse-id">Google Programmable Search Engine ID</label>
+          <input type="text" id="google-cse-id" placeholder="Your Search Engine ID (cx)...">
+        </div>
+        <p class="help-text" style="color: var(--fg-muted); font-size: 12px;">
+          This key is used when "Web Search" is enabled.
+        </p>
+      </div>
+      <div class="modal-actions">
+        <div class="action-group" style="margin-left: auto;">
+          <button id="cancel-search-api" class="primary-btn">Cancel</button>
+          <button id="save-search-api" class="primary-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Settings Modal -->
   <div id="settings-modal" class="modal hidden">
     <div class="modal-overlay"></div>
@@ -288,7 +333,8 @@
         <div class="form-group">
           <label for="platform-select">Platform</label>
           <select id="platform-select">
-            <option value="openrouter">OpenRouter</option>
+            <option value="cerebras">Cerebras</option>
+            <option value="openrouter">Openrouter</option>
             <option value="groq">Groq</option>
             <option value="gemini">Gemini</option>
             <option value="zai">Zhipu AI</option>
@@ -305,12 +351,13 @@
           <input type="text" id="model-label" placeholder="mis. Deepseek v3.1">
         </div> -->
 
-        <div class="form-group">
-          <!-- <label for="model-note">Notes</label>
-          <textarea id="model-note" rows="2" placeholder="e.g. Model pintar, dan cepat"></textarea> -->
-          <p id="model-note-preview" class="help-text" style="margin-top:6px;">—</p>
+        <div class="rel">
+          <blockquote>
+            <p class="model-note-label">Model notes:</p>
+            <p id="model-note-preview" class="help-text" style="margin-top:6px;">—</p>
+          </blockquote>
         </div>
-
+          
         <div class="form-group">
           <label for="title-model-select">Model for Title Generator</label>
           <select id="title-model-select">
@@ -339,10 +386,10 @@
           <input type="text" id="api-key" placeholder="Secret platform key...">
         </div>
 
-        <div class="form-group">
+        <!-- <div class="form-group">
           <label for="serp-api-key">SerpApi API Key (for Web Search)</label>
           <input type="text" id="serp-api-key" placeholder="SerpApi platform key...">
-        </div>
+        </div> -->
 
         <p class="help-text" style="color: var(--fg-muted); font-size: 12px;">
           Saved to the application data folder (Electron userData).

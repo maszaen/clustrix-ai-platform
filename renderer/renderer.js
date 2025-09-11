@@ -18,7 +18,7 @@ const streamManager = {
   byKey: {},
 
   makeKey(session, messageIndex) {
-    return `${session.created_at}:${messageIndex}`;
+    return `${session.id}:${messageIndex}`;
   },
 
   stopAllForKey(key) {
@@ -159,6 +159,33 @@ const streamManager = {
 
 
 // Utility Functions
+function generateSessionId() {
+  const timestamp = Date.now().toString(36);
+  const randomStr = Math.random().toString(36).slice(2, 9);
+  return `${timestamp}-${randomStr}`;
+}
+
+function toggleGoogleCseInput() {
+  const provider = $("#search-api-provider").value;
+  const keyLabel = $("#search-api-key-label");
+  const keyInput = $("#search-api-key");
+  const cseGroup = $("#google-cse-id-group");
+
+  if (provider === 'google') {
+    keyLabel.textContent = 'Google API Key';
+    keyInput.placeholder = 'Your Google Cloud API key...';
+    keyInput.value = state.settings.googleApiKey || '';
+    $("#google-cse-id").value = state.settings.googleCseId || '';
+    cseGroup.classList.remove('hidden');
+  } else {
+    keyLabel.textContent = 'SerpAPI API Key';
+    keyInput.placeholder = 'Your SerpAPI private key...';
+    keyInput.value = state.settings.serpApiKey || '';
+    cseGroup.classList.add('hidden');
+  }
+  log("UI_SEARCH_API", 2, "toggleGoogleCseInput", `UI updated for provider: ${provider}`);
+}
+
 async function processSearchStatusQueue() {
   if (isProcessingQueue) return;
   isProcessingQueue = true;
@@ -542,7 +569,7 @@ function renderMgmtProviders() {
           </button>
         ${items.map(p => `
           <button class="modal-menu-item" data-prov="${p}" style="width:100%;justify-content:space-between">
-            <span style="display:flex;align-items:center;gap:10px;text-transform:capitalize;">
+            <span class="mm-prov-title" style="display:flex;align-items:center;gap:10px;text-transform:capitalize;">
               ${p}
             </span>
             <span class="help-text" style="color: var(--fg-muted)">${(provs[p].models||[]).length} models</span>
@@ -605,13 +632,13 @@ function renderMgmtProvider(pkey) {
 
     <div class="form-group">
       <div style="display: flex; gap: 8px; padding-left: 16px; padding-top: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);" class="row-center">
-        <label>Models</label>
+        <label class="no-padding-left">Models</label>
         <svg id="add-model" style="margin-bottom: 8px; cursor: pointer;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-plus-icon lucide-circle-plus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
       </div>
       <div id="model-list" style="max-height: 400px; overflow: auto;">
         ${list.map(m => `
-          <div class="menu-item no-padding" data-mid="${m.id}" style="width:100%; justify-content:space-between; padding: 8px 16px !important; border-radius: none !important;">
-            <span>${m.label || m.id}</span>
+          <div class="menu-item no-padding mgmt-list" data-mid="${m.id}" style="width:100%; justify-content:space-between; padding: 8px 16px !important; border-radius: none !important;">
+            <span class="mm-prov-title">${m.label || m.id}</span>
             <button class="icon-btn danger" data-del="${m.id}" title="Delete">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
@@ -707,7 +734,7 @@ function renderMgmtModel(pkey, mid) {
     </div>
     <div class="form-group">
       <label>Notes</label>
-      <textarea id="mm-note" rows="3" placeholder="Catatan model...">${meta.note || ''}</textarea>
+      <textarea id="mm-note" rows="3" placeholder="Model notes...">${meta.note || ''}</textarea>
     </div>
   `;
 
@@ -841,6 +868,16 @@ function defaultModels() {
           'glm-4.5-flash'
         ]
       },
+      cerebras: {
+        baseUrl: 'https://api.cerebras.ai/v1/chat/completions',
+        apiKey: '',
+        models: [
+          'gpt-oss-120b',
+          'qwen-3-coder-480b',
+          'qwen-3-235b-a22b-thinking-2507',
+          'llama-3.3-70b',
+        ]
+      }
     }
   };
 }
@@ -943,7 +980,7 @@ function scheduleThinkingText(aiNode, {
   delay2 = 2000, 
   delay3 = 3500, 
   delay4 = 5000 
-} = {}) {
+} = {}) {  
   cancelThinkingText(aiNode);
   const textEl = aiNode.querySelector(".thinking-text-indicator");
   if (!textEl) return;
@@ -997,6 +1034,11 @@ function scrollToBottom({ force = false } = {}) {
 }
 
 function getThinkingMarkup() {
+  // Check if thinking mode is disabled
+  const act = state.settings?.models?.active || {};
+  const thinkMode = act.thinkMode || 'off';
+  if (thinkMode === 'off') return '';
+  
   return `<div class="thinking-container">
     <div class="typing-indicator"><span></span><span></span><span></span></div>
     <span class="thinking-text-indicator"></span>
@@ -1376,6 +1418,7 @@ function getWelcomeMessage() {
 
 function typewriterEffect(element, text, { speed = 30, punctuationDelay = 350 } = {}) {
   element.textContent = "";
+  log("UI_EFFECT", 1, "typewriterEffect", "Starting typewriter effect.", { text_length: text.length, speed, punctuationDelay });
   let i = 0;
   const punctuation = ".,?!;:-–";
   function type() {
@@ -1480,10 +1523,19 @@ function renderHistory() {
 
   clearLog();
   if (!current || !current.messages) return;
+
   for (let i = 0; i < current.messages.length; i++) {
-    const [role, content] = current.messages[i];
+    console.log(`[DIAGNOSTIC] Rendering index ${i}:`, JSON.parse(JSON.stringify(current.messages[i])));
+    const messageData = current.messages[i];
+    if (!Array.isArray(messageData)) continue;
+
+    const role = messageData[0];
+    const content = messageData[1];
+    const modelInfo = messageData[2]; 
+
     const n = addMessage(role, content, { final: true, index: i });
     n.dataset.index = String(i);
+
     if (role === 'ai') hydrateThinkingIfAny(n, current, i);
   }
   scrollToBottom({ force: true });
@@ -1491,47 +1543,75 @@ function renderHistory() {
 
 function renderSessions() {
   const ul = $("#session-list");
-  const filter = ($("#search").value || "").toLowerCase();
-  let filteredSessions = state.sessions.filter((s) => s.name === null || s.name);
+  if (!ul) return;
 
-  if (filter) {
-    filteredSessions = filteredSessions.filter((s) => {
-      if (s.name === null) return true;
-      const nameMatch = s.name.toLowerCase().includes(filter);
-      if (isAdvancedSearch) {
-        const contentMatch = s.messages.some((msg) => msg[1].toLowerCase().includes(filter));
-        return nameMatch || contentMatch;
-      }
-      return nameMatch;
-    });
+  const filterValue = ($("#search")?.value || "").toLowerCase();
+
+  // Reset pagination ketika filter berubah
+  if (renderSessions._lastFilter !== filterValue) {
+    loadedSessionCount = SESSIONS_PER_PAGE;
+    renderSessions._lastFilter = filterValue;
   }
+
+  let sessions = Array.isArray(state.sessions) ? state.sessions.slice() : [];
+
+  sessions.sort((a, b) => {
+    const da = new Date(a?.last_updated || a?.created_at || 0).getTime();
+    const db = new Date(b?.last_updated || b?.created_at || 0).getTime();
+
+    if (isNaN(da)) da = 0;
+    if (isNaN(db)) db = 0;
+
+    return db - da;
+  });
+
+  if (filterValue) {
+    sessions = sessions.filter((s) => {
+      if (s.name === null) return true;
+      const nameMatch = (s.name || "").toLowerCase().includes(filterValue);
+      if (!isAdvancedSearch) return nameMatch;
+      const contentMatch = Array.isArray(s.messages)
+        ? s.messages.some((m) => (m?.[1] || "").toLowerCase().includes(filterValue))
+        : false;
+      return nameMatch || contentMatch;
+    });
+  } else {
+    sessions = sessions.filter((s) => s.name === null || s.name);
+  }
+
+  const total = sessions.length;
+  const pageSize = SESSIONS_PER_PAGE || 30;
+  const limit = Math.min(loadedSessionCount > 0 ? loadedSessionCount : pageSize, total);
+  const pageItems = sessions.slice(0, limit);
 
   ul.innerHTML = "";
   let lastDateGroup = null;
 
-  filteredSessions.forEach((s) => {
-    const currentDateGroup = getRelativeDateGroup(s.created_at);
-    if (currentDateGroup !== lastDateGroup) {
-      const separator = document.createElement("div");
-      separator.className = "date-separator";
-      separator.textContent = currentDateGroup;
-      ul.appendChild(separator);
-      lastDateGroup = currentDateGroup;
+  for (const s of pageItems) {
+    const basisDate = s?.last_updated || s?.created_at || new Date().toISOString();
+    const currentGroup = getRelativeDateGroup(basisDate);
+
+    if (currentGroup !== lastDateGroup) {
+      const sep = document.createElement("div");
+      sep.className = "date-separator";
+      sep.textContent = currentGroup;
+      ul.appendChild(sep);
+      lastDateGroup = currentGroup;
     }
 
     if (s.name === null) {
       const placeholder = document.createElement("li");
       placeholder.className = s === current ? "active session-placeholder" : "session-placeholder";
-      placeholder.dataset.sessionId = s.created_at; // Use created_at as unique identifier
+      placeholder.dataset.sessionId = s.id || "";
       placeholder.innerHTML = `<span class="name">Untitled chat</span><div class="spinner"></div>`;
       placeholder.addEventListener("click", () => setCurrent(s));
       ul.appendChild(placeholder);
-      return;
+      continue;
     }
 
     const li = document.createElement("li");
     li.className = s === current ? "active" : "";
-    li.dataset.sessionId = s.created_at; // Use created_at as unique identifier
+    li.dataset.sessionId = s.id || "";
     li.innerHTML = `
       <span class="name">${esc(s.name)}</span>
       <div class="session-meta">
@@ -1543,20 +1623,33 @@ function renderSessions() {
         </span>
       </div>
     `;
-
-    // try { li.querySelector('.tokens').textContent = `${s.tokens_used || 0} tokens`; } catch {}
-
     li.addEventListener("click", () => setCurrent(s));
-    li.querySelector("button").addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      showConfirmationModal("Delete Session", `Are you sure you want to delete "${s.name}"?`, () => deleteSession(s));
-    });
+    const delBtn = li.querySelector("button");
+    if (delBtn) {
+      delBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        showConfirmationModal("Delete Session", `Are you sure you want to delete "${s.name}"?`, () => deleteSession(s));
+      });
+    }
 
     ul.appendChild(li);
-  });
+  }
+
+  if (total > limit) {
+    const moreLi = document.createElement("li");
+    moreLi.className = "load-more";
+    const btn = document.createElement("button");
+    const remaining = Math.min(pageSize, total - limit);
+    btn.textContent = `Load more (${remaining})`;
+    btn.addEventListener("click", () => {
+      loadedSessionCount = limit + pageSize;
+      renderSessions();
+    });
+    moreLi.appendChild(btn);
+    ul.appendChild(moreLi);
+  }
 }
 
-// Function to update only a specific session title with typewriter effect
 function updateSessionTitle(sessionId, newTitle, useTypewriter = true) {
   const sessionElement = document.querySelector(`#session-list li[data-session-id="${sessionId}"]`);
   if (!sessionElement) return;
@@ -1565,7 +1658,6 @@ function updateSessionTitle(sessionId, newTitle, useTypewriter = true) {
   if (!nameElement) return;
   
   if (useTypewriter) {
-    // Apply typewriter effect to session title
     nameElement.textContent = "";
     let i = 0;
     const punctuation = ".,?!;:-–";
@@ -1574,14 +1666,14 @@ function updateSessionTitle(sessionId, newTitle, useTypewriter = true) {
         const char = newTitle.charAt(i);
         nameElement.textContent += char;
         i++;
-        let delay = 25 + Math.random() * 20; // Faster speed for session titles
-        if (punctuation.includes(char)) delay += 150; // Shorter punctuation delay
+        let delay = 25 + Math.random() * 20;
+        if (punctuation.includes(char)) delay += 150;
         setTimeout(type, delay);
       }
     }
     setTimeout(type, 50);
   } else {
-    nameElement.textContent = newTitle; // Use textContent directly, no need to escape
+    nameElement.textContent = newTitle;
   }
 }
 
@@ -1611,7 +1703,6 @@ function convertPlaceholderToSession(sessionId, sessionData) {
     </div>
   `;
   
-  // Re-add event listeners
   sessionElement.addEventListener("click", () => setCurrent(sessionData));
   sessionElement.querySelector("button").addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -1619,18 +1710,20 @@ function convertPlaceholderToSession(sessionId, sessionData) {
   });
 }
 
-// Function to update active session state without full re-render
 function updateActiveSessionState(newActiveSession) {
-  // Remove active class from all sessions
-  document.querySelectorAll('#session-list li.active').forEach(li => {
-    li.classList.remove('active');
-  });
+  const currentActive = $("#session-list li.active");
+  if (currentActive) {
+    if (newActiveSession && currentActive.dataset.sessionId === newActiveSession.id) {
+      return;
+    }
+    currentActive.classList.remove('active');
+  }
   
-  // Add active class to new active session
   if (newActiveSession) {
-    const activeElement = document.querySelector(`#session-list li[data-session-id="${newActiveSession.created_at}"]`);
-    if (activeElement) {
-      activeElement.classList.add('active');
+    const newElement = $(`#session-list li[data-session-id="${newActiveSession.id}"]`);
+    if (newElement) {
+      newElement.classList.add('active');
+      log("UI", 1, "updateActiveSessionState", "Updated active session UI", { newSessionId: newActiveSession.id });
     }
   }
 }
@@ -1726,7 +1819,19 @@ function addMessage(role, content, { final = false, index = -1 } = {}) {
         if (Number.isInteger(idx) && idx >= 0) regenerateFromIndex(idx);
       });
       actions.appendChild(regenBtn);
-    }
+      if (current && current.messages && current.messages[index]) {
+        const messageData = current.messages[index];
+        const modelInfo = Array.isArray(messageData) ? messageData[2] : null;
+
+        if (modelInfo && modelInfo.provider && modelInfo.model) {
+          const modelInfoEl = document.createElement("span");
+          modelInfoEl.className = "model-info-tag";
+          modelInfoEl.title = `Provider: ${modelInfo.provider}\nModel ID: ${modelInfo.model}`;
+          modelInfoEl.textContent = `${modelInfo.provider}/${modelInfo.label || modelInfo.model}`;
+          actions.appendChild(modelInfoEl);
+        }
+      }
+    } 
   }
   scrollToBottom({ force: true });
   return node;
@@ -1767,6 +1872,7 @@ function setCurrent(s) {
     }
   }
   $("#zenai-logo").innerHTML = ``
+  
   renderSessions();
   updateChatHeader();
   updateInputState();
@@ -1776,9 +1882,11 @@ function setCurrent(s) {
 async function load() {
   if (!state.settings) state.settings = {}; 
   if (!state.settings.think) state.settings.think = { mode: 'off' };
+  if (!state.settings.searchApiProvider) { state.settings.searchApiProvider = 'serpapi'; }
   if (!state.settings.serpApiKey) { state.settings.serpApiKey = ""; }
+  if (!state.settings.googleApiKey) { state.settings.googleApiKey = ""; }
+  if (!state.settings.googleCseId) { state.settings.googleCseId = ""; }
 
-  $('#serp-api-key').value = state.settings.serpApiKey || "";
   const thinkSel = document.getElementById('extended-thinking');
   if (thinkSel) {
     thinkSel.value = state.settings.think?.mode || 'off';
@@ -1795,6 +1903,12 @@ async function load() {
       state.sessions = data.sessions || [];
       state.settings = { ...state.settings, ...(data.settings || {}) };
       state.sessions.forEach(ensureTokenFields);
+      state.sessions.forEach(s => {
+        if (!s.id) {
+          s.id = generateSessionId();
+          log("MIGRATION", 2, "load", "Added new unique ID to legacy session", { sessionName: s.name });
+        }
+      });
     }
   } catch (e) {
     log("APP", 4, "load", "Failed to load data.", { error: e });
@@ -1876,6 +1990,7 @@ async function generateAndSetTitle(session){
   if(!session || !session.messages || session.messages.length < 2) return;
   const userPrompt = session.messages.find(m => m[0]==='user')?.[1] || '';
   if(!userPrompt) return;
+  log("TITLE", 2, "generateAndSetTitle", "Executed")
 
   try{
     if (DEBUG_MODE){
@@ -1908,20 +2023,17 @@ async function generateAndSetTitle(session){
   }
   await save();
   
-  // Update chat header with typewriter effect if this is the current session
   if (session === current) {
     typewriterEffect($("#chat-title"), current.name);
   }
   
-  // Check if this session was a placeholder (name was null before)
-  const sessionElement = document.querySelector(`#session-list li[data-session-id="${session.created_at}"]`);
+  const sessionElement = document.querySelector(`#session-list li[data-session-id="${session.id}"]`);
+  
   if (sessionElement && sessionElement.classList.contains('session-placeholder')) {
-    // Convert placeholder to full session item, then apply typewriter effect to title
-    convertPlaceholderToSession(session.created_at, session);
-    updateSessionTitle(session.created_at, session.name, true);
-  } else {
-    // Update only the specific session title in the sidebar with typewriter effect
-    updateSessionTitle(session.created_at, session.name, true);
+    convertPlaceholderToSession(session.id, session); 
+    updateSessionTitle(session.id, session.name, true);
+  } else if (sessionElement) {
+    updateSessionTitle(session.id, session.name, true);
   }
 }
 
@@ -2077,7 +2189,10 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     btn.addEventListener("click", () => {
       footer.innerHTML = "";
 
-      session.messages[messageIndex] = ["ai", seedText];
+      const existingMessage = session.messages[messageIndex];
+      const modelInfo = Array.isArray(existingMessage) ? existingMessage[2] : null;
+      session.messages[messageIndex] = ["ai", seedText, modelInfo];
+      log("STREAM", 2, "renderContinuePlaceholder:click", "Continuing stream, preserving modelInfo.", { modelInfo });
 
       const msgs = buildResumeMessagesFromSession(session, messageIndex, seedText);
 
@@ -2101,6 +2216,10 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     if (!s) return;
     const { session, aiNode, messageIndex } = s;
 
+    const existingMessageData = session.messages[messageIndex];
+    const modelInfo = existingMessageData && Array.isArray(existingMessageData) ? existingMessageData[2] : null;
+    log("FINALIZE", 1, "finalize", "Preparing to save final message.", { hasModelInfo: !!modelInfo, modelInfo });
+
     const display = trimEnd(fullResponse);
     const hasContent = display.length > 0;
     const hasEnd = END_RX.test(fullResponse) || sawEnd;
@@ -2111,10 +2230,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       finalMessageToSave = hasContent ? `${display}\n\n${formattedError}` : formattedError;
     }
     
-    if (finalMessageToSave) {
-      session.messages[messageIndex] = ["ai", finalMessageToSave];
+    if (finalMessageToSave || interrupted) {
+      session.messages[messageIndex] = ["ai", finalMessageToSave, modelInfo];
+      log("FINALIZE", 2, "finalize", "Final message saved to state with modelInfo.", { content: finalMessageToSave.substring(0, 50) + '...', modelInfo });
     } else if (interrupted) {
-      session.messages[messageIndex] = ["ai", formatErrorMessageForSaving(reason)];
+      session.messages[messageIndex] = ["ai", formatErrorMessageForSaving(reason), modelInfo];
     }
 
     if (aiNode && document.contains(aiNode)) {
@@ -2143,9 +2263,9 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     try { updateChatHeader?.(); } catch {}
     try { save?.(); } catch {}
 
-    if (hasContent && (!session.name || /untitled/i.test(session.name))) {
-      try { generateAndSetTitle?.(session); } catch {}
-    }
+    // if (hasContent && (!session.name || /untitled/i.test(session.name))) {
+    //   try { generateAndSetTitle?.(session); } catch {}
+    // }
   };
 
   showThinking();
@@ -2253,7 +2373,7 @@ async function startStream(
   initialFullResponse = ""
 ) {
   const nonce = Math.random().toString(36).slice(2);
-  const streamId = `${session.created_at}-${aiMessageIndex}-${nonce}`;
+  const streamId = `${session.id}-${aiMessageIndex}-${nonce}`;
   if (aiNode?.dataset) aiNode.dataset.streamId = streamId;
 
   const messages = overrideMessages ? overrideMessages : buildMessagesUpTo(aiMessageIndex - 1);
@@ -2362,7 +2482,7 @@ async function startStream(
   }
 
   const act = state.settings?.models?.active || {};
-  const thinkMode = act.thinkMode || 'medium';
+  const thinkMode = act.thinkMode || 'off';
 
   const controller = window.api.chat.stream(
     messages,
@@ -2372,7 +2492,12 @@ async function startStream(
       apiKey: act.apiKey,
       thinkMode,
       webSearchEnabled: state.settings.webSearchEnabled,
-      serpApiKey: state.settings.serpApiKey
+      searchApiConfig: {
+        provider: state.settings.searchApiProvider,
+        serpApiKey: state.settings.serpApiKey,
+        googleApiKey: state.settings.googleApiKey,
+        googleCseId: state.settings.googleCseId,
+      }
     },
     (evt) => {
       if (evt && typeof evt === 'object') {
@@ -2395,13 +2520,16 @@ async function startStream(
   });
 }
 
-
 function renderAiFinalActions(aiNode, content, messageIndex) {
-  if (!aiNode || !document.contains(aiNode)) return;
+  if (!aiNode || !document.contains(aiNode) || !current) return;
   const actions = aiNode.querySelector(".message-actions");
   if (!actions) return;
 
   actions.innerHTML = "";
+
+  const messageData = current.messages[messageIndex];
+  const modelInfo = Array.isArray(messageData) ? messageData[2] : null;
+  log("RENDER", 2, "renderAiFinalActions", `Fetching modelInfo for index ${messageIndex} directly from state.`, { hasModelInfo: !!modelInfo, modelInfo });
 
   const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
   const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
@@ -2433,40 +2561,58 @@ function renderAiFinalActions(aiNode, content, messageIndex) {
     if (Number.isInteger(idx) && idx >= 0) regenerateFromIndex(idx);
   });
   actions.appendChild(regenBtn);
+
+  if (modelInfo && modelInfo.provider && modelInfo.model) {
+    const modelInfoEl = document.createElement("span");
+    modelInfoEl.className = "model-info-tag";
+    modelInfoEl.title = `Provider: ${modelInfo.provider}\nModel ID: ${modelInfo.model}`;
+    modelInfoEl.textContent = `${modelInfo.provider}/${modelInfo.label || modelInfo.model}`;
+    actions.appendChild(modelInfoEl);
+  }
 }
 
 async function send() {
   const input = $("#msg");
   const text = (input.value || "").trim();
 
-  if (text === '/debugsearchui') {
-    log("DEBUG", 2, "send", "Search UI debug mode triggered.");
-    input.value = "";
-    input.style.height = "auto";
-    if (!current) { // Jika belum ada sesi, buat sesi dummy
-      current = { name: "Debug Session", created_at: nowISO(), messages: [] };
-    }
-    runSearchUIDebug();
-    return; // Hentikan eksekusi fungsi send
+  if (!current || !text || streamManager.isStreamingInSession(current)) {
+    return;
   }
-  
-  if (document.activeElement) document.activeElement.blur();
-  log("SESSION", 2, "send", "Sending new message", {
-    session: current?.name,
-    messageExcerpt: text.substring(0, 60) + "...",
-  });
-
-  if (!text || !current || streamManager.isStreamingInSession(current)) return;
+  log("SEND", 1, "send", "Executing send from existing session.", { text });
 
   ensureTokenFields(current);
 
-  current.created_at = nowISO();
+  // --- PERBAIKAN: Lakukan semua modifikasi state SEBELUM menyimpan ---
+  if (!current.created_at) current.created_at = nowISO();
+  current.last_updated = nowISO();
 
+  // 1. Tambahkan pesan pengguna ke state
   current.messages.push(["user", text]);
   const userIndex = current.messages.length - 1;
+
+  // 2. Siapkan dan tambahkan pesan AI placeholder ke state
+  const aiMessageIndex = current.messages.length;
+  const config = getActiveChatConfig();
+  const modelMeta = getModelMeta(state.settings.models, config.provider, config.model);
+  const modelInfo = {
+      provider: config.provider,
+      model: config.model,
+      label: modelMeta.label || config.model 
+  };
+  current.messages.push(["ai", "", modelInfo]);
+  log("SEND", 1, "send", "Pushed user message and AI placeholder with modelInfo.", { modelInfo });
+  
+  // 3. SEKARANG baru simpan state yang sudah lengkap
   await save();
 
-  state.sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  if (current.name === null) {
+    generateAndSetTitle(current);
+  }
+
+  state.sessions.sort((a, b) =>
+    new Date(b.last_updated || b.created_at || 0) -
+    new Date(a.last_updated || a.created_at || 0)
+  );
   renderSessions();
 
   addMessage("user", text, { final: true, index: userIndex });
@@ -2474,84 +2620,122 @@ async function send() {
   input.value = "";
   input.style.height = "auto";
 
-  const aiMessageIndex = current.messages.length;
-  current.messages.push(["ai", ""]);
   const aiNode = addMessage("ai", "", { final: false, index: aiMessageIndex });
   aiNode.dataset.index = String(aiMessageIndex);
-  hydrateThinkingIfAny(aiNode, current, aiMessageIndex);
 
+  hydrateThinkingIfAny(aiNode, current, aiMessageIndex);
   scheduleThinkingText(aiNode);
-  
-  const isFirstInteraction = current.messages.filter((m) => m[0] === "ai" && m[1]).length === 0;
+  const isFirstInteraction = current.messages.filter((m) => m[0] === "ai" && m[1]).length === 1;
   startStream(current, text, aiNode, aiMessageIndex, isFirstInteraction);
 }
 
 async function sendFromWelcome() {
   const input = $("#msg-central");
   const text = (input.value || "").trim();
-
-  log("SESSION", 2, "sendFromWelcome", "Creating new session from welcome page", {
-    messageExcerpt: text.substring(0, 60) + "...",
-  });
-
   if (!text) return;
+  log("SEND", 1, "sendFromWelcome", "Executing send from welcome screen.", { text });
+
+  const config = getActiveChatConfig();
+  const modelMeta = getModelMeta(state.settings.models, config.provider, config.model);
+  const modelInfo = {
+      provider: config.provider,
+      model: config.model,
+      label: modelMeta.label || config.model
+  };
+  log("SEND", 1, "sendFromWelcome", "Generated modelInfo.", { modelInfo });
 
   const s = {
     name: null,
+    id: generateSessionId(),
     created_at: nowISO(),
-    messages: [["user", text]],
+    last_updated: nowISO(),
+    messages: [
+      ["user", text],
+      ["ai", "", modelInfo]
+    ],
     seeded: true,
     tokens_used: 0,
     tokens_by_message: {},
   };
+
+  // 2. Masukkan sesi yang sudah LENGKAP ke state
   state.sessions.unshift(s);
-
-  setCurrent(s);
+  
+  // 3. SEKARANG baru simpan state yang sudah benar
   await save();
-  input.value = "";
+  log("SEND", 2, "sendFromWelcome", "New complete session created and saved.", { sessionId: s.id });
 
-  const aiMessageIndex = s.messages.length;
-  s.messages.push(["ai", ""]);
-  const aiNode = addMessage("ai", "", { final: false, index: aiMessageIndex });
-  aiNode.dataset.index = String(aiMessageIndex);
+  // 4. Atur sebagai sesi saat ini (akan merender dari data yang sudah benar)
+  setCurrent(s);
+  
+  input.value = ""; // Kosongkan input di welcome screen
+  
+  // 5. Dapatkan node AI yang sudah dirender oleh setCurrent
+  const aiMessageIndex = 1; // Indeks AI di sesi baru
+  const aiNode = $(`#chat-log .message[data-index="${aiMessageIndex}"]`);
+  
+  if (!aiNode) {
+     log("SEND", 4, "sendFromWelcome", "FATAL: Could not find AI node after setCurrent.", { aiMessageIndex });
+     return;
+  }
+  
+  // Ganti konten statisnya dengan loader
+  const textDiv = aiNode.querySelector('.message-text');
+  if (textDiv) textDiv.innerHTML = getThinkingMarkup();
+  const actionsDiv = aiNode.querySelector('.message-actions');
+  if (actionsDiv) actionsDiv.innerHTML = '';
+  
+  log("SEND", 1, "sendFromWelcome", "Found AI node and prepared for stream.", { nodeExists: !!aiNode });
+
+  generateAndSetTitle(s);
+
   hydrateThinkingIfAny(aiNode, current, aiMessageIndex);
-
   scheduleThinkingText(aiNode);
   startStream(s, text, aiNode, aiMessageIndex, true);
 }
-
 
 async function regenerateFromIndex(aiIndex) {
   if (!current || streamManager.isStreamingInSession(current)) return;
 
   const userMessages = current.messages.slice(0, aiIndex).filter((m) => m[0] === "user");
-  const lastUserMessage = userMessages.pop();
-  if (!lastUserMessage) return;
-
-  const text = lastUserMessage[1];
-
-  log("SESSION", 2, "regenerateFromIndex", "Initiating response regeneration", { session: current.name, fromIndex: aiIndex });
+  const lastUserMsg = userMessages.pop()?.[1] || "";
 
   current.messages.length = aiIndex;
+  current.last_updated = nowISO();
+  
   await save();
 
+  state.sessions.sort((a, b) =>
+    new Date(b.last_updated || b.created_at || 0) -
+    new Date(a.last_updated || a.created_at || 0)
+  );
+  renderSessions();
   const chatLog = $("#chat-log");
   const allMessages = chatLog.querySelectorAll(".message");
   for (let i = allMessages.length - 1; i >= 0; i--) {
-    const msgIndex = parseInt(allMessages[i].dataset.index || "-1", 10);
+    const msgNode = allMessages[i];
+    const msgIndex = parseInt(msgNode.dataset.index || "-1", 10);
     if (msgIndex >= aiIndex) {
-      allMessages[i].remove();
+      msgNode.remove();
     }
   }
 
   const newAiMessageIndex = current.messages.length;
-  current.messages.push(["ai", ""]);
+  const config = getActiveChatConfig();
+  const modelMeta = getModelMeta(state.settings.models, config.provider, config.model);
+  const modelInfo = {
+      provider: config.provider,
+      model: config.model,
+      label: modelMeta.label || config.model
+  };
+  current.messages.push(["ai", "", modelInfo]);
+  log("SEND", 1, "regenerateFromIndex", "Pushed new AI placeholder for regeneration.", { modelInfo });
   const aiNode = addMessage("ai", "", { final: false, index: newAiMessageIndex });
   aiNode.dataset.index = String(newAiMessageIndex);
 
   scheduleThinkingText(aiNode);
   const isFirstInteraction = aiIndex === 1;
-  startStream(current, text, aiNode, newAiMessageIndex, isFirstInteraction);
+  startStream(current, lastUserMsg, aiNode, newAiMessageIndex, isFirstInteraction);
 }
 
 async function regenerateFromCancelled(targetButton) {
@@ -2564,7 +2748,9 @@ async function regenerateFromCancelled(targetButton) {
   if (isNaN(messageIndex)) return;
 
   const existingContent = current.messages[messageIndex]?.[1] || "";
-
+  const modelInfo = current.messages[messageIndex]?.[2] || null;
+  log("STREAM", 2, "regenerateFromCancelled", "Regenerating from cancelled, preserving modelInfo.", { modelInfo });
+  
   const msgs = buildMessagesUpTo(messageIndex - 1);
 
   let promptContent;
@@ -2579,7 +2765,7 @@ async function regenerateFromCancelled(targetButton) {
 
   msgs.push({ role: "user", content: promptContent });
 
-  current.messages[messageIndex] = ["ai", ""];
+  current.messages[messageIndex] = ["ai", "", modelInfo];
   await save();
 
   const newNode = addMessage("ai", "", { final: false, index: messageIndex });
@@ -2720,6 +2906,39 @@ function setupEventListeners() {
     window.api?.window.close();
   });
 
+  $("#open-search-api-settings").addEventListener("click", () => {
+    log("UI", 2, "event:open-search-api-settings", "Opening Search API modal.");
+    $("#search-api-provider").value = state.settings.searchApiProvider || 'serpapi';
+    toggleGoogleCseInput();
+    $("#search-api-modal").classList.remove("hidden");
+    $("#settings-menu").classList.add("hidden");
+  });
+
+  $("#search-api-provider").addEventListener("change", toggleGoogleCseInput);
+
+  const closeSearchApiModal = () => $("#search-api-modal").classList.add("hidden");
+  $("#close-search-api").addEventListener("click", closeSearchApiModal);
+  $("#cancel-search-api").addEventListener("click", closeSearchApiModal);
+  $("#search-api-modal .modal-overlay").addEventListener("click", closeSearchApiModal);
+
+  $("#save-search-api").addEventListener("click", async () => {
+    const provider = $("#search-api-provider").value;
+    const apiKey = $("#search-api-key").value.trim();
+    const cseId = $("#google-cse-id").value.trim();
+
+    state.settings.searchApiProvider = provider;
+    if (provider === 'google') {
+      state.settings.googleApiKey = apiKey;
+      state.settings.googleCseId = cseId;
+    } else {
+      state.settings.serpApiKey = apiKey;
+    }
+
+    log("SETTINGS", 2, "event:save-search-api", "Saving Search API settings", { provider });
+    await save();
+    closeSearchApiModal();
+  });
+
   (function wireWelcomeInputs() {
     const msgCentral = $("#msg-central");
     if (msgCentral) {
@@ -2761,9 +2980,6 @@ function setupEventListeners() {
     // const labelEl    = $("#model-label"); // form dimatikan
     // const noteEl     = $("#model-note");  // form dimatikan
     const notePrev   = $("#model-note-preview");
-    const serpApi    = state.settings.serpApiKey;
-    
-    $("#serp-api-key").value = serpApi || '';
 
     $("#extended-thinking").value = modelsConf.active?.thinkMode || 'off';
 
@@ -2777,7 +2993,6 @@ function setupEventListeners() {
       const prov = modelsConf.providers?.[p] || { baseUrl: '', apiKey: '', models: [] };
       const list = normalizeProviderModels(prov.models || []);
 
-      // isi dropdown pakai LABEL (fallback id)
       modelSelEl.innerHTML = "";
       if (list.length) {
         for (const m of list) {
@@ -2846,9 +3061,6 @@ function setupEventListeners() {
     // const label    = $("#model-label").value.trim() || modelId; // form dimatikan
     // const note     = $("#model-note").value.trim();             // form dimatikan
     const thinkMode = $("#extended-thinking").value;
-    const serpApi = $("#serp-api-key");
-
-    state.settings.serpApiKey = serpApi.value.trim() 
 
     const conf = state.settings.models || defaultModels();
     conf.providers = conf.providers || {};
@@ -2880,7 +3092,6 @@ function setupEventListeners() {
     try { 
       if (!DEBUG_MODE) 
         await window.api.models.save(conf); 
-        await save();
     } catch {}
 
     updateModelHeader();

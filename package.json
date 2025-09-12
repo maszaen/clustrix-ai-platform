@@ -17,19 +17,18 @@
   "config": {
     "forge": {
       "packagerConfig": {
+        "prune": false,
         "name": "ZenAI",
         "executableName": "zenai",
-        "icon": "public/images/favicon.png",
+        "icon": "public/images/favicon",
         "out": "out",
         "ignore": [
-          "/node_modules",
-          "/src",
-          "/.git",
-          "/dist",
-          "\\.gitignore",
-          "\\.gitattributes",
-          "/README.md",
-          "/\\.env"
+          "/\\.git($|/)",
+          "/\\.gitignore($|/)",
+          "/\\.gitattributes($|/)",
+          "^(?!node_modules/).*/dist($|/)",
+          "^(?!node_modules/).*/src($|/)",
+          "/README\\.md$/i"
         ]
       },
       "makers": [
@@ -39,7 +38,6 @@
             "name": "zenai",
             "authors": "Zaen",
             "description": "ZenAI - A smart AI chat assistant.",
-            "setupIcon": "public/images/favicon.ico",
             "noMsi": true,
             "setupExe": "ZenAI-Setup.exe"
           }
@@ -57,9 +55,6 @@
   },
   "dependencies": {
     "cheerio": "^1.1.2",
-    "choices.js": "^11.1.0",
-    "dotenv": "^17.2.2",
-    "marked": "^16.2.1",
     "serpapi": "^2.2.1"
   }
 }

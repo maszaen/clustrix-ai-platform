@@ -889,6 +889,31 @@ input:checked + .slider:before {
   color: var(--surface);
 }
 
+.message-actions .model-info-tag {
+  -webkit-user-select: none !important; 
+  -moz-user-select: none !important;  
+  -ms-user-select: none !important;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  color: var(--icon);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 2px 8px;
+  border-radius: var(--radius-lg);
+  cursor: default;
+  white-space: nowrap;
+  max-width: 350px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-fast);
+}
+
+.message-actions .model-info-tag:hover {
+  background: var(--bg-secondary);
+}
+
 .message-actions svg {
   color: var(--icon) !important;
   stroke: currentColor !important;
@@ -2688,19 +2713,4 @@ figure:nth-child(3) {
   background-color: var(--hover-bg);
   border-color: var(--primary);
   transform: translateY(1px);
-}
-
-.message-actions .model-info-tag {
-  color: var(--fg-muted);
-  font-size: 11px;
-  font-family: var(--font-mono);
-  padding: 2px 6px;
-  border-radius: 4px;
-  background-color: var(--bg-secondary);
-  margin-left: 8px;
-  cursor: default;
-  white-space: nowrap;
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }

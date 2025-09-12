@@ -122,7 +122,7 @@ ipcMain.handle('models:save', async (_evt, conf) => {
 
 function createWindow(){
   const win = new BrowserWindow({
-    width: 1500, height: 900,
+    width: 1200, height: 900,
     frame: false,
     minWidth: 850,
     minHeight: 400,
@@ -133,7 +133,7 @@ function createWindow(){
     }
   });
   
-  win.webContents.openDevTools();
+  // win.webContents.openDevTools();
 
   // Logging
   ipcMain.on('log:write', (_event, logData) => {

@@ -1525,18 +1525,20 @@ function renderHistory() {
   if (!current || !current.messages) return;
 
   for (let i = 0; i < current.messages.length; i++) {
-    console.log(`[DIAGNOSTIC] Rendering index ${i}:`, JSON.parse(JSON.stringify(current.messages[i])));
     const messageData = current.messages[i];
     if (!Array.isArray(messageData)) continue;
 
     const role = messageData[0];
     const content = messageData[1];
-    const modelInfo = messageData[2]; 
-
-    const n = addMessage(role, content, { final: true, index: i });
+    const modelInfo = messageData[2];
+    const isNewSessionPlaceholder = (role === 'ai' && content === '' && i === current.messages.length - 1);
+    const isFinal = !isNewSessionPlaceholder;
+    const n = addMessage(role, content, { final: isFinal, index: i, modelInfo: modelInfo });
     n.dataset.index = String(i);
 
-    if (role === 'ai') hydrateThinkingIfAny(n, current, i);
+    if (role === 'ai' && isFinal) {
+      hydrateThinkingIfAny(n, current, i);
+    }
   }
   scrollToBottom({ force: true });
 }
@@ -1826,8 +1828,8 @@ function addMessage(role, content, { final = false, index = -1 } = {}) {
         if (modelInfo && modelInfo.provider && modelInfo.model) {
           const modelInfoEl = document.createElement("span");
           modelInfoEl.className = "model-info-tag";
-          modelInfoEl.title = `Provider: ${modelInfo.provider}\nModel ID: ${modelInfo.model}`;
-          modelInfoEl.textContent = `${modelInfo.provider}/${modelInfo.label || modelInfo.model}`;
+          modelInfoEl.title = `Provider: ${modelInfo.provider.charAt(0).toUpperCase() + modelInfo.provider.slice(1)}\nModel ID: ${modelInfo.model}`;
+          modelInfoEl.textContent = `${modelInfo.provider.charAt(0).toUpperCase() + modelInfo.provider.slice(1)} / ${modelInfo.label || modelInfo.model}`;
           actions.appendChild(modelInfoEl);
         }
       }
@@ -2658,20 +2660,17 @@ async function sendFromWelcome() {
     tokens_by_message: {},
   };
 
-  // 2. Masukkan sesi yang sudah LENGKAP ke state
   state.sessions.unshift(s);
-  
-  // 3. SEKARANG baru simpan state yang sudah benar
   await save();
   log("SEND", 2, "sendFromWelcome", "New complete session created and saved.", { sessionId: s.id });
 
-  // 4. Atur sebagai sesi saat ini (akan merender dari data yang sudah benar)
+  // setCurrent sekarang akan merender semuanya dengan benar berkat renderHistory yang baru
   setCurrent(s);
   
-  input.value = ""; // Kosongkan input di welcome screen
+  input.value = "";
   
-  // 5. Dapatkan node AI yang sudah dirender oleh setCurrent
-  const aiMessageIndex = 1; // Indeks AI di sesi baru
+  // Dapatkan node AI yang sudah dirender dengan benar (lengkap dengan loader)
+  const aiMessageIndex = 1;
   const aiNode = $(`#chat-log .message[data-index="${aiMessageIndex}"]`);
   
   if (!aiNode) {
@@ -2679,17 +2678,11 @@ async function sendFromWelcome() {
      return;
   }
   
-  // Ganti konten statisnya dengan loader
-  const textDiv = aiNode.querySelector('.message-text');
-  if (textDiv) textDiv.innerHTML = getThinkingMarkup();
-  const actionsDiv = aiNode.querySelector('.message-actions');
-  if (actionsDiv) actionsDiv.innerHTML = '';
-  
-  log("SEND", 1, "sendFromWelcome", "Found AI node and prepared for stream.", { nodeExists: !!aiNode });
+  log("SEND", 1, "sendFromWelcome", "Found correctly rendered AI node for stream.", { nodeExists: !!aiNode });
 
   generateAndSetTitle(s);
 
-  hydrateThinkingIfAny(aiNode, current, aiMessageIndex);
+  // hydrateThinkingIfAny tidak diperlukan di sini karena belum ada 'thought' yang tersimpan
   scheduleThinkingText(aiNode);
   startStream(s, text, aiNode, aiMessageIndex, true);
 }

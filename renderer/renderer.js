@@ -1,3 +1,4 @@
+
 let state = { sessions: [], settings: { persona: { name: "", work: "", prefs: "" }, theme: "light" } };
 let current = null;
 let collapsed = false;
@@ -172,13 +173,13 @@ function toggleGoogleCseInput() {
   const cseGroup = $("#google-cse-id-group");
 
   if (provider === 'google') {
-    keyLabel.textContent = 'Google API Key';
+    keyLabel.textContent = 'Google Cloud API Key';
     keyInput.placeholder = 'Your Google Cloud API key...';
     keyInput.value = state.settings.googleApiKey || '';
     $("#google-cse-id").value = state.settings.googleCseId || '';
     cseGroup.classList.remove('hidden');
   } else {
-    keyLabel.textContent = 'SerpAPI API Key';
+    keyLabel.textContent = 'SerpApi API Key';
     keyInput.placeholder = 'Your SerpAPI private key...';
     keyInput.value = state.settings.serpApiKey || '';
     cseGroup.classList.add('hidden');
@@ -377,7 +378,7 @@ function appendThinking(aiNode, chunk, session, messageIndex) {
 
 function cleanLeadingWhitespace(text) {
   if (!text || typeof text !== 'string') return '';
-  return text.replace(/^[\s\u200B\u200C\u200D\u2060\ufeff\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+/, '');
+  return text.replace(/^[\s\u200B\u200C\u200D\u2060\ufeff\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+/, '').trim();
 }
 
 function updateThinkingUI(aiNode, content) {
@@ -811,7 +812,7 @@ function defaultBaseUrlFor(p){
   if(p==='openrouter') return 'https://openrouter.ai/api/v1';
   if(p==='groq')       return 'https://api.groq.com/openai/v1';
   if(p==='gemini')     return 'https://generativelanguage.googleapis.com/v1beta';
-  if(p==='zai')        return 'https://api.z.ai/api/paas/v4/';
+  if(p==='zhipu')        return 'https://api.z.ai/api/paas/v4/';
   return 'https://api.z.ai/api/paas/v4/';
 }
 
@@ -861,7 +862,7 @@ function defaultModels() {
           'gemini-1.5-flash-8b'
         ]
       },
-      zai: {
+      zhipu: {
         baseUrl: 'https://api.z.ai/api/paas/v4/',
         apiKey: '',
         models: [
@@ -903,7 +904,7 @@ async function loadModelsConf() {
 function getActiveChatConfig(){
   const m = state?.settings?.models || {};
   const act = m.active || {};
-  const platform = act.platform || 'zai';
+  const platform = act.platform || 'zhipu';
   const prov = m.providers?.[platform] || {};
   return {
     provider: platform,
@@ -920,7 +921,7 @@ function getTitleGenConfig(){
   if (tg.useDefault || !tg.model) return getActiveChatConfig();
 
   const act = m.active || {};
-  const platform = act.platform || 'zai';
+  const platform = act.platform || 'zhipu';
   const prov = m.providers?.[platform] || {};
   return {
     provider: platform,
@@ -1264,15 +1265,73 @@ function enhancedMarkdownParse(src) {
   return codeBlocks.reduce((acc, block, i) => acc.replace(`__CODEBLOCK_${i}__`, block), html);
 }
 
+// function parseInlineMarkdown(text) {
+//   if (!text) return "";
+//   let html = text
+//     .replaceAll("&", "&amp;")
+//     .replaceAll("<", "&lt;")
+//     .replaceAll(">", "&gt;");
+//   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
+//   html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
+
+//   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
+//   html = html.replace(footnoteGroupRegex, (match) => {
+//     const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
+//     const links = [];
+//     let result;
+//     while ((result = individualFootnoteRegex.exec(match)) !== null) {
+//       const number = result[1];
+//       const url = result[2];
+//       links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer">[${number}]</a>`);
+//     }
+//     return `<sup class="footnote-ref">${links.join(', ')}</sup>`;
+//   });
+  
+//   const linkRegex = /\[(.*?)\]\((.*?)\)/g;
+//   html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
+//   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
+  
+//   const inlineCodeBlocks = [];
+//   html = html.replace(/`([^`]+?)`/g, (match, content) => {
+//     const placeholder = `__INLINE_CODE_${inlineCodeBlocks.length}__`;
+//     inlineCodeBlocks.push(`<code>${content}</code>`);
+//     return placeholder;
+//   });
+
+//   const autoLinkRegex = /(\b(https?:\/\/|www\.)[^\s<>"'()]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}(\/[^\s<>"'()]*)*)/g;
+//   html = html.replace(autoLinkRegex, (url) => {
+//     if (html.includes(`href="${url}"`) || html.includes(`src="${url}"`)) {
+//         return url;
+//     }
+//     let href = url;
+//     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
+//     return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+//   });
+
+//   html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
+//   html = html
+//     .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
+//     .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>");
+//   html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>");
+//   html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>");
+//   html = html.replace(/~~(.*?)~~/g, "<del>$1</del>");
+  
+//   return html;
+// }
+
+
 function parseInlineMarkdown(text) {
   if (!text) return "";
   let html = text
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+
+  // Image
   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
   html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
 
+  // Footnote group
   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
   html = html.replace(footnoteGroupRegex, (match) => {
     const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
@@ -1281,15 +1340,24 @@ function parseInlineMarkdown(text) {
     while ((result = individualFootnoteRegex.exec(match)) !== null) {
       const number = result[1];
       const url = result[2];
-      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer">[${number}]</a>`);
+      links.push(
+        `<a href="${url}" target="_blank" rel="noopener noreferrer">[${number}]</a>`
+      );
     }
-    return `<sup class="footnote-ref">${links.join(', ')}</sup>`;
+    return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
   });
-  
+
+  // Normal markdown link
   const linkRegex = /\[(.*?)\]\((.*?)\)/g;
-  html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
+  html = html.replace(
+    linkRegex,
+    '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>'
+  );
+
+  // Underline (escaped HTML)
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
-  
+
+  // Inline code (temporary placeholders)
   const inlineCodeBlocks = [];
   html = html.replace(/`([^`]+?)`/g, (match, content) => {
     const placeholder = `__INLINE_CODE_${inlineCodeBlocks.length}__`;
@@ -1297,27 +1365,122 @@ function parseInlineMarkdown(text) {
     return placeholder;
   });
 
-  const autoLinkRegex = /(\b(https?:\/\/|www\.)[^\s<>"'()]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}(\/[^\s<>"'()]*)*)/g;
-  html = html.replace(autoLinkRegex, (url) => {
-    if (html.includes(`href="${url}"`) || html.includes(`src="${url}"`)) {
-        return url;
+  /* --------------------------------------------------------------
+   *  Auto‑link regex (perbaikan)
+   *  1️⃣ Menangkap URL yang dimulai dengan http(s):// atau www.
+   *  2️⃣ Menangkap domain yang diakhiri TLD umum (com, net, org, ...).
+   *  3️⃣ Negative lookbehind (?<!\w) memastikan tidak berada di tengah
+   *     kata/identifier seperti "console.log".
+   * -------------------------------------------------------------- */
+  const tldList = [
+    "com",
+    "net",
+    "org",
+    "io",
+    "gov",
+    "edu",
+    "co",
+    "info",
+    "biz",
+    "online",
+    "app",
+    "id",
+    "me",
+    "site",
+    "tech",
+    "dev",
+    "ai",
+    "cloud",
+    "shop",
+    "store",
+    "live",
+    "blog",
+    "club",
+    "news",
+    "xyz",
+    "link",
+    "cloud",
+    "space",
+    "page",
+    "pro",
+    "design",
+    "agency",
+    "group",
+    "company",
+    "inc",
+    "us",
+    "uk",
+    "au",
+    "ca",
+    "de",
+    "fr",
+    "es",
+    "it",
+    "nl",
+    "se",
+    "no",
+    "fi",
+    "ru",
+    "cn",
+    "jp",
+    "br",
+    "in",
+    "cz",
+    "pl",
+    "be",
+    "ch",
+    "at",
+    "sg",
+    "hk",
+    "nz",
+    "mx",
+    "ar",
+    "cl",
+    "kr",
+    "za",
+    "ae",
+    "sa"
+  ];
+  const tldPattern = tldList.join("|");
+
+  const autoLinkRegex = new RegExp(
+    // 1️⃣ http(s):// atau www.
+    "(\\b(?:https?:\\/\\/|www\\.)[^\\s<>\"]+)" +
+      "|" +
+      // 2️⃣ domain + TLD yang valid, tidak di‑ikuti oleh karakter kata (negative lookbehind)
+      "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ")(?:\\/[^\\s<>\"]*)?)",
+    "gi"
+  );
+
+  html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl) => {
+    // Jika sudah menjadi link (href / src) lewat proses sebelumnya, biarkan apa adanya
+    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`)) {
+      return match;
     }
-    let href = url;
+    let href = protocolUrl || domainUrl;
+    // Tambahkan http:// bila hanya "www.example"
     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
-    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>`;
   });
 
-  html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
+  // Restore inline code placeholders
+  html = inlineCodeBlocks.reduce(
+    (acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block),
+    html
+  );
+
+  // Bold‑italic, bold, italic, strikethrough
   html = html
     .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
-    .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>");
-  html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>");
-  html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>");
-  html = html.replace(/~~(.*?)~~/g, "<del>$1</del>");
-  
+    .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>")
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__(.*?)__/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/_([^_]+)_/g, "<em>$1</em>")
+    .replace(/~~(.*?)~~/g, "<del>$1</del>");
+
   return html;
 }
-
 function md(src) {
   if (!src) return "";
   const cleanSrc = src.trim();
@@ -1549,7 +1712,6 @@ function renderSessions() {
 
   const filterValue = ($("#search")?.value || "").toLowerCase();
 
-  // Reset pagination ketika filter berubah
   if (renderSessions._lastFilter !== filterValue) {
     loadedSessionCount = SESSIONS_PER_PAGE;
     renderSessions._lastFilter = filterValue;
@@ -1639,15 +1801,30 @@ function renderSessions() {
 
   if (total > limit) {
     const moreLi = document.createElement("li");
-    moreLi.className = "load-more";
-    const btn = document.createElement("button");
+    const separator = document.createElement('hr');
     const remaining = Math.min(pageSize, total - limit);
-    btn.textContent = `Load more (${remaining})`;
-    btn.addEventListener("click", () => {
+    moreLi.innerHTML = `
+      <span class="name">Show ${remaining} more</span>
+      <div class="session-meta">
+        <span class="tokens"></span>
+        <span class="menu">
+          <button title="Show more">
+          <svg viewBox="0 0 512 512" width="16" height="16" fill="currentColor" stroke="none" stroke-width="2">
+            <path d="M233.4 406.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L256 338.7 86.6 169.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z"></path>
+          </svg>
+          </button>
+        </span>
+      </div>
+    `;
+    // moreLi.textContent = `Show ${remaining} more`;
+    separator.classList.add('hr-8px');
+    moreLi.classList.add("load-more");
+    moreLi.title = `${total} chat sessions total.`
+    moreLi.addEventListener("click", () => {
       loadedSessionCount = limit + pageSize;
       renderSessions();
     });
-    moreLi.appendChild(btn);
+    ul.appendChild(separator);
     ul.appendChild(moreLi);
   }
 }
@@ -1753,11 +1930,12 @@ function addMessage(role, content, { final = false, index = -1 } = {}) {
     node.innerHTML = `<div class="message-row"><div class="message-content"><div class="message-text">${formatUserMessage(content)}</div>${baseActions}</div></div>`;
   } else if (role === "ai_cancelled") {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="ZenAI Logo"></div>`;
-    node.innerHTML = `<div class="message-row">${aiAvatar}<div class="message-content"><div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${content}</span><button class="primary-btn regenerate-cancelled" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate?</button></div></div></div></div>`;
+    node.innerHTML = `<div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${content}</span><button class="primary-btn regenerate-cancelled" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate?</button></div></div></div></div>`;
+    // kalo mau pake avatar <div class="message-row">${aiAvatar}<div class="message-content">, taro di awal node.innerHTML ye
   } else {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="ZenAI Logo"></div>`;
     const thinking = `<div class="thinking-container"><div class="typing-indicator"><span></span><span></span><span></span></div><span class="thinking-text-indicator"></span></div>`;
-    node.innerHTML = `<div class="message-row">${aiAvatar}<div class="message-content"><div class="web-search-indicator" style="display: none;"></div><div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
+    node.innerHTML = `<div class="web-search-indicator" style="display: none;"></div><div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
     if (role === "ai" && !final) {
       node.style.opacity = "0";
       node.style.transform = "translateY(20px)";
@@ -1828,7 +2006,7 @@ function addMessage(role, content, { final = false, index = -1 } = {}) {
         if (modelInfo && modelInfo.provider && modelInfo.model) {
           const modelInfoEl = document.createElement("span");
           modelInfoEl.className = "model-info-tag";
-          modelInfoEl.title = `Provider: ${modelInfo.provider.charAt(0).toUpperCase() + modelInfo.provider.slice(1)}\nModel ID: ${modelInfo.model}`;
+          modelInfoEl.title = `This response using\nProvider: ${modelInfo.provider.charAt(0).toUpperCase() + modelInfo.provider.slice(1)}\nModel ID: ${modelInfo.model}`;
           modelInfoEl.textContent = `${modelInfo.provider.charAt(0).toUpperCase() + modelInfo.provider.slice(1)} / ${modelInfo.label || modelInfo.model}`;
           actions.appendChild(modelInfoEl);
         }
@@ -3399,7 +3577,6 @@ function initializeApp() {
 }
 
 document.addEventListener("DOMContentLoaded", initializeApp);
-
 
 async function runSearchUIDebug() {
   log("DEBUG", 2, "runSearchUIDebug", "--- MEMULAI SIMULASI UI WEB SEARCH ---");

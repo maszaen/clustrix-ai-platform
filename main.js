@@ -1,4 +1,3 @@
-require('dotenv').config();
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -24,7 +23,6 @@ function logHelper(context, func, message, details = {}) {
     console.error('Gagal menulis ke file log:', e);
   }
 }
-
 
 let lastTokenStreamId = null; 
 
@@ -79,7 +77,7 @@ function defaultModelsConf() {
         apiKey: '',
         models: ['gemini-1.5-flash','gemini-1.5-flash-8b']
       },
-      zai: {
+      zhipu: {
         baseUrl: 'https://api.z.ai/api/paas/v4/',
         apiKey: '',
         models: ['glm-4.5-flash']
@@ -278,7 +276,7 @@ function runStandardStreaming(event, payload) {
     (provider === 'openrouter' ? 'https://openrouter.ai/api/v1' :
     provider === 'groq'      ? 'https://api.groq.com/openai/v1' :
     provider === 'gemini'    ? 'https://generativelanguage.googleapis.com/v1beta' :
-    provider === 'zai'       ? 'https://api.z.ai/api/paas/v4/' :
+    provider === 'zhipu'       ? 'https://api.z.ai/api/paas/v4/' :
     provider === 'cerebras'  ? 'https://api.cerebras.ai/v1/' :
                                 (process.env.BASE_URL || 'https://api.z.ai/api/paas/v4/'));
 
@@ -287,10 +285,9 @@ function runStandardStreaming(event, payload) {
     (provider === 'openrouter' ? (process.env.OPENROUTER_API_KEY || '') :
     provider === 'groq'      ? (process.env.GROQ_API_KEY || '') :
     provider === 'gemini'    ? (process.env.GEMINI_API_KEY || '') :
-    provider === 'zai'       ? (process.env.Z_API_KEY || '') :
+    provider === 'zhipu'       ? (process.env.Z_API_KEY || '') :
     provider === 'cerebras'  ? (process.env.CEREBRAS_API_KEY || '') :
                                 (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || ''));
-
 
   function sendDone(){ event.sender.send(`chat:done-${reqId}`); activeStreams.delete(reqId); }
   function sendErr(msg){ 

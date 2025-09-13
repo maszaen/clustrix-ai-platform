@@ -258,6 +258,22 @@ hr {
   margin: 8px auto 8px auto !important;
 }
 
+.pad-hr-lg {
+  padding: 0 var(--spacing-lg);
+}
+.row-between {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.row-gap {
+  display: flex;
+  flex-direction: row;
+  gap: var(--spacing-sm);
+}
+
 .row-center {
   display: flex;
   flex-direction: row;
@@ -411,19 +427,23 @@ hr {
 }
 
 .icon-btn2 {
+  font-family: var(--font-display);
   background: transparent;
-  color: var(--icon);
+  color: var(--fg);
   border: 1px solid var(--border-input);
   padding: var(--spacing-sm) var(--spacing-lg);
   border-radius: var(--radius-md);
   cursor: pointer;
-  font-weight: var(--font-bold);
   transition: var(--transition-fast);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--spacing-sm);
   height: 40px;
+}
+
+.icon-btn2 span {
+  padding-top: 5px;
 }
 
 .icon-btn2:hover {
@@ -498,8 +518,9 @@ hr {
 .date-separator {
   padding: 12px var(--spacing-lg) 4px;
   font-size: 12px;
-  color: var(--fg-muted);
-  text-transform: uppercase;
+  color: var(--icon);
+  opacity: 0.9;
+  text-transform: capitalize;
   position: sticky;
   top: 0;
   background: var(--bg-secondary);
@@ -526,6 +547,7 @@ hr {
 }
 
 #session-list li {
+  color: var(--fg-muted);
   position: relative;
   padding: 3px var(--spacing-lg);
   border-radius: var(--radius-md);
@@ -813,8 +835,7 @@ input:checked + .slider:before {
 }
 
 #central-input-container {
-  box-shadow: var(--shadow-lg);
-  margin-bottom: 200px;
+  /* sengaja empty */
 }
 
 /* --- Logika Transisi Animasi --- */
@@ -899,6 +920,45 @@ input:checked + .slider:before {
 .copy-btn:hover, .edit-btn:hover, .regen-btn:hover {
   background: var(--bg-secondary);
   color: var(--surface);
+}
+
+.pad-l-sm {
+  padding-left: var(--spacing-sm)
+}
+
+.input-container-btn {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-size: 12px;
+  font-family: var(--font-display);
+  align-items: center;
+  padding: 2px 10px 2px 10px;
+  margin: 5px 0;
+  gap: 5px;
+  border-radius: var(--radius-lg);
+  cursor: default;
+  white-space: nowrap;
+  max-width: 350px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition-fast);
+}
+
+.input-container-btn svg {
+  display: block;
+  height: 16px;
+  width: 16px;
+}
+
+.input-container-btn p {
+  padding-top: 5px;
+}
+
+.input-container-btn:hover {
+  background: var(--surface);
 }
 
 .message-actions .model-info-tag {
@@ -1206,7 +1266,7 @@ input:checked + .slider:before {
 #input-area {
   position: relative;
   padding: 0 var(--spacing-xl) var(--spacing-lg) var(--spacing-xl);
-  background: var(--surface);
+  background: var(--bg);
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -1221,9 +1281,9 @@ input:checked + .slider:before {
   justify-content: center;
   margin: 0 auto;
   gap: var(--spacing-md);
-  background: var(--surface);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-input);
-  border-radius: 30px;
+  border-radius: var(--radius-lg);
   padding: var(--spacing-sm);
   transition: var(--transition-fast);
   position: relative;
@@ -1237,7 +1297,7 @@ input:checked + .slider:before {
   left: 0;
   width: 100%;
   height: 200px;
-  background: var(--surface);
+  background: var(--bg);
   filter: blur(20px);
   opacity: 0.8;
   border-radius: inherit;
@@ -1253,9 +1313,7 @@ input:checked + .slider:before {
   margin: 0 auto;
   gap: var(--spacing-md);
   background: var(--bg-secondary);
-  border: 1px solid var(--border-input);
   border-radius: 23.5px;
-  padding: var(--spacing-sm);
   transition: var(--transition-fast);
   position: relative;
 }
@@ -1272,7 +1330,6 @@ textarea::-webkit-scrollbar {
 
 .input-container:focus-within {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
 #msg, #msg-central {
@@ -1296,7 +1353,7 @@ textarea::-webkit-scrollbar {
   border: none;
   background: transparent;
   fill: none !important;
-  border-radius: 100px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1330,7 +1387,7 @@ textarea::-webkit-scrollbar {
   /* border: 1px solid black; */
 }
 
-#msg::placeholder {
+#msg::placeholder, #msg-central::placeholder {
   color: var(--fg-muted);
 }
 
@@ -1724,6 +1781,10 @@ blockquote blockquote::before,
 blockquote blockquote blockquote::before,
 blockquote blockquote blockquote blockquote::before {
   background-color: var(--border);
+}
+
+#search::placeholder {
+  color: var(--fg-muted);
 }
 
 #app.sidebar-collapsed .primary-btn span,

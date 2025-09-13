@@ -120,9 +120,9 @@ ipcMain.handle('models:save', async (_evt, conf) => {
 
 function createWindow(){
   const win = new BrowserWindow({
-    width: 1200, height: 900,
+    width: 1300, height: 900,
     frame: false,
-    minWidth: 850,
+    minWidth: 650,
     minHeight: 400,
     icon: path.join(__dirname, 'public', 'images', 'favicon.ico'),
     webPreferences: {

@@ -26,8 +26,6 @@
           "/\\.git($|/)",
           "/\\.gitignore($|/)",
           "/\\.gitattributes($|/)",
-          "^(?!node_modules/).*/dist($|/)",
-          "^(?!node_modules/).*/src($|/)",
           "/README\\.md$/i"
         ]
       },

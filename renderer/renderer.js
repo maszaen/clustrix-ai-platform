@@ -377,8 +377,9 @@ function appendThinking(aiNode, chunk, session, messageIndex) {
 }
 
 function cleanLeadingWhitespace(text) {
+  // log('CLEAN_WS', 2, 'cleanLeadingWhitespace', text)
   if (!text || typeof text !== 'string') return '';
-  return text.replace(/^[\s\u200B\u200C\u200D\u2060\ufeff\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+/, '').trim();
+  return text.replace(/^[\s\u200B\u200C\u200D\u2060\ufeff\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+/, '');
 }
 
 function updateThinkingUI(aiNode, content) {
@@ -1453,23 +1454,19 @@ function parseInlineMarkdown(text) {
   );
 
   html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl) => {
-    // Jika sudah menjadi link (href / src) lewat proses sebelumnya, biarkan apa adanya
     if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`)) {
       return match;
     }
     let href = protocolUrl || domainUrl;
-    // Tambahkan http:// bila hanya "www.example"
     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
     return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>`;
   });
 
-  // Restore inline code placeholders
   html = inlineCodeBlocks.reduce(
     (acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block),
     html
   );
 
-  // Bold‑italic, bold, italic, strikethrough
   html = html
     .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
     .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>")
@@ -2143,12 +2140,12 @@ function updateInputState() {
   
   if (isStreaming) {
     sendBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 18 18" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-icon lucide-square"><rect width="12" height="12" x="3" y="3" rx="2"/></svg>`;
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 18 18" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-icon lucide-square"><rect width="12" height="12" x="3" y="3" rx="2"/></svg>`;
     sendBtn.classList.add("interrupt");  
     sendBtn.title = "Interrupt response";
   } else {
     sendBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-icon lucide-arrow-up">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-icon lucide-arrow-up">
         <path d="m5 12 7-7 7 7"/>
         <path d="M12 19V5"/>
       </svg>
@@ -2199,7 +2196,11 @@ async function generateAndSetTitle(session){
       session.name = (title || 'New Chat').slice(0, 70);
     }
   } catch(e){
-    session.name = (userPrompt.split(/\s+/).slice(0,6).join(' ') || 'New Chat').slice(0,70);
+    session.name = (userPrompt.split(/\s+/)
+    .slice(0,4)
+    .map(word => word.trim().toLowerCase().replace(/^\w/, c => c.toUpperCase())) 
+    .join(' ') || 'Untitled')
+    .slice(0,70);
   }
   await save();
   
@@ -2253,7 +2254,7 @@ function saveSwitchModelForm() {
 
 function hydrateThinkingIfAny(aiNode, session, messageIndex) {
   const thinkData = session?._x_think && session._x_think[messageIndex];
-  if (!thinkData) return;
+  if (!thinkData || thinkData.text == "") return;
 
   const thinkText = (typeof thinkData === 'object' ? thinkData.text : thinkData) || '';
   const thinkDuration = typeof thinkData === 'object' ? thinkData.duration : null;
@@ -2746,7 +2747,7 @@ function renderAiFinalActions(aiNode, content, messageIndex) {
     const modelInfoEl = document.createElement("span");
     modelInfoEl.className = "model-info-tag";
     modelInfoEl.title = `Provider: ${modelInfo.provider}\nModel ID: ${modelInfo.model}`;
-    modelInfoEl.textContent = `${modelInfo.provider}/${modelInfo.label || modelInfo.model}`;
+    modelInfoEl.textContent = `${modelInfo.provider.charAt(0).toUpperCase() + modelInfo.provider.slice(1)} / ${modelInfo.label || modelInfo.model}`;
     actions.appendChild(modelInfoEl);
   }
 }
@@ -2762,15 +2763,12 @@ async function send() {
 
   ensureTokenFields(current);
 
-  // --- PERBAIKAN: Lakukan semua modifikasi state SEBELUM menyimpan ---
   if (!current.created_at) current.created_at = nowISO();
   current.last_updated = nowISO();
 
-  // 1. Tambahkan pesan pengguna ke state
   current.messages.push(["user", text]);
   const userIndex = current.messages.length - 1;
 
-  // 2. Siapkan dan tambahkan pesan AI placeholder ke state
   const aiMessageIndex = current.messages.length;
   const config = getActiveChatConfig();
   const modelMeta = getModelMeta(state.settings.models, config.provider, config.model);
@@ -2782,7 +2780,6 @@ async function send() {
   current.messages.push(["ai", "", modelInfo]);
   log("SEND", 1, "send", "Pushed user message and AI placeholder with modelInfo.", { modelInfo });
   
-  // 3. SEKARANG baru simpan state yang sudah lengkap
   await save();
 
   if (current.name === null) {
@@ -2842,25 +2839,22 @@ async function sendFromWelcome() {
   await save();
   log("SEND", 2, "sendFromWelcome", "New complete session created and saved.", { sessionId: s.id });
 
-  // setCurrent sekarang akan merender semuanya dengan benar berkat renderHistory yang baru
   setCurrent(s);
   
   input.value = "";
   
-  // Dapatkan node AI yang sudah dirender dengan benar (lengkap dengan loader)
   const aiMessageIndex = 1;
   const aiNode = $(`#chat-log .message[data-index="${aiMessageIndex}"]`);
   
   if (!aiNode) {
-     log("SEND", 4, "sendFromWelcome", "FATAL: Could not find AI node after setCurrent.", { aiMessageIndex });
-     return;
+    log("SEND", 4, "sendFromWelcome", "FATAL: Could not find AI node after setCurrent.", { aiMessageIndex });
+    return;
   }
   
   log("SEND", 1, "sendFromWelcome", "Found correctly rendered AI node for stream.", { nodeExists: !!aiNode });
 
   generateAndSetTitle(s);
 
-  // hydrateThinkingIfAny tidak diperlukan di sini karena belum ada 'thought' yang tersimpan
   scheduleThinkingText(aiNode);
   startStream(s, text, aiNode, aiMessageIndex, true);
 }

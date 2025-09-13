@@ -1,4 +1,4 @@
-
+let welcomeScreenStagedFiles = [];
 let state = { sessions: [], settings: { persona: { name: "", work: "", prefs: "" }, theme: "light" } };
 let current = null;
 let collapsed = false;
@@ -160,6 +160,44 @@ const streamManager = {
 
 
 // Utility Functions
+function renderWelcomeScreenFiles() {
+  const container = $('#welcome-file-upload-container');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  welcomeScreenStagedFiles.forEach((file, index) => {
+    const pill = document.createElement('div');
+    pill.className = 'file-pill';
+    pill.innerHTML = `<span>${esc(file.name)}</span><button class="remove-file-btn" data-index="${index}">&times;</button>`;
+    pill.querySelector('.remove-file-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      welcomeScreenStagedFiles.splice(index, 1);
+      renderWelcomeScreenFiles();
+    });
+    container.appendChild(pill);
+  });
+}
+
+function renderUploadedFiles() {
+  if (!current) return;
+  const container = $('#active-chat-file-upload-container');
+  if (!container) return;
+
+  container.innerHTML = '';
+  (current.uploadedFiles || []).forEach((file, index) => {
+    const pill = document.createElement('div');
+    pill.className = 'file-pill';
+    pill.innerHTML = `<span>${esc(file.name)}</span><button class="remove-file-btn" data-index="${index}">&times;</button>`;
+    pill.querySelector('.remove-file-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      current.uploadedFiles.splice(index, 1);
+      renderUploadedFiles();
+      save();
+    });
+    container.appendChild(pill);
+  });
+}
+
 function generateSessionId() {
   const timestamp = Date.now().toString(36);
   const randomStr = Math.random().toString(36).slice(2, 9);
@@ -950,8 +988,10 @@ function updateModelHeader() {
 
 function showWelcomeScreen() {
   current = null;
+  welcomeScreenStagedFiles = [];
+  renderWelcomeScreenFiles(); 
   $(".chat-area").classList.add("welcome-active");
-  $("#chat-title").textContent = "New Chat";
+  $("#chat-title").textContent = "Untitled Chat";
   $("#chat-title").title = "New Chat, ask anything";
   $("#zenai-logo").innerHTML = `
               <div style="--i: 1"></div>
@@ -1642,12 +1682,30 @@ function personaSystem() {
 function buildMessages() {
   const msgs = [{ role: "system", content: personaSystem() }];
   if (!current || !current.messages) return msgs;
-  for (const [role, content] of current.messages) {
-    if (role === "user") msgs.push({ role: "user", content });
-    else if (role === "ai") msgs.push({ role: "assistant", content });
+
+  for (const messageData of current.messages) {
+    const [role, content, metadata] = messageData;
+    if (role === 'ai' && content === '') continue;
+
+    if (role === "user") {
+      let fullUserPrompt = content;
+      if (metadata && metadata.files && metadata.files.length > 0) {
+        let fileContext = "Based on the content of the following file(s), please answer my request.\n\n";
+        metadata.files.forEach(file => {
+          if (!file.error) {
+            fileContext += `--- START OF FILE: ${file.name} ---\n${file.content}\n--- END OF FILE: ${file.name} ---\n\n`;
+          }
+        });
+        fullUserPrompt = `${fileContext}My request is: "${content}"`;
+      }
+      msgs.push({ role: "user", content: fullUserPrompt });
+    } else if (role === "ai") {
+      msgs.push({ role: "assistant", content });
+    }
   }
   return msgs;
 }
+
 
 function buildMessagesUpTo(indexInclusive) {
   const msgs = [{ role: "system", content: personaSystem() }];
@@ -1676,11 +1734,7 @@ function buildResumeMessagesFromSession(session, messageIndex, fullResponseSoFar
 
 // Session Rendering
 function renderHistory() {
-  log("SESSION", 1, "renderHistory", `Merender riwayat chat untuk sesi`, {
-    sessionName: current?.name || "none",
-    messageCount: current?.messages?.length || 0
-  });
-
+  log("SESSION", 1, "renderHistory", `Rendering chat history`, { sessionName: current?.name });
   clearLog();
   if (!current || !current.messages) return;
 
@@ -1688,16 +1742,18 @@ function renderHistory() {
     const messageData = current.messages[i];
     if (!Array.isArray(messageData)) continue;
 
-    const role = messageData[0];
-    const content = messageData[1];
-    const modelInfo = messageData[2];
-    const isNewSessionPlaceholder = (role === 'ai' && content === '' && i === current.messages.length - 1);
-    const isFinal = !isNewSessionPlaceholder;
-    const n = addMessage(role, content, { final: isFinal, index: i, modelInfo: modelInfo });
-    n.dataset.index = String(i);
+    const [role, content, metadata] = messageData;
+    const isPlaceholder = (role === 'ai' && content === '' && i === current.messages.length - 1);
+    
+    const node = addMessage(role, content, {
+      final: !isPlaceholder,
+      index: i,
+      metadata: metadata || {}
+    });
+    if(node) node.dataset.index = String(i);
 
-    if (role === 'ai' && isFinal) {
-      hydrateThinkingIfAny(n, current, i);
+    if (role === 'ai' && !isPlaceholder) {
+      hydrateThinkingIfAny(node, current, i);
     }
   }
   scrollToBottom({ force: true });
@@ -1904,17 +1960,24 @@ function updateActiveSessionState(newActiveSession) {
   }
 }
 
-function updateChatHeader() {
-  if (current?.name) {
-    $("#chat-title").textContent = current.name;
-    $("#chat-title").title = `${current.tokens_used || 0} tokens`;
+function updateChatHeader({ animate = false } = {}) {
+  if (!current) return;
+  const titleEl = $("#chat-title");
+  if (!titleEl) return;
+  
+  const titleText = current.name || "Untitled Chat";
+  titleEl.title = `${current.tokens_used || 0} tokens`;
+
+  if (titleEl._typewriterTimeout) clearTimeout(titleEl._typewriterTimeout);
+
+  if (animate) {
+    typewriterEffect(titleEl, titleText);
   } else {
-    $("#chat-title").textContent = "Untitled chat";
-    $("#chat-title").title = "no token used";
+    titleEl.textContent = titleText;
   }
 }
 
-function addMessage(role, content, { final = false, index = -1 } = {}) {
+function addMessage(role, content, { final = false, index = -1, metadata = {} } = {}) {
   const log = $("#chat-log");
   const node = document.createElement("div");
   node.className = `message ${role}`;
@@ -1923,12 +1986,18 @@ function addMessage(role, content, { final = false, index = -1 } = {}) {
   const editIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
   const regenIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>`;
   const baseActions = `<div class="message-actions"></div>`;
+
   if (role === "user") {
-    node.innerHTML = `<div class="message-row"><div class="message-content"><div class="message-text">${formatUserMessage(content)}</div>${baseActions}</div></div>`;
+    let uiContent = '';
+    if (metadata && metadata.files && metadata.files.length > 0) {
+      const pillsHTML = metadata.files.map(file => `<div class="file-pill-bubble">${esc(file.name)}</div>`).join('');
+      uiContent += `<div class="file-pills-container">${pillsHTML}</div>`;
+    }
+    uiContent += `<div class="user-text-content">${formatUserMessage(content)}</div>`;
+    node.innerHTML = `<div class="message-row"><div class="message-content"><div class="message-text">${uiContent}</div>${baseActions}</div></div>`;
   } else if (role === "ai_cancelled") {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="ZenAI Logo"></div>`;
     node.innerHTML = `<div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${content}</span><button class="primary-btn regenerate-cancelled" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate?</button></div></div></div></div>`;
-    // kalo mau pake avatar <div class="message-row">${aiAvatar}<div class="message-content">, taro di awal node.innerHTML ye
   } else {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="ZenAI Logo"></div>`;
     const thinking = `<div class="thinking-container"><div class="typing-indicator"><span></span><span></span><span></span></div><span class="thinking-text-indicator"></span></div>`;
@@ -2027,6 +2096,7 @@ function setCurrent(s) {
   current = s;
   $(".chat-area").classList.remove("welcome-active");
   renderHistory();
+  renderUploadedFiles();
   for (const streamId in streamManager.activeStreams) {
     const stream = streamManager.activeStreams[streamId];
     if (stream.session === s) {
@@ -2051,7 +2121,7 @@ function setCurrent(s) {
   $("#zenai-logo").innerHTML = ``
   
   renderSessions();
-  updateChatHeader();
+  updateChatHeader({ animate: false });
   updateInputState();
   log("SESSION", 2, "setCurrent", "Berhasil beralih sesi", { newCurrentSession: current.name });
 }
@@ -2205,7 +2275,7 @@ async function generateAndSetTitle(session){
   await save();
   
   if (session === current) {
-    typewriterEffect($("#chat-title"), current.name);
+    updateChatHeader({ animate: true });
   }
   
   const sessionElement = document.querySelector(`#session-list li[data-session-id="${session.id}"]`);
@@ -2544,20 +2614,12 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
   };
 }
 
-async function startStream(
-  session,
-  text,
-  aiNode,
-  aiMessageIndex,
-  isFirstInteraction = false,
-  overrideMessages = null,
-  initialFullResponse = ""
-) {
+async function startStream(session, text, aiNode, aiMessageIndex, isFirstInteraction = false, overrideMessages = null, initialFullResponse = "") {
   const nonce = Math.random().toString(36).slice(2);
   const streamId = `${session.id}-${aiMessageIndex}-${nonce}`;
   if (aiNode?.dataset) aiNode.dataset.streamId = streamId;
 
-  const messages = overrideMessages ? overrideMessages : buildMessagesUpTo(aiMessageIndex - 1);
+  const messages = overrideMessages || buildMessagesUpTo(aiMessageIndex - 1);
   const handler = createStreamHandler(streamId, text, isFirstInteraction);
 
   if (DEBUG_MODE) {
@@ -2668,7 +2730,8 @@ async function startStream(
   const controller = window.api.chat.stream(
     messages,
     act.model || 'glm-4.5-flash',
-    { provider: act.platform || 'openrouter',
+    { 
+      provider: act.platform || 'openrouter',
       baseUrl: act.baseUrl,
       apiKey: act.apiKey,
       thinkMode,
@@ -2752,111 +2815,99 @@ function renderAiFinalActions(aiNode, content, messageIndex) {
   }
 }
 
-async function send() {
-  const input = $("#msg");
-  const text = (input.value || "").trim();
-
-  if (!current || !text || streamManager.isStreamingInSession(current)) {
-    return;
-  }
-  log("SEND", 1, "send", "Executing send from existing session.", { text });
-
-  ensureTokenFields(current);
-
-  if (!current.created_at) current.created_at = nowISO();
-  current.last_updated = nowISO();
-
-  current.messages.push(["user", text]);
-  const userIndex = current.messages.length - 1;
-
-  const aiMessageIndex = current.messages.length;
-  const config = getActiveChatConfig();
-  const modelMeta = getModelMeta(state.settings.models, config.provider, config.model);
-  const modelInfo = {
-      provider: config.provider,
-      model: config.model,
-      label: modelMeta.label || config.model 
-  };
-  current.messages.push(["ai", "", modelInfo]);
-  log("SEND", 1, "send", "Pushed user message and AI placeholder with modelInfo.", { modelInfo });
-  
-  await save();
-
-  if (current.name === null) {
-    generateAndSetTitle(current);
-  }
-
-  state.sessions.sort((a, b) =>
-    new Date(b.last_updated || b.created_at || 0) -
-    new Date(a.last_updated || a.created_at || 0)
-  );
-  renderSessions();
-
-  addMessage("user", text, { final: true, index: userIndex });
-
-  input.value = "";
-  input.style.height = "auto";
-
-  const aiNode = addMessage("ai", "", { final: false, index: aiMessageIndex });
-  aiNode.dataset.index = String(aiMessageIndex);
-
-  hydrateThinkingIfAny(aiNode, current, aiMessageIndex);
-  scheduleThinkingText(aiNode);
-  const isFirstInteraction = current.messages.filter((m) => m[0] === "ai" && m[1]).length === 1;
-  startStream(current, text, aiNode, aiMessageIndex, isFirstInteraction);
-}
-
-async function sendFromWelcome() {
-  const input = $("#msg-central");
-  const text = (input.value || "").trim();
-  if (!text) return;
-  log("SEND", 1, "sendFromWelcome", "Executing send from welcome screen.", { text });
-
-  const config = getActiveChatConfig();
-  const modelMeta = getModelMeta(state.settings.models, config.provider, config.model);
-  const modelInfo = {
-      provider: config.provider,
-      model: config.model,
-      label: modelMeta.label || config.model
-  };
-  log("SEND", 1, "sendFromWelcome", "Generated modelInfo.", { modelInfo });
-
+async function createNewSession(initialMessages = []) {
+  log("SESSION", 2, "createNewSession", "Creating new session object...");
   const s = {
-    name: null,
     id: generateSessionId(),
+    name: null,
     created_at: nowISO(),
     last_updated: nowISO(),
-    messages: [
-      ["user", text],
-      ["ai", "", modelInfo]
-    ],
-    seeded: true,
+    messages: initialMessages,
+    uploadedFiles: [],
+    canvases: {},
     tokens_used: 0,
     tokens_by_message: {},
   };
 
   state.sessions.unshift(s);
   await save();
-  log("SEND", 2, "sendFromWelcome", "New complete session created and saved.", { sessionId: s.id });
+  log("SESSION", 2, "createNewSession", "New session object created.", { sessionId: s.id });
+  return s;
+}
 
-  setCurrent(s);
+async function send() {
+  const input = $("#msg");
+  const originalText = (input.value || "").trim();
+  if (!current || (!originalText && current.uploadedFiles.length === 0) || streamManager.isStreamingInSession(current)) return;
+
+  const filesToAttach = [...current.uploadedFiles];
+  current.uploadedFiles = [];
+  renderUploadedFiles();
   
+  current.last_updated = nowISO();
+  current.messages.push(["user", originalText, { files: filesToAttach }]);
+  const userIndex = current.messages.length - 1;
+
+  const config = getActiveChatConfig();
+  const modelInfo = { provider: config.provider, model: config.model, label: getModelMeta(state.settings.models, config.provider, config.model).label || config.model };
+  current.messages.push(["ai", "", modelInfo]);
+  
+  addMessage("user", originalText, { final: true, index: userIndex, metadata: { files: filesToAttach } });
+  
+  const aiMessageIndex = current.messages.length - 1;
+  const aiNode = addMessage("ai", "", { final: false, index: aiMessageIndex, metadata: modelInfo });
+  aiNode.dataset.index = String(aiMessageIndex);
+
   input.value = "";
+  input.style.height = "auto";
   
-  const aiMessageIndex = 1;
-  const aiNode = $(`#chat-log .message[data-index="${aiMessageIndex}"]`);
-  
-  if (!aiNode) {
-    log("SEND", 4, "sendFromWelcome", "FATAL: Could not find AI node after setCurrent.", { aiMessageIndex });
-    return;
+  if (current.name === null) {
+    generateAndSetTitle(current);
   }
-  
-  log("SEND", 1, "sendFromWelcome", "Found correctly rendered AI node for stream.", { nodeExists: !!aiNode });
-
-  generateAndSetTitle(s);
+  await save();
+  renderSessions();
 
   scheduleThinkingText(aiNode);
-  startStream(s, text, aiNode, aiMessageIndex, true);
+  const messagesForAI = buildMessages();
+  startStream(current, originalText, aiNode, aiMessageIndex, false, messagesForAI);
+}
+
+async function sendFromWelcome() {
+  const input = $("#msg-central");
+  const originalText = (input.value || "").trim();
+  if (!originalText && welcomeScreenStagedFiles.length === 0) return;
+
+  const userTextForUI = originalText || `Analyzing ${welcomeScreenStagedFiles.length} file(s)...`;
+  const filesToAttach = [...welcomeScreenStagedFiles];
+  
+  const s = await createNewSession();
+  setCurrent(s);
+  
+  s.messages.push(["user", userTextForUI, { files: filesToAttach }]);
+  
+  welcomeScreenStagedFiles = [];
+  renderWelcomeScreenFiles();
+  
+  if (input) { input.value = ""; input.style.height = "auto"; }
+
+  const config = getActiveChatConfig();
+  const modelInfo = { provider: config.provider, model: config.model, label: getModelMeta(state.settings.models, config.provider, config.model).label || config.model };
+  s.messages.push(["ai", "", modelInfo]);
+  
+  clearLog();
+  addMessage("user", userTextForUI, { final: true, index: 0, metadata: { files: filesToAttach } });
+
+  const aiMessageIndex = s.messages.length - 1;
+  const aiNode = addMessage("ai", "", { final: false, index: aiMessageIndex, metadata: modelInfo });
+  aiNode.dataset.index = String(aiMessageIndex);
+
+  generateAndSetTitle(s);
+  await save();
+  renderSessions();
+  
+  scheduleThinkingText(aiNode);
+  const messagesForAI = buildMessages();
+  startStream(s, userTextForUI, aiNode, aiMessageIndex, true, messagesForAI);
 }
 
 async function regenerateFromIndex(aiIndex) {
@@ -3056,6 +3107,33 @@ function setupResponsiveHandlers() {
 
 // App Lifecycle
 function setupEventListeners() {
+  document.querySelectorAll('.input-container-btn').forEach(btn => {
+    const p = btn.querySelector('p');
+    if (p && p.textContent.includes('Upload File')) {
+      btn.addEventListener('click', async () => {
+        log("RENDERER", 1, "upload:click", "Upload File button clicked.");
+        try {
+          const fileContents = await window.api.files.openDialogAndRead();
+          if (!fileContents || fileContents.length === 0) {
+            log("RENDERER", 1, "upload:click", "No files selected or dialog canceled.");
+            return;
+          }
+          if (current) {
+            log("RENDERER", 1, "upload:click", "Adding files to active session.");
+            current.uploadedFiles.push(...fileContents.filter(f => !f.error));
+            renderUploadedFiles();
+          } else {
+            log("RENDERER", 1, "upload:click", "Adding files to welcome screen staging area.");
+            welcomeScreenStagedFiles.push(...fileContents.filter(f => !f.error));
+            renderWelcomeScreenFiles();
+          }
+        } catch (error) {
+          log("RENDERER", 4, "upload:click", "Error during file upload process.", { error });
+        }
+      });
+    }
+  });
+
   $("#minimize-btn").addEventListener("click", () => {
     log("UI", 0, "event:minimize-btn", "Minimize button clicked");
     window.api?.window.minimize();

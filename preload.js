@@ -44,6 +44,9 @@ contextBridge.exposeInMainWorld('api', {
     },
     titleSuggest: (text, model = 'glm-4.5-flash', opts = {}) => ipcRenderer.invoke('chat:title', { text, model, ...opts }),
   },
+  files: {
+    openDialogAndRead: () => ipcRenderer.invoke('files:open-dialog'),
+  },
   models: {
     load: () => ipcRenderer.invoke('models:load'),
     save: (conf) => ipcRenderer.invoke('models:save', conf),

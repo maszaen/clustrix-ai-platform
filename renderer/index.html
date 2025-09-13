@@ -187,6 +187,7 @@
           </div>
           
           <div class="input-container-parent">
+            <span id="welcome-file-upload-container" class="file-upload-container"></span>
             <div class="input-container" id="central-input-container">
               <textarea id="msg-central" placeholder="Ask anything" rows="1"></textarea>
               
@@ -225,14 +226,18 @@
       
       
       <div id="input-area">
-        <span></span>
         <div class="input-container-parent">
+          <div id="active-chat-file-upload-container" class="file-upload-container"></div>
           <div class="input-container">
             <textarea id="msg" placeholder="Ask anything" rows="1"></textarea>
             
           </div>
             <div class="row-between pad-l-sm">
               <div class="row-gap">
+                <span class="input-container-btn" style="cursor: pointer" title="Send message">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-icon lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                  <p>Upload File</p>
+                </span>
                 <span class="input-container-btn" style="cursor: pointer">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe-icon lucide-globe"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
                   <p>Web Search</p>

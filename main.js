@@ -1,9 +1,12 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const fsp = require('fs').promises;
 const https = require('https');
 const cheerio = require('cheerio'); 
 const { getJson } = require('serpapi');
+const mammoth = require('mammoth');
+const xlsx = require('./xlsx/xlsx');
 
 const logFile = path.join(app.getPath('userData'), 'app.log');
 
@@ -203,6 +206,7 @@ ipcMain.handle('sessions:load', async () => {
     return { sessions: [], settings: { persona: {} } };
   }
 });
+
 ipcMain.handle('sessions:save', async (_evt, data) => {
   try{
     fs.writeFileSync(dataFile, JSON.stringify(data, null, 2), 'utf-8');
@@ -211,6 +215,80 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
     console.error('save error', e);
     return false;
   }
+});
+
+ipcMain.handle('files:open-dialog', async (event) => {
+  logHelper('FILE_DIALOG', 'ipc:handle', 'Received request to open file dialog.');
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) {
+    logHelper('FILE_DIALOG', 'ipc:handle', 'FATAL: Could not get window reference.');
+    return [];
+  }
+
+  const { canceled, filePaths } = await dialog.showOpenDialog(window, {
+    title: 'Upload File',
+    buttonLabel: 'Upload',
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      { 
+        name: 'Supported Files', 
+        extensions: ['docx', 'xlsx', 'xls', 'txt', 'md', 'js', 'ts', 'tsx', 'java', 'html', 'css', 'json', 'py'] 
+      }
+    ]
+  });
+
+  logHelper('FILE_DIALOG', 'ipc:handle', `Dialog closed. Canceled: ${canceled}`, { filePaths });
+  if (canceled || filePaths.length === 0) return [];
+  
+  const MAX_FILES = 2;
+  const MAX_SIZE_KB = 600;
+
+  if (filePaths.length > MAX_FILES) {
+    dialog.showErrorBox('Upload Failed', `You can select a maximum of ${MAX_FILES} files.`);
+    return [];
+  }
+
+  try {
+    let totalSize = 0;
+    for (const filePath of filePaths) {
+      const stats = await fsp.stat(filePath);
+      totalSize += stats.size;
+    }
+    if (totalSize > MAX_SIZE_KB * 1024) {
+      dialog.showErrorBox('Upload Failed', `Total file size cannot exceed ${MAX_SIZE_KB} KB.`);
+      return [];
+    }
+  } catch (error) {
+    logHelper('FILE_DIALOG', 'ipc:handle', 'Failed to validate file size.', { error: error.message });
+    dialog.showErrorBox('Error', 'Failed to validate file size.');
+    return [];
+  }
+  
+  const results = [];
+  for (const filePath of filePaths) {
+    const extension = path.extname(filePath).toLowerCase();
+    const fileInfo = { name: path.basename(filePath), type: extension.substring(1), content: '', error: null };
+    try {
+      if (extension === '.docx') {
+        fileInfo.content = (await mammoth.extractRawText({ path: filePath })).value;
+      } else if (['.xlsx', '.xls'].includes(extension)) {
+        const workbook = xlsx.readFile(filePath);
+        let fullText = '';
+        workbook.SheetNames.forEach(sheetName => {
+          fullText += xlsx.utils.sheet_to_csv(workbook.Sheets[sheetName]) + '\n\n';
+        });
+        fileInfo.content = fullText.trim();
+      } else {
+        fileInfo.content = await fsp.readFile(filePath, 'utf-8');
+      }
+    } catch (error) {
+      fileInfo.error = 'Failed to read or process file.';
+      logHelper('FILE_READER', 'open-dialog', `Error reading ${fileInfo.name}`, { error: error.message });
+    }
+    results.push(fileInfo);
+  }
+  logHelper('FILE_DIALOG', 'ipc:handle', 'Processing complete. Sending results to renderer.', { resultCount: results.length });
+  return results;
 });
 
 // ---------- Helpers ----------

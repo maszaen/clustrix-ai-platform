@@ -1205,6 +1205,15 @@ function enhancedMarkdownParse(src) {
   sanitizedSrc = sanitizedSrc.replace(boldListFixRegex, "$1$2 **$3**");
   const normalizedSrc = sanitizedSrc.replace(/\u00A0/g, " ").replace(/\r\n/g, "\n");
   const codeBlocks = [];
+  const latexBlocks = [];
+  const latexRegex = /(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/g;
+
+  let protectedSrc = normalizedSrc.replace(latexRegex, (match) => {
+    const placeholder = `__LATEX_${latexBlocks.length}__`;
+    latexBlocks.push(match);
+    return placeholder;
+  });
+  
   let processedSrc = normalizedSrc.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
     const placeholder = `\n__CODEBLOCK_${codeBlocks.length}__\n`;
     const codeContent = code.trim();
@@ -1348,7 +1357,13 @@ function enhancedMarkdownParse(src) {
     }
   }
   closeOpenBlocks();
-  return codeBlocks.reduce((acc, block, i) => acc.replace(`__CODEBLOCK_${i}__`, block), html);
+
+  let finalHtml = codeBlocks.reduce((acc, block, i) => acc.replace(`__CODEBLOCK_${i}__`, block), html);
+  finalHtml = latexBlocks.reduce((acc, block, i) => {
+      return acc.replace(`__LATEX_${i}__`, block);
+  }, finalHtml);
+
+  return finalHtml;
 }
 
 function parseInlineMarkdown(text) {
@@ -1358,11 +1373,9 @@ function parseInlineMarkdown(text) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
-  // Image
   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
   html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
 
-  // Footnote group
   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
   html = html.replace(footnoteGroupRegex, (match) => {
     const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
@@ -1428,6 +1441,17 @@ function parseInlineMarkdown(text) {
 
   return html;
 }
+
+async function renderMathInElement(element) {
+  if (window.MathJax && typeof window.MathJax.typesetPromise === 'function') {
+    try {
+      await window.MathJax.typesetPromise([element]);
+    } catch (e) {
+      log("MATHJAX", 4, "renderMathInElement", "Gagal merender LaTeX", { error: e });
+    }
+  }
+}
+
 function md(src) {
   if (!src) return "";
   const cleanSrc = src.trim();
@@ -1673,6 +1697,7 @@ function renderHistory() {
 
     if (role === 'ai' && !isPlaceholder) {
       hydrateThinkingIfAny(node, current, i);
+      renderMathInElement(node);
     }
   }
   scrollToBottom({ force: true });
@@ -2064,7 +2089,6 @@ async function load() {
   }
 
   try {
-    log("APP", 2, "load", "Attempting to load data...");
     const data = DEBUG_MODE ? JSON.parse(localStorage.getItem("zenai-data")) : await window.api.sessions.load();
     if (data) {
       state.sessions = data.sessions || [];
@@ -2415,6 +2439,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       if (div) {
         div.innerHTML = md(finalMessageToSave || "");
         if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
+        renderMathInElement(div);
       }
 
       clearContinuePlaceholder(aiNode);
@@ -2524,6 +2549,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         const display = trimEnd(fullResponse);
         div.innerHTML = md(display);
         if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
+        renderMathInElement(div);
       }
     }
 
@@ -2935,10 +2961,8 @@ function deleteCurrentSession() {
 
 // Theme and UI
 function applyTheme(theme) {
-  log("UI", 2, "applyTheme", "Applying new theme", { theme });
   document.body.className = theme === "dark" ? "dark-theme" : "light-theme";
   $("#theme-slider").checked = theme === "dark";
-  // $("#theme-label").textContent = theme === "dark" ? "Dark" : "Light";
   state.settings.theme = theme;
 }
 
@@ -3029,7 +3053,6 @@ function initialModelSwitch() {
   ['welcome', 'chat'].forEach(screen => {
       const conf = state.settings.models;
       const activeProvider = conf.active.platform;
-      log("UI", 1, "initialModelSwitch", `Model button updated for ${screen}`, { activeProv: activeProvider}) 
       
       const models = normalizeProviderModels(conf.providers[activeProvider]?.models || []);
       const modelBtn = $(`#btn-model-switch-${screen}`);

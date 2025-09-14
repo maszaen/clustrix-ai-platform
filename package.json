@@ -52,9 +52,11 @@
     "electron": "^38.0.0"
   },
   "dependencies": {
+    "@mathjax/mathjax-newcm-font": "^4.0.0",
     "cheerio": "^1.1.2",
     "mammoth": "^1.10.0",
-    "xlsx": "file:./xlsx",
-    "serpapi": "^2.2.1"
+    "mathjax": "^4.0.0",
+    "serpapi": "^2.2.1",
+    "xlsx": "file:./xlsx"
   }
 }

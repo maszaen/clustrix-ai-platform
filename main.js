@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
@@ -7,6 +7,8 @@ const cheerio = require('cheerio');
 const { getJson } = require('serpapi');
 const mammoth = require('mammoth');
 const xlsx = require('./xlsx/xlsx');
+
+
 
 const logFile = path.join(app.getPath('userData'), 'app.log');
 
@@ -134,7 +136,7 @@ function createWindow(){
     }
   });
   
-  // win.webContents.openDevTools();
+  win.webContents.openDevTools();
 
   // Logging
   ipcMain.on('log:write', (_event, logData) => {
@@ -146,7 +148,7 @@ function createWindow(){
       if (details.streamId === lastTokenStreamId) {
         try {
           fs.appendFileSync(logFile, `- [${time}] token: ${details.token || '(empty)'}\n`);
-        } catch (e) { /* silent fail */ }
+        } catch (e) {}
         return;
       }
       
@@ -180,12 +182,58 @@ function createWindow(){
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 app.whenReady().then(() => {
+  protocol.registerFileProtocol('mjx', (request, callback) => {
+    try {
+      const raw = request.url.replace(/^mjx:\/*/i, '');
+      const rel = decodeURIComponent(raw.replace(/^\/+/, ''));
+
+      let absolutePath;
+      if (rel.startsWith('@mathjax/')) {
+        absolutePath = path.join(__dirname, 'node_modules', rel);
+      } else if (rel.startsWith('sre/')) {
+        console.warn('[MJX] Blocked SRE request →', rel);
+        return callback({ error: -6 });
+      } else {
+        absolutePath = path.join(__dirname, 'node_modules', 'mathjax', rel);
+      }
+
+      console.log('Mencoba memuat path:', absolutePath);
+      console.log('Apakah file ada?:', fs.existsSync(absolutePath));
+      callback({ path: path.normalize(absolutePath) });
+    } catch (e) {
+      console.error(`[MathJax Protocol] Error untuk ${request.url}`, e);
+      callback({ error: -6 });
+    }
+  });
+
+  // 2. Terapkan header keamanan (tetap sama dan sudah benar).
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline' mjx:",
+            "connect-src 'self' mjx: blob:",   // ⟵ izinkan fetch ke mjx:// & blob:
+            "worker-src 'self' blob:",         // ⟵ izinkan Worker dari blob:
+            "frame-src 'self'",                // ⟵ untuk worker pool berbasis iframe
+            "font-src 'self' data: mjx:",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data:"
+          ].join('; ')
+        ]
+      }
+    });
+  });
+
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
-// ---------- Persistence (sessions + settings) ----------
+
+// Persistence (sessions + settings)
 const dataFile = path.join(app.getPath('userData'), 'chat_data.json');
 
 ipcMain.handle('sessions:load', async () => {

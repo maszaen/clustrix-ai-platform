@@ -926,6 +926,10 @@ input:checked + .slider:before {
   gap: var(--spacing-sm);
 }
 
+.message.user .message-text:empty {
+  display: none;
+}
+
 .message.user .message-actions {
   justify-content: 
   flex-end;   /* align right for user */
@@ -1932,15 +1936,16 @@ blockquote blockquote blockquote blockquote::before {
 .message-text h4 {
   margin: var(--spacing-lg) 0 var(--spacing-md) 0;
   font-weight: var(--font-bold);
+  font-family: var(--font-display);
   line-height: 1.3;
 }
 
-.message-text h1 { font-size: 24px; }
-.message-text h2 { font-size: 22px; }
-.message-text h3 { font-size: 20px; }
-.message-text h4 { font-size: 18px; }
-.message-text h5 { font-size: 17px; }
-.message-text h6 { font-size: 16px; }
+.message-text h1 { font-size: 22px; }
+.message-text h2 { font-size: 20.6px; }
+.message-text h3 { font-size: 19.2px; }
+.message-text h4 { font-size: 17.8px; }
+.message-text h5 { font-size: 16.4px; }
+.message-text h6 { font-size: 15px; }
 
 .message-text p {
   margin: 0 0 var(--spacing-sm) 0;
@@ -3025,72 +3030,4 @@ figure:nth-child(3) {
   background: var(--primary-light);
   color: var(--primary);
   font-weight: bold;
-}
-
-.canvas-artifact {
-  width: 100%; padding: var(--spacing-md) var(--spacing-lg);
-  border: 1px solid var(--border); border-radius: var(--radius-lg);
-  margin: var(--spacing-lg) 0; background: var(--surface-secondary);
-  cursor: pointer; transition: var(--transition-fast); text-align: center;
-  animation: fadeInScale 0.4s var(--bounce);
-}
-.canvas-artifact:hover {
-  border-color: var(--primary);
-  background: var(--primary-light);
-}
-.canvas-artifact-text {
-  font-family: var(--font-mono); color: var(--fg-muted); font-size: 14px;
-}
-.canvas-artifact-text strong { color: var(--primary); font-weight: bold; }
-
-/* Canvas Sidebar */
-.canvas-sidebar {
-  position: fixed; top: 0; right: 0; bottom: 0;
-  width: 400px; background: var(--bg-secondary);
-  border-left: 1px solid var(--border); z-index: 150;
-  transform: translateX(100%); transition: transform var(--transition-medium);
-  display: flex; flex-direction: column;
-}
-#app.canvas-active .canvas-sidebar { transform: translateX(0); }
-#app.canvas-active .chat-area { padding-right: 400px; }
-
-.canvas-sidebar-header {
-  padding: var(--spacing-md); display: flex;
-  justify-content: space-between; align-items: center;
-  border-bottom: 1px solid var(--border); flex-shrink: 0;
-}
-.canvas-sidebar-header h3 { font-size: 16px; }
-.canvas-sidebar-content { padding: var(--spacing-sm); flex-grow: 1; overflow-y: auto; }
-
-.canvas-container {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); overflow: hidden; margin-bottom: var(--spacing-md);
-}
-.canvas-header {
-  padding: var(--spacing-sm) var(--spacing-md); background: var(--surface-secondary);
-  border-bottom: 1px solid var(--border); font-family: var(--font-mono);
-  font-size: 12px; color: var(--fg-muted); text-transform: uppercase;
-}
-.canvas-content {
-  padding: var(--spacing-md); max-height: 400px; overflow-y: auto;
-  font-family: var(--font-mono); font-size: 13px; line-height: 1.6;
-  white-space: pre-wrap; word-wrap: break-word;
-}
-.canvas-content pre, .canvas-content code {
-  background: transparent !important; padding: 0 !important; margin: 0 !important;
-  border: none !important;
-}
-
-/* Layout Responsif untuk Sidebar */
-@media (max-width: 1200px) {
-  #app.canvas-active .chat-area { padding-right: 350px; }
-  .canvas-sidebar { width: 350px; }
-  
-  #app.canvas-active.sidebar-collapsed .chat-area { margin-left: 64px; }
-  #app.canvas-active:not(.sidebar-collapsed) .sidebar { width: 64px; }
-  #app.canvas-active:not(.sidebar-collapsed) .sidebar .sidebar-header,
-  #app.canvas-active:not(.sidebar-collapsed) .sidebar .sidebar-footer { padding: var(--spacing-md) var(--spacing-sm); }
-  #app.canvas-active:not(.sidebar-collapsed) .sidebar .sessions-container,
-  #app.canvas-active:not(.sidebar-collapsed) .sidebar .search-container,
-  #app.canvas-active:not(.sidebar-collapsed) .sidebar .settings-btn span { display: none; }
 }

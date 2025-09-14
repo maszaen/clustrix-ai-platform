@@ -1,7 +1,5 @@
 let state = { sessions: [], settings: { persona: { name: "", work: "", prefs: "" }, theme: "light" } };
 let welcomeScreenStagedFiles = [];
-let formToggles = { canvas: false };
-let isCanvasSidebarOpen = false;
 let current = null;
 let collapsed = false;
 let loadedSessionCount = 0;
@@ -160,37 +158,6 @@ const streamManager = {
   },
 };
 
-
-// Utility Functions
-function updateCanvasButtonState() {
-  const isPermanentlyEnabled = current && current.canvasPermanentlyEnabled;
-  const isToggledForNext = !isPermanentlyEnabled && formToggles.canvas;
-  const isActive = isPermanentlyEnabled || isToggledForNext;
-  
-  $$('[id^="btn-canvas-"]').forEach(btn => {
-    btn.classList.toggle('toggled', isActive);
-    btn.classList.toggle('canvas-locked', isPermanentlyEnabled);
-  });
-}
-
-function handleCanvasToggleClick() {
-  if (current && current.canvasPermanentlyEnabled) return;
-  formToggles.canvas = !formToggles.canvas;
-  updateCanvasButtonState();
-  log('UI', 1, 'handleCanvasToggleClick', `Canvas prompt toggle set to ${formToggles.canvas}`);
-}
-
-function toggleCanvasSidebar() {
-  isCanvasSidebarOpen = !isCanvasSidebarOpen;
-  $('#app').classList.toggle('canvas-active', isCanvasSidebarOpen);
-  
-  if (isCanvasSidebarOpen && window.innerWidth <= 1200 && !$('#app').classList.contains('sidebar-collapsed')) {
-    $('#app').classList.add('sidebar-collapsed');
-    collapsed = true;
-  }
-  log('UI', 2, 'toggleCanvasSidebar', `Canvas sidebar toggled`, { isOpen: isCanvasSidebarOpen });
-}
-
 function openQuickModelSwitch(event, screen) {
   const modelBtn = $(`#btn-model-switch-${screen}`);
   const modal = $('#quick-model-switch-modal');
@@ -236,51 +203,6 @@ function openQuickModelSwitch(event, screen) {
   const close = () => modal.classList.add('hidden');
   modal.querySelector('.modal-overlay').onclick = close;
   modal.classList.remove('hidden');
-}
-
-function addCanvasArtifactMessage(canvasName) {
-  const logEl = $("#chat-log");
-  const artifactNode = document.createElement("div");
-  artifactNode.className = "canvas-artifact";
-  artifactNode.innerHTML = `<span class="canvas-artifact-text">Canvas Created: <strong>${esc(canvasName)}</strong> (Click to view)</span>`;
-  
-  artifactNode.addEventListener('click', () => {
-    if (!isCanvasSidebarOpen) {
-      toggleCanvasSidebar();
-    }
-  });
-  
-  logEl.appendChild(artifactNode);
-  scrollToBottom({ force: true });
-}
-
-function applyCanvasEdits(canvasName, buffer) {
-  if (!current || !current.canvases || !current.canvases[canvasName]) return;
-  log('CANVAS', 1, 'applyCanvasEdits', `Applying edits to canvas: ${canvasName}`);
-  
-  buffer = buffer.replace(/\[--CANVAS(?:_FOR_CODE)?_.*?--\]\n?/, '');
-  buffer = buffer.replace(/```(\w*\n)?/g, '').replace(/```\n?$/, '');
-
-  let contentLines = current.canvases[canvasName].content.split('\n');
-  const commands = buffer.split(/(\[--DELETE_LINES_\d+(?:_TO_\d+)?--\])/g);
-
-  for (let i = 1; i < commands.length; i += 2) {
-    const command = commands[i];
-    const replacementText = commands[i - 1];
-    
-    const match = command.match(/\[--DELETE_LINES_(\d+)(?:_TO_(\d+))?--\]/);
-    const startLine = parseInt(match[1], 10);
-    const endLine = match[2] ? parseInt(match[2], 10) : startLine;
-    const deleteCount = (endLine - startLine) + 1;
-
-    // Sisipkan teks pengganti jika ada
-    if (replacementText.trim()) {
-      contentLines.splice(startLine - 1, deleteCount, ...replacementText.trim().split('\n'));
-    } else {
-      contentLines.splice(startLine - 1, deleteCount);
-    }
-  }
-  current.canvases[canvasName].content = contentLines.join('\n');
 }
 
 function renderWelcomeScreenFiles() {
@@ -1112,7 +1034,8 @@ function updateModelHeader() {
 function showWelcomeScreen() {
   current = null;
   welcomeScreenStagedFiles = [];
-  renderWelcomeScreenFiles(); 
+  renderWelcomeScreenFiles();
+
   $(".chat-area").classList.add("welcome-active");
   $("#chat-title").textContent = "New Chat";
   $("#chat-title").title = "New Chat, ask anything";
@@ -1199,7 +1122,6 @@ function scrollToBottom({ force = false } = {}) {
 }
 
 function getThinkingMarkup() {
-  // Check if thinking mode is disabled
   const act = state.settings?.models?.active || {};
   const thinkMode = act.thinkMode || 'off';
   if (thinkMode === 'off') return '';
@@ -1429,61 +1351,6 @@ function enhancedMarkdownParse(src) {
   return codeBlocks.reduce((acc, block, i) => acc.replace(`__CODEBLOCK_${i}__`, block), html);
 }
 
-// function parseInlineMarkdown(text) {
-//   if (!text) return "";
-//   let html = text
-//     .replaceAll("&", "&amp;")
-//     .replaceAll("<", "&lt;")
-//     .replaceAll(">", "&gt;");
-//   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
-//   html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
-
-//   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
-//   html = html.replace(footnoteGroupRegex, (match) => {
-//     const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
-//     const links = [];
-//     let result;
-//     while ((result = individualFootnoteRegex.exec(match)) !== null) {
-//       const number = result[1];
-//       const url = result[2];
-//       links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer">[${number}]</a>`);
-//     }
-//     return `<sup class="footnote-ref">${links.join(', ')}</sup>`;
-//   });
-  
-//   const linkRegex = /\[(.*?)\]\((.*?)\)/g;
-//   html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
-//   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
-  
-//   const inlineCodeBlocks = [];
-//   html = html.replace(/`([^`]+?)`/g, (match, content) => {
-//     const placeholder = `__INLINE_CODE_${inlineCodeBlocks.length}__`;
-//     inlineCodeBlocks.push(`<code>${content}</code>`);
-//     return placeholder;
-//   });
-
-//   const autoLinkRegex = /(\b(https?:\/\/|www\.)[^\s<>"'()]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}(\/[^\s<>"'()]*)*)/g;
-//   html = html.replace(autoLinkRegex, (url) => {
-//     if (html.includes(`href="${url}"`) || html.includes(`src="${url}"`)) {
-//         return url;
-//     }
-//     let href = url;
-//     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
-//     return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-//   });
-
-//   html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
-//   html = html
-//     .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
-//     .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>");
-//   html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>");
-//   html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>");
-//   html = html.replace(/~~(.*?)~~/g, "<del>$1</del>");
-  
-//   return html;
-// }
-
-
 function parseInlineMarkdown(text) {
   if (!text) return "";
   let html = text
@@ -1511,17 +1378,14 @@ function parseInlineMarkdown(text) {
     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
   });
 
-  // Normal markdown link
   const linkRegex = /\[(.*?)\]\((.*?)\)/g;
   html = html.replace(
     linkRegex,
     '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>'
   );
 
-  // Underline (escaped HTML)
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
 
-  // Inline code (temporary placeholders)
   const inlineCodeBlocks = [];
   html = html.replace(/`([^`]+?)`/g, (match, content) => {
     const placeholder = `__INLINE_CODE_${inlineCodeBlocks.length}__`;
@@ -1529,89 +1393,12 @@ function parseInlineMarkdown(text) {
     return placeholder;
   });
 
-  /* --------------------------------------------------------------
-   *  Auto‑link regex (perbaikan)
-   *  1️⃣ Menangkap URL yang dimulai dengan http(s):// atau www.
-   *  2️⃣ Menangkap domain yang diakhiri TLD umum (com, net, org, ...).
-   *  3️⃣ Negative lookbehind (?<!\w) memastikan tidak berada di tengah
-   *     kata/identifier seperti "console.log".
-   * -------------------------------------------------------------- */
-  const tldList = [
-    "com",
-    "net",
-    "org",
-    "io",
-    "gov",
-    "edu",
-    "co",
-    "info",
-    "biz",
-    "online",
-    "app",
-    "id",
-    "me",
-    "site",
-    "tech",
-    "dev",
-    "ai",
-    "cloud",
-    "shop",
-    "store",
-    "live",
-    "blog",
-    "club",
-    "news",
-    "xyz",
-    "link",
-    "cloud",
-    "space",
-    "page",
-    "pro",
-    "design",
-    "agency",
-    "group",
-    "company",
-    "inc",
-    "us",
-    "uk",
-    "au",
-    "ca",
-    "de",
-    "fr",
-    "es",
-    "it",
-    "nl",
-    "se",
-    "no",
-    "fi",
-    "ru",
-    "cn",
-    "jp",
-    "br",
-    "in",
-    "cz",
-    "pl",
-    "be",
-    "ch",
-    "at",
-    "sg",
-    "hk",
-    "nz",
-    "mx",
-    "ar",
-    "cl",
-    "kr",
-    "za",
-    "ae",
-    "sa"
-  ];
+  const tldList=["com","net","org","io","gov","edu","co","info","biz","online","app","id","me","site","tech","dev","ai","cloud","shop","store","live","blog","club","news","xyz","link","cloud","space","page","pro","design","agency","group","company","inc","us","uk","au","ca","de","fr","es","it","nl","se","no","fi","ru","cn","jp","br","in","cz","pl","be","ch","at","sg","hk","nz","mx","ar","cl","kr","za","ae","sa"];
   const tldPattern = tldList.join("|");
 
   const autoLinkRegex = new RegExp(
-    // 1️⃣ http(s):// atau www.
     "(\\b(?:https?:\\/\\/|www\\.)[^\\s<>\"]+)" +
       "|" +
-      // 2️⃣ domain + TLD yang valid, tidak di‑ikuti oleh karakter kata (negative lookbehind)
       "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ")(?:\\/[^\\s<>\"]*)?)",
     "gi"
   );
@@ -1740,10 +1527,15 @@ function getWelcomeMessage() {
 }
 
 function typewriterEffect(element, text, { speed = 30, punctuationDelay = 350 } = {}) {
+  if (Array.isArray(element._twTimers)) {
+    for (const t of element._twTimers) try { clearTimeout(t); } catch {}
+  }
+  element._twTimers = [];
+
   element.textContent = "";
-  log("UI_EFFECT", 1, "typewriterEffect", "Starting typewriter effect.", { text_length: text.length, speed, punctuationDelay });
   let i = 0;
   const punctuation = ".,?!;:-–";
+
   function type() {
     if (i < text.length) {
       const char = text.charAt(i);
@@ -1751,10 +1543,13 @@ function typewriterEffect(element, text, { speed = 30, punctuationDelay = 350 } 
       i++;
       let delay = speed + Math.random() * 40;
       if (punctuation.includes(char)) delay += punctuationDelay;
-      setTimeout(type, delay);
+      const t = setTimeout(type, delay);
+      element._twTimers.push(t);
     }
   }
-  setTimeout(type, 100);
+
+  const starter = setTimeout(type, 100);
+  element._twTimers.push(starter);
 }
 
 function findOverlap(existing, newToken) {
@@ -2092,7 +1887,10 @@ function updateChatHeader({ animate = false } = {}) {
   const titleText = current.name || "Untitled Chat";
   titleEl.title = `${current.tokens_used || 0} tokens`;
 
-  if (titleEl._typewriterTimeout) clearTimeout(titleEl._typewriterTimeout);
+  if (Array.isArray(titleEl._twTimers)) {
+    for (const t of titleEl._twTimers) try { clearTimeout(t); } catch {}
+    titleEl._twTimers = [];
+  }
 
   if (animate) {
     typewriterEffect(titleEl, titleText);
@@ -2212,9 +2010,7 @@ function clearLog() {
 }
 
 function setCurrent(s) {
-  log("SESSION", 2, "setCurrent", "Mencoba beralih sesi", { targetSession: s?.name || "undefined" });
   if (current === s) {
-    log("SESSION", 1, "setCurrent", "Beralih sesi dibatalkan karena sesi sudah aktif.");
     return;
   }
   current = s;
@@ -2247,7 +2043,7 @@ function setCurrent(s) {
   renderSessions();
   updateChatHeader({ animate: false });
   updateInputState();
-  log("SESSION", 2, "setCurrent", "Berhasil beralih sesi", { newCurrentSession: current.name });
+  log("SESSION", 2, "setCurrent", "Successfully switch session", { newCurrentSession: current.name });
 }
 
 async function load() {
@@ -3258,17 +3054,12 @@ function setupEventListeners() {
       $('#web-search-switch').checked = state.settings.webSearchEnabled;
     });
     
-    const canvasBtn = $(`#btn-canvas-${screen}`);
-    if(canvasBtn) canvasBtn.addEventListener('click', handleCanvasToggleClick);
-    
     setTimeout(() => {
       initialModelSwitch();
     }, 500);
     const modelBtn = $(`#btn-model-switch-${screen}`);
     if(modelBtn) modelBtn.addEventListener('click', (e) => openQuickModelSwitch(e, screen));
   });
-  
-  $('#canvas-sidebar-close').addEventListener('click', toggleCanvasSidebar);
 
   document.querySelectorAll('.input-container-btn').forEach(btn => {
     const p = btn.querySelector('p');

@@ -1027,6 +1027,10 @@ function updateModelHeader() {
   if (titleEl) titleEl.textContent = title;
   if (titleEl) titleEl.title = prov; 
 
+  const modelBtn = $(`#btn-model-switch-welcome` || `#btn-model-switch-chat`);
+  const p = modelBtn.querySelector('p');
+  if (p) p.textContent = title || '';
+
   const tokensEl = document.querySelector('#chat-title');
   if (tokensEl && !tokensEl.textContent) tokensEl.title = '';
 }
@@ -1131,25 +1135,6 @@ function getThinkingMarkup() {
     <span class="thinking-text-indicator"></span>
   </div>`;
 }
-
-
-// function testThinking() {
-//   const target = document.querySelector('.message-ai') || document.querySelector('[class*="message"]');
-//   if (!target) return console.log('❌ Target not found');
-//   target.innerHTML = '';
-//   const html = `<div class="thinking-container">
-//   <div class="typing-indicator"><span></span><span></span><span></span></div>
-//   <span class="thinking-text-indicator"></span>
-//   </div>`;
-//   scheduleThinkingText($(`#chat-log .message.ai`));
-//   target.insertAdjacentHTML('beforeend', html);
-//   const target2 = document.querySelector('.thinking-text-indicator') || document.querySelector('[class*="thinking-text-indicator"]');
-//   target2.innerHTML = '';
-//   const text = `<div>Thinking</div>`;
-  
-//   target2.insertAdjacentHTML('beforeend', text);
-//   console.log('✅ Done with insertAdjacentHTML!');
-// }
 
 function getRelativeDateGroup(dateString) {
   const date = new Date(dateString);
@@ -3050,23 +3035,39 @@ function setupResponsiveHandlers() {
 }
 
 function initialModelSwitch() {
+  const conf = state?.settings?.models;
+  if (!conf?.active?.platform || !conf?.active?.model) {
+    return false;
+  }
+
   ['welcome', 'chat'].forEach(screen => {
-      const conf = state.settings.models;
-      const activeProvider = conf.active.platform;
-      
-      const models = normalizeProviderModels(conf.providers[activeProvider]?.models || []);
-      const modelBtn = $(`#btn-model-switch-${screen}`);
-      models.forEach(model => {
-        if (model.id === conf.active.model) {
-          const p = modelBtn.querySelector('p');
-          if (p) p.textContent = model.label || model.id;
-        }
-      });
+    const activeProvider = conf.active.platform;
+    const models = normalizeProviderModels(conf.providers[activeProvider]?.models || []);
+    const modelBtn = document.querySelector(`#btn-model-switch-${screen}`);
+    
+    models.forEach(model => {
+      if (model.id === conf.active.model) {
+        const p = modelBtn?.querySelector('p');
+        if (p) p.textContent = model.label || model.id;
+      }
+    });
   });
+
+  return true;
 }
 
 
 // App Lifecycle
+function initWithRetry(maxRetry = 20, interval = 100) {
+  let attempt = 0;
+  const timer = setInterval(() => {
+    if (initialModelSwitch() || attempt >= maxRetry) {
+      clearInterval(timer);
+    }
+    attempt++;
+  }, interval);
+}
+
 function setupEventListeners() {
   ['welcome', 'chat'].forEach(screen => {
     const searchBtn = $(`#btn-web-search-${screen}`);
@@ -3077,9 +3078,7 @@ function setupEventListeners() {
       $('#web-search-switch').checked = state.settings.webSearchEnabled;
     });
     
-    setTimeout(() => {
-      initialModelSwitch();
-    }, 500);
+    initWithRetry();
     const modelBtn = $(`#btn-model-switch-${screen}`);
     if(modelBtn) modelBtn.addEventListener('click', (e) => openQuickModelSwitch(e, screen));
   });

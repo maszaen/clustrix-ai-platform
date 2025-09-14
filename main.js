@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, session, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, protocol, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
@@ -181,32 +181,90 @@ function createWindow(){
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'mjx',
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    corsEnabled: true,
+    stream: true
+  }
+}]);
+
+function guessContentType(p) {
+  const ext = path.extname(p).toLowerCase();
+  switch (ext) {
+    case '.js':
+    case '.mjs':
+    case '.cjs':     return 'text/javascript; charset=utf-8';
+    case '.json':    return 'application/json; charset=utf-8';
+    case '.css':     return 'text/css; charset=utf-8';
+    case '.svg':     return 'image/svg+xml';
+    case '.map':     return 'application/json; charset=utf-8';
+    case '.woff':    return 'font/woff';
+    case '.woff2':   return 'font/woff2';
+    case '.ttf':     return 'font/ttf';
+    default:         return 'application/octet-stream';
+  }
+}
+
+function safeJoin(base, rel) {
+  const candidate = path.normalize(path.join(base, rel));
+  if (!candidate.startsWith(base)) {
+    return null;
+  }
+  return candidate;
+}
+
 app.whenReady().then(() => {
-  protocol.registerFileProtocol('mjx', (request, callback) => {
+  // === Modern handler ===
+  protocol.handle('mjx', async (req) => {
     try {
-      const raw = request.url.replace(/^mjx:\/*/i, '');
-      const rel = decodeURIComponent(raw.replace(/^\/+/, ''));
+      console.log('[MJX] URL', req.url);
+
+      const raw = req.url.replace(/^mjx:\/*/i, '');
+      let rel = decodeURIComponent(raw.replace(/^\/+/, ''));
+
+      if (rel.startsWith('sre/')) {
+        console.warn('[MJX] Blocked SRE request →', rel);
+        return new Response('Not found', { status: 404 });
+      }
+
+      rel = rel.replace(/^mathjax\/(mathjax-[^/]+-font\/.*)$/i, '@mathjax/$1');
 
       let absolutePath;
       if (rel.startsWith('@mathjax/')) {
-        absolutePath = path.join(__dirname, 'node_modules', rel);
-      } else if (rel.startsWith('sre/')) {
-        console.warn('[MJX] Blocked SRE request →', rel);
-        return callback({ error: -6 });
+        const base = path.join(__dirname, 'node_modules');
+        const safe = safeJoin(base, rel); 
+        if (!safe) return new Response('Forbidden', { status: 403 });
+        absolutePath = safe;
       } else {
-        absolutePath = path.join(__dirname, 'node_modules', 'mathjax', rel);
+        const base = path.join(__dirname, 'node_modules', 'mathjax');
+        const safe = safeJoin(base, rel);
+        if (!safe) return new Response('Forbidden', { status: 403 });
+        absolutePath = safe;
       }
 
-      console.log('Mencoba memuat path:', absolutePath);
-      console.log('Apakah file ada?:', fs.existsSync(absolutePath));
-      callback({ path: path.normalize(absolutePath) });
-    } catch (e) {
-      console.error(`[MathJax Protocol] Error untuk ${request.url}`, e);
-      callback({ error: -6 });
+      console.log('[MJX] ->', absolutePath);
+
+      const exists = await fsp.access(absolutePath).then(() => true).catch(() => false);
+      if (!exists) {
+        console.warn('[MJX] 404', absolutePath);
+        return new Response('Not found', { status: 404 });
+      }
+
+      const data = await fsp.readFile(absolutePath);
+      return new Response(data, {
+        status: 200,
+        headers: { 'Content-Type': guessContentType(absolutePath), 'Cache-Control': 'no-cache' }
+      });
+    } catch (err) {
+      console.error('[MJX] 500', err);
+      return new Response('Internal error', { status: 500 });
     }
   });
 
-  // 2. Terapkan header keamanan (tetap sama dan sudah benar).
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -215,9 +273,9 @@ app.whenReady().then(() => {
           [
             "default-src 'self'",
             "script-src 'self' 'unsafe-inline' mjx:",
-            "connect-src 'self' mjx: blob:",   // ⟵ izinkan fetch ke mjx:// & blob:
-            "worker-src 'self' blob:",         // ⟵ izinkan Worker dari blob:
-            "frame-src 'self'",                // ⟵ untuk worker pool berbasis iframe
+            "connect-src 'self' mjx: blob:",
+            "worker-src 'self' blob:",
+            "frame-src 'self'",
             "font-src 'self' data: mjx:",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data:"

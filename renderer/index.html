@@ -519,7 +519,7 @@
       },
       output: {
         font: 'mathjax-newcm',
-        fontPath: 'mjx:/@mathjax/%%FONT%%-font' 
+        fontPath: 'mjx://@mathjax/%%FONT%%-font'   // pakai skema + 2 slash
       },
       svg: { fontCache: 'global' },
       options: {
@@ -528,6 +528,8 @@
       },
       startup: {
         ready: () => {
+          console.log('MathJax is ready to go!');
+          console.log('MJX output =', MathJax.config.output); // VERIF: font + fontPath
           MathJax.startup.defaultReady();
         }
       }

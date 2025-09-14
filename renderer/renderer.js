@@ -1,5 +1,7 @@
-let welcomeScreenStagedFiles = [];
 let state = { sessions: [], settings: { persona: { name: "", work: "", prefs: "" }, theme: "light" } };
+let welcomeScreenStagedFiles = [];
+let formToggles = { canvas: false };
+let isCanvasSidebarOpen = false;
 let current = null;
 let collapsed = false;
 let loadedSessionCount = 0;
@@ -160,6 +162,127 @@ const streamManager = {
 
 
 // Utility Functions
+function updateCanvasButtonState() {
+  const isPermanentlyEnabled = current && current.canvasPermanentlyEnabled;
+  const isToggledForNext = !isPermanentlyEnabled && formToggles.canvas;
+  const isActive = isPermanentlyEnabled || isToggledForNext;
+  
+  $$('[id^="btn-canvas-"]').forEach(btn => {
+    btn.classList.toggle('toggled', isActive);
+    btn.classList.toggle('canvas-locked', isPermanentlyEnabled);
+  });
+}
+
+function handleCanvasToggleClick() {
+  if (current && current.canvasPermanentlyEnabled) return;
+  formToggles.canvas = !formToggles.canvas;
+  updateCanvasButtonState();
+  log('UI', 1, 'handleCanvasToggleClick', `Canvas prompt toggle set to ${formToggles.canvas}`);
+}
+
+function toggleCanvasSidebar() {
+  isCanvasSidebarOpen = !isCanvasSidebarOpen;
+  $('#app').classList.toggle('canvas-active', isCanvasSidebarOpen);
+  
+  if (isCanvasSidebarOpen && window.innerWidth <= 1200 && !$('#app').classList.contains('sidebar-collapsed')) {
+    $('#app').classList.add('sidebar-collapsed');
+    collapsed = true;
+  }
+  log('UI', 2, 'toggleCanvasSidebar', `Canvas sidebar toggled`, { isOpen: isCanvasSidebarOpen });
+}
+
+function openQuickModelSwitch(event, screen) {
+  const modelBtn = $(`#btn-model-switch-${screen}`);
+  const modal = $('#quick-model-switch-modal');
+  const card = $('#quick-model-switch-card');
+  const body = $('#quick-model-switch-body');
+  const conf = state.settings.models;
+  const activeProv = conf.active.platform;
+  
+  const models = normalizeProviderModels(conf.providers[activeProv]?.models || []);
+  body.innerHTML = '';
+  
+  models.forEach(model => {
+    const btn = document.createElement('button');
+    btn.className = 'quick-model-item';
+    btn.textContent = model.label || model.id;
+    if (model.id === conf.active.model) {
+      btn.classList.add('active');
+    }
+    btn.addEventListener('click', async () => {
+      conf.active.model = model.id;
+      const p = modelBtn.querySelector('p');
+      if (p) p.textContent = model.label || model.id;
+      await persistModels(conf);
+      modal.classList.add('hidden');
+    });
+    body.appendChild(btn);
+  });
+
+  const triggerBtn = event.currentTarget;
+  const rect = triggerBtn.getBoundingClientRect();
+  const onWelcomePage = !current;
+
+  if (onWelcomePage) {
+    card.style.top = `${rect.bottom + 8}px`;
+    card.style.bottom = 'auto';
+  } else {
+    card.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+    card.style.top = 'auto';
+  }
+  card.style.right = `${window.innerWidth - rect.right}px`;
+  card.style.left = 'auto';
+  
+  const close = () => modal.classList.add('hidden');
+  modal.querySelector('.modal-overlay').onclick = close;
+  modal.classList.remove('hidden');
+}
+
+function addCanvasArtifactMessage(canvasName) {
+  const logEl = $("#chat-log");
+  const artifactNode = document.createElement("div");
+  artifactNode.className = "canvas-artifact";
+  artifactNode.innerHTML = `<span class="canvas-artifact-text">Canvas Created: <strong>${esc(canvasName)}</strong> (Click to view)</span>`;
+  
+  artifactNode.addEventListener('click', () => {
+    if (!isCanvasSidebarOpen) {
+      toggleCanvasSidebar();
+    }
+  });
+  
+  logEl.appendChild(artifactNode);
+  scrollToBottom({ force: true });
+}
+
+function applyCanvasEdits(canvasName, buffer) {
+  if (!current || !current.canvases || !current.canvases[canvasName]) return;
+  log('CANVAS', 1, 'applyCanvasEdits', `Applying edits to canvas: ${canvasName}`);
+  
+  buffer = buffer.replace(/\[--CANVAS(?:_FOR_CODE)?_.*?--\]\n?/, '');
+  buffer = buffer.replace(/```(\w*\n)?/g, '').replace(/```\n?$/, '');
+
+  let contentLines = current.canvases[canvasName].content.split('\n');
+  const commands = buffer.split(/(\[--DELETE_LINES_\d+(?:_TO_\d+)?--\])/g);
+
+  for (let i = 1; i < commands.length; i += 2) {
+    const command = commands[i];
+    const replacementText = commands[i - 1];
+    
+    const match = command.match(/\[--DELETE_LINES_(\d+)(?:_TO_(\d+))?--\]/);
+    const startLine = parseInt(match[1], 10);
+    const endLine = match[2] ? parseInt(match[2], 10) : startLine;
+    const deleteCount = (endLine - startLine) + 1;
+
+    // Sisipkan teks pengganti jika ada
+    if (replacementText.trim()) {
+      contentLines.splice(startLine - 1, deleteCount, ...replacementText.trim().split('\n'));
+    } else {
+      contentLines.splice(startLine - 1, deleteCount);
+    }
+  }
+  current.canvases[canvasName].content = contentLines.join('\n');
+}
+
 function renderWelcomeScreenFiles() {
   const container = $('#welcome-file-upload-container');
   if (!container) return;
@@ -991,7 +1114,7 @@ function showWelcomeScreen() {
   welcomeScreenStagedFiles = [];
   renderWelcomeScreenFiles(); 
   $(".chat-area").classList.add("welcome-active");
-  $("#chat-title").textContent = "Untitled Chat";
+  $("#chat-title").textContent = "New Chat";
   $("#chat-title").title = "New Chat, ask anything";
   $("#zenai-logo").innerHTML = `
               <div style="--i: 1"></div>
@@ -1734,6 +1857,7 @@ function buildResumeMessagesFromSession(session, messageIndex, fullResponseSoFar
 
 // Session Rendering
 function renderHistory() {
+  $('#quick-model-switch-modal').classList.add('hidden');
   log("SESSION", 1, "renderHistory", `Rendering chat history`, { sessionName: current?.name });
   clearLog();
   if (!current || !current.messages) return;
@@ -2166,6 +2290,7 @@ async function load() {
     state.settings.webSearchEnabled = false;
   }
   $('#web-search-switch').checked = state.settings.webSearchEnabled;
+  $$('[id^="btn-web-search-"]').forEach(b => b.classList.toggle('toggled', state.settings.webSearchEnabled));
   log("APP", 2, "load", "Successfully loaded data.", { sessionCount: state.sessions.length });
 
   applyTheme(state.settings.theme || "light");
@@ -3104,9 +3229,47 @@ function setupResponsiveHandlers() {
   });
 }
 
+function initialModelSwitch() {
+  ['welcome', 'chat'].forEach(screen => {
+      const conf = state.settings.models;
+      const activeProvider = conf.active.platform;
+      log("UI", 1, "initialModelSwitch", `Model button updated for ${screen}`, { activeProv: activeProvider}) 
+      
+      const models = normalizeProviderModels(conf.providers[activeProvider]?.models || []);
+      const modelBtn = $(`#btn-model-switch-${screen}`);
+      models.forEach(model => {
+        if (model.id === conf.active.model) {
+          const p = modelBtn.querySelector('p');
+          if (p) p.textContent = model.label || model.id;
+        }
+      });
+  });
+}
+
 
 // App Lifecycle
 function setupEventListeners() {
+  ['welcome', 'chat'].forEach(screen => {
+    const searchBtn = $(`#btn-web-search-${screen}`);
+    if(searchBtn) searchBtn.addEventListener('click', () => {
+      state.settings.webSearchEnabled = !state.settings.webSearchEnabled;
+      $$('[id^="btn-web-search-"]').forEach(b => b.classList.toggle('toggled', state.settings.webSearchEnabled));
+      save();
+      $('#web-search-switch').checked = state.settings.webSearchEnabled;
+    });
+    
+    const canvasBtn = $(`#btn-canvas-${screen}`);
+    if(canvasBtn) canvasBtn.addEventListener('click', handleCanvasToggleClick);
+    
+    setTimeout(() => {
+      initialModelSwitch();
+    }, 500);
+    const modelBtn = $(`#btn-model-switch-${screen}`);
+    if(modelBtn) modelBtn.addEventListener('click', (e) => openQuickModelSwitch(e, screen));
+  });
+  
+  $('#canvas-sidebar-close').addEventListener('click', toggleCanvasSidebar);
+
   document.querySelectorAll('.input-container-btn').forEach(btn => {
     const p = btn.querySelector('p');
     if (p && p.textContent.includes('Upload File')) {
@@ -3212,6 +3375,7 @@ function setupEventListeners() {
   $("#open-model-mgmt").addEventListener("click", () => {
     openModelMgmt();
     $("#settings-menu").classList.add("hidden");
+    $('#quick-model-switch-modal').classList.add('hidden');
   });
 
   $("#open-model-switcher").addEventListener("click", () => {
@@ -3294,6 +3458,7 @@ function setupEventListeners() {
 
     $("#models-modal").classList.remove("hidden");
     $("#settings-menu").classList.add("hidden");
+    $('#quick-model-switch-modal').classList.add('hidden');
   });
 
   $("#save-models").addEventListener("click", async () => {
@@ -3301,8 +3466,7 @@ function setupEventListeners() {
     const modelId  = $("#model-select").value.trim();
     const baseUrl  = $("#base-url").value.trim();
     const apiKey   = $("#api-key").value.trim();
-    // const label    = $("#model-label").value.trim() || modelId; // form dimatikan
-    // const note     = $("#model-note").value.trim();             // form dimatikan
+
     const thinkMode = $("#extended-thinking").value;
 
     const conf = state.settings.models || defaultModels();
@@ -3313,21 +3477,17 @@ function setupEventListeners() {
     conf.providers[platform].baseUrl = baseUrl;
     conf.providers[platform].apiKey  = apiKey;
 
-    // normalisasi dan PERTAHANKAN label/note existing
     const list = normalizeProviderModels(conf.providers[platform].models || []);
     const idx  = list.findIndex(m => m.id === modelId);
 
     if (idx >= 0) {
-      // JANGAN sentuh label/note. Cuma pastikan id tetap benar.
       const existing = list[idx];
       list[idx] = { ...existing, id: modelId };
     } else {
-      // Entry baru → fallback label=id, note='', supaya preview jalan
       list.unshift({ id: modelId, label: modelId, note: '' });
     }
     conf.providers[platform].models = list;
 
-    // set active tanpa merusak meta
     conf.active = { platform, model: modelId, baseUrl, apiKey, thinkMode };
 
     state.settings.models = conf;
@@ -3336,6 +3496,19 @@ function setupEventListeners() {
       if (!DEBUG_MODE) 
         await window.api.models.save(conf); 
     } catch {}
+
+    const config = state.settings.models;
+    const activeProvider = config.active.platform;
+    log("UI", 1, "initialModelSwitch", `Model button updated for ${screen}`, { activeProv: activeProvider}) 
+    
+    const modelsState = normalizeProviderModels(config.providers[activeProvider]?.models || []);
+    const modelBtn = $(`#btn-model-switch-welcome` || `#btn-model-switch-chat`);
+    modelsState.forEach(model => {
+      if (model.id === config.active.model) {
+        const p = modelBtn.querySelector('p');
+        if (p) p.textContent = model.label || model.id;
+      }
+    });
 
     updateModelHeader();
     $("#models-modal").classList.add("hidden");
@@ -3353,6 +3526,7 @@ function setupEventListeners() {
 
   $("#new-chat").addEventListener("click", () => {
     log("UI", 0, "event:new-chat-click", "New chat button clicked");
+    $('#quick-model-switch-modal').classList.add('hidden');
     showWelcomeScreen();
   });
 
@@ -3366,6 +3540,7 @@ function setupEventListeners() {
     const willShow = $("#settings-menu").classList.contains("hidden");
     log("UI", 0, "event:open-settings-click", "Settings menu toggled", { willShow });
     $("#settings-menu").classList.toggle("hidden");
+    $('#quick-model-switch-modal').classList.add('hidden');
   });
 
   $("#open-persona-settings").addEventListener("click", () => {
@@ -3376,6 +3551,7 @@ function setupEventListeners() {
     $("#persona-prefs").value = prefs || "";
     $("#settings-modal").classList.remove("hidden");
     $("#settings-menu").classList.add("hidden");
+    $('#quick-model-switch-modal').classList.add('hidden');
   });
 
   $("#close-modal").addEventListener("click", () => {
@@ -3411,6 +3587,7 @@ function setupEventListeners() {
       current = null;
       await save();
       $("#settings-modal").classList.add("hidden");
+      $('#quick-model-switch-modal').classList.add('hidden');
       showWelcomeScreen();
       log("SETTINGS", 2, "delete-all:completed", "All sessions have been deleted", { sessionsCount: state.sessions.length });
     });
@@ -3430,6 +3607,7 @@ function setupEventListeners() {
   $("#web-search-switch").addEventListener("change", (e) => {
     state.settings.webSearchEnabled = e.target.checked;
     save();
+    $$('[id^="btn-web-search-"]').forEach(b => b.classList.toggle('toggled', state.settings.webSearchEnabled));
     log("SETTINGS", 2, "event:web-search-change", "Web Search Toggled", { enabled: e.target.checked });
   });
 
@@ -3449,6 +3627,7 @@ function setupEventListeners() {
       $("#settings-modal").classList.add("hidden");
       $("#confirm-modal").classList.add("hidden");
       $("#settings-menu").classList.add("hidden");
+      $('#quick-model-switch-modal').classList.add('hidden');
     }
   });
 
@@ -3464,8 +3643,10 @@ function setupEventListeners() {
   });
 
   $("#send").addEventListener("click", () => {
+    const modal = $('#quick-model-switch-modal');
+    modal.classList.add('hidden');
+
     if (!current) return;
-    
 
     const isStreaming = streamManager.isStreamingInSession(current);
     if (!isStreaming) {
@@ -3563,6 +3744,7 @@ function setupEventListeners() {
 
   document.addEventListener("click", (event) => {
     const copyBtn = event.target.closest(".copy-code-btn");
+    
     if (copyBtn) {
       const block = copyBtn.closest(".code-block-container");
       const codeEl = block?.querySelector("pre code");

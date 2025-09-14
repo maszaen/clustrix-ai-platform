@@ -142,9 +142,8 @@
           </button>
         </div>
       </header>
-      
+
       <div class="chat-log-container">
-        <!-- Sample messages for demo -->
         <div id="chat-log">
           <div class="message ai">
             <div class="message-row">
@@ -194,24 +193,24 @@
             </div>
 
             <div class="row-between pad-l-sm">
-              <div class="row-gap">
+              <div class="row-gap w-50">
                 <span class="input-container-btn" style="cursor: pointer" title="Send message">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-icon lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                   <p>Upload File</p>
                 </span>
-                <span class="input-container-btn" style="cursor: pointer" title="Web search">
+                <span id="btn-web-search-welcome" class="input-container-btn" style="cursor: pointer" title="Web search">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe-icon lucide-globe"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
                   <p>Web Search</p>
                 </span>
-                <span class="input-container-btn" style="cursor: pointer">
+                <span id="btn-canvas-welcome" class="input-container-btn" style="cursor: pointer">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
                   <p>Canvas</p>
                 </span>
               </div>
               
-              <div class="row-gap">
-                <span class="input-container-btn" style="cursor: pointer">
-                  <p>Deepseek v3.1</p>
+              <div class="row-gap w-50">
+                <span id="btn-model-switch-welcome" class="input-container-btn" style="cursor: pointer">
+                  <p>Switch Model</p>
                   <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
                 </span>
                 <button id="send-central" class="send-button" title="Send message">
@@ -238,19 +237,19 @@
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus-icon lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                   <p>Upload File</p>
                 </span>
-                <span class="input-container-btn" style="cursor: pointer">
+                <span id="btn-web-search-chat" class="input-container-btn" style="cursor: pointer">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe-icon lucide-globe"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
                   <p>Web Search</p>
                 </span>
-                <span class="input-container-btn" style="cursor: pointer">
+                <span id="btn-canvas-chat" class="input-container-btn" style="cursor: pointer">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-pen-icon lucide-square-pen"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/></svg>
                   <p>Canvas</p>
                 </span>
               </div>
 
               <div class="row-gap">
-                <span class="input-container-btn" style="cursor: pointer">
-                  <p>Deepseek v3.1</p>
+                <span id="btn-model-switch-chat" class="input-container-btn" style="cursor: pointer">
+                  <p>Switch Model</p>
                   <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
                 </span>
                 <button id="send" class="send-button" title="Send message">
@@ -261,6 +260,16 @@
         </div>
       </div>
     </main>
+    <aside class="canvas-sidebar" id="canvas-sidebar">
+      <div class="canvas-sidebar-header">
+        <h3>Canvas</h3>
+        <button id="canvas-sidebar-close" class="icon-btn" title="Close Canvas">
+          <svg width="16" height="16" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div id="canvas-area" class="canvas-sidebar-content">
+        </div>
+    </aside>
   </div>
 
   <!-- Search API Modal -->
@@ -299,6 +308,14 @@
           <button id="cancel-search-api" class="primary-btn">Cancel</button>
           <button id="save-search-api" class="primary-btn">Save</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="quick-model-switch-modal" class="hidden">
+    <div class="modal-overlay"></div>
+    <div id="quick-model-switch-card" class="mini-modal-card" style="position: fixed; max-width: 400px; width: auto;">
+      <div class="modal-body" id="quick-model-switch-body" style="padding: 0; max-height: 400px; overflow-y: auto;">
       </div>
     </div>
   </div>

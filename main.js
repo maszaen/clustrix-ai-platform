@@ -576,8 +576,8 @@ function runStandardStreaming(event, payload) {
   };
   if (API_KEY) headers['Authorization'] = `Bearer ${API_KEY}`;
   if (provider === 'openrouter') {
-    headers['HTTP-Referer'] = 'https://zenai.local';
-    headers['X-Title'] = 'ZenAI Desktop';
+    headers['HTTP-Referer'] = 'https://clustrix.local';
+    headers['X-Title'] = 'Clustrix Desktop';
   }
 
   const options = {
@@ -776,8 +776,8 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
     ...extraHdr
   };
   if (provider === 'openrouter') {
-    headers['HTTP-Referer'] = headers['HTTP-Referer'] || 'https://zenai.local';
-    headers['X-Title'] = headers['X-Title'] || 'ZenAI Desktop';
+    headers['HTTP-Referer'] = headers['HTTP-Referer'] || 'https://clustrix.local';
+    headers['X-Title'] = headers['X-Title'] || 'Clustrix Desktop';
   }
 
   const resText = await new Promise((resolve, reject) => {
@@ -897,8 +897,8 @@ function invokeLLM_nonStream(messages, options) {
       'Content-Length': Buffer.byteLength(body)
     };
     if (provider === 'openrouter') {
-      headers['HTTP-Referer'] = 'https://zenai.local';
-      headers['X-Title'] = 'ZenAI Desktop';
+      headers['HTTP-Referer'] = 'https://clustrix.local';
+      headers['X-Title'] = 'Clustrix Desktop';
     }
 
     const req = https.request({ method: 'POST', hostname: u.hostname, path: u.pathname, protocol: u.protocol, headers }, (res) => {

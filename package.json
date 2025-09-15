@@ -1,8 +1,8 @@
 {
-  "name": "zenai",
+  "name": "clustrix",
   "version": "26.2.0",
   "private": true,
-  "description": "ZenAI - A smart AI chat assistant.",
+  "description": "Clustrix - A smart AI chat assistant.",
   "author": "Zaen",
   "main": "main.js",
   "type": "commonjs",
@@ -18,8 +18,8 @@
     "forge": {
       "packagerConfig": {
         "prune": false,
-        "name": "ZenAI",
-        "executableName": "zenai",
+        "name": "Clustrix",
+        "executableName": "clustrix",
         "icon": "public/images/favicon",
         "out": "out",
         "ignore": [
@@ -33,11 +33,11 @@
         {
           "name": "@electron-forge/maker-squirrel",
           "config": {
-            "name": "zenai",
+            "name": "clustrix",
             "authors": "Zaen",
-            "description": "ZenAI - A smart AI chat assistant.",
+            "description": "Clustrix - A smart AI chat assistant.",
             "noMsi": true,
-            "setupExe": "ZenAI-Setup.exe"
+            "setupExe": "Clustrix-Setup.exe"
           }
         }
       ],

@@ -56,6 +56,7 @@ body.light-theme {
   --primary: #0842a0; /* done: for accent like text */
   --primary-light: #D3E3FD; /* done: for session list */
   --primary-light-hover: #c5dafbff;
+  --accent: #1752afff;
   
   --hover-bg: #e4e8ed; /* done; for lists or button hover */
   --hover-bg-secondary: #dadee3ff;
@@ -115,6 +116,7 @@ body.dark-theme {
   --primary: #D3E3FD; /* done */
   --primary-light: #1e3a8a; /* done */
   --primary-light-hover: #28489fff;
+  --accent: #0e4baeff;
   
   --hover-bg: #323537; /* done */
   --hover-bg-secondary: #3d4043ff;
@@ -318,6 +320,14 @@ hr {
   min-width: 0;
 }
 
+.row-gap-0 {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+
 .row-gap {
   display: flex;
   flex-direction: row;
@@ -401,10 +411,27 @@ hr {
 
 .sidebar-header {
   padding: var(--spacing-md);
-  border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
-  flex-direction: row;
+  flex-direction: column;
+}
+
+#little-icon {
+  background: transparent;
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 0;
+  cursor: pointer;
+  color: var(--fg);
+  transition: var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: start;
+  min-width: 0;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  height: 40px;
+  border: none;
+  width: 100%;
 }
 
 .mobile-toggle-sidebar {
@@ -416,8 +443,10 @@ hr {
 
 .icon-btn {
   background: transparent;
-  border: 1px solid var(--border-input);
-  padding: var(--spacing-sm);
+  border: 1px solid transparent;
+  padding: var(--spacing-xs);
+  margin: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
   border-radius: var(--radius-md);
   cursor: pointer;
   color: var(--fg);
@@ -425,14 +454,13 @@ hr {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 40px;
-  width: 40px;
+  height: 30px;
+  width: 30px;
 }
 
 .icon-btn:hover {
   background: var(--hover-bg);
   border-color: var(--border-light);
-  transform: translateY(-1px);
 }
 
 .primary-btn {
@@ -484,24 +512,60 @@ hr {
   transform: translateY(0);
 }
 
+.circle-bg {
+  display: flex;
+  background: var(--accent);
+  border-radius: var(--radius-full);
+  align-items: center;
+  justify-content: center;
+  transition: all 0.5s;
+  -webkit-transition: all 0.3s;
+}
+
+.icon-btn2:hover .circle-bg {
+  background-color: #58a0cfff;
+  box-shadow: 0 0 20px #6fc5ff50;
+  transform: scale(1.1);
+}
+
+.circle-bg svg {
+  color: white;
+  transform: scale(0.75)
+}
+
+.icon-btn2:active .circle-bg {
+  background-color: #3488c1ff;
+  transition: all 0.25s;
+  -webkit-transition: all 0.25s;
+  box-shadow: none;
+  transform: scale(0.98);
+}
+
 .icon-btn2 {
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   background: transparent;
-  color: var(--fg);
-  border: 1px solid var(--border-input);
-  padding: var(--spacing-sm) var(--spacing-lg);
-  border-radius: var(--radius-md);
+  color: var(--fg-muted);
+  border: none;
+  padding: 0 var(--spacing-md) 0 9px;
+  border-radius: var(--radius-full);
   cursor: pointer;
   transition: var(--transition-fast);
   display: flex;
+  font-size: 14px;
+  min-width: 0;
   align-items: center;
-  justify-content: center;
-  gap: var(--spacing-sm);
-  height: 40px;
+  justify-content: start;
+  gap: var(--spacing-md);
+  height: 36px;
+  position: relative;
+  opacity: 1;
+  transition: all 0.3s ease;
 }
 
 .icon-btn2 span {
-  padding-top: 5px;
+  padding-top: 0px;
+  position: absolute;
+  left: 42px;
 }
 
 .icon-btn2:hover {
@@ -515,8 +579,8 @@ hr {
 }
 
 .symbols svg {
-  width: 20px;
-  height: 20px;
+  width: 21px;
+  height: 21px;
 }
 
 .font-btn:hover {
@@ -811,15 +875,16 @@ h3.date-separator {
   gap: var(--spacing-sm);
   background: transparent;
   border: none;
-  padding: var(--spacing-lg);
+  padding: var(--spacing-lg) 2px var(--spacing-lg) 24px;
   cursor: pointer;
-  color: var(--fg);
+  color: var(--fg-muted);
   transition: var(--transition-fast);
   font-size: 14px;
 }
 
 .settings-btn:hover {
   background: var(--hover-bg);
+  color: var(--fg);
 }
 
 /* Settings Menu */
@@ -1913,10 +1978,8 @@ textarea::-webkit-scrollbar {
 
 /* Collapsed Sidebar Styles */
 #app.sidebar-collapsed .sidebar-header {
-  padding: var(--spacing-md) var(--spacing-sm);
-  align-items: center;
+  align-items: start;
   flex-direction: column;
-  gap: var(--spacing-md);
 }
 
 .table-container {
@@ -3287,4 +3350,8 @@ figure:nth-child(3) {
   background: var(--primary-light);
   color: var(--primary);
   font-weight: bold;
+}
+
+.disappearing {
+  opacity: 1;
 }

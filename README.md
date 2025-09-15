@@ -1,4 +1,4 @@
-# ZenAI Desktop
+# Clustrix Desktop
 
 Aplikasi chat AI berbasis **Electron** dengan dukungan **multi-provider**, **streaming**, dan **Switch Model** yang fleksibel (OpenRouter, Groq, Gemini, Z AI, dan Custom). Fokus ke kecepatan, kemudahan debug, serta *power-user features* untuk main di ekosistem **free models**.
 

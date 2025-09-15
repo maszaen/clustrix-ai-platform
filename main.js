@@ -9,7 +9,6 @@ const mammoth = require('mammoth');
 const xlsx = require('./xlsx/xlsx');
 
 
-
 const logFile = path.join(app.getPath('userData'), 'app.log');
 
 if (!process.env || Object.keys(process.env).length === 0) {
@@ -192,33 +191,69 @@ protocol.registerSchemesAsPrivileged([{
   }
 }]);
 
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'pkg',
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    corsEnabled: true,
+    stream: true
+  }
+}]);
+
 function guessContentType(p) {
   const ext = path.extname(p).toLowerCase();
   switch (ext) {
     case '.js':
     case '.mjs':
-    case '.cjs':     return 'text/javascript; charset=utf-8';
-    case '.json':    return 'application/json; charset=utf-8';
-    case '.css':     return 'text/css; charset=utf-8';
-    case '.svg':     return 'image/svg+xml';
-    case '.map':     return 'application/json; charset=utf-8';
-    case '.woff':    return 'font/woff';
-    case '.woff2':   return 'font/woff2';
-    case '.ttf':     return 'font/ttf';
-    default:         return 'application/octet-stream';
+    case '.cjs': return 'text/javascript; charset=utf-8';
+    case '.css': return 'text/css; charset=utf-8';
+    case '.json': return 'application/json; charset=utf-8';
+    case '.svg': return 'image/svg+xml';
+    case '.map': return 'application/json; charset=utf-8';
+    case '.woff': return 'font/woff';
+    case '.woff2': return 'font/woff2';
+    case '.ttf': return 'font/ttf';
+    default: return 'application/octet-stream';
   }
 }
 
 function safeJoin(base, rel) {
   const candidate = path.normalize(path.join(base, rel));
-  if (!candidate.startsWith(base)) {
-    return null;
-  }
-  return candidate;
+  return candidate.startsWith(base) ? candidate : null;
 }
 
 app.whenReady().then(() => {
-  // === Modern handler ===
+  protocol.handle('pkg', async (req) => {
+    try {
+      console.log('[PKG] URL', req.url);
+      const raw = req.url.replace(/^pkg:\/*/i, '');
+      const rel = decodeURIComponent(raw.replace(/^\/+/, ''));
+      const base = path.join(__dirname, 'node_modules');
+
+      if (!rel || rel.includes('..')) return new Response('Forbidden', { status: 403 });
+
+      const abs = safeJoin(base, rel);
+      if (!abs) return new Response('Forbidden', { status: 403 });
+
+      const exists = await fsp.access(abs).then(() => true).catch(() => false);
+      if (!exists) {
+        console.warn('[PKG] 404', abs);
+        return new Response('Not found', { status: 404 });
+      }
+
+      const data = await fsp.readFile(abs);
+      return new Response(data, {
+        status: 200,
+        headers: { 'Content-Type': guessContentType(abs), 'Cache-Control': 'no-cache' }
+      });
+    } catch (e) {
+      console.error('[PKG] 500', e);
+      return new Response('Internal error', { status: 500 });
+    }
+  });
+
   protocol.handle('mjx', async (req) => {
     try {
       console.log('[MJX] URL', req.url);
@@ -269,18 +304,16 @@ app.whenReady().then(() => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': [
-          [
-            "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' mjx:",
-            "connect-src 'self' mjx: blob:",
-            "worker-src 'self' blob:",
-            "frame-src 'self'",
-            "font-src 'self' data: mjx:",
-            "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' data:"
-          ].join('; ')
-        ]
+        'Content-Security-Policy': [[
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' mjx: pkg:",
+          "style-src 'self' 'unsafe-inline' pkg:",
+          "font-src 'self' data: mjx: pkg:",
+          "img-src 'self' data:",
+          "connect-src 'self' mjx: blob: pkg:",
+          "worker-src 'self' blob:",
+          "frame-src 'self'"
+        ].join('; ')]
       }
     });
   });

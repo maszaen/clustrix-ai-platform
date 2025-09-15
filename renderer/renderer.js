@@ -1704,29 +1704,20 @@ function renderSessions() {
   sessions.sort((a, b) => {
     const da = new Date(a?.last_updated || a?.created_at || 0).getTime();
     const db = new Date(b?.last_updated || b?.created_at || 0).getTime();
-
-    if (isNaN(da)) da = 0;
-    if (isNaN(db)) db = 0;
-
     return db - da;
   });
 
   if (filterValue) {
     sessions = sessions.filter((s) => {
-      if (s.name === null) return true;
       const nameMatch = (s.name || "").toLowerCase().includes(filterValue);
-      if (!isAdvancedSearch) return nameMatch;
-      const contentMatch = Array.isArray(s.messages)
-        ? s.messages.some((m) => (m?.[1] || "").toLowerCase().includes(filterValue))
-        : false;
+      if (!isAdvancedSearch || !s.messages) return nameMatch;
+      const contentMatch = s.messages.some((m) => (m?.[1] || "").toLowerCase().includes(filterValue));
       return nameMatch || contentMatch;
     });
-  } else {
-    sessions = sessions.filter((s) => s.name === null || s.name);
   }
 
   const total = sessions.length;
-  const pageSize = SESSIONS_PER_PAGE || 30;
+  const pageSize = SESSIONS_PER_PAGE;
   const limit = Math.min(loadedSessionCount > 0 ? loadedSessionCount : pageSize, total);
   const pageItems = sessions.slice(0, limit);
 
@@ -1738,39 +1729,37 @@ function renderSessions() {
     const currentGroup = getRelativeDateGroup(basisDate);
 
     if (currentGroup !== lastDateGroup) {
-      const sep = document.createElement("div");
+      const sep = document.createElement("h3");
       sep.className = "date-separator";
       sep.textContent = currentGroup;
       ul.appendChild(sep);
       lastDateGroup = currentGroup;
     }
 
-    if (s.name === null) {
-      const placeholder = document.createElement("li");
-      placeholder.className = s === current ? "active session-placeholder" : "session-placeholder";
-      placeholder.dataset.sessionId = s.id || "";
-      placeholder.innerHTML = `<span class="name">Untitled chat</span><div class="spinner"></div>`;
-      placeholder.addEventListener("click", () => setCurrent(s));
-      ul.appendChild(placeholder);
-      continue;
-    }
-
     const li = document.createElement("li");
     li.className = s === current ? "active" : "";
     li.dataset.sessionId = s.id || "";
+    
     li.innerHTML = `
-      <span class="name">${esc(s.name)}</span>
-      <div class="session-meta">
-        <span class="tokens"></span>
-        <span class="menu">
-          <button title="Delete Session">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          </button>
-        </span>
+      <div class="session-item-group">
+        <a href="#" class="session-link" onclick="return false;">
+          <span class="session-title-text">${esc(s.name || 'Untitled Chat')}</span>
+        </a>
+        <div class="session-actions">
+            <button class="session-options-btn" title="Delete Session">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+        </div>
       </div>
     `;
-    li.addEventListener("click", () => setCurrent(s));
-    const delBtn = li.querySelector("button");
+
+    li.addEventListener("click", (e) => {
+        if (!e.target.closest('.session-options-btn')) {
+            setCurrent(s);
+        }
+    });
+
+    const delBtn = li.querySelector(".session-options-btn");
     if (delBtn) {
       delBtn.addEventListener("click", (ev) => {
         ev.stopPropagation();
@@ -1783,31 +1772,42 @@ function renderSessions() {
 
   if (total > limit) {
     const moreLi = document.createElement("li");
-    const separator = document.createElement('hr');
     const remaining = Math.min(pageSize, total - limit);
+    
     moreLi.innerHTML = `
-      <span class="name">Show ${remaining} more</span>
-      <div class="session-meta">
-        <span class="tokens"></span>
-        <span class="menu">
-          <button title="Show more">
-          <svg viewBox="0 0 512 512" width="16" height="16" fill="currentColor" stroke="none" stroke-width="2">
-            <path d="M233.4 406.6c12.5 12.5 32.8 12.5 45.3 0l192-192c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L256 338.7 86.6 169.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l192 192z"></path>
-          </svg>
-          </button>
-        </span>
-      </div>
+        <a href="#" class="load-more-link" onclick="return false;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 30" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-chevron-down-icon lucide-circle-chevron-down"><circle cx="12" cy="12" r="10"/><path d="m16 10-4 4-4-4"/></svg>
+          <span>Show more sessions</span>
+        </a>
     `;
-    // moreLi.textContent = `Show ${remaining} more`;
-    separator.classList.add('hr-8px');
-    moreLi.classList.add("load-more");
-    moreLi.title = `${total} chat sessions total.`
+    moreLi.classList.add("load-more-item");
+    moreLi.title = `${total} chat sessions total.`;
     moreLi.addEventListener("click", () => {
       loadedSessionCount = limit + pageSize;
       renderSessions();
     });
-    ul.appendChild(separator);
+    ul.appendChild(document.createElement('hr')).className = 'hr-for-sidebar';
     ul.appendChild(moreLi);
+  }
+  updateSessionContainerPadding(); 
+}
+
+function updateSessionContainerPadding() {
+  const container = $('.sessions-container');
+  const clist = $('#session-list');
+
+  if (!container || !clist) return;
+
+  const hasScrollbar = container.scrollHeight > container.clientHeight;
+
+  if (hasScrollbar) {
+    clist.style.paddingRight = '6px';
+    container.style.paddingRight = '0px';
+    console.log("jadi 0px")
+  } else {
+    clist.style.paddingRight = '8px';
+    container.style.paddingRight = '6px';
+    console.log("jadi 6px")
   }
 }
 
@@ -3595,7 +3595,6 @@ function setupEventListeners() {
   });
 }
 
-
 function initializeApp() {
   log("APP", 2, "initializeApp", "Initializing application.");
 
@@ -3644,94 +3643,3 @@ function initializeApp() {
 }
 
 document.addEventListener("DOMContentLoaded", initializeApp);
-
-async function runSearchUIDebug() {
-  log("DEBUG", 2, "runSearchUIDebug", "--- MEMULAI SIMULASI UI WEB SEARCH ---");
-  
-  const aiMessageIndex = current ? current.messages.length : 0;
-  if (current) current.messages.push(["ai", ""]);
-  const aiNode = addMessage("ai", "", { final: false, index: aiMessageIndex });
-  aiNode.dataset.index = String(aiMessageIndex);
-  
-  ensureThinkingUI(aiNode);
-  const thinkEl = aiNode._thinkingEl;
-
-  const dummyData = {
-    decision: {
-      summary_key: "Nepal Protests 2025",
-      reasoning: "The user is asking about a serious protest in Nepal in 2025 and wants to know its causes. This refers to recent events that would require up-to-date information from the internet.",
-      search_queries: [
-        "protest Nepal 2025 causes",
-        "Nepal demonstration 2025 reasons",
-        "Nepal crisis 2025"
-      ]
-    },
-    urls: [
-      { link: "https://www.bbc.com/news/articles/example1" },
-      { link: "https://www.cnn.com/2025/09/09/asia/nepal-protests" },
-      { link: "https://www.hrw.org/news/2025/09/09/nepal-protest" }
-    ],
-    pageCount: 3
-  };
-
-
-  try {
-    const createTitleSpan = () => {
-      const span = document.createElement('span');
-      span.style.fontFamily = 'var(--font-display-italic)';
-      return span;
-    };
-    
-    log("DEBUG", 2, "runSearchUIDebug", "Adegan 1: Menampilkan status DECIDED");
-    thinkEl.toggle.querySelector('span').textContent = `Searching for "${dummyData.decision.summary_key}"...`;
-    
-    thinkEl.text.innerHTML = '';
-    if (!thinkEl.body.classList.contains('expanded')) thinkEl.toggle.click();
-    
-    const reasoningTitle = createTitleSpan();
-    thinkEl.text.appendChild(reasoningTitle);
-    await typewriterEffectChunked(reasoningTitle, "Reasoning:", 500, 1);
-
-    const reasoningContent = document.createElement('span');
-    thinkEl.text.appendChild(document.createElement('br'));
-    thinkEl.text.appendChild(reasoningContent);
-    await typewriterEffectChunked(reasoningContent, dummyData.decision.reasoning, 2500);
-
-    thinkEl.text.appendChild(document.createElement('br'));
-    thinkEl.text.appendChild(document.createElement('br'));
-
-    const keywordsTitle = createTitleSpan();
-    thinkEl.text.appendChild(keywordsTitle);
-    await typewriterEffectChunked(keywordsTitle, "Keywords:", 500, 1);
-
-    const keywordsContent = document.createElement('span');
-    thinkEl.text.appendChild(document.createElement('br'));
-    thinkEl.text.appendChild(keywordsContent);
-    await typewriterEffectChunked(keywordsContent, dummyData.decision.search_queries.join('\n'), 1500);
-
-    log("DEBUG", 2, "runSearchUIDebug", "Adegan 2: Menampilkan status FOUND_URLS");
-    thinkEl.text.appendChild(document.createElement('br'));
-    thinkEl.text.appendChild(document.createElement('br'));
-    
-    const urlsTitle = createTitleSpan();
-    thinkEl.text.appendChild(urlsTitle);
-    await typewriterEffectChunked(urlsTitle, "Found URLs:", 500, 1);
-
-    const urlsContent = document.createElement('span');
-    thinkEl.text.appendChild(document.createElement('br'));
-    thinkEl.text.appendChild(urlsContent);
-    await typewriterEffectChunked(urlsContent, dummyData.urls.map(r => r.link).join('\n'), 1500);
-
-    log("DEBUG", 2, "runSearchUIDebug", "Adegan 3: Menampilkan status PROCESSING");
-    thinkEl.toggle.querySelector('span').textContent = `Reading ${dummyData.pageCount} pages & preparing answer...`;
-    await new Promise(r => setTimeout(r, 3000));
-
-    log("DEBUG", 2, "runSearchUIDebug", "Adegan 4: Simulasi Selesai");
-    thinkEl.wrap.style.display = 'none';
-    const mainText = aiNode.querySelector('.message-text');
-    mainText.innerHTML = md("Ini adalah contoh hasil akhir setelah proses pencarian selesai.");
-
-  } catch (e) {
-    log("DEBUG", 4, "runSearchUIDebug", "Simulasi Gagal", { error: e.message });
-  }
-}

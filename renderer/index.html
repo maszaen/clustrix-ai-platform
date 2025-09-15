@@ -9,6 +9,10 @@
   <title>ZenAI</title>
   <link rel="icon" type="image/x-icon" href="../public/images/favicon.ico" />
   <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="pkg://perfect-scrollbar/css/perfect-scrollbar.css">
+<script defer src="pkg://perfect-scrollbar/dist/perfect-scrollbar.js"></script>
+
+
 </head>
 <body class="dark-theme scrollable">
   <div id="app">
@@ -478,7 +482,6 @@
     </div>
   </div>
 
-  <!-- Tiny modal untuk Add Provider / Add Model -->
   <div id="mini-modal" class="modal hidden">
     <div class="modal-overlay"></div>
     <div class="modal-card" style="max-width:480px;">
@@ -519,7 +522,7 @@
       },
       output: {
         font: 'mathjax-newcm',
-        fontPath: 'mjx://@mathjax/%%FONT%%-font'   // pakai skema + 2 slash
+        fontPath: 'mjx://@mathjax/%%FONT%%-font'
       },
       svg: { fontCache: 'global' },
       options: {
@@ -529,7 +532,7 @@
       startup: {
         ready: () => {
           console.log('MathJax is ready to go!');
-          console.log('MJX output =', MathJax.config.output); // VERIF: font + fontPath
+          console.log('MJX output =', MathJax.config.output); 
           MathJax.startup.defaultReady();
         }
       }

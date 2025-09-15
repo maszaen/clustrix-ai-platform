@@ -56,6 +56,7 @@
     "cheerio": "^1.1.2",
     "mammoth": "^1.10.0",
     "mathjax": "^4.0.0",
+    "perfect-scrollbar": "^1.5.6",
     "serpapi": "^2.2.1",
     "xlsx": "file:./xlsx"
   }

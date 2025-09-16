@@ -24,13 +24,7 @@ class TextareaCustomScrollbar {
     this._dragStartScrollTop = 0;
 
     // Apply maxHeight ke textarea
-    console.log(`TextareaCustomScrollbar init for ${this.ta.id || 'unnamed'}:`, {
-      defaultMaxHeight: this.maxHeight,
-      optsMaxHeight: opts.maxHeight
-    });
-    
     this.ta.style.maxHeight = this.maxHeight + 'px';
-    console.log(`Applied max-height: ${this.maxHeight}px for ${this.ta.id}`);
 
     // Mark the textarea as having a custom scrollbar
     this.ta.__hasCustomScrollbar = true;
@@ -84,19 +78,15 @@ class TextareaCustomScrollbar {
 
   // ===== core
   updateLayout(force = false) {
-    console.log('updateLayout called, force:', force);
     
-    // Re-query the textarea to ensure we have the current element
     const currentTextarea = this.shell.querySelector('textarea');
     if (!currentTextarea) {
       console.error('updateLayout: no textarea found in shell');
       return;
     }
     
-    // If the textarea reference has changed, update it
     if (this.ta !== currentTextarea) {
       console.warn(`Textarea reference changed! Old: ${this.ta?.id}, New: ${currentTextarea.id}`);
-      // Remove event listeners from old textarea if it exists
       if (this.ta) {
         this.ta.removeEventListener('input', this._onInput);
         this.ta.removeEventListener('scroll', this._onScroll);
@@ -104,42 +94,28 @@ class TextareaCustomScrollbar {
       
       this.ta = currentTextarea;
       
-      // Re-bind events to the new textarea
       this.ta.addEventListener('input', this._onInput);
       this.ta.addEventListener('scroll', this._onScroll);
       this.ta.style.maxHeight = this.maxHeight + 'px';
       this.ta.__hasCustomScrollbar = true;
     }
     
-    console.log('Textarea element:', this.ta.id, this.ta);
-    console.log('Before height change - scrollHeight:', this.ta.scrollHeight, 'value length:', this.ta.value.length);
-    console.log('Textarea value preview:', this.ta.value.substring(0, 50) + (this.ta.value.length > 50 ? '...' : ''));
-    
-    // Autoheight sampai maxHeight
     const prevH = this.ta.style.height;
     
-    // Store current computed height
     const computedStyle = window.getComputedStyle(this.ta);
-    console.log('Current computed height:', computedStyle.height, 'min-height:', computedStyle.minHeight);
     
     this.ta.style.height = 'auto';
-    console.log('After setting height auto - scrollHeight:', this.ta.scrollHeight);
     
-    const natural = this.ta.scrollHeight;     // tinggi konten asli
+    const natural = this.ta.scrollHeight;   
     const viewport = Math.min(natural, this.maxHeight);
 
     this.ta.style.height = viewport + 'px';
-    console.log(`Natural height: ${natural}, viewport: ${viewport}, maxHeight: ${this.maxHeight}`);
 
-    // Tampilkan track hanya jika konten > viewport
-    const needScroll = natural > viewport + 1; // toleransi
-    console.log('Need scroll:', needScroll, 'natural:', natural, 'viewport:', viewport);
+    const needScroll = natural > viewport + 1; 
     this.track.classList.toggle('is-hidden', !needScroll);
 
-    // Sync thumb size & pos
     this._syncThumb();
 
-    // Kalau height gak berubah dan bukan force, skip
     if (!force && prevH === this.ta.style.height) return;
   }
 
@@ -148,22 +124,18 @@ class TextareaCustomScrollbar {
     const viewport = this.ta.clientHeight;
     const trackH = this._trackHeight();
 
-    console.log(`_syncThumb: content=${content}, viewport=${viewport}, trackH=${trackH}`);
 
     if (content <= viewport + 1 || trackH <= 0) {
-      console.log('Hiding track - content too small or track height 0');
       this.track.classList.add('is-hidden');
       return;
     }
 
-    console.log('Showing track');
     this.track.classList.remove('is-hidden');
 
     const ratio = viewport / content;
     const thumbH = Math.max(this.minThumb, Math.floor(trackH * ratio));
     this._thumbH = thumbH;
     this.thumb.style.height = thumbH + 'px';
-    console.log(`Setting thumb height: ${thumbH}px`);
 
     const maxThumbTop = trackH - thumbH;
     const maxScrollTop = content - viewport;
@@ -174,7 +146,6 @@ class TextareaCustomScrollbar {
     this._maxScrollTop = maxScrollTop;
 
     this.thumb.style.transform = `translateY(${Math.round(tTop)}px)`;
-    console.log(`Setting thumb transform: translateY(${Math.round(tTop)}px)`);
   }
 
   _trackHeight() {
@@ -183,27 +154,19 @@ class TextareaCustomScrollbar {
       return rectTrack.height;
     }
     
-    // Fallback: calculate based on shell height
     const rectShell = this.shell.getBoundingClientRect();
     const taRect = this.ta.getBoundingClientRect();
-    
-    // Use the actual textarea height minus some padding
     return Math.max(0, taRect.height - 8); // 4px top + 4px bottom padding
   }
 
   // ===== events
   _onInput() {
-    // natural height bisa berubah → relayout & sync
-    console.log('_onInput triggered, calling updateLayout');
     this.updateLayout(true);
   }
 
   _onScroll() {
-    // textarea digeser (wheel/keys) → thumb ikut
-    // throttle via rAF
     cancelAnimationFrame(this._rafSync);
     this._rafSync = requestAnimationFrame(() => {
-      console.log('_onScroll triggered, calling _syncThumb');
       this._syncThumb();
     });
   }
@@ -254,10 +217,8 @@ class TextareaCustomScrollbar {
     const thumbMiddle = (thumbRect.top + thumbRect.bottom) / 2 - trackRect.top;
     
     if (clickY < thumbMiddle) {
-      // page up
       this.ta.scrollTop = Math.max(0, this.ta.scrollTop - page);
     } else {
-      // page down
       this.ta.scrollTop = Math.min(this._maxScrollTop || 0, this.ta.scrollTop + page);
     }
   }
@@ -269,15 +230,12 @@ class TextareaCustomScrollbar {
 
 
 (function initAllCustomTextareas() {
-  console.log("TA-SHELL EXECUTED");
   
   function initializeShells() {
     const shells = document.querySelectorAll('.ta-shell');
-    console.log(`Found ${shells.length} .ta-shell elements`);
     
     for (const sh of shells) {
       if (sh.__taScroll) {
-        console.log('Shell already initialized:', sh);
         continue;
       }
       
@@ -287,7 +245,6 @@ class TextareaCustomScrollbar {
           minThumb: 20,     // tinggi minimal thumb
           pageStep: 0.9     // klik track = ~90% viewport
         });
-        console.log('Successfully initialized shell:', sh);
       } catch (error) {
         console.error('Failed to initialize custom scrollbar for shell:', sh, error);
       }
@@ -313,7 +270,6 @@ class TextareaCustomScrollbar {
           if (!n.__taScroll) {
             try {
               n.__taScroll = new TextareaCustomScrollbar(n);
-              console.log('Dynamically initialized shell:', n);
             } catch (error) {
               console.error('Failed to initialize dynamic shell:', n, error);
             }
@@ -323,7 +279,6 @@ class TextareaCustomScrollbar {
           if (!el.__taScroll) {
             try {
               el.__taScroll = new TextareaCustomScrollbar(el);
-              console.log('Dynamically initialized nested shell:', el);
             } catch (error) {
               console.error('Failed to initialize dynamic nested shell:', el, error);
             }

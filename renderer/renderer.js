@@ -228,10 +228,32 @@ function renderUploadedFiles() {
   const container = $('#active-chat-file-upload-container');
   if (!container) return;
 
+  const currentFiles = current.uploadedFiles || [];
+  
+  // Store existing pills to preserve them
+  const existingPills = Array.from(container.querySelectorAll('.file-pill'));
+  const existingFileMap = new Map();
+  
+  existingPills.forEach(pill => {
+    const span = pill.querySelector('span');
+    if (span) {
+      existingFileMap.set(span.textContent, pill);
+    }
+  });
+
+  // Clear container
   container.innerHTML = '';
-  (current.uploadedFiles || []).forEach((file, index) => {
-    const pill = document.createElement('div');
-    pill.className = 'file-pill';
+
+  currentFiles.forEach((file, index) => {
+    let pill = existingFileMap.get(file.name);
+    
+    if (pill) {
+      pill.classList.add('no-animate');
+    } else {
+      pill = document.createElement('div');
+      pill.className = 'file-pill';
+    }
+    
     pill.innerHTML = `<span>${esc(file.name)}</span><button class="remove-file-btn" data-index="${index}">&times;</button>`;
     pill.querySelector('.remove-file-btn').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -239,6 +261,7 @@ function renderUploadedFiles() {
       renderUploadedFiles();
       save();
     });
+    
     container.appendChild(pill);
   });
 }
@@ -562,6 +585,10 @@ function ensureTokenFields(session) {
   if (typeof session.tokens_used !== "number") session.tokens_used = 0;
   if (!session.tokens_by_message || typeof session.tokens_by_message !== "object") {
     session.tokens_by_message = {};
+  }
+  // Ensure uploadedFiles array exists for file upload functionality
+  if (!Array.isArray(session.uploadedFiles)) {
+    session.uploadedFiles = [];
   }
 }
 
@@ -2024,6 +2051,12 @@ function setCurrent(s) {
     return;
   }
   current = s;
+  
+  // Ensure the session has all required fields
+  if (current) {
+    ensureTokenFields(current);
+  }
+  
   $(".chat-area").classList.remove("welcome-active");
   renderHistory();
   renderUploadedFiles();
@@ -2770,6 +2803,12 @@ async function createNewSession(initialMessages = []) {
 async function send() {
   const input = $("#msg");
   const originalText = (input.value || "").trim();
+  
+  // Ensure current session has uploadedFiles array
+  if (current && !Array.isArray(current.uploadedFiles)) {
+    current.uploadedFiles = [];
+  }
+  
   if (!current || (!originalText && current.uploadedFiles.length === 0) || streamManager.isStreamingInSession(current)) return;
 
   const filesToAttach = [...current.uploadedFiles];
@@ -3158,6 +3197,10 @@ function setupEventListeners() {
           }
           if (current) {
             log("RENDERER", 1, "upload:click", "Adding files to active session.");
+            // Ensure uploadedFiles array exists
+            if (!Array.isArray(current.uploadedFiles)) {
+              current.uploadedFiles = [];
+            }
             current.uploadedFiles.push(...fileContents.filter(f => !f.error));
             renderUploadedFiles();
           } else {

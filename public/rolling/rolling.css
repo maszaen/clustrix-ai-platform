@@ -7,9 +7,9 @@
   display: block;
   width: 100%;
   min-height: 40px;
-  max-height: 350px;          /* Match the JavaScript maxHeight setting */
+  max-height: 350px;        
   padding: 10px 12px;
-  padding-right: 20px;         /* ruang buat custom thumb agar teks gak ketutup */
+  padding-right: 20px;      
   border-radius: 10px;
   background: var(--input-bg, #1f1f24);
   color: var(--input-fg, #fff);
@@ -17,19 +17,19 @@
   line-height: 1.4;
   font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   outline: none;
-  resize: none;                /* kita handle resize sendiri */
-  overflow-y: auto;            /* aktif, tapi disembunyikan visualnya */
+  resize: none;                
+  overflow-y: auto;            
   overflow-x: hidden;
   box-sizing: border-box;
 
-  scrollbar-width: none;               /* Firefox */
-  -ms-overflow-style: none;            /* IE/Edge Legacy */
+  scrollbar-width: none;             
+  -ms-overflow-style: none;          
 }
 .ta-shell > textarea::-webkit-scrollbar { 
   width: 0; 
   height: 0; 
   background: transparent; 
-} /* WebKit */
+}
 
 .ta-scrollbar {
   position: absolute;
@@ -64,43 +64,36 @@
   background: var(--scrollbar-thumb-active, rgba(255,255,255,.75)); 
 }
 
-/* Saat konten belum ngelebihin viewport, sembunyikan track */
 .ta-scrollbar.is-hidden { 
   display: none; 
 }
 
-/* Ensure the ta-shell respects existing input container styles */
 .input-container .ta-shell {
   width: 100%;
 }
 
 .input-container .ta-shell > textarea {
-  /* Inherit existing input styles but override specific properties */
   background: inherit;
   color: inherit;
   border: inherit;
   border-radius: inherit;
   font: inherit;
   
-  /* Override conflicting styles from main CSS */
   -ms-overflow-style: auto !important;
   scrollbar-width: auto !important;
 }
 
-/* Override the main CSS scrollbar hiding for ta-shell textareas */
 .ta-shell > textarea::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
   background: transparent !important;
 }
 
-/* Ensure custom scrollbar positioning works correctly */
 .input-container .ta-shell {
   position: relative;
 }
 
-/* Override the max-height from main CSS for custom scrollbar textareas */
 .ta-shell > #msg,
 .ta-shell > #msg-central {
-  max-height: 350px !important; /* Match the rolling.js maxHeight */
+  max-height: 350px !important;
 }

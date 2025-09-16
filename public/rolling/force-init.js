@@ -119,7 +119,6 @@ window.testTextareaExpansion = function(textareaId) {
   // Long test text
   const longText = `This is a very long text that should trigger the scrollbar. `.repeat(100);
   
-  // Set the content FIRST
   console.log('Setting textarea content...');
   console.log('Target textarea:', textarea.id, textarea);
   console.log('Scrollbar textarea reference:', customScrollbar.ta.id, customScrollbar.ta);

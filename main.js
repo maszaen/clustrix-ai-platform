@@ -224,10 +224,13 @@ function safeJoin(base, rel) {
   return candidate.startsWith(base) ? candidate : null;
 }
 
+app.commandLine.appendSwitch('enable-features',
+  'OverlayScrollbar,OverlayScrollbarFlashAfterAnyScrollUpdate,OverlayScrollbarFlashWhenMouseEnter');
+console.log('[FLAGS]', app.commandLine.getSwitchValue('enable-features'));
+
 app.whenReady().then(() => {
   protocol.handle('pkg', async (req) => {
     try {
-      console.log('[PKG] URL', req.url);
       const raw = req.url.replace(/^pkg:\/*/i, '');
       const rel = decodeURIComponent(raw.replace(/^\/+/, ''));
       const base = path.join(__dirname, 'node_modules');
@@ -256,8 +259,6 @@ app.whenReady().then(() => {
 
   protocol.handle('mjx', async (req) => {
     try {
-      console.log('[MJX] URL', req.url);
-
       const raw = req.url.replace(/^mjx:\/*/i, '');
       let rel = decodeURIComponent(raw.replace(/^\/+/, ''));
 
@@ -280,8 +281,6 @@ app.whenReady().then(() => {
         if (!safe) return new Response('Forbidden', { status: 403 });
         absolutePath = safe;
       }
-
-      console.log('[MJX] ->', absolutePath);
 
       const exists = await fsp.access(absolutePath).then(() => true).catch(() => false);
       if (!exists) {
@@ -320,6 +319,8 @@ app.whenReady().then(() => {
 
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  const appVersion = app.getVersion();
+  console.log(`Application Version (from package.json): ${appVersion}`);
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 

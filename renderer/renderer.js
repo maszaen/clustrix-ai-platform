@@ -2820,7 +2820,19 @@ async function sendFromWelcome() {
   welcomeScreenStagedFiles = [];
   renderWelcomeScreenFiles();
   
-  if (input) { input.value = ""; input.style.height = "auto"; }
+  if (input) { 
+    input.value = ""; 
+    
+    // Check if using custom scrollbar
+    const shell = input.closest('.ta-shell');
+    if (shell && shell.__taScroll) {
+      // Let custom scrollbar handle the height reset
+      shell.__taScroll.updateLayout(true);
+    } else {
+      // Fallback for regular textareas
+      input.style.height = "auto"; 
+    }
+  }
 
   const config = getActiveChatConfig();
   const modelInfo = { provider: config.provider, model: config.model, label: getModelMeta(state.settings.models, config.provider, config.model).label || config.model };
@@ -3043,6 +3055,14 @@ function setupMobileSidebar() {
 function setupTextareaResize() {
   const msgInput = $("#msg");
   msgInput.addEventListener("input", function () {
+    // Check if this textarea is using custom scrollbar
+    const shell = this.closest('.ta-shell');
+    if (shell && shell.__taScroll) {
+      // Let the custom scrollbar handle the resizing
+      return;
+    }
+    
+    // Fallback to original behavior for textareas without custom scrollbar
     this.style.height = "auto";
     this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
   });
@@ -3051,6 +3071,14 @@ function setupTextareaResize() {
 function setupTextareaCentralResize() {
   const msgCentral = $("#msg-central");
   msgCentral.addEventListener("input", function () {
+    // Check if this textarea is using custom scrollbar
+    const shell = this.closest('.ta-shell');
+    if (shell && shell.__taScroll) {
+      // Let the custom scrollbar handle the resizing
+      return;
+    }
+    
+    // Fallback to original behavior for textareas without custom scrollbar
     this.style.height = "auto";
     this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
   });

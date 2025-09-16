@@ -9,9 +9,8 @@
   <title>Clustrix</title>
   <link rel="icon" type="image/x-icon" href="../public/images/favicon.ico" />
   <link rel="stylesheet" href="./style.css" />
-  <link rel="stylesheet" href="pkg://perfect-scrollbar/css/perfect-scrollbar.css">
-<script defer src="pkg://perfect-scrollbar/dist/perfect-scrollbar.js"></script>
-
+  <link rel="stylesheet" href="pkg://perfect-scrollbar/css/perfect-scrollbar.css">  
+  <link rel="stylesheet" href="../public/rolling/rolling.css">
 
 </head>
 <body class="dark-theme scrollable">
@@ -203,7 +202,12 @@
           <div class="input-container-parent">
             <span id="welcome-file-upload-container" class="file-upload-container"></span>
             <div class="input-container" id="central-input-container">
-              <textarea id="msg-central" placeholder="Ask anything" rows="1"></textarea>
+              <div class="ta-shell">
+                <textarea id="msg-central" rows="1" placeholder="Ask anything" rows="1"></textarea>
+                <div class="ta-scrollbar" aria-hidden="true">
+                  <div class="ta-thumb"></div>
+                </div>
+              </div>
               
             </div>
 
@@ -239,8 +243,12 @@
         <div class="input-container-parent">
           <div id="active-chat-file-upload-container" class="file-upload-container"></div>
           <div class="input-container">
-            <textarea id="msg" placeholder="Ask anything" rows="1"></textarea>
-            
+            <div class="ta-shell">
+              <textarea id="msg" placeholder="Ask anything" rows="1"></textarea>
+              <div class="ta-scrollbar" aria-hidden="true">
+                <div class="ta-thumb"></div>
+              </div>
+            </div>
           </div>
             <div class="row-between pad-l-sm">
               <div class="row-gap">
@@ -551,6 +559,9 @@
   <script defer id="MathJax-script" src="mjx://startup.js"></script>
   <script src="../public/prism/prism.js"></script>
   <script src="data.js"></script>
+  <script src="../public/rolling/rolling.js"></script>
+  <script src="../public/rolling/debug.js"></script>
+  <script src="../public/rolling/force-init.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

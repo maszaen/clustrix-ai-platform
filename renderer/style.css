@@ -385,6 +385,8 @@ hr {
 
 #app.sidebar-collapsed .sidebar {
   width: 64px;
+  border-right: 1px solid var(--border-light);
+  background: var(--bg);
 }
 
 #app.sidebar-collapsed .chat-area {
@@ -407,6 +409,7 @@ hr {
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: width;
   transform: translateZ(0);
+  transition: all 0.3s ease-out;
 }
 
 .sidebar-header {

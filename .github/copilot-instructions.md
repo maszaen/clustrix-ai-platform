@@ -157,9 +157,10 @@ testTextareaExpansion('msg-central'); // from force-init.js
 ```
 
 ### Log System
+
 - Main process logs to `${userData}/app.log`
 - Renderer logs via `log(context, level, func, message, details)`
-- Debug helpers in `public/rolling/debug.js`
+
 
 ## Common Gotchas
 

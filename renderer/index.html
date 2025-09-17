@@ -10,6 +10,10 @@
   <link rel="icon" type="image/x-icon" href="../public/images/favicon.ico" />
   <link rel="stylesheet" href="./style.css" />
   <link rel="stylesheet" href="../public/rolling/rolling.css">
+  
+  <!-- Item lists debug analysis -->
+  <link rel="stylesheet" href="../debug-menu.css">
+  <script src="../debug-menu.js"></script>
 
 </head>
 <body class="dark-theme scrollable">
@@ -30,7 +34,7 @@
           </div>
           <span>New chat</span>
         </button>
-        <button id="trigger-delete-session" class="icon-btn2 symbols disappearing">
+        <button id="chats-btn" class="icon-btn2 symbols disappearing">
           <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 group" aria-hidden="true"><path class="group-hover:-translate-x-[0.5px] transition group-active:translate-x-0" d="M8.99962 2C12.3133 2 14.9996 4.68629 14.9996 8C14.9996 11.3137 12.3133 14 8.99962 14H2.49962C2.30105 13.9998 2.12113 13.8821 2.04161 13.7002C1.96224 13.5181 1.99835 13.3058 2.1334 13.1602L3.93516 11.2178C3.34317 10.2878 2.99962 9.18343 2.99962 8C2.99962 4.68643 5.68609 2.00022 8.99962 2ZM8.99962 3C6.23838 3.00022 3.99961 5.23871 3.99961 8C3.99961 9.11212 4.36265 10.1386 4.97618 10.9688C5.11884 11.1621 5.1035 11.4293 4.94004 11.6055L3.64512 13H8.99962C11.761 13 13.9996 10.7614 13.9996 8C13.9996 5.23858 11.761 3 8.99962 3Z"></path><path class="group-hover:translate-x-[0.5px] transition group-active:translate-x-0" d="M16.5445 9.72754C16.4182 9.53266 16.1678 9.44648 15.943 9.53418C15.7183 9.62215 15.5932 9.85502 15.6324 10.084L15.7369 10.3955C15.9073 10.8986 16.0006 11.438 16.0006 12C16.0006 13.1123 15.6376 14.1386 15.024 14.9687C14.8811 15.1621 14.8956 15.4302 15.0592 15.6064L16.3531 17H11.0006C9.54519 17 8.23527 16.3782 7.32091 15.3848L7.07091 15.1103C6.88996 14.9645 6.62535 14.9606 6.43907 15.1143C6.25267 15.2682 6.20668 15.529 6.31603 15.7344L6.58458 16.0625C7.68048 17.253 9.25377 18 11.0006 18H17.5006C17.6991 17.9998 17.8791 17.8822 17.9586 17.7002C18.038 17.5181 18.0018 17.3058 17.8668 17.1602L16.0631 15.2178C16.6554 14.2876 17.0006 13.1837 17.0006 12C17.0006 11.3271 16.8891 10.6792 16.6842 10.0742L16.5445 9.72754Z"></path></svg>
           <span>Chats</span>
         </button>
@@ -40,23 +44,6 @@
         </button>
       </div>
 
-      
-      <div class="search-container">
-        <div class="search-box">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="11" cy="11" r="8"></circle>
-            <path d="m21 21-4.35-4.35"></path>
-          </svg>
-          <input id="search" placeholder="Search chats" />
-        </div>
-        <div class="advanced-search-toggle">
-          <label class="theme-switch small">
-            <input type="checkbox" id="advanced-search-switch">
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
-      
       <div class="sessions-container">
         <ul id="session-list"></ul>
       </div>
@@ -234,6 +221,72 @@
             </div>
           </div>
 
+        </div>
+      </div>
+
+      <!-- Chats Page -->
+      <div id="chats-page" class="chats-page">
+        <div class="chats-header">
+          <h2>All Chats</h2>
+          <button id="back-to-chat" class="icon-btn">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3l-5 5 5 5M3 8h14"/></svg>
+            Back
+          </button>
+        </div>
+        <div class="chats-search-container">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+            <input id="chats-search" placeholder="Search in titles and content..." />
+          </div>
+        </div>
+
+        <div id="chats-controls-container" class="chats-controls-container">
+          <div id="chats-info-bar" class="chats-info-bar">
+            <span id="chats-total-count">...</span>
+            <button id="chats-select-btn" class="link-btn">Select</button>
+          </div>
+
+          <div id="chats-select-action-bar" class="chats-select-action-bar" style="display: none;">
+            <div class="selection-group">
+              <input type="checkbox" id="chats-select-all-checkbox" />
+              <label for="chats-select-all-checkbox" id="chats-selected-count">0 selected</label>
+            </div>
+            <div class="action-group">
+              <button id="chats-delete-selected-btn" class="icon-btn danger" title="Delete Selected" disabled>
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M6 2l-2 2h12l-2-2H6zM4 6v10c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6H4zm2 2h8v8H6V8z"/></svg>
+              </button>
+              <button id="chats-select-close-btn" class="icon-btn" title="Cancel Selection">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M15.1465 4.14642C15.3418 3.95121 15.6583 3.95118 15.8536 4.14642C16.0487 4.34168 16.0488 4.65822 15.8536 4.85346L10.7071 9.99997L15.8536 15.1465C16.0487 15.3417 16.0488 15.6583 15.8536 15.8535C15.6828 16.0244 15.4187 16.0461 15.2247 15.918L15.1465 15.8535L10 10.707L4.85352 15.8535C4.65827 16.0486 4.34168 16.0486 4.14648 15.8535C3.95129 15.6583 3.95142 15.3418 4.14648 15.1465L9.293 9.99997L4.14648 4.85346C3.95142 4.65818 3.95129 4.34162 4.14648 4.14642C4.34168 3.95128 4.65825 3.95138 4.85352 4.14642L10 9.29294L15.1465 4.14642Z"></path></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div id="chats-list" class="chats-list"></div>
+      </div>
+
+      <!-- Artifacts Page -->
+      <div id="artifacts-page" class="artifacts-page">
+        <div class="artifacts-header">
+          <h2>Code Artifacts</h2>
+          <button id="back-to-chat-from-artifacts" class="icon-btn">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M8 3l-5 5 5 5M3 8h14"/>
+            </svg>
+            Back
+          </button>
+        </div>
+        <div class="chats-search-container">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input id="artifacts-search" placeholder="Search artifacts..." />
+          </div>
+        </div>
+        <div id="artifacts-list" class="artifacts-list">
+          <!-- Artifact items will be populated here -->
         </div>
       </div>
       

@@ -26,6 +26,130 @@ const THINKING_TIMER = new WeakMap();
 const SESSIONS_PER_PAGE = 30;
 const DEBUG_MODE = typeof window.api === "undefined";
 const LOGGING = true;
+
+// Page State Management
+let currentPageState = 'welcome'; // Default page state
+
+function savePageState(pageState, sessionId = null) {
+  try {
+    // Save to localStorage for immediate persistence
+    localStorage.setItem('clustrix-current-page', pageState);
+    
+    // Save session ID if provided (for chat state)
+    if (sessionId) {
+      localStorage.setItem('clustrix-current-session', sessionId);
+    } else if (pageState !== 'chat') {
+      // Clear session ID if not in chat state
+      localStorage.removeItem('clustrix-current-session');
+    }
+    
+    // Also save to the main state object for database persistence
+    if (!state.settings) state.settings = {};
+    state.settings.currentPage = pageState;
+    if (sessionId) {
+      state.settings.currentSession = sessionId;
+    } else if (pageState !== 'chat') {
+      delete state.settings.currentSession;
+    }
+    
+    // Save to database via save() function
+    save();
+    
+    log("PageState", 0, "savePageState", `Page state saved: ${pageState}${sessionId ? ` (session: ${sessionId})` : ''}`);
+  } catch (error) {
+    log("PageState", 2, "savePageState", "Failed to save page state", { error: error.message });
+  }
+}
+
+function loadPageState() {
+  try {
+    // Use preloaded settings if available for instant access
+    const preloadedSettings = window.__PRELOADED_SETTINGS__;
+    if (preloadedSettings && preloadedSettings.currentPage) {
+      currentPageState = preloadedSettings.currentPage;
+      log("PageState", 0, "loadPageState", `Page state loaded from preload: ${preloadedSettings.currentPage}`);
+      return preloadedSettings.currentPage;
+    }
+    
+    // Fallback to localStorage and database
+    let savedPage = localStorage.getItem('clustrix-current-page');
+    
+    if (!savedPage && state.settings && state.settings.currentPage) {
+      savedPage = state.settings.currentPage;
+    }
+    
+    // Validate that the saved page is one of the valid states
+    const validPages = ['welcome', 'chats', 'artifacts', 'chat'];
+    if (savedPage && validPages.includes(savedPage)) {
+      currentPageState = savedPage;
+      log("PageState", 0, "loadPageState", `Page state loaded: ${savedPage}`);
+      return savedPage;
+    } else {
+      // Default to welcome if no valid saved state
+      currentPageState = 'welcome';
+      log("PageState", 0, "loadPageState", "No valid saved page state, defaulting to welcome");
+      return 'welcome';
+    }
+  } catch (error) {
+    log("PageState", 2, "loadPageState", "Failed to load page state", { error: error.message });
+    currentPageState = 'welcome';
+    return 'welcome';
+  }
+}
+
+function restoreLastActivePage() {
+  const lastPage = loadPageState();
+  
+  log("PageState", 0, "restoreLastActivePage", `Restoring page: ${lastPage}`);
+  
+  // Navigate to the last active page
+  switch (lastPage) {
+    case 'chats':
+      showChatsPage();
+      break;
+    case 'artifacts':
+      showArtifactsPage();
+      break;
+    case 'chat':
+      // Try to restore the specific last active chat session
+      try {
+        const preloadedSettings = window.__PRELOADED_SETTINGS__;
+        const savedSessionId = preloadedSettings?.currentSession || 
+                              localStorage.getItem('clustrix-current-session') || 
+                              (state.settings && state.settings.currentSession);
+        
+        let sessionToRestore = null;
+        
+        // Try to find the specific session that was saved
+        if (savedSessionId && state.sessions && state.sessions.length > 0) {
+          sessionToRestore = state.sessions.find(s => s.id === savedSessionId);
+        }
+        
+        // If specific session not found, use the most recent session
+        if (!sessionToRestore && state.sessions && state.sessions.length > 0) {
+          sessionToRestore = state.sessions[0]; // Most recent session (sorted by date)
+        }
+        
+        if (sessionToRestore) {
+          setCurrent(sessionToRestore);
+          restoreNormalView();
+          log("PageState", 0, "restoreLastActivePage", `Restored chat session: ${sessionToRestore.name || 'Untitled'} (${sessionToRestore.id})`);
+        } else {
+          // No sessions available, fall back to welcome
+          showWelcomeScreen();
+          log("PageState", 0, "restoreLastActivePage", "No sessions available, falling back to welcome");
+        }
+      } catch (error) {
+        log("PageState", 2, "restoreLastActivePage", "Error restoring chat session", { error: error.message });
+        showWelcomeScreen();
+      }
+      break;
+    case 'welcome':
+    default:
+      showWelcomeScreen();
+      break;
+  }
+}
 const streamManager = {
   activeStreams: {},
   byKey: {},
@@ -584,47 +708,86 @@ const saveDraftDebounced = (() => {
 })();
 
 // Artifacts management functions
-function saveCodeArtifact(title, code, language) {
+function saveCodeArtifact(title, code, language, sessionId = null, messageIndex = null) {
   const artifact = {
     id: Date.now().toString(),
     title: title || `Untitled ${language || 'Code'}`,
     code: code,
     language: language || 'text',
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
+    // Add origin tracking for "View in Chat" feature
+    sessionId: sessionId,
+    messageIndex: messageIndex
   };
   
   codeArtifacts.unshift(artifact); // Add to beginning for latest first
   
-  // Save to localStorage
-  try {
-    localStorage.setItem('code-artifacts', JSON.stringify(codeArtifacts));
-  } catch (e) {
-    console.warn('Failed to save artifact:', e);
-  }
+  // Save to file-based storage via IPC
+  saveArtifactsToFile();
   
   return artifact;
 }
 
-function loadAllArtifacts() {
+async function loadAllArtifacts() {
   try {
+    // Try to load from file-based storage first
+    if (window.api && window.api.artifacts) {
+      const fileArtifacts = await window.api.artifacts.load();
+      if (fileArtifacts && fileArtifacts.length > 0) {
+        codeArtifacts = fileArtifacts;
+        return codeArtifacts;
+      }
+    }
+    
+    // Fallback: migrate from localStorage if exists
     const stored = localStorage.getItem('code-artifacts');
     if (stored) {
-      codeArtifacts = JSON.parse(stored);
+      const legacyArtifacts = JSON.parse(stored);
+      if (legacyArtifacts.length > 0) {
+        // Migrate to file-based storage
+        codeArtifacts = legacyArtifacts.map(artifact => ({
+          ...artifact,
+          sessionId: null, // Legacy artifacts don't have origin tracking
+          messageIndex: null
+        }));
+        
+        // Save to new file-based system
+        await saveArtifactsToFile();
+        
+        // Clear localStorage after successful migration
+        localStorage.removeItem('code-artifacts');
+        console.log('✅ Migrated artifacts from localStorage to file-based storage');
+        return codeArtifacts;
+      }
     }
+    
+    // Return empty array if no artifacts found
+    codeArtifacts = [];
+    return codeArtifacts;
   } catch (e) {
     console.warn('Failed to load artifacts:', e);
     codeArtifacts = [];
+    return codeArtifacts;
+  }
+}
+
+async function saveArtifactsToFile() {
+  try {
+    if (window.api && window.api.artifacts) {
+      await window.api.artifacts.save(codeArtifacts);
+    } else {
+      // Fallback to localStorage if API not available
+      localStorage.setItem('code-artifacts', JSON.stringify(codeArtifacts));
+    }
+  } catch (e) {
+    console.warn('Failed to save artifacts:', e);
   }
 }
 
 function deleteArtifact(artifactId) {
   codeArtifacts = codeArtifacts.filter(a => a.id !== artifactId);
-  try {
-    localStorage.setItem('code-artifacts', JSON.stringify(codeArtifacts));
-  } catch (e) {
-    console.warn('Failed to delete artifact:', e);
-  }
+  saveArtifactsToFile();
 }
 
 function finalizeThinkingUI(aiNode, duration) {
@@ -1191,6 +1354,9 @@ function showWelcomeScreen() {
   document.getElementById('chats-btn')?.classList.remove('active');
   document.getElementById('artifact-btn')?.classList.remove('active');
   
+  // Save page state
+  savePageState('welcome');
+  
   $("#chat-title").textContent = "New Chat";
   $("#chat-title").title = "New Chat, ask anything";
   $("#clustrix-logo").innerHTML = `
@@ -1231,17 +1397,19 @@ function showWelcomeScreen() {
 
 function showChatsPage() {
   current = null;
-  // Reset state saat halaman dibuka
   isChatsSelectMode = false;
   selectedChatIds.clear();
 
-  // Update UI state - remove other active states and add chats-active
   $(".chat-area").classList.remove("welcome-active");
   $(".chat-area").classList.remove("artifacts-active");
   $(".chat-area").classList.add("chats-active");
   document.getElementById('chats-btn')?.classList.add('active');
   document.getElementById('artifact-btn')?.classList.remove('active');
-  $("#chat-title").textContent = "All Chats";
+  
+  // Save page state
+  savePageState('chats');
+  
+  $("#chat-title").textContent = "Your Chat History";
   $("#chat-title").title = "Browse all your conversations";
   $("#clustrix-logo").innerHTML = '';
   const welcomeScreen = document.getElementById('welcome-screen');
@@ -1353,15 +1521,14 @@ function renderChatsPage() {
           <h3 class="chat-item-title">${escapeHtml(session.name || 'Untitled Chat')}</h3>
           <span class="chat-item-date">${formattedDate}</span>
         </div>
-        <p class="chat-item-preview">${escapeHtml(lastMessagePreview)}</p>
       </div>
       <div class="chat-item-actions">
         <div class="chat-menu-container">
           <button class="chat-menu-btn" data-session-id="${session.id}" title="Chat options">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="12" cy="5" r="2"/>
+              <circle cx="5" cy="12" r="2"/>
               <circle cx="12" cy="12" r="2"/>
-              <circle cx="12" cy="19" r="2"/>
+              <circle cx="19" cy="12" r="2"/>
             </svg>
           </button>
           <div class="chat-menu-dropdown" data-session-id="${session.id}">
@@ -1369,7 +1536,7 @@ function renderChatsPage() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
               </svg>
-              <span>${session.isFavorite ? 'Unfavorite' : 'Favorite'}</span>
+              <span>${session.isFavorite ? 'Unstar' : 'Star'}</span>
             </div>
             <div class="chat-menu-item" data-action="rename">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -1396,19 +1563,17 @@ function renderChatsPage() {
     showMoreDiv.className = 'show-more-container';
     showMoreDiv.innerHTML = `
       <button id="chats-show-more" class="show-more-btn">
-        Show More (${total - limit} remaining)
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-chevron-down-icon lucide-circle-chevron-down"><circle cx="12" cy="12" r="10"/><path d="m16 10-4 4-4-4"/></svg>
+        Show more sessions
       </button>
     `;
     chatsList.appendChild(showMoreDiv);
     
-    // Add event listener for show more
     document.getElementById('chats-show-more').addEventListener('click', () => {
       loadedChatPageCount = limit + pageSize;
       renderChatsPage();
     });
   }
-  
-  console.log('DEBUG: renderChatsPage completed, items rendered:', pageItems.length);
 }
 
 // Toggle favorite status
@@ -1581,9 +1746,9 @@ function createSessionListItem(s) {
           <div class="chat-menu-container">
             <button class="chat-menu-btn session-options-btn" data-session-id="${s.id}" title="Chat options">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="5" r="2"/>
+                <circle cx="5" cy="12" r="2"/>
                 <circle cx="12" cy="12" r="2"/>
-                <circle cx="12" cy="19" r="2"/>
+                <circle cx="19" cy="12" r="2"/>
               </svg>
             </button>
             <div class="chat-menu-dropdown" data-session-id="${s.id}">
@@ -1591,7 +1756,7 @@ function createSessionListItem(s) {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                 </svg>
-                <span>${s.isFavorite ? 'Unfavorite' : 'Favorite'}</span>
+                <span>${s.isFavorite ? 'Unstar' : 'Star'}</span>
               </div>
               <div class="chat-menu-item" data-action="rename">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -1992,10 +2157,18 @@ function restoreNormalView() {
   document.getElementById('chats-btn')?.classList.remove('active');
   document.getElementById('artifact-btn')?.classList.remove('active');
   
+  // Save page state as 'chat' when viewing an active chat session
+  // Include the current session ID if available
+  const sessionId = current && current.id ? current.id : null;
+  savePageState('chat', sessionId);
+  
   const welcomeScreen = document.getElementById('welcome-screen');
   if (welcomeScreen) welcomeScreen.style.display = '';
   
 }
+
+// Flag to prevent duplicate event listeners
+let artifactsListenersAdded = false;
 
 function showArtifactsPage() {
   current = null;
@@ -2009,6 +2182,9 @@ function showArtifactsPage() {
   document.getElementById('artifact-btn')?.classList.add('active');
   document.getElementById('chats-btn')?.classList.remove('active');
   
+  // Save page state
+  savePageState('artifacts');
+  
   $("#chat-title").textContent = "Code Artifacts";
   $("#chat-title").title = "Your saved code snippets";
   $("#clustrix-logo").innerHTML = '';
@@ -2019,7 +2195,11 @@ function showArtifactsPage() {
   
   renderArtifactsPage();
   
-  setupArtifactsPageListeners();
+  // Only setup listeners once to prevent duplicates
+  if (!artifactsListenersAdded) {
+    setupArtifactsPageListeners();
+    artifactsListenersAdded = true;
+  }
   
   renderSessions();
   updateInputState();
@@ -2168,6 +2348,7 @@ function showArtifactModal(artifact) {
         <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
           <span class="artifact-language">${escapeHtml(artifact.language)}</span>
           <button class="artifact-btn copy-full-code-btn">Copy All</button>
+          ${artifact.sessionId ? `<button class="artifact-btn view-in-chat-btn" data-session-id="${artifact.sessionId}" data-message-index="${artifact.messageIndex || ''}">View in Chat</button>` : ''}
         </div>
         <pre style="background: var(--bg-secondary); padding: 16px; border-radius: var(--radius-sm); overflow: auto; max-height: 60vh;"><code>${escapeHtml(artifact.code)}</code></pre>
       </div>
@@ -2210,10 +2391,140 @@ function showArtifactModal(artifact) {
       }, 1000);
     });
   });
+
+  // View in Chat button in modal
+  const viewInChatBtn = modal.querySelector('.view-in-chat-btn');
+  if (viewInChatBtn) {
+    viewInChatBtn.addEventListener('click', () => {
+      const sessionId = viewInChatBtn.getAttribute('data-session-id');
+      const messageIndex = parseInt(viewInChatBtn.getAttribute('data-message-index'));
+      
+      log("UI", 1, "viewInChatBtn", "Navigating to source chat", { sessionId, messageIndex });
+      
+      // Close the modal first
+      closeModal();
+      
+      // Navigate to chat session
+      viewInChatFromArtifact(sessionId, messageIndex);
+    });
+  }
 }
 
 function getChatScroller() {
   return document.querySelector(".chat-log-container");
+}
+
+function renderAllMessagesForNavigation(session) {
+  log("NAVIGATION", 1, "renderAllMessagesForNavigation", "Force loading all messages for navigation", { 
+    totalMessages: session.messages?.length 
+  });
+  
+  clearLog();
+  if (!session || !session.messages) return;
+  
+  // Render all messages without lazy loading
+  for (let i = 0; i < session.messages.length; i++) {
+    const messageData = session.messages[i];
+    if (!Array.isArray(messageData)) continue;
+
+    const [role, content, metadata] = messageData;
+    const isPlaceholder = (role === 'ai' && content === '' && i === session.messages.length - 1);
+    
+    const node = addMessage(role, content, {
+      final: !isPlaceholder,
+      index: i,
+      metadata: metadata || {}
+    });
+    
+    if (node) {
+      node.dataset.index = String(i);
+      node.dataset.lazyLoaded = 'false';
+    }
+
+    if (role === 'ai' && !isPlaceholder) {
+      hydrateThinkingIfAny(node, session, i);
+      renderMathInElement(node);
+    }
+  }
+  
+  log("NAVIGATION", 1, "renderAllMessagesForNavigation", "All messages loaded for navigation");
+}
+
+async function findArtifactByCode(codeContent, language) {
+  try {
+    const artifacts = await loadAllArtifacts();
+    return artifacts.find(artifact => 
+      artifact.code === codeContent && 
+      artifact.language === language
+    );
+  } catch (error) {
+    log("ARTIFACTS", 4, "findArtifactByCode", "Error checking artifact", { error: error.message });
+    return null;
+  }
+}
+
+function viewInChatFromArtifact(sessionId, messageIndex) {
+  log("NAVIGATION", 1, "viewInChatFromArtifact", "Starting navigation to source chat", { sessionId, messageIndex });
+  
+  // Find the session in chat data
+  const targetSession = state.sessions.find(session => session.id === sessionId);
+  if (!targetSession) {
+    log("NAVIGATION", 4, "viewInChatFromArtifact", "Session not found", { sessionId });
+    return;
+  }
+
+  // Set flag to prevent auto-scroll to bottom
+  window._preventAutoScrollToBottom = true;
+
+  // Disable lazy loading for this navigation to ensure all messages are loaded
+  const originalLazyState = targetSession._lazyState;
+  targetSession._lazyState = null;
+
+  // Set current session and switch to chat view (this also calls renderHistory)
+  setCurrent(targetSession);
+  renderSessions();
+  updateChatHeader();
+  
+  // Force load all messages for View in Chat navigation
+  renderAllMessagesForNavigation(targetSession);
+  
+  // Wait for DOM to be ready and scroll to the specific message
+  setTimeout(() => {
+    // Clear the flag after DOM operations
+    window._preventAutoScrollToBottom = false;
+    
+    if (messageIndex !== null && messageIndex >= 0) {
+      const messages = document.querySelectorAll('.message');
+      const targetMessage = Array.from(messages).find(msg => 
+        parseInt(msg.getAttribute('data-message-index')) === messageIndex
+      );
+      
+      if (targetMessage) {
+        log("NAVIGATION", 2, "viewInChatFromArtifact", "Found target message, scrolling", { messageIndex });
+        
+        // Scroll to the message
+        targetMessage.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+        
+        // Highlight code blocks in the message briefly
+        const codeBlocks = targetMessage.querySelectorAll('.code-block-container');
+        codeBlocks.forEach(block => {
+          block.style.transition = 'box-shadow 0.3s ease';
+          block.style.boxShadow = '0 0 0 2px var(--accent), 0 0 20px rgba(var(--accent-rgb), 0.3)';
+          
+          setTimeout(() => {
+            block.style.boxShadow = '';
+          }, 2000);
+        });
+      } else {
+        log("NAVIGATION", 3, "viewInChatFromArtifact", "Target message not found", { messageIndex, totalMessages: messages.length });
+      }
+    }
+  }, 300); // Increased timeout to allow full rendering
+  
+  log("NAVIGATION", 1, "viewInChatFromArtifact", "Navigation completed", { sessionId, messageIndex });
 }
 
 
@@ -2259,15 +2570,83 @@ function cancelThinkingText(aiNode) {
   THINKING_TIMER.delete(aiNode);
 }
 
+// Smart scroll state tracking
+let isUserScrolledUp = false;
+let lastUserScrollTime = 0;
+let autoScrollEnabled = true;
+
 function isNearBottom(el, threshold = 48) {
   if (!el) return true;
   return el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
 }
 
-function scrollToBottom({ force = false } = {}) {
+// Initialize smart scroll tracking
+function initializeSmartScroll() {
+  const scroller = getChatScroller();
+  if (!scroller || scroller._smartScrollInitialized) return;
+  
+  scroller._smartScrollInitialized = true;
+  
+  let scrollTimeout;
+  scroller.addEventListener('scroll', (e) => {
+    if (window._isLazyLoading) return;
+    
+    const now = Date.now();
+    const nearBottom = isNearBottom(scroller, 100);
+    
+    if (nearBottom && isUserScrolledUp) {
+      isUserScrolledUp = false;
+      autoScrollEnabled = true;
+    }
+    else if (!nearBottom && !isUserScrolledUp) {
+      isUserScrolledUp = true;
+      autoScrollEnabled = false;
+      lastUserScrollTime = now;
+    }
+    
+    clearTimeout(scrollTimeout);
+    
+    scrollTimeout = setTimeout(() => {
+      const stillNearBottom = isNearBottom(scroller, 100);
+      if (stillNearBottom && isUserScrolledUp) {
+        isUserScrolledUp = false;
+        autoScrollEnabled = true;
+        console.log('👤 Settled at bottom - auto-scroll re-enabled');
+      }
+    }, 150);
+  }, { passive: true });
+}
+
+function scrollToBottom({ force = false, fromAI = false } = {}) {
   const scroller = getChatScroller();
   if (!scroller) return;
-  const shouldScroll = force || isNearBottom(scroller);
+  
+  // Check for prevent auto-scroll flag (used by View in Chat feature)
+  if (window._preventAutoScrollToBottom && !force) {
+    console.log('🚫 Auto-scroll blocked by prevent flag (View in Chat navigation)');
+    return;
+  }
+  
+  // Check for lazy loading flag - prevent auto-scroll during lazy operations
+  if (window._isLazyLoading && !force) {
+    console.log('🚫 Auto-scroll blocked during lazy loading');
+    return;
+  }
+  
+  // Smart scroll logic for AI responses
+  if (fromAI && !force) {
+    if (!autoScrollEnabled && isUserScrolledUp) {
+      console.log('🤖 AI scroll blocked - user scrolled up');
+      return;
+    }
+    // For AI responses, only scroll if we're near bottom or auto-scroll is enabled
+    if (!isNearBottom(scroller, 150)) {
+      console.log('🤖 AI scroll skipped - not near bottom');
+      return;
+    }
+  }
+  
+  const shouldScroll = force || isNearBottom(scroller) || (fromAI && autoScrollEnabled);
   if (shouldScroll) {
     requestAnimationFrame(() => {
       scroller.scrollTop = scroller.scrollHeight;
@@ -2348,23 +2727,42 @@ function handleSaveButtonClick(event) {
       onSave: (vals) => {
         const title = vals["artifact-title"].trim();
         if (title) { // Hanya save jika user memberikan judul
-          log("UI", 2, "handleSaveButtonClick", "Saving artifact via modal", { title: title, language: language });
-          const artifact = saveCodeArtifact(title, code, language);
+          // Find parent message to get session and message context
+          const messageNode = saveButton.closest('.message');
+          const sessionId = messageNode ? messageNode.getAttribute('data-session-id') : (current ? current.id : null);
+          const messageIndex = messageNode ? parseInt(messageNode.getAttribute('data-message-index')) : null;
+
+          log("UI", 2, "handleSaveButtonClick", "Saving artifact via modal", { 
+            title: title, 
+            language: language,
+            sessionId: sessionId,
+            messageIndex: messageIndex 
+          });
+          const artifact = saveCodeArtifact(title, code, language, sessionId, messageIndex);
           
-          // Visual feedback
+          // Update UI to show this code block as saved
+          const codeBlock = saveButton.closest('.code-block-container');
+          const languageSpan = codeBlock?.querySelector('.language-name');
+          if (languageSpan) {
+            languageSpan.innerHTML = `${language} | <span style="color: var(--accent); font-weight: 500;">${esc(title)}</span>`;
+          }
+          
+          // Visual feedback and then hide save button
           const originalText = saveButton.querySelector("span").textContent;
           saveButton.innerHTML = `${checkIconSVG} <span>Saved!</span>`;
           saveButton.classList.add("copied"); // "copied" class for styling
           
           setTimeout(() => {
-            saveButton.innerHTML = `${saveIconSVG} <span>${originalText}</span>`;
-            saveButton.classList.remove("copied");
+            // Hide the save button permanently for saved artifacts
+            saveButton.style.display = 'none';
           }, 2000);
           
           log("UI", 2, "handleSaveButtonClick", "Code saved to artifacts", { 
             artifactId: artifact.id, 
             language: language, 
-            title: title 
+            title: title,
+            sessionId: sessionId,
+            messageIndex: messageIndex
           });
         }
       }
@@ -2384,26 +2782,6 @@ function attachCodeBlockListeners(container) {
   const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
   const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
   const saveIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>`;
-
-  console.log("DEBUG attachCodeBlockListeners:", {
-    container: container,
-    containerClassName: container?.className,
-    copyButtons: copyButtons.length,
-    saveButtons: saveButtons.length,
-    allCodeBlocks: container.querySelectorAll('.code-block-container').length
-  });
-
-  // Debug save buttons specifically
-  saveButtons.forEach((btn, index) => {
-    console.log(`DEBUG Save button ${index}:`, {
-      button: btn,
-      hasDataCode: !!btn.dataset.code,
-      dataCode: btn.dataset.code?.substring(0, 50) + '...',
-      hasDataLanguage: !!btn.dataset.language,
-      dataLanguage: btn.dataset.language,
-      buttonHTML: btn.outerHTML.substring(0, 200) + '...'
-    });
-  });
 
   log("UI", 1, "attachCodeBlockListeners", "Attaching listeners", { 
     copyButtons: copyButtons.length, 
@@ -2702,7 +3080,55 @@ function md(src) {
   tempDiv.innerHTML = html;
   if (tempDiv.querySelector("pre code")) Prism.highlightAllUnder(tempDiv);
   attachCodeBlockListeners(tempDiv);
+  
+  // Schedule async post-processing to update code blocks with artifact info
+  setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
+  
   return tempDiv.innerHTML;
+}
+
+async function updateCodeBlocksWithArtifactInfo(container = document) {
+  try {
+    const artifacts = await loadAllArtifacts();
+    if (!artifacts || !Array.isArray(artifacts)) {
+      log("UI", 3, "updateCodeBlocksWithArtifactInfo", "No artifacts loaded or artifacts is not an array", { artifacts });
+      return;
+    }
+    
+    const codeBlocks = container.querySelectorAll('.code-block-container');
+    
+    codeBlocks.forEach((block) => {
+      const codeElement = block.querySelector('code');
+      const saveButton = block.querySelector('.save-code-btn');
+      const languageSpan = block.querySelector('.language-name');
+      
+      if (codeElement && saveButton && languageSpan) {
+        const codeContent = codeElement.textContent;
+        const language = saveButton.getAttribute('data-language');
+        
+        // Find matching artifact
+        const matchingArtifact = artifacts.find(artifact => 
+          artifact.code === codeContent && 
+          artifact.language === language
+        );
+        
+        if (matchingArtifact) {
+          // Update language display to include artifact title
+          languageSpan.innerHTML = `${language} | <span style="color: var(--accent); font-weight: 500;">${esc(matchingArtifact.title)}</span>`;
+          
+          // Hide save button for saved artifacts
+          saveButton.style.display = 'none';
+          
+          log("UI", 1, "updateCodeBlocksWithArtifactInfo", "Updated code block with artifact info", { 
+            artifactTitle: matchingArtifact.title,
+            language: language 
+          });
+        }
+      }
+    });
+  } catch (error) {
+    log("UI", 4, "updateCodeBlocksWithArtifactInfo", "Error updating code blocks", { error: error.message });
+  }
 }
 
 function formatErrorMessageForSaving(reason) {
@@ -2943,26 +3369,246 @@ function renderHistory() {
   clearLog();
   if (!current || !current.messages) return;
 
-  for (let i = 0; i < current.messages.length; i++) {
-    const messageData = current.messages[i];
+  renderHistoryLazy();
+}
+
+function renderHistoryLazy() {
+  if (!current || !current.messages) return;
+  
+  const totalMessages = current.messages.length;
+  const INITIAL_LOAD_COUNT = 6;
+  
+  log("SESSION", 1, "renderHistoryLazy", `Lazy loading chat history`, { 
+    totalMessages, 
+    initialLoad: Math.min(INITIAL_LOAD_COUNT, totalMessages) 
+  });
+  
+  const startIndex = Math.max(0, totalMessages - INITIAL_LOAD_COUNT);
+  const initialMessages = current.messages.slice(startIndex);
+  
+  if (!current._lazyState) {
+    current._lazyState = {
+      allMessages: current.messages,
+      loadedStartIndex: startIndex,
+      totalMessages: totalMessages
+    };
+  }
+  
+  for (let i = 0; i < initialMessages.length; i++) {
+    const actualIndex = startIndex + i;
+    const messageData = initialMessages[i];
     if (!Array.isArray(messageData)) continue;
 
     const [role, content, metadata] = messageData;
-    const isPlaceholder = (role === 'ai' && content === '' && i === current.messages.length - 1);
+    const isPlaceholder = (role === 'ai' && content === '' && actualIndex === totalMessages - 1);
     
     const node = addMessage(role, content, {
       final: !isPlaceholder,
-      index: i,
+      index: actualIndex,
       metadata: metadata || {}
     });
-    if(node) node.dataset.index = String(i);
+    if(node) {
+      node.dataset.index = String(actualIndex);
+      node.dataset.lazyLoaded = 'true';
+    }
 
     if (role === 'ai' && !isPlaceholder) {
-      hydrateThinkingIfAny(node, current, i);
+      hydrateThinkingIfAny(node, current, actualIndex);
       renderMathInElement(node);
     }
   }
-  scrollToBottom({ force: true });
+  
+  setupLazyScrollListener();
+  
+  if (startIndex > 0) {
+    addLoadOlderIndicator(startIndex);
+  } else {
+  }
+  
+  requestAnimationFrame(() => {
+    const scroller = getChatScroller();
+    if (scroller) {
+      scroller.scrollTop = scroller.scrollHeight;
+    }
+    
+    // Update code blocks with artifact info after rendering
+    setTimeout(() => updateCodeBlocksWithArtifactInfo(), 100);
+  });
+}
+
+function addLoadOlderIndicator(remainingCount) {
+  const logContainer = $('#chat-log');
+  if (!logContainer) {
+    return;
+  }
+    
+  const indicator = document.createElement('div');
+  indicator.id = 'load-older-indicator';
+  indicator.className = 'load-older-indicator';
+  indicator.innerHTML = `
+    <div class="load-older-content">
+      <span class="load-older-text">Loading older messages...</span>
+    </div>
+  `;
+  
+  logContainer.insertBefore(indicator, logContainer.firstChild);
+}
+
+function setupLazyScrollListener() {
+  const scroller = getChatScroller();
+  if (!scroller || scroller._lazyListenerAdded) {
+    return;
+  }
+  
+  scroller._lazyListenerAdded = true;
+  
+  scroller.addEventListener('scroll', throttle(() => {
+    
+    if (scroller.scrollTop < 100 && current?._lazyState) {
+      const indicator = document.getElementById('load-older-indicator');
+      
+      if (indicator && current._lazyState.loadedStartIndex > 0) {
+        loadOlderMessages(false);
+      }
+    }
+  }, 100));
+  
+  window.testLazyScroll = function() {
+    const scroller = getChatScroller();
+    if (scroller) {
+      scroller.scrollTop = 0;
+    }
+  };
+}
+
+window.loadOlderMessages = function(smoothScroll = true) {
+  if (!current?._lazyState || current._lazyState.loadedStartIndex <= 0) return;
+  
+  window._isLazyLoading = true;
+  
+  const LOAD_BATCH_SIZE = 10;
+  const newStartIndex = Math.max(0, current._lazyState.loadedStartIndex - LOAD_BATCH_SIZE);
+  const messagesToLoad = current._lazyState.allMessages.slice(newStartIndex, current._lazyState.loadedStartIndex);
+  
+  log("SESSION", 1, "loadOlderMessages", `Loading older messages`, { 
+    newStartIndex, 
+    loadCount: messagesToLoad.length,
+    smoothScroll 
+  });
+  
+  const scroller = getChatScroller();
+  const oldScrollHeight = scroller ? scroller.scrollHeight : 0;
+  
+  const oldIndicator = document.getElementById('load-older-indicator');
+  if (oldIndicator) oldIndicator.remove();
+  
+  const logContainer = $('#chat-log');
+  if (!logContainer) {
+    return;
+  }
+  
+  const fragment = document.createDocumentFragment();
+  
+  for (let i = 0; i < messagesToLoad.length; i++) {
+    const actualIndex = newStartIndex + i;
+    const messageData = messagesToLoad[i];
+    if (!Array.isArray(messageData)) continue;
+
+    const [role, content, metadata] = messageData;
+    
+    const node = addMessage(role, content, {
+      final: true,
+      index: actualIndex,
+      metadata: metadata || {},
+      skipContainer: true
+    });
+    
+    if (node) {
+      node.dataset.index = String(actualIndex);
+      node.dataset.lazyLoaded = 'true';
+      fragment.appendChild(node);
+
+      if (role === 'ai') {
+        hydrateThinkingIfAny(node, current, actualIndex);
+        renderMathInElement(node);
+      }
+    }
+  }
+  
+  let preservedScrollTop = null;
+  if (scroller && !smoothScroll) {
+    preservedScrollTop = scroller.scrollTop;
+    
+    const originalScrollBehavior = scroller.style.scrollBehavior;
+    scroller.style.scrollBehavior = 'auto';
+    
+    const scrollLock = document.createElement('div');
+    scrollLock.style.position = 'absolute';
+    scrollLock.style.top = '0';
+    scrollLock.style.left = '0';
+    scrollLock.style.width = '100%';
+    scrollLock.style.height = '100%';
+    scrollLock.style.pointerEvents = 'none';
+    scrollLock.style.zIndex = '9999';
+    scroller.appendChild(scrollLock);
+    logContainer.insertBefore(fragment, logContainer.firstChild);
+    const heightDifference = scroller.scrollHeight - oldScrollHeight;
+    const newScrollTop = preservedScrollTop + heightDifference;
+    
+    scroller.scrollTo({
+      top: newScrollTop,
+      behavior: 'auto'
+    });
+    
+    scroller.removeChild(scrollLock);
+    scroller.style.scrollBehavior = originalScrollBehavior;
+    
+    preservedScrollTop = newScrollTop;
+  } else {
+    logContainer.insertBefore(fragment, logContainer.firstChild);
+  }
+  
+  current._lazyState.loadedStartIndex = newStartIndex;
+  
+  if (newStartIndex > 0) {
+    addLoadOlderIndicator(newStartIndex);
+  }
+  
+  if (preservedScrollTop !== null) {
+    requestAnimationFrame(() => {
+      if (Math.abs(scroller.scrollTop - preservedScrollTop) > 2) {
+        scroller.scrollTo({
+          top: preservedScrollTop,
+          behavior: 'auto'
+        });
+      }
+      
+      setTimeout(() => {
+        window._isLazyLoading = false;
+        // Update code blocks with artifact info for newly loaded messages
+        updateCodeBlocksWithArtifactInfo();
+      }, 50);
+    });
+  } else {
+    setTimeout(() => {
+      window._isLazyLoading = false;
+      // Update code blocks with artifact info for newly loaded messages
+      updateCodeBlocksWithArtifactInfo();
+    }, 50);
+  }
+};
+
+// Throttle utility function
+function throttle(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
 }
 
 function renderSessions() {
@@ -3074,11 +3720,9 @@ function updateSessionContainerPadding() {
   if (hasScrollbar) {
     clist.style.paddingRight = '6px';
     container.style.paddingRight = '0px';
-    console.log("jadi 0px")
   } else {
     clist.style.paddingRight = '8px';
     container.style.paddingRight = '6px';
-    console.log("jadi 6px")
   }
 }
 
@@ -3180,10 +3824,17 @@ function updateChatHeader({ animate = false } = {}) {
   }
 }
 
-function addMessage(role, content, { final = false, index = -1, metadata = {} } = {}) {
+function addMessage(role, content, { final = false, index = -1, metadata = {}, skipContainer = false } = {}) {
   const log = $("#chat-log");
   const node = document.createElement("div");
   node.className = `message ${role}`;
+  // Add data attributes for session and message tracking
+  if (index >= 0) {
+    node.setAttribute('data-message-index', index);
+  }
+  if (current && current.id) {
+    node.setAttribute('data-session-id', current.id);
+  }
   const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
   const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
   const editIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
@@ -3210,7 +3861,12 @@ function addMessage(role, content, { final = false, index = -1, metadata = {} } 
       node.style.transform = "translateY(20px)";
     }
   }
-  log.appendChild(node);
+  
+  // Conditionally append to log container
+  if (!skipContainer) {
+    log.appendChild(node);
+  }
+  
   if (role === "ai" && !final) {
     requestAnimationFrame(() => {
       node.style.transition = "opacity 0.4s ease-out, transform 0.4s ease-out";
@@ -3282,7 +3938,11 @@ function addMessage(role, content, { final = false, index = -1, metadata = {} } 
       }
     } 
   }
-  scrollToBottom({ force: true });
+  
+  if (!skipContainer) {
+    scrollToBottom({ force: true });
+  }
+  
   return node;
 }
 
@@ -3292,34 +3952,31 @@ function clearLog() {
 
 function setCurrent(s) {
   if (current === s) {
-    console.log("DEBUG setCurrent: Session is already current, skipping");
     return;
   }
   
-  console.log("DEBUG setCurrent: Switching from", current?.id, "to", s?.id);
-  
   if (current && current.id) {
-    const msgInput = $("#msg"); // Targetkan input chat aktif
+    const msgInput = $("#msg");
     if (msgInput) {
-      console.log("DEBUG setCurrent: Saving draft for session", current.id, "value:", msgInput.value.substring(0, 50) + "...");
-      saveDraftForSession(current.id, msgInput.value); // Simpan dari input yang benar
+      saveDraftForSession(current.id, msgInput.value);
     }
   }
-  
   current = s;
   
-  // Ensure the session has all required fields
+  if (current && current.id) {
+    savePageState('chat', current.id);
+    log("SessionState", 0, "setCurrent", `Session set as current and saved: ${current.name || 'Untitled'} (${current.id})`);
+  }
+  
   if (current) {
     ensureTokenFields(current);
   }
   
-  const msgInput = $("#msg"); // Targetkan input chat aktif
+  const msgInput = $("#msg");
   if (msgInput) {
     const draft = (current && current.id) ? loadDraftForSession(current.id) : '';
-    console.log("DEBUG setCurrent: Loading draft for session", current?.id, "draft:", draft.substring(0, 50) + "...");
-    msgInput.value = draft; // Muat ke input yang benar
+    msgInput.value = draft;
 
-    // Picu pembaruan tinggi textarea setelah memuat draf
     const shell = msgInput.closest('.ta-shell');
     if (shell && shell._scrollbarInstance) {
         shell._scrollbarInstance.updateLayout();
@@ -3333,21 +3990,26 @@ function setCurrent(s) {
   $(".chat-area").classList.remove("chats-active");
   $(".chat-area").classList.remove("artifacts-active");
   
-  // Clear active button states
   document.getElementById('chats-btn')?.classList.remove('active');
   document.getElementById('artifact-btn')?.classList.remove('active');
   
-  // Restore normal chat view
   const welcomeScreen = document.getElementById('welcome-screen');
   if (welcomeScreen) welcomeScreen.style.display = '';
   
-  // Restore chat log container if it was replaced
   const chatLogContainer = document.querySelector('.chat-log-container');
   if (chatLogContainer && !chatLogContainer.querySelector('#chat-log')) {
-    // Chat log container was replaced with chats/artifacts page, restore it
     chatLogContainer.innerHTML = `
       <div id="chat-log"></div>
     `;
+  }
+  
+  if (current) {
+    current._lazyState = null;
+    const scroller = getChatScroller();
+    if (scroller) {
+      scroller._lazyListenerAdded = false;
+    }
+    window._isLazyLoading = false;
   }
   
   renderHistory();
@@ -3382,6 +4044,7 @@ function setCurrent(s) {
 }
 
 async function load() {
+  window._isLazyLoading = false;
   if (!state.settings) state.settings = {}; 
   if (!state.settings.think) state.settings.think = { mode: 'off' };
   if (!state.settings.searchApiProvider) { state.settings.searchApiProvider = 'serpapi'; }
@@ -3392,8 +4055,8 @@ async function load() {
   // Load saved drafts
   loadAllDrafts();
   
-  // Load saved artifacts
-  loadAllArtifacts();
+  // Load saved artifacts (async now due to file-based storage)
+  loadAllArtifacts().catch(e => console.warn('Failed to load artifacts on startup:', e));
 
   const thinkSel = document.getElementById('extended-thinking');
   if (thinkSel) {
@@ -3429,13 +4092,43 @@ async function load() {
   $$('[id^="btn-web-search-"]').forEach(b => b.classList.toggle('toggled', state.settings.webSearchEnabled));
   log("APP", 2, "load", "Successfully loaded data.", { sessionCount: state.sessions.length });
 
-  applyTheme(state.settings.theme || "light");
+  const preloadedSettings = window.__PRELOADED_SETTINGS__ || {};
+  const themeToUse = preloadedSettings.theme || state.settings.theme || "dark";
+  
+  if (!preloadedSettings.theme || preloadedSettings.theme !== themeToUse) {
+    applyTheme(themeToUse);
+  } else {
+    state.settings.theme = themeToUse;
+    localStorage.setItem('clustrix-theme', themeToUse);
+    $("#theme-slider").checked = themeToUse === "dark";
+  }
+  
+  if (preloadedSettings.webSearchEnabled !== undefined) {
+    state.settings.webSearchEnabled = preloadedSettings.webSearchEnabled;
+  }
+  $('#web-search-switch').checked = state.settings.webSearchEnabled;
+  $$('[id^="btn-web-search-"]').forEach(b => b.classList.toggle('toggled', state.settings.webSearchEnabled));
+  
   await loadModelsConf();
   renderSessions();
   updateModelHeader();
-  showWelcomeScreen();
+  
+  restoreLastActivePage();
+  
   typewriterEffect($("#welcome-message"), getWelcomeMessage());
   await save();
+  
+  setTimeout(() => {
+    if (window.__FADE_OUT_OVERLAY__) {
+      window.__FADE_OUT_OVERLAY__();
+      log("UI", 0, "load", "Loading overlay fade-out sequence started");
+    } else {
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) {
+        overlay.style.display = 'none';
+      }
+    }
+  }, 50);
 }
 
 async function save() {
@@ -3866,6 +4559,9 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         div.innerHTML = md(display);
         if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
         renderMathInElement(div);
+        
+        // Smart auto-scroll for AI content streaming
+        scrollToBottom({ fromAI: true });
       }
     }
 
@@ -4102,6 +4798,14 @@ async function send() {
   const input = $("#msg");
   const originalText = (input.value || "").trim();
   
+  // Clear lazy loading flag when user sends new message
+  window._isLazyLoading = false;
+  
+  // Re-enable auto-scroll when user sends a message
+  isUserScrolledUp = false;
+  autoScrollEnabled = true;
+  console.log('💬 User sending message - auto-scroll re-enabled');
+  
   // Ensure current session has uploadedFiles array
   if (current && !Array.isArray(current.uploadedFiles)) {
     current.uploadedFiles = [];
@@ -4150,6 +4854,15 @@ async function send() {
 async function sendFromWelcome() {
   const input = $("#msg-central");
   const originalText = (input.value || "").trim();
+  
+  // Clear lazy loading flag when user sends new message
+  window._isLazyLoading = false;
+  
+  // Re-enable auto-scroll when user sends a message
+  isUserScrolledUp = false;
+  autoScrollEnabled = true;
+  console.log('💬 User sending message from welcome - auto-scroll re-enabled');
+  
   if (!originalText && welcomeScreenStagedFiles.length === 0) return;
 
   const userTextForUI = originalText || `Analyzing ${welcomeScreenStagedFiles.length} file(s)...`;
@@ -4305,9 +5018,13 @@ function deleteCurrentSession() {
 
 // Theme and UI
 function applyTheme(theme) {
-  document.body.className = theme === "dark" ? "dark-theme" : "light-theme";
+  document.body.className = theme === "dark" ? "dark-theme scrollable" : "light-theme scrollable";
+  document.documentElement.className = theme === "dark" ? "dark-theme" : "light-theme";
   $("#theme-slider").checked = theme === "dark";
   state.settings.theme = theme;
+  
+  // Save to localStorage immediately for instant loading on next refresh
+  localStorage.setItem('clustrix-theme', theme);
 }
 
 function toggleTheme() {
@@ -4485,6 +5202,19 @@ function initWithRetry(maxRetry = 20, interval = 100) {
 
 function setupEventListeners() {
   document.addEventListener("keydown", (e) => {
+    // Handle Ctrl+R for smooth reload
+    if (e.ctrlKey && e.key === 'r') {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      log("UI", 0, "event:keydown-CtrlR", "Ctrl+R pressed, triggering smooth reload");
+      // Use setTimeout to ensure preventDefault takes effect first
+      setTimeout(() => {
+        window.__SMOOTH_RELOAD__();
+      }, 0);
+      return false;
+    }
+    
     if (e.key === "Escape" || e.key === "Esc") {
       const modalsToClose = [
         '#quick-model-switch-modal', '#model-mgmt-modal', '#mini-modal',
@@ -4563,7 +5293,11 @@ function setupEventListeners() {
     if(searchBtn) searchBtn.addEventListener('click', () => {
       state.settings.webSearchEnabled = !state.settings.webSearchEnabled;
       $$('[id^="btn-web-search-"]').forEach(b => b.classList.toggle('toggled', state.settings.webSearchEnabled));
+      
+      // Save to localStorage immediately for instant loading
+      localStorage.setItem('clustrix-web-search', state.settings.webSearchEnabled.toString());
       save();
+      
       $('#web-search-switch').checked = state.settings.webSearchEnabled;
     });
     
@@ -4585,7 +5319,6 @@ function setupEventListeners() {
           }
           if (current) {
             log("RENDERER", 1, "upload:click", "Adding files to active session.");
-            // Ensure uploadedFiles array exists
             if (!Array.isArray(current.uploadedFiles)) {
               current.uploadedFiles = [];
             }
@@ -4601,6 +5334,11 @@ function setupEventListeners() {
         }
       });
     }
+  });
+
+  $("#refresh-btn").addEventListener("click", () => {
+    log("UI", 0, "event:refresh-btn", "Refresh button clicked");
+    window.__SMOOTH_RELOAD__();
   });
 
   $("#minimize-btn").addEventListener("click", () => {
@@ -4925,7 +5663,11 @@ function setupEventListeners() {
 
   $("#web-search-switch").addEventListener("change", (e) => {
     state.settings.webSearchEnabled = e.target.checked;
+    
+    // Save to localStorage immediately for instant loading
+    localStorage.setItem('clustrix-web-search', state.settings.webSearchEnabled.toString());
     save();
+    
     $$('[id^="btn-web-search-"]').forEach(b => b.classList.toggle('toggled', state.settings.webSearchEnabled));
     log("SETTINGS", 2, "event:web-search-change", "Web Search Toggled", { enabled: e.target.checked });
   });
@@ -5093,6 +5835,9 @@ function setupEventListeners() {
 
 function initializeApp() {
   log("APP", 2, "initializeApp", "Initializing application.");
+  
+  // Initialize smart scroll system
+  initializeSmartScroll();
 
   if (window.api) {
     window.api.on('chat-update', (payload) => {
@@ -5110,7 +5855,7 @@ function initializeApp() {
         indicator.innerHTML = `
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.54 12a9.5 9.5 0 1 1-9.5-9.5 9.5 9.5 0 0 1 9.5 9.5Z"/><path d="M22 12h-2"/></svg>
           <span class="status-text">Searching for "${data.summarizedQuery}"...</span>`;
-        scrollToBottom();
+        scrollToBottom({ fromAI: true });
       } else if (type === 'READING_COMPLETE') {
         indicator.classList.remove('searching');
         indicator.innerHTML = `
@@ -5118,7 +5863,7 @@ function initializeApp() {
           <span class="status-text">Read ${data.pageCount} web pages</span>
           <span class="page-count-pill">${data.pageCount}</span>`;
         mainText.innerHTML = getThinkingMarkup();
-        scrollToBottom();
+        scrollToBottom({ fromAI: true });
       }
     });
     window.api.on('search:status', (status) => {
@@ -5139,3 +5884,24 @@ function initializeApp() {
 }
 
 document.addEventListener("DOMContentLoaded", initializeApp);
+
+document.addEventListener("DOMContentLoaded", () => {
+  
+  setTimeout(() => {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+      if (overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
+    }
+  }, 3000);
+});
+
+window.addEventListener('error', (event) => {
+  console.error('Uncaught error detected, force removing overlay:', event.error);
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) {
+    overlay.style.display = 'none';
+  }
+});

@@ -9,14 +9,150 @@
   <title>Clustrix</title>
   <link rel="icon" type="image/x-icon" href="../public/images/favicon.ico" />
   <link rel="stylesheet" href="./style.css" />
-  <link rel="stylesheet" href="../public/rolling/rolling.css">
+  <!-- <link rel="stylesheet" href="../public/rolling/rolling.css"> -->
   
   <!-- Item lists debug analysis -->
   <link rel="stylesheet" href="../debug-menu.css">
   <script src="../debug-menu.js"></script>
 
+  <!-- Instant Settings Loader - Prevents all UI flashes -->
+  <script>
+    (function() {
+      let finalTheme = 'dark';
+      
+      try {
+        let savedTheme = localStorage.getItem('clustrix-theme');
+        let webSearchEnabled = localStorage.getItem('clustrix-web-search');
+        let currentPage = localStorage.getItem('clustrix-current-page');
+        let currentSession = localStorage.getItem('clustrix-current-session');
+        
+        const savedData = localStorage.getItem('clustrix-data');
+        if (savedData) {
+          try {
+            const data = JSON.parse(savedData);
+            if (!savedTheme) savedTheme = data.settings?.theme;
+            if (webSearchEnabled === null) webSearchEnabled = data.settings?.webSearchEnabled;
+            if (!currentPage) currentPage = data.settings?.currentPage;
+            if (!currentSession) currentSession = data.settings?.currentSession;
+          } catch (e) {
+          }
+        }
+        
+        const theme = savedTheme || 'dark';
+        finalTheme = theme;
+        const webSearch = webSearchEnabled !== null ? webSearchEnabled === 'true' : false;
+        const page = currentPage || 'welcome';
+        
+        if (document.documentElement) {
+          document.documentElement.className = theme === 'dark' ? 'dark-theme' : 'light-theme';
+        } else {
+          console.error('document.documentElement not available');
+        }
+        
+        if (document.body) {
+          document.body.className = (theme === 'dark' ? 'dark-theme' : 'light-theme') + ' scrollable';
+        } else {
+          document.addEventListener('DOMContentLoaded', () => {
+            if (document.body) {
+              document.body.className = (finalTheme === 'dark' ? 'dark-theme' : 'light-theme') + ' scrollable';
+            }
+          });
+        }
+        
+        window.__PRELOADED_SETTINGS__ = {
+          theme: theme,
+          webSearchEnabled: webSearch,
+          currentPage: page,
+          currentSession: currentSession
+        };
+        
+      } catch (error) {
+        if (document.documentElement) {
+          document.documentElement.className = 'dark-theme';
+        }
+        if (document.body) {
+          document.body.className = 'dark-theme scrollable';
+        }
+        window.__PRELOADED_SETTINGS__ = {
+          theme: 'dark',
+          webSearchEnabled: false,
+          currentPage: 'welcome',
+          currentSession: null
+        };
+      }
+      
+      window.__FADE_OUT_OVERLAY__ = function() {
+        const overlay = document.getElementById('loading-overlay');
+        if (!overlay) {
+          return;
+        }
+        
+        setTimeout(() => {
+          overlay.classList.add('unblur');
+          setTimeout(() => {
+            overlay.classList.add('hidden');
+            
+            setTimeout(() => {
+              try {
+                if (overlay && overlay.parentNode) {
+                  overlay.parentNode.removeChild(overlay);
+                }
+              } catch (e) {
+              }
+            }, 200);
+            
+          }, 400);
+          
+        }, 300);
+      };
+      
+      // Professional smooth reload with blur transition
+      window.__SMOOTH_RELOAD__ = function() {
+        // Prevent any existing reload attempts
+        if (window.__RELOADING__) return;
+        window.__RELOADING__ = true;
+        
+        // Create reload overlay with blur effect
+        const reloadOverlay = document.createElement('div');
+        reloadOverlay.id = 'reload-overlay';
+        reloadOverlay.className = 'loading-overlay';
+        reloadOverlay.style.display = 'flex';
+        reloadOverlay.style.opacity = '0';
+        reloadOverlay.style.backdropFilter = 'blur(0px)';
+        reloadOverlay.style.transition = 'opacity 0.3s ease, backdrop-filter 0.3s ease';
+        reloadOverlay.style.zIndex = '10000';
+        reloadOverlay.style.position = 'fixed';
+        reloadOverlay.style.top = '0';
+        reloadOverlay.style.left = '0';
+        reloadOverlay.style.width = '100%';
+        reloadOverlay.style.height = '100%';
+        reloadOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+        
+        document.body.appendChild(reloadOverlay);
+        
+        // Force reflow to ensure styles are applied
+        reloadOverlay.offsetHeight;
+        
+        // Small delay to ensure DOM is ready, then animate
+        setTimeout(() => {
+          reloadOverlay.style.opacity = '1';
+          reloadOverlay.style.backdropFilter = 'blur(10px)';
+          
+          // Reload after transition completes
+          setTimeout(() => {
+            window.location.reload();
+          }, 350); // Slightly longer to ensure transition completes
+        }, 16); // One frame delay
+      };
+    })();
+  </script>
+
 </head>
 <body class="dark-theme scrollable">
+  
+  <!-- Smooth Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay"></div>
+  
   <div id="app">
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
@@ -131,6 +267,9 @@
         </div>
 
         <div class="window-controls">
+          <button id="refresh-btn" class="window-btn refresh" title="Refresh App">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-refresh-cw"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+          </button>
           <button id="minimize-btn" class="window-btn minimize" title="Minimize">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-minus-icon lucide-minus"><path d="M5 12h14"/></svg>
           </button>
@@ -188,12 +327,12 @@
           <div class="input-container-parent">
             <span id="welcome-file-upload-container" class="file-upload-container"></span>
             <div class="input-container" id="central-input-container">
-              <div class="ta-shell">
+              <!-- <div class="ta-shell"> -->
                 <textarea id="msg-central" rows="1" placeholder="Ask anything" rows="1"></textarea>
-                <div class="ta-scrollbar" aria-hidden="true">
+                <!-- <div class="ta-scrollbar" aria-hidden="true">
                   <div class="ta-thumb"></div>
-                </div>
-              </div>
+                </div> -->
+              <!-- </div> -->
               
             </div>
 
@@ -225,18 +364,17 @@
       </div>
 
       <!-- Chats Page -->
-      <div id="chats-page" class="chats-page">
-        <div class="chats-header">
-          <h2>All Chats</h2>
-          <button id="back-to-chat" class="icon-btn">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M8 3l-5 5 5 5M3 8h14"/></svg>
-            Back
-          </button>
+      
+        
+        <div id="chats-page" class="chats-page">
+          <div class="chats-header">
+            <h2>Your Chat History</h2>
+          
         </div>
         <div class="chats-search-container">
           <div class="search-box">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-            <input id="chats-search" placeholder="Search in titles and content..." />
+            <input id="chats-search" placeholder="Search your chats..." />
           </div>
         </div>
 
@@ -264,6 +402,7 @@
         
         <div id="chats-list" class="chats-list"></div>
       </div>
+
 
       <!-- Artifacts Page -->
       <div id="artifacts-page" class="artifacts-page">
@@ -295,12 +434,12 @@
         <div class="input-container-parent">
           <div id="active-chat-file-upload-container" class="file-upload-container"></div>
           <div class="input-container">
-            <div class="ta-shell">
+            <!-- <div class="ta-shell"> -->
               <textarea id="msg" placeholder="Ask anything" rows="1"></textarea>
-              <div class="ta-scrollbar" aria-hidden="true">
+              <!-- <div class="ta-scrollbar" aria-hidden="true">
                 <div class="ta-thumb"></div>
-              </div>
-            </div>
+              </div> -->
+            <!-- </div> -->
           </div>
             <div class="row-between pad-l-sm">
               <div class="row-gap">
@@ -600,9 +739,7 @@
         ignoreHtmlClass: 'no-mathjax'
       },
       startup: {
-        ready: () => {
-          console.log('MathJax is ready to go!');
-          console.log('MJX output =', MathJax.config.output); 
+        ready: () => { 
           MathJax.startup.defaultReady();
         }
       }
@@ -611,9 +748,9 @@
   <script defer id="MathJax-script" src="mjx://startup.js"></script>
   <script src="../public/prism/prism.js"></script>
   <script src="data.js"></script>
-  <script src="../public/rolling/rolling.js"></script>
+  <!-- <script src="../public/rolling/rolling.js"></script>
   <script src="../public/rolling/debug.js"></script>
-  <script src="../public/rolling/force-init.js"></script>
+  <script src="../public/rolling/force-init.js"></script> -->
   <script src="renderer.js"></script>
 </body>
 </html>

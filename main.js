@@ -228,6 +228,7 @@ app.commandLine.appendSwitch('enable-features',
   'OverlayScrollbar,OverlayScrollbarFlashAfterAnyScrollUpdate,OverlayScrollbarFlashWhenMouseEnter');
 console.log('[FLAGS]', app.commandLine.getSwitchValue('enable-features'));
 
+
 app.whenReady().then(() => {
   protocol.handle('pkg', async (req) => {
     try {
@@ -319,8 +320,6 @@ app.whenReady().then(() => {
 
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-  const appVersion = app.getVersion();
-  console.log(`Application Version (from package.json): ${appVersion}`);
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
@@ -353,6 +352,31 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
     return true;
   }catch(e){
     console.error('save error', e);
+    return false;
+  }
+});
+
+// Artifacts persistence
+const artifactsFile = path.join(app.getPath('userData'), 'artifacts.json');
+
+ipcMain.handle('artifacts:load', async () => {
+  try{
+    if (!fs.existsSync(artifactsFile)) return [];
+    const raw = fs.readFileSync(artifactsFile, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  }catch(e){
+    console.error('artifacts load error', e);
+    return [];
+  }
+});
+
+ipcMain.handle('artifacts:save', async (_evt, artifacts) => {
+  try{
+    fs.writeFileSync(artifactsFile, JSON.stringify(artifacts, null, 2), 'utf-8');
+    return true;
+  }catch(e){
+    console.error('artifacts save error', e);
     return false;
   }
 });

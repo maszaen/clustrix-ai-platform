@@ -12,6 +12,10 @@ contextBridge.exposeInMainWorld('api', {
     load: () => ipcRenderer.invoke('sessions:load'),
     save: (data) => ipcRenderer.invoke('sessions:save', data),
   },
+  artifacts: {
+    load: () => ipcRenderer.invoke('artifacts:load'),
+    save: (artifacts) => ipcRenderer.invoke('artifacts:save', artifacts),
+  },
   chat: {
     stream(messages, model='glm-4.5-flash', optionsOrCb, maybeCb){
       const id = rid();

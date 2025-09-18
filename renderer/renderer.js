@@ -716,6 +716,7 @@ function saveCodeArtifact(title, code, language, sessionId = null, messageIndex 
     language: language || 'text',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    isFavorite: false, // Add favorite status
     // Add origin tracking for "View in Chat" feature
     sessionId: sessionId,
     messageIndex: messageIndex
@@ -735,7 +736,11 @@ async function loadAllArtifacts() {
     if (window.api && window.api.artifacts) {
       const fileArtifacts = await window.api.artifacts.load();
       if (fileArtifacts && fileArtifacts.length > 0) {
-        codeArtifacts = fileArtifacts;
+        // Ensure file artifacts have all required properties
+        codeArtifacts = fileArtifacts.map(artifact => ({
+          ...artifact,
+          isFavorite: artifact.isFavorite || false // Add isFavorite if missing
+        }));
         return codeArtifacts;
       }
     }
@@ -748,6 +753,7 @@ async function loadAllArtifacts() {
         // Migrate to file-based storage
         codeArtifacts = legacyArtifacts.map(artifact => ({
           ...artifact,
+          isFavorite: artifact.isFavorite || false, // Add isFavorite if missing
           sessionId: null, // Legacy artifacts don't have origin tracking
           messageIndex: null
         }));
@@ -788,6 +794,16 @@ async function saveArtifactsToFile() {
 function deleteArtifact(artifactId) {
   codeArtifacts = codeArtifacts.filter(a => a.id !== artifactId);
   saveArtifactsToFile();
+}
+
+function toggleArtifactFavorite(artifactId) {
+  const artifact = codeArtifacts.find(a => a.id === artifactId);
+  if (artifact) {
+    artifact.isFavorite = !artifact.isFavorite;
+    artifact.updated_at = new Date().toISOString();
+    saveArtifactsToFile();
+    renderArtifactsPage(); // Refresh to update star/unstar text
+  }
 }
 
 function finalizeThinkingUI(aiNode, duration) {
@@ -1118,7 +1134,7 @@ function renderMgmtModel(pkey, mid) {
     </div>
     <div class="form-group">
       <label>Notes</label>
-      <textarea id="mm-note" rows="3" placeholder="Model notes...">${meta.note || ''}</textarea>
+      <textarea id="mm-note" spellcheck="false" autocorrect="off" rows="3" placeholder="Model notes...">${meta.note || ''}</textarea>
     </div>
   `;
 
@@ -2227,9 +2243,19 @@ function renderArtifactsPage() {
   
   artifactsList.innerHTML = '';
   
-  codeArtifacts.forEach(artifact => {
+  // Sort artifacts: starred first, then by creation date (newest first)
+  const sortedArtifacts = [...codeArtifacts].sort((a, b) => {
+    // First priority: starred items go to top
+    if (a.isFavorite && !b.isFavorite) return -1;
+    if (!a.isFavorite && b.isFavorite) return 1;
+    
+    // Second priority: within same favorite status, sort by creation date (newest first)
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+  
+  sortedArtifacts.forEach(artifact => {
     const artifactItem = document.createElement('div');
-    artifactItem.className = 'artifact-item';
+    artifactItem.className = `artifact-item${artifact.isFavorite ? ' starred' : ''}`;
     artifactItem.dataset.artifactId = artifact.id;
     
     const date = new Date(artifact.created_at);
@@ -2238,6 +2264,35 @@ function renderArtifactsPage() {
     const codePreview = artifact.code.length > 200 ? artifact.code.slice(0, 200) + '...' : artifact.code;
     
     artifactItem.innerHTML = `
+      <div class="artifact-menu-container">
+        <button class="artifact-menu-btn" data-artifact-id="${artifact.id}" title="Artifact options">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="5" cy="12" r="2"/>
+            <circle cx="12" cy="12" r="2"/>
+            <circle cx="19" cy="12" r="2"/>
+          </svg>
+        </button>
+        <div class="artifact-menu-dropdown" data-artifact-id="${artifact.id}">
+          <div class="artifact-menu-item" data-action="copy">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+            </svg>
+            <span>Copy</span>
+          </div>
+          <div class="artifact-menu-item" data-action="favorite">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+            <span>${artifact.isFavorite ? 'Unstar' : 'Star'}</span>
+          </div>
+          <div class="artifact-menu-item artifact-menu-item-danger" data-action="delete">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M6 2l-2 2h12l-2-2H6zM4 6v10c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6H4zm2 2h8v8H6V8z"/>
+            </svg>
+            <span>Delete</span>
+          </div>
+        </div>
+      </div>
       <div class="artifact-preview-container">
           <div class="artifact-preview"><code>${escapeHtml(codePreview)}</code></div>
       </div>
@@ -2281,8 +2336,108 @@ function setupArtifactsPageListeners() {
     });
   }
   
-  // Artifact action buttons
+  // Artifact menu and action handlers
   document.addEventListener('click', (e) => {
+    // Handle artifact menu button clicks
+    if (e.target.closest('.artifact-menu-btn')) {
+      e.stopPropagation();
+      const menuContainer = e.target.closest('.artifact-menu-container');
+      const menuButton = menuContainer.querySelector('.artifact-menu-btn');
+      const dropdown = menuContainer.querySelector('.artifact-menu-dropdown');
+      
+      // Close all other persistent-open menus and remove their active states
+      document.querySelectorAll('.artifact-menu-dropdown.persistent-open').forEach(menu => {
+        if (menu !== dropdown) {
+          menu.classList.remove('persistent-open');
+          const otherButton = menu.parentElement.querySelector('.artifact-menu-btn');
+          if (otherButton) otherButton.classList.remove('persistent-active');
+        }
+      });
+      
+      // Toggle current menu's persistent state
+      const isPersistentOpen = dropdown.classList.contains('persistent-open');
+      
+      if (isPersistentOpen) {
+        // Close the menu
+        dropdown.classList.remove('persistent-open');
+        menuButton.classList.remove('persistent-active');
+      } else {
+        // Open the menu in persistent state
+        dropdown.classList.add('persistent-open');
+        menuButton.classList.add('persistent-active');
+      }
+      return;
+    }
+
+    // Handle artifact menu item clicks
+    if (e.target.closest('.artifact-menu-item')) {
+      e.stopPropagation();
+      const menuItem = e.target.closest('.artifact-menu-item');
+      const action = menuItem.dataset.action;
+      const dropdown = e.target.closest('.artifact-menu-dropdown');
+      const artifactId = dropdown.dataset.artifactId;
+      
+      // Close menu and remove persistent state
+      dropdown.classList.remove('persistent-open');
+      const menuButton = dropdown.parentElement.querySelector('.artifact-menu-btn');
+      if (menuButton) menuButton.classList.remove('persistent-active');
+      
+      const artifact = codeArtifacts.find(a => a.id === artifactId);
+      if (!artifact) return;
+      
+      if (action === 'copy') {
+        navigator.clipboard.writeText(artifact.code).then(() => {
+          // Create temporary feedback element
+          const feedback = document.createElement('div');
+          feedback.textContent = 'Copied!';
+          feedback.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--surface);
+            color: var(--fg);
+            padding: 8px 16px;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            z-index: 10000;
+            font-size: 14px;
+            font-weight: 500;
+          `;
+          document.body.appendChild(feedback);
+          setTimeout(() => {
+            document.body.removeChild(feedback);
+          }, 1000);
+        }).catch(err => {
+          console.warn('Failed to copy:', err);
+        });
+      } else if (action === 'favorite') {
+        toggleArtifactFavorite(artifactId);
+      } else if (action === 'delete') {
+        showConfirmationModal(
+          "Delete Artifact", 
+          `Are you sure you want to delete "${artifact.title}"?`, 
+          () => {
+            deleteArtifact(artifactId);
+            renderArtifactsPage(); // Refresh the list
+          }
+        );
+      }
+      return;
+    }
+
+    // Handle artifact item clicks (for viewing)
+    if (e.target.closest('.artifact-item') && !e.target.closest('.artifact-menu-container')) {
+      const artifactItem = e.target.closest('.artifact-item');
+      const artifactId = artifactItem.dataset.artifactId;
+      const artifact = codeArtifacts.find(a => a.id === artifactId);
+      if (artifact) {
+        showArtifactModal(artifact);
+      }
+      return;
+    }
+
+    // Legacy artifact action buttons (fallback for old structure)
     const artifactId = e.target.dataset.artifactId;
     if (!artifactId) return;
     
@@ -2316,6 +2471,61 @@ function setupArtifactsPageListeners() {
           renderArtifactsPage(); // Refresh the list
         }
       );
+    }
+  });
+
+  // Artifact page hover management (like chats page)
+  const artifactsPage = document.getElementById('artifacts-page');
+  if (artifactsPage) {
+    artifactsPage.addEventListener('mouseenter', (e) => {
+      if (e.target.closest('.artifact-item')) {
+        const artifactItem = e.target.closest('.artifact-item');
+        const dropdown = artifactItem.querySelector('.artifact-menu-dropdown.persistent-open');
+        const menuButton = artifactItem.querySelector('.artifact-menu-btn');
+        if (dropdown && menuButton) {
+          menuButton.classList.add('persistent-active');
+        }
+      }
+    }, true);
+
+    artifactsPage.addEventListener('mouseleave', (e) => {
+      // Check if we're actually leaving the artifacts page
+      const artifactsPageRect = artifactsPage.getBoundingClientRect();
+      const mouseX = e.clientX;
+      const mouseY = e.clientY;
+      
+      const isLeavingPage = (
+        mouseX < artifactsPageRect.left || 
+        mouseX > artifactsPageRect.right || 
+        mouseY < artifactsPageRect.top || 
+        mouseY > artifactsPageRect.bottom
+      );
+      
+      if (isLeavingPage) {
+        const artifactItems = artifactsPage.querySelectorAll('.artifact-item');
+        artifactItems.forEach(artifactItem => {
+          const dropdown = artifactItem.querySelector('.artifact-menu-dropdown.persistent-open');
+          const menuButton = artifactItem.querySelector('.artifact-menu-btn');
+          if (dropdown && menuButton) {
+            // Only close if not hovering over menu area
+            if (!menuButton.matches(':hover') && !dropdown.matches(':hover')) {
+              dropdown.classList.remove('persistent-open');
+              menuButton.classList.remove('persistent-active');
+            }
+          }
+        });
+      }
+    }, true);
+  }
+
+  // Close artifact menus when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.artifact-menu-container')) {
+      document.querySelectorAll('.artifact-menu-dropdown.persistent-open').forEach(menu => {
+        menu.classList.remove('persistent-open');
+        const menuButton = menu.parentElement.querySelector('.artifact-menu-btn');
+        if (menuButton) menuButton.classList.remove('persistent-active');
+      });
     }
   });
 }
@@ -2588,17 +2798,75 @@ let isUserScrolledUp = false;
 let lastUserScrollTime = 0;
 let autoScrollEnabled = true;
 
+// Smart autoscroll with newline detection
+let lastContentHeight = 0;
+let scrollPendingTimeout = null;
+
+function smartScrollToBottom() {
+  const scroller = getChatScroller();
+  if (!scroller) return;
+  
+  const messageContainer = scroller.querySelector('.messages-container') || scroller;
+  const currentHeight = messageContainer.scrollHeight;
+  
+  // Check if content actually grew (new content added)
+  if (currentHeight > lastContentHeight) {
+    lastContentHeight = currentHeight;
+    
+    // Clear any pending scroll
+    if (scrollPendingTimeout) {
+      clearTimeout(scrollPendingTimeout);
+    }
+    
+    // Use requestAnimationFrame for smooth scrolling
+    requestAnimationFrame(() => {
+      const isNearBottomThreshold = 100; // More generous threshold
+      const isUserNearBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - isNearBottomThreshold;
+      
+      if (isUserNearBottom || autoScrollEnabled) {
+        // Ensure we scroll to the absolute bottom
+        scroller.scrollTop = scroller.scrollHeight;
+      }
+    });
+  }
+}
+
+// Debounced autoscroll for high-speed streaming with smart detection
+let debouncedScrollTimeout = null;
+let lastScrollRequest = 0;
+const SCROLL_DEBOUNCE_MS = 60; // Faster response for better UX
+const MAX_SCROLL_FREQUENCY = 25; // Reduced frequency for smoother experience
+
+function debouncedScrollToBottom() {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastScrollRequest;
+  
+  // If we're getting requests too frequently, use longer debounce
+  const debounceTime = timeSinceLastRequest < MAX_SCROLL_FREQUENCY ? SCROLL_DEBOUNCE_MS * 1.3 : SCROLL_DEBOUNCE_MS;
+  
+  lastScrollRequest = now;
+  
+  clearTimeout(debouncedScrollTimeout);
+  debouncedScrollTimeout = setTimeout(() => {
+    smartScrollToBottom();
+  }, debounceTime);
+}
+
 function isNearBottom(el, threshold = 48) {
   if (!el) return true;
   return el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
 }
 
-// Initialize smart scroll tracking
+// Initialize smart scroll tracking with content height monitoring
 function initializeSmartScroll() {
   const scroller = getChatScroller();
   if (!scroller || scroller._smartScrollInitialized) return;
   
   scroller._smartScrollInitialized = true;
+  
+  // Initialize content height tracking
+  const messageContainer = scroller.querySelector('.messages-container') || scroller;
+  lastContentHeight = messageContainer.scrollHeight;
   
   let scrollTimeout;
   scroller.addEventListener('scroll', (e) => {
@@ -2661,9 +2929,27 @@ function scrollToBottom({ force = false, fromAI = false } = {}) {
   
   const shouldScroll = force || isNearBottom(scroller) || (fromAI && autoScrollEnabled);
   if (shouldScroll) {
-    requestAnimationFrame(() => {
-      scroller.scrollTop = scroller.scrollHeight;
-    });
+    // Use smooth scrolling for AI responses to prevent jarring jumps
+    if (fromAI && !force) {
+      requestAnimationFrame(() => {
+        const targetScroll = scroller.scrollHeight;
+        const currentScroll = scroller.scrollTop;
+        const maxJump = 150; // Maximum pixels to jump at once
+        
+        if (targetScroll - currentScroll > maxJump) {
+          // If the jump would be too large, scroll incrementally
+          scroller.scrollTop = currentScroll + maxJump;
+        } else {
+          // Normal scroll to bottom
+          scroller.scrollTop = targetScroll;
+        }
+      });
+    } else {
+      // Force scroll (immediate)
+      requestAnimationFrame(() => {
+        scroller.scrollTop = scroller.scrollHeight;
+      });
+    }
   }
 }
 
@@ -4688,13 +4974,18 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     if (s.aiNode && document.contains(s.aiNode)) {
       const div = s.aiNode.querySelector(".message-text");
       if (div) {
+        const prevHeight = div.scrollHeight;
         const display = trimEnd(fullResponse);
         div.innerHTML = md(display);
         if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
         renderMathInElement(div);
         
-        // Smart auto-scroll for AI content streaming
-        scrollToBottom({ fromAI: true });
+        // Check if content actually changed/grew
+        const newHeight = div.scrollHeight;
+        if (newHeight > prevHeight) {
+          // Content grew - trigger smart scroll
+          debouncedScrollToBottom();
+        }
       }
     }
 

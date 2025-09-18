@@ -82,68 +82,58 @@
       }
       
       window.__FADE_OUT_OVERLAY__ = function() {
-        const overlay = document.getElementById('loading-overlay');
-        if (!overlay) {
-          return;
-        }
-        
-        setTimeout(() => {
-          overlay.classList.add('unblur');
-          setTimeout(() => {
-            overlay.classList.add('hidden');
-            
-            setTimeout(() => {
-              try {
-                if (overlay && overlay.parentNode) {
-                  overlay.parentNode.removeChild(overlay);
-                }
-              } catch (e) {
-              }
-            }, 200);
-            
-          }, 400);
-          
-        }, 300);
-      };
+  const overlay = document.getElementById('loading-overlay');
+  if (!overlay) {
+    return;
+  }
+  
+  setTimeout(() => {
+    // Inject shrink style
+    const container = overlay.querySelector('.loading-container');
+    if (container) {
+      container.style.width = '0';
+      container.style.height = '0';
+      container.style.transition = 'width 0.4s ease, height 0.4s ease';
+    }
+    
+    setTimeout(() => {
+      overlay.classList.add('hidden');
       
-      // Professional smooth reload with blur transition
-      window.__SMOOTH_RELOAD__ = function() {
-        // Prevent any existing reload attempts
-        if (window.__RELOADING__) return;
-        window.__RELOADING__ = true;
-        
-        // Create reload overlay with blur effect
-        const reloadOverlay = document.createElement('div');
-        reloadOverlay.id = 'reload-overlay';
-        reloadOverlay.className = 'loading-overlay';
-        reloadOverlay.style.display = 'flex';
-        reloadOverlay.style.opacity = '0';
-        reloadOverlay.style.backdropFilter = 'blur(0px)';
-        reloadOverlay.style.transition = 'opacity 0.3s ease, backdrop-filter 0.3s ease';
-        reloadOverlay.style.zIndex = '10000';
-        reloadOverlay.style.position = 'fixed';
-        reloadOverlay.style.top = '0';
-        reloadOverlay.style.left = '0';
-        reloadOverlay.style.width = '100%';
-        reloadOverlay.style.height = '100%';
-        reloadOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
-        
-        document.body.appendChild(reloadOverlay);
-        
-        // Force reflow to ensure styles are applied
-        reloadOverlay.offsetHeight;
-        
-        // Small delay to ensure DOM is ready, then animate
-        setTimeout(() => {
-          reloadOverlay.style.opacity = '1';
-          reloadOverlay.style.backdropFilter = 'blur(10px)';
-          
-          // Reload after transition completes
-          setTimeout(() => {
-            window.location.reload();
-          }, 350); // Slightly longer to ensure transition completes
-        }, 16); // One frame delay
-      };
+      setTimeout(() => {
+        try {
+          if (overlay && overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+          }
+        } catch (e) {
+        }
+      }, 200);
+      
+    }, 400);
+    
+  }, 300);
+};
+
+window.__SMOOTH_RELOAD__ = function() {
+  if (window.__RELOADING__) return;
+  window.__RELOADING__ = true;
+  
+  // Create circle overlay
+  const reloadOverlay = document.createElement('div');
+  reloadOverlay.className = 'loading-overlay';
+  reloadOverlay.innerHTML = '<div class="loading-container" style="width: 0; height: 0; position: absolute; top: 17px; right: 157px; background: #282A2C; border-radius: 50%; transform: translate(50%, -50%); transition: width 0.6s ease, height 0.6s ease;"></div>';
+  
+  document.body.appendChild(reloadOverlay);
+  
+  setTimeout(() => {
+    const container = reloadOverlay.querySelector('.loading-container');
+    container.style.width = '300vmax';
+    container.style.height = '300vmax';
+    
+    setTimeout(() => {
+      window.location.reload();
+    }, 350);
+  }, 16);
+};
     })();
   </script>
 
@@ -151,7 +141,9 @@
 <body class="dark-theme scrollable">
   
   <!-- Smooth Loading Overlay -->
-  <div id="loading-overlay" class="loading-overlay"></div>
+  <div id="loading-overlay" class="loading-overlay">
+  <div class="loading-container"></div>
+</div>
   
   <div id="app">
     <aside class="sidebar" id="sidebar">

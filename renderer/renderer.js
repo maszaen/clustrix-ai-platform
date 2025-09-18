@@ -2238,18 +2238,22 @@ function renderArtifactsPage() {
     const codePreview = artifact.code.length > 200 ? artifact.code.slice(0, 200) + '...' : artifact.code;
     
     artifactItem.innerHTML = `
-      <div class="artifact-header">
-        <h3 class="artifact-title">${escapeHtml(artifact.title)}</h3>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span class="artifact-language">${escapeHtml(artifact.language)}</span>
-          <span class="chat-item-date">${formattedDate}</span>
-        </div>
+      <div class="artifact-preview-container">
+          <div class="artifact-preview"><code>${escapeHtml(codePreview)}</code></div>
       </div>
-      <div class="artifact-preview"><code>${escapeHtml(codePreview)}</code></div>
+      <div class="artifact-header">
+          <div class="row-gap">
+            <h3 class="artifact-title">${escapeHtml(artifact.title)}</h3>
+            <span class="artifact-language">${escapeHtml(artifact.language)}</span>
+          </div>
+          <div class="artifact-meta">
+              <span class="artifact-date">${formattedDate}</span>
+          </div>
+      </div>
       <div class="artifact-actions">
-        <button class="artifact-btn copy-artifact-btn" data-artifact-id="${artifact.id}">Copy</button>
-        <button class="artifact-btn view-artifact-btn" data-artifact-id="${artifact.id}">View</button>
-        <button class="artifact-btn delete-artifact-btn" data-artifact-id="${artifact.id}">Delete</button>
+          <button class="artifact-btn copy-artifact-btn" data-artifact-id="${artifact.id}">Copy</button>
+          <button class="artifact-btn view-artifact-btn" data-artifact-id="${artifact.id}">View</button>
+          <button class="artifact-btn delete-artifact-btn" data-artifact-id="${artifact.id}">Delete</button>
       </div>
     `;
     
@@ -2444,6 +2448,15 @@ function renderAllMessagesForNavigation(session) {
     if (role === 'ai' && !isPlaceholder) {
       hydrateThinkingIfAny(node, session, i);
       renderMathInElement(node);
+    }
+    
+    // Setup expand/collapse for user messages in navigation
+    if (role === 'user' && node) {
+      // Only setup if not already done
+      const expandBtn = node.querySelector('.message-expand-btn');
+      if (expandBtn && !expandBtn.dataset.setupComplete) {
+        setTimeout(() => setupUserMessageExpandCollapse(node), 0);
+      }
     }
   }
   
@@ -2744,7 +2757,7 @@ function handleSaveButtonClick(event) {
           const codeBlock = saveButton.closest('.code-block-container');
           const languageSpan = codeBlock?.querySelector('.language-name');
           if (languageSpan) {
-            languageSpan.innerHTML = `${language} | <span style="color: var(--accent); font-weight: 500;">${esc(title)}</span>`;
+            languageSpan.innerHTML = `${language} <span>${esc(title)}</span>`;
           }
           
           // Visual feedback and then hide save button
@@ -3114,7 +3127,7 @@ async function updateCodeBlocksWithArtifactInfo(container = document) {
         
         if (matchingArtifact) {
           // Update language display to include artifact title
-          languageSpan.innerHTML = `${language} | <span style="color: var(--accent); font-weight: 500;">${esc(matchingArtifact.title)}</span>`;
+          languageSpan.innerHTML = `${language} <span>${esc(matchingArtifact.title)}</span>`;
           
           // Hide save button for saved artifacts
           saveButton.style.display = 'none';
@@ -3416,6 +3429,15 @@ function renderHistoryLazy() {
       hydrateThinkingIfAny(node, current, actualIndex);
       renderMathInElement(node);
     }
+    
+    // Setup expand/collapse for user messages
+    if (role === 'user' && node) {
+      // Only setup if not already done
+      const expandBtn = node.querySelector('.message-expand-btn');
+      if (expandBtn && !expandBtn.dataset.setupComplete) {
+        setTimeout(() => setupUserMessageExpandCollapse(node), 0);
+      }
+    }
   }
   
   setupLazyScrollListener();
@@ -3531,6 +3553,15 @@ window.loadOlderMessages = function(smoothScroll = true) {
       if (role === 'ai') {
         hydrateThinkingIfAny(node, current, actualIndex);
         renderMathInElement(node);
+      }
+      
+      // Setup expand/collapse for user messages in lazy loading
+      if (role === 'user') {
+        // Only setup if not already done
+        const expandBtn = node.querySelector('.message-expand-btn');
+        if (expandBtn && !expandBtn.dataset.setupComplete) {
+          setTimeout(() => setupUserMessageExpandCollapse(node), 0);
+        }
       }
     }
   }
@@ -3848,7 +3879,20 @@ function addMessage(role, content, { final = false, index = -1, metadata = {}, s
       uiContent += `<div class="file-pills-container">${pillsHTML}</div>`;
     }
     uiContent += `<div class="user-text-content">${formatUserMessage(content)}</div>`;
-    node.innerHTML = `<div class="message-row"><div class="message-content"><div class="message-text">${uiContent}</div>${baseActions}</div></div>`;
+    
+    // Add expand button for user messages
+    const expandButton = `<button class="message-expand-btn hidden" title="Expand/Collapse">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 9l6 6 6-6"/>
+      </svg>
+    </button>`;
+    
+    node.innerHTML = `<div class="message-row"><div class="message-content"><div class="message-text">${uiContent}${expandButton}</div>${baseActions}</div></div>`;
+    
+    // Setup expand/collapse functionality after DOM is ready
+    setTimeout(() => {
+      setupUserMessageExpandCollapse(node);
+    }, 0);
   } else if (role === "ai_cancelled") {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
     node.innerHTML = `<div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${content}</span><button class="primary-btn regenerate-cancelled" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate?</button></div></div></div></div>`;
@@ -3950,9 +3994,98 @@ function clearLog() {
   $("#chat-log").innerHTML = "";
 }
 
+// Setup expand/collapse functionality for user messages
+function setupUserMessageExpandCollapse(messageNode) {
+  const textContent = messageNode.querySelector('.user-text-content');
+  const expandBtn = messageNode.querySelector('.message-expand-btn');
+  
+  if (!textContent || !expandBtn) {
+    return;
+  }
+  
+  // Check if already setup to prevent duplicate event listeners
+  if (expandBtn.dataset.setupComplete === 'true') {
+    return;
+  }
+  
+  // Check if content is actually overflowing (more than 5 lines)
+  const lineHeight = parseInt(getComputedStyle(textContent).lineHeight) || 20;
+  const maxHeight = lineHeight * 5;
+  
+  // Create a temporary element to measure actual content height
+  const tempDiv = document.createElement('div');
+  tempDiv.style.cssText = `
+    position: absolute;
+    visibility: hidden;
+    width: ${textContent.offsetWidth}px;
+    font-family: ${getComputedStyle(textContent).fontFamily};
+    font-size: ${getComputedStyle(textContent).fontSize};
+    line-height: ${getComputedStyle(textContent).lineHeight};
+    padding: 0;
+    margin: 0;
+    border: none;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  `;
+  tempDiv.innerHTML = textContent.innerHTML;
+  document.body.appendChild(tempDiv);
+  
+  const actualHeight = tempDiv.offsetHeight;
+  document.body.removeChild(tempDiv);
+  
+  // Show expand button only if content overflows
+  if (actualHeight > maxHeight) {
+    expandBtn.classList.remove('hidden');
+    
+    // Set dynamic max-height CSS custom properties for smooth animation
+    textContent.style.setProperty('--collapsed-height', `${maxHeight}px`);
+    textContent.style.setProperty('--expanded-height', `${actualHeight+30}px`);
+    
+    // Add click handler with smooth animation
+    expandBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const isExpanded = textContent.classList.contains('expanded');
+      
+      if (isExpanded) {
+        // Collapse with staged animation: height first, then line-clamp
+        textContent.classList.add('collapsing');
+        textContent.classList.remove('expanded');
+        expandBtn.classList.remove('expanded');
+        expandBtn.title = 'Expand';
+        
+        // Clean up after animation completes (600ms)
+        setTimeout(() => {
+          textContent.classList.remove('collapsing');
+          // The final state is handled by the keyframe animation
+        }, 600);
+        
+      } else {
+        // Expand with animation
+        textContent.classList.remove('collapsing');
+        textContent.classList.add('expanded');
+        expandBtn.classList.add('expanded');
+        expandBtn.title = 'Collapse';
+      }
+    });
+  } else {
+    // Content doesn't overflow, hide the button
+    expandBtn.classList.add('hidden');
+  }
+  
+  // Mark as setup complete
+  expandBtn.dataset.setupComplete = 'true';
+}
+
 function setCurrent(s) {
   if (current === s) {
     return;
+  }
+  
+  // Close mobile sidebar when switching sessions
+  if (window.innerWidth <= 768) {
+    closeMobileSidebar();
   }
   
   if (current && current.id) {
@@ -5050,6 +5183,34 @@ function showConfirmationModal(title, message, onConfirm) {
   modal.querySelector(".modal-overlay").onclick = close;
 }
 
+// Helper function for closing mobile sidebar with proper cleanup
+function closeMobileSidebar() {
+  const sidebar = $("#sidebar");
+  if (!sidebar.classList.contains("open")) return;
+  
+  sidebar.classList.remove("open");
+  sidebar.classList.remove("content-visible");
+  
+  // Hide backdrop
+  const backdrop = sidebar._backdrop || document.getElementById('mobile-sidebar-backdrop');
+  if (backdrop) {
+    backdrop.classList.remove("active");
+  }
+  
+  // Clean up event listeners
+  if (sidebar._closeOnBackdrop && backdrop) {
+    backdrop.removeEventListener("click", sidebar._closeOnBackdrop);
+    sidebar._closeOnBackdrop = null;
+  }
+  if (sidebar._closeOnEscape) {
+    document.removeEventListener("keydown", sidebar._closeOnEscape);
+    sidebar._closeOnEscape = null;
+  }
+  
+  // Clear references
+  sidebar._backdrop = null;
+}
+
 function handleSidebarToggle() {
   const toggleBtn = $("#toggle-sidebar");
   const openedBtn = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 group-hover:scale-80 transition scale-100 text-text-300" aria-hidden="true"><path d="M16.5 4C17.3284 4 18 4.67157 18 5.5V14.5C18 15.3284 17.3284 16 16.5 16H3.5C2.67157 16 2 15.3284 2 14.5V5.5C2 4.67157 2.67157 4 3.5 4H16.5ZM7 15H16.5C16.7761 15 17 14.7761 17 14.5V5.5C17 5.22386 16.7761 5 16.5 5H7V15ZM3.5 5C3.22386 5 3 5.22386 3 5.5V14.5C3 14.7761 3.22386 15 3.5 15H6V5H3.5Z"></path></svg>`
@@ -5057,17 +5218,43 @@ function handleSidebarToggle() {
   
   if (window.innerWidth <= 768) {
     const sidebar = $("#sidebar");
-    sidebar.classList.toggle("open");
-    if (sidebar.classList.contains("open")) {
+    const isOpening = !sidebar.classList.contains("open");
+    
+    if (isOpening) {
+      // Create or get backdrop
+      let backdrop = document.getElementById('mobile-sidebar-backdrop');
+      if (!backdrop) {
+        backdrop = document.createElement('div');
+        backdrop.id = 'mobile-sidebar-backdrop';
+        backdrop.className = 'mobile-sidebar-backdrop';
+        document.body.appendChild(backdrop);
+      }
+      
+      // Show sidebar and backdrop
+      sidebar.classList.add("open");
+      backdrop.classList.add("active");
+      
+      // Add slight delay to content animation
       setTimeout(() => {
-        const closeOnClickOutside = (e) => {
-          if (!sidebar.contains(e.target) && !$("#toggle-sidebar-2").contains(e.target)) {
-            sidebar.classList.remove("open");
-            document.removeEventListener("click", closeOnClickOutside);
-          }
-        };
-        document.addEventListener("click", closeOnClickOutside);
+        sidebar.classList.add("content-visible");
       }, 100);
+      
+      // Setup event handlers
+      const closeOnBackdrop = () => closeMobileSidebar();
+      const closeOnEscape = (e) => {
+        if (e.key === 'Escape') closeMobileSidebar();
+      };
+      
+      backdrop.addEventListener('click', closeOnBackdrop);
+      document.addEventListener('keydown', closeOnEscape);
+      
+      // Store handlers for cleanup
+      sidebar._closeOnBackdrop = closeOnBackdrop;
+      sidebar._closeOnEscape = closeOnEscape;
+      sidebar._backdrop = backdrop;
+      
+    } else {
+      closeMobileSidebar();
     }
   } else {
     collapsed = !collapsed;
@@ -5162,6 +5349,9 @@ function setupResponsiveHandlers() {
       isMobile = stillMobile;
       $("#app").classList.remove("sidebar-collapsed");
       $("#sidebar").classList.remove("open");
+      
+      // Close mobile sidebar when switching between mobile/desktop
+      closeMobileSidebar();
     }
   });
 }
@@ -5362,6 +5552,11 @@ function setupEventListeners() {
     toggleGoogleCseInput();
     $("#search-api-modal").classList.remove("hidden");
     $("#settings-menu").classList.add("hidden");
+    
+    // Close mobile sidebar when opening search API settings
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
   });
 
   $("#search-api-provider").addEventListener("change", toggleGoogleCseInput);
@@ -5420,6 +5615,11 @@ function setupEventListeners() {
     openModelMgmt();
     $("#settings-menu").classList.add("hidden");
     $('#quick-model-switch-modal').classList.add('hidden');
+    
+    // Close mobile sidebar when opening model management
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
   });
 
   $("#open-model-switcher").addEventListener("click", () => {
@@ -5431,6 +5631,11 @@ function setupEventListeners() {
     // const labelEl    = $("#model-label"); // form dimatikan
     // const noteEl     = $("#model-note");  // form dimatikan
     const notePrev   = $("#model-note-preview");
+
+    // Close mobile sidebar when opening model switcher
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
 
     $("#extended-thinking").value = modelsConf.active?.thinkMode || 'off';
 
@@ -5578,16 +5783,34 @@ function setupEventListeners() {
   $("#new-chat").addEventListener("click", () => {
     log("UI", 0, "event:new-chat-click", "New chat button clicked");
     $('#quick-model-switch-modal').classList.add('hidden');
+    
+    // Close mobile sidebar when creating new chat
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+    
     showWelcomeScreen();
   });
 
   $("#chats-btn").addEventListener("click", () => {
     log("UI", 0, "event:chats-page-click", "Chats page button clicked");
+    
+    // Close mobile sidebar when switching to chats page
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+    
     showChatsPage();
   });
 
   $("#artifact-btn").addEventListener("click", () => {
     log("UI", 0, "event:artifacts-page-click", "Artifacts page button clicked");
+    
+    // Close mobile sidebar when switching to artifacts page
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+    
     showArtifactsPage();
   });
 
@@ -5597,6 +5820,9 @@ function setupEventListeners() {
     log("UI", 0, "event:open-settings-click", "Settings menu toggled", { willShow });
     $("#settings-menu").classList.toggle("hidden");
     $('#quick-model-switch-modal').classList.add('hidden');
+    
+    // Close mobile sidebar when opening customize/settings menu
+    
   });
 
   $("#open-persona-settings").addEventListener("click", () => {
@@ -5608,6 +5834,11 @@ function setupEventListeners() {
     $("#settings-modal").classList.remove("hidden");
     $("#settings-menu").classList.add("hidden");
     $('#quick-model-switch-modal').classList.add('hidden');
+    
+    // Close mobile sidebar when opening persona settings
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
   });
 
   $("#close-modal").addEventListener("click", () => {

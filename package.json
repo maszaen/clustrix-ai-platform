@@ -58,6 +58,10 @@
     "mathjax": "^4.0.0",
     "perfect-scrollbar": "^1.5.6",
     "serpapi": "^2.2.1",
-    "xlsx": "file:./xlsx"
+    "xlsx": "file:./xlsx",
+    "langchain": "^0.3.0",
+    "@langchain/openai": "^0.3.0",
+    "@langchain/community": "^0.3.0",
+    "uuid": "^10.0.0"
   }
 }

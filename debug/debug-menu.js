@@ -1,10 +1,6 @@
-// Menu Debugging Helper
-// Add this to your browser console or include it temporarily in your app
-
 function debugMenuPositioning() {
   console.log('=== MENU POSITIONING DEBUG ===');
   
-  // Find all menu containers
   const menuContainers = document.querySelectorAll('.chat-menu-container');
   console.log(`Found ${menuContainers.length} menu containers`);
   
@@ -19,7 +15,6 @@ function debugMenuPositioning() {
     console.log('Button:', button);
     console.log('List Item:', listItem);
     
-    // Check positioning context
     const containerStyles = getComputedStyle(container);
     const dropdownStyles = getComputedStyle(dropdown);
     const listItemStyles = getComputedStyle(listItem);

@@ -6,8 +6,20 @@ const https = require('https');
 const cheerio = require('cheerio'); 
 const { getJson } = require('serpapi');
 const mammoth = require('mammoth');
-const xlsx = require('./xlsx/xlsx');
+const xlsx = require('./local_modules/xlsx/xlsx');
 
+const ClustrixLangChainService = require('./backend/langchain-service');
+const { MultiAgentOrchestrator } = require('./backend/langchain-agents');
+const { getBaseUrl, getApiKey, joinEndpoint, applyThinkingHints } = require('./backend/langchain-helpers');
+
+let langchainService = null;
+let agentOrchestrator = null;
+
+app.whenReady().then(() => {
+  langchainService = new ClustrixLangChainService(app);
+  agentOrchestrator = new MultiAgentOrchestrator(langchainService);
+  console.log('🚀 LangChain services initialized');
+});
 
 const logFile = path.join(app.getPath('userData'), 'app.log');
 
@@ -40,7 +52,6 @@ function parseTriageJson(rawText) {
   }
 }
 
-// ---------- Models Config (providers) ----------
 const modelsConfFile = path.join(app.getPath('userData'), 'ai-model.conf.json');
 
 function defaultModelsConf() {
@@ -59,7 +70,6 @@ function defaultModelsConf() {
           'deepseek/deepseek-chat-v3.1:free',
           'meta-llama/llama-3.1-8b-instruct',
           'mistralai/mistral-7b-instruct',
-          'deepseek/deepseek-chat',
           'openai/gpt-oss-120b:free',
           'openai/gpt-oss-20b:free',
           'meta-llama/llama-4-maverick:free',
@@ -137,39 +147,124 @@ function createWindow(){
   
   win.webContents.openDevTools();
 
-  // Logging
+  let logState = {
+    lastSignature: null,
+    lastDetails: null,
+    sequenceCount: 0
+  };
   ipcMain.on('log:write', (_event, logData) => {
-    const { timestamp, context, func, message, details } = logData;
-    const d = new Date(timestamp);
-    const time = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}:${d.getMilliseconds().toString().padStart(3, '0')}`;
+    const { timestamp, context, levelLabel, func, message, details } = logData;
+    
+    let time;
+    if (timestamp && timestamp.includes(':')) {
+      time = timestamp;
+    } else {
+      const d = new Date();
+      time = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}.${d.getMilliseconds().toString().padStart(3, '0')}`;
+    }
+
+    const signature = `${context}:${func}:${message}`;
+    const detailsStr = details ? JSON.stringify(details, Object.keys(details).sort()) : '';
+    const isSameBase = signature === logState.lastSignature;
+    const hasDetails = details && Object.keys(details).length > 0;
 
     if (func === 'onToken' && details && details.streamId) {
       if (details.streamId === lastTokenStreamId) {
         try {
           fs.appendFileSync(logFile, `- [${time}] token: ${details.token || '(empty)'}\n`);
+          console.log(`- [${time}] token: ${details.token || '(empty)'}`);
         } catch (e) {}
         return;
       }
-      
       lastTokenStreamId = details.streamId;
     } else {
       lastTokenStreamId = null;
     }
 
-    let logLine = `[${context} - ${time}] ${func}() → ${message}`;
-    if (details && Object.keys(details).length > 0) {
-      for (const [key, value] of Object.entries(details)) {
-        const valueString = (typeof value === 'object' && value !== null) ? JSON.stringify(value) : String(value);
-        logLine += `\n- ${key}: ${valueString}`;
+    if (isSameBase && hasDetails) {
+      // Same function/message but potentially different data
+      logState.sequenceCount++;
+      const changedDetails = getChangedDetails(details, logState.lastDetails || {});
+      
+      if (Object.keys(changedDetails).length > 0) {
+        // Show incremental changes
+        const shortTime = time.split(':').slice(1).join(':');
+        let logLine = `${logState.sequenceCount}. [${shortTime}] ${func}().\n${message}`;
+        
+        console.log(`${logState.sequenceCount}. [${context} - ${shortTime}] ${func}() -> ${message}`);
+        
+        for (const [key, value] of Object.entries(changedDetails)) {
+          const valueString = (typeof value === 'object' && value !== null) ? JSON.stringify(value) : String(value);
+          logLine += `\n- ${key}: ${valueString}`;
+          console.log(`   - ${key}: ${valueString}`);
+        }
+        
+        try {
+          fs.appendFileSync(logFile, logLine + '\n\n', 'utf-8');
+        } catch (e) {
+          console.error('Gagal menulis ke file log:', e);
+        }
+      } else {
+        // No changes, minimal log
+        logState.sequenceCount++;
+        const shortTime = time.split(':').slice(1).join(':');
+        const minimalLog = `${logState.sequenceCount}. [${shortTime}] ${func}().`;
+        
+        console.log(`${logState.sequenceCount}. [${context} - ${shortTime}] ${func}().`);
+        
+        try {
+          fs.appendFileSync(logFile, minimalLog + '\n', 'utf-8');
+        } catch (e) {}
+      }
+      
+      logState.lastDetails = hasDetails ? {...details} : null;
+      
+    } else if (isSameBase && !hasDetails) {
+      // Same function/message, no data - ultra minimal
+      logState.sequenceCount++;
+      const shortTime = time.split(':').slice(1).join(':');
+      const ultraMinimal = `${logState.sequenceCount}. [${shortTime}]`;
+      
+      console.log(`${logState.sequenceCount}. [${context} - ${shortTime}]`);
+      
+      try {
+        fs.appendFileSync(logFile, ultraMinimal + '\n', 'utf-8');
+      } catch (e) {}
+      
+    } else {
+      // New signature - full format
+      logState.lastSignature = signature;
+      logState.lastDetails = hasDetails ? {...details} : null;
+      logState.sequenceCount = 0;
+      
+      let logLine = `[${context} ${levelLabel || 'LOG'}] [${time}] ${func}().\n${message}`;
+      console.log(`[${context} ${levelLabel || 'LOG'} - ${time}] ${func}() -> ${message}`);
+      
+      if (hasDetails) {
+        for (const [key, value] of Object.entries(details)) {
+          const valueString = (typeof value === 'object' && value !== null) ? JSON.stringify(value) : String(value);
+          logLine += `\n- ${key}: ${valueString}`;
+          console.log(`   - ${key}: ${valueString}`);
+        }
+      }
+      
+      try {
+        fs.appendFileSync(logFile, logLine + '\n\n', 'utf-8');
+      } catch (e) {
+        console.error('Gagal menulis ke file log:', e);
       }
     }
-
-    try {
-      fs.appendFileSync(logFile, logLine + '\n\n', 'utf-8');
-    } catch (e) {
-      console.error('Gagal menulis ke file log:', e);
-    }
   });
+
+function getChangedDetails(current, previous) {
+  const changed = {};
+  for (const [key, value] of Object.entries(current)) {
+    if (previous[key] !== value) {
+      changed[key] = value;
+    }
+  }
+  return changed;
+}
   
   ipcMain.on('window:minimize', () => win.minimize());
   ipcMain.on('window:maximize', () => {
@@ -381,6 +476,31 @@ ipcMain.handle('artifacts:save', async (_evt, artifacts) => {
   }
 });
 
+// Projects IPC handlers
+const projectsFile = path.join(app.getPath('userData'), 'projects.json');
+
+ipcMain.handle('projects:load', async () => {
+  try{
+    if (!fs.existsSync(projectsFile)) return [];
+    const content = fs.readFileSync(projectsFile, 'utf-8');
+    const parsed = JSON.parse(content || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  }catch(e){
+    console.error('projects load error', e);
+    return [];
+  }
+});
+
+ipcMain.handle('projects:save', async (_evt, projects) => {
+  try{
+    fs.writeFileSync(projectsFile, JSON.stringify(projects, null, 2), 'utf-8');
+    return true;
+  }catch(e){
+    console.error('projects save error', e);
+    return false;
+  }
+});
+
 ipcMain.handle('files:open-dialog', async (event) => {
   logHelper('FILE_DIALOG', 'ipc:handle', 'Received request to open file dialog.');
   const window = BrowserWindow.fromWebContents(event.sender);
@@ -465,38 +585,12 @@ ipcMain.handle('files:open-dialog', async (event) => {
 });
 
 // ---------- Helpers ----------
-function joinEndpoint(base, p){
-  const b = String(base || '').replace(/\/+$/, '');
-  const s = String(p || '').replace(/^\/+/, '');
-  return `${b}/${s}`;
-}
-
 function mapEffort(mode){
   if (!mode || mode === 'off') return null;
   if (mode === 'low') return 'low';
   if (mode === 'medium') return 'medium';
   if (mode === 'high') return 'high';
   return null;
-}
-
-function applyThinkingHints({ provider, model, bodyObj, thinkMode }) {
-  const effort = mapEffort(thinkMode);
-  if (!effort && thinkMode !== 'auto') return;
-
-  bodyObj.stream_options = Object.assign({}, bodyObj.stream_options, { include_reasoning: true });
-
-  if (effort) {
-    bodyObj.reasoning = Object.assign({}, bodyObj.reasoning, { effort }); // 'low' | 'medium' | 'high'
-  }
-
-  const mid = String(model || '').toLowerCase();
-  if (mid.includes('deepseek')) {
-    if (!bodyObj.max_thought_tokens && effort) {
-      bodyObj.max_thought_tokens = effort === 'high' ? 2048 : effort === 'medium' ? 1024 : 512;
-    }
-    bodyObj.stream_options.include_reasoning = true;
-  }
-
 }
 
 // ---------- Streaming from MAIN (SSE) ----------
@@ -518,213 +612,350 @@ ipcMain.on('chat:stream-start', async (event, payload) => {
 
 function runStandardStreaming(event, payload) {
   const reqId = payload.reqId;
-  const messages = payload.messages || [];
+  let messages = payload.messages || [];
   const model = payload.model || 'glm-4.5-flash';
   const provider = (payload.provider || 'openrouter').toLowerCase();
+  const sessionId = payload.sessionId || 'default';
+  const session = payload.session || {};
 
-  let BASE_URL =
-    (payload.baseUrl || '') ||
-    (provider === 'openrouter' ? 'https://openrouter.ai/api/v1' :
-    provider === 'groq'      ? 'https://api.groq.com/openai/v1' :
-    provider === 'gemini'    ? 'https://generativelanguage.googleapis.com/v1beta' :
-    provider === 'zhipu'       ? 'https://api.z.ai/api/paas/v4/' :
-    provider === 'cerebras'  ? 'https://api.cerebras.ai/v1/' :
-                                (process.env.BASE_URL || 'https://api.z.ai/api/paas/v4/'));
-
-  let API_KEY =
-    (payload.apiKey || '') ||
-    (provider === 'openrouter' ? (process.env.OPENROUTER_API_KEY || '') :
-    provider === 'groq'      ? (process.env.GROQ_API_KEY || '') :
-    provider === 'gemini'    ? (process.env.GEMINI_API_KEY || '') :
-    provider === 'zhipu'       ? (process.env.Z_API_KEY || '') :
-    provider === 'cerebras'  ? (process.env.CEREBRAS_API_KEY || '') :
-                                (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || ''));
-
-  function sendDone(){ event.sender.send(`chat:done-${reqId}`); activeStreams.delete(reqId); }
-  function sendErr(msg){ 
-    event.sender.send(`chat:error-${reqId}`, msg); 
-    activeStreams.delete(reqId); 
+  // ==================== LANGCHAIN ENHANCEMENT ====================
+  // Process messages through LangChain if available
+  if (langchainService && agentOrchestrator) {
+    processWithLangChain();
+  } else {
+    processWithoutLangChain();
   }
 
-  if (provider === 'gemini') {
+  async function processWithLangChain() {
     try {
-      const url = new URL(`${BASE_URL.replace(/\/+$/,'')}/models/${encodeURIComponent(model)}:generateContent`);
-      if (API_KEY) url.searchParams.set('key', API_KEY);
+      console.log('🚀 MAIN: Starting LangChain processing...');
+      logHelper('LANGCHAIN', 'runStandardStreaming', 'Processing with LangChain enhancement');
+      
+      // Check if this is a project session
+      const isProject = session.type === 'project' || session.isProject || false;
+      console.log(`📋 MAIN: Session type detected: ${isProject ? 'PROJECT' : 'REGULAR'}`);
+      
+      if (isProject) {
+        console.log('🤖 MAIN: PROJECT mode - activating agent system...');
+        logHelper('LANGCHAIN', 'runStandardStreaming', 'Detected PROJECT session - using agents');
+        
+        // For project sessions, use agent system for complex processing
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage && lastMessage.role === 'user') {
+          console.log(`💭 MAIN: Processing user query: "${lastMessage.content.substring(0, 100)}..."`);
+          
+          // Process uploaded files if any
+          if (session.uploadedFiles && session.uploadedFiles.length > 0) {
+            console.log(`📁 MAIN: Processing ${session.uploadedFiles.length} uploaded files...`);
+            await langchainService.processUploadedFiles(session.uploadedFiles, sessionId);
+          }
+          
+          console.log('🤖 MAIN: Calling agent orchestrator...');
+          // Use agent orchestrator for project sessions
+          const agentResponse = await agentOrchestrator.processComplexRequest(
+            lastMessage.content, 
+            sessionId, 
+            session, 
+            model, 
+            getApiKey(provider, payload)
+          );
+          
+          // Send agent response as stream chunks
+          if (agentResponse) {
+            console.log(`✅ MAIN: Agent response received (${agentResponse.length} chars), starting streaming...`);
+            const chunks = agentResponse.split(' ');
+            let index = 0;
+            const sendChunk = () => {
+              if (index < chunks.length) {
+                event.sender.send(`chat:chunk-${reqId}`, chunks[index] + ' ');
+                index++;
+                setTimeout(sendChunk, 50); // Simulate streaming
+              } else {
+                console.log('🎉 MAIN: Agent streaming completed');
+                event.sender.send(`chat:done-${reqId}`);
+                activeStreams.delete(reqId);
+              }
+            };
+            sendChunk();
+            return;
+          } else {
+            console.log('⚠️ MAIN: No agent response received, falling back to standard processing');
+          }
+        }
+      } else {
+        console.log('💬 MAIN: REGULAR mode - checking if RE+ACT pattern needed...');
+        logHelper('LANGCHAIN', 'runStandardStreaming', 'Regular session - analyzing query complexity');
+        
+        // Process uploaded files for regular sessions
+        if (session.uploadedFiles && session.uploadedFiles.length > 0) {
+          console.log(`📁 MAIN: Processing ${session.uploadedFiles.length} uploaded files for regular session...`);
+          await langchainService.processUploadedFiles(session.uploadedFiles, sessionId);
+        }
+        
+        // Check if we should use RE+ACT pattern
+        const shouldUseReact = langchainService.shouldUseReasoningAction(
+          currentMessage,
+          session.uploadedFiles || []
+        );
+        
+        if (shouldUseReact) {
+          console.log('🧠 MAIN: Using RE+ACT pattern for complex query analysis...');
+          
+          try {
+            const reactResult = await langchainService.processWithReasoningAction(
+              currentMessage,
+              sessionId,
+              session.uploadedFiles || [],
+              model
+            );
+            
+            console.log(`🎯 MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
+            
+            // Stream the RE+ACT response
+            const responseText = reactResult.response || 'Analysis completed using desktop search capabilities.';
+            const words = responseText.split(' ');
+            let index = 0;
+            
+            const sendChunk = () => {
+              if (index < words.length) {
+                event.sender.send(`chat:chunk-${reqId}`, words.slice(index, index + 3).join(' ') + ' ');
+                index += 3;
+                setTimeout(sendChunk, 100); // Slower for better readability
+              } else {
+                console.log('🎉 MAIN: RE+ACT streaming completed');
+                event.sender.send(`chat:done-${reqId}`);
+                activeStreams.delete(reqId);
+              }
+            };
+            
+            sendChunk();
+            return;
+            
+          } catch (reactError) {
+            console.error('❌ MAIN: RE+ACT processing failed, falling back:', reactError);
+            // Fall through to standard processing
+          }
+        }
+        
+        // Standard context enhancement for simple queries
+        console.log('🔍 MAIN: Using standard context enhancement...');
+        messages = await langchainService.processMessage(messages, model, {}, sessionId, session);
+        console.log(`✅ MAIN: Messages enhanced, new count: ${messages.length}`);
+      }
+      
+    } catch (error) {
+      console.error('❌ MAIN: LangChain processing error:', error);
+      logHelper('LANGCHAIN', 'runStandardStreaming', 'LangChain processing failed, falling back', { error: error.message });
+    }
+    
+    console.log('🔄 MAIN: Proceeding with standard streaming...');
+    // Continue with standard streaming
+    processWithoutLangChain();
+  }
 
-      const contents = [];
-      for (const m of messages) {
-        const role = m.role === 'assistant' ? 'model' : 'user';
-        contents.push({ role, parts: [{ text: String(m.content || '') }] });
+  function processWithoutLangChain() {
+    // Original streaming logic
+    const BASE_URL = getBaseUrl(provider, payload);
+    const API_KEY = getApiKey(provider, payload);
+
+    function sendDone(){ event.sender.send(`chat:done-${reqId}`); activeStreams.delete(reqId); }
+    function sendErr(msg){ 
+      event.sender.send(`chat:error-${reqId}`, msg); 
+      activeStreams.delete(reqId); 
+    }
+
+    if (provider === 'gemini') {
+      handleGeminiStreaming();
+      return;
+    }
+
+    handleOpenAICompatibleStreaming();
+
+    function handleGeminiStreaming() {
+      try {
+        const url = new URL(`${BASE_URL.replace(/\/+$/,'')}/models/${encodeURIComponent(model)}:generateContent`);
+        if (API_KEY) url.searchParams.set('key', API_KEY);
+
+        const contents = [];
+        for (const m of messages) {
+          const role = m.role === 'assistant' ? 'model' : 'user';
+          contents.push({ role, parts: [{ text: String(m.content || '') }] });
+        }
+
+        const body = JSON.stringify({ contents });
+        const opts = {
+          method: 'POST',
+          hostname: url.hostname,
+          path: url.pathname + url.search,
+          protocol: url.protocol,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Content-Length': Buffer.byteLength(body)
+          }
+        };
+
+        const req = https.request(opts, (res) => {
+          let acc = '';
+          res.setEncoding('utf8');
+          res.on('data', d => acc += d);
+          res.on('end', () => {
+            if (res.statusCode < 200 || res.statusCode >= 300) {
+              return sendErr(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc.slice(0,200)}`);
+            }
+            try {
+              const j = JSON.parse(acc);
+              const text = (j.candidates?.[0]?.content?.parts || [])
+                .map(p => p.text || '').join('');
+              if (text) event.sender.send(`chat:chunk-${reqId}`, text);
+              sendDone();
+            } catch (e) {
+              sendErr('Bad JSON from Gemini');
+            }
+          });
+        });
+        req.on('error', e => sendErr(e.message || String(e)));
+        req.write(body); req.end();
+        activeStreams.set(reqId, req);
+      } catch (e) {
+        sendErr(e.message || String(e));
+      }
+    }
+
+    function handleOpenAICompatibleStreaming() {
+      const url = new URL(joinEndpoint(BASE_URL, 'chat/completions'));
+      let bodyObj = { model, messages, stream: true };
+      applyThinkingHints({ provider, model, bodyObj, thinkMode: payload.thinkMode });
+      const body = JSON.stringify(bodyObj);
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Content-Length': Buffer.byteLength(body)
+      };
+
+      if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
+      if (provider === 'openrouter') {
+        headers['HTTP-Referer'] = 'https://clustrix.local';
+        headers['X-Title'] = 'Clustrix Desktop';
       }
 
-      const body = JSON.stringify({ contents });
       const opts = {
         method: 'POST',
         hostname: url.hostname,
+        port: url.port,
         path: url.pathname + url.search,
         protocol: url.protocol,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Content-Length': Buffer.byteLength(body)
-        }
+        headers
       };
 
       const req = https.request(opts, (res) => {
-        let acc = '';
+        if (res.statusCode < 200 || res.statusCode >= 300){
+          let err = '';
+          res.on('data', d => err += d.toString('utf-8'));
+          res.on('end', () => sendErr(`HTTP ${res.statusCode} ${res.statusMessage} — ${err.slice(0,200)}`));
+          return;
+        }
+
+        const ctype = String(res.headers['content-type'] || '').toLowerCase();
+        const isSSE = ctype.includes('text/event-stream');
+
+        if (!isSSE) {
+          let acc = '';
+          res.setEncoding('utf8');
+          res.on('data', (d) => acc += d);
+          res.on('end', () => {
+            try {
+              const j = JSON.parse(acc);
+
+              // 'thinking' / 'reasoning'
+              let think =
+                j?.choices?.[0]?.message?.reasoning_content ??
+                j?.choices?.[0]?.message?.reasoning ??
+                j?.reasoning_content ??
+                j?.reasoning ??
+                j?.thoughts ??
+                '';
+
+              if (Array.isArray(think)) think = think.map(p => (p?.text ?? p)).join('');
+              if (think) event.sender.send(`chat:chunk-${reqId}`, { think });
+
+              // text biasa
+              let text =
+                j?.choices?.[0]?.message?.content ??
+                j?.message?.content ??
+                j?.output_text ?? '';
+
+              if (Array.isArray(text)) text = text.map(p => (p?.text ?? p)).join('');
+              if (text) event.sender.send(`chat:chunk-${reqId}`, text);
+
+              sendDone();
+            } catch (e) {
+              sendErr(`JSON parse error (non-stream): ${e.message?.slice(0,100)}`);
+            }
+          });
+          return;
+        }
+
         res.setEncoding('utf8');
-        res.on('data', d => acc += d);
-        res.on('end', () => {
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            return sendErr(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc.slice(0,200)}`);
-          }
-          try {
-            const j = JSON.parse(acc);
-            const text = (j.candidates?.[0]?.content?.parts || [])
-              .map(p => p.text || '').join('');
-            if (text) event.sender.send(`chat:chunk-${reqId}`, text);
-            sendDone();
-          } catch (e) {
-            sendErr('Bad JSON from Gemini');
+        let buffer = '';
+        res.on('data', (chunk) => {
+          buffer += chunk;
+
+          let idx;
+          while ((idx = buffer.search(/\r?\n\r?\n/)) !== -1) {
+            const rawEvent = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + (buffer[idx] === '\r' ? 4 : 2));
+
+            const lines = rawEvent.split(/\r?\n/);
+            const dataLines = [];
+            let isDone = false;
+
+            for (const ln of lines) {
+              if (/^\s*data:\s*\[DONE\]\s*$/i.test(ln)) { isDone = true; break; }
+              const m = ln.match(/^\s*data:\s?(.*)$/);
+              if (m) dataLines.push(m[1]);
+            }
+            if (isDone) continue;
+            if (!dataLines.length) continue;
+
+            const payload = dataLines.join('\n');
+
+            try {
+              const j = JSON.parse(payload);
+
+              let rdelta =
+                j?.choices?.[0]?.delta?.reasoning_content ??
+                j?.choices?.[0]?.delta?.reasoning ??
+                j?.choices?.[0]?.delta?.thoughts ??
+                j?.delta?.thinking ??
+                j?.reasoning ??
+                '';
+
+              if (Array.isArray(rdelta)) rdelta = rdelta.map(p => (p?.text ?? p)).join('');
+              if (rdelta) event.sender.send(`chat:chunk-${reqId}`, { think: rdelta });
+
+              const delta =
+                j?.choices?.[0]?.delta?.content ??
+                j?.delta?.content ??
+                j?.content ?? '';
+
+              if (delta) event.sender.send(`chat:chunk-${reqId}`, delta);
+
+            } catch (e) {
+              console.log('[SSE BAD JSON]', payload.slice(0,200));
+            }
           }
         });
+
+        res.on('end', sendDone);
       });
       req.on('error', e => sendErr(e.message || String(e)));
       req.write(body); req.end();
       activeStreams.set(reqId, req);
-    } catch (e) {
-      sendErr(e.message || String(e));
     }
-    return;
   }
-
-  const url = new URL(joinEndpoint(BASE_URL, 'chat/completions'));
-  let bodyObj = { model, messages, stream: true };
-  applyThinkingHints({ provider, model, bodyObj, thinkMode: payload.thinkMode });
-  const body = JSON.stringify(bodyObj);
-
-  const headers = {
-    'Content-Type': 'application/json',
-    'Accept': 'text/event-stream',
-    'Content-Length': Buffer.byteLength(body)
-  };
-  if (API_KEY) headers['Authorization'] = `Bearer ${API_KEY}`;
-  if (provider === 'openrouter') {
-    headers['HTTP-Referer'] = 'https://clustrix.local';
-    headers['X-Title'] = 'Clustrix Desktop';
-  }
-
-  const options = {
-    method: 'POST',
-    hostname: url.hostname,
-    path: url.pathname + url.search,
-    protocol: url.protocol,
-    headers
-  };
-
-  const req = https.request(options, (res) => {
-    if (res.statusCode < 200 || res.statusCode >= 300){
-      let err = '';
-      res.on('data', d => err += d.toString('utf-8'));
-      res.on('end', () => sendErr(`HTTP ${res.statusCode} ${res.statusMessage} — ${err.slice(0,200)}`));
-      return;
-    }
-
-    const ctype = String(res.headers['content-type'] || '').toLowerCase();
-    const isSSE = ctype.includes('text/event-stream');
-
-    if (!isSSE) {
-      let acc = '';
-      res.setEncoding('utf8');
-      res.on('data', (d) => acc += d);
-      res.on('end', () => {
-        try {
-          const j = JSON.parse(acc);
-
-          // 'thinking' / 'reasoning'
-          let think =
-            j?.choices?.[0]?.message?.reasoning_content ??
-            j?.choices?.[0]?.message?.reasoning ??
-            j?.reasoning_content ??
-            j?.reasoning ??
-            j?.thoughts ??
-            '';
-
-          if (Array.isArray(think)) think = think.map(p => (p?.text ?? p)).join('');
-          if (think) event.sender.send(`chat:chunk-${reqId}`, { think });
-
-          // text biasa
-          let text =
-            j?.choices?.[0]?.message?.content ??
-            j?.message?.content ??
-            j?.output_text ?? '';
-
-          if (Array.isArray(text)) text = text.map(p => (p?.text ?? p)).join('');
-          if (text) event.sender.send(`chat:chunk-${reqId}`, text);
-
-          sendDone();
-        } catch (e) {
-          sendErr(`JSON parse error (non-stream): ${e.message?.slice(0,100)}`);
-        }
-      });
-      return;
-    }
-    res.setEncoding('utf8');
-    let buffer = '';
-    res.on('data', (chunk) => {
-      buffer += chunk;
-
-      let idx;
-      while ((idx = buffer.search(/\r?\n\r?\n/)) !== -1) {
-        const rawEvent = buffer.slice(0, idx);
-        buffer = buffer.slice(idx + (buffer[idx] === '\r' ? 4 : 2));
-
-        const lines = rawEvent.split(/\r?\n/);
-        const dataLines = [];
-        let isDone = false;
-
-        for (const ln of lines) {
-          if (/^\s*data:\s*\[DONE\]\s*$/i.test(ln)) { isDone = true; break; }
-          const m = ln.match(/^\s*data:\s?(.*)$/);
-          if (m) dataLines.push(m[1]);
-        }
-        if (isDone) continue;
-        if (!dataLines.length) continue;
-
-        const payload = dataLines.join('\n');
-
-        try {
-          const j = JSON.parse(payload);
-
-          let rdelta =
-            j?.choices?.[0]?.delta?.reasoning_content ??
-            j?.choices?.[0]?.delta?.reasoning ??
-            j?.choices?.[0]?.delta?.thoughts ??
-            j?.delta?.thinking ??
-            j?.reasoning ??
-            '';
-
-          if (Array.isArray(rdelta)) rdelta = rdelta.map(p => (p?.text ?? p)).join('');
-          if (rdelta) event.sender.send(`chat:chunk-${reqId}`, { think: rdelta });
-
-          const delta =
-            j?.choices?.[0]?.delta?.content ??
-            j?.delta?.content ??
-            j?.content ?? '';
-
-          if (delta) event.sender.send(`chat:chunk-${reqId}`, delta);
-
-        } catch (e) {
-          console.log('[SSE BAD JSON]', payload.slice(0,200));
-        }
-      }
-    });
-
-    res.on('end', sendDone);
-  });
-  req.on('error', e => sendErr(e.message || String(e)));
-  req.write(body); req.end();
-  activeStreams.set(reqId, req);
 }
 
 ipcMain.on('chat:stream-cancel', (event, reqId) => {

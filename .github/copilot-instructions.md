@@ -21,9 +21,26 @@ The app supports 5 AI providers with per-provider configuration:
 
 ## Development Workflows
 
+### Debugging Protocol
+
+**CRITICAL RULE**: Never run `npm run dev` unless specifically requested. The user will provide logs and debugging information manually.
+
+**Debugging Workflow**:
+1. User reports issues with specific functionality
+2. Agent analyzes code without running the application
+3. Agent proposes fixes based on code analysis
+4. User tests the fixes and provides logs/feedback
+5. Agent iterates based on user-provided debugging information
+
+**Log Interpretation**: When user provides logs, look for:
+- Error patterns in structured logs with emoji indicators
+- Session creation/navigation flows
+- IPC communication patterns
+- UI state changes and page transitions
+
 ### Running the App
 ```bash
-# Development mode
+# Development mode - ONLY when user requests
 npm run dev
 # or with Z AI environment 
 npm run node  # Uses preset Z_API_KEY environment
@@ -36,8 +53,48 @@ npm run make
 - **Sessions**: `${userData}/chat_data.json`
 - **Model Config**: `${userData}/ai-model.conf.json`  
 - **Artifacts**: `${userData}/artifacts.json`
+- **Projects**: `${userData}/projects.json`
 - **Debug Logs**: `${userData}/app.log`
 - **Debug Mode**: Triggered when `window.api` is undefined
+
+### Logging Standards
+
+**MANDATORY LOGGING RULE**: Always use the structured `log()` function instead of `console.log()`.
+
+```javascript
+// ✅ CORRECT - Use structured logging
+log("PROJECTS", 2, "createNewProject", "Project created successfully", { 
+  projectId: project.id, 
+  name: project.name 
+});
+
+// ❌ WRONG - Never use console.log
+console.log("Project created:", project.id);
+```
+
+**Log Function Signature**:
+```javascript
+log(context, level, functionName, message, details = {})
+```
+
+**Parameters**:
+- `context`: Module/section (e.g., "PROJECTS", "SESSION", "UI", "LANGCHAIN")
+- `level`: 0=TRACE, 1=DEBUG, 2=INFO, 3=WARN, 4=ERROR
+- `functionName`: Current function name for traceability
+- `message`: Human-readable description
+- `details`: Object with relevant data for debugging
+
+**Backend Integration**: The `log()` function automatically:
+- Sends logs to backend terminal via `window.api.logging.write()`
+- Stores in `${userData}/app.log` for persistent debugging
+- Queues logs if API not ready and flushes when available
+- Provides console output for browser DevTools
+
+**Benefits**:
+- **Unified Logging**: All logs centralized in app.log database
+- **Backend Visibility**: Logs appear in terminal where app is running
+- **Structured Data**: Searchable and filterable log entries
+- **Production Ready**: Controlled by LOGGING flag for production builds
 
 ## Critical Patterns
 

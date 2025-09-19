@@ -396,7 +396,16 @@ ipcMain.handle('files:open-dialog', async (event) => {
     filters: [
       { 
         name: 'Supported Files', 
-        extensions: ['docx', 'xlsx', 'xls', 'txt', 'md', 'js', 'ts', 'tsx', 'java', 'html', 'css', 'json', 'py'] 
+        extensions: [
+          'docx', 'xlsx', 'xls', 'csv', 'tsv',
+          'txt', 'md', 'log', 'ini',
+          'json', 'yaml', 'yml', 'xml',
+          'html', 'css',
+          'js', 'ts', 'tsx', 'java', 'py', 'go', 'rs',
+          'c', 'cpp', 'h', 'hpp',
+          'sh', 'bat',
+          'toml', 'conf', 'properties'
+        ]
       }
     ]
   });

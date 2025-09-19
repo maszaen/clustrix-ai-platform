@@ -6,6 +6,8 @@
   <title>Font Preview Tool</title>
   <style>
     /* START: FONT-FACE RULES */
+    @font-face { font-family: "06fe80d45fc12f7f-s.p"; src: url("./06fe80d45fc12f7f-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: "0cd27f4e808e3c8d-s.p"; src: url("./0cd27f4e808e3c8d-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "177b7db6a26ff4c3-s.p"; src: url("./177b7db6a26ff4c3-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "183a0d33cd5ef006-s.p"; src: url("./183a0d33cd5ef006-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "2cc8547efe9f163a-s.p"; src: url("./2cc8547efe9f163a-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
@@ -15,10 +17,13 @@
     @font-face { font-family: "5cc13524e09f5d21-s.p"; src: url("./5cc13524e09f5d21-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "5fee9713a1748cc9-s.p"; src: url("./5fee9713a1748cc9-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "6a2030c2a5787e7a-s.p"; src: url("./6a2030c2a5787e7a-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: "75014e9053556df0-s.p"; src: url("./75014e9053556df0-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "8217ebd4682cfe49-s.p"; src: url("./8217ebd4682cfe49-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: "a0eafab536ffd221-s.p (1)"; src: url("./a0eafab536ffd221-s.p (1).woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "a0eafab536ffd221-s.p"; src: url("./a0eafab536ffd221-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "a72997480c14a9d4-s.p"; src: url("./a72997480c14a9d4-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "ae9d065a0123ed8a-s.p"; src: url("./ae9d065a0123ed8a-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: "b5f39ee185750359-s.p"; src: url("./b5f39ee185750359-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "b8c97ebabd0473a4-s.p"; src: url("./b8c97ebabd0473a4-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "b96accb76593e50d-s.p"; src: url("./b96accb76593e50d-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "cfe503504e29ad5d-s.p"; src: url("./cfe503504e29ad5d-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
@@ -27,7 +32,7 @@
     @font-face { font-family: "d7440d3c533a1aec-s.p"; src: url("./d7440d3c533a1aec-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "db2277a4dc542e54-s.p"; src: url("./db2277a4dc542e54-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
     @font-face { font-family: "f6f0b26c2c0e7b63-s.p"; src: url("./f6f0b26c2c0e7b63-s.p.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-    /* END: FONT-FACE RULES */
+/* END: FONT-FACE RULES */
 
     /* --- Minimalist Base Styles --- */
     :root {
@@ -205,16 +210,35 @@ document.addEventListener("DOMContentLoaded", () => {
   // ====== FONT LIST (Urutan default) ======
 
   // START: FONT-FAMILIES ARRAY
-  let fontFamilies = [
-    "177b7db6a26ff4c3-s.p", "183a0d33cd5ef006-s.p", "2cc8547efe9f163a-s.p",
-    "2d21c5135ef46b39-s.p", "3b066fe34f61f169-s.p", "4e8887750eb14755-s.p",
-    "5cc13524e09f5d21-s.p", "5fee9713a1748cc9-s.p", "6a2030c2a5787e7a-s.p",
-    "8217ebd4682cfe49-s.p", "a0eafab536ffd221-s.p", "a72997480c14a9d4-s.p",
-    "ae9d065a0123ed8a-s.p", "b8c97ebabd0473a4-s.p", "b96accb76593e50d-s.p",
-    "cfe503504e29ad5d-s.p", "d13ff1ddfcb21419-s.p", "d4ad98ce6ee578c0-s.p",
-    "d7440d3c533a1aec-s.p", "db2277a4dc542e54-s.p", "f6f0b26c2c0e7b63-s.p",
-  ];
-  // END: FONT-FAMILIES ARRAY
+let fontFamilies = [
+    "06fe80d45fc12f7f-s.p",
+    "0cd27f4e808e3c8d-s.p",
+    "177b7db6a26ff4c3-s.p",
+    "183a0d33cd5ef006-s.p",
+    "2cc8547efe9f163a-s.p",
+    "2d21c5135ef46b39-s.p",
+    "3b066fe34f61f169-s.p",
+    "4e8887750eb14755-s.p",
+    "5cc13524e09f5d21-s.p",
+    "5fee9713a1748cc9-s.p",
+    "6a2030c2a5787e7a-s.p",
+    "75014e9053556df0-s.p",
+    "8217ebd4682cfe49-s.p",
+    "a0eafab536ffd221-s.p (1)",
+    "a0eafab536ffd221-s.p",
+    "a72997480c14a9d4-s.p",
+    "ae9d065a0123ed8a-s.p",
+    "b5f39ee185750359-s.p",
+    "b8c97ebabd0473a4-s.p",
+    "b96accb76593e50d-s.p",
+    "cfe503504e29ad5d-s.p",
+    "d13ff1ddfcb21419-s.p",
+    "d4ad98ce6ee578c0-s.p",
+    "d7440d3c533a1aec-s.p",
+    "db2277a4dc542e54-s.p",
+    "f6f0b26c2c0e7b63-s.p"
+];
+// END: FONT-FAMILIES ARRAY
   
   const previewList = document.getElementById("previewList");
   const customText = document.getElementById("customText");

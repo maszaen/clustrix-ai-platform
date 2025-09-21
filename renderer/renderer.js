@@ -3585,6 +3585,9 @@ function showProjectDetailView(project) {
   if (titleEl) titleEl.textContent = project.name || "Untitled Project";
   if (descEl) descEl.textContent = project.description || "No description available";
 
+  // Update star button state
+  updateProjectStarButton();
+
   // Render project content
   renderProjectSessions(project);
   renderProjectInstructions(project);
@@ -3613,12 +3616,15 @@ function renderProjectsPage() {
     });
   }
 
-  // Sort projects by last_updated
-  projects.sort(
-    (a, b) =>
-      new Date(b.last_updated || b.created_at) -
-      new Date(a.last_updated || a.created_at),
-  );
+  // Sort projects: favorites first, then by last_updated
+  projects.sort((a, b) => {
+    // Favorites come first
+    if (a.isFavorite && !b.isFavorite) return -1;
+    if (!a.isFavorite && b.isFavorite) return 1;
+    
+    // Then sort by last_updated
+    return new Date(b.last_updated || b.created_at) - new Date(a.last_updated || a.created_at);
+  });
 
   // Update UI Controls based on mode
   const infoBar = document.getElementById("projects-info-bar");
@@ -3735,9 +3741,14 @@ function renderProjectSessions(project) {
   if (!sessionsList) return;
 
   // Get sessions for this project
-  const projectSessions = state.sessions.filter(
-    (s) => s.projectId === project.id,
-  );
+  let projectSessions = state.sessions.filter((s) => s.projectId === project.id);
+
+  // Sort sessions: favorites first, then by last_updated
+  projectSessions.sort((a, b) => {
+    if (a.isFavorite && !b.isFavorite) return -1;
+    if (!a.isFavorite && b.isFavorite) return 1;
+    return new Date(b.last_updated || b.created_at) - new Date(a.last_updated || a.created_at);
+  });
 
   sessionsList.innerHTML = "";
 
@@ -3754,6 +3765,7 @@ function renderProjectSessions(project) {
     const sessionItem = document.createElement("div");
     sessionItem.className = "project-session-item";
     sessionItem.dataset.sessionId = session.id;
+    if (session.isFavorite) sessionItem.classList.add("favorite");
 
     const lastMessage = session.messages[session.messages.length - 1];
     const preview = lastMessage
@@ -3764,8 +3776,39 @@ function renderProjectSessions(project) {
 
     sessionItem.innerHTML = `
       <div class="session-info">
-        <h4>${escapeHtml(session.name || "Untitled Chat")}</h4>
+        <h4 class="session-title">${escapeHtml(session.name || "Untitled Chat")}</h4>
         <small class="session-date">Last updated ${formattedDate}</small>
+      </div>
+      <div class="session-actions">
+        <div class="session-menu-container">
+          <button class="session-menu-btn" data-session-id="${session.id}" title="Session options">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="12" r="2"/>
+              <circle cx="12" cy="12" r="2"/>
+              <circle cx="19" cy="12" r="2"/>
+            </svg>
+          </button>
+          <div class="session-menu-dropdown" data-session-id="${session.id}">
+            <div class="session-menu-item" data-action="favorite">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+              <span>${session.isFavorite ? "Unstar" : "Star"}</span>
+            </div>
+            <div class="session-menu-item" data-action="rename">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+              </svg>
+              <span>Rename</span>
+            </div>
+            <div class="session-menu-item session-menu-item-danger" data-action="delete">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M6 2l-2 2h12l-2-2H6zM4 6v10c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6H4zm2 2h8v8H6V8z"/>
+              </svg>
+              <span>Delete</span>
+            </div>
+          </div>
+        </div>
       </div>
     `;
 
@@ -4101,6 +4144,179 @@ function setupProjectsPageListeners() {
       return;
     }
 
+    // Close project menus when clicking outside
+    if (!e.target.closest(".project-menu-container")) {
+      document
+        .querySelectorAll(".project-menu-dropdown.persistent-open")
+        .forEach((menu) => {
+          menu.classList.remove("persistent-open");
+          const menuButton = menu.parentElement.querySelector(".project-menu-btn");
+          if (menuButton) menuButton.classList.remove("persistent-active");
+        });
+    }
+
+    // Handle session menu button clicks
+    if (target.closest(".session-menu-btn")) {
+      e.stopPropagation();
+      const menuButton = target.closest(".session-menu-btn");
+      const menuContainer = menuButton.closest(".session-menu-container");
+      const dropdown = menuContainer.querySelector(".session-menu-dropdown");
+
+      // Close all other persistent-open menus and remove their active states
+      document
+        .querySelectorAll(".session-menu-dropdown.persistent-open")
+        .forEach((menu) => {
+          if (menu !== dropdown) {
+            menu.classList.remove("persistent-open");
+            const otherButton =
+              menu.parentElement.querySelector(".session-menu-btn");
+            if (otherButton) otherButton.classList.remove("persistent-active");
+          }
+        });
+
+      // Toggle current menu's persistent state
+      const isPersistentOpen = dropdown.classList.contains("persistent-open");
+
+      if (isPersistentOpen) {
+        // Close the menu
+        dropdown.classList.remove("persistent-open");
+        menuButton.classList.remove("persistent-active");
+      } else {
+        // Open the menu in persistent state
+        dropdown.classList.add("persistent-open");
+        menuButton.classList.add("persistent-active");
+      }
+      return;
+    }
+
+    // Handle session menu item clicks
+    if (target.closest(".session-menu-item")) {
+      e.stopPropagation();
+      const menuItem = target.closest(".session-menu-item");
+      const action = menuItem.dataset.action;
+      const dropdown = menuItem.closest(".session-menu-dropdown");
+      const menuSessionId = dropdown.dataset.sessionId;
+
+      // Close menu and remove persistent state
+      dropdown.classList.remove("persistent-open");
+      const menuButton = dropdown.parentElement.querySelector(".session-menu-btn");
+      if (menuButton) menuButton.classList.remove("persistent-active");
+
+      if (action === "delete") {
+        const session = state.sessions.find((s) => s.id === menuSessionId);
+        if (session) {
+          showConfirmationModal(
+            "Delete Session",
+            `Are you sure you want to delete "${session.name}"?`,
+            () => {
+              deleteSession(session);
+              renderProjectSessions(currentProject); // Refresh project sessions
+            },
+          );
+        }
+      } else if (action === "favorite") {
+        const session = state.sessions.find((s) => s.id === menuSessionId);
+        if (session) {
+          session.isFavorite = !session.isFavorite;
+          save();
+          renderProjectSessions(currentProject); // Refresh to update star text
+        }
+      } else if (action === "rename") {
+        const session = state.sessions.find((s) => s.id === menuSessionId);
+        if (session) {
+          startSidebarRename(menuSessionId);
+        }
+      }
+      return;
+    }
+
+    // Close session menus when clicking outside
+    if (!e.target.closest(".session-menu-container")) {
+      document
+        .querySelectorAll(".session-menu-dropdown.persistent-open")
+        .forEach((menu) => {
+          menu.classList.remove("persistent-open");
+          const menuButton = menu.parentElement.querySelector(".session-menu-btn");
+          if (menuButton) menuButton.classList.remove("persistent-active");
+        });
+    }
+
+    // Close project title menus when clicking outside
+    if (!e.target.closest(".project-title-menu-container")) {
+      document
+        .querySelectorAll(".project-title-menu-dropdown.persistent-open")
+        .forEach((menu) => {
+          menu.classList.remove("persistent-open");
+          const menuButton = menu.parentElement.querySelector(".project-title-menu-btn");
+          if (menuButton) menuButton.classList.remove("persistent-active");
+        });
+    }
+
+    // Handle project title menu button clicks
+    if (target.closest(".project-title-menu-btn")) {
+      e.stopPropagation();
+      const menuContainer = target.closest(".project-title-menu-container");
+      const menuButton = menuContainer.querySelector(".project-title-menu-btn");
+      const dropdown = menuContainer.querySelector(".project-title-menu-dropdown");
+
+      // Close all other persistent-open menus and remove their active states
+      document
+        .querySelectorAll(".project-title-menu-dropdown.persistent-open")
+        .forEach((menu) => {
+          if (menu !== dropdown) {
+            menu.classList.remove("persistent-open");
+            const otherButton =
+              menu.parentElement.querySelector(".project-title-menu-btn");
+            if (otherButton) otherButton.classList.remove("persistent-active");
+          }
+        });
+
+      // Toggle current menu's persistent state
+      const isPersistentOpen = dropdown.classList.contains("persistent-open");
+
+      if (isPersistentOpen) {
+        // Close the menu
+        dropdown.classList.remove("persistent-open");
+        menuButton.classList.remove("persistent-active");
+      } else {
+        // Open the menu in persistent state
+        dropdown.classList.add("persistent-open");
+        menuButton.classList.add("persistent-active");
+      }
+      return;
+    }
+
+    // Handle project title menu item clicks
+    if (target.closest(".project-title-menu-item")) {
+      e.stopPropagation();
+      const menuItem = target.closest(".project-title-menu-item");
+      const action = menuItem.dataset.action;
+      const dropdown = target.closest(".project-title-menu-dropdown");
+
+      // Close menu and remove persistent state
+      dropdown.classList.remove("persistent-open");
+      const menuButton = dropdown.parentElement.querySelector(".project-title-menu-btn");
+      if (menuButton) menuButton.classList.remove("persistent-active");
+
+      if (action === "rename") {
+        if (currentProject) startProjectDetailRename(currentProject);
+      } else if (action === "delete") {
+        if (currentProject) showDeleteProjectConfirmation(currentProject);
+      }
+      return;
+    }
+
+    // Handle project star button clicks
+    if (target.closest(".project-star-btn")) {
+      e.stopPropagation();
+      if (currentProject) {
+        toggleProjectFavorite(currentProject);
+        updateProjectStarButton();
+        renderProjectsPage();
+      }
+      return;
+    }
+
     // Action for clicking project item (could open project or select)
     if (projectId) {
       if (isProjectsSelectMode) {
@@ -4136,7 +4352,7 @@ function setupProjectsPageListeners() {
     if (e.target.closest(".project-session-item")) {
       const sessionItem = e.target.closest(".project-session-item");
       const sessionId = sessionItem?.dataset.sessionId;
-      if (sessionId) {
+      if (sessionId && !e.target.closest(".session-actions")) {
         const session = state.sessions.find((s) => s.id === sessionId);
         if (session) {
           setCurrent(session);
@@ -4277,11 +4493,213 @@ function setupProjectsPageListeners() {
     );
 
     // Track mouse position for dropdown detection
-    projectsPage.addEventListener("mousemove", (e) => {
+    document.addEventListener("mousemove", (e) => {
       window.lastMouseX = e.clientX;
       window.lastMouseY = e.clientY;
     });
   }
+
+  // Add hover management for project-session-item persistent menus
+  document.addEventListener(
+    "mouseenter",
+    (e) => {
+      if (!(e.target instanceof Element)) return;
+      const sessionItem = e.target.closest(".project-session-item");
+      if (sessionItem) {
+        const dropdown = sessionItem.querySelector(
+          ".session-menu-dropdown.persistent-open",
+        );
+        const menuButton = sessionItem.querySelector(".session-menu-btn");
+        if (dropdown && menuButton) {
+          menuButton.classList.add("persistent-active");
+        }
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "mouseleave",
+    (e) => {
+      if (!(e.target instanceof Element)) return;
+      const sessionItem = e.target.closest(".project-session-item");
+      if (sessionItem) {
+        // Check if mouse is actually leaving the project-session-item
+        const rect = sessionItem.getBoundingClientRect();
+        const isStillInside =
+          e.clientX >= rect.left &&
+          e.clientX <= rect.right &&
+          e.clientY >= rect.top &&
+          e.clientY <= rect.bottom;
+
+        // Check if mouse is hovering over dropdown menu
+        const dropdown = sessionItem.querySelector(
+          ".session-menu-dropdown.persistent-open",
+        );
+        const isHoveringDropdown =
+          dropdown && e.target.closest(".session-menu-dropdown");
+
+        // Only close menu if mouse actually left project-session-item AND not hovering dropdown
+        if (!isStillInside && !isHoveringDropdown) {
+          const menuButton = sessionItem.querySelector(".session-menu-btn");
+          if (dropdown && menuButton) {
+            dropdown.classList.remove("persistent-open");
+            menuButton.classList.remove("persistent-active");
+          }
+        }
+      }
+    },
+    true,
+  );
+
+  // Handle mouseleave from session dropdown menu
+  document.addEventListener(
+    "mouseleave",
+    (e) => {
+      if (!(e.target instanceof Element)) return;
+      const dropdown = e.target.closest(
+        ".session-menu-dropdown.persistent-open",
+      );
+      if (dropdown) {
+        // Delay check to ensure mouse isn't moving to project-session-item
+        setTimeout(() => {
+          const sessionItem = dropdown.closest(".project-session-item");
+          if (sessionItem) {
+            // Check if mouse is still within project-session-item or dropdown
+            const sessionRect = sessionItem.getBoundingClientRect();
+            const dropdownRect = dropdown.getBoundingClientRect();
+
+            // Get current mouse position (approximate)
+            const mouseX = window.lastMouseX || 0;
+            const mouseY = window.lastMouseY || 0;
+
+            const isInSessionItem =
+              mouseX >= sessionRect.left &&
+              mouseX <= sessionRect.right &&
+              mouseY >= sessionRect.top &&
+              mouseY <= sessionRect.bottom;
+
+            const isInDropdown =
+              mouseX >= dropdownRect.left &&
+              mouseX <= dropdownRect.right &&
+              mouseY >= dropdownRect.top &&
+              mouseY <= dropdownRect.bottom;
+
+            // Close menu if mouse is not in project-session-item or dropdown
+            if (!isInSessionItem && !isInDropdown) {
+              const menuButton = sessionItem.querySelector(".session-menu-btn");
+              if (menuButton) {
+                dropdown.classList.remove("persistent-open");
+                menuButton.classList.remove("persistent-active");
+              }
+            }
+          }
+        }, 50);
+      }
+    },
+    true,
+  );
+
+  // Add hover management for project-title-menu persistent menus
+  document.addEventListener(
+    "mouseenter",
+    (e) => {
+      if (!(e.target instanceof Element)) return;
+      const titleContainer = e.target.closest(".project-title-menu-container");
+      if (titleContainer) {
+        const dropdown = titleContainer.querySelector(
+          ".project-title-menu-dropdown.persistent-open",
+        );
+        const menuButton = titleContainer.querySelector(".project-title-menu-btn");
+        if (dropdown && menuButton) {
+          menuButton.classList.add("persistent-active");
+        }
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "mouseleave",
+    (e) => {
+      if (!(e.target instanceof Element)) return;
+      const titleContainer = e.target.closest(".project-title-menu-container");
+      if (titleContainer) {
+        // Check if mouse is actually leaving the project-title-menu-container
+        const rect = titleContainer.getBoundingClientRect();
+        const isStillInside =
+          e.clientX >= rect.left &&
+          e.clientX <= rect.right &&
+          e.clientY >= rect.top &&
+          e.clientY <= rect.bottom;
+
+        // Check if mouse is hovering over dropdown menu
+        const dropdown = titleContainer.querySelector(
+          ".project-title-menu-dropdown.persistent-open",
+        );
+        const isHoveringDropdown =
+          dropdown && e.target.closest(".project-title-menu-dropdown");
+
+        // Only close menu if mouse actually left project-title-menu-container AND not hovering dropdown
+        if (!isStillInside && !isHoveringDropdown) {
+          const menuButton = titleContainer.querySelector(".project-title-menu-btn");
+          if (dropdown && menuButton) {
+            dropdown.classList.remove("persistent-open");
+            menuButton.classList.remove("persistent-active");
+          }
+        }
+      }
+    },
+    true,
+  );
+
+  // Handle mouseleave from project title dropdown menu
+  document.addEventListener(
+    "mouseleave",
+    (e) => {
+      if (!(e.target instanceof Element)) return;
+      const dropdown = e.target.closest(
+        ".project-title-menu-dropdown.persistent-open",
+      );
+      if (dropdown) {
+        // Delay check to ensure mouse isn't moving to project-title-menu-container
+        setTimeout(() => {
+          const titleContainer = dropdown.closest(".project-title-menu-container");
+          if (titleContainer) {
+            // Check if mouse is still within project-title-menu-container or dropdown
+            const titleRect = titleContainer.getBoundingClientRect();
+            const dropdownRect = dropdown.getBoundingClientRect();
+
+            // Get current mouse position (approximate)
+            const mouseX = window.lastMouseX || 0;
+            const mouseY = window.lastMouseY || 0;
+
+            const isInTitleContainer =
+              mouseX >= titleRect.left &&
+              mouseX <= titleRect.right &&
+              mouseY >= titleRect.top &&
+              mouseY <= titleRect.bottom;
+
+            const isInDropdown =
+              mouseX >= dropdownRect.left &&
+              mouseX <= dropdownRect.right &&
+              mouseY >= dropdownRect.top &&
+              mouseY <= dropdownRect.bottom;
+
+            // Close menu if mouse is not in project-title-menu-container or dropdown
+            if (!isInTitleContainer && !isInDropdown) {
+              const menuButton = titleContainer.querySelector(".project-title-menu-btn");
+              if (menuButton) {
+                dropdown.classList.remove("persistent-open");
+                menuButton.classList.remove("persistent-active");
+              }
+            }
+          }
+        }, 50);
+      }
+    },
+    true,
+  );
 
   // Project file input is now handled by drop zone click, no need for change listener
 }
@@ -4358,6 +4776,7 @@ async function createNewProject(name, description = "") {
     description,
     created_at: nowISO(),
     last_updated: nowISO(),
+    isFavorite: false,
     instructions: [],
     files: [],
     settings: {},
@@ -4399,11 +4818,39 @@ async function loadProjectsData() {
       const saved = localStorage.getItem("projects_data");
       projectsData = saved ? JSON.parse(saved) : [];
     }
+    
+    // Ensure all projects have isFavorite property
+    projectsData.forEach(project => {
+      if (project.isFavorite === undefined) {
+        project.isFavorite = false;
+      }
+    });
   } catch (error) {
     log("PROJECTS", 4, "loadProjectsData", "Error loading projects", {
       error: error.message,
     });
     projectsData = [];
+  }
+}
+
+async function toggleProjectFavorite(project) {
+  project.isFavorite = !project.isFavorite;
+  await saveProjectsData();
+  
+  log("PROJECTS", 2, "toggleProjectFavorite", "Project favorite toggled", {
+    projectId: project.id,
+    isFavorite: project.isFavorite,
+  });
+}
+
+function updateProjectStarButton() {
+  const starBtn = document.querySelector(".project-star-btn");
+  if (starBtn && currentProject) {
+    if (currentProject.isFavorite) {
+      starBtn.classList.add("starred");
+    } else {
+      starBtn.classList.remove("starred");
+    }
   }
 }
 
@@ -4812,6 +5259,74 @@ function startProjectRename(project) {
 
     // Re-render to update everything
     renderProjectsPage();
+  };
+
+  input.addEventListener("blur", () => finishRename(true));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      finishRename(true);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      finishRename(false);
+    }
+  });
+}
+
+function startProjectDetailRename(project) {
+  const titleElement = document.getElementById("project-detail-title");
+  if (!titleElement) {
+    log("PROJECTS", 4, "startProjectDetailRename", "Title element not found", {
+      projectId: project.id,
+    });
+    return;
+  }
+  
+  const originalName = project.name || "Untitled Project";
+
+  // Create input element
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = originalName;
+  input.className = "project-detail-rename-input";
+  input.style.cssText = `
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-size: inherit;
+    font-weight: inherit;
+    padding: 4px 8px;
+    border-radius: 4px;
+    width: 100%;
+  `;
+
+  // Replace title with input
+  const parent = titleElement.parentNode;
+  parent.replaceChild(input, titleElement);
+  input.focus();
+  input.select();
+
+  const finishRename = async (save = false) => {
+    if (save && input.value.trim() && input.value.trim() !== originalName) {
+      project.name = input.value.trim();
+      project.last_updated = nowISO();
+      await saveProjectsData();
+
+      log("PROJECTS", 2, "startProjectDetailRename", "Project renamed", {
+        projectId: project.id,
+        oldName: originalName,
+        newName: project.name,
+      });
+    }
+
+    // Restore title element
+    const newTitle = document.createElement("h2");
+    newTitle.id = "project-detail-title";
+    newTitle.textContent = project.name || "Untitled Project";
+    parent.replaceChild(newTitle, input);
+
+    // Update star button state after rename
+    updateProjectStarButton();
   };
 
   input.addEventListener("blur", () => finishRename(true));

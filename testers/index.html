@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Testbed – Counter & Sort</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="container">
+    <section class="card">
+      <h1>Counter</h1>
+
+      <!-- BUG: duplikat ID "counter" -->
+      <output id="counter" class="counter">0</output>
+      <output id="counter" class="counter shadow">0</output> <!-- BUG: duplicate id -->
+
+      <div class="actions" id="actions">
+        <button data-action="increment">+1</button>
+        <button data-action="decremnt">-1</button> <!-- BUG: typo data-action -->
+      </div>
+
+      <div class="name-field">
+        <!-- BUG: label for tidak matching -->
+        <label for="name">Your Name</label> <!-- BUG -->
+        <input id="username" placeholder="ketik nama di sini" />
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Sortable Numbers</h2>
+      <p class="hint">Klik “Sort” untuk toggle urutan.</p>
+
+      <ul id="number-list" data-sort="asc">
+        <li>9</li>
+        <li>2</li>
+        <li>11</li>
+        <li>3</li>
+        <li>10</li>
+      </ul>
+
+      <div class="actions">
+        <button id="btn-sort">Sort</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Module order benar: app.js mengimpor state.js -->
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

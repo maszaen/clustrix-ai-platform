@@ -11,7 +11,7 @@ class DesktopSearchEngine {
   }
 
   loadProjectFiles(files) {
-    console.log(`🗂️ Loading ${files.length} files into search engine...`);
+    console.log(`Loading ${files.length} files into search engine...`);
     this.projectFiles.clear();
     
     files.forEach(file => {
@@ -22,69 +22,44 @@ class DesktopSearchEngine {
       });
     });
     
-    console.log(`✅ Loaded ${this.projectFiles.size} files for searching`);
+    console.log(`Loaded ${this.projectFiles.size} files for searching`);
   }
 
-  searchPattern(pattern, options = {}) {
-    const {
-      maxResults = 100,
-      contextLines = 2,
-      caseSensitive = false,
-      wholeWord = false,
-      fileFilter = null
-    } = options;
-
-    console.log(`🔍 Searching for pattern: "${pattern}"`);
-    
-    const results = [];
-    const regex = new RegExp(
-      wholeWord ? `\\b${pattern}\\b` : pattern,
-      caseSensitive ? 'g' : 'gi'
-    );
-
-    for (const [fileName, fileData] of this.projectFiles) {
-      // Skip files that don't match filter
-      if (fileFilter && !fileName.match(fileFilter)) continue;
-      
-      if (results.length >= maxResults) break;
-
-      fileData.lines.forEach((line, lineIndex) => {
-        if (results.length >= maxResults) return;
-        
-        if (regex.test(line)) {
-          // Get context lines
-          const startLine = Math.max(0, lineIndex - contextLines);
-          const endLine = Math.min(fileData.lines.length - 1, lineIndex + contextLines);
-          
-          const contextSnippet = [];
-          for (let i = startLine; i <= endLine; i++) {
-            const prefix = i === lineIndex ? '→' : ' ';
-            contextSnippet.push(`${prefix} ${i + 1}: ${fileData.lines[i]}`);
-          }
-
-          results.push({
-            fileName,
-            lineNumber: lineIndex + 1,
-            content: line,
-            context: contextSnippet.join('\n'),
-            match: line.match(regex)
-          });
-        }
-      });
+  async searchPattern(raw) {
+  let input = raw;
+  if (typeof raw === "string") {
+    try { input = JSON.parse(raw); } catch {}
+  }
+  const pattern = typeof input === "object" && input?.pattern ? String(input.pattern) : String(raw || "");
+  const options = typeof input === "object" && input?.options ? input.options : {};
+  const files = Array.isArray(options.files) && options.files.length ? options.files : Object.keys(this.files);
+  const caseSensitive = !!options.caseSensitive;
+  const flags = caseSensitive ? "g" : "gi";
+  let rx;
+  try { rx = new RegExp(pattern, flags); } catch { return []; }
+  const results = [];
+  for (const f of files) {
+    const fileName = f;
+    const content = this.files[fileName] || "";
+    if (!content) continue;
+    const lines = content.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      rx.lastIndex = 0;
+      if (rx.test(line)) {
+        results.push({
+          file: fileName,
+          line: i + 1,
+          snippet: line.slice(0, 400),
+        });
+      }
     }
-
-    this.searchHistory.push({
-      pattern,
-      options,
-      resultCount: results.length,
-      timestamp: new Date().toISOString()
-    });
-
-    console.log(`📊 Found ${results.length} matches for "${pattern}"`);
-    return results;
   }
+  return results;
+}
 
-  searchFunctions(functionName = null) {
+  searchFunctions(params) {
+    const functionName = params.functionName || params.value;
     const patterns = [
       `function\\s+${functionName || '\\w+'}`,
       `const\\s+${functionName || '\\w+'}\\s*=`,
@@ -96,14 +71,19 @@ class DesktopSearchEngine {
 
     const results = [];
     patterns.forEach(pattern => {
-      const matches = this.searchPattern(pattern, { maxResults: 50, contextLines: 3 });
-      results.push(...matches);
+        // PERBAIKAN: Bungkus argumen dalam satu objek
+        const matches = this.searchPattern({
+            pattern: pattern, 
+            options: { maxResults: 50, contextLines: 3 }
+        });
+        results.push(...matches);
     });
 
     return this.deduplicateResults(results);
   }
 
-  searchCSS(selector) {
+  searchCSS(params) {
+    const selector = params.selector || params.value;
     const patterns = [
       `\\.${selector}\\s*{`,
       `#${selector}\\s*{`,
@@ -121,7 +101,8 @@ class DesktopSearchEngine {
     return this.deduplicateResults(results);
   }
 
-  searchHTML(element) {
+  searchHTML(params) {
+    const element = params.element || params.value;
     const patterns = [
       `<${element}[^>]*>`,        
       `</${element}>`,            
@@ -138,7 +119,8 @@ class DesktopSearchEngine {
     return this.deduplicateResults(results);
   }
 
-  searchImports(moduleName = null) {
+  searchImports(params) {
+    const moduleName = params.moduleName || params.value;
     const modulePattern = moduleName || '[^\'\"]+';
     const patterns = [
       `import.*${moduleName || '\\w+'}`,
@@ -157,7 +139,8 @@ class DesktopSearchEngine {
     return this.deduplicateResults(results);
   }
 
-  analyzeFileStructure(fileName) {
+  analyzeFileStructure(params) {
+    const fileName = params.fileName || params.value;
     const fileData = this.projectFiles.get(fileName);
     if (!fileData) return null;
 
@@ -313,37 +296,40 @@ class DesktopSearchEngine {
     };
   }
 
-  async executeSearchCommand(command, params) {
-    console.log(`🤖 AI executing search: ${command} with params:`, params);
-    
-    try {
-      switch (command) {
-        case 'searchPattern':
-          return this.searchPattern(params.pattern, params.options || {});
-        
-        case 'searchFunctions':
-          return this.searchFunctions(params.functionName);
-        
-        case 'searchCSS':
-          return this.searchCSS(params.selector);
-        
-        case 'searchHTML':
-          return this.searchHTML(params.element);
-        
-        case 'searchImports':
-          return this.searchImports(params.moduleName);
-        
-        case 'analyzeFileStructure':
-          return this.analyzeFileStructure(params.fileName);
-        
-        default:
-          throw new Error(`Unknown search command: ${command}`);
-      }
-    } catch (error) {
-      console.error(`❌ Search command failed:`, error);
-      return { error: error.message };
-    }
+  async executeSearchCommand(cmd) {
+  const v = cmd?.value;
+  let parsed = v;
+  if (typeof v === "string") {
+    try { parsed = JSON.parse(v); } catch {}
   }
+  const name = cmd?.name || cmd?.tool || cmd?.fn || "";
+  if (!name) return [];
+  if (name === "searchPattern") {
+    const out = await this.searchPattern(parsed || v);
+    return Array.isArray(out) ? out : [];
+  }
+  if (name === "searchHTML") {
+    const out = await this.searchHTML(parsed || v);
+    return Array.isArray(out) ? out : [];
+  }
+  if (name === "searchFunctions") {
+    const out = await this.searchFunctions(parsed || v);
+    return Array.isArray(out) ? out : [];
+  }
+  if (name === "searchImports") {
+    const out = await this.searchImports(parsed || v);
+    return Array.isArray(out) ? out : [];
+  }
+  if (name === "searchCSS") {
+    const out = await this.searchCSS(parsed || v);
+    return Array.isArray(out) ? out : [];
+  }
+  if (name === "analyzeFileStructure") {
+    const out = await this.analyzeFileStructure(parsed || v);
+    return Array.isArray(out) ? out : [];
+  }
+  return [];
+}
 }
 
 module.exports = DesktopSearchEngine;

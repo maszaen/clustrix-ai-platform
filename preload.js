@@ -3,8 +3,8 @@ function rid(){ return `${Date.now().toString(36)}-${Math.random().toString(36).
 
 contextBridge.exposeInMainWorld('api', {
   on: (channel, callback) => {
-    const validChannels = ['chat-update', 'stats:update', 'search:status']; 
-    if (validChannels.includes(channel)) {
+    const validChannels = ['chat-update', 'stats:update', 'search:status', 'chat:think-']; 
+    if (validChannels.some(valid => channel.startsWith(valid))) {
       ipcRenderer.on(channel, (event, ...args) => callback(...args));
     }
   },
@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('api', {
 
       ipcRenderer.send('chat:stream-start', {
         reqId: id, messages, model,
+        sessionId: options.sessionId,
+        session: options.session,
         provider: options.provider,
         baseUrl: options.baseUrl,
         apiKey: options.apiKey,

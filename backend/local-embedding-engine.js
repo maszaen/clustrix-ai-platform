@@ -37,12 +37,44 @@ class LocalEmbeddingEngine {
         // Restore Maps from serialized data
         this.vocabulary = new Map(savedIndex.vocabulary || []);
         this.idfCache = new Map(savedIndex.idfCache || []);
-        this.documentIndex = new Map(savedIndex.documentIndex || []);
+        
+        // Restore documentIndex with proper Map conversion for nested properties
+        this.documentIndex = new Map();
+        if (savedIndex.documentIndex) {
+          savedIndex.documentIndex.forEach(([fileName, docData]) => {
+            // Ensure tfVector and tfidfVector are Maps
+            if (!docData.tfVector) {
+              docData.tfVector = new Map();
+            } else if (Array.isArray(docData.tfVector)) {
+              docData.tfVector = new Map(docData.tfVector);
+            } else if (typeof docData.tfVector === 'object' && docData.tfVector !== null) {
+              // Handle case where it's a plain object (shouldn't happen but safety check)
+              docData.tfVector = new Map(Object.entries(docData.tfVector));
+            } else {
+              // Fallback: create empty Map
+              docData.tfVector = new Map();
+            }
+
+            if (!docData.tfidfVector) {
+              docData.tfidfVector = new Map();
+            } else if (Array.isArray(docData.tfidfVector)) {
+              docData.tfidfVector = new Map(docData.tfidfVector);
+            } else if (typeof docData.tfidfVector === 'object' && docData.tfidfVector !== null) {
+              // Handle case where it's a plain object (shouldn't happen but safety check)
+              docData.tfidfVector = new Map(Object.entries(docData.tfidfVector));
+            } else {
+              // Fallback: create empty Map
+              docData.tfidfVector = new Map();
+            }
+
+            this.documentIndex.set(fileName, docData);
+          });
+        }
         
         console.log(`📚 Local Index: Loaded ${this.documentIndex.size} documents, ${this.vocabulary.size} vocabulary terms`);
       }
     } catch (error) {
-      console.error('❌ Error loading local index:', error);
+      console.error('Error loading local index:', error);
       this.initializeEmpty();
     }
   }
@@ -52,18 +84,30 @@ class LocalEmbeddingEngine {
    */
   saveIndex() {
     try {
+      // Convert documentIndex to serializable format
+      const serializableDocumentIndex = Array.from(this.documentIndex.entries()).map(([fileName, docData]) => {
+        return [
+          fileName,
+          {
+            ...docData,
+            tfVector: Array.from(docData.tfVector.entries()),
+            tfidfVector: Array.from(docData.tfidfVector.entries())
+          }
+        ];
+      });
+      
       const indexData = {
         vocabulary: Array.from(this.vocabulary.entries()),
         idfCache: Array.from(this.idfCache.entries()),
-        documentIndex: Array.from(this.documentIndex.entries()),
+        documentIndex: serializableDocumentIndex,
         lastSaved: new Date().toISOString(),
         documentCount: this.documentIndex.size
       };
       
       fs.writeFileSync(this.indexFile, JSON.stringify(indexData, null, 2));
-      console.log(`💾 Local Index: Saved ${this.documentIndex.size} documents to disk`);
+      console.log(`Local Index: Saved ${this.documentIndex.size} documents to disk`);
     } catch (error) {
-      console.error('❌ Error saving local index:', error);
+      console.error('Error saving local index:', error);
     }
   }
 
@@ -158,7 +202,7 @@ class LocalEmbeddingEngine {
     
     const tokens = this.tokenize(content);
     if (tokens.length === 0) {
-      console.log(`⚠️ No meaningful tokens found in ${fileName}`);
+      console.log(`No meaningful tokens found in ${fileName}`);
       return;
     }
     
@@ -178,7 +222,7 @@ class LocalEmbeddingEngine {
     // Invalidate IDF cache since document count changed
     this.idfCache.clear();
     
-    console.log(`✅ Local Index: Document ${fileName} indexed with ${tokens.length} tokens`);
+    console.log(`Local Index: Document ${fileName} indexed with ${tokens.length} tokens`);
   }
 
   /**
@@ -217,7 +261,7 @@ class LocalEmbeddingEngine {
    * Search for relevant documents using local similarity
    */
   searchSimilar(query, maxResults = 5, minSimilarity = 0.1) {
-    console.log(`🔍 Local Search: Searching for "${query.slice(0, 50)}..."`);
+    console.log(`Local Search: Searching for "${query.slice(0, 50)}..."`);
     
     if (this.documentIndex.size === 0) {
       console.log('📭 Local Search: No documents in index');
@@ -226,7 +270,7 @@ class LocalEmbeddingEngine {
     
     const queryTokens = this.tokenize(query);
     if (queryTokens.length === 0) {
-      console.log('⚠️ Local Search: No meaningful query tokens');
+      console.log('Local Search: No meaningful query tokens');
       return [];
     }
     
@@ -255,7 +299,7 @@ class LocalEmbeddingEngine {
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, maxResults);
     
-    console.log(`📊 Local Search: Found ${results.length} relevant documents (${similarities.length} above threshold)`);
+    console.log(`Local Search: Found ${results.length} relevant documents (${similarities.length} above threshold)`);
     
     return results;
   }
@@ -305,7 +349,7 @@ class LocalEmbeddingEngine {
     if (this.documentIndex.has(fileName)) {
       this.documentIndex.delete(fileName);
       this.idfCache.clear(); // Invalidate IDF cache
-      console.log(`🗑️ Local Index: Removed document ${fileName}`);
+      console.log(`Local Index: Removed document ${fileName}`);
       return true;
     }
     return false;
@@ -326,7 +370,7 @@ class LocalEmbeddingEngine {
    * Rebuild IDF cache (useful after bulk operations)
    */
   rebuildIDFCache() {
-    console.log('🔧 Local Index: Rebuilding IDF cache...');
+    console.log('Local Index: Rebuilding IDF cache...');
     this.idfCache.clear();
     
     // Pre-calculate IDF for all terms in vocabulary
@@ -334,7 +378,7 @@ class LocalEmbeddingEngine {
       this.calculateIDF(term);
     });
     
-    console.log(`✅ Local Index: IDF cache rebuilt for ${this.idfCache.size} terms`);
+    console.log(`Local Index: IDF cache rebuilt for ${this.idfCache.size} terms`);
   }
 
   /**

@@ -18,7 +18,7 @@ let agentOrchestrator = null;
 app.whenReady().then(() => {
   langchainService = new ClustrixLangChainService(app);
   agentOrchestrator = new MultiAgentOrchestrator(langchainService);
-  console.log('🚀 LangChain services initialized');
+  console.log('LangChain services initialized');
 });
 
 const logFile = path.join(app.getPath('userData'), 'app.log');
@@ -182,12 +182,10 @@ function createWindow(){
     }
 
     if (isSameBase && hasDetails) {
-      // Same function/message but potentially different data
       logState.sequenceCount++;
       const changedDetails = getChangedDetails(details, logState.lastDetails || {});
       
       if (Object.keys(changedDetails).length > 0) {
-        // Show incremental changes
         const shortTime = time.split(':').slice(1).join(':');
         let logLine = `${logState.sequenceCount}. [${shortTime}] ${func}().\n${message}`;
         
@@ -533,30 +531,6 @@ ipcMain.handle('files:open-dialog', async (event) => {
   logHelper('FILE_DIALOG', 'ipc:handle', `Dialog closed. Canceled: ${canceled}`, { filePaths });
   if (canceled || filePaths.length === 0) return [];
   
-  const MAX_FILES = 2;
-  const MAX_SIZE_KB = 600;
-
-  if (filePaths.length > MAX_FILES) {
-    dialog.showErrorBox('Upload Failed', `You can select a maximum of ${MAX_FILES} files.`);
-    return [];
-  }
-
-  try {
-    let totalSize = 0;
-    for (const filePath of filePaths) {
-      const stats = await fsp.stat(filePath);
-      totalSize += stats.size;
-    }
-    if (totalSize > MAX_SIZE_KB * 1024) {
-      dialog.showErrorBox('Upload Failed', `Total file size cannot exceed ${MAX_SIZE_KB} KB.`);
-      return [];
-    }
-  } catch (error) {
-    logHelper('FILE_DIALOG', 'ipc:handle', 'Failed to validate file size.', { error: error.message });
-    dialog.showErrorBox('Error', 'Failed to validate file size.');
-    return [];
-  }
-  
   const results = [];
   for (const filePath of filePaths) {
     const extension = path.extname(filePath).toLowerCase();
@@ -596,7 +570,12 @@ function mapEffort(mode){
 // ---------- Streaming from MAIN (SSE) ----------
 const activeStreams = new Map();
 ipcMain.on('chat:stream-start', async (event, payload) => {
+  try {
+    console.debug('MAIN: chat:stream-start invoked', { reqId: payload.reqId, webSearchEnabled: payload.webSearchEnabled, aiMessageIndex: payload.aiMessageIndex });
+  } catch (e) {}
+
   if (!payload.webSearchEnabled) {
+    console.debug('MAIN: webSearchEnabled is falsey, using standard streaming');
     logHelper('ROUTER', 'chat:stream-start', 'Web search nonaktif. Menjalankan chat standar.');
     return runStandardStreaming(event, payload);
   }
@@ -628,15 +607,20 @@ function runStandardStreaming(event, payload) {
 
   async function processWithLangChain() {
     try {
-      console.log('🚀 MAIN: Starting LangChain processing...');
+      console.log('MAIN: Starting LangChain processing...');
       logHelper('LANGCHAIN', 'runStandardStreaming', 'Processing with LangChain enhancement');
       
-      // Check if this is a project session
+      // Vectorize chat history for better context retrieval
+      if (messages && messages.length > 0) {
+        console.log(`MAIN: Vectorizing chat history (${messages.length} messages)...`);
+        await langchainService.vectorizeChatHistory(sessionId, messages);
+      }
+      
       const isProject = session.type === 'project' || session.isProject || false;
       console.log(`📋 MAIN: Session type detected: ${isProject ? 'PROJECT' : 'REGULAR'}`);
       
       if (isProject) {
-        console.log('🤖 MAIN: PROJECT mode - activating agent system...');
+        console.log('MAIN: PROJECT mode - activating agent system...');
         logHelper('LANGCHAIN', 'runStandardStreaming', 'Detected PROJECT session - using agents');
         
         // For project sessions, use agent system for complex processing
@@ -646,23 +630,190 @@ function runStandardStreaming(event, payload) {
           
           // Process uploaded files if any
           if (session.uploadedFiles && session.uploadedFiles.length > 0) {
-            console.log(`📁 MAIN: Processing ${session.uploadedFiles.length} uploaded files...`);
+            console.log(`MAIN: Processing ${session.uploadedFiles.length} uploaded files...`);
             await langchainService.processUploadedFiles(session.uploadedFiles, sessionId);
           }
           
-          console.log('🤖 MAIN: Calling agent orchestrator...');
-          // Use agent orchestrator for project sessions
-          const agentResponse = await agentOrchestrator.processComplexRequest(
-            lastMessage.content, 
-            sessionId, 
-            session, 
-            model, 
-            getApiKey(provider, payload)
-          );
+          console.log('MAIN: Calling agent orchestrator...');
+          console.log(`MAIN: Provider detected: ${provider}, session type: ${session.type}`);
+          
+          // Use agent orchestrator for project sessions (OpenAI only for now)
+          let agentResponse = null;
+          if (provider === 'openai') {
+            try {
+              agentResponse = await agentOrchestrator.processComplexRequest(
+                lastMessage.content, 
+                sessionId, 
+                session, 
+                model, 
+                getApiKey(provider, payload)
+              );
+            } catch (error) {
+              console.log('MAIN: Agent orchestrator failed, falling back to standard processing:', error.message);
+            }
+          } else {
+            console.log(`MAIN: Agent orchestrator only supports OpenAI, checking if RE+ACT pattern needed for ${provider}...`);
+            
+            // For non-OpenAI providers, check if we should use RE+ACT pattern
+            // Get files from session.uploadedFiles or from the session's last user message metadata
+            let availableFiles = session.uploadedFiles || [];
+            if (availableFiles.length === 0 && session.messages && session.messages.length > 1) {
+              // Look at the last user message (second-to-last message, since AI message was just added)
+              const lastUserMessage = session.messages[session.messages.length - 2];
+              if (lastUserMessage && lastUserMessage.length >= 3 && lastUserMessage[2] && lastUserMessage[2].files) {
+                availableFiles = lastUserMessage[2].files;
+              }
+            }
+            
+            console.log('DEBUG: session.messages length:', session.messages ? session.messages.length : 'undefined');
+            console.log('DEBUG: last message (AI):', session.messages && session.messages.length > 0 ? JSON.stringify(session.messages[session.messages.length - 1]) : 'no messages');
+            console.log('DEBUG: second-to-last message (user):', session.messages && session.messages.length > 1 ? JSON.stringify(session.messages[session.messages.length - 2]) : 'no user message');
+            
+            const shouldUseReact = langchainService.shouldUseReasoningAction(
+              lastMessage.content,
+              availableFiles,
+              session.type
+            );
+            
+            console.log(`MAIN: RE+ACT check - sessionType: ${session.type}, uploadedFiles: ${session.uploadedFiles ? session.uploadedFiles.length : 0}, sessionMessageFiles: ${session.messages && session.messages.length > 1 ? (session.messages[session.messages.length - 2][2] && session.messages[session.messages.length - 2][2].files ? session.messages[session.messages.length - 2][2].files.length : 0) : 0}, query: "${lastMessage.content.slice(0, 50)}..."`);
+            
+            if (shouldUseReact) {
+              console.log('MAIN: Using RE+ACT pattern for complex project query analysis...');
+
+              try {
+                if (availableFiles && availableFiles.length > 0) {
+                    const modelInfo = { provider, model, apiKey: getApiKey(provider, payload), baseUrl: getBaseUrl(provider, payload) };
+                    langchainService.reasoningAgent.initializeSession(sessionId, availableFiles, modelInfo);
+                    console.log(`MAIN: ReasoningAgent re-initialized for session ${sessionId} with ${availableFiles.length} files.`);
+                }
+                const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
+                // Send event to initialize thinking UI
+
+                console.debug('MAIN: Sending REACT_START chat-update', { reqId: reqId, aiMessageIndex: payload.aiMessageIndex });
+                event.sender.send('chat-update', {
+                  type: 'REACT_START',
+                  messageIndex: aiMessageIndex,
+                  data: {
+                    sessionId: session?.id || null
+                  }
+                });
+
+                // Progress callback to send thinking updates
+                const progressCallback = (update) => {
+                  if (update.type === 'thinking') {
+                    // Calculate the AI message index (should be the last message in the session)
+                    const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
+                    // Send thinking update over the same 'chat-update' channel (like web-search does)
+                    console.debug('MAIN: Sending THINKING chat-update', { reqId, sessionId, aiMessageIndex, len: String(update.content).length });
+                    const safeThink =
+                    (update && typeof update.content === 'string' && update.content.trim())
+                      ? update.content.trim()
+                      : 'Menganalisis berkas proyek, menyusun rencana aksi, dan mengeksekusi langkah-langkah awal.';
+
+                  event.sender.send('chat-update', {
+                    type: 'THINKING',
+                    messageIndex: aiMessageIndex,
+                    data: {
+                      sessionId: session?.id,
+                      think: safeThink
+                    }
+                  });
+                  } else if (update.type === 'action_result') {
+                      const actionData = update.data || {};
+                      const results = Array.isArray(actionData.results) ? actionData.results : [];
+                      const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
+
+                      // Buat ringkasan hasil aksi dalam format teks
+                      let resultSummary = `\n✅ Aksi '${actionData.action}' selesai.`;
+
+                      if (results.length > 0) {
+                          resultSummary += ` Ditemukan ${results.length} hasil:\n`;
+                          // Batasi hanya beberapa hasil untuk ditampilkan di log agar tidak terlalu panjang
+                          resultSummary += results.slice(0, 5).map(r => 
+                              `- **${r.fileName}:${r.lineNumber || '?'}**: \`${r.snippet.trim().substring(0, 80)}...\``
+                          ).join('\n');
+                          if (results.length > 5) {
+                              resultSummary += `\n- ... dan ${results.length - 5} hasil lainnya.`;
+                          }
+                      } else {
+                          resultSummary += ` Tidak ada hasil yang ditemukan.`;
+                      }
+
+                      // Kirim ringkasan ini sebagai bagian dari alur pemikiran (THINKING)
+                      console.debug('MAIN: Sending formatted ACTION_RESULT as THINKING update');
+                      event.sender.send('chat-update', {
+                          type: 'THINKING',
+                          messageIndex: aiMessageIndex,
+                          data: {
+                              think: resultSummary,
+                              reqId,
+                              sessionId
+                          }
+                      });
+                  }
+                };
+
+                if (availableFiles && availableFiles.length > 0) {
+                const modelInfo = { provider, model, apiKey: getApiKey(provider, payload), baseUrl: getBaseUrl(provider, payload) };
+                langchainService.reasoningAgent.initializeSession(sessionId, availableFiles, modelInfo);
+            }
+
+                const reactResult = await langchainService.processWithReasoningAction(
+                  lastMessage.content,
+                  sessionId,
+                  availableFiles,
+                  model,
+                  provider,
+                  getApiKey(provider, payload),
+                  getBaseUrl(provider, payload),
+                  progressCallback  // Pass progress callback
+                );
+
+                console.log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
+
+                // CAREFULLY: Ensure response is a string before processing
+                let responseText = '';
+                if (typeof reactResult === 'string') {
+                  responseText = reactResult;
+                } else if (reactResult && reactResult.response && typeof reactResult.response.response === 'string') {
+                  // <<< TAMBAHKAN KONDISI INI
+                  responseText = reactResult.response.response;
+                } else if (reactResult && typeof reactResult.response === 'string') {
+                  responseText = reactResult.response;
+                } else if (reactResult && reactResult.finalResponse && typeof reactResult.finalResponse === 'string') {
+                  responseText = reactResult.finalResponse;
+                } else {
+                  // Fallback for malformed response
+                  console.log("MAIN: RE+ACT returned malformed response, using fallback", { reactResult });
+                  responseText = 'RE+ACT analysis completed but response format was unexpected. Please try rephrasing your question.';
+                }
+
+                // CAREFULLY: Safe string operations with validation
+                // CAREFULLY: Safe string operations with validation
+                if (responseText && typeof responseText === 'string' || responseText && responseText.length > 0) {
+                  const tokens = responseText.split(/\s+/);
+                  for (const t of tokens) {
+                    event.sender.send(`chat:chunk-${reqId}`, t + ' ');
+                    await new Promise(r => setTimeout(r, 18)); // kecilin/naikin sesuai selera
+                  }
+                  event.sender.send(`chat:done-${reqId}`);
+                  activeStreams.delete(reqId);
+                  return;
+                }
+
+              } catch (reactError) {
+                console.error('MAIN: RE+ACT processing failed for project session, falling back:', reactError.message);
+                console.error('MAIN: Full RE+ACT error:', reactError);
+                // Fall through to standard processing
+              }
+            } else {
+              console.log('MAIN: RE+ACT not needed for this query, using standard processing');
+            }
+          }
           
           // Send agent response as stream chunks
           if (agentResponse) {
-            console.log(`✅ MAIN: Agent response received (${agentResponse.length} chars), starting streaming...`);
+            console.log(`MAIN: Agent response received (${agentResponse.length} chars), starting streaming...`);
             const chunks = agentResponse.split(' ');
             let index = 0;
             const sendChunk = () => {
@@ -671,7 +822,7 @@ function runStandardStreaming(event, payload) {
                 index++;
                 setTimeout(sendChunk, 50); // Simulate streaming
               } else {
-                console.log('🎉 MAIN: Agent streaming completed');
+                console.log('MAIN: Agent streaming completed');
                 event.sender.send(`chat:done-${reqId}`);
                 activeStreams.delete(reqId);
               }
@@ -679,27 +830,35 @@ function runStandardStreaming(event, payload) {
             sendChunk();
             return;
           } else {
-            console.log('⚠️ MAIN: No agent response received, falling back to standard processing');
+            console.log('MAIN: No agent response received, falling back to standard processing');
           }
         }
       } else {
-        console.log('💬 MAIN: REGULAR mode - checking if RE+ACT pattern needed...');
+        console.log('MAIN: REGULAR mode - checking if RE+ACT pattern needed...');
         logHelper('LANGCHAIN', 'runStandardStreaming', 'Regular session - analyzing query complexity');
         
-        // Process uploaded files for regular sessions
-        if (session.uploadedFiles && session.uploadedFiles.length > 0) {
-          console.log(`📁 MAIN: Processing ${session.uploadedFiles.length} uploaded files for regular session...`);
-          await langchainService.processUploadedFiles(session.uploadedFiles, sessionId);
-        }
+        // Get current message content
+        const currentMessage = messages[messages.length - 1].content;
         
         // Check if we should use RE+ACT pattern
         const shouldUseReact = langchainService.shouldUseReasoningAction(
           currentMessage,
-          session.uploadedFiles || []
+          session.uploadedFiles || [],
+          session.type
         );
         
         if (shouldUseReact) {
-          console.log('🧠 MAIN: Using RE+ACT pattern for complex query analysis...');
+          console.log('MAIN: Using RE+ACT pattern for complex query analysis...');
+
+          const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
+
+          // Kirim event untuk memulai UI pemikiran DENGAN menyertakan index yang benar
+          console.debug('MAIN: Sending REACT_START chat-update', { reqId: reqId, aiMessageIndex });
+          event.sender.send('chat-update', { 
+              type: 'REACT_START', 
+              messageIndex: aiMessageIndex, // << PENTING
+              data: { query: lastMessage.content.substring(0, 100) }
+          });
           
           try {
             const reactResult = await langchainService.processWithReasoningAction(
@@ -709,46 +868,59 @@ function runStandardStreaming(event, payload) {
               model
             );
             
-            console.log(`🎯 MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
+            console.log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
             
-            // Stream the RE+ACT response
-            const responseText = reactResult.response || 'Analysis completed using desktop search capabilities.';
-            const words = responseText.split(' ');
-            let index = 0;
-            
-            const sendChunk = () => {
-              if (index < words.length) {
-                event.sender.send(`chat:chunk-${reqId}`, words.slice(index, index + 3).join(' ') + ' ');
-                index += 3;
-                setTimeout(sendChunk, 100); // Slower for better readability
-              } else {
-                console.log('🎉 MAIN: RE+ACT streaming completed');
+            // CAREFULLY: Ensure response is a string before processing
+            let responseText = '';
+            if (typeof reactResult === 'string') {
+              responseText = reactResult;
+            } else if (reactResult && reactResult.response && typeof reactResult.response.response === 'string') {
+              // <<< TAMBAHKAN KONDISI INI
+              responseText = reactResult.response.response;
+            } else if (reactResult && typeof reactResult.response === 'string') {
+              responseText = reactResult.response;
+            } else if (reactResult && reactResult.finalResponse && typeof reactResult.finalResponse === 'string') {
+              responseText = reactResult.finalResponse;
+            } else {
+              // Fallback for malformed response
+              logHelper("MAIN", "runStandardStreaming", "RE+ACT returned malformed response, using fallback", { reactResult });
+              responseText = 'RE+ACT analysis completed but response format was unexpected. Please try rephrasing your question.';
+            }
+
+            // CAREFULLY: Safe string operations with validation
+            if (responseText && typeof responseText === 'string' || responseText && responseText.length > 0) {
+                const tokens = responseText.split(/\s+/);
+                for (const t of tokens) {
+                  event.sender.send(`chat:chunk-${reqId}`, t + ' ');
+                  await new Promise(r => setTimeout(r, 18)); // kecilin/naikin sesuai selera
+                }
+                logHelper("MAIN", "Line 925", "This line is executed")
                 event.sender.send(`chat:done-${reqId}`);
                 activeStreams.delete(reqId);
-              }
-            };
-            
-            sendChunk();
-            return;
+                return;
+              } else {
+              logHelper("MAIN", "runStandardStreaming", "RE+ACT response is not a valid string, falling back to standard processing");
+              // Fall through to standard processing
+            }
             
           } catch (reactError) {
-            console.error('❌ MAIN: RE+ACT processing failed, falling back:', reactError);
+            console.error('MAIN: RE+ACT processing failed, falling back:', reactError);
             // Fall through to standard processing
           }
         }
         
         // Standard context enhancement for simple queries
-        console.log('🔍 MAIN: Using standard context enhancement...');
+        console.log('MAIN: Using standard context enhancement...');
         messages = await langchainService.processMessage(messages, model, {}, sessionId, session);
-        console.log(`✅ MAIN: Messages enhanced, new count: ${messages.length}`);
+        console.log(`MAIN: Messages enhanced, new count: ${messages.length}`);
       }
       
     } catch (error) {
-      console.error('❌ MAIN: LangChain processing error:', error);
+      console.error('MAIN: LangChain processing error:', error);
       logHelper('LANGCHAIN', 'runStandardStreaming', 'LangChain processing failed, falling back', { error: error.message });
     }
     
-    console.log('🔄 MAIN: Proceeding with standard streaming...');
+    console.log('MAIN: Proceeding with standard streaming...');
     // Continue with standard streaming
     processWithoutLangChain();
   }

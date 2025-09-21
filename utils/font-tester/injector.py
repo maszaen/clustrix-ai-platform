@@ -40,21 +40,21 @@ def generate_js_array(font_files):
 
 def main():
     """Fungsi utama untuk menjalankan proses injeksi."""
-    print("🚀 Memulai proses injeksi font...")
+    print("Memulai proses injeksi font...")
 
     # 1. Pindai direktori untuk file font
     try:
         all_files = os.listdir(FONT_DIR)
         font_files = sorted([f for f in all_files if f.endswith(FONT_EXTENSIONS)])
     except FileNotFoundError:
-        print(f"❌ Error: Direktori '{FONT_DIR}' tidak ditemukan.")
+        print(f"Error: Direktori '{FONT_DIR}' tidak ditemukan.")
         return
 
     if not font_files:
         print("🟡 Peringatan: Tidak ada file font ditemukan. Tidak ada yang diubah.")
         return
 
-    print(f"✅ Ditemukan {len(font_files)} file font.")
+    print(f"Ditemukan {len(font_files)} file font.")
 
     # 2. Hasilkan blok kode CSS dan JS yang baru
     css_rules = generate_font_face_rules(font_files)
@@ -66,7 +66,7 @@ def main():
             html_content = f.read()
     except FileNotFoundError:
         print(
-            f"❌ Error: File '{HTML_FILE}' tidak ditemukan. Pastikan skrip ini berada di direktori yang sama."
+            f"Error: File '{HTML_FILE}' tidak ditemukan. Pastikan skrip ini berada di direktori yang sama."
         )
         return
 
@@ -86,7 +86,7 @@ def main():
     html_content = re.sub(css_pattern, new_css_block, html_content)
     html_content = re.sub(js_pattern, new_js_block, html_content)
 
-    print("🔧 Kode CSS dan JavaScript baru telah dihasilkan.")
+    print("Kode CSS dan JavaScript baru telah dihasilkan.")
 
     # 5. Tulis kembali konten yang sudah diperbarui ke file HTML
     try:
@@ -94,7 +94,7 @@ def main():
             f.write(html_content)
         print(f"✨ Injeksi berhasil! '{HTML_FILE}' telah diperbarui.")
     except IOError as e:
-        print(f"❌ Error saat menulis ke file: {e}")
+        print(f"Error saat menulis ke file: {e}")
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ class ReasoningActionAgent {
   /**
    * Initialize with project files for current session
    */
-  initializeSession(sessionId, files) {
+  initializeSession(sessionId, files, modelInfo = {}) {
     console.log(`🧠 RE+ACT: Initializing session ${sessionId} with ${files.length} files`);
     
     this.searchEngine.loadProjectFiles(files);
@@ -28,22 +28,31 @@ class ReasoningActionAgent {
       capabilities,
       actionHistory: [],
       currentPlan: null,
-      thinkingState: null
+      thinkingState: null,
+      model: modelInfo  // Store model information for API calls
     });
     
-    console.log(`✅ Session initialized with capabilities:`, capabilities);
+    console.log(`Session initialized with capabilities:`, capabilities);
     return capabilities;
   }
 
   /**
    * Process user query with RE+ACT pattern
    */
-  async processWithReasoningAction(userQuery, sessionId, existingMessages = []) {
+  async processWithReasoningAction(userQuery, sessionId, existingMessages = [], progressCallback = null) {
     console.log(`🧠 RE+ACT: Processing query for session ${sessionId}`);
     
     const sessionState = this.sessionState.get(sessionId);
     if (!sessionState) {
       throw new Error(`Session ${sessionId} not initialized`);
+    }
+
+    // Send initial thinking update
+    if (progressCallback) {
+      progressCallback({
+        type: 'thinking',
+        content: `🤔 Analyzing your query: "${userQuery.substring(0, 100)}${userQuery.length > 100 ? '...' : ''}"\n\n📋 Planning analysis steps...`
+      });
     }
 
     // Step 1: Initial reasoning - let AI understand the problem and plan actions
@@ -56,11 +65,40 @@ class ReasoningActionAgent {
     const plan = this.parseReasoningResponse(reasoningResponse);
     console.log(`📋 RE+ACT: AI generated plan with ${plan.actions.length} actions`);
     
+    // Update thinking with plan
+    if (progressCallback) {
+      progressCallback({
+        type: 'thinking',
+        content: `📋 Analysis Plan Created:\n${plan.actions.map((action, i) => `${i + 1}. ${action.type} - ${action.why || 'Searching for information'}`).join('\n')}\n\n⚡ Executing actions...`
+      });
+    }
+
     // Step 3: Execute actions one by one, updating AI with results
     let finalResponse = reasoningResponse;
+    const MAX_ACTIONS = 10; // Prevent infinite loops
+    let totalActionsExecuted = 0;
     
     for (const [index, action] of plan.actions.entries()) {
-      console.log(`🔧 RE+ACT: Executing action ${index + 1}/${plan.actions.length}: ${action.type}`);
+      if (totalActionsExecuted >= MAX_ACTIONS) {
+        console.log(`RE+ACT: Stopping execution after ${MAX_ACTIONS} actions to prevent infinite loops`);
+        if (progressCallback) {
+          progressCallback({
+            type: 'thinking',
+            content: `⚠️ Stopped execution after ${MAX_ACTIONS} actions to prevent infinite loops`
+          });
+        }
+        break;
+      }
+      
+      console.log(`RE+ACT: Executing action ${index + 1}/${plan.actions.length}: ${action.type}`);
+      
+      // Update thinking with current action
+      if (progressCallback) {
+        progressCallback({
+          type: 'thinking',
+          content: `🔍 Executing action ${index + 1}/${plan.actions.length}: ${action.type}\n${action.why || 'Searching for information...'}`
+        });
+      }
       
       const actionResult = await this.executeAction(action, sessionId);
       sessionState.actionHistory.push({
@@ -69,6 +107,45 @@ class ReasoningActionAgent {
         timestamp: new Date().toISOString()
       });
       
+      totalActionsExecuted++;
+      
+      // Update thinking with action result
+      if (progressCallback) {
+        const resultSummary = actionResult.success 
+          ? `\nFound ${actionResult.count || 0} results`
+          : `\n${actionResult.error || 'Action failed'}`;
+        // Send a human-friendly thinking update
+        progressCallback({
+          type: 'thinking',
+          content: `\nAction ${index + 1} completed: ${action.type}\n${resultSummary}`
+        });
+
+        // Also send a structured action_result payload so the main process can render
+        // results similarly to web-search (FOUND_URLS / READING_COMPLETE).
+        try {
+          const structured = {
+            action: action.type,
+            params: action.params,
+            success: Boolean(actionResult.success),
+            resultCount: Array.isArray(actionResult.results) ? actionResult.results.length : (actionResult.resultCount || 0),
+            results: Array.isArray(actionResult.results) ? actionResult.results.map(r => ({
+              fileName: r.fileName || r.source || '(unknown)',
+              lineNumber: r.lineNumber || r.line || null,
+              snippet: (r.context || r.preview || r.text || '').toString().substring(0, 800)
+            })) : []
+          };
+
+          progressCallback({
+            type: 'action_result',
+            content: `Action ${index + 1} results ready`,
+            data: structured
+          });
+        } catch (e) {
+          // Non-fatal - continue
+          console.warn('RE+ACT: Failed to emit structured action_result', e);
+        }
+      }
+      
       // Send action result back to AI for next step
       if (index < plan.actions.length - 1 || actionResult.requiresFollowup) {
         const followupPrompt = this.buildFollowupPrompt(action, actionResult, plan, index);
@@ -76,21 +153,63 @@ class ReasoningActionAgent {
         
         // Check if AI wants to perform additional actions
         const additionalPlan = this.parseReasoningResponse(finalResponse);
-        if (additionalPlan.actions.length > 0) {
-          console.log(`🔄 RE+ACT: AI requested ${additionalPlan.actions.length} additional actions`);
-          plan.actions.push(...additionalPlan.actions);
+        if (additionalPlan.actions.length > 0 && totalActionsExecuted < MAX_ACTIONS) {
+          // Filter out invalid actions
+          const validActions = additionalPlan.actions.filter(action => {
+            return action.type && action.params && Object.keys(action.params).length > 0;
+          });
+          
+          if (validActions.length > 0) {
+            console.log(`\nRE+ACT: AI requested ${validActions.length} additional actions`);
+            if (progressCallback) {
+              progressCallback({
+                type: 'thinking',
+                content: `\nAI requested ${validActions.length} additional actions, continuing analysis...`
+              });
+            }
+            plan.actions.push(...validActions);
+          } else {
+            console.log(`RE+ACT: AI requested additional actions but all were invalid, stopping`);
+            break;
+          }
         }
       }
     }
     
     // Step 4: Final synthesis
     if (sessionState.actionHistory.length > 0) {
+      if (progressCallback) {
+        progressCallback({
+          type: 'thinking',
+          content: `\nSynthesizing results from ${sessionState.actionHistory.length} completed actions...\n\nGenerating final analysis...`
+        });
+      }
+      
       const synthesisPrompt = this.buildSynthesisPrompt(userQuery, sessionState.actionHistory, sessionState);
       finalResponse = await this.makeAIRequest(synthesisPrompt, sessionId);
     }
     
-    console.log(`✅ RE+ACT: Completed processing with ${sessionState.actionHistory.length} actions executed`);
+    console.log(`RE+ACT: Completed processing with ${sessionState.actionHistory.length} actions executed`);
     
+    // Final thinking update with summary
+    if (progressCallback) {
+      const summary = `\nAnalysis Complete!\nSummary:\n - ${sessionState.actionHistory.length} actions executed\n - ${plan.actions.length} planned steps completed\n - Ready to provide final answer`;
+      progressCallback({
+        type: 'thinking',
+        content: summary
+      });
+    }
+    
+    let hasText = typeof finalResponse === "string" && finalResponse.trim().length > 0;
+    let looksLikePlanOnly = hasText && /(^|\n)\s*PLAN\s*:|^\s*\*\*REASONING\*\*|^REASONING:/i.test(finalResponse) && !/FINAL ANSWER|JAWABAN AKHIR|KESIMPULAN|SOLUTION|SOLUSI/i.test(finalResponse);
+    if (!hasText || looksLikePlanOnly) {
+      const planText = typeof plan === "string" ? plan : JSON.stringify(plan);
+      const ctx = Array.isArray(sessionState.files) ? sessionState.files.map(f => `${f.name}\n${f.content}`).join("\n\n") : "";
+      const finalPrompt = ["Selesaikan permintaan pengguna berdasarkan rencana berikut dan konteks proyek.","Rencana:", String(planText || ""), "Konteks:", ctx, "Berikan jawaban akhir yang langsung bisa dipakai, bukan rencana."].join("\n\n");
+      const synthesized = await this.makeAIRequest(finalPrompt, sessionId);
+      finalResponse = typeof synthesized === "string" ? synthesized : (synthesized && synthesized.content) || "";
+    }
+
     return {
       response: finalResponse,
       actionsExecuted: sessionState.actionHistory.length,
@@ -160,22 +279,29 @@ CURRENT THINKING: [What you expect to find and how it will help]`;
     }
 
     // Extract actions
-    const actionMatches = response.matchAll(/\d+\.\s*ACTION:\s*(\w+)\s*with\s*({[^}]*}|\w+)(?:\s*WHY:\s*(.*?)(?=\n\d+\.|$))?/gs);
+    const actionMatches = response.matchAll(/\d+\.\s*ACTION:\s*[`*]?(\w+)[`*]?\s*with\s*({[^}]*}|\w+)(?:\s*WHY:\s*(.*?)(?=\n\d+\.|$))?/gs);
     
     for (const match of actionMatches) {
-      const actionType = match[1];
+      const actionType = match[1].trim(); 
       let params = {};
       
       try {
-        // Try to parse as JSON
-        if (match[2].startsWith('{')) {
-          params = JSON.parse(match[2]);
-        } else {
-          // Simple parameter
-          params = { value: match[2] };
-        }
+          let rawParams = match[2];
+          if (rawParams.startsWith('{')) {
+              let parsed = JSON.parse(rawParams);
+              // Cek jika hasilnya adalah objek dengan satu properti 'value'
+              // yang isinya adalah string JSON lain.
+              if (typeof parsed.value === 'string' && parsed.value.startsWith('{')) {
+                  params = JSON.parse(parsed.value);
+              } else {
+                  params = parsed;
+              }
+          } else {
+              params = { value: rawParams };
+          }
       } catch (error) {
-        console.warn(`⚠️ Could not parse action parameters: ${match[2]}`);
+          console.warn(`Could not parse action parameters: ${match[2]}`);
+          params = { value: match[2] }; // Fallback
       }
       
       plan.actions.push({
@@ -184,6 +310,37 @@ CURRENT THINKING: [What you expect to find and how it will help]`;
         reason: match[3]?.trim() || '',
         executed: false
       });
+    }
+
+    // Fallback: some models output PLAN as a markdown table. Try parsing that into actions.
+    if (plan.actions.length === 0) {
+      try {
+        // Find a markdown table under PLAN: header
+        const tableMatch = response.match(/\n\s*\|\s*#\s*\|[\s\S]*?\n\s*\|[-\s|:]+\n([\s\S]*?)\n\s*\n/);
+        if (tableMatch && tableMatch[1]) {
+          const rows = tableMatch[1].trim().split(/\n+/);
+          for (const row of rows) {
+            // table columns split by |, trim each cell
+            const cols = row.split('|').map(c => c.trim()).filter((v,i) => v !== '' || i>0);
+            // Expected col layout: [index, ACTION, PARAMETERS, WHY]
+            if (cols.length >= 3) {
+              const rawAction = cols[1].replace(/\*+/g, '').trim();
+              let actionType = rawAction.replace(/[*`]/g, '').split(/\s+/)[0];
+              let rawParams = cols[2].trim();
+              let params = {};
+              try {
+                if (rawParams.startsWith('{')) params = JSON.parse(rawParams);
+                else params = { value: rawParams.replace(/^`|`$/g, '') };
+              } catch (e) {
+                params = { value: rawParams };
+              }
+              plan.actions.push({ type: actionType, params, reason: (cols[3]||'').trim(), executed: false });
+            }
+          }
+        }
+      } catch (e) {
+        // ignore fallback parsing errors
+      }
     }
 
     // Extract current thinking
@@ -199,7 +356,7 @@ CURRENT THINKING: [What you expect to find and how it will help]`;
    * Execute a single action
    */
   async executeAction(action, sessionId) {
-    console.log(`🔧 Executing ${action.type} with params:`, action.params);
+    console.log(`Executing ${action.type} with params:`, action.params);
     
     try {
       const result = await this.searchEngine.executeSearchCommand(action.type, action.params);
@@ -219,7 +376,7 @@ CURRENT THINKING: [What you expect to find and how it will help]`;
       };
       
     } catch (error) {
-      console.error(`❌ Action ${action.type} failed:`, error);
+      console.error(`Action ${action.type} failed:`, error);
       return {
         success: false,
         action: action.type,
@@ -304,12 +461,16 @@ ${resultsText}
 
 REMAINING ACTIONS: ${originalPlan.actions.length - actionIndex - 1}
 
-Based on these search results, continue your analysis. If you need to perform additional searches or modify your approach, specify new actions in the same format:
+Based on these search results, continue your analysis. 
+
+IMPORTANT: Only request additional actions if you absolutely need more information to answer the user's question. If you have enough information to provide a helpful answer, do not request more actions.
+
+If you need to perform additional searches, specify new actions in the same format:
 
 ACTION: searchType with {"param": "value"}
 WHY: Explanation
 
-Otherwise, continue with your analysis based on the findings above.`;
+If you have sufficient information to answer the user's question, provide your final analysis without requesting more actions.`;
   }
 
   /**
@@ -356,20 +517,73 @@ Your response should be practical and specific, referencing the actual code/cont
    */
   async makeAIRequest(prompt, sessionId) {
     try {
-      console.log(`🤖 AI Request for session ${sessionId}:`, prompt.slice(0, 100) + '...');
-      
-      // Use the existing chat model from LangChain service
-      if (this.langchainService.chatModel) {
-        const response = await this.langchainService.chatModel.invoke(prompt);
-        return response.content;
-      } else {
-        // Fallback to simple processing
-        console.log('⚠️ No AI model available, using pattern analysis');
-        return this.generateFallbackResponse(prompt);
+      console.log(`AI Request for session ${sessionId}:`, prompt.slice(0, 100) + '...');
+
+      // Use the existing AI API call method from main process
+      // We need to get the current provider and model from the session
+      const sessionData = this.sessionState.get(sessionId);
+      if (!sessionData || !sessionData.model) {
+        throw new Error('Session not properly initialized with model information');
       }
-      
+
+      const { provider, model, apiKey, baseUrl } = sessionData.model;
+
+      // Make direct API call similar to handleOpenAICompatibleStreaming
+      const url = new URL(`${baseUrl.replace(/\/+$/,'')}/chat/completions`);
+      const bodyObj = {
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: false  // Non-streaming for RE+ACT
+      };
+
+      const body = JSON.stringify(bodyObj);
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      };
+
+      if (provider === 'openrouter') {
+        headers['HTTP-Referer'] = 'https://clustrix.local';
+        headers['X-Title'] = 'Clustrix Desktop';
+      }
+
+      const response = await new Promise((resolve, reject) => {
+        const https = require('https');
+        const opts = {
+          method: 'POST',
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname + url.search,
+          protocol: url.protocol,
+          headers
+        };
+
+        const req = https.request(opts, (res) => {
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            if (res.statusCode < 200 || res.statusCode >= 300) {
+              reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+              return;
+            }
+            resolve(data);
+          });
+        });
+
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+      });
+
+      const jsonResponse = JSON.parse(response);
+      const content = jsonResponse?.choices?.[0]?.message?.content ||
+                     jsonResponse?.message?.content ||
+                     jsonResponse?.output_text || '';
+
+      return content;
+
     } catch (error) {
-      console.error(`❌ AI request failed:`, error);
+      console.error(`AI request failed:`, error);
       return this.generateFallbackResponse(prompt);
     }
   }

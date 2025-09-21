@@ -1,4 +1,4 @@
-# 🚀 LangChain Integration in Clustrix
+# LangChain Integration in Clustrix
 
 ## Overview
 
@@ -6,11 +6,11 @@ Clustrix sekarang sudah terintegrasi dengan LangChain untuk memberikan kemampuan
 
 - 📚 **Vector Database** untuk penyimpanan konteks yang efisien
 - 🤖 **Specialized Agents** untuk handling complex tasks
-- 🗂️ **Project Session** vs Regular Session differentiation
+- **Project Session** vs Regular Session differentiation
 - 📄 **Enhanced File Processing** dengan chunking dan semantic search
 - 🧠 **Persistent Memory** untuk project continuity
 
-## 🏗️ Architecture
+## Architecture
 
 ### Core Components
 
@@ -36,7 +36,7 @@ MultiAgentOrchestrator
 └── ProjectManagementAgent
 ```
 
-## 🔧 Features
+## Features
 
 ### 1. **Intelligent Session Types**
 - **Regular Sessions**: Enhanced dengan context yang relevan
@@ -67,7 +67,7 @@ const response = await agentOrchestrator.processComplexRequest(
 - Project-specific memory persistence
 - Relevance scoring untuk optimal results
 
-## 🚀 Usage
+## Usage
 
 ### Enabling Project Mode
 Untuk mengaktifkan project mode dan agent system:
@@ -92,7 +92,7 @@ Agent akan dipilih otomatis berdasarkan:
 - **Debugging**: Error analysis, solution suggestions
 - **Project Management**: Planning, organization, tracking
 
-## 📊 Configuration
+## Configuration
 
 ### API Keys
 LangChain akan menggunakan API key yang tersedia:
@@ -107,7 +107,7 @@ ${userData}/vector_data.json // Vector store persistence
 ${userData}/project_memory.json // Project-specific memory
 ```
 
-## 🎯 Performance
+## Performance
 
 ### Smart Loading
 - Lazy initialization jika tidak ada API key
@@ -138,7 +138,7 @@ User Query → Agent Selection → Specialized Processing
     Vector Search → Context Generation
 ```
 
-## 📈 Benefits
+## Benefits
 
 1. **Reduced Context Overload**: Tidak lagi "ngirim semua konteks ke request"
 2. **Intelligent Retrieval**: Hanya konteks yang relevan yang dikirim
@@ -146,7 +146,7 @@ User Query → Agent Selection → Specialized Processing
 4. **Persistent Memory**: Project continuity across sessions
 5. **Scalable Architecture**: Modular design untuk future enhancements
 
-## 🛠️ Development
+## Development
 
 ### Testing LangChain
 ```bash
@@ -202,7 +202,7 @@ console.log(agentOrchestrator.agents.map(a => a.name));
 const results = await langchainService.vectorStore.similaritySearch(query, 3);
 ```
 
-## 🎉 Success!
+## Success!
 
 LangChain integration berhasil memberikan Clustrix kemampuan:
 - ✅ Smart context management

@@ -20,7 +20,7 @@ class FileSummarizer {
         console.log(`📚 Loaded ${this.summaryCache.size} file summaries from cache`);
       }
     } catch (error) {
-      console.error('❌ Error loading summary cache:', error);
+      console.error('Error loading summary cache:', error);
     }
   }
 
@@ -29,7 +29,7 @@ class FileSummarizer {
       const summaries = Object.fromEntries(this.summaryCache);
       fs.writeFileSync(this.summaryFile, JSON.stringify(summaries, null, 2));
     } catch (error) {
-      console.error('❌ Error saving summary cache:', error);
+      console.error('Error saving summary cache:', error);
     }
   }
 
@@ -492,8 +492,8 @@ class FileSummarizer {
 
     const totalCompressionRatio = Math.round((1 - totalOptimizedSize / totalOriginalSize) * 100);
 
-    console.log(`📊 File processing complete: ${files.length} files`);
-    console.log(`💾 Size optimization: ${totalOriginalSize} → ${totalOptimizedSize} chars (${totalCompressionRatio}% reduction)`);
+    console.log(`File processing complete: ${files.length} files`);
+    console.log(`Size optimization: ${totalOriginalSize} → ${totalOptimizedSize} chars (${totalCompressionRatio}% reduction)`);
 
     return {
       files: results,
@@ -512,7 +512,7 @@ class FileSummarizer {
     if (fs.existsSync(this.summaryFile)) {
       fs.unlinkSync(this.summaryFile);
     }
-    console.log('🗑️ Summary cache cleared');
+    console.log('Summary cache cleared');
   }
 
   getCacheStats() {

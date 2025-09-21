@@ -16,7 +16,7 @@ def instant_web_opener():
     Add your URLs to the websites array below
     """
 
-    # 🔥 ADD YOUR WEBSITES HERE 🔥
+    # ADD YOUR WEBSITES HERE
     # Just paste your URLs separated by commas, super easy!
     websites = [
         "https://claude.ai/_next/static/media/177b7db6a26ff4c3-s.p.woff2",
@@ -42,7 +42,7 @@ def instant_web_opener():
         "https://claude.ai/_next/static/media/f6f0b26c2c0e7b63-s.p.woff2",
     ]
 
-    print("🚀 INSTANT AUTOMATION WEB OPENER")
+    print("INSTANT AUTOMATION WEB OPENER")
     print("=" * 40)
     print(f"Ready to open {len(websites)} websites...")
     print()
@@ -55,15 +55,15 @@ def instant_web_opener():
 
     # Confirmation
     try:
-        choice = input("🔥 Ready to launch? (y/n): ").lower().strip()
+        choice = input("Ready to launch? (y/n): ").lower().strip()
         if choice not in ["y", "yes"]:
-            print("✋ Operation cancelled. See you later!")
+            print("Operation cancelled. See you later!")
             return
     except KeyboardInterrupt:
         print("\n✋ Operation cancelled. See you later!")
         return
 
-    print("\n🎯 Opening websites...")
+    print("\nOpening websites...")
     print("-" * 30)
 
     # Open each website
@@ -75,18 +75,18 @@ def instant_web_opener():
             success_count += 1
             time.sleep(0.5)  # Small delay to prevent overwhelming the system
         except Exception as e:
-            print(f"❌ Failed to open Link {i}: {str(e)}")
+            print(f"Failed to open Link {i}: {str(e)}")
 
-    print(f"\n✅ Done! Successfully opened {success_count}/{len(websites)} websites")
-    print("🎉 Your browsers are ready to go!")
+    print(f"\nDone! Successfully opened {success_count}/{len(websites)} websites")
+    print("Your browsers are ready to go!")
 
 
 if __name__ == "__main__":
     try:
         instant_web_opener()
     except KeyboardInterrupt:
-        print("\n\n👋 Process interrupted. Goodbye!")
+        print("\n\nProcess interrupted. Goodbye!")
         sys.exit(0)
     except Exception as e:
-        print(f"\n❌ Unexpected error: {str(e)}")
+        print(f"\nUnexpected error: {str(e)}")
         sys.exit(1)

@@ -52,16 +52,16 @@
     "electron": "^38.1.0"
   },
   "dependencies": {
+    "@langchain/community": "^0.3.0",
+    "@langchain/openai": "^0.3.0",
     "@mathjax/mathjax-newcm-font": "^4.0.0",
     "cheerio": "^1.1.2",
+    "langchain": "^0.3.0",
     "mammoth": "^1.10.0",
     "mathjax": "^4.0.0",
     "perfect-scrollbar": "^1.5.6",
     "serpapi": "^2.2.1",
-    "xlsx": "file:./xlsx",
-    "langchain": "^0.3.0",
-    "@langchain/openai": "^0.3.0",
-    "@langchain/community": "^0.3.0",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "xlsx": "file:./xlsx"
   }
 }

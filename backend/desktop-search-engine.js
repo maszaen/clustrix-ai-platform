@@ -1,5 +1,4 @@
 const path = require('path');
-const fs = require('fs');
 
 class DesktopSearchEngine {
   constructor(langchainService) {
@@ -13,7 +12,7 @@ class DesktopSearchEngine {
   loadProjectFiles(files) {
     console.log(`Loading ${files.length} files into search engine...`);
     this.projectFiles.clear();
-    
+
     files.forEach(file => {
       this.projectFiles.set(file.name, {
         content: file.content,
@@ -21,122 +20,195 @@ class DesktopSearchEngine {
         lines: file.content.split('\n')
       });
     });
-    
+
     console.log(`Loaded ${this.projectFiles.size} files for searching`);
   }
 
-  async searchPattern(raw) {
-  let input = raw;
-  if (typeof raw === "string") {
-    try { input = JSON.parse(raw); } catch {}
-  }
-  const pattern = typeof input === "object" && input?.pattern ? String(input.pattern) : String(raw || "");
-  const options = typeof input === "object" && input?.options ? input.options : {};
-  const files = Array.isArray(options.files) && options.files.length ? options.files : Object.keys(this.files);
-  const caseSensitive = !!options.caseSensitive;
-  const flags = caseSensitive ? "g" : "gi";
-  let rx;
-  try { rx = new RegExp(pattern, flags); } catch { return []; }
-  const results = [];
-  for (const f of files) {
-    const fileName = f;
-    const content = this.files[fileName] || "";
-    if (!content) continue;
-    const lines = content.split(/\r?\n/);
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      rx.lastIndex = 0;
-      if (rx.test(line)) {
-        results.push({
-          file: fileName,
-          line: i + 1,
-          snippet: line.slice(0, 400),
-        });
+  searchPattern(raw) {
+    let input = raw;
+    if (typeof raw === 'string') {
+      try {
+        input = JSON.parse(raw);
+      } catch (error) {
+        input = raw;
       }
     }
-  }
-  return results;
-}
 
-  searchFunctions(params) {
+    const pattern = typeof input === 'object' && input?.pattern != null
+      ? String(input.pattern)
+      : typeof raw === 'string'
+        ? raw
+        : '';
+    const options = typeof input === 'object' && input?.options ? input.options : {};
+    const fileOption = options?.files;
+    const files = Array.isArray(fileOption) && fileOption.length
+      ? Array.from(new Set(fileOption.map(String)))
+      : typeof fileOption === 'string' && fileOption.trim()
+        ? [fileOption.trim()]
+        : Array.from(this.projectFiles.keys());
+    const caseSensitive = Boolean(options.caseSensitive);
+    const flags = caseSensitive ? 'g' : 'gi';
+    let rx;
+    try {
+      rx = new RegExp(pattern, flags);
+    } catch (error) {
+      return [];
+    }
+
+    const contextLines = Number.isInteger(options.contextLines) && options.contextLines >= 0
+      ? options.contextLines
+      : 0;
+    const maxResults = Number.isInteger(options.maxResults) && options.maxResults > 0
+      ? options.maxResults
+      : Infinity;
+    const snippetLength = Number.isInteger(options.snippetLength) && options.snippetLength > 0
+      ? options.snippetLength
+      : 400;
+
+    const results = [];
+
+    for (const fileName of files) {
+      const fileData = this.projectFiles.get(fileName);
+      if (!fileData || !Array.isArray(fileData.lines)) continue;
+
+      const { lines } = fileData;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = typeof lines[i] === 'string' ? lines[i] : '';
+        rx.lastIndex = 0;
+
+        if (rx.test(line)) {
+          const start = Math.max(0, i - contextLines);
+          const end = Math.min(lines.length, i + contextLines + 1);
+          const context = lines.slice(start, end).join('\n');
+
+          results.push({
+            fileName,
+            lineNumber: i + 1,
+            context
+          });
+
+          if (results.length >= maxResults) {
+            return this.deduplicateResults(results, { maxResults, snippetLength });
+          }
+        }
+      }
+    }
+
+    return this.deduplicateResults(results, { maxResults, snippetLength });
+  }
+
+  async searchFunctions(params) {
     const functionName = params.functionName || params.value;
     const patterns = [
       `function\\s+${functionName || '\\w+'}`,
       `const\\s+${functionName || '\\w+'}\\s*=`,
       `let\\s+${functionName || '\\w+'}\\s*=`,
       `${functionName || '\\w+'}\\s*:\\s*function`,
-      `def\\s+${functionName || '\\w+'}`,  // Python
+      `def\\s+${functionName || '\\w+'}`,
       `function\\s*${functionName || '\\w+'}\\s*\\(`
     ];
 
+    const options = { maxResults: 50, contextLines: 3 };
     const results = [];
-    patterns.forEach(pattern => {
-        // PERBAIKAN: Bungkus argumen dalam satu objek
-        const matches = this.searchPattern({
-            pattern: pattern, 
-            options: { maxResults: 50, contextLines: 3 }
-        });
-        results.push(...matches);
-    });
 
-    return this.deduplicateResults(results);
+    for (const pattern of patterns) {
+      const matches = await this.searchPattern({
+        pattern,
+        options
+      });
+      results.push(...matches);
+
+      if (results.length >= options.maxResults) {
+        break;
+      }
+    }
+
+    return this.deduplicateResults(results, options);
   }
 
-  searchCSS(params) {
+  async searchCSS(params) {
     const selector = params.selector || params.value;
     const patterns = [
       `\\.${selector}\\s*{`,
       `#${selector}\\s*{`,
-      `${selector}\\s*{`, 
-      `class\\s*=\\s*["'].*${selector}`, 
-      `id\\s*=\\s*["'].*${selector}`     
+      `${selector}\\s*{`,
+      `class\\s*=\\s*['\"].*${selector}`,
+      `id\\s*=\\s*['\"].*${selector}`
     ];
 
+    const options = { maxResults: 30, contextLines: 2 };
     const results = [];
-    patterns.forEach(pattern => {
-      const matches = this.searchPattern(pattern, { maxResults: 30, contextLines: 2 });
-      results.push(...matches);
-    });
 
-    return this.deduplicateResults(results);
+    for (const pattern of patterns) {
+      const matches = await this.searchPattern({
+        pattern,
+        options
+      });
+      results.push(...matches);
+
+      if (results.length >= options.maxResults) {
+        break;
+      }
+    }
+
+    return this.deduplicateResults(results, options);
   }
 
-  searchHTML(params) {
+  async searchHTML(params) {
     const element = params.element || params.value;
     const patterns = [
-      `<${element}[^>]*>`,        
-      `</${element}>`,            
-      `<${element}\\s+[^>]*/>`,   
-      `${element}\\s*=`,          
+      `<${element}[^>]*>`,
+      `</${element}>`,
+      `<${element}\\s+[^>]*/>`,
+      `${element}\\s*=`,
     ];
 
+    const options = { maxResults: 50, contextLines: 1 };
     const results = [];
-    patterns.forEach(pattern => {
-      const matches = this.searchPattern(pattern, { maxResults: 50, contextLines: 1 });
-      results.push(...matches);
-    });
 
-    return this.deduplicateResults(results);
+    for (const pattern of patterns) {
+      const matches = await this.searchPattern({
+        pattern,
+        options
+      });
+      results.push(...matches);
+
+      if (results.length >= options.maxResults) {
+        break;
+      }
+    }
+
+    return this.deduplicateResults(results, options);
   }
 
-  searchImports(params) {
+  async searchImports(params) {
     const moduleName = params.moduleName || params.value;
-    const modulePattern = moduleName || '[^\'\"]+';
+    const modulePattern = moduleName || "[^'\"]+";
     const patterns = [
       `import.*${moduleName || '\\w+'}`,
-      `require\\(['"]+${modulePattern}['"]+\\)`,
+      `require\\(['\"]+${modulePattern}['\"]+\\)`,
       `from\\s+${moduleName || '\\w+'}\\s+import`,
       `<script.*src.*${modulePattern}`,
       `<link.*href.*${modulePattern}`,
     ];
 
+    const options = { maxResults: 30, contextLines: 1 };
     const results = [];
-    patterns.forEach(pattern => {
-      const matches = this.searchPattern(pattern, { maxResults: 30, contextLines: 1 });
-      results.push(...matches);
-    });
 
-    return this.deduplicateResults(results);
+    for (const pattern of patterns) {
+      const matches = await this.searchPattern({
+        pattern,
+        options
+      });
+      results.push(...matches);
+
+      if (results.length >= options.maxResults) {
+        break;
+      }
+    }
+
+    return this.deduplicateResults(results, options);
   }
 
   analyzeFileStructure(params) {
@@ -152,7 +224,7 @@ class DesktopSearchEngine {
     };
 
     const ext = path.extname(fileName).toLowerCase();
-    
+
     if (['.js', '.ts', '.jsx', '.tsx'].includes(ext)) {
       analysis.structure = this.analyzeJavaScriptStructure(fileData.lines);
     } else if (['.html', '.htm'].includes(ext)) {
@@ -175,19 +247,19 @@ class DesktopSearchEngine {
 
     lines.forEach((line, index) => {
       const trimmed = line.trim();
-      
+
       if (/^(import|const.*require|let.*require|var.*require)/.test(trimmed)) {
         structure.imports.push({ line: index + 1, content: trimmed });
       }
-      
+
       if (/^(function|const.*=.*function|let.*=.*function|async\s+function)/.test(trimmed)) {
         structure.functions.push({ line: index + 1, content: trimmed });
       }
-      
+
       if (/^class\s+\w+/.test(trimmed)) {
         structure.classes.push({ line: index + 1, content: trimmed });
       }
-      
+
       if (/^export/.test(trimmed)) {
         structure.exports.push({ line: index + 1, content: trimmed });
       }
@@ -205,31 +277,31 @@ class DesktopSearchEngine {
 
     lines.forEach((line, index) => {
       const trimmed = line.trim().toLowerCase();
-      
+
       if (trimmed.includes('<!doctype')) {
         structure.doctype = { line: index + 1, content: line.trim() };
       }
-      
+
       if (trimmed.includes('<title>')) {
         structure.head.title = { line: index + 1, content: line.trim() };
       }
-      
+
       if (trimmed.includes('<script')) {
         structure.head.scripts.push({ line: index + 1, content: line.trim() });
       }
-      
+
       if (trimmed.includes('<link') && trimmed.includes('stylesheet')) {
         structure.head.stylesheets.push({ line: index + 1, content: line.trim() });
       }
-      
+
       if (trimmed.includes('<form')) {
         structure.body.forms.push({ line: index + 1, content: line.trim() });
       }
-      
+
       if (trimmed.includes('<textarea')) {
         structure.body.inputs.push({ line: index + 1, content: line.trim(), type: 'textarea' });
       }
-      
+
       if (trimmed.includes('<input')) {
         structure.body.inputs.push({ line: index + 1, content: line.trim(), type: 'input' });
       }
@@ -248,20 +320,20 @@ class DesktopSearchEngine {
 
     lines.forEach((line, index) => {
       const trimmed = line.trim();
-      
+
       if (trimmed.includes('{') && !trimmed.startsWith('/*')) {
         const selector = trimmed.split('{')[0].trim();
         structure.selectors.push({ line: index + 1, selector });
-        
+
         if (selector.includes('.')) {
           structure.classes.push({ line: index + 1, class: selector });
         }
-        
+
         if (selector.includes('#')) {
           structure.ids.push({ line: index + 1, id: selector });
         }
       }
-      
+
       if (trimmed.includes('@media')) {
         structure.mediaQueries.push({ line: index + 1, content: trimmed });
       }
@@ -270,14 +342,53 @@ class DesktopSearchEngine {
     return structure;
   }
 
-  deduplicateResults(results) {
+  deduplicateResults(results, options = {}) {
+    const maxResults = Number.isInteger(options.maxResults) && options.maxResults > 0
+      ? options.maxResults
+      : Infinity;
+    const maxSnippetLength = Number.isInteger(options.snippetLength) && options.snippetLength > 0
+      ? options.snippetLength
+      : 400;
+
     const seen = new Set();
-    return results.filter(result => {
-      const key = `${result.fileName}:${result.lineNumber}`;
-      if (seen.has(key)) return false;
+    const deduped = [];
+
+    for (const result of results) {
+      if (!result || typeof result !== 'object') continue;
+
+      const fileName = result.fileName || result.file;
+      const rawLine = result.lineNumber ?? result.line;
+      const lineNumber = Number.isInteger(rawLine) ? rawLine : parseInt(rawLine, 10);
+      const rawContext = typeof result.context === 'string'
+        ? result.context
+        : typeof result.snippet === 'string'
+          ? result.snippet
+          : '';
+
+      if (!fileName || Number.isNaN(lineNumber)) continue;
+
+      const key = `${fileName}:${lineNumber}`;
+      if (seen.has(key)) continue;
       seen.add(key);
-      return true;
-    });
+
+      const context = String(rawContext);
+      const snippet = context.length > maxSnippetLength
+        ? context.slice(0, maxSnippetLength)
+        : context;
+
+      deduped.push({
+        fileName,
+        lineNumber,
+        context,
+        snippet
+      });
+
+      if (deduped.length >= maxResults) {
+        break;
+      }
+    }
+
+    return deduped;
   }
 
   getCapabilities() {
@@ -296,40 +407,69 @@ class DesktopSearchEngine {
     };
   }
 
-  async executeSearchCommand(cmd) {
-  const v = cmd?.value;
-  let parsed = v;
-  if (typeof v === "string") {
-    try { parsed = JSON.parse(v); } catch {}
+  async executeSearchCommand(command, rawParams = null) {
+    let name = '';
+    let params = rawParams;
+
+    if (typeof command === 'string') {
+      name = command;
+    } else if (command && typeof command === 'object') {
+      name = command.name || command.tool || command.fn || command.type || '';
+      if (Object.prototype.hasOwnProperty.call(command, 'value')) {
+        params = command.value;
+      } else if (Object.prototype.hasOwnProperty.call(command, 'params')) {
+        params = command.params;
+      }
+    }
+
+    if (typeof params === 'string') {
+      try {
+        params = JSON.parse(params);
+      } catch (error) {
+        if (name !== 'searchPattern') {
+          params = { value: params };
+        }
+      }
+    }
+
+    if (params === undefined || params === null) {
+      params = {};
+    } else if (typeof params !== 'object') {
+      params = name === 'searchPattern' ? String(params) : { value: params };
+    }
+
+    name = typeof name === 'string' ? name : '';
+    if (!name) {
+      return [];
+    }
+
+    switch (name) {
+      case 'searchPattern': {
+        const results = await this.searchPattern(params);
+        return Array.isArray(results) ? results : [];
+      }
+      case 'searchHTML': {
+        const results = await this.searchHTML(params);
+        return Array.isArray(results) ? results : [];
+      }
+      case 'searchFunctions': {
+        const results = await this.searchFunctions(params);
+        return Array.isArray(results) ? results : [];
+      }
+      case 'searchImports': {
+        const results = await this.searchImports(params);
+        return Array.isArray(results) ? results : [];
+      }
+      case 'searchCSS': {
+        const results = await this.searchCSS(params);
+        return Array.isArray(results) ? results : [];
+      }
+      case 'analyzeFileStructure':
+        return await this.analyzeFileStructure(params);
+      default:
+        return [];
+    }
   }
-  const name = cmd?.name || cmd?.tool || cmd?.fn || "";
-  if (!name) return [];
-  if (name === "searchPattern") {
-    const out = await this.searchPattern(parsed || v);
-    return Array.isArray(out) ? out : [];
-  }
-  if (name === "searchHTML") {
-    const out = await this.searchHTML(parsed || v);
-    return Array.isArray(out) ? out : [];
-  }
-  if (name === "searchFunctions") {
-    const out = await this.searchFunctions(parsed || v);
-    return Array.isArray(out) ? out : [];
-  }
-  if (name === "searchImports") {
-    const out = await this.searchImports(parsed || v);
-    return Array.isArray(out) ? out : [];
-  }
-  if (name === "searchCSS") {
-    const out = await this.searchCSS(parsed || v);
-    return Array.isArray(out) ? out : [];
-  }
-  if (name === "analyzeFileStructure") {
-    const out = await this.analyzeFileStructure(parsed || v);
-    return Array.isArray(out) ? out : [];
-  }
-  return [];
-}
 }
 
 module.exports = DesktopSearchEngine;

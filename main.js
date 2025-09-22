@@ -700,56 +700,51 @@ function runStandardStreaming(event, payload) {
 
                 // Progress callback to send thinking updates
                 const progressCallback = (update) => {
-                  if (update.type === 'thinking') {
-                    // Calculate the AI message index (should be the last message in the session)
-                    const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
-                    // Send thinking update over the same 'chat-update' channel (like web-search does)
-                    console.debug('MAIN: Sending THINKING chat-update', { reqId, sessionId, aiMessageIndex, len: String(update.content).length });
-                    const safeThink =
-                    (update && typeof update.content === 'string' && update.content.trim())
-                      ? update.content.trim()
-                      : 'Menganalisis berkas proyek, menyusun rencana aksi, dan mengeksekusi langkah-langkah awal.';
+                  const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
 
-                  event.sender.send('chat-update', {
-                    type: 'THINKING',
-                    messageIndex: aiMessageIndex,
-                    data: {
-                      sessionId: session?.id,
-                      think: safeThink
+                  if (update.type === 'thinking_log') {
+                    const entry = update.entry || {};
+                    const thinkText = typeof entry.text === 'string' && entry.text.trim()
+                      ? entry.text.trim()
+                      : (typeof update.content === 'string' ? update.content.trim() : '');
+
+                    if (!thinkText) {
+                      return;
                     }
-                  });
+
+                    event.sender.send('chat-update', {
+                      type: 'THINKING',
+                      messageIndex: aiMessageIndex,
+                      data: {
+                        sessionId: session?.id,
+                        think: thinkText,
+                        thinkEntry: entry,
+                        reqId,
+                      },
+                    });
+                  } else if (update.type === 'thinking') {
+                    const fallback = typeof update.content === 'string' ? update.content.trim() : '';
+                    if (!fallback) return;
+
+                    event.sender.send('chat-update', {
+                      type: 'THINKING',
+                      messageIndex: aiMessageIndex,
+                      data: {
+                        sessionId: session?.id,
+                        think: fallback,
+                        reqId,
+                      },
+                    });
                   } else if (update.type === 'action_result') {
-                      const actionData = update.data || {};
-                      const results = Array.isArray(actionData.results) ? actionData.results : [];
-                      const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
-
-                      // Buat ringkasan hasil aksi dalam format teks
-                      let resultSummary = `\n✅ Aksi '${actionData.action}' selesai.`;
-
-                      if (results.length > 0) {
-                          resultSummary += ` Ditemukan ${results.length} hasil:\n`;
-                          // Batasi hanya beberapa hasil untuk ditampilkan di log agar tidak terlalu panjang
-                          resultSummary += results.slice(0, 5).map(r => 
-                              `- **${r.fileName}:${r.lineNumber || '?'}**: \`${r.snippet.trim().substring(0, 80)}...\``
-                          ).join('\n');
-                          if (results.length > 5) {
-                              resultSummary += `\n- ... dan ${results.length - 5} hasil lainnya.`;
-                          }
-                      } else {
-                          resultSummary += ` Tidak ada hasil yang ditemukan.`;
-                      }
-
-                      // Kirim ringkasan ini sebagai bagian dari alur pemikiran (THINKING)
-                      console.debug('MAIN: Sending formatted ACTION_RESULT as THINKING update');
-                      event.sender.send('chat-update', {
-                          type: 'THINKING',
-                          messageIndex: aiMessageIndex,
-                          data: {
-                              think: resultSummary,
-                              reqId,
-                              sessionId
-                          }
-                      });
+                    event.sender.send('chat-update', {
+                      type: 'REACT_ACTION_RESULT',
+                      messageIndex: aiMessageIndex,
+                      data: {
+                        sessionId: session?.id,
+                        reqId,
+                        ...(update.data || {}),
+                      },
+                    });
                   }
                 };
 
@@ -769,22 +764,25 @@ function runStandardStreaming(event, payload) {
                   progressCallback  // Pass progress callback
                 );
 
-                console.log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
+                console.log(`MAIN: RE+ACT completed with ${reactResult?.actionsExecuted || 0} actions`);
 
-                // CAREFULLY: Ensure response is a string before processing
-                let responseText = '';
+                const candidateResponses = [];
+                if (reactResult && typeof reactResult.finalResponse === 'string') {
+                  candidateResponses.push(reactResult.finalResponse);
+                }
+                if (reactResult && typeof reactResult.response === 'string') {
+                  candidateResponses.push(reactResult.response);
+                }
+                if (reactResult && reactResult.response && typeof reactResult.response.response === 'string') {
+                  candidateResponses.push(reactResult.response.response);
+                }
                 if (typeof reactResult === 'string') {
-                  responseText = reactResult;
-                } else if (reactResult && reactResult.response && typeof reactResult.response.response === 'string') {
-                  // <<< TAMBAHKAN KONDISI INI
-                  responseText = reactResult.response.response;
-                } else if (reactResult && typeof reactResult.response === 'string') {
-                  responseText = reactResult.response;
-                } else if (reactResult && reactResult.finalResponse && typeof reactResult.finalResponse === 'string') {
-                  responseText = reactResult.finalResponse;
-                } else {
-                  // Fallback for malformed response
-                  console.log("MAIN: RE+ACT returned malformed response, using fallback", { reactResult });
+                  candidateResponses.push(reactResult);
+                }
+
+                let responseText = candidateResponses.find((text) => typeof text === 'string' && text.trim().length > 0);
+                if (!responseText) {
+                  console.log('MAIN: RE+ACT returned malformed response, using fallback', { reactResult });
                   responseText = 'RE+ACT analysis completed but response format was unexpected. Please try rephrasing your question.';
                 }
 
@@ -867,22 +865,25 @@ function runStandardStreaming(event, payload) {
               session.uploadedFiles || [],
               model
             );
-            
-            console.log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
-            
-            // CAREFULLY: Ensure response is a string before processing
-            let responseText = '';
+
+            console.log(`MAIN: RE+ACT completed with ${reactResult?.actionsExecuted || 0} actions`);
+
+            const candidateResponses = [];
+            if (reactResult && typeof reactResult.finalResponse === 'string') {
+              candidateResponses.push(reactResult.finalResponse);
+            }
+            if (reactResult && typeof reactResult.response === 'string') {
+              candidateResponses.push(reactResult.response);
+            }
+            if (reactResult && reactResult.response && typeof reactResult.response.response === 'string') {
+              candidateResponses.push(reactResult.response.response);
+            }
             if (typeof reactResult === 'string') {
-              responseText = reactResult;
-            } else if (reactResult && reactResult.response && typeof reactResult.response.response === 'string') {
-              // <<< TAMBAHKAN KONDISI INI
-              responseText = reactResult.response.response;
-            } else if (reactResult && typeof reactResult.response === 'string') {
-              responseText = reactResult.response;
-            } else if (reactResult && reactResult.finalResponse && typeof reactResult.finalResponse === 'string') {
-              responseText = reactResult.finalResponse;
-            } else {
-              // Fallback for malformed response
+              candidateResponses.push(reactResult);
+            }
+
+            let responseText = candidateResponses.find((text) => typeof text === 'string' && text.trim().length > 0);
+            if (!responseText) {
               logHelper("MAIN", "runStandardStreaming", "RE+ACT returned malformed response, using fallback", { reactResult });
               responseText = 'RE+ACT analysis completed but response format was unexpected. Please try rephrasing your question.';
             }

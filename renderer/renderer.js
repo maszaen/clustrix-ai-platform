@@ -778,6 +778,10 @@ function ensureThinkingUI(aiNode) {
   text.className = "thinking-text";
   body.appendChild(text);
 
+  const results = document.createElement("div");
+  results.className = "thinking-results";
+  body.appendChild(results);
+
   toggle.addEventListener("click", () => {
     const ex = toggle.getAttribute("aria-expanded") === "true";
     toggle.setAttribute("aria-expanded", ex ? "false" : "true");
@@ -790,21 +794,76 @@ function ensureThinkingUI(aiNode) {
   const content = aiNode.querySelector(".message-content") || aiNode;
   content.prepend(wrap);
 
-  aiNode._thinkingEl = { wrap, toggle, body, text };
+  aiNode._thinkingEl = { wrap, toggle, body, text, results };
 }
 
 // Anda bisa menyederhanakan fungsi ini
-function appendThinking(aiNode, chunk, session, messageIndex) {
-  if (!chunk || !aiNode || !session || messageIndex == null) return;
-  
+function appendThinking(aiNode, payload, session, messageIndex) {
+  if (!aiNode || !session || messageIndex == null) return;
+
+  let entry = null;
+
+  if (payload && typeof payload === "object") {
+    if (payload.thinkEntry && typeof payload.thinkEntry === "object") {
+      entry = payload.thinkEntry;
+    } else if (typeof payload.think === "string") {
+      entry = { text: payload.think };
+    }
+  } else if (typeof payload === "string") {
+    entry = { text: payload };
+  }
+
+  if (!entry || !entry.text || !String(entry.text).trim()) {
+    return;
+  }
+
+  const normalized = {
+    ...entry,
+    text: String(entry.text).trim(),
+  };
+
   ensureThinkingUI(aiNode);
-  
-  updateThinkingUI(aiNode, chunk, session, messageIndex);
 
   session._x_think = session._x_think || {};
-  const prev = String(session._x_think[messageIndex] || "");
-  session._x_think[messageIndex] = prev + chunk; 
-  
+  const thinkState = session._x_think[messageIndex];
+  const existing =
+    thinkState && typeof thinkState === "object"
+      ? thinkState
+      : { entries: [], text: typeof thinkState === "string" ? thinkState : "" };
+
+  existing.entries = Array.isArray(existing.entries) ? existing.entries : [];
+  existing.entries.push(normalized);
+  existing.text = renderThinkingEntriesToText(existing.entries);
+
+  session._x_think[messageIndex] = existing;
+
+  updateThinkingUI(aiNode, payload, session, messageIndex);
+
+  saveThinkingDebounced();
+}
+
+function appendActionResult(aiNode, payload, session, messageIndex) {
+  if (!aiNode || !session || messageIndex == null || !payload) return;
+
+  ensureThinkingUI(aiNode);
+
+  const el = aiNode._thinkingEl;
+  if (!el) return;
+
+  session._x_actionResults = session._x_actionResults || {};
+  const list = Array.isArray(session._x_actionResults[messageIndex])
+    ? session._x_actionResults[messageIndex]
+    : [];
+
+  list.push(payload);
+  session._x_actionResults[messageIndex] = list;
+
+  if (el.results) {
+    el.results.innerHTML = renderActionResults(list);
+    el.body.classList.add('expanded');
+    el.toggle.setAttribute('aria-expanded', 'true');
+  }
+
   saveThinkingDebounced();
 }
 
@@ -817,6 +876,68 @@ function cleanLeadingWhitespace(text) {
   );
 }
 
+function renderThinkingEntriesToText(entries = []) {
+  return entries
+    .map((entry) => {
+      const text = entry && typeof entry.text === "string" ? entry.text.trim() : "";
+      return text ? `- ${text}` : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function renderThinkingEntries(entries = []) {
+  if (!entries.length) return "";
+  const items = entries
+    .map((entry, idx) => {
+      const text = entry && typeof entry.text === "string" ? entry.text.trim() : "";
+      if (!text) return "";
+      const stage = entry.stage ? ` data-stage="${escapeHtml(String(entry.stage))}"` : "";
+      const actionIndex =
+        typeof entry.actionIndex === "number" ? ` data-action-index="${entry.actionIndex}"` : "";
+      return `<li${stage}${actionIndex}><span class="thinking-log-text">${escapeHtml(text)}</span></li>`;
+    })
+    .filter(Boolean)
+    .join("");
+
+  return `<ul class="thinking-log">${items}</ul>`;
+}
+
+function renderActionResults(results = []) {
+  if (!results.length) return "";
+
+  return results
+    .map((result, idx) => {
+      const actionLabel = result.action ? `${result.action}` : `Action ${idx + 1}`;
+      const hitCount = typeof result.resultCount === 'number' ? result.resultCount : (result.results?.length || 0);
+      const hits = Array.isArray(result.results) ? result.results.slice(0, 5) : [];
+
+      const listItems = hits
+        .map((hit) => {
+          const location = `${hit.fileName || '(unknown)'}:${hit.lineNumber ?? '?'}`;
+          const snippet = (hit.snippet || hit.context || '').toString().trim().slice(0, 160);
+          return `<li><code>${escapeHtml(location)}</code>${snippet ? ` — ${escapeHtml(snippet)}` : ''}</li>`;
+        })
+        .join('');
+
+      const extra = Array.isArray(result.results) && result.results.length > hits.length
+        ? `<div class="action-result-extra">+${result.results.length - hits.length} more</div>`
+        : '';
+
+      const body = listItems
+        ? `<ul class="action-result-list">${listItems}</ul>${extra}`
+        : '<div class="action-result-empty">Tidak ada hasil yang ditemukan.</div>';
+
+      return `
+        <div class="action-result" data-action-index="${idx}">
+          <div class="action-result-header"><strong>${escapeHtml(actionLabel)}</strong><span class="action-result-count">${hitCount} hasil</span></div>
+          ${body}
+        </div>
+      `;
+    })
+    .join('');
+}
+
 function updateThinkingUI(aiNode, content, session, messageIndex) {
   const el = aiNode._thinkingEl;
   if (!el) return;
@@ -825,16 +946,18 @@ function updateThinkingUI(aiNode, content, session, messageIndex) {
     el.body.classList.add('expanded');
     el.toggle.setAttribute('aria-expanded', 'true');
   }
-  
-  // Re-render full thinking content instead of appending
-  if (session && session._x_think && session._x_think[messageIndex]) {
-    const thinkData = session._x_think[messageIndex];
-    const thinkText = (typeof thinkData === "object" ? thinkData.text : thinkData) || "";
-    el.text.innerHTML = renderWithExistingFormatter(thinkText);
+
+  const thinkData = session && session._x_think ? session._x_think[messageIndex] : null;
+  if (thinkData && typeof thinkData === "object" && Array.isArray(thinkData.entries) && thinkData.entries.length) {
+    el.text.innerHTML = renderThinkingEntries(thinkData.entries);
   } else {
-    // Fallback for when session data isn't available yet
-    const newContent = renderWithExistingFormatter(content);
-    el.text.innerHTML = newContent;
+    const fallbackText =
+      typeof content === "string"
+        ? content
+        : content && typeof content.think === "string"
+          ? content.think
+          : "";
+    el.text.innerHTML = renderWithExistingFormatter(fallbackText);
   }
 }
 
@@ -8191,18 +8314,32 @@ function saveSwitchModelForm() {
 
 function hydrateThinkingIfAny(aiNode, session, messageIndex) {
   const thinkData = session?._x_think && session._x_think[messageIndex];
-  if (!thinkData || thinkData.text == "") return;
+  if (!thinkData) return;
 
-  const thinkText =
-    (typeof thinkData === "object" ? thinkData.text : thinkData) || "";
+  const entries =
+    typeof thinkData === "object" && Array.isArray(thinkData.entries)
+      ? thinkData.entries
+      : [];
+
+  const thinkText = entries.length
+    ? renderThinkingEntriesToText(entries)
+    : (typeof thinkData === "object" ? thinkData.text : thinkData) || "";
   const thinkDuration =
     typeof thinkData === "object" ? thinkData.duration : null;
 
-  if (thinkText.trim()) {
+  if (thinkText && thinkText.trim()) {
     ensureThinkingUI(aiNode);
     const el = aiNode._thinkingEl;
     if (el) {
-      el.text.innerHTML = renderWithExistingFormatter(thinkText);
+      if (entries.length) {
+        el.text.innerHTML = renderThinkingEntries(entries);
+      } else {
+        el.text.innerHTML = renderWithExistingFormatter(thinkText);
+      }
+      if (el.results) {
+        const storedResults = session._x_actionResults && session._x_actionResults[messageIndex];
+        el.results.innerHTML = renderActionResults(storedResults || []);
+      }
       el.body.classList.add("collapsed");
       el.toggle.setAttribute("aria-collapsed", "true");
     }
@@ -8430,7 +8567,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       const div = aiNode.querySelector(".message-text");
       if (div) {
         const thinkingContainer = div.querySelector('.thinking-wrap');
-        const thinkingText = session._x_think && session._x_think[messageIndex] ? session._x_think[messageIndex].text : '';
+        const thinkingState = session._x_think && session._x_think[messageIndex];
+        const thinkingText =
+          thinkingState && typeof thinkingState === 'object'
+            ? renderThinkingEntriesToText(thinkingState.entries || []) || thinkingState.text || ''
+            : thinkingState || '';
         if (thinkingContainer && finalMessageToSave && finalMessageToSave.trim() === thinkingText.trim()) {
           // Don't append duplicate thinking content
         } else if (thinkingContainer && finalMessageToSave) {
@@ -8527,15 +8668,22 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
         session._x_think = session._x_think || {};
 
-        if (
-          typeof session._x_think[messageIndex] !== "object" ||
-          session._x_think[messageIndex] === null
-        ) {
-          const existingText = session._x_think[messageIndex] || "";
-          session._x_think[messageIndex] = { text: existingText };
+        let thinkState = session._x_think[messageIndex];
+        if (!thinkState || typeof thinkState !== "object") {
+          const existingText = typeof thinkState === "string" ? thinkState : "";
+          thinkState = {
+            text: existingText,
+            entries: Array.isArray(thinkState?.entries) ? thinkState.entries : [],
+          };
         }
 
-        session._x_think[messageIndex].duration = durationSeconds;
+        thinkState.entries = Array.isArray(thinkState.entries) ? thinkState.entries : [];
+        if (!thinkState.text && thinkState.entries.length) {
+          thinkState.text = renderThinkingEntriesToText(thinkState.entries);
+        }
+
+        thinkState.duration = durationSeconds;
+        session._x_think[messageIndex] = thinkState;
         saveThinkingDebounced();
 
         finalizeThinkingUI(s.aiNode, durationSeconds);
@@ -10308,19 +10456,28 @@ function initializeApp() {
         scrollToBottom({ fromAI: true });
       } else if (type === "THINKING") {
         try {
-            const thinkContent = data?.think;
-            const sessionId = data?.sessionId || payload.sessionId || current?.id;
-            const sess = state.sessions.find(s => s.id === sessionId) || current;
+          const sessionId = data?.sessionId || payload.sessionId || current?.id;
+          const sess = state.sessions.find((s) => s.id === sessionId) || current;
 
-            if (thinkContent && sess) {
-                // Langsung gunakan bubbleNode, tidak perlu mencari ulang
-                appendThinking(bubbleNode, thinkContent, sess, messageIndex);
-                scrollToBottom({ fromAI: true });
-            }
+          if (sess) {
+            appendThinking(bubbleNode, data, sess, messageIndex);
+            scrollToBottom({ fromAI: true });
+          }
         } catch (e) {
-            console.error('Error handling THINKING update:', e);
+          console.error('Error handling THINKING update:', e);
         }
-    }
+      } else if (type === 'REACT_ACTION_RESULT') {
+        try {
+          const sessionId = data?.sessionId || payload.sessionId || current?.id;
+          const sess = state.sessions.find((s) => s.id === sessionId) || current;
+          if (sess) {
+            appendActionResult(bubbleNode, data, sess, messageIndex);
+            scrollToBottom({ fromAI: true });
+          }
+        } catch (e) {
+          console.error('Error handling REACT_ACTION_RESULT update:', e);
+        }
+      }
     });
     window.api.on("search:status", (status) => {
       searchStatusQueue.push(status);

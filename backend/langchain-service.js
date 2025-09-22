@@ -454,20 +454,24 @@ class ClustrixLangChainService {
       
       // Step 2: Process with reasoning and actions
       const result = await this.reasoningAgent.processWithReasoningAction(
-        userMessage, 
-        sessionId, 
+        userMessage,
+        sessionId,
         []
       );
-      
+
       console.log(`RE+ACT: Completed with ${result.actionsExecuted} actions executed`);
-      
+
       return {
         enhanced: true,
         method: 'reasoning-action',
         actionsExecuted: result.actionsExecuted,
-        reasoning: result.reasoning,
+        reasoning: result.plan?.reasoning || '',
+        plan: result.plan,
+        thinkingLog: result.thinkingLog,
+        actionHistory: result.actionHistory,
         searchResults: result.searchResults,
-        response: result.response
+        finalResponse: result.finalResponse,
+        response: result.finalResponse
       };
       
     } catch (error) {
@@ -1416,10 +1420,15 @@ Respond with ONLY a JSON object in this format:
     
     // Process with reasoning action agent
     const result = await this.reasoningAgent.processWithReasoningAction(userMessage, sessionId, [], progressCallback);
-    
+
     return {
-      response: result.finalResponse || result,
-      actionsExecuted: result.actionHistory?.length || 0,
+      finalResponse: result.finalResponse,
+      response: result.finalResponse,
+      actionsExecuted: result.actionsExecuted,
+      actionHistory: result.actionHistory,
+      thinkingLog: result.thinkingLog,
+      plan: result.plan,
+      searchResults: result.searchResults,
       sessionId
     };
   }

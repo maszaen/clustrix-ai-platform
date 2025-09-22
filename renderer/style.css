@@ -4538,27 +4538,49 @@ a:focus-visible {
   align-items: center;
   min-height: 0;
   min-width: 0;
-  
+
   transform-origin: left center;
   position: relative;
   overflow: hidden;
-  
-  background: linear-gradient(90deg, 
-    transparent 0%,           
-    transparent 40%,          
-    rgba(255, 255, 255, 0.85) 50%,  
-    transparent 60%,         
-    transparent 100%         
+
+  background: linear-gradient(90deg,
+    transparent 0%,
+    transparent 40%,
+    rgba(255, 255, 255, 0.85) 50%,
+    transparent 60%,
+    transparent 100%
   );
-  
+
   background-size: 200% 100%;
-  
+
   -webkit-background-clip: text;
   background-clip: text;
-  
-  animation: 
-    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
-    shimmer 4s 0.4s infinite ease-in-out;          
+
+  animation:
+    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    shimmer 4s 0.4s infinite ease-in-out;
+}
+
+.thinking-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: inline;
+}
+
+.thinking-log li {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
+.thinking-log li + li {
+  margin-left: 0.35em;
+}
+
+.thinking-log-text {
+  display: inline;
+  white-space: pre-wrap;
 }
 
 @keyframes shimmer {

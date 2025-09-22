@@ -5532,6 +5532,9 @@ function scheduleThinkingText(
   cancelThinkingText(aiNode);
   const textEl = aiNode.querySelector(".thinking-text-indicator");
   if (!textEl) return;
+  if (!textEl.textContent || !textEl.textContent.trim()) {
+    textEl.textContent = "Reading your request";
+  }
 
   const timer1 = setTimeout(() => {
     const currentTextEl = aiNode.querySelector(".thinking-text-indicator");
@@ -5553,14 +5556,14 @@ function scheduleThinkingText(
     if (currentTextEl) currentTextEl.textContent = "Almost ready";
   }, delay4);
 
-  THINKING_TIMER.set(aiNode, { timer1, timer2, timer3, timer4 });
+  THINKING_TIMER.set(aiNode, [timer1, timer2, timer3, timer4]);
 }
 
 function cancelThinkingText(aiNode) {
-  const t = THINKING_TIMER.get(aiNode);
-  if (t) {
-    clearTimeout(t.shortId);
-    clearTimeout(t.longId);
+  const timers = THINKING_TIMER.get(aiNode);
+  if (timers) {
+    const ids = Array.isArray(timers) ? timers : Object.values(timers);
+    ids.forEach((id) => clearTimeout(id));
   }
   THINKING_TIMER.delete(aiNode);
 }
@@ -5974,11 +5977,12 @@ function scrollToBottom({ force = false, fromAI = false } = {}) {
 function getThinkingMarkup() {
   const act = state.settings?.models?.active || {};
   const thinkMode = act.thinkMode || "off";
-  if (thinkMode === "off") return "";
+  const fallbackText =
+    thinkMode === "off" ? "Preparing response…" : "Reading your request";
 
-  return `<div class="thinking-container">
+  return `<div class="thinking-container" data-think-mode="${thinkMode}">
     <div class="typing-indicator"><span></span><span></span><span></span></div>
-    <span class="thinking-text-indicator"></span>
+    <span class="thinking-text-indicator">${fallbackText}</span>
   </div>`;
 }
 
@@ -7703,7 +7707,7 @@ function addMessage(
     node.innerHTML = `<div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${content}</span><button class="primary-btn regenerate-cancelled" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate?</button></div></div></div></div>`;
   } else {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
-    const thinking = `<div class="thinking-container"><div class="typing-indicator"><span></span><span></span><span></span></div><span class="thinking-text-indicator"></span></div>`;
+    const thinking = getThinkingMarkup();
     node.innerHTML = `<div class="web-search-indicator" style="display: none;"></div><div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
     if (role === "ai" && !final) {
       node.style.opacity = "0";
@@ -10449,10 +10453,12 @@ function initializeApp() {
           <span class="status-text">Read ${data.pageCount} web pages</span>
           <span class="page-count-pill">${data.pageCount}</span>`;
         mainText.innerHTML = getThinkingMarkup();
+        scheduleThinkingText(bubbleNode);
         scrollToBottom({ fromAI: true });
       } else if (type === "REACT_START") {
         // Initialize thinking UI for RE+ACT pattern
         mainText.innerHTML = getThinkingMarkup();
+        scheduleThinkingText(bubbleNode);
         scrollToBottom({ fromAI: true });
       } else if (type === "THINKING") {
         try {

@@ -3,14 +3,13 @@ const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
 const https = require('https');
-const cheerio = require('cheerio'); 
-const { getJson } = require('serpapi');
 const mammoth = require('mammoth');
 const xlsx = require('./local_modules/xlsx/xlsx');
 
 const ClustrixLangChainService = require('./backend/langchain-service');
 const { MultiAgentOrchestrator } = require('./backend/langchain-agents');
 const { getBaseUrl, getApiKey, joinEndpoint, applyThinkingHints } = require('./backend/langchain-helpers');
+const { performWebSearch, scrapeUrls } = require('./backend/web-search');
 
 let langchainService = null;
 let agentOrchestrator = null;
@@ -636,17 +635,85 @@ function runStandardStreaming(event, payload) {
           
           console.log('MAIN: Calling agent orchestrator...');
           console.log(`MAIN: Provider detected: ${provider}, session type: ${session.type}`);
-          
+
+          const baseUrl = getBaseUrl(provider, payload);
+          const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
+          const reactStartPayload = {
+            type: 'REACT_START',
+            messageIndex: aiMessageIndex,
+            data: {
+              sessionId: session?.id || null,
+            },
+          };
+
+                // Progress callback to send thinking updates
+                const progressCallback = (update) => {
+                  const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
+
+                  if (update.type === 'thinking_log') {
+                    const entry = update.entry || {};
+                    const thinkText = typeof entry.text === 'string' && entry.text.trim()
+                      ? entry.text.trim()
+                      : (typeof update.content === 'string' ? update.content.trim() : '');
+
+                    if (!thinkText) {
+                      return;
+                    }
+
+                    event.sender.send('chat-update', {
+                      type: 'THINKING',
+                      messageIndex: aiMessageIndex,
+                      data: {
+                        sessionId: session?.id,
+                        think: thinkText,
+                        thinkEntry: entry,
+                        reqId,
+                      },
+                    });
+                  } else if (update.type === 'thinking') {
+                    const fallback = typeof update.content === 'string' ? update.content.trim() : '';
+                    if (!fallback) return;
+
+                    event.sender.send('chat-update', {
+                      type: 'THINKING',
+                      messageIndex: aiMessageIndex,
+                      data: {
+                        sessionId: session?.id,
+                        think: fallback,
+                        reqId,
+                      },
+                    });
+                  } else if (update.type === 'action_result') {
+                    event.sender.send('chat-update', {
+                      type: 'REACT_ACTION_RESULT',
+                      messageIndex: aiMessageIndex,
+                      data: {
+                        sessionId: session?.id,
+                        reqId,
+                        ...(update.data || {}),
+                      },
+                    });
+                  }
+                };
+
           // Use agent orchestrator for project sessions (OpenAI only for now)
           let agentResponse = null;
           if (provider === 'openai') {
             try {
+              event.sender.send('chat-update', reactStartPayload);
               agentResponse = await agentOrchestrator.processComplexRequest(
-                lastMessage.content, 
-                sessionId, 
-                session, 
-                model, 
-                getApiKey(provider, payload)
+                lastMessage.content,
+                sessionId,
+                session,
+                model,
+                getApiKey(provider, payload),
+                {
+                  provider,
+                  baseUrl,
+                  searchApiConfig: payload.searchApiConfig,
+                  progressCallback,
+                  logHelper,
+                }
               );
             } catch (error) {
               console.log('MAIN: Agent orchestrator failed, falling back to standard processing:', error.message);
@@ -680,83 +747,17 @@ function runStandardStreaming(event, payload) {
             if (shouldUseReact) {
               console.log('MAIN: Using RE+ACT pattern for complex project query analysis...');
 
-              try {
-                if (availableFiles && availableFiles.length > 0) {
-                    const modelInfo = { provider, model, apiKey: getApiKey(provider, payload), baseUrl: getBaseUrl(provider, payload) };
+                try {
+                  if (availableFiles && availableFiles.length > 0) {
+                    const modelInfo = { provider, model, apiKey: getApiKey(provider, payload), baseUrl };
                     langchainService.reasoningAgent.initializeSession(sessionId, availableFiles, modelInfo);
                     console.log(`MAIN: ReasoningAgent re-initialized for session ${sessionId} with ${availableFiles.length} files.`);
-                }
-                const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
-                // Send event to initialize thinking UI
-
-                console.debug('MAIN: Sending REACT_START chat-update', { reqId: reqId, aiMessageIndex: payload.aiMessageIndex });
-                event.sender.send('chat-update', {
-                  type: 'REACT_START',
-                  messageIndex: aiMessageIndex,
-                  data: {
-                    sessionId: session?.id || null
                   }
-                });
+                  const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
+                  // Send event to initialize thinking UI
 
-                // Progress callback to send thinking updates
-                const progressCallback = (update) => {
-                  if (update.type === 'thinking') {
-                    // Calculate the AI message index (should be the last message in the session)
-                    const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
-                    // Send thinking update over the same 'chat-update' channel (like web-search does)
-                    console.debug('MAIN: Sending THINKING chat-update', { reqId, sessionId, aiMessageIndex, len: String(update.content).length });
-                    const safeThink =
-                    (update && typeof update.content === 'string' && update.content.trim())
-                      ? update.content.trim()
-                      : 'Menganalisis berkas proyek, menyusun rencana aksi, dan mengeksekusi langkah-langkah awal.';
-
-                  event.sender.send('chat-update', {
-                    type: 'THINKING',
-                    messageIndex: aiMessageIndex,
-                    data: {
-                      sessionId: session?.id,
-                      think: safeThink
-                    }
-                  });
-                  } else if (update.type === 'action_result') {
-                      const actionData = update.data || {};
-                      const results = Array.isArray(actionData.results) ? actionData.results : [];
-                      const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
-
-                      // Buat ringkasan hasil aksi dalam format teks
-                      let resultSummary = `\n✅ Aksi '${actionData.action}' selesai.`;
-
-                      if (results.length > 0) {
-                          resultSummary += ` Ditemukan ${results.length} hasil:\n`;
-                          // Batasi hanya beberapa hasil untuk ditampilkan di log agar tidak terlalu panjang
-                          resultSummary += results.slice(0, 5).map(r => 
-                              `- **${r.fileName}:${r.lineNumber || '?'}**: \`${r.snippet.trim().substring(0, 80)}...\``
-                          ).join('\n');
-                          if (results.length > 5) {
-                              resultSummary += `\n- ... dan ${results.length - 5} hasil lainnya.`;
-                          }
-                      } else {
-                          resultSummary += ` Tidak ada hasil yang ditemukan.`;
-                      }
-
-                      // Kirim ringkasan ini sebagai bagian dari alur pemikiran (THINKING)
-                      console.debug('MAIN: Sending formatted ACTION_RESULT as THINKING update');
-                      event.sender.send('chat-update', {
-                          type: 'THINKING',
-                          messageIndex: aiMessageIndex,
-                          data: {
-                              think: resultSummary,
-                              reqId,
-                              sessionId
-                          }
-                      });
-                  }
-                };
-
-                if (availableFiles && availableFiles.length > 0) {
-                const modelInfo = { provider, model, apiKey: getApiKey(provider, payload), baseUrl: getBaseUrl(provider, payload) };
-                langchainService.reasoningAgent.initializeSession(sessionId, availableFiles, modelInfo);
-            }
+                  console.debug('MAIN: Sending REACT_START chat-update', { reqId: reqId, aiMessageIndex });
+                  event.sender.send('chat-update', reactStartPayload);
 
                 const reactResult = await langchainService.processWithReasoningAction(
                   lastMessage.content,
@@ -765,7 +766,7 @@ function runStandardStreaming(event, payload) {
                   model,
                   provider,
                   getApiKey(provider, payload),
-                  getBaseUrl(provider, payload),
+                  baseUrl,
                   progressCallback  // Pass progress callback
                 );
 
@@ -1359,106 +1360,4 @@ function invokeLLM_nonStream(messages, options) {
     req.write(body);
     req.end();
   });
-}
-
-async function performWebSearch(queries, config) {
-  if (!config || typeof config !== 'object') {
-    logHelper('WEB_SEARCH', 'performWebSearch', 'FATAL ERROR: Konfigurasi pencarian tidak valid atau hilang.', { receivedConfig: config });
-    return [];
-  }
-
-  const provider = config.provider || 'serpapi';
-  logHelper('WEB_SEARCH', 'performWebSearch', `Fungsi dipanggil dengan provider: ${provider}`, { queries });
-
-  if (provider === 'google') {
-    if (!config.googleApiKey || !config.googleCseId) {
-      logHelper('WEB_SEARCH', 'performWebSearch', 'ERROR: Google API Key atau CX (Search Engine ID) tidak diatur.');
-      return [];
-    }
-    try {
-      const promises = queries.map(q => new Promise((resolve, reject) => {
-        const url = new URL('https://www.googleapis.com/customsearch/v1');
-        url.searchParams.set('key', config.googleApiKey);
-        url.searchParams.set('cx', config.googleCseId);
-        url.searchParams.set('q', q);
-        url.searchParams.set('hl', 'id');
-        url.searchParams.set('gl', 'id');
-        
-        logHelper('WEB_SEARCH', 'performWebSearch', 'Membuat request ke Google CSE API', { url: url.toString() });
-
-        const req = https.get(url, (res) => {
-          let data = '';
-          res.on('data', (chunk) => data += chunk);
-          res.on('end', () => {
-            if (res.statusCode >= 200 && res.statusCode < 300) {
-              resolve(JSON.parse(data));
-            } else {
-              logHelper('WEB_SEARCH', 'performWebSearch', `Google API HTTP Error ${res.statusCode}`, { response: data });
-              resolve({ items: [] });
-            }
-          });
-        });
-        req.on('error', (err) => {
-          logHelper('WEB_SEARCH', 'performWebSearch', 'Google API Request Error', { error: err.message });
-          resolve({ items: [] });
-        });
-      }));
-
-      const results = await Promise.all(promises);
-      logHelper('WEB_SEARCH', 'performWebSearch', `Menerima ${results.length} respons dari Google CSE API.`);
-
-      const transformedResults = results.flatMap(res => res.items || [])
-        .map(item => ({
-          link: item.link,
-          title: item.title,
-          snippet: item.snippet
-        }))
-        .filter(r => r.link && !r.link.includes("youtube.com"))
-        .slice(0, 5);
-      
-      logHelper('WEB_SEARCH', 'performWebSearch', `Transformasi hasil Google selesai. Ditemukan ${transformedResults.length} hasil organik.`);
-      return transformedResults;
-
-    } catch (error) {
-      logHelper('WEB_SEARCH', 'performWebSearch', 'FATAL ERROR: Pencarian Google CSE API gagal.', { error: error.message });
-      return [];
-    }
-  } else {
-    if (!config.serpApiKey) {
-      logHelper('WEB_SEARCH', 'performWebSearch', 'ERROR: SerpAPI Key tidak diatur.');
-      return [];
-    }
-    try {
-      const promises = queries.map(q => getJson({ q, api_key: config.serpApiKey, hl: 'id', gl: 'id' }));
-      const results = await Promise.all(promises);
-      logHelper('WEB_SEARCH', 'performWebSearch', `Menerima ${results.length} respons dari SerpAPI.`);
-
-      const organicResults = results.flatMap(r => r.organic_results || [])
-        .filter(r => r.link && !r.link.includes("youtube.com"))
-        .slice(0, 5);
-      logHelper('WEB_SEARCH', 'performWebSearch', `Filter hasil SerpAPI selesai. Ditemukan ${organicResults.length} hasil organik.`);
-      return organicResults;
-    } catch (error) {
-      logHelper('WEB_SEARCH', 'performWebSearch', 'FATAL ERROR: Pencarian SerpApi gagal.', { error: error.message });
-      return [];
-    }
-  }
-}
-
-async function scrapeUrls(urls) {
-  const MAX_CHARS_PER_PAGE = 2000;
-  const scrapePromises = urls.map(url => new Promise(async (resolve) => {
-    try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
-      if (!response.ok) return resolve("");
-      const html = await response.text();
-      const $ = cheerio.load(html);
-      $('script, style, nav, footer, header, aside, form').remove();
-      const text = $('body').text().replace(/\s\s+/g, ' ').trim();
-      resolve(text.substring(0, MAX_CHARS_PER_PAGE));
-    } catch (e) {
-      resolve("");
-    }
-  }));
-  return Promise.all(scrapePromises);
 }

@@ -143,6 +143,7 @@ body.light-theme {
   --bg-secondary: #F0F4F9; /* done, sidebar dan code bg */
   --fg: #1f1f1f; /* done: font paling kontras */
   --fg-muted: #575B60; /* done: font redup, di sidebar, dan di form */
+  --fg-death: #383c40ff;
   --surface: #FFFFFF; /* done: input chat */
   --surface-secondary: #E9EEF6; /* done: bubble user */
   --border: #C4C7C5; /* done: HR atau separator */
@@ -207,6 +208,7 @@ body.dark-theme {
   --bg-secondary: #282A2C; /* done, sidebar dan code bg */
   --fg: #FCFCFC; /* done: font paling kontras */
   --fg-muted: #BDC1C6; /* done: font di sidebar atau form */
+  --fg-death: #8f9296ff;
   --surface: #1f1f1f; /* done: input chat */
   --surface-secondary: #333537; /* done: bubble user */
   --border: #4a5050; /* done */
@@ -296,7 +298,7 @@ body.dark-theme {
   padding: 0;
   user-select: none;
   scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
+  -webkit-font-smoothing: antialiased !important;
 }
 
 html {
@@ -758,13 +760,39 @@ hr {
 .date-separator {
   padding: 12px var(--spacing-lg) 4px;
   font-size: 12px;
-  color: var(--icon);
-  opacity: 0.9;
+  color: var(--fg-death) !important;
+  opacity: 1;
   text-transform: capitalize;
   position: sticky;
   top: 0;
   background: var(--bg-secondary);
+  /* border-bottom: 1px solid var(--border);
+  border-image: radial-gradient(circle, var(--border-light) 50%, transparent, transparent) 1;  */
   z-index: 1;
+}
+
+.date-separator.project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  opacity: 1;
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+}
+
+.project-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-count {
+  font-size: 11px;
+  color: var(--icon);
+  opacity: 0.7;
+  font-weight: 400;
 }
 
 /* Session list */
@@ -883,6 +911,13 @@ hr {
   opacity: 1;
   transition: all 0.4s ease;
   pointer-events: auto;
+}
+
+/* Show more button styling */
+.project-session-show-more {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
 }
 
 .session-actions {
@@ -1200,6 +1235,71 @@ input:checked + .slider:before {
   transform: translateX(20px);
 }
 
+/* Settings Toggle Switches */
+.toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.toggle-item {
+  display: flex;
+  align-items: center;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.toggle-label span:first-child {
+  flex: 1;
+}
+
+.toggle-input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  background-color: var(--border-input);
+  border-radius: var(--radius-full);
+  transition: var(--transition-medium);
+  cursor: pointer;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--surface);
+  border-radius: 50%;
+  transition: var(--transition-medium);
+  box-shadow: var(--shadow-sm);
+}
+
+.toggle-input:checked + .toggle-slider {
+  background-color: var(--primary);
+}
+
+.toggle-input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
 /* Welcome Screen */
 #welcome-screen {
   position: absolute;
@@ -1310,17 +1410,17 @@ input:checked + .slider:before {
   padding: 0 20px;
 }
 
-.project-detail-view.active {  /* Animasi project detail view */
+.project-detail-view.active {
   opacity: 1;
-  transform: translateY(0) scale(1);
-  animation: slideInPage 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(0) scale(1);
+  animation: slideInSubPage 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .project-detail-view.closing {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-20px) scale(0.95);
-  animation: slideOutPage 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(500px) scale(0.95);
+  animation: slideOutSubPage 0.3s cubic-bezier(0.7, 0, 0.84, 0);
 }
 
 .project-back-btn {
@@ -1358,6 +1458,7 @@ input:checked + .slider:before {
   align-items: start;
   flex-direction: column;
   gap: 7px;
+  padding-left: 7px;
   margin: 10px 17px 10px 14px;
 }
 
@@ -1631,7 +1732,6 @@ input:checked + .slider:before {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  cursor: pointer;
   justify-content: center;
   transition: all 0.2s ease;
 }
@@ -1922,23 +2022,27 @@ input:checked + .slider:before {
   display: flex;
   border-top: 1px solid var(--border);
   justify-content: center;
+  width: 100%;
+  align-items: center;
   gap: 10px;
   padding-top: 10px;
 }
 
-#chats-show-more {
+#chats-show-more, .show-more-btn-detail-view {
   background: transparent;
   display: flex;
   border: none;
   cursor: pointer;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   transition: all 0.3s ease;
+  margin: 0 auto;
   color: var(--fg-muted);
   border-radius: var(--radius-full);
 }
 
-#chats-show-more:hover {
+#chats-show-more:hover, .show-more-btn-detail-view:hover {
   background: var(--bg-secondary);
   display: flex;
   cursor: pointer;
@@ -2328,6 +2432,10 @@ input:checked + .slider:before {
   min-width: 40px;
 }
 
+.project-title-text {
+  padding-top: 5px;
+}
+
 .input-container-btn:hover {
   background: var(--surface);
 }
@@ -2335,8 +2443,7 @@ input:checked + .slider:before {
 .project-title-indicator {
   display: flex;
   align-items: center;
-  border: 1px solid var(--border);
-  color: var(--accent);
+  border: 1px solid var(--primary);
   font-size: 12px;
   font-family: var(--font-display);
   padding: 2px 10px 2px 10px;
@@ -2352,7 +2459,17 @@ input:checked + .slider:before {
   overflow: hidden;
   text-overflow: ellipsis;
   box-shadow: var(--shadow-sm);
-  background: var(--surface-accent);
+
+  color: var(--primary);
+  background-color: var(--primary-light);
+  cursor: pointer;
+}
+
+.project-title-indicator svg {
+  display: block;
+  height: 18px;
+  width: 18px;
+  flex-shrink: 0;
 }
 
 .project-title-text {
@@ -2954,6 +3071,28 @@ textarea::-webkit-scrollbar {
   to {
     opacity: 0;
     transform: translateY(-20px) scale(0.95);
+  }
+}
+
+@keyframes slideInSubPage {
+  from {
+    opacity: 0;
+    transform: translateX(500px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes slideOutSubPage {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(500px) scale(0.95);
   }
 }
 

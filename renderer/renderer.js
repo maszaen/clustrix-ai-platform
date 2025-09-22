@@ -7,17 +7,21 @@ let current = null;
 let collapsed = false;
 let loadedSessionCount = 0;
 let loadedChatPageCount = 0;
+let loadedProjectSessionCount = 0;
 let isAdvancedSearch = false;
 let onlineResumeTimer = null;
 let searchStatusQueue = [];
 let isProcessingQueue = false;
 let sessionDrafts = new Map();
+let projectsDocumentListener = null;
 let codeArtifacts = [];
 let isChatsSelectMode = false;
 let selectedChatIds = new Set();
 let isProjectsSelectMode = false;
 let selectedProjectIds = new Set();
 let justSentMessage = false;
+let currentProject = null;
+let projectsData = [];
 
 // Utility functions
 function escapeHtml(text) {
@@ -2740,6 +2744,19 @@ function setupChatsPageListeners() {
           if (menuButton) menuButton.classList.remove("persistent-active");
         });
     }
+
+    // Handle project show more button clicks
+    if (e.target.closest(".project-show-more")) {
+      e.preventDefault();
+      const showMoreLink = e.target.closest(".project-show-more");
+      const projectId = showMoreLink.dataset.projectId;
+      if (projectId) {
+        const project = projectsData.find(p => p.id === projectId);
+        if (project) {
+          showProjectDetailView(project);
+        }
+      }
+    }
   });
 
   // Listener untuk search input
@@ -3466,10 +3483,6 @@ function viewInChatFromArtifact(sessionId, messageIndex) {
 // ========================================
 
 // Projects state management
-let currentProject = null;
-let projectsData = [];
-let projectsListenersAdded = false;
-
 function showProjectsPage() {
   current = null;
   isProjectsSelectMode = false;
@@ -3508,11 +3521,6 @@ function showProjectsPage() {
   showProjectsListView();
 
   renderProjectsPage();
-
-  if (!projectsListenersAdded) {
-    setupProjectsPageListeners();
-    projectsListenersAdded = true;
-  }
 
   renderSessions();
   updateInputState();
@@ -3553,6 +3561,9 @@ function showProjectsListView() {
 }
 
 function showProjectDetailView(project) {
+  // Reset project session pagination when switching projects
+  loadedProjectSessionCount = 0;
+
   const listView = document.getElementById("projects-list-view");
   const detailView = document.getElementById("project-detail-view");
 
@@ -3761,7 +3772,17 @@ function renderProjectSessions(project) {
     return;
   }
 
-  projectSessions.forEach((session) => {
+  // Pagination - use loadedProjectSessionCount or default to 5
+  const total = projectSessions.length;
+  const pageSize = 9; // Show 5 more each time
+  const limit = Math.min(
+    loadedProjectSessionCount > 0 ? loadedProjectSessionCount : pageSize,
+    total,
+  );
+  const sessionsToShow = projectSessions.slice(0, limit);
+  const hasMoreSessions = limit < total;
+
+  sessionsToShow.forEach((session) => {
     const sessionItem = document.createElement("div");
     sessionItem.className = "project-session-item";
     sessionItem.dataset.sessionId = session.id;
@@ -3814,6 +3835,19 @@ function renderProjectSessions(project) {
 
     sessionsList.appendChild(sessionItem);
   });
+
+  // Add "Show More" button if there are more sessions
+  if (hasMoreSessions) {
+    const showMoreItem = document.createElement("div");
+    showMoreItem.className = "project-session-show-more";
+    showMoreItem.innerHTML = `
+      <button class="show-more-btn-detail-view show-more-btn" data-project-id="${project.id}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-chevron-down-icon lucide-circle-chevron-down"><circle cx="12" cy="12" r="10"/><path d="m16 10-4 4-4-4"/></svg>
+        <span>Show More (${total - limit} more)</span>
+      </button>
+    `;
+    sessionsList.appendChild(showMoreItem);
+  }
 }
 
 async function showInstructionModal() {
@@ -4341,8 +4375,13 @@ function setupProjectsPageListeners() {
   projectsPage.addEventListener("click", pageListener);
   projectsPage._listener = pageListener; // Save reference to listener
 
+  // Remove previous document listener if exists
+  if (projectsDocumentListener) {
+    document.removeEventListener("click", projectsDocumentListener);
+  }
+
   // Additional project actions (outside main list items)
-  document.addEventListener("click", (e) => {
+  projectsDocumentListener = (e) => {
     // Project send button
     if (e.target.closest("#project-send-btn")) {
       handleProjectSend();
@@ -4356,6 +4395,42 @@ function setupProjectsPageListeners() {
         const session = state.sessions.find((s) => s.id === sessionId);
         if (session) {
           setCurrent(session);
+        }
+      }
+    }
+
+    // Show more sessions button click
+    if (e.target.closest(".show-more-btn")) {
+      const showMoreBtn = e.target.closest(".show-more-btn");
+      const projectId = showMoreBtn?.dataset.projectId;
+      if (projectId) {
+        // If currently in project detail view and clicking show more on the same project, load more sessions
+        if (currentProject && currentProject.id === projectId) {
+          // Calculate current limit and add pageSize
+          const projectSessions = state.sessions.filter(s => s.projectId === projectId);
+          const total = projectSessions.length;
+          const pageSize = 5;
+          const currentLimit = Math.min(
+            loadedProjectSessionCount > 0 ? loadedProjectSessionCount : pageSize,
+            total,
+          );
+          loadedProjectSessionCount = currentLimit + pageSize;
+          renderProjectSessions(currentProject);
+          return;
+        }
+
+        // For other cases (e.g., from projects list view), find the project and show its detail
+        const project = projectsData.find((p) => p.id === projectId);
+        if (project) {
+          const projectSessions = state.sessions.filter(s => s.projectId === project.id);
+          const total = projectSessions.length;
+          const pageSize = 5;
+          const currentLimit = Math.min(
+            loadedProjectSessionCount > 0 ? loadedProjectSessionCount : pageSize,
+            total,
+          );
+          loadedProjectSessionCount = currentLimit + pageSize;
+          renderProjectSessions(project);
         }
       }
     }
@@ -4391,7 +4466,9 @@ function setupProjectsPageListeners() {
         viewProjectFile(parseInt(index));
       }
     }
-  });
+  };
+
+  document.addEventListener("click", projectsDocumentListener);
 
   // Add hover management for persistent menus - PROJECTS PAGE VERSION
   if (projectsPage) {
@@ -6947,6 +7024,7 @@ function renderHistory() {
     sessionName: current?.name,
   });
   clearLog();
+  currentProject = null;
   if (!current || !current.messages) return;
 
   renderHistoryLazy();
@@ -7248,6 +7326,10 @@ function renderSessions() {
   const ul = $("#session-list");
   if (!ul) return;
 
+  // Get display settings with defaults
+  const showProjects = state.settings.showProjects !== undefined ? state.settings.showProjects : false;
+  const showStarred = state.settings.showStarred !== undefined ? state.settings.showStarred : true;
+
   // Note: sidebar search has been removed, no filtering in sidebar anymore
   const filterValue = "";
 
@@ -7291,14 +7373,24 @@ function renderSessions() {
   ul.innerHTML = "";
 
   // Separate favorites, projects, and regular sessions
-  const favorites = pageItems.filter((s) => s.isFavorite);
-  const projectSessions = pageItems.filter((s) => !s.isFavorite && s.projectId);
+  const favorites = showStarred ? pageItems.filter((s) => s.isFavorite) : [];
+  const showingStarred = state.settings.showStarred
+  const projectSessions = showProjects ? pageItems.filter((s) => !s.isFavorite && s.projectId) : [];
   const regularSessions = pageItems.filter(
-    (s) => !s.isFavorite && !s.projectId,
+    (s) => (!s.isFavorite || !showStarred) && (!s.projectId || !showProjects),
   );
 
+  // Group project sessions by project
+  const projectGroups = {};
+  for (const session of projectSessions) {
+    if (!projectGroups[session.projectId]) {
+      projectGroups[session.projectId] = [];
+    }
+    projectGroups[session.projectId].push(session);
+  }
+
   // Render favorites first (above all date separators)
-  if (favorites.length > 0) {
+  if (favorites.length > 0 && favorites) {
     const favoritesHeader = document.createElement("h3");
     favoritesHeader.className = "date-separator";
     favoritesHeader.textContent = "Starred";
@@ -7310,16 +7402,84 @@ function renderSessions() {
     }
   }
 
-  // Render project sessions
-  if (projectSessions.length > 0) {
-    const projectsHeader = document.createElement("h3");
-    projectsHeader.className = "date-separator";
-    projectsHeader.textContent = "Projects";
-    ul.appendChild(projectsHeader);
+  // Render project groups (only if showProjects is enabled)
+  if (showProjects) {
+    for (const projectId in projectGroups) {
+      const project = projectsData.find(p => p.id === projectId);
+      if (!project) continue;
 
-    for (const s of projectSessions) {
-      const li = createSessionListItem(s);
-      ul.appendChild(li);
+      const projectSessionsList = projectGroups[projectId];
+      const maxSessions = 5;
+      const sessionsToShow = projectSessionsList.slice(0, maxSessions);
+      const hasMore = projectSessionsList.length > maxSessions;
+
+      // Project header yang bisa diklik untuk show more
+      const projectHeader = document.createElement("h3");
+      projectHeader.className = "date-separator project-header";
+      
+      // Tambah class clickable kalau ada more sessions
+      if (hasMore) {
+        projectHeader.classList.add("project-show-more", "clickable");
+        projectHeader.style.cursor = "pointer";
+      }
+      
+      projectHeader.dataset.projectId = projectId;
+      projectHeader.innerHTML = `
+        <span class="project-name">${escapeHtml(project.name || "Unnamed Project")}</span>
+        <span class="project-count">(${projectSessionsList.length})</span>
+        ${hasMore ? `
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="show-more-icon">
+            <path d="M9 18l6-6-6-6"/>
+          </svg>
+        ` : ''}
+      `;
+      
+      // Tambah tooltip kalau clickable
+      if (hasMore) {
+        projectHeader.title = `Click to view all ${projectSessionsList.length} sessions in ${project.name || "this project"}`;
+      }
+      
+      // Event listener untuk show more functionality
+      if (hasMore) {
+        projectHeader.addEventListener("click", (e) => {
+          e.preventDefault();
+          console.log("Project header clicked for show more", projectId);
+          const project = projectsData.find(p => p.id === projectId);
+          console.log("Found project:", project);
+          
+          if (project) {
+            // If currently in project detail view for the SAME project, do nothing
+            if (currentProject && currentProject.id === projectId) {
+              return; // Don't execute anything
+            }
+            // If currently in project detail view for a DIFFERENT project, use showProjectsListView() then navigate to detail view
+            else if (currentProject) {
+              closeMobileSidebar();
+              showProjectsListView();
+              setTimeout(() => {
+                showProjectDetailView(project);
+              }, 350); // Wait for list view animation to complete
+            } else {
+              // Not in project detail view, activate projects page first
+              showProjectsPage();
+              closeMobileSidebar();
+              setTimeout(() => {
+                showProjectDetailView(project);
+              }, 100); // Small delay to ensure page is fully activated
+            }
+          }
+        });
+      }
+      
+      ul.appendChild(projectHeader);
+
+      // Render sessions for this project
+      for (const s of sessionsToShow) {
+        const li = createSessionListItem(s);
+        ul.appendChild(li);
+      }
+      
+      // Gak perlu moreLi lagi, udah di handle sama projectHeader
     }
   }
 
@@ -7771,7 +7931,6 @@ function setCurrent(s) {
   if (current && current.type === "project" && current.projectId) {
     const project = projectsData.find(p => p.id === current.projectId);
     if (project && project.files && project.files.length > 0) {
-      // Only copy files if session doesn't have them already
       if (!current.uploadedFiles || current.uploadedFiles.length === 0) {
         current.uploadedFiles = [...project.files];
         log("PROJECTS", 2, "setCurrent", `Copied ${project.files.length} files from project "${project.name}" to session "${current.name}"`);
@@ -8059,7 +8218,7 @@ function updateInputState() {
     // Find the project name
     const project = projectsData?.find(p => p.id === current.projectId);
     if (project && projectIndicator && projectTitleText) {
-      projectTitleText.textContent = `📁 ${project.name || "Project"}`;
+      projectTitleText.textContent = `${project.name || "Project"}`;
       projectIndicator.style.display = "flex";
     }
   } else if (projectIndicator) {
@@ -9424,6 +9583,11 @@ function initWithRetry(maxRetry = 20, interval = 100) {
 }
 
 function setupEventListeners() {
+  let projectsListenersAdded = false;
+  if (!projectsListenersAdded) {
+    setupProjectsPageListeners();
+    projectsListenersAdded = true;
+  }
   document.addEventListener("keydown", (e) => {
     // Handle Ctrl+R for smooth reload
     if (e.ctrlKey && e.key === "r") {
@@ -9613,6 +9777,17 @@ function setupEventListeners() {
       });
     }
   });
+
+  $("#project-title-indicator").addEventListener("click", () => {
+    const projectId = current.projectId;
+    const project = projectsData.find(p => p.id === projectId);
+    log("STATE_PROJECT", 2, "Project state information", project)
+    showProjectsPage();
+    setTimeout(() => {
+      showProjectDetailView(project)
+    }, 100);
+    
+  })
 
   $("#refresh-btn").addEventListener("click", () => {
     log("UI", 0, "event:refresh-btn", "Refresh button clicked");
@@ -9946,7 +10121,12 @@ function setupEventListeners() {
       closeMobileSidebar();
     }
 
-    showProjectsPage();
+    // If currently in project detail view, use showProjectsListView() for smooth transition
+    if (currentProject) {
+      showProjectsListView();
+    } else {
+      showProjectsPage();
+    }
   });
 
   $("#artifact-btn").addEventListener("click", () => {
@@ -9974,16 +10154,20 @@ function setupEventListeners() {
 
   $("#open-persona-settings").addEventListener("click", () => {
     const { name, work, prefs } = state.settings.persona;
+    const showProjects = state.settings.showProjects !== undefined ? state.settings.showProjects : false;
+    const showStarred = state.settings.showStarred !== undefined ? state.settings.showStarred : true;
     log(
       "UI",
       0,
       "event:open-persona-settings-click",
       "Persona settings modal opened",
-      { hasName: !!name, hasWork: !!work, hasPrefs: !!prefs },
+      { hasName: !!name, hasWork: !!work, hasPrefs: !!prefs, showProjects, showStarred },
     );
     $("#persona-name").value = name || "";
     $("#persona-work").value = work || "";
     $("#persona-prefs").value = prefs || "";
+    $("#show-projects-toggle").checked = showProjects;
+    $("#show-starred-toggle").checked = showStarred;
     $("#settings-modal").classList.remove("hidden");
     $("#settings-menu").classList.add("hidden");
     $("#quick-model-switch-modal").classList.add("hidden");
@@ -9992,6 +10176,27 @@ function setupEventListeners() {
     if (window.innerWidth <= 768) {
       closeMobileSidebar();
     }
+  });
+
+  // Immediate save for sidebar display toggles
+  $("#show-projects-toggle").addEventListener("change", async (e) => {
+    const showProjects = e.target.checked;
+    log("SETTINGS", 2, "event:show-projects-toggle-change", "Show Projects toggle changed", {
+      showProjects,
+    });
+    state.settings.showProjects = showProjects;
+    await save();
+    renderSessions(); // Re-render sessions to reflect the new settings
+  });
+
+  $("#show-starred-toggle").addEventListener("change", async (e) => {
+    const showStarred = e.target.checked;
+    log("SETTINGS", 2, "event:show-starred-toggle-change", "Show Starred toggle changed", {
+      showStarred,
+    });
+    state.settings.showStarred = showStarred;
+    await save();
+    renderSessions(); // Re-render sessions to reflect the new settings
   });
 
   $("#close-modal").addEventListener("click", () => {
@@ -10015,6 +10220,7 @@ function setupEventListeners() {
     });
     state.settings.persona = persona;
     await save();
+    // Note: showProjects and showStarred are saved immediately when toggles change
     $("#settings-modal").classList.add("hidden");
   });
 

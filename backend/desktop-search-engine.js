@@ -32,17 +32,16 @@ class DesktopSearchEngine {
   }
   const pattern = typeof input === "object" && input?.pattern ? String(input.pattern) : String(raw || "");
   const options = typeof input === "object" && input?.options ? input.options : {};
-  const files = Array.isArray(options.files) && options.files.length ? options.files : Object.keys(this.files);
+  const files = Array.isArray(options.files) && options.files.length ? options.files : Array.from(this.projectFiles.keys());
   const caseSensitive = !!options.caseSensitive;
   const flags = caseSensitive ? "g" : "gi";
   let rx;
   try { rx = new RegExp(pattern, flags); } catch { return []; }
   const results = [];
-  for (const f of files) {
-    const fileName = f;
-    const content = this.files[fileName] || "";
-    if (!content) continue;
-    const lines = content.split(/\r?\n/);
+  for (const fileName of files) {
+    const fileData = this.projectFiles.get(fileName);
+    if (!fileData || !fileData.content) continue;
+    const lines = fileData.lines || fileData.content.split(/\r?\n/);
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       rx.lastIndex = 0;
@@ -71,7 +70,6 @@ class DesktopSearchEngine {
 
     const results = [];
     patterns.forEach(pattern => {
-        // PERBAIKAN: Bungkus argumen dalam satu objek
         const matches = this.searchPattern({
             pattern: pattern, 
             options: { maxResults: 50, contextLines: 3 }
@@ -94,7 +92,10 @@ class DesktopSearchEngine {
 
     const results = [];
     patterns.forEach(pattern => {
-      const matches = this.searchPattern(pattern, { maxResults: 30, contextLines: 2 });
+      const matches = this.searchPattern({
+        pattern: pattern, 
+        options: { maxResults: 30, contextLines: 2 }
+      });
       results.push(...matches);
     });
 
@@ -112,7 +113,10 @@ class DesktopSearchEngine {
 
     const results = [];
     patterns.forEach(pattern => {
-      const matches = this.searchPattern(pattern, { maxResults: 50, contextLines: 1 });
+      const matches = this.searchPattern({
+        pattern: pattern, 
+        options: { maxResults: 50, contextLines: 1 }
+      });
       results.push(...matches);
     });
 
@@ -121,7 +125,7 @@ class DesktopSearchEngine {
 
   searchImports(params) {
     const moduleName = params.moduleName || params.value;
-    const modulePattern = moduleName || '[^\'\"]+';
+    const modulePattern = moduleName || '[^\'"]+';
     const patterns = [
       `import.*${moduleName || '\\w+'}`,
       `require\\(['"]+${modulePattern}['"]+\\)`,
@@ -132,7 +136,10 @@ class DesktopSearchEngine {
 
     const results = [];
     patterns.forEach(pattern => {
-      const matches = this.searchPattern(pattern, { maxResults: 30, contextLines: 1 });
+      const matches = this.searchPattern({
+        pattern: pattern, 
+        options: { maxResults: 30, contextLines: 1 }
+      });
       results.push(...matches);
     });
 

@@ -59,7 +59,7 @@ class ClustrixLangChainService {
           if (provider.apiKey && provider.apiKey.trim() !== '') {
             hasApiKey = true;
             availableProvider = { name, ...provider };
-            console.log(`🔑 Found API key for provider: ${name}`);
+            console.log(`Found API key for provider: ${name}`);
             break;
           }
         }
@@ -85,14 +85,14 @@ class ClustrixLangChainService {
       console.log('LangChain service initialized successfully');
     } catch (error) {
       console.error('Failed to initialize LangChain service:', error);
-      console.log('🔄 Falling back to simple text similarity...');
+      console.log('Falling back to simple text similarity...');
       this.useSimpleEmbeddings();
       this.isInitialized = true;
     }
   }
 
   async initializeEmbeddings(provider) {
-    console.log(`🚀 Initializing embeddings with ${provider.name} provider...`);
+    console.log(`Initializing embeddings with ${provider.name} provider...`);
     
     try {
       switch (provider.name.toLowerCase()) {
@@ -127,7 +127,7 @@ class ClustrixLangChainService {
         case 'cerebras':
         default:
           // These providers don't support embeddings, use text similarity
-          console.log(`📝 Provider ${provider.name} doesn't support embeddings, using text similarity`);
+          console.log(`Provider ${provider.name} doesn't support embeddings, using text similarity`);
           this.useSimpleEmbeddings();
           break;
       }
@@ -138,7 +138,7 @@ class ClustrixLangChainService {
   }
 
   useSimpleEmbeddings() {
-    console.log('📝 Using simple text-based embeddings...');
+    console.log('Using simple text-based embeddings...');
     // Simple text-based similarity using TF-IDF like approach
     this.embeddings = {
       embedDocuments: async (documents) => {
@@ -202,15 +202,15 @@ class ClustrixLangChainService {
     // Custom similarity search for text-based embeddings
     if (!this.documentStore) {
       this.documentStore = [];
-      console.log(`📋 LangChain: Document store empty, returning no results`);
+      console.log(`LangChain: Document store empty, returning no results`);
       return [];
     }
     
-    console.log(`📚 LangChain: Searching through ${this.documentStore.length} documents in custom store`);
+    console.log(`LangChain: Searching through ${this.documentStore.length} documents in custom store`);
     
     const startTime = Date.now();
     const queryVector = this.textToVector(query);
-    console.log(`🧮 LangChain: Generated query vector (${queryVector.length} dimensions)`);
+    console.log(`LangChain: Generated query vector (${queryVector.length} dimensions)`);
     
     const similarities = this.documentStore.map((doc, index) => {
       const similarity = this.cosineSimilarity(queryVector, doc.vector);
@@ -230,7 +230,7 @@ class ClustrixLangChainService {
       .slice(0, k);
     
     console.log(`LangChain: Custom search completed in ${Date.now() - startTime}ms`);
-    console.log(`📈 LangChain: Top ${Math.min(k, sortedResults.length)} similarity scores:`);
+    console.log(`LangChain: Top ${Math.min(k, sortedResults.length)} similarity scores:`);
     
     sortedResults.forEach((result, index) => {
       console.log(`  ${index + 1}. Score: ${result.similarity.toFixed(4)} - ${result.metadata?.fileName || 'Unknown'} (chunk ${result.metadata?.chunkIndex || '?'})`);
@@ -275,15 +275,15 @@ class ClustrixLangChainService {
   
   async processUploadedFiles(files, sessionId) {
     if (!files || files.length === 0) {
-      console.log('📋 LangChain: No files to process');
+      console.log('LangChain: No files to process');
       return;
     }
 
-    console.log(`🔄 LangChain: Starting PURE LOCAL processing of ${files.length} files for session ${sessionId}`);
+    console.log(`LangChain: Starting PURE LOCAL processing of ${files.length} files for session ${sessionId}`);
     
     try {
       // Step 1: Optimize files with LOCAL summarization (NO AI)
-      console.log('🧠 LangChain: Running LOCAL file optimization and summarization...');
+      console.log('LangChain: Running LOCAL file optimization and summarization...');
       const optimizedResult = await this.fileSummarizer.processFiles(files);
       
       console.log(`Token optimization: ${optimizedResult.stats.totalCompressionRatio}% reduction (${optimizedResult.stats.tokenSavings} tokens saved)`);
@@ -319,7 +319,7 @@ class ClustrixLangChainService {
       
       console.log(`LangChain: PURE LOCAL processing complete!`);
       console.log(`Files processed: ${processedCount}/${files.length}`);
-      console.log(`� Token savings: ${optimizedResult.stats.tokenSavings} tokens`);
+      console.log(`Token savings: ${optimizedResult.stats.tokenSavings} tokens`);
       console.log(`Local index: ${indexStats.documentCount} docs, ${indexStats.vocabularySize} terms`);
       
       return {
@@ -341,7 +341,7 @@ class ClustrixLangChainService {
       
       // Split file content into chunks
       const chunks = await this.textSplitter.splitText(file.content);
-      console.log(`📝 LangChain: Split ${file.name} into ${chunks.length} chunks`);
+      console.log(`LangChain: Split ${file.name} into ${chunks.length} chunks`);
       
       // Create documents with metadata
       const documents = chunks.map((chunk, index) => ({
@@ -362,7 +362,7 @@ class ClustrixLangChainService {
 
       // Add to vector store or custom store
       if (this.vectorStore && this.vectorStore.addDocuments) {
-        console.log(`🚀 LangChain: Adding documents to LangChain vector store...`);
+        console.log(`LangChain: Adding documents to LangChain vector store...`);
         await this.vectorStore.addDocuments(documents);
         console.log(`LangChain: Documents added to vector store successfully`);
       } else {
@@ -371,13 +371,13 @@ class ClustrixLangChainService {
         for (const [docIndex, doc] of documents.entries()) {
           await this.addDocumentToStore(doc.pageContent, doc.metadata);
           if (docIndex % 10 === 0) {
-            console.log(`� LangChain: Progress: ${docIndex + 1}/${documents.length} documents added`);
+            console.log(`LangChain: Progress: ${docIndex + 1}/${documents.length} documents added`);
           }
         }
         console.log(`LangChain: All documents added to custom store`);
       }
       
-      console.log(`📁 LangChain: Successfully processed ${file.name} - ${chunks.length} chunks added to ${this.vectorStore ? 'vector' : 'custom'} store`);
+      console.log(`LangChain: Successfully processed ${file.name} - ${chunks.length} chunks added to ${this.vectorStore ? 'vector' : 'custom'} store`);
       return chunks.length;
     } catch (error) {
       console.error(`LangChain: Error adding file ${file.name} to store:`, error);
@@ -387,7 +387,7 @@ class ClustrixLangChainService {
 
   async searchRelevantContent(query, sessionId = null, maxResults = 5) {
     console.log(`LangChain: Searching for relevant content using LOCAL similarity...`);
-    console.log(`📝 LangChain: Query: "${query.substring(0, 100)}${query.length > 100 ? '...' : ''}"`);
+    console.log(`LangChain: Query: "${query.substring(0, 100)}${query.length > 100 ? '...' : ''}"`);
     console.log(`LangChain: Session filter: ${sessionId || 'All sessions'}, Max results: ${maxResults}`);
     
     try {
@@ -420,11 +420,11 @@ class ClustrixLangChainService {
         relevanceScore: result.similarity
       }));
 
-      console.log(`� LangChain: Returning ${finalResults.length} LOCAL results (no AI tokens used)`);
+      console.log(`LangChain: Returning ${finalResults.length} LOCAL results (no AI tokens used)`);
       
       // Log performance info
       const indexStats = this.localEmbedding.getStats();
-      console.log(`📈 Local Index Performance: ${indexStats.documentCount} docs searched in ${Date.now() - startTime}ms`);
+      console.log(`Local Index Performance: ${indexStats.documentCount} docs searched in ${Date.now() - startTime}ms`);
       
       return finalResults;
       
@@ -437,12 +437,12 @@ class ClustrixLangChainService {
   // ==================== REASONING + ACTION PATTERN ====================
   
   async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '') {
-    console.log(`🧠 LangChain: Starting RE+ACT processing for session ${sessionId}`);
+    console.log(`LangChain: Starting RE+ACT processing for session ${sessionId}`);
     
     try {
       // Step 1: Initialize RE+ACT agent with project files
       if (uploadedFiles && uploadedFiles.length > 0) {
-        console.log(`📁 RE+ACT: Initializing with ${uploadedFiles.length} files`);
+        console.log(`RE+ACT: Initializing with ${uploadedFiles.length} files`);
         const capabilities = this.reasoningAgent.initializeSession(sessionId, uploadedFiles, {
           provider,
           model,
@@ -480,17 +480,17 @@ class ClustrixLangChainService {
    * Check if session should use RE+ACT pattern
    */
   shouldUseReasoningAction(userMessage, uploadedFiles = [], sessionType = null) {
-    console.log(`🤔 RE+ACT check called with: sessionType=${sessionType}, uploadedFiles=${uploadedFiles ? uploadedFiles.length : 'null'}, message="${userMessage.slice(0, 50)}..."`);
+    console.log(`RE+ACT check called with: sessionType=${sessionType}, uploadedFiles=${uploadedFiles ? uploadedFiles.length : 'null'}, message="${userMessage.slice(0, 50)}..."`);
     
     // Use RE+ACT for project sessions with uploaded files by default
     if (sessionType === 'project' && uploadedFiles && uploadedFiles.length > 0) {
-      console.log(`🤔 RE+ACT decision: USE (project session with ${uploadedFiles.length} files)`);
+      console.log(`RE+ACT decision: USE (project session with ${uploadedFiles.length} files)`);
       return true;
     }
 
     // Use RE+ACT for sessions with uploaded files and complex queries
     if (!uploadedFiles || uploadedFiles.length === 0) {
-      console.log(`🤔 RE+ACT decision: SKIP (no uploaded files)`);
+      console.log(`RE+ACT decision: SKIP (no uploaded files)`);
       return false;
     }
 
@@ -510,7 +510,7 @@ class ClustrixLangChainService {
     const messageText = userMessage.toLowerCase();
     const needsAnalysis = analysisKeywords.some(keyword => messageText.includes(keyword));
 
-    console.log(`🤔 RE+ACT decision: ${needsAnalysis ? 'USE' : 'SKIP'} (${uploadedFiles.length} files, analysis keywords: ${needsAnalysis})`);
+    console.log(`RE+ACT decision: ${needsAnalysis ? 'USE' : 'SKIP'} (${uploadedFiles.length} files, analysis keywords: ${needsAnalysis})`);
 
     return needsAnalysis;
   }
@@ -518,7 +518,7 @@ class ClustrixLangChainService {
   // ==================== CHAT HISTORY VECTORIZATION ====================
   
   async vectorizeChatHistory(sessionId, messages) {
-    console.log(`📝 LangChain: Vectorizing chat history for session ${sessionId} (${messages.length} messages)`);
+    console.log(`LangChain: Vectorizing chat history for session ${sessionId} (${messages.length} messages)`);
     
     try {
       let vectorizedCount = 0;
@@ -553,7 +553,7 @@ class ClustrixLangChainService {
               vectorizedCount++;
               
               if (vectorizedCount % 5 === 0) {
-                console.log(`📝 Vectorized ${vectorizedCount} messages so far...`);
+                console.log(`Vectorized ${vectorizedCount} messages so far...`);
               }
             }
           }
@@ -563,7 +563,7 @@ class ClustrixLangChainService {
       // Save the updated index
       this.localEmbedding.saveIndex();
       
-      console.log(`📝 LangChain: Successfully vectorized ${vectorizedCount} chat messages for session ${sessionId}`);
+      console.log(`LangChain: Successfully vectorized ${vectorizedCount} chat messages for session ${sessionId}`);
       return vectorizedCount;
       
     } catch (error) {
@@ -573,7 +573,7 @@ class ClustrixLangChainService {
   }
   
   async generateSmartContext(userMessage, sessionId, uploadedFiles = [], tokenBudget = 2000) {
-    console.log(`🧠 LangChain: Generating smart context for session ${sessionId} with ${tokenBudget} token budget`);
+    console.log(`LangChain: Generating smart context for session ${sessionId} with ${tokenBudget} token budget`);
     
     try {
       const startTime = Date.now();
@@ -589,7 +589,7 @@ class ClustrixLangChainService {
       let newFileContext = '';
       if (uploadedFiles && uploadedFiles.length > 0) {
         const optimizedFiles = await this.fileSummarizer.processFiles(uploadedFiles);
-        console.log(`📁 Smart context: Processed ${uploadedFiles.length} files with ${optimizedFiles.stats.totalCompressionRatio}% compression`);
+        console.log(`Smart context: Processed ${uploadedFiles.length} files with ${optimizedFiles.stats.totalCompressionRatio}% compression`);
         
         for (const file of optimizedFiles.files) {
           if (newFileContext.length + file.optimizedContent.length < maxContextChars / 2) {
@@ -673,9 +673,9 @@ class ClustrixLangChainService {
   // ==================== ENHANCED CONTEXT GENERATION (Legacy) ====================
   
   async generateEnhancedContext(userMessage, sessionId, uploadedFiles = []) {
-    console.log(`🧠 LangChain: Generating enhanced context for session ${sessionId}`);
-    console.log(`💭 LangChain: User message: "${userMessage.substring(0, 100)}${userMessage.length > 100 ? '...' : ''}"`);
-    console.log(`📁 LangChain: Uploaded files: ${uploadedFiles.length}`);
+    console.log(`LangChain: Generating enhanced context for session ${sessionId}`);
+    console.log(`LangChain: User message: "${userMessage.substring(0, 100)}${userMessage.length > 100 ? '...' : ''}"`);
+    console.log(`LangChain: Uploaded files: ${uploadedFiles.length}`);
     
     try {
       const startTime = Date.now();
@@ -694,7 +694,7 @@ class ClustrixLangChainService {
       
       // If no relevant content found and we have new files, process them
       if (relevantDocs.length === 0 && uploadedFiles && uploadedFiles.length > 0) {
-        console.log(`🔄 LangChain: No existing content found, processing new uploaded files...`);
+        console.log(`LangChain: No existing content found, processing new uploaded files...`);
         await this.processUploadedFiles(uploadedFiles, sessionId);
         
         // Try searching again
@@ -718,8 +718,8 @@ class ClustrixLangChainService {
       const maxContextChars = MAX_CONTEXT_TOKENS * CHARS_PER_TOKEN;
       
       if (relevantDocs.length > 0) {
-        console.log(`📝 LangChain: Building enhanced context from ${relevantDocs.length} documents...`);
-        console.log(`📏 LangChain: Context limit: ${maxContextChars} chars (~${MAX_CONTEXT_TOKENS} tokens)`);
+        console.log(`LangChain: Building enhanced context from ${relevantDocs.length} documents...`);
+        console.log(`LangChain: Context limit: ${maxContextChars} chars (~${MAX_CONTEXT_TOKENS} tokens)`);
         
         enhancedContext += '\n=== RELEVANT CONTEXT FROM UPLOADED FILES ===\n';
         
@@ -737,7 +737,7 @@ class ClustrixLangChainService {
               const truncatedChunk = `\n[${index + 1}] From ${doc.metadata?.fileName || 'Unknown'} (TRUNCATED):\n${doc.content.substring(0, remainingSpace - 50)}...\n`;
               enhancedContext += truncatedChunk;
               totalContextLength += truncatedChunk.length;
-              console.log(`📄 LangChain: Added truncated chunk ${index + 1}: ${doc.metadata?.fileName} (${truncatedChunk.length} chars)`);
+              console.log(`LangChain: Added truncated chunk ${index + 1}: ${doc.metadata?.fileName} (${truncatedChunk.length} chars)`);
             }
             break;
           }
@@ -745,20 +745,20 @@ class ClustrixLangChainService {
           enhancedContext += contextChunk;
           totalContextLength += contextChunk.length;
           
-          console.log(`📄 LangChain: Added context chunk ${index + 1}: ${doc.metadata?.fileName || 'Unknown'} (${contextChunk.length} chars)`);
+          console.log(`LangChain: Added context chunk ${index + 1}: ${doc.metadata?.fileName || 'Unknown'} (${contextChunk.length} chars)`);
         }
         
         enhancedContext += '\n=== END CONTEXT ===\n';
         
         const estimatedTokens = Math.ceil(totalContextLength / CHARS_PER_TOKEN);
         console.log(`LangChain: Enhanced context generated in ${Date.now() - startTime}ms`);
-        console.log(`📏 LangChain: Total context length: ${totalContextLength} characters (~${estimatedTokens} tokens)`);
+        console.log(`LangChain: Total context length: ${totalContextLength} characters (~${estimatedTokens} tokens)`);
         
         if (estimatedTokens > MAX_CONTEXT_TOKENS) {
           console.log(`LangChain: Warning: Context size (${estimatedTokens} tokens) still exceeds target limit`);
         }
       } else {
-        console.log(`📭 LangChain: No relevant context found for this query`);
+        console.log(`LangChain: No relevant context found for this query`);
       }
 
       return enhancedContext;
@@ -811,7 +811,7 @@ class ClustrixLangChainService {
     const estimatedTokens = Math.ceil(totalChars / CHARS_PER_TOKEN);
     console.log(`LangChain: Message truncation completed`);
     console.log(`LangChain: Kept ${keptMessages.length}/${messages.length} messages`);
-    console.log(`📏 LangChain: Total chars: ${totalChars} (~${estimatedTokens} tokens)`);
+    console.log(`LangChain: Total chars: ${totalChars} (~${estimatedTokens} tokens)`);
     
     return keptMessages;
   }
@@ -824,11 +824,11 @@ class ClustrixLangChainService {
   }
 
   async processMessage(messages, model, options, sessionId, session) {
-    console.log(`🚀 LangChain: Processing message for session ${sessionId}`);
+    console.log(`LangChain: Processing message for session ${sessionId}`);
     console.log(`LangChain: Message count: ${messages.length}, Model: ${model}`);
     
     const isProject = this.getSessionType(session);
-    console.log(`📋 LangChain: Session type: ${isProject ? 'PROJECT' : 'REGULAR'}`);
+    console.log(`LangChain: Session type: ${isProject ? 'PROJECT' : 'REGULAR'}`);
     
     const startTime = Date.now();
     let result;
@@ -837,7 +837,7 @@ class ClustrixLangChainService {
       console.log(`LangChain: Using PROJECT processing mode with agents...`);
       result = await this.processProjectMessage(messages, model, options, sessionId, session);
     } else {
-      console.log(`💬 LangChain: Using REGULAR processing mode...`);
+      console.log(`LangChain: Using REGULAR processing mode...`);
       result = await this.processRegularMessage(messages, model, options, sessionId, session);
     }
     
@@ -848,7 +848,7 @@ class ClustrixLangChainService {
   }
 
   async processRegularMessage(messages, model, options, sessionId, session) {
-    console.log(`💬 LangChain: Starting regular message processing...`);
+    console.log(`LangChain: Starting regular message processing...`);
     
     // Check if we already have context messages to avoid duplication
     const hasExistingContext = messages.some(msg => 
@@ -858,7 +858,7 @@ class ClustrixLangChainService {
     );
     
     if (hasExistingContext) {
-      console.log(`🔄 LangChain: Context already exists in message chain, skipping enhancement`);
+      console.log(`LangChain: Context already exists in message chain, skipping enhancement`);
       return messages;
     }
 
@@ -871,8 +871,8 @@ class ClustrixLangChainService {
     
     // Regular chat: lightweight processing, just add basic file context if available
     const lastMessage = truncatedMessages[truncatedMessages.length - 1];
-    console.log(`📝 LangChain: Last message: "${lastMessage.content.substring(0, 100)}${lastMessage.content.length > 100 ? '...' : ''}"`);
-    console.log(`📁 LangChain: Available uploaded files: ${session.uploadedFiles?.length || 0}`);
+    console.log(`LangChain: Last message: "${lastMessage.content.substring(0, 100)}${lastMessage.content.length > 100 ? '...' : ''}"`);
+    console.log(`LangChain: Available uploaded files: ${session.uploadedFiles?.length || 0}`);
     
     // Skip if the message is too short (like "p")
     if (lastMessage.content.trim().length < 3) {
@@ -907,11 +907,11 @@ class ClustrixLangChainService {
       };
       
       enhancedMessages.splice(-1, 0, systemMessage);
-      console.log(`📋 LangChain: Inserted context message at position ${enhancedMessages.length - 2}`);
+      console.log(`LangChain: Inserted context message at position ${enhancedMessages.length - 2}`);
       
       return enhancedMessages;
     } else {
-      console.log(`📭 LangChain: No enhanced context available, using original messages`);
+      console.log(`LangChain: No enhanced context available, using original messages`);
     }
 
     return truncatedMessages;
@@ -924,7 +924,7 @@ class ClustrixLangChainService {
     console.log(`LangChain: Truncated messages from ${messages.length} to ${truncatedMessages.length} for project processing`);
     
     const lastMessage = truncatedMessages[truncatedMessages.length - 1];
-    console.log(`📝 LangChain: Project query: "${lastMessage.content.substring(0, 100)}${lastMessage.content.length > 100 ? '...' : ''}"`);
+    console.log(`LangChain: Project query: "${lastMessage.content.substring(0, 100)}${lastMessage.content.length > 100 ? '...' : ''}"`);
     
     console.log(`LangChain: Step 1 - Generating enhanced context for project...`);
     const enhancedContext = await this.generateEnhancedContext(
@@ -933,14 +933,14 @@ class ClustrixLangChainService {
       session.uploadedFiles || []
     );
 
-    console.log(`🧠 LangChain: Step 2 - Detecting intent and selecting agent...`);
+    console.log(`LangChain: Step 2 - Detecting intent and selecting agent...`);
     const intent = await this.detectIntent(lastMessage.content);
     console.log(`LangChain: Detected intent: ${intent}`);
     
-    console.log(`⚡ LangChain: Step 3 - Applying project-specific enhancements...`);
+    console.log(`LangChain: Step 3 - Applying project-specific enhancements...`);
     const systemPrompt = this.getProjectSystemPrompt(intent, enhancedContext);
     
-    console.log(`🔗 LangChain: Step 4 - Building enhanced message chain...`);
+    console.log(`LangChain: Step 4 - Building enhanced message chain...`);
     const enhancedMessages = [
       { role: 'system', content: systemPrompt },
       ...truncatedMessages.slice(0, -1),
@@ -953,9 +953,7 @@ class ClustrixLangChainService {
   async detectIntent(userMessage) {
     const message = userMessage.toLowerCase();
     
-    if (message.includes('code') || message.includes('implement') || message.includes('function')) {
-      return 'coding';
-    } else if (message.includes('analyze') || message.includes('explain') || message.includes('understand')) {
+    if (message.includes('analyze') || message.includes('explain') || message.includes('understand')) {
       return 'analysis';
     } else if (message.includes('research') || message.includes('find') || message.includes('search')) {
       return 'research';
@@ -970,15 +968,6 @@ class ClustrixLangChainService {
     const basePrompt = `You are Clustrix AI, an advanced AI assistant specialized in project development and analysis. You have access to the user's project files and should provide comprehensive, professional responses.`;
     
     const intentPrompts = {
-      coding: `${basePrompt}
-
-FOCUS: Code implementation and development
-- Analyze the provided code/files thoroughly
-- Suggest best practices and optimizations
-- Provide working, production-ready code
-- Consider security, performance, and maintainability
-- Include error handling and edge cases`,
-
       analysis: `${basePrompt}
 
 FOCUS: Code/project analysis and explanation
@@ -1028,11 +1017,11 @@ FOCUS: General project assistance
   
   async extractSessionInsights(messages, sessionId) {
     try {
-      console.log(`🧠 LangChain: Extracting session insights for ${sessionId}...`);
+      console.log(`LangChain: Extracting session insights for ${sessionId}...`);
       
       // Only analyze if we have enough conversation
       if (messages.length < 3) {
-        console.log(`📝 LangChain: Not enough messages for insight extraction`);
+        console.log(`LangChain: Not enough messages for insight extraction`);
         return;
       }
       
@@ -1048,7 +1037,7 @@ FOCUS: General project assistance
         console.log(`LangChain: Using AI-powered conversation analysis...`);
         insights = await this.analyzeConversationWithAI(conversationText);
       } else {
-        console.log(`📝 LangChain: Using simple pattern analysis...`);
+        console.log(`LangChain: Using simple pattern analysis...`);
         insights = this.analyzeConversationPatterns(conversationText);
       }
       
@@ -1070,6 +1059,7 @@ FOCUS: General project assistance
   }
 
   async analyzeConversationWithAI(conversationText) {
+    console.log('analyzeConversationWithAI() executed')
     try {
       // Create a lightweight analysis prompt
       const analysisPrompt = `Analyze this conversation and extract key insights in JSON format:
@@ -1311,7 +1301,7 @@ Respond with ONLY a JSON object in this format:
         
         // Restore documents and embeddings to vector store
         if (vectorData.documents && vectorData.embeddings && vectorData.documents.length > 0) {
-          console.log(`🔄 LangChain: Restoring ${vectorData.documents.length} documents to vector store...`);
+          console.log(`LangChain: Restoring ${vectorData.documents.length} documents to vector store...`);
           
           // Create new vector store with restored data
           const restoredVectors = [];
@@ -1335,10 +1325,10 @@ Respond with ONLY a JSON object in this format:
           
           console.log(`LangChain: Successfully restored ${restoredVectors.length} documents to vector store`);
         } else {
-          console.log('📭 LangChain: No documents to restore from vector store file');
+          console.log('LangChain: No documents to restore from vector store file');
         }
       } else {
-        console.log('📝 LangChain: No existing vector store file found, starting fresh');
+        console.log('LangChain: No existing vector store file found, starting fresh');
       }
     } catch (error) {
       console.error('Error loading vector data:', error);

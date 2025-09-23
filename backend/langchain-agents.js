@@ -39,15 +39,13 @@ class DynamicResearchAgent {
 
     const fileContext = this.buildFileContext(uploadedFiles);
 
-    if (progressCallback && fileContext.entries.length > 0) {
       progressCallback({
         type: 'thinking_log',
         entry: {
-          text: '• Mengkaji ringkasan file proyek yang relevan.',
+          text: '• Reviewing relevant project file summaries.',
           stage: 'context',
         },
       });
-    }
 
     const planningPrompt = this.buildPlanningPrompt(userMessage, fileContext.summaryText);
     const planningResponse = await this.invokeLLM(planningPrompt, {
@@ -62,15 +60,13 @@ class DynamicResearchAgent {
 
     let combinedFindings = [];
     if (plan.queries.length > 0 && searchApiConfig) {
-      if (progressCallback) {
         progressCallback({
           type: 'thinking_log',
           entry: {
-            text: '• Menjalankan pencarian web lanjutan berdasarkan rencana.',
+            text: '• Running advanced web search based on plan.',
             stage: 'web-search',
           },
         });
-      }
 
       const limitedQueries = plan.queries.slice(0, maxQueries);
       const searchResults = await performWebSearch(limitedQueries, searchApiConfig, logHelper);
@@ -92,7 +88,7 @@ class DynamicResearchAgent {
           progressCallback({
             type: 'thinking_log',
             entry: {
-              text: `• Menggabungkan ${combinedFindings.length} temuan daring untuk sintesis akhir.`,
+              text: `• Combining ${combinedFindings.length} online findings for final synthesis.`,
               stage: 'web-search',
             },
           });
@@ -117,7 +113,7 @@ class DynamicResearchAgent {
       progressCallback({
         type: 'thinking_log',
         entry: {
-          text: '• Menyintesis jawaban akhir berdasarkan temuan.',
+          text: '• Synthesizing final answer based on findings.',
           stage: 'synthesis',
         },
       });
@@ -241,34 +237,34 @@ class DynamicResearchAgent {
   buildPlanningPrompt(userMessage, contextSummary) {
     const contextSection = contextSummary && contextSummary.trim()
       ? contextSummary
-      : 'Tidak ada ringkasan file yang tersedia. Fokus pada pemahaman permintaan pengguna.';
+      : 'No file summary available. Focus on understanding the user request.';
 
-    return `Anda adalah Clustrix Research Planner, agen riset yang menyusun langkah kerja sebelum memberi jawaban.
+    return `You are Clustrix Research Planner, a research agent that plans work steps before providing answers.
 
-KONTEKS PROYEK (ringkasan terbatas):
+PROJECT CONTEXT (limited summary):
 ${contextSection}
 
-PERMINTAAN PENGGUNA:
+USER REQUEST:
 """
 ${userMessage}
 """
 
-TUGAS:
-1. Tulis satu baris judul berpoin yang merangkum fokus riset (gunakan simbol "•" di awal baris).
-2. Buat bagian "FILE INSIGHTS:" berisi 2-5 poin ringkas mengenai konteks file di atas.
-3. Buat bagian "WEB SEARCH QUERIES:" berisi 2-4 kueri pencarian prioritas (tanpa penomoran otomatis dari model, gunakan tanda "-" atau "•").
-4. (Opsional) Tambahkan "PLAN NOTES:" berisi catatan penting bila diperlukan.
-5. Hindari format tabel, JSON, atau kode. Hanya teks biasa dengan heading seperti contoh.
-6. Jangan menjawab pertanyaan pengguna sekarang; hanya susun rencana.
+TASK:
+1. Write one line bullet point title summarizing research focus (use "•" symbol at start of line).
+2. Create "FILE INSIGHTS:" section with 2-5 points about file context above.
+3. Create "WEB SEARCH QUERIES:" section with 2-4 priority search queries (no automatic numbering from model, use "-" or "•").
+4. (Optional) Add "PLAN NOTES:" section with important notes if needed.
+5. Avoid table, JSON, or code formats. Only plain text with headings like example.
+6. Do not answer user question now; only plan.
 
-Ikuti format contoh berikut:
-• Judul fokus riset
+Follow this example format:
+• Research focus title
 FILE INSIGHTS:
-- poin konteks
+- context point
 WEB SEARCH QUERIES:
-- kueri pertama
+- first query
 PLAN NOTES:
-- catatan tambahan
+- additional note
 `;
   }
 
@@ -397,31 +393,31 @@ PLAN NOTES:
           .join('\n\n')
       : 'Tidak ada temuan web tambahan yang dapat digunakan.';
 
-    return `Anda adalah Clustrix Research Agent yang harus menyusun jawaban akhir berdasarkan ringkasan file dan hasil pencarian web.
+    return `You are Clustrix Research Agent that must compose the final answer based on file summary and web search results.
 
-LANGKAH PERENCANAAN:
-Judul: ${plan.title || 'Tidak tersedia'}
-Insight utama:
+PLANNING STEPS:
+Title: ${plan.title || 'Not available'}
+Key insights:
 ${insightSection}
 
-RINGKASAN FILE TERPILIH:
+SELECTED FILE SUMMARY:
 ${contextSection}
 
-TEMUAN WEB TERBARU:
+LATEST WEB FINDINGS:
 ${findingsSection}
 
-PERTANYAAN PENGGUNA:
+USER QUESTION:
 """
 ${userMessage}
 """
 
-INSTRUKSI OUTPUT:
-- Jawab langsung pertanyaan pengguna dengan struktur yang mudah dipahami.
-- Jika pengguna berbahasa Indonesia, gunakan bahasa Indonesia; bila tidak jelas, gunakan bahasa Inggris netral.
-- Sertakan referensi ke sumber web menggunakan format tautan markdown: [Nama Sumber](URL).
-- Gabungkan informasi dari konteks internal dan hasil web tanpa menyalin mentah.
-- Tekankan langkah lanjut atau rekomendasi praktis bila relevan.
-- Jangan gunakan format JSON atau tabel dalam jawaban akhir.
+OUTPUT INSTRUCTIONS:
+- Answer the user's question directly with an easy-to-understand structure.
+- If the user speaks Indonesian, use Indonesian; if unclear, use neutral English.
+- Include references to web sources using markdown link format: [Source Name](URL).
+- Combine information from internal context and web results without copying raw text.
+- Emphasize next steps or practical recommendations when relevant.
+- Do not use JSON or table formats in the final answer.
 `;
   }
 

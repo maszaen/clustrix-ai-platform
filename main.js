@@ -616,7 +616,7 @@ function runStandardStreaming(event, payload) {
       }
       
       const isProject = session.type === 'project' || session.isProject || false;
-      console.log(`📋 MAIN: Session type detected: ${isProject ? 'PROJECT' : 'REGULAR'}`);
+      console.log(`MAIN: Session type detected: ${isProject ? 'PROJECT' : 'REGULAR'}`);
       
       if (isProject) {
         console.log('MAIN: PROJECT mode - activating agent system...');
@@ -648,50 +648,37 @@ function runStandardStreaming(event, payload) {
 
                 // Progress callback to send thinking updates
                 const progressCallback = (update) => {
-                  const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
-
                   if (update.type === 'thinking_log') {
-                    const entry = update.entry || {};
-                    const thinkText = typeof entry.text === 'string' && entry.text.trim()
-                      ? entry.text.trim()
-                      : (typeof update.content === 'string' ? update.content.trim() : '');
-
-                    if (!thinkText) {
-                      return;
-                    }
-
-                    event.sender.send('chat-update', {
-                      type: 'THINKING',
-                      messageIndex: aiMessageIndex,
+                    event.sender.send('search:status', {
+                      step: 'DECIDED',
                       data: {
-                        sessionId: session?.id,
-                        think: thinkText,
-                        thinkEntry: entry,
-                        reqId,
-                      },
+                        reasoning: update.entry?.text || update.content || '',
+                        summary_key: update.entry?.text || update.content || '',
+                        search_queries: [update.entry?.text || update.content || '']
+                      }
                     });
-                  } else if (update.type === 'thinking') {
-                    const fallback = typeof update.content === 'string' ? update.content.trim() : '';
-                    if (!fallback) return;
-
-                    event.sender.send('chat-update', {
-                      type: 'THINKING',
-                      messageIndex: aiMessageIndex,
+                  } else if (update.type === 'searching') {
+                    event.sender.send('search:status', {
+                      step: 'ACTION_EXECUTING',
                       data: {
-                        sessionId: session?.id,
-                        think: fallback,
-                        reqId,
-                      },
+                        actionType: update.data?.summarizedQuery?.split(':')[0] || 'Action',
+                        actionDescription: update.data?.summarizedQuery?.split(':').slice(1).join(':').trim() || 'Processing...',
+                        actionTitle: update.data?.summarizedQuery || 'Action in progress'
+                      }
                     });
-                  } else if (update.type === 'action_result') {
-                    event.sender.send('chat-update', {
-                      type: 'REACT_ACTION_RESULT',
-                      messageIndex: aiMessageIndex,
+                  } else if (update.type === 'reading_complete') {
+                    event.sender.send('search:status', {
+                      step: 'ACTION_RESULTS',
                       data: {
-                        sessionId: session?.id,
-                        reqId,
-                        ...(update.data || {}),
-                      },
+                        count: update.data?.pageCount || 1,
+                        actionType: update.data?.actionType || 'Analysis',
+                        success: update.data?.success !== false
+                      }
+                    });
+                  } else if (update.type === 'processing') {
+                    event.sender.send('search:status', {
+                      step: 'PROCESSING',
+                      data: { count: update.data?.count || 1 }
                     });
                   }
                 };
@@ -752,6 +739,14 @@ function runStandardStreaming(event, payload) {
                     const modelInfo = { provider, model, apiKey: getApiKey(provider, payload), baseUrl };
                     langchainService.reasoningAgent.initializeSession(sessionId, availableFiles, modelInfo);
                     console.log(`MAIN: ReasoningAgent re-initialized for session ${sessionId} with ${availableFiles.length} files.`);
+                    
+                    // Send FOUND_URLS equivalent for project files
+                    const projectFiles = availableFiles.map(f => ({
+                      title: f.name,
+                      link: `file://${f.name}`,
+                      snippet: f.content.substring(0, 200) + (f.content.length > 200 ? '...' : '')
+                    }));
+                    event.sender.send('search:status', { step: 'FOUND_URLS', data: projectFiles });
                   }
                   const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
                   // Send event to initialize thinking UI
@@ -790,19 +785,62 @@ function runStandardStreaming(event, payload) {
                 }
 
                 // CAREFULLY: Safe string operations with validation
-                // CAREFULLY: Safe string operations with validation
-                if (responseText && typeof responseText === 'string' || responseText && responseText.length > 0) {
-                  const tokens = responseText.split(/\s+/);
-                  for (const t of tokens) {
-                    event.sender.send(`chat:chunk-${reqId}`, t + ' ');
-                    await new Promise(r => setTimeout(r, 18)); // kecilin/naikin sesuai selera
+                if (responseText && typeof responseText === 'string' && responseText.length > 0) {
+                  // Extract thinking content from <thinking> tags or JSON reasoning field like regular responses
+                  console.log(`MAIN: RE+ACT response received (${responseText.length} chars), starting streaming...`);
+                  console.log(`MAIN: RE+ACT response preview: ${responseText.substring(0, 200)}...`);
+
+                  let thinkingContent = '';
+                  let mainContent = responseText;
+
+                  // Try to parse as JSON first (like {"reasoning": "...", "response": "..."})
+                  try {
+                    const jsonResponse = JSON.parse(responseText);
+                    console.log(`MAIN: RE+ACT parsed JSON successfully, has reasoning: ${!!jsonResponse.reasoning}`);
+                    if (jsonResponse.reasoning) {
+                      thinkingContent = jsonResponse.reasoning;
+                      mainContent = jsonResponse.response || jsonResponse.content || '';
+                      console.log(`MAIN: RE+ACT parsed JSON response - thinking: ${thinkingContent.length} chars, main: ${mainContent.length} chars`);
+                    }
+                  } catch (e) {
+                    console.log(`MAIN: RE+ACT JSON parse failed: ${e.message}, trying HTML tags`);
+                    // Not JSON, try parsing <thinking> tags
+                    const thinkingMatch = responseText.match(/<thinking>([\s\S]*?)<\/thinking>/i);
+                    if (thinkingMatch) {
+                      thinkingContent = thinkingMatch[1].trim();
+                      mainContent = responseText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+                      console.log(`MAIN: RE+ACT parsed HTML tags - thinking: ${thinkingContent.length} chars, main: ${mainContent.length} chars`);
+                    }
                   }
+
+                  // Send thinking content first if present (like regular chat streaming)
+                  if (thinkingContent) {
+                    console.log(`MAIN: RE+ACT sending thinking content (${thinkingContent.length} chars)`);
+                    const thinkingChunks = thinkingContent.split(' ');
+                    for (const chunk of thinkingChunks) {
+                      if (chunk.trim()) {
+                        event.sender.send(`chat:chunk-${reqId}`, { think: chunk + ' ' });
+                        await new Promise(r => setTimeout(r, 30));
+                      }
+                    }
+                  } else {
+                    console.log(`MAIN: RE+ACT no thinking content found`);
+                  }
+
+                  // Then send main content as regular chunks
+                  const mainChunks = mainContent.split(' ');
+                  for (const chunk of mainChunks) {
+                    if (chunk.trim()) {
+                      event.sender.send(`chat:chunk-${reqId}`, chunk + ' ');
+                      await new Promise(r => setTimeout(r, 30));
+                    }
+                  }
+
+                  console.log('MAIN: RE+ACT streaming completed');
                   event.sender.send(`chat:done-${reqId}`);
                   activeStreams.delete(reqId);
                   return;
-                }
-
-              } catch (reactError) {
+                }              } catch (reactError) {
                 console.error('MAIN: RE+ACT processing failed for project session, falling back:', reactError.message);
                 console.error('MAIN: Full RE+ACT error:', reactError);
                 // Fall through to standard processing
@@ -861,6 +899,16 @@ function runStandardStreaming(event, payload) {
               data: { query: lastMessage.content.substring(0, 100) }
           });
           
+          // Send FOUND_URLS for project files if any
+          if (session.uploadedFiles && session.uploadedFiles.length > 0) {
+            const projectFiles = session.uploadedFiles.map(f => ({
+              title: f.name,
+              link: `file://${f.name}`,
+              snippet: f.content.substring(0, 200) + (f.content.length > 200 ? '...' : '')
+            }));
+            event.sender.send('search:status', { step: 'FOUND_URLS', data: projectFiles });
+          }
+          
           try {
             const reactResult = await langchainService.processWithReasoningAction(
               currentMessage,
@@ -871,38 +919,49 @@ function runStandardStreaming(event, payload) {
             
             console.log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
             
-            // CAREFULLY: Ensure response is a string before processing
+            // Send PROCESSING and READING_COMPLETE like web search
+            event.sender.send('search:status', { step: 'PROCESSING', data: { count: reactResult.actionsExecuted || 1 } });
+            event.sender.send('chat-update', { type: 'READING_COMPLETE', messageIndex: aiMessageIndex, data: { pageCount: reactResult.actionsExecuted || 1 } });
+            
+            // Get the clean response text
             let responseText = '';
             if (typeof reactResult === 'string') {
               responseText = reactResult;
             } else if (reactResult && reactResult.response && typeof reactResult.response.response === 'string') {
-              // <<< TAMBAHKAN KONDISI INI
               responseText = reactResult.response.response;
             } else if (reactResult && typeof reactResult.response === 'string') {
               responseText = reactResult.response;
             } else if (reactResult && reactResult.finalResponse && typeof reactResult.finalResponse === 'string') {
               responseText = reactResult.finalResponse;
             } else {
-              // Fallback for malformed response
-              logHelper("MAIN", "runStandardStreaming", "RE+ACT returned malformed response, using fallback", { reactResult });
               responseText = 'RE+ACT analysis completed but response format was unexpected. Please try rephrasing your question.';
             }
 
-            // CAREFULLY: Safe string operations with validation
-            if (responseText && typeof responseText === 'string' || responseText && responseText.length > 0) {
-                const tokens = responseText.split(/\s+/);
-                for (const t of tokens) {
-                  event.sender.send(`chat:chunk-${reqId}`, t + ' ');
-                  await new Promise(r => setTimeout(r, 18)); // kecilin/naikin sesuai selera
-                }
-                logHelper("MAIN", "Line 925", "This line is executed")
-                event.sender.send(`chat:done-${reqId}`);
-                activeStreams.delete(reqId);
-                return;
-              } else {
-              logHelper("MAIN", "runStandardStreaming", "RE+ACT response is not a valid string, falling back to standard processing");
-              // Fall through to standard processing
+            // Format response as thinking content for think mode UI
+            let thinkingContent = responseText;
+            let finalAnswer = 'Analysis completed successfully.';
+            
+            // Send thinking content first
+            const thinkingChunks = thinkingContent.split(' ');
+            for (const chunk of thinkingChunks) {
+              if (chunk.trim()) {
+                event.sender.send(`chat:chunk-${reqId}`, { think: chunk + ' ' });
+                await new Promise(r => setTimeout(r, 30));
+              }
             }
+            
+            // Then send final answer
+            const answerChunks = finalAnswer.split(' ');
+            for (const chunk of answerChunks) {
+              if (chunk.trim()) {
+                event.sender.send(`chat:chunk-${reqId}`, chunk + ' ');
+                await new Promise(r => setTimeout(r, 30));
+              }
+            }
+            
+            event.sender.send(`chat:done-${reqId}`);
+            activeStreams.delete(reqId);
+            return;
             
           } catch (reactError) {
             console.error('MAIN: RE+ACT processing failed, falling back:', reactError);

@@ -48,7 +48,7 @@ def instant_web_opener():
     print()
 
     # Show what's about to be opened
-    print("📋 Websites to open:")
+    print("Websites to open:")
     for i, url in enumerate(websites, 1):
         print(f"   {i}. {url}")
     print()

@@ -407,6 +407,22 @@ class LocalEmbeddingEngine {
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, maxResults);
   }
+
+  /**
+   * Get all documents in the index
+   */
+  getAllDocuments() {
+    const documents = [];
+    this.documentIndex.forEach((docData, fileName) => {
+      documents.push({
+        name: fileName,
+        content: docData.metadata.content || '',
+        type: docData.metadata.fileType || 'unknown',
+        lines: docData.metadata.content ? docData.metadata.content.split('\n') : []
+      });
+    });
+    return documents;
+  }
 }
 
 module.exports = LocalEmbeddingEngine;

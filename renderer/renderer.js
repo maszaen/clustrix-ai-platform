@@ -99,6 +99,96 @@ const SESSIONS_PER_PAGE = 30;
 const DEBUG_MODE = typeof window.api === "undefined";
 const LOGGING = true;
 
+function getFilesForDisplay(session, context = 'form') {
+  if (!session || !session.uploadedFiles) return [];
+  
+  const isProjectSession = session.type === 'project' || session.isProject;
+  const allFiles = session.uploadedFiles;
+  
+  switch (context) {
+    case 'form':
+      return isProjectSession 
+        ? allFiles.filter(file => !file.isFromProject)
+        : allFiles; 
+    
+    case 'message':
+      return isProjectSession
+        ? allFiles.filter(file => !file.isFromProject) 
+        : allFiles;
+    
+    case 'ai':
+      return allFiles;
+    
+    default:
+      return allFiles;
+  }
+}
+
+function getFilesForMessage(session, messageType = 'conversation') {
+  if (!session || !session.uploadedFiles) return [];
+  
+  const isProjectSession = session.type === 'project' || session.isProject;
+  
+  if (messageType === 'initial' && isProjectSession) {
+    return [];
+  }
+  
+  if (messageType === 'conversation') {
+    // 💬 CONVERSATION MESSAGES: Include new files only for project sessions
+    return isProjectSession
+      ? session.uploadedFiles.filter(file => !file.isFromProject)
+      : session.uploadedFiles;
+  }
+  
+  return session.uploadedFiles;
+}
+
+/**
+ * 🧠 AI CONTEXT BUILDER 🧠
+ * Builds comprehensive file context for AI processing
+ * @param {Object} session - Current session object
+ * @returns {Array} All files for AI processing (project + user files)
+ */
+function getFilesForAI(session) {
+  if (!session || !session.uploadedFiles) return [];
+  // Always return ALL files for AI - both project database files and user uploads
+  return session.uploadedFiles;
+}
+
+/**
+ * 📊 FILE VISIBILITY ANALYZER 📊
+ * Analyzes file visibility patterns for debugging and optimization
+ * @param {Object} session - Current session object
+ * @returns {Object} Analysis of file visibility
+ */
+function analyzeFileVisibility(session) {
+  if (!session) return { error: 'No session provided' };
+  
+  const allFiles = session.uploadedFiles || [];
+  const projectFiles = allFiles.filter(f => f.isFromProject);
+  const userFiles = allFiles.filter(f => !f.isFromProject);
+  const isProjectSession = session.type === 'project' || session.isProject;
+  
+  return {
+    sessionType: isProjectSession ? 'project' : 'regular',
+    totalFiles: allFiles.length,
+    projectFiles: projectFiles.length,
+    userFiles: userFiles.length,
+    formDisplay: getFilesForDisplay(session, 'form').length,
+    messageDisplay: getFilesForDisplay(session, 'message').length,
+    aiProcessing: getFilesForAI(session).length,
+    visibility: {
+      form: isProjectSession ? 'user-files-only' : 'all-files',
+      message: isProjectSession ? 'user-files-only' : 'all-files',
+      ai: 'all-files'
+    }
+  };
+}
+
+// ============================================================================
+// END FILE MANAGEMENT SYSTEM
+// ============================================================================
+
 let currentPageState = "welcome";
 
 function savePageState(pageState, sessionId = null) {
@@ -513,7 +603,17 @@ function renderUploadedFiles() {
   const container = $("#active-chat-file-upload-container");
   if (!container) return;
 
+  // 🎭 Use the new file display orchestrator for form context
+  const filesToShow = getFilesForDisplay(current, 'form');
   const currentFiles = current.uploadedFiles || [];
+  
+  // 📊 Log visibility analysis for debugging
+  const visibilityAnalysis = analyzeFileVisibility(current);
+  if (visibilityAnalysis.formDisplay > 0 || visibilityAnalysis.totalFiles > 0) {
+    log("RENDERER", 1, "renderUploadedFiles", 
+      `File visibility: ${visibilityAnalysis.formDisplay}/${visibilityAnalysis.totalFiles} shown in form`, 
+      visibilityAnalysis);
+  }
 
   const existingPills = Array.from(container.querySelectorAll(".file-pill"));
   const existingFileMap = new Map();
@@ -527,7 +627,10 @@ function renderUploadedFiles() {
 
   container.innerHTML = "";
 
-  currentFiles.forEach((file, index) => {
+  filesToShow.forEach((file, index) => {
+    // 🔍 Find the actual index in the original array for removal
+    const actualIndex = currentFiles.indexOf(file);
+    
     let pill = existingFileMap.get(file.name);
 
     if (pill) {
@@ -537,10 +640,10 @@ function renderUploadedFiles() {
       pill.className = "file-pill";
     }
 
-    pill.innerHTML = `<span>${esc(file.name)}</span><button class="remove-file-btn" data-index="${index}">&times;</button>`;
+    pill.innerHTML = `<span>${esc(file.name)}</span><button class="remove-file-btn" data-index="${actualIndex}">&times;</button>`;
     pill.querySelector(".remove-file-btn").addEventListener("click", (e) => {
       e.stopPropagation();
-      current.uploadedFiles.splice(index, 1);
+      current.uploadedFiles.splice(actualIndex, 1);
       renderUploadedFiles();
       save();
     });
@@ -635,60 +738,151 @@ async function processSearchStatusQueue() {
 
     switch (status.step) {
       case "DECIDED":
-        thinkEl.toggle.querySelector("span").textContent =
-          `Searching for "${status.data.summary_key}"...`;
-        thinkEl.text.innerHTML = "";
-        if (!thinkEl.body.classList.contains("expanded")) {
-          thinkEl.toggle.click();
+        // Check if this is project session (has reasoning but no search_queries)
+        const isProjectSession = !status.data.search_queries || status.data.search_queries.length === 0;
+        
+        if (isProjectSession) {
+          // Project session analysis
+          thinkEl.toggle.querySelector("span").textContent =
+            `Planning analysis approach...`;
+          thinkEl.text.innerHTML = "";
+          if (!thinkEl.body.classList.contains("expanded")) {
+            thinkEl.toggle.click();
+          }
+
+          const analysisTitle = createTitleSpan();
+          thinkEl.text.appendChild(analysisTitle);
+          await typewriterEffectChunked(analysisTitle, "Planning Analysis:", 100, 4);
+
+          thinkEl.text.appendChild(document.createElement("br"));
+          const analysisContent = document.createElement("span");
+          thinkEl.text.appendChild(analysisContent);
+          // Make reasoning more user-friendly by extracting key insights
+          const reasoning = status.data.reasoning || "Analyzing project structure and determining optimal analysis approach...";
+          const userFriendlyReasoning = reasoning.length > 200 ? 
+            reasoning.substring(0, 200) + "..." : 
+            reasoning;
+          await typewriterEffectChunked(
+            analysisContent,
+            userFriendlyReasoning,
+            800,
+          );
+        } else {
+          // Web search session
+          thinkEl.toggle.querySelector("span").textContent =
+            `Searching for "${status.data.summary_key}"...`;
+          thinkEl.text.innerHTML = "";
+          if (!thinkEl.body.classList.contains("expanded")) {
+            thinkEl.toggle.click();
+          }
+
+          const reasoningTitle = createTitleSpan();
+          thinkEl.text.appendChild(reasoningTitle);
+          await typewriterEffectChunked(reasoningTitle, "Reasoning:", 100, 4);
+
+          thinkEl.text.appendChild(document.createElement("br"));
+          const reasoningContent = document.createElement("span");
+          thinkEl.text.appendChild(reasoningContent);
+          await typewriterEffectChunked(
+            reasoningContent,
+            status.data.reasoning,
+            1000,
+          );
+
+          thinkEl.text.innerHTML += "<br><br>";
+          const keywordsTitle = createTitleSpan();
+          thinkEl.text.appendChild(keywordsTitle);
+          await typewriterEffectChunked(keywordsTitle, "Keywords:", 200, 3);
+
+          thinkEl.text.appendChild(document.createElement("br"));
+          const keywordsContent = document.createElement("span");
+          thinkEl.text.appendChild(keywordsContent);
+          await typewriterEffectChunked(
+            keywordsContent,
+            status.data.search_queries.join("\n"),
+            700,
+          );
         }
-
-        const reasoningTitle = createTitleSpan();
-        thinkEl.text.appendChild(reasoningTitle);
-        await typewriterEffectChunked(reasoningTitle, "Reasoning:", 100, 4);
-
-        thinkEl.text.appendChild(document.createElement("br"));
-        const reasoningContent = document.createElement("span");
-        thinkEl.text.appendChild(reasoningContent);
-        await typewriterEffectChunked(
-          reasoningContent,
-          status.data.reasoning,
-          1000,
-        );
-
-        thinkEl.text.innerHTML += "<br><br>";
-        const keywordsTitle = createTitleSpan();
-        thinkEl.text.appendChild(keywordsTitle);
-        await typewriterEffectChunked(keywordsTitle, "Keywords:", 200, 3);
-
-        thinkEl.text.appendChild(document.createElement("br"));
-        const keywordsContent = document.createElement("span");
-        thinkEl.text.appendChild(keywordsContent);
-        await typewriterEffectChunked(
-          keywordsContent,
-          status.data.search_queries.join("\n"),
-          700,
-        );
         break;
 
       case "FOUND_URLS":
         thinkEl.text.innerHTML += "<br><br>";
         const urlsTitle = createTitleSpan();
         thinkEl.text.appendChild(urlsTitle);
-        await typewriterEffectChunked(urlsTitle, "Found URLs:", 200, 3);
+        
+        // Check if this is project session (has file:// links)
+        const isProjectFiles = status.data && status.data.some && status.data.some(item => item.link && item.link.startsWith('file://'));
+        
+        if (isProjectFiles) {
+          await typewriterEffectChunked(urlsTitle, "Analyzing Project Files:", 200, 3);
+          
+          thinkEl.text.appendChild(document.createElement("br"));
+          const filesContent = document.createElement("span");
+          thinkEl.text.appendChild(filesContent);
+          await typewriterEffectChunked(
+            filesContent,
+            status.data.map((r) => `${r.title} (${r.snippet ? r.snippet.substring(0, 100) + '...' : 'analyzing...'})`).join("\n"),
+            700,
+          );
+        } else {
+          await typewriterEffectChunked(urlsTitle, "Found URLs:", 200, 3);
+
+          thinkEl.text.appendChild(document.createElement("br"));
+          const urlsContent = document.createElement("span");
+          thinkEl.text.appendChild(urlsContent);
+          await typewriterEffectChunked(
+            urlsContent,
+            status.data.map((r) => r.link).join("\n"),
+            700,
+          );
+        }
+        break;
+
+      case "ACTION_EXECUTING":
+        thinkEl.text.innerHTML += "<br><br>";
+        const actionTitle = createTitleSpan();
+        thinkEl.text.appendChild(actionTitle);
+        const actionType = status.data.actionType || "Action";
+        await typewriterEffectChunked(actionTitle, `${actionType}:`, 200, 3);
 
         thinkEl.text.appendChild(document.createElement("br"));
-        const urlsContent = document.createElement("span");
-        thinkEl.text.appendChild(urlsContent);
+        const actionContent = document.createElement("span");
+        thinkEl.text.appendChild(actionContent);
+        const actionDesc = status.data.actionDescription || status.data.actionTitle || "Processing...";
+        await typewriterEffectChunked(actionContent, actionDesc, 500);
+        break;
+
+      case "ACTION_RESULTS":
+        thinkEl.text.innerHTML += "<br><br>";
+        const resultsTitle = createTitleSpan();
+        thinkEl.text.appendChild(resultsTitle);
+        const resultActionType = status.data.actionType || "Analysis";
+        await typewriterEffectChunked(resultsTitle, `${resultActionType} Results:`, 200, 3);
+
+        thinkEl.text.appendChild(document.createElement("br"));
+        const resultsContent = document.createElement("span");
+        thinkEl.text.appendChild(resultsContent);
+        const resultCount = status.data.count || 1;
+        const resultStatus = status.data.success !== false ? "completed" : "failed";
         await typewriterEffectChunked(
-          urlsContent,
-          status.data.map((r) => r.link).join("\n"),
-          700,
+          resultsContent,
+          `Found ${resultCount} relevant ${resultCount === 1 ? 'result' : 'results'} (${resultStatus})`,
+          300,
         );
         break;
 
       case "PROCESSING":
-        thinkEl.toggle.querySelector("span").textContent =
-          `Reading ${status.data.count} pages & preparing answer...`;
+        // Check if this is project session by looking for file:// links in recent FOUND_URLS
+        const isProjectProcessing = searchStatusQueue.some(s => s.step === 'FOUND_URLS' && 
+          s.data && s.data.some && s.data.some(item => item.link && item.link.startsWith('file://')));
+        
+        if (isProjectProcessing) {
+          thinkEl.toggle.querySelector("span").textContent =
+            `Analyzing ${status.data.count} search results & synthesizing answer...`;
+        } else {
+          thinkEl.toggle.querySelector("span").textContent =
+            `Reading ${status.data.count} pages & preparing answer...`;
+        }
         await new Promise((r) => setTimeout(r, 1000));
         break;
     }
@@ -3749,7 +3943,7 @@ function createProjectListItem(project) {
 
 function renderProjectSessions(project) {
   const sessionsList = document.getElementById("project-sessions-list");
-  if (!sessionsList) return;
+  if (!sessionsList || !project) return;
 
   // Get sessions for this project
   let projectSessions = state.sessions.filter((s) => s.projectId === project.id);
@@ -4244,7 +4438,9 @@ function setupProjectsPageListeners() {
             `Are you sure you want to delete "${session.name}"?`,
             () => {
               deleteSession(session);
-              renderProjectSessions(currentProject); // Refresh project sessions
+              if (currentProject) {
+                renderProjectSessions(currentProject); // Refresh project sessions
+              }
             },
           );
         }
@@ -4253,7 +4449,9 @@ function setupProjectsPageListeners() {
         if (session) {
           session.isFavorite = !session.isFavorite;
           save();
-          renderProjectSessions(currentProject); // Refresh to update star text
+          if (currentProject) {
+            renderProjectSessions(currentProject); // Refresh to update star text
+          }
         }
       } else if (action === "rename") {
         const session = state.sessions.find((s) => s.id === menuSessionId);
@@ -4415,7 +4613,9 @@ function setupProjectsPageListeners() {
             total,
           );
           loadedProjectSessionCount = currentLimit + pageSize;
-          renderProjectSessions(currentProject);
+          if (currentProject) {
+            renderProjectSessions(currentProject);
+          }
           return;
         }
 
@@ -4938,8 +5138,8 @@ async function handleProjectSend() {
   const originalText = (input?.value || "").trim();
   if (!originalText) return;
 
-  // 1. Siapkan semua data yang dibutuhkan
-  const filesToAttach = currentProject.files ? [...currentProject.files] : [];
+  // 🚀 Use the new file attachment strategist for initial project messages
+  const filesToAttach = getFilesForMessage(current, 'initial');
   const config = getActiveChatConfig();
   const modelInfo = {
     provider: config.provider,
@@ -4976,7 +5176,6 @@ async function handleProjectSend() {
   }
   document.getElementById("projects-btn")?.classList.remove("active");
 
-  // 5b. Bangun UI secara eksplisit (Pola `sendFromWelcome`)
   clearLog();
   addMessage("user", originalText, {
     final: true,
@@ -4985,35 +5184,32 @@ async function handleProjectSend() {
   });
   
   const aiMessageIndex = s.messages.length - 1;
-  // LANGSUNG TANGKAP aiNode, tidak perlu querySelector atau setTimeout
   const aiNode = addMessage("ai", "", {
     final: false,
     index: aiMessageIndex,
     metadata: modelInfo,
   });
 
-  // 6. Kosongkan input
   input.value = "";
   input.style.height = "auto";
 
-  // 7. Siapkan UI untuk respons AI
   createResponseSpacer();
   setTimeout(() => expandSpacer(), 50);
 
-  // 8. Generate judul & simpan
   if (s.name === null) {
     generateAndSetTitle(s);
   }
   await save();
   renderSessions();
 
-  // 9. Terakhir, mulai stream ke `aiNode` yang sudah pasti kita pegang referensinya
   scheduleThinkingText(aiNode);
   const messagesForAI = buildMessagesForProject(s);
   startStream(s, originalText, aiNode, aiMessageIndex, false, messagesForAI);
 
   // Update daftar sesi di halaman proyek
-  renderProjectSessions(currentProject);
+  if (currentProject) {
+    renderProjectSessions(currentProject);
+  }
 }
 
 // Project Instruction Management Functions
@@ -7695,24 +7891,33 @@ function addMessage(
       </svg>
     </button>`;
 
+    // 💬 Use the new file display orchestrator for message context
+    // Only show file pills for files that should be visible in this context
     if (metadata && metadata.files && metadata.files.length > 0) {
-      const pillsHTML = metadata.files
-        .map(
-          (file) => `
-        <div class="file-pill-bubble">
-          ${getFileIcon(esc(file.name))}
-          <div style="display: flex; flex-direction: column;">
-            <p>${esc(file.name)}</p>
-            <span class="file-extension">${esc(getExtension(file.name))}</span>
-          </div>  
-        </div>`,
-        )
-        .join("");
+      // 🎭 Get files that should be displayed in message bubbles
+      const filesToShow = getFilesForDisplay(current, 'message').filter(displayFile => 
+        metadata.files.some(metaFile => metaFile.name === displayFile.name)
+      );
+      
+      if (filesToShow.length > 0) {
+        const pillsHTML = filesToShow
+          .map(
+            (file) => `
+          <div class="file-pill-bubble">
+            ${getFileIcon(esc(file.name))}
+            <div style="display: flex; flex-direction: column;">
+              <p>${esc(file.name)}</p>
+              <span class="file-extension">${esc(getExtension(file.name))}</span>
+            </div>  
+          </div>`,
+          )
+          .join("");
 
-      fileContent += `
-      <div class="file-pills-container">
-        ${pillsHTML}
-      </div>`;
+        fileContent += `
+        <div class="file-pills-container">
+          ${pillsHTML}
+        </div>`;
+      }
     }
 
     finalUiContent += ` 
@@ -7931,10 +8136,11 @@ function setCurrent(s) {
   if (current && current.type === "project" && current.projectId) {
     const project = projectsData.find(p => p.id === current.projectId);
     if (project && project.files && project.files.length > 0) {
-      if (!current.uploadedFiles || current.uploadedFiles.length === 0) {
-        current.uploadedFiles = [...project.files];
-        log("PROJECTS", 2, "setCurrent", `Copied ${project.files.length} files from project "${project.name}" to session "${current.name}"`);
-      }
+      // Always mark project files as from project database, merging with existing files
+      const projectFiles = project.files.map(file => ({ ...file, isFromProject: true }));
+      const existingNonProjectFiles = (current.uploadedFiles || []).filter(file => !file.isFromProject);
+      current.uploadedFiles = [...projectFiles, ...existingNonProjectFiles];
+      log("PROJECTS", 2, "setCurrent", `Merged ${project.files.length} project files with ${existingNonProjectFiles.length} user files`);
     }
   }
 
@@ -8440,8 +8646,6 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
   ) {
     const { disabledMs = 3000, interrupted = false } = opts;
 
-    // Collapse spacer when rendering placeholder (response incomplete)
-    // console.log("🔄 Rendering continue placeholder - collapsing spacer"); // Removed console.log
     collapseSpacer();
 
     if (!aiNode || !document.contains(aiNode)) return;
@@ -8554,8 +8758,12 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     const hasContent = display.length > 0;
     const hasEnd = END_RX.test(fullResponse) || sawEnd;
 
+    // For non-interrupted responses, consider them complete even without END marker
+    // This fixes the issue where continue placeholder appears on completed responses
+    const isComplete = hasEnd || !interrupted;
+
     // Collapse response spacer when response is complete
-    if (hasEnd || interrupted) {
+    if (isComplete) {
       collapseSpacer();
     }
 
@@ -8607,7 +8815,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
       clearContinuePlaceholder(aiNode);
 
-      if (hasContent && !hasEnd && !interrupted) {
+      if (hasContent && !isComplete && !interrupted) {
         renderContinuePlaceholder(aiNode, session, messageIndex, display, {
           disabledMs: 1200,
           interrupted: false,
@@ -8618,8 +8826,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     }
 
     s.fullResponse = finalMessageToSave;
-    s.sawEnd = hasEnd;
-    s.endSeen = hasEnd;
+    s.sawEnd = isComplete;
+    s.endSeen = isComplete;
     cleanupStream();
 
     try {
@@ -9041,8 +9249,10 @@ async function send() {
   )
     return;
 
-  const filesToAttach = [...current.uploadedFiles];
-  current.uploadedFiles = [];
+  // 📨 Use the new file attachment strategist for conversation messages
+  const filesToAttach = getFilesForMessage(current, 'conversation');
+  
+  // 🎭 Update form display after determining attachments
   renderUploadedFiles();
 
   current.last_updated = nowISO();

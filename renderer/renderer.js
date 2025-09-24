@@ -102,43 +102,17 @@ const LOGGING = true;
 
 function getFilesForDisplay(session, context = 'form') {
   if (!session || !session.uploadedFiles) return [];
-  
-  const isProjectSession = session.type === 'project' || session.isProject;
-  const allFiles = session.uploadedFiles;
-  
-  switch (context) {
-    case 'form':
-      return isProjectSession 
-        ? allFiles.filter(file => !file.isFromProject)
-        : allFiles; 
-    
-    case 'message':
-      return isProjectSession
-        ? allFiles.filter(file => !file.isFromProject) 
-        : allFiles;
-    
-    case 'ai':
-      return allFiles;
-    
-    default:
-      return allFiles;
-  }
+
+  // Project files are now stored separately in project database
+  // Only session-specific files are stored in session.uploadedFiles
+  return session.uploadedFiles;
 }
 
 function getFilesForMessage(session, messageType = 'conversation') {
   if (!session || !session.uploadedFiles) return [];
-  
-  const isProjectSession = session.type === 'project' || session.isProject;
-  
-  if (messageType === 'initial' && isProjectSession) {
-    return session.uploadedFiles;
-  }
-  
-  if (messageType === 'conversation') {
-    // 💬 CONVERSATION MESSAGES: Include all files for project sessions
-    return session.uploadedFiles;
-  }
-  
+
+  // Project files are now stored separately in project database
+  // Only session-specific files are returned
   return session.uploadedFiles;
 }
 
@@ -151,23 +125,21 @@ function getFilesForAI(session) {
 
 function analyzeFileVisibility(session) {
   if (!session) return { error: 'No session provided' };
-  
+
   const allFiles = session.uploadedFiles || [];
-  const projectFiles = allFiles.filter(f => f.isFromProject);
-  const userFiles = allFiles.filter(f => !f.isFromProject);
   const isProjectSession = session.type === 'project' || session.isProject;
-  
+
   return {
     sessionType: isProjectSession ? 'project' : 'regular',
     totalFiles: allFiles.length,
-    projectFiles: projectFiles.length,
-    userFiles: userFiles.length,
+    projectFiles: 0, // Project files are now stored separately
+    userFiles: allFiles.length, // All files in session are user-uploaded for that session
     formDisplay: getFilesForDisplay(session, 'form').length,
     messageDisplay: getFilesForDisplay(session, 'message').length,
     aiProcessing: getFilesForAI(session).length,
     visibility: {
-      form: isProjectSession ? 'user-files-only' : 'all-files',
-      message: isProjectSession ? 'user-files-only' : 'all-files',
+      form: 'all-files', // All session files are shown in form
+      message: 'all-files', // All session files are shown in messages
       ai: 'all-files'
     }
   };
@@ -5240,12 +5212,8 @@ async function handleProjectSend() {
   const stagedUserFiles = projectMessageStagedFiles.filter((file) => !file.error);
   if (!originalText && stagedUserFiles.length === 0) return;
 
-  const projectFilesForSession = (currentProject.files || []).map((file) => ({
-    ...file,
-    isFromProject: true,
-  }));
+  // Project files stay in project database, only user-uploaded files go to session
   const userFilesForSession = stagedUserFiles.map((file) => ({ ...file }));
-  const filesToAttach = [...projectFilesForSession, ...userFilesForSession];
   const config = getActiveChatConfig();
   const modelInfo = {
     provider: config.provider,
@@ -5260,10 +5228,10 @@ async function handleProjectSend() {
     projectId: currentProject.id,
     type: "project",
   });
-  s.uploadedFiles = filesToAttach; // Untuk file pills di form
+  s.uploadedFiles = userFilesForSession; // Only user-uploaded files for this session
 
   // 3. Isi data pesan di dalam objek sesi
-  s.messages.push(["user", originalText, { files: filesToAttach }]);
+  s.messages.push(["user", originalText, { files: userFilesForSession }]);
   s.messages.push(["ai", "", modelInfo]);
 
   // 4. Update dan simpan data proyek
@@ -5286,7 +5254,7 @@ async function handleProjectSend() {
   addMessage("user", originalText, {
     final: true,
     index: 0,
-    metadata: { files: filesToAttach },
+    metadata: { files: userFilesForSession },
   });
   
   const aiMessageIndex = s.messages.length - 1;
@@ -8078,10 +8046,8 @@ function addMessage(
     // 💬 Use the new file display orchestrator for message context
     // Only show file pills for files that should be visible in this context
     if (metadata && metadata.files && metadata.files.length > 0) {
-      // 🎭 Get files that should be displayed in message bubbles
-      const filesToShow = getFilesForDisplay(current, 'message').filter(displayFile => 
-        metadata.files.some(metaFile => metaFile.name === displayFile.name)
-      );
+      // 🎭 Show file bubbles directly from message metadata for historical messages
+      const filesToShow = metadata.files;
       
       if (filesToShow.length > 0) {
         const pillsHTML = filesToShow
@@ -8315,18 +8281,6 @@ function setCurrent(s) {
     }
   }
   current = s;
-
-  // For project sessions, ensure files are copied from project to session
-  if (current && current.type === "project" && current.projectId) {
-    const project = projectsData.find(p => p.id === current.projectId);
-    if (project && project.files && project.files.length > 0) {
-      // Always mark project files as from project database, merging with existing files
-      const projectFiles = project.files.map(file => ({ ...file, isFromProject: true }));
-      const existingNonProjectFiles = (current.uploadedFiles || []).filter(file => !file.isFromProject);
-      current.uploadedFiles = [...projectFiles, ...existingNonProjectFiles];
-      log("PROJECTS", 2, "setCurrent", `Merged ${project.files.length} project files with ${existingNonProjectFiles.length} user files`);
-    }
-  }
 
   if (current && current.id) {
     savePageState("chat", current.id);

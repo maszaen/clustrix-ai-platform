@@ -627,10 +627,24 @@ function runStandardStreaming(event, payload) {
         if (lastMessage && lastMessage.role === 'user') {
           console.log(`💭 MAIN: Processing user query: "${lastMessage.content.substring(0, 100)}..."`);
           
-          // Process uploaded files if any
-          if (session.uploadedFiles && session.uploadedFiles.length > 0) {
-            console.log(`MAIN: Processing ${session.uploadedFiles.length} uploaded files...`);
-            await langchainService.processUploadedFiles(session.uploadedFiles, sessionId);
+          // Get project files for processing
+          let projectFiles = [];
+          if (session.projectId) {
+            try {
+              const projects = JSON.parse(fs.readFileSync(projectsFile, 'utf-8'));
+              const project = projects.find(p => p.id === session.projectId);
+              if (project && project.files) {
+                projectFiles = project.files;
+              }
+            } catch (error) {
+              console.error('MAIN: Error loading project files:', error);
+            }
+          }
+          
+          // Process project files if any
+          if (projectFiles && projectFiles.length > 0) {
+            console.log(`MAIN: Processing ${projectFiles.length} project files...`);
+            await langchainService.processUploadedFiles(projectFiles, sessionId);
           }
           
           console.log('MAIN: Calling agent orchestrator...');
@@ -708,11 +722,8 @@ function runStandardStreaming(event, payload) {
           } else {
             console.log(`MAIN: Agent orchestrator only supports OpenAI, checking if RE+ACT pattern needed for ${provider}...`);
             
-            // For non-OpenAI providers, check if we should use RE+ACT pattern
-            // Get files from session.uploadedFiles or from the session's last user message metadata
             let availableFiles = session.uploadedFiles || [];
             if (availableFiles.length === 0 && session.messages && session.messages.length > 1) {
-              // Look at the last user message (second-to-last message, since AI message was just added)
               const lastUserMessage = session.messages[session.messages.length - 2];
               if (lastUserMessage && lastUserMessage.length >= 3 && lastUserMessage[2] && lastUserMessage[2].files) {
                 availableFiles = lastUserMessage[2].files;
@@ -876,13 +887,28 @@ function runStandardStreaming(event, payload) {
         console.log('MAIN: REGULAR mode - checking if RE+ACT pattern needed...');
         logHelper('LANGCHAIN', 'runStandardStreaming', 'Regular session - analyzing query complexity');
         
-        // Get current message content
-        const currentMessage = messages[messages.length - 1].content;
+        // Get appropriate files for AI processing
+        let filesForAI = session.uploadedFiles || [];
+        
+        // For project sessions, use project files from database instead of session files
+        if (session.type === 'project' && session.projectId) {
+          try {
+            const projects = JSON.parse(fs.readFileSync(projectsFile, 'utf-8'));
+            const project = projects.find(p => p.id === session.projectId);
+            if (project && project.files) {
+              filesForAI = project.files;
+              console.log(`MAIN: Using ${filesForAI.length} project files for AI processing`);
+            }
+          } catch (error) {
+            console.error('MAIN: Error loading project files:', error);
+            filesForAI = session.uploadedFiles || [];
+          }
+        }
         
         // Check if we should use RE+ACT pattern
         const shouldUseReact = langchainService.shouldUseReasoningAction(
           currentMessage,
-          session.uploadedFiles || [],
+          filesForAI,
           session.type
         );
         
@@ -899,9 +925,9 @@ function runStandardStreaming(event, payload) {
               data: { query: lastMessage.content.substring(0, 100) }
           });
           
-          // Send FOUND_URLS for project files if any
-          if (session.uploadedFiles && session.uploadedFiles.length > 0) {
-            const projectFiles = session.uploadedFiles.map(f => ({
+          // Send FOUND_URLS for files if any
+          if (filesForAI && filesForAI.length > 0) {
+            const projectFiles = filesForAI.map(f => ({
               title: f.name,
               link: `file://${f.name}`,
               snippet: f.content.substring(0, 200) + (f.content.length > 200 ? '...' : '')
@@ -913,7 +939,7 @@ function runStandardStreaming(event, payload) {
             const reactResult = await langchainService.processWithReasoningAction(
               currentMessage,
               sessionId,
-              session.uploadedFiles || [],
+              filesForAI,
               model
             );
             

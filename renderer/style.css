@@ -5734,14 +5734,22 @@ figure:nth-child(3) {
 }
 
 .empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   text-align: center;
   padding: 60px 20px;
 }
 
 .empty-state p {
-  font-size: 18px;
+  font-size: 14px;
   color: var(--fg-muted);
   margin: 0 0 20px 0;
+}
+
+.empty-state svg {
+  color: var(--fg-muted);
 }
 
 .empty-state .primary-btn {

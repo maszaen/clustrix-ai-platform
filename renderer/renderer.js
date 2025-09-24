@@ -130,37 +130,24 @@ function getFilesForMessage(session, messageType = 'conversation') {
   const isProjectSession = session.type === 'project' || session.isProject;
   
   if (messageType === 'initial' && isProjectSession) {
-    return [];
+    return session.uploadedFiles;
   }
   
   if (messageType === 'conversation') {
-    // 💬 CONVERSATION MESSAGES: Include new files only for project sessions
-    return isProjectSession
-      ? session.uploadedFiles.filter(file => !file.isFromProject)
-      : session.uploadedFiles;
+    // 💬 CONVERSATION MESSAGES: Include all files for project sessions
+    return session.uploadedFiles;
   }
   
   return session.uploadedFiles;
 }
 
-/**
- * 🧠 AI CONTEXT BUILDER 🧠
- * Builds comprehensive file context for AI processing
- * @param {Object} session - Current session object
- * @returns {Array} All files for AI processing (project + user files)
- */
+
 function getFilesForAI(session) {
   if (!session || !session.uploadedFiles) return [];
-  // Always return ALL files for AI - both project database files and user uploads
   return session.uploadedFiles;
 }
 
-/**
- * 📊 FILE VISIBILITY ANALYZER 📊
- * Analyzes file visibility patterns for debugging and optimization
- * @param {Object} session - Current session object
- * @returns {Object} Analysis of file visibility
- */
+
 function analyzeFileVisibility(session) {
   if (!session) return { error: 'No session provided' };
   
@@ -806,7 +793,6 @@ async function processSearchStatusQueue() {
         break;
 
       case "FOUND_URLS":
-        thinkEl.text.innerHTML += "<br><br>";
         const urlsTitle = createTitleSpan();
         thinkEl.text.appendChild(urlsTitle);
         
@@ -821,10 +807,11 @@ async function processSearchStatusQueue() {
           thinkEl.text.appendChild(filesContent);
           await typewriterEffectChunked(
             filesContent,
-            status.data.map((r) => `${r.title} (${r.snippet ? r.snippet.substring(0, 100) + '...' : 'analyzing...'})`).join("\n"),
+            status.data.map((r) => `${r.title} `).join("\n"),
             700,
           );
         } else {
+          thinkEl.text.innerHTML += "<br><br>";
           await typewriterEffectChunked(urlsTitle, "Found URLs:", 200, 3);
 
           thinkEl.text.appendChild(document.createElement("br"));
@@ -903,7 +890,22 @@ function newSessionName() {
 }
 
 function formatUserMessage(content) {
-  return esc(content).replace(/\n/g, "<br/>");
+  if (!content) return "";
+  let html = content
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+  // Only support bold and italic formatting for user messages
+  html = html
+    .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
+    .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>")
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__(.*?)__/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/_([^_]+)_/g, "<em>$1</em>");
+
+  return html.replace(/\n/g, "<br/>");
 }
 
 async function typewriterEffectChunked(
@@ -2019,8 +2021,9 @@ function updateModelHeader() {
   // Fix selector logic to update both welcome and chat model buttons
   const welcomeBtn = $("#btn-model-switch-welcome");
   const chatBtn = $("#btn-model-switch-chat");
+  const projectBtn = $("#btn-model-switch-project");
 
-  [welcomeBtn, chatBtn].forEach((modelBtn) => {
+  [welcomeBtn, chatBtn, projectBtn].forEach((modelBtn) => {
     if (modelBtn) {
       const p = modelBtn.querySelector("p");
       if (p) p.textContent = title || "";
@@ -5474,17 +5477,87 @@ async function viewProjectFile(index) {
 }
 
 function startProjectRename(project) {
-  const projectItem = document.querySelector(
-    `[data-project-id="${project.id}"]`,
-  );
-  if (!projectItem) return;
-
-  const titleElement = projectItem.querySelector(".project-item-title");
-  if (!titleElement) {
-    log("PROJECTS", 4, "startProjectRename", "Title element not found", {
+  // Ensure we're on the projects page and it's fully rendered
+  if (!document.querySelector('#projects-page') || document.querySelector('#projects-page').style.display === 'none') {
+    log("PROJECTS", 4, "startProjectRename", "Not on projects page or page not visible", {
       projectId: project.id,
+      currentPage: document.querySelector('.page:not([style*="display: none"])')?.id || 'unknown'
     });
     return;
+  }
+
+  const projectItem = document.querySelector(
+    `#projects-page [data-project-id="${project.id}"]`,
+  );
+  if (!projectItem) {
+    log("PROJECTS", 4, "startProjectRename", "Project item not found in DOM", {
+      projectId: project.id,
+      availableProjectIds: Array.from(document.querySelectorAll('#projects-page [data-project-id]')).map(el => el.dataset.projectId)
+    });
+    return;
+  }
+
+  // Ensure the project item has basic structure
+  if (!projectItem.children || projectItem.children.length === 0) {
+    log("PROJECTS", 4, "startProjectRename", "Project item has no children elements", {
+      projectId: project.id,
+      projectItemHTML: projectItem.innerHTML.substring(0, 100) + '...'
+    });
+    return;
+  }
+
+  const titleElement = projectItem.querySelector(".project-item-title");
+  let targetElement = titleElement;
+  if (!titleElement) {
+    // Try to find any h3 element as fallback
+    const h3Element = projectItem.querySelector("h3");
+    if (h3Element) {
+      h3Element.classList.add("project-item-title");
+      targetElement = h3Element;
+      log("PROJECTS", 3, "startProjectRename", "Found h3 element, added title class", {
+        projectId: project.id,
+      });
+    } else {
+      // Create the title element if it doesn't exist at all
+      const headerElement = projectItem.querySelector(".project-item-header");
+      if (headerElement) {
+        const newTitle = document.createElement("h3");
+        newTitle.className = "project-item-title";
+        newTitle.textContent = project.name || "Untitled Project";
+        headerElement.insertBefore(newTitle, headerElement.firstChild);
+        targetElement = newTitle;
+        log("PROJECTS", 3, "startProjectRename", "Created missing title element", {
+          projectId: project.id,
+        });
+      } else {
+        // Ultimate fallback: create title element in the project item content
+        const contentElement = projectItem.querySelector(".project-item-content");
+        if (contentElement) {
+          const newTitle = document.createElement("h3");
+          newTitle.className = "project-item-title";
+          newTitle.textContent = project.name || "Untitled Project";
+          newTitle.style.cssText = `
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+            color: var(--text-primary);
+          `;
+          contentElement.insertBefore(newTitle, contentElement.firstChild);
+          targetElement = newTitle;
+          log("PROJECTS", 3, "startProjectRename", "Created title element in content area", {
+            projectId: project.id,
+          });
+        } else {
+          log("PROJECTS", 4, "startProjectRename", "No suitable container found to create title in", {
+            projectId: project.id,
+            projectItemHTML: projectItem.innerHTML.substring(0, 300) + '...',
+            allClasses: Array.from(projectItem.querySelectorAll('*')).map(el => el.className).filter(c => c).join(', '),
+            childElements: Array.from(projectItem.children).map(el => el.tagName + (el.className ? '.' + el.className : '')).join(', ')
+          });
+          return;
+        }
+      }
+    }
   }
   
   const originalName = project.name || "Untitled Project";
@@ -5506,8 +5579,8 @@ function startProjectRename(project) {
   `;
 
   // Replace title with input
-  const parent = titleElement.parentNode;
-  parent.replaceChild(input, titleElement);
+  const parent = targetElement.parentNode;
+  parent.replaceChild(input, targetElement);
   input.focus();
   input.select();
 
@@ -5530,8 +5603,11 @@ function startProjectRename(project) {
     newTitle.textContent = project.name || "Untitled Project";
     parent.replaceChild(newTitle, input);
 
-    // Re-render to update everything
-    renderProjectsPage();
+    // Update the date display to reflect the new last_updated time
+    const dateElement = projectItem.querySelector(".project-item-date");
+    if (dateElement) {
+      dateElement.textContent = `Last updated ${formatRelativeTime(project.last_updated || project.created_at)}`;
+    }
   };
 
   input.addEventListener("blur", () => finishRename(true));
@@ -6085,7 +6161,7 @@ function initializeSmartScroll() {
   );
 }
 
-function scrollToBottom({ force = false, fromAI = false } = {}) {
+function  scrollToBottom({ force = false, fromAI = false } = {}) {
   const scroller = getChatScroller();
   if (!scroller) return;
 
@@ -9908,7 +9984,7 @@ function setupEventListeners() {
     });
   }
 
-  ["welcome", "chat"].forEach((screen) => {
+  ["welcome", "chat", "project"].forEach((screen) => {
     const searchBtn = $(`#btn-web-search-${screen}`);
     if (searchBtn)
       searchBtn.addEventListener("click", () => {
@@ -9937,7 +10013,7 @@ function setupEventListeners() {
 
   document.querySelectorAll(".input-container-btn").forEach((btn) => {
     const p = btn.querySelector("p");
-    if (p && p.textContent.includes("Upload File")) {
+    if (p && p.textContent.includes("Upload Files")) {
       btn.addEventListener("click", async () => {
         log("RENDERER", 1, "upload:click", "Upload File button clicked.");
         try {
@@ -10262,7 +10338,7 @@ function setupEventListeners() {
     const modelsState = normalizeProviderModels(
       config.providers[activeProvider]?.models || [],
     );
-    const modelBtn = $(`#btn-model-switch-welcome` || `#btn-model-switch-chat`);
+    const modelBtn = $(`#btn-model-switch-welcome` || `#btn-model-switch-chat` || `#btn-model-switch-project`);
     modelsState.forEach((model) => {
       if (model.id === config.active.model) {
         const p = modelBtn.querySelector("p");

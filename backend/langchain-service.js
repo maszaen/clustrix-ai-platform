@@ -436,7 +436,7 @@ class ClustrixLangChainService {
 
   // ==================== REASONING + ACTION PATTERN ====================
   
-  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '') {
+  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', progressCallback = null) {
     console.log(`LangChain: Starting RE+ACT processing for session ${sessionId}`);
     
     try {
@@ -454,9 +454,10 @@ class ClustrixLangChainService {
       
       // Step 2: Process with reasoning and actions
       const result = await this.reasoningAgent.processWithReasoningAction(
-        userMessage, 
-        sessionId, 
-        []
+        userMessage,
+        sessionId,
+        [],
+        progressCallback
       );
       
       console.log(`RE+ACT: Completed with ${result.actionsExecuted} actions executed`);
@@ -1390,28 +1391,6 @@ Respond with ONLY a JSON object in this format:
       console.error('Error getting available provider:', error);
       return null;
     }
-  }
-
-  /**
-   * Process user query with RE+ACT pattern (Reasoning + Action)
-   */
-  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'glm-4.5-flash', provider = 'zhipu', apiKey = '', baseUrl = '', progressCallback = null) {
-    console.log(`LangChain: Processing with RE+ACT pattern for session ${sessionId}`);
-    
-    // Initialize session with uploaded files and model information if not already done
-    if (uploadedFiles && uploadedFiles.length > 0) {
-      const modelInfo = { provider, model, apiKey, baseUrl };
-      this.reasoningAgent.initializeSession(sessionId, uploadedFiles, modelInfo);
-    }
-    
-    // Process with reasoning action agent
-    const result = await this.reasoningAgent.processWithReasoningAction(userMessage, sessionId, [], progressCallback);
-    
-    return {
-      response: result.finalResponse || result,
-      actionsExecuted: result.actionHistory?.length || 0,
-      sessionId
-    };
   }
 
   getOpenAIKey() {

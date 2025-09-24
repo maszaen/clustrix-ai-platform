@@ -448,37 +448,191 @@ IMPORTANT: The thinking section must be included and will be saved for future re
     }
 
     // Extract actions
-    const actionMatches = response.matchAll(/\d+\.\s*ACTION:\s*[`*]?(\w+)[`*]?\s*with\s*({[^}]*}|\w+)(?:\s*WHY:\s*(.*?)(?=\n\d+\.|$))?/gs);
-    
-    for (const match of actionMatches) {
-      const actionType = match[1].trim(); 
-      let params = {};
-      
-      try {
-          let rawParams = match[2];
-          if (rawParams.startsWith('{')) {
-              let parsed = JSON.parse(rawParams);
-              // Cek jika hasilnya adalah objek dengan satu properti 'value'
-              // yang isinya adalah string JSON lain.
-              if (typeof parsed.value === 'string' && parsed.value.startsWith('{')) {
-                  params = JSON.parse(parsed.value);
-              } else {
-                  params = parsed;
-              }
-          } else {
-              params = { value: rawParams };
-          }
-      } catch (error) {
-          console.warn(`Could not parse action parameters: ${match[2]}`);
-          params = { value: match[2] }; // Fallback
+    const extractPlanSection = () => {
+      const planMatch = response.match(/PLAN\s*:\s*([\s\S]*)/i);
+      if (!planMatch) {
+        return '';
       }
-      
-      plan.actions.push({
-        type: actionType,
-        params,
-        reason: match[3]?.trim() || '',
-        executed: false
-      });
+
+      let section = planMatch[1];
+      const terminators = [
+        /\n\s*CURRENT THINKING\s*:/i,
+        /\n\s*FINAL ANSWER\s*:/i,
+        /\n\s*FINAL RESPONSE\s*:/i,
+        /\n\s*JAWABAN AKHIR\s*:/i,
+        /\n\s*KESIMPULAN\s*:/i,
+        /\n\s*SOLUTION\s*:/i
+      ];
+
+      for (const terminator of terminators) {
+        const idx = section.search(terminator);
+        if (idx !== -1) {
+          section = section.slice(0, idx);
+          break;
+        }
+      }
+
+      return section.trim();
+    };
+
+    const extractParameters = (text) => {
+      if (!text) {
+        return { paramsSource: '', remainder: '' };
+      }
+
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return { paramsSource: '', remainder: '' };
+      }
+
+      if (trimmed.startsWith('```')) {
+        const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```/i);
+        if (fenceMatch) {
+          const remainder = trimmed.slice(fenceMatch[0].length);
+          return { paramsSource: fenceMatch[1].trim(), remainder: remainder.trim() };
+        }
+      }
+
+      if (trimmed.startsWith('{')) {
+        let depth = 0;
+        let inString = false;
+        let escape = false;
+        let stringChar = null;
+
+        for (let i = 0; i < trimmed.length; i++) {
+          const char = trimmed[i];
+
+          if (escape) {
+            escape = false;
+            continue;
+          }
+
+          if (char === '\\') {
+            escape = true;
+            continue;
+          }
+
+          if (inString) {
+            if (char === stringChar) {
+              inString = false;
+            }
+            continue;
+          }
+
+          if (char === '"' || char === '\'' || char === '`') {
+            inString = char;
+            stringChar = char;
+            continue;
+          }
+
+          if (char === '{') {
+            depth++;
+          } else if (char === '}') {
+            depth--;
+            if (depth === 0) {
+              const paramsSource = trimmed.slice(0, i + 1);
+              const remainder = trimmed.slice(i + 1);
+              return { paramsSource, remainder: remainder.trim() };
+            }
+          }
+        }
+
+        return { paramsSource: trimmed, remainder: '' };
+      }
+
+      const whyIndex = trimmed.search(/\bWHY:/i);
+      if (whyIndex !== -1) {
+        return {
+          paramsSource: trimmed.slice(0, whyIndex).trim(),
+          remainder: trimmed.slice(whyIndex).trim()
+        };
+      }
+
+      const newlineIndex = trimmed.indexOf('\n');
+      if (newlineIndex !== -1) {
+        return {
+          paramsSource: trimmed.slice(0, newlineIndex).trim(),
+          remainder: trimmed.slice(newlineIndex).trim()
+        };
+      }
+
+      return { paramsSource: trimmed, remainder: '' };
+    };
+
+    const parseActionParams = (rawParams) => {
+      if (!rawParams) {
+        return {};
+      }
+
+      let text = rawParams.trim();
+      if (!text) {
+        return {};
+      }
+
+      if (text.startsWith('```')) {
+        const fenceMatch = text.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
+        if (fenceMatch) {
+          text = fenceMatch[1].trim();
+        } else {
+          text = text.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+        }
+      }
+
+      const cleaned = text.replace(/^`+|`+$/g, '').trim();
+      if (!cleaned) {
+        return {};
+      }
+
+      if (cleaned.startsWith('{')) {
+        try {
+          return JSON.parse(cleaned);
+        } catch (error) {
+          console.warn(`Could not parse action parameters: ${cleaned}`);
+        }
+      }
+
+      const unquoted = cleaned.replace(/^['"]|['"]$/g, '');
+      return { value: unquoted };
+    };
+
+    const extractReason = (text) => {
+      if (!text) {
+        return '';
+      }
+
+      const reasonMatch = text.match(/WHY:\s*([\s\S]*)/i);
+      if (reasonMatch) {
+        return reasonMatch[1].trim();
+      }
+
+      return text.trim();
+    };
+
+    const planSection = extractPlanSection();
+
+    if (planSection) {
+      const actionPattern = /(\d+)\.\s*ACTION:\s*[`*]?([A-Za-z0-9_]+)[`*]?\s*with\s*/gi;
+      const matches = Array.from(planSection.matchAll(actionPattern));
+
+      for (let i = 0; i < matches.length; i++) {
+        const match = matches[i];
+        const actionType = match[2].trim();
+        const blockStart = match.index ?? 0;
+        const blockEnd = i + 1 < matches.length ? matches[i + 1].index : planSection.length;
+        const block = planSection.slice(blockStart, blockEnd);
+
+        const afterWith = block.slice(match[0].length).trim();
+        const { paramsSource, remainder } = extractParameters(afterWith);
+        const params = parseActionParams(paramsSource);
+        const reason = extractReason(remainder);
+
+        plan.actions.push({
+          type: actionType,
+          params,
+          reason,
+          executed: false
+        });
+      }
     }
 
     // Fallback: some models output PLAN as a markdown table. Try parsing that into actions.
@@ -526,24 +680,27 @@ IMPORTANT: The thinking section must be included and will be saved for future re
    */
   async executeAction(action, sessionId) {
     console.log(`Executing ${action.type} with params:`, action.params);
-    
+
     try {
       const result = await this.searchEngine.executeSearchCommand(action.type, action.params);
-      
+
       // Limit results to prevent token overflow
       const limitedResult = this.limitSearchResults(result, 100);
-      
+      const resultCount = Array.isArray(result) ? result.length : (result ? 1 : 0);
+
+      console.log(`Action ${action.type} returned ${resultCount} result(s)`);
+
       action.executed = true;
-      
+
       return {
         success: true,
         action: action.type,
         params: action.params,
-        resultCount: Array.isArray(result) ? result.length : 1,
+        resultCount,
         results: limitedResult,
         requiresFollowup: this.shouldRequireFollowup(action, result)
       };
-      
+
     } catch (error) {
       console.error(`Action ${action.type} failed:`, error);
       return {
@@ -713,76 +870,122 @@ IMPORTANT: The thinking section must be included and will be saved for future re
    * Make AI request (integrated with existing LangChain service)
    */
   async makeAIRequest(prompt, sessionId) {
-    try {
-      console.log(`AI Request for session ${sessionId}:`, prompt.slice(0, 100) + '...');
+    console.log(`AI Request for session ${sessionId}:`, prompt.slice(0, 100) + '...');
 
-      // Use the existing AI API call method from main process
-      // We need to get the current provider and model from the session
-      const sessionData = this.sessionState.get(sessionId);
-      if (!sessionData || !sessionData.model) {
-        throw new Error('Session not properly initialized with model information');
-      }
-
-      const { provider, model, apiKey, baseUrl } = sessionData.model;
-
-      // Make direct API call similar to handleOpenAICompatibleStreaming
-      const url = new URL(`${baseUrl.replace(/\/+$/,'')}/chat/completions`);
-      const bodyObj = {
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        stream: false  // Non-streaming for RE+ACT
-      };
-
-      const body = JSON.stringify(bodyObj);
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      };
-
-      if (provider === 'openrouter') {
-        headers['HTTP-Referer'] = 'https://clustrix.local';
-        headers['X-Title'] = 'Clustrix Desktop';
-      }
-
-      const response = await new Promise((resolve, reject) => {
-        const https = require('https');
-        const opts = {
-          method: 'POST',
-          hostname: url.hostname,
-          port: url.port,
-          path: url.pathname + url.search,
-          protocol: url.protocol,
-          headers
-        };
-
-        const req = https.request(opts, (res) => {
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', () => {
-            if (res.statusCode < 200 || res.statusCode >= 300) {
-              reject(new Error(`HTTP ${res.statusCode}: ${data}`));
-              return;
-            }
-            resolve(data);
-          });
-        });
-
-        req.on('error', reject);
-        req.write(body);
-        req.end();
-      });
-
-      const jsonResponse = JSON.parse(response);
-      const content = jsonResponse?.choices?.[0]?.message?.content ||
-                     jsonResponse?.message?.content ||
-                     jsonResponse?.output_text || '';
-
-      return content;
-
-    } catch (error) {
-      console.error(`AI request failed:`, error);
+    const sessionData = this.sessionState.get(sessionId);
+    if (!sessionData || !sessionData.model) {
+      console.error('AI request failed: Session not properly initialized with model information');
       return this.generateFallbackResponse(prompt);
     }
+
+    const { provider, model, apiKey, baseUrl } = sessionData.model;
+    const https = require('https');
+
+    const url = new URL(`${baseUrl.replace(/\/+$/,'')}/chat/completions`);
+    const bodyObj = {
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      stream: false
+    };
+
+    const body = JSON.stringify(bodyObj);
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    };
+
+    if (provider === 'openrouter') {
+      headers['HTTP-Referer'] = 'https://clustrix.local';
+      headers['X-Title'] = 'Clustrix Desktop';
+    }
+
+    const makeHttpRequest = () => new Promise((resolve, reject) => {
+      const opts = {
+        method: 'POST',
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname + url.search,
+        protocol: url.protocol,
+        headers
+      };
+
+      const req = https.request(opts, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            const error = new Error(`HTTP ${res.statusCode}: ${data}`);
+            error.statusCode = res.statusCode;
+            error.responseBody = data;
+            reject(error);
+            return;
+          }
+          resolve(data);
+        });
+      });
+
+      req.on('error', (error) => {
+        reject(error);
+      });
+
+      req.write(body);
+      req.end();
+    });
+
+    const extractStatusCode = (error) => {
+      if (!error) return null;
+      if (typeof error.statusCode === 'number') {
+        return error.statusCode;
+      }
+      const match = (error.message || '').match(/HTTP\s+(\d{3})/i);
+      return match ? parseInt(match[1], 10) : null;
+    };
+
+    const isRetryable = (error) => {
+      const status = extractStatusCode(error);
+      if (status === 429 || (status >= 500 && status < 600)) {
+        return true;
+      }
+
+      const transientCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ECONNREFUSED', 'ENETUNREACH', 'EHOSTUNREACH']);
+      return transientCodes.has(error?.code);
+    };
+
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    const maxAttempts = 4;
+    const baseDelay = 500;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const responseText = await makeHttpRequest();
+        const jsonResponse = JSON.parse(responseText);
+        const content = jsonResponse?.choices?.[0]?.message?.content ||
+                        jsonResponse?.message?.content ||
+                        jsonResponse?.output_text || '';
+        return content;
+      } catch (error) {
+        lastError = error;
+        const status = extractStatusCode(error);
+        const shouldRetry = attempt < maxAttempts && isRetryable(error);
+
+        if (shouldRetry) {
+          const backoff = baseDelay * Math.pow(2, attempt - 1);
+          const jitter = Math.floor(Math.random() * 200);
+          const delay = backoff + jitter;
+          console.warn(`AI request attempt ${attempt} failed (${status || error.code || 'error'}). Retrying in ${delay}ms...`);
+          await sleep(delay);
+          continue;
+        }
+
+        console.error(`AI request attempt ${attempt} failed:`, error);
+        break;
+      }
+    }
+
+    console.error('AI request failed after retries:', lastError);
+    return this.generateFallbackResponse(prompt);
   }
 
   /**

@@ -354,7 +354,7 @@
               <div class="row-gap w-50">
                 <span class="input-container-btn" style="cursor: pointer" title="Send message">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-paperclip-icon lucide-paperclip"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"/></svg>
-                  <p>Upload File</p>
+                  <p>Upload Files</p>
                 </span>
                 <span id="btn-web-search-welcome" class="input-container-btn" style="cursor: pointer" title="Web search">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe-icon lucide-globe">
@@ -386,7 +386,7 @@
       <!-- Projects Page -->
       <div id="projects-page" class="projects-page">
         <div class="chats-header">
-          <h2>Your Projects (Beta)</h2>
+          <h2>Your Projects</h2>
           <button id="new-project-btn" class="white-btn" title="New Project">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M12 5v14m-7-7h14" />
@@ -485,17 +485,13 @@
                   <div class="row-between pad-l-sm">
                     <div class="row-gap w-50">
                       
-                      <span id="btn-web-search-welcome" class="input-container-btn" style="cursor: pointer" title="Web search">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe-icon lucide-globe">
-                          <circle cx="12" cy="12" r="10" />
-                          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-                          <path d="M2 12h20" />
-                        </svg>
-                        <p>Attach Files</p>
+                      <span class="input-container-btn" style="cursor: pointer" title="Web search">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-paperclip-icon lucide-paperclip"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"/></svg>
+                        <p>Upload Files</p>
                       </span>
                     </div>
                     <div class="row-gap w-50">
-                      <span id="btn-model-switch-welcome" class="input-container-btn" style="cursor: pointer">
+                      <span id="btn-model-switch-project" class="input-container-btn" style="cursor: pointer">
                         <p>Switch Model</p>
                         <svg viewBox="0 0 24 24">
                           <path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" />
@@ -623,7 +619,7 @@
             <div class="row-gap">
               <span class="input-container-btn" style="cursor: pointer" title="Send message">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-paperclip-icon lucide-paperclip"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551"/></svg>
-                <p>Upload File</p>
+                <p>Upload Files</p>
               </span>
               <span id="btn-web-search-chat" class="input-container-btn" style="cursor: pointer">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe-icon lucide-globe">
@@ -734,20 +730,19 @@
           <label for="persona-prefs">What personal preferences should AI consider?</label>
           <textarea id="persona-prefs" spellcheck="false" autocorrect="off" rows="4" placeholder="e.g., Provide concise answers, use technical terms..."></textarea>
         </div>
-        <hr />
+
         <div class="form-group">
-          <label>Sidebar Display Options</label>
           <div class="toggle-group">
             <div class="toggle-item">
               <label for="show-projects-toggle" class="toggle-label">
-                <span>Show Projects</span>
+                <span>Show projects session</span>
                 <input type="checkbox" id="show-projects-toggle" class="toggle-input">
                 <span class="toggle-slider"></span>
               </label>
             </div>
             <div class="toggle-item">
               <label for="show-starred-toggle" class="toggle-label">
-                <span>Show Starred</span>
+                <span>Show starred session</span>
                 <input type="checkbox" id="show-starred-toggle" class="toggle-input">
                 <span class="toggle-slider"></span>
               </label>
@@ -764,23 +759,7 @@
       </div>
     </div>
   </div>
-  <!-- Confirmation Modal -->
-  <div id="confirm-modal" class="modal hidden">
-    <div class="modal-overlay"></div>
-    <div class="modal-card confirm-modal">
-      <div class="modal-header">
-        <h2 id="confirm-title">Confirm Action</h2>
-      </div>
-      <hr />
-      <div class="modal-body">
-        <p id="confirm-message">Are you sure you want to proceed?</p>
-      </div>
-      <div class="modal-actions">
-        <button id="confirm-cancel" class="primary-btn">Cancel</button>
-        <button id="confirm-ok" class="danger-btn">Confirm</button>
-      </div>
-    </div>
-  </div>
+  
   <!-- Switch Model Modal -->
   <div id="models-modal" class="modal hidden">
     <div class="modal-overlay"></div>
@@ -851,6 +830,25 @@
       </div>
     </div>
   </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card confirm-modal">
+      <div class="modal-header">
+        <h2 id="confirm-title">Confirm Action</h2>
+      </div>
+      <hr />
+      <div class="modal-body">
+        <p id="confirm-message">Are you sure you want to proceed?</p>
+      </div>
+      <div class="modal-actions">
+        <button id="confirm-cancel" class="primary-btn">Cancel</button>
+        <button id="confirm-ok" class="danger-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Model Management (Edit List) -->
   <div id="model-mgmt-modal" class="modal hidden">
     <div class="modal-overlay"></div>

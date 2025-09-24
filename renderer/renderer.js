@@ -3,6 +3,7 @@ let state = {
   settings: { persona: { name: "", work: "", prefs: "" }, theme: "light" },
 };
 let welcomeScreenStagedFiles = [];
+let projectMessageStagedFiles = [];
 let current = null;
 let collapsed = false;
 let loadedSessionCount = 0;
@@ -580,6 +581,24 @@ function renderWelcomeScreenFiles() {
       e.stopPropagation();
       welcomeScreenStagedFiles.splice(index, 1);
       renderWelcomeScreenFiles();
+    });
+    container.appendChild(pill);
+  });
+}
+
+function renderProjectMessageFiles() {
+  const container = $("#project-message");
+  if (!container) return;
+
+  container.innerHTML = "";
+  projectMessageStagedFiles.forEach((file, index) => {
+    const pill = document.createElement("div");
+    pill.className = "file-pill";
+    pill.innerHTML = `<span>${esc(file.name)}</span><button class="remove-file-btn" data-index="${index}">&times;</button>`;
+    pill.querySelector(".remove-file-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      projectMessageStagedFiles.splice(index, 1);
+      renderProjectMessageFiles();
     });
     container.appendChild(pill);
   });
@@ -3501,7 +3520,7 @@ function showArtifactModal(artifact) {
       closeModal();
 
       // Navigate to chat session
-      viewInChatFromArtifact(sessionId, messageIndex);
+      viewInChatFromArtifact(sessionId, messageIndex, artifact.id);
     });
   }
 }
@@ -3582,13 +3601,13 @@ async function findArtifactByCode(codeContent, language) {
   }
 }
 
-function viewInChatFromArtifact(sessionId, messageIndex) {
+function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
   log(
     "NAVIGATION",
     1,
     "viewInChatFromArtifact",
     "Starting navigation to source chat",
-    { sessionId, messageIndex },
+    { sessionId, messageIndex, artifactId },
   );
 
   // Find the session in chat data
@@ -3617,11 +3636,66 @@ function viewInChatFromArtifact(sessionId, messageIndex) {
   // Force load all messages for View in Chat navigation
   renderAllMessagesForNavigation(targetSession);
 
-  // Wait for DOM to be ready and scroll to the specific message
+  // Wait for DOM to be ready and scroll to the specific artifact or message
   setTimeout(() => {
     // Clear the flag after DOM operations
     window._preventAutoScrollToBottom = false;
 
+    // If artifactId is provided, scroll to specific code block
+    if (artifactId) {
+      const targetCodeBlock = document.querySelector(
+        `[data-artifact-id="${artifactId}"]`
+      );
+
+      if (targetCodeBlock) {
+        log(
+          "NAVIGATION",
+          2,
+          "viewInChatFromArtifact",
+          "Found target code block, scrolling",
+          { artifactId },
+        );
+
+        // Get the full code block container (parent of header)
+        const codeBlockContainer = targetCodeBlock.closest('.code-block-container');
+        
+        if (codeBlockContainer) {
+          // Scroll to the code block with some offset for better visibility
+          codeBlockContainer.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+
+          // Highlight the specific code block
+          codeBlockContainer.style.transition = "box-shadow 0.3s ease";
+          codeBlockContainer.style.boxShadow =
+            "0 0 0 2px var(--accent), 0 0 20px rgba(var(--accent-rgb), 0.3)";
+
+          setTimeout(() => {
+            codeBlockContainer.style.boxShadow = "";
+          }, 2000);
+
+          log(
+            "NAVIGATION",
+            1,
+            "viewInChatFromArtifact",
+            "Successfully scrolled to artifact",
+            { artifactId },
+          );
+          return;
+        }
+      } else {
+        log(
+          "NAVIGATION",
+          3,
+          "viewInChatFromArtifact",
+          "Target code block not found, falling back to message",
+          { artifactId },
+        );
+      }
+    }
+
+    // Fallback: scroll to message if artifactId not found or not provided
     if (messageIndex !== null && messageIndex >= 0) {
       const messages = document.querySelectorAll(".message");
       const targetMessage = Array.from(messages).find(
@@ -3644,19 +3718,21 @@ function viewInChatFromArtifact(sessionId, messageIndex) {
           block: "center",
         });
 
-        // Highlight code blocks in the message briefly
-        const codeBlocks = targetMessage.querySelectorAll(
-          ".code-block-container",
-        );
-        codeBlocks.forEach((block) => {
-          block.style.transition = "box-shadow 0.3s ease";
-          block.style.boxShadow =
-            "0 0 0 2px var(--accent), 0 0 20px rgba(var(--accent-rgb), 0.3)";
+        // Highlight all code blocks in the message briefly if no specific artifact
+        if (!artifactId) {
+          const codeBlocks = targetMessage.querySelectorAll(
+            ".code-block-container",
+          );
+          codeBlocks.forEach((block) => {
+            block.style.transition = "box-shadow 0.3s ease";
+            block.style.boxShadow =
+              "0 0 0 2px var(--accent), 0 0 20px rgba(var(--accent-rgb), 0.3)";
 
-          setTimeout(() => {
-            block.style.boxShadow = "";
-          }, 2000);
-        });
+            setTimeout(() => {
+              block.style.boxShadow = "";
+            }, 2000);
+          });
+        }
       } else {
         log(
           "NAVIGATION",
@@ -3672,6 +3748,7 @@ function viewInChatFromArtifact(sessionId, messageIndex) {
   log("NAVIGATION", 1, "viewInChatFromArtifact", "Navigation completed", {
     sessionId,
     messageIndex,
+    artifactId,
   });
 }
 
@@ -3755,6 +3832,13 @@ function showProjectsListView() {
   }
 
   currentProject = null;
+  projectMessageStagedFiles = [];
+  renderProjectMessageFiles();
+  const projectInput = document.getElementById("project-message-input");
+  if (projectInput) {
+    projectInput.value = "";
+    projectInput.style.height = "auto";
+  }
 }
 
 function showProjectDetailView(project) {
@@ -3785,7 +3869,21 @@ function showProjectDetailView(project) {
     }
   }
 
+  const isDifferentProject = !currentProject || currentProject.id !== project.id;
   currentProject = project;
+
+  if (isDifferentProject) {
+    projectMessageStagedFiles = [];
+    renderProjectMessageFiles();
+
+    const projectInput = document.getElementById("project-message-input");
+    if (projectInput) {
+      projectInput.value = "";
+      projectInput.style.height = "auto";
+    }
+  }
+
+  renderProjectMessageFiles();
 
   // Update project detail header
   const titleEl = document.getElementById("project-detail-title");
@@ -5139,10 +5237,15 @@ async function handleProjectSend() {
 
   const input = document.getElementById("project-message-input");
   const originalText = (input?.value || "").trim();
-  if (!originalText) return;
+  const stagedUserFiles = projectMessageStagedFiles.filter((file) => !file.error);
+  if (!originalText && stagedUserFiles.length === 0) return;
 
-  // 🚀 Use the new file attachment strategist for initial project messages
-  const filesToAttach = getFilesForMessage(current, 'initial');
+  const projectFilesForSession = (currentProject.files || []).map((file) => ({
+    ...file,
+    isFromProject: true,
+  }));
+  const userFilesForSession = stagedUserFiles.map((file) => ({ ...file }));
+  const filesToAttach = [...projectFilesForSession, ...userFilesForSession];
   const config = getActiveChatConfig();
   const modelInfo = {
     provider: config.provider,
@@ -5195,6 +5298,8 @@ async function handleProjectSend() {
 
   input.value = "";
   input.style.height = "auto";
+  projectMessageStagedFiles = [];
+  renderProjectMessageFiles();
 
   createResponseSpacer();
   setTimeout(() => expandSpacer(), 50);
@@ -6834,6 +6939,7 @@ async function updateCodeBlocksWithArtifactInfo(container = document) {
       const codeElement = block.querySelector("code");
       const saveButton = block.querySelector(".save-code-btn");
       const languageSpan = block.querySelector(".language-name");
+      const idData = block.querySelector(".code-block-header");
 
       if (codeElement && saveButton && languageSpan) {
         const codeContent = codeElement.textContent;
@@ -6848,6 +6954,7 @@ async function updateCodeBlocksWithArtifactInfo(container = document) {
         if (matchingArtifact) {
           // Update language display to include artifact title
           languageSpan.innerHTML = `${language} <span>${esc(matchingArtifact.title)}</span>`;
+          idData.dataset.artifactId = matchingArtifact.id;
 
           // Hide save button for saved artifacts
           saveButton.style.display = "none";
@@ -6859,6 +6966,7 @@ async function updateCodeBlocksWithArtifactInfo(container = document) {
             "Updated code block with artifact info",
             {
               artifactTitle: matchingArtifact.title,
+              artifactID: matchingArtifact.id,
               language: language,
             },
           );
@@ -8834,8 +8942,6 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     const hasContent = display.length > 0;
     const hasEnd = END_RX.test(fullResponse) || sawEnd;
 
-    // For non-interrupted responses, consider them complete even without END marker
-    // This fixes the issue where continue placeholder appears on completed responses
     const isComplete = hasEnd || !interrupted;
 
     // Collapse response spacer when response is complete
@@ -8896,6 +9002,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           disabledMs: 1200,
           interrupted: false,
         });
+        restoreAiMessageAutoHeight();
       }
 
       renderAiFinalActions(aiNode, finalMessageToSave, messageIndex);
@@ -10012,56 +10119,127 @@ function setupEventListeners() {
   });
 
   document.querySelectorAll(".input-container-btn").forEach((btn) => {
-    const p = btn.querySelector("p");
-    if (p && p.textContent.includes("Upload Files")) {
-      btn.addEventListener("click", async () => {
-        log("RENDERER", 1, "upload:click", "Upload File button clicked.");
-        try {
-          const fileContents = await window.api.files.openDialogAndRead();
-          if (!fileContents || fileContents.length === 0) {
+    const label = btn.querySelector("p");
+    if (!label || !label.textContent.includes("Upload Files")) return;
+
+    btn.addEventListener("click", async () => {
+      const context =
+        btn.dataset.uploadContext ||
+        (btn.closest("#project-detail-view")
+          ? "project-message"
+          : current
+            ? "chat"
+            : "welcome");
+
+      log(
+        "RENDERER",
+        1,
+        "upload:click",
+        `Upload File button clicked (${context}).`,
+      );
+
+      try {
+        const fileContents = await window.api.files.openDialogAndRead();
+        if (!fileContents || fileContents.length === 0) {
+          log(
+            "RENDERER",
+            1,
+            "upload:click",
+            `No files selected or dialog canceled (${context}).`,
+          );
+          return;
+        }
+
+        const validFiles = fileContents.filter((f) => !f.error);
+        if (validFiles.length === 0) {
+          log(
+            "RENDERER",
+            2,
+            "upload:click",
+            `All selected files failed to load (${context}).`,
+          );
+          return;
+        }
+
+        if (context === "project-message") {
+          if (!currentProject) {
             log(
-              "RENDERER",
-              1,
-              "upload:click",
-              "No files selected or dialog canceled.",
+              "PROJECTS",
+              3,
+              "upload:project-message",
+              "Cannot attach files without an active project.",
             );
             return;
           }
-          if (current) {
-            log(
-              "RENDERER",
-              1,
-              "upload:click",
-              "Adding files to active session.",
-            );
-            if (!Array.isArray(current.uploadedFiles)) {
-              current.uploadedFiles = [];
-            }
-            current.uploadedFiles.push(...fileContents.filter((f) => !f.error));
-            renderUploadedFiles();
-          } else {
-            log(
-              "RENDERER",
-              1,
-              "upload:click",
-              "Adding files to welcome screen staging area.",
-            );
-            welcomeScreenStagedFiles.push(
-              ...fileContents.filter((f) => !f.error),
-            );
-            renderWelcomeScreenFiles();
-          }
-        } catch (error) {
+
+          projectMessageStagedFiles.push(...validFiles);
+          renderProjectMessageFiles();
+
+          log(
+            "PROJECTS",
+            1,
+            "upload:project-message",
+            `Added ${validFiles.length} file(s) to project message staging area.`,
+            {
+              projectId: currentProject.id,
+              stagedCount: projectMessageStagedFiles.length,
+            },
+          );
+          return;
+        }
+
+        if (context === "welcome") {
+          welcomeScreenStagedFiles.push(...validFiles);
+          renderWelcomeScreenFiles();
+
           log(
             "RENDERER",
-            4,
-            "upload:click",
-            "Error during file upload process.",
-            { error },
+            1,
+            "upload:welcome",
+            `Added ${validFiles.length} file(s) to welcome staging area.`,
+            { stagedCount: welcomeScreenStagedFiles.length },
           );
+          return;
         }
-      });
-    }
+
+        if (!current) {
+          welcomeScreenStagedFiles.push(...validFiles);
+          renderWelcomeScreenFiles();
+
+          log(
+            "RENDERER",
+            1,
+            "upload:welcome-fallback",
+            `No active session, staged ${validFiles.length} file(s) for welcome screen.`,
+            { stagedCount: welcomeScreenStagedFiles.length },
+          );
+          return;
+        }
+
+        if (!Array.isArray(current.uploadedFiles)) {
+          current.uploadedFiles = [];
+        }
+
+        current.uploadedFiles.push(...validFiles);
+        renderUploadedFiles();
+
+        log(
+          "RENDERER",
+          1,
+          "upload:chat",
+          `Added ${validFiles.length} file(s) to active session.`,
+          { sessionId: current.id, totalFiles: current.uploadedFiles.length },
+        );
+      } catch (error) {
+        log(
+          "RENDERER",
+          4,
+          "upload:click",
+          `Error during file upload process (${context}).`,
+          { error },
+        );
+      }
+    });
   });
 
   $("#project-title-indicator").addEventListener("click", () => {

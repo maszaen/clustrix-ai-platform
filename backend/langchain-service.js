@@ -480,29 +480,268 @@ class ClustrixLangChainService {
   /**
    * Check if session should use RE+ACT pattern
    */
-  shouldUseReasoningAction(userMessage, uploadedFiles = [], sessionType = null) {
+  async shouldUseReasoningAction(userMessage, uploadedFiles = [], sessionType = null, sessionMessages = []) {
     console.log(`RE+ACT check called with: sessionType=${sessionType}, uploadedFiles=${uploadedFiles ? uploadedFiles.length : 'null'}, message="${userMessage.slice(0, 50)}..."`);
-    
-    // Use RE+ACT for project sessions with uploaded files by default
-    if (sessionType === 'project' && uploadedFiles && uploadedFiles.length > 0) {
-      console.log(`RE+ACT decision: USE (project session with ${uploadedFiles.length} files)`);
-      return true;
-    }
 
-    // Use RE+ACT for sessions with uploaded files and complex queries
+    // Skip RE+ACT if no files available
     if (!uploadedFiles || uploadedFiles.length === 0) {
       console.log(`RE+ACT decision: SKIP (no uploaded files)`);
       return false;
     }
 
-    // Keywords that indicate need for code/file analysis (English and Indonesian)
+    // For project sessions, do intelligent analysis instead of always using RE+ACT
+    if (sessionType === 'project') {
+      return await this.shouldUseResearchAgentForProject(userMessage, uploadedFiles, sessionMessages);
+    }
+
+    // For regular sessions, use existing logic
+    return this.shouldUseResearchAgentForRegular(userMessage, uploadedFiles);
+  }
+
+  async shouldUseResearchAgentForProject(userMessage, uploadedFiles, sessionMessages = []) {
+    console.log(`AI-based RE+ACT analysis: ${uploadedFiles.length} files, message length: ${userMessage.length}`);
+
+    // For very short queries, skip AI check and use basic reading
+    if (userMessage.trim().length < 20) {
+      console.log(`RE+ACT decision: SKIP (very short query)`);
+      return false;
+    }
+
+    try {
+      // Create a simple prompt for AI to decide
+      const decisionPrompt = `You are an AI assistant analyzing whether a user query requires deep research and analysis of project files, or if it can be answered with basic file reading.
+
+Query: "${userMessage}"
+
+Available files: ${uploadedFiles.map(f => f.name).join(', ')}
+
+Instructions:
+- Answer ONLY with "RESEARCH" or "BASIC"
+- Use "RESEARCH" if the query requires: code analysis, debugging, finding specific patterns, complex relationships, architecture review, or deep investigation
+- Use "BASIC" if the query is simple like: showing content, basic questions, or straightforward information retrieval
+
+Decision:`;
+
+      // Use a lightweight model for decision (we can use any available provider)
+      const decision = await this.makeQuickAIDecision(decisionPrompt);
+
+      const needsResearch = decision.toUpperCase().includes('RESEARCH');
+      console.log(`AI Decision: ${decision} -> ${needsResearch ? 'USE' : 'SKIP'} RE+ACT`);
+
+      return needsResearch;
+
+    } catch (error) {
+      console.error('AI decision failed, falling back to basic logic:', error.message);
+      // Fallback to simple heuristics if AI decision fails
+      return userMessage.length > 150 || userMessage.toLowerCase().includes('analisis') || userMessage.toLowerCase().includes('analysis');
+    }
+  }
+
+  async makeQuickAIDecision(prompt) {
+    // Use the active provider from config for decision making
+    const activeProvider = this.getAvailableProvider();
+    if (activeProvider) {
+      try {
+        console.log(`Using active provider ${activeProvider.name} for AI decision`);
+        const response = await this.callAIForDecision(activeProvider.name, prompt);
+        if (response) {
+          return response.trim();
+        }
+      } catch (error) {
+        console.log(`Active provider ${activeProvider.name} failed for decision:`, error.message);
+      }
+    }
+
+    // Fallback: try other available providers
+    const fallbackProviders = ['openai', 'cerebras', 'gemini', 'groq'];
+    for (const provider of fallbackProviders) {
+      if (activeProvider && provider === activeProvider.name) continue; // Skip if already tried
+      
+      try {
+        console.log(`Trying fallback provider ${provider} for AI decision`);
+        const response = await this.callAIForDecision(provider, prompt);
+        if (response) {
+          return response.trim();
+        }
+      } catch (error) {
+        console.log(`Fallback provider ${provider} failed for decision:`, error.message);
+        continue;
+      }
+    }
+
+    // If all providers fail, default to BASIC
+    console.log('All providers failed for AI decision, using fallback');
+    return 'BASIC';
+  }
+
+  async callAIForDecision(provider, prompt) {
+    try {
+      // Get API configuration from main process
+      const apiConfig = this.getApiConfigForProvider(provider);
+      if (!apiConfig) {
+        console.log(`No API config for ${provider}, using fallback`);
+        return this.fallbackDecision(prompt);
+      }
+
+      const { apiKey, baseUrl } = apiConfig;
+      const https = require('https');
+
+      const url = new URL(`${baseUrl.replace(/\/+$/,'')}/chat/completions`);
+      const bodyObj = {
+        model: this.getDecisionModelForProvider(provider),
+        messages: [{ role: 'user', content: prompt }],
+        stream: false,
+        max_tokens: 10, // Very short response needed
+        temperature: 0.1 // Low temperature for consistent decisions
+      };
+
+      const body = JSON.stringify(bodyObj);
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      };
+
+      if (provider === 'openrouter') {
+        headers['HTTP-Referer'] = 'https://clustrix.local';
+        headers['X-Title'] = 'Clustrix Desktop';
+      }
+
+      const response = await this.makeHttpRequest(url, headers, body);
+      const data = JSON.parse(response);
+
+      if (data.choices && data.choices[0] && data.choices[0].message) {
+        const decision = data.choices[0].message.content.trim();
+        console.log(`AI Decision from ${provider}: "${decision}"`);
+        return decision;
+      }
+
+    } catch (error) {
+      console.error(`AI decision call failed for ${provider}:`, error.message);
+    }
+
+    // Fallback to simple logic
+    return this.fallbackDecision(prompt);
+  }
+
+  getApiConfigForProvider(provider) {
+    try {
+      const configPath = path.join(this.app.getPath('userData'), 'ai-model.conf.json');
+      
+      if (!fs.existsSync(configPath)) {
+        console.log('AI model config not found');
+        return null;
+      }
+      
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const providers = config.providers || {};
+      
+      if (providers[provider]) {
+        const providerConfig = providers[provider];
+        if (providerConfig.apiKey && providerConfig.apiKey.trim() !== '') {
+          return {
+            apiKey: providerConfig.apiKey,
+            baseUrl: providerConfig.baseUrl || this.getDefaultBaseUrl(provider)
+          };
+        }
+      }
+      
+      console.log(`No valid API config found for provider: ${provider}`);
+      return null;
+    } catch (error) {
+      console.error('Error loading API config:', error);
+      return null;
+    }
+  }
+
+  getDefaultBaseUrl(provider) {
+    switch (provider) {
+      case 'openai': return 'https://api.openai.com/v1';
+      case 'groq': return 'https://api.groq.com/openai/v1';
+      case 'gemini': return 'https://generativelanguage.googleapis.com/v1beta';
+      case 'cerebras': return 'https://api.cerebras.ai/v1';
+      default: return 'https://api.openai.com/v1';
+    }
+  }
+
+  getDecisionModelForProvider(provider) {
+    try {
+      // Try to get the active model from config first
+      const configPath = path.join(this.app.getPath('userData'), 'ai-model.conf.json');
+      if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        if (config.active && config.active.platform === provider) {
+          return config.active.model;
+        }
+      }
+    } catch (error) {
+      console.log('Error reading config for decision model:', error.message);
+    }
+
+    // Fallback to lightweight models for each provider
+    switch (provider) {
+      case 'openai': return 'gpt-3.5-turbo';
+      case 'groq': return 'llama3-8b-8192';
+      case 'gemini': return 'gemini-1.5-flash';
+      case 'cerebras': return 'llama3.1-8b';
+      case 'openrouter': return 'meta-llama/llama-3.1-8b-instruct:free';
+      default: return 'gpt-3.5-turbo';
+    }
+  }
+
+  async makeHttpRequest(url, headers, body) {
+    return new Promise((resolve, reject) => {
+      const opts = {
+        method: 'POST',
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname + url.search,
+        protocol: url.protocol,
+        headers
+      };
+
+      const req = require('https').request(opts, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            const error = new Error(`HTTP ${res.statusCode}: ${data}`);
+            error.statusCode = res.statusCode;
+            error.responseBody = data;
+            reject(error);
+            return;
+          }
+          resolve(data);
+        });
+      });
+
+      req.on('error', reject);
+      req.write(body);
+      req.end();
+    });
+  }
+
+  fallbackDecision(prompt) {
+    const message = prompt.toLowerCase();
+
+    // Simple fallback logic
+    if (message.includes('analisis') || message.includes('analysis') ||
+        message.includes('debug') || message.includes('find') ||
+        message.includes('search') || message.includes('review') ||
+        message.includes('architecture') || message.includes('structure')) {
+      return 'RESEARCH';
+    }
+
+    return 'BASIC';
+  }
+
+  shouldUseResearchAgentForRegular(userMessage, uploadedFiles) {
+    // Existing logic for regular sessions
     const analysisKeywords = [
       'error', 'bug', 'issue', 'problem', 'not working', 'broken',
       'find', 'search', 'locate', 'where is', 'check',
       'analyze', 'review', 'debug', 'fix', 'help',
       'function', 'class', 'method', 'variable',
       'css', 'html', 'javascript', 'style', 'layout',
-      // Indonesian keywords
       'fungsi', 'kelas', 'metode', 'variabel', 'debug', 'perbaiki',
       'cek', 'lihat', 'cari', 'temukan', 'analisis', 'ulas',
       'masalah', 'error', 'bug', 'rusak', 'tidak berfungsi'
@@ -511,9 +750,35 @@ class ClustrixLangChainService {
     const messageText = userMessage.toLowerCase();
     const needsAnalysis = analysisKeywords.some(keyword => messageText.includes(keyword));
 
-    console.log(`RE+ACT decision: ${needsAnalysis ? 'USE' : 'SKIP'} (${uploadedFiles.length} files, analysis keywords: ${needsAnalysis})`);
+    console.log(`Regular RE+ACT decision: ${needsAnalysis ? 'USE' : 'SKIP'} (${uploadedFiles.length} files, analysis keywords: ${needsAnalysis})`);
 
     return needsAnalysis;
+  }
+
+  isFollowUpToResearch(sessionMessages, currentMessage) {
+    if (!sessionMessages || sessionMessages.length < 2) return false;
+
+    // Check recent messages for research agent usage
+    const recentMessages = sessionMessages.slice(-4); // Check last 4 messages
+
+    for (const msg of recentMessages) {
+      if (msg[0] === 'ai' && msg[1]) {
+        const aiResponse = msg[1].toLowerCase();
+
+        // Check if AI response indicates research was done
+        if (aiResponse.includes('research') ||
+            aiResponse.includes('analysis') ||
+            aiResponse.includes('investigation') ||
+            aiResponse.includes('found in') ||
+            aiResponse.includes('located in') ||
+            aiResponse.includes('riset') ||
+            aiResponse.includes('analisis')) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   // ==================== CHAT HISTORY VECTORIZATION ====================

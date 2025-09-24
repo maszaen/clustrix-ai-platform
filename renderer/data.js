@@ -6,13 +6,13 @@ const welcomeMessages = {
     "Morning check-in, [USERNAME]!",
   ],
   siang: [
-    "Afternoon, [USERNAME]!",
+    "Good afternoon, [USERNAME]!",
     "Hey [USERNAME], what's good?",
     "Midday check-in, [USERNAME]!",
     "Afternoon vibes, [USERNAME]!",
   ],
   sore: [
-    "Evening, [USERNAME]!",
+    "Evening vibes, [USERNAME]!",
     "Good evening, [USERNAME]!",
     "Evening check-in, [USERNAME]!",
     "Hey [USERNAME], what's up?",

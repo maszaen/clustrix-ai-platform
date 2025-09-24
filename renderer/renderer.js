@@ -735,7 +735,6 @@ async function processSearchStatusQueue() {
           thinkEl.text.appendChild(document.createElement("br"));
           const analysisContent = document.createElement("span");
           thinkEl.text.appendChild(analysisContent);
-          // Make reasoning more user-friendly by extracting key insights
           const reasoning = status.data.reasoning || "Analyzing project structure and determining optimal analysis approach...";
           const userFriendlyReasoning = reasoning.length > 200 ? 
             reasoning.substring(0, 200) + "..." : 
@@ -1062,7 +1061,6 @@ function saveDraftForSession(sessionId, content) {
     sessionDrafts.set(sessionId, content);
   } else {
     sessionDrafts.delete(sessionId);
-    localStorage.removeItem("session-drafts"); // Disini
   }
   try {
     const draftsObj = Object.fromEntries(sessionDrafts);
@@ -1103,10 +1101,12 @@ function loadAllDrafts() {
 
 const saveDraftDebounced = (() => {
   let timer = null;
-  return (sessionId, content) => {
+  return Object.assign((sessionId, content) => {
     clearTimeout(timer);
     timer = setTimeout(() => saveDraftForSession(sessionId, content), 300);
-  };
+  }, {
+    cancel: () => clearTimeout(timer)
+  });
 })();
 
 // Artifacts management functions
@@ -5523,7 +5523,7 @@ async function viewProjectFile(index) {
       <div class="modal-body">
         <div class="file-info-display">
           <p><strong>Type:</strong> ${escapeHtml(file.type)}</p>
-          <p><strong>Size:</strong> ${(file.size / 1024).toFixed(1)} KB</p>
+          <p><strong>Size:</strong> ${file.size && !isNaN(file.size) ? (file.size / 1024).toFixed(1) + ' KB' : 'Unknown'}</p>
         </div>
         <div class="file-content-preview">
           <label>Content Preview:</label>
@@ -9412,6 +9412,10 @@ async function send() {
     metadata: { files: filesToAttach },
   });
 
+  // 🧹 Clear uploaded files from form after attaching to message
+  current.uploadedFiles = [];
+  renderUploadedFiles();
+
   const aiMessageIndex = current.messages.length - 1;
   const aiNode = addMessage("ai", "", {
     final: false,
@@ -9427,6 +9431,9 @@ async function send() {
 
   input.value = "";
   input.style.height = "auto";
+
+  // Cancel any pending draft saves to prevent race conditions
+  saveDraftDebounced.cancel();
 
   justSentMessage = true;
   setTimeout(() => {
@@ -9483,6 +9490,9 @@ async function sendFromWelcome() {
 
   if (input) {
     input.value = "";
+
+    // Cancel any pending draft saves to prevent race conditions
+    saveDraftDebounced.cancel();
 
     justSentMessage = true;
     setTimeout(() => {
@@ -9844,7 +9854,7 @@ function setupMobileSidebar() {
 function setupTextareaResize() {
   const msgInput = $("#msg");
   msgInput.addEventListener("input", function () {
-    if (current && current.id) {
+    if (current && current.id && !justSentMessage) {
       saveDraftDebounced(current.id, this.value);
     }
 
@@ -9862,7 +9872,7 @@ function setupTextareaCentralResize() {
   const msgCentral = $("#msg-central");
   msgCentral.addEventListener("input", function () {
     // console.log("DEBUG: Input event on msg-central, current session:", current?.id, "value length:", this.value.length); // Removed console.log
-    if (current && current.id) {
+    if (current && current.id && !justSentMessage) {
       saveDraftDebounced(current.id, this.value);
     } else if (!current) {
       // Always save draft for welcome screen, even if empty (to clear it)
@@ -9877,6 +9887,26 @@ function setupTextareaCentralResize() {
     this.style.height = "auto";
     this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
   });
+}
+
+function setupTextareaProjectResize() {
+  const projectInput = $("#project-message-input");
+  if (projectInput) {
+    projectInput.addEventListener("input", function () {
+      // Save draft for current project session
+      if (currentProject && currentProject.id) {
+        saveDraftDebounced(`project-${currentProject.id}`, this.value);
+      }
+
+      const shell = this.closest(".ta-shell");
+      if (shell && shell.__taScroll) {
+        return;
+      }
+
+      this.style.height = "auto";
+      this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
+    });
+  }
 }
 
 function setupResponsiveHandlers() {
@@ -10547,6 +10577,22 @@ function setupEventListeners() {
     }
   });
 
+  $("#announcement-btn").addEventListener("click", () => {
+    log("UI", 0, "event:projects-page-click", "Projects page button clicked");
+
+    // Close mobile sidebar when switching to projects page
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+
+    // If currently in project detail view, use showProjectsListView() for smooth transition
+    if (currentProject) {
+      showProjectsListView();
+    } else {
+      showProjectsPage();
+    }
+  });
+
   $("#artifact-btn").addEventListener("click", () => {
     log("UI", 0, "event:artifacts-page-click", "Artifacts page button clicked");
 
@@ -10967,6 +11013,7 @@ function initializeApp() {
 
   setupTextareaResize();
   setupTextareaCentralResize();
+  setupTextareaProjectResize();
   setupResponsiveHandlers();
   window.addEventListener("beforeunload", () => {
     streamManager.shutdownGracefully();

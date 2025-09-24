@@ -93,6 +93,8 @@
 
 .message.ai strong {
   font-family: var(--font-ai-bold);
+  letter-spacing: 0.03em;
+  color: var(--bold);
 }
 
 .message.ai em {
@@ -139,6 +141,7 @@
 }
 
 body.light-theme {
+  --bck: #00000008;
   --bg: #FFFFFF; /* done: background paling belakang, base */
   --bg-secondary: #F0F4F9; /* done, sidebar dan code bg */
   --fg: #1f1f1f; /* done: font paling kontras */
@@ -158,6 +161,7 @@ body.light-theme {
   --primary-light-hover: #c5dafbff;
   --accent: #1752afff;
   --white-hover: #363636ff;
+  --bold: #404040ff;
   
   --hover-bg: #e4e8ed; /* done; for lists or button hover */
   --hover-bg-secondary: #dadee3ff;
@@ -221,6 +225,7 @@ body.dark-theme {
   --primary-light-hover: #28489fff;
   --accent: #0e4baeff;
   --white-hover: #f0f0f0ff;
+  --bold: #ebebebff;
   
   --hover-bg: #323537; /* done */
   --hover-bg-secondary: #3d4043ff;
@@ -671,7 +676,7 @@ hr {
   align-items: center;
   justify-content: start;
   gap: var(--spacing-md);
-  height: 36px;
+  height: 30px;
   position: relative;
   opacity: 1;
   transition: all 0.3s ease !important  ;
@@ -837,7 +842,7 @@ hr {
   display: flex;
   align-items: center;
   width: 100%;
-  height: 36px;
+  height: 30px;
   padding: 0 var(--spacing-md);
   border-radius: var(--radius-full);
   text-decoration: none;
@@ -922,7 +927,7 @@ hr {
 
 .session-actions {
   position: absolute;
-  right: 0px;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -943,11 +948,11 @@ hr {
   background: transparent;
   border: none;
   cursor: pointer;
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
-  padding: 18px 18px;
+  padding: 12px 12px;
   justify-content: center;
   border-radius: var(--radius-full);
   color: var(--fg-muted);
@@ -1014,7 +1019,7 @@ h3.date-separator {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-sm);
-  height: 36px;
+  height: 30px;
   width: 100%;
   border-radius: var(--radius-md);
   color: var(--fg-muted);
@@ -2088,17 +2093,22 @@ input:checked + .slider:before {
 }
 
 .welcome-content {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 100%;
-  max-width: 700px;
+  max-width: 720px;
+  padding: 0 20px;
   text-align: center;
 }
 
 .welcome-content h2 {
-  font-size: 34px;
+  font-size: 30px;
   font-family: var(--font-display);
   font-weight: var(--font-normal);
   color: var(--icon);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
 }
 
 #central-input-container {
@@ -3539,7 +3549,7 @@ blockquote blockquote blockquote blockquote::before {
 }
 
 .message-text {
-  border-radius: var(--radius-xl);
+  border-radius: 20px;
   font-size: 15px;
   line-height: 1.6;
   word-wrap: break-word;
@@ -5290,7 +5300,7 @@ figure:nth-child(3) {
 }
 
 .chat-menu-btn {
-  padding: 18px;
+  padding: 12px;
   background: none;
   border: none;
   color: var(--fg-muted);
@@ -6485,3 +6495,34 @@ figure:nth-child(3) {
 
 .file-empty-state-icon svg {
 } 
+
+.announcement {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 7px 14px;
+  margin: 0px 12px;
+  font-size: 12px;
+  border-bottom-right-radius: 12px;
+  border-bottom-left-radius: 12px;
+  background: var(--bck);
+}
+
+.announcement p {
+  color: var(--fg-muted);
+}
+
+.announcement span {
+  text-decoration: underline;
+  color: var(--fg);
+  transition: color 0.2s;
+  cursor: pointer;
+}
+
+.announcement span:hover {
+  color: var(--primary);
+}
+
+.project-left-column .input-container-parent {
+  
+}

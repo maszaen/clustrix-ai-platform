@@ -534,7 +534,12 @@ ipcMain.handle('files:open-dialog', async (event) => {
   for (const filePath of filePaths) {
     const extension = path.extname(filePath).toLowerCase();
     const fileInfo = { name: path.basename(filePath), type: extension.substring(1), content: '', error: null };
+    
     try {
+      // Get file stats to include size
+      const stats = await fsp.stat(filePath);
+      fileInfo.size = stats.size;
+      
       if (extension === '.docx') {
         fileInfo.content = (await mammoth.extractRawText({ path: filePath })).value;
       } else if (['.xlsx', '.xls'].includes(extension)) {
@@ -549,6 +554,7 @@ ipcMain.handle('files:open-dialog', async (event) => {
       }
     } catch (error) {
       fileInfo.error = 'Failed to read or process file.';
+      fileInfo.size = fileInfo.size || 0; // Ensure size is set even on error
       logHelper('FILE_READER', 'open-dialog', `Error reading ${fileInfo.name}`, { error: error.message });
     }
     results.push(fileInfo);
@@ -700,6 +706,16 @@ function runStandardStreaming(event, payload) {
           // Use agent orchestrator for project sessions (OpenAI only for now)
           let agentResponse = null;
           if (provider === 'openai') {
+            // Send FOUND_URLS for project files before starting agent
+            if (projectFiles && projectFiles.length > 0) {
+              const foundUrlsData = projectFiles.map(f => ({
+                title: f.name,
+                link: `file://${f.name}`,
+                snippet: f.content.substring(0, 200) + (f.content.length > 200 ? '...' : '')
+              }));
+              event.sender.send('search:status', { step: 'FOUND_URLS', data: foundUrlsData });
+            }
+            
             try {
               event.sender.send('chat-update', reactStartPayload);
               agentResponse = await agentOrchestrator.processComplexRequest(
@@ -722,11 +738,21 @@ function runStandardStreaming(event, payload) {
           } else {
             console.log(`MAIN: Agent orchestrator only supports OpenAI, checking if RE+ACT pattern needed for ${provider}...`);
             
+            // Get appropriate files for AI processing
             let availableFiles = session.uploadedFiles || [];
-            if (availableFiles.length === 0 && session.messages && session.messages.length > 1) {
-              const lastUserMessage = session.messages[session.messages.length - 2];
-              if (lastUserMessage && lastUserMessage.length >= 3 && lastUserMessage[2] && lastUserMessage[2].files) {
-                availableFiles = lastUserMessage[2].files;
+            
+            // For project sessions, use project files from database instead of session files
+            if (session.type === 'project' && session.projectId) {
+              try {
+                const projects = JSON.parse(fs.readFileSync(projectsFile, 'utf-8'));
+                const project = projects.find(p => p.id === session.projectId);
+                if (project && project.files) {
+                  availableFiles = project.files;
+                  console.log(`MAIN: Using ${availableFiles.length} project files for AI processing`);
+                }
+              } catch (error) {
+                console.error('MAIN: Error loading project files:', error);
+                availableFiles = session.uploadedFiles || [];
               }
             }
             
@@ -734,10 +760,11 @@ function runStandardStreaming(event, payload) {
             console.log('DEBUG: last message (AI):', session.messages && session.messages.length > 0 ? JSON.stringify(session.messages[session.messages.length - 1]) : 'no messages');
             console.log('DEBUG: second-to-last message (user):', session.messages && session.messages.length > 1 ? JSON.stringify(session.messages[session.messages.length - 2]) : 'no user message');
             
-            const shouldUseReact = langchainService.shouldUseReasoningAction(
+            const shouldUseReact = await langchainService.shouldUseReasoningAction(
               lastMessage.content,
               availableFiles,
-              session.type
+              session.type,
+              session.messages
             );
             
             console.log(`MAIN: RE+ACT check - sessionType: ${session.type}, uploadedFiles: ${session.uploadedFiles ? session.uploadedFiles.length : 0}, sessionMessageFiles: ${session.messages && session.messages.length > 1 ? (session.messages[session.messages.length - 2][2] && session.messages[session.messages.length - 2][2].files ? session.messages[session.messages.length - 2][2].files.length : 0) : 0}, query: "${lastMessage.content.slice(0, 50)}..."`);
@@ -906,10 +933,11 @@ function runStandardStreaming(event, payload) {
         }
         
         // Check if we should use RE+ACT pattern
-        const shouldUseReact = langchainService.shouldUseReasoningAction(
+        const shouldUseReact = await langchainService.shouldUseReasoningAction(
           currentMessage,
           filesForAI,
-          session.type
+          session.type,
+          session.messages
         );
         
         if (shouldUseReact) {

@@ -35,7 +35,7 @@
 
 @font-face {
   font-family: 'AI_Text_Bold';
-  src: url('../public/fonts/Capricorn-AI-Text-Bold.woff2') format('woff');
+  src: url('../public/fonts/Capricorn-AI-Text-Bold-2.woff2') format('woff');
   font-weight: normal;
   font-style: normal;
 }
@@ -179,32 +179,34 @@ body.light-theme {
   --success: #25bd4dff;
   --warning: #fbbc04;
 
-  /* dari prism */
-  --prism-base: #1f1f1f;
-  --prism-comment: #a0a1a7; /* Abu-abu untuk komentar */
-  --prism-punctuation: #383a42; /* Hitam lembut untuk tanda baca */
-  --prism-tag-property-constant: #e45649; /* Merah untuk tag, properti */
-  --prism-number-boolean: #a626a4; /* Ungu untuk angka, boolean */
-  --prism-string-selector-attr-name: #50a14f; /* Hijau untuk string, selector */
-  --prism-operator-entity-url-variable: #383a42; /* Hitam lembut */
-  --prism-function-classname-atrule: #c18401; /* Oranye/kuning tua untuk fungsi */
-  --prism-keyword: #0184bc; /* Biru untuk keyword */
-  --prism-regex-important: #50a14f; /* Hijau tua */
-  --prism-css-string: #a626a4; /* Ungu, agar kontras di CSS */
+  /* dari hljs */
+  --hljs-base: #1f1f1f;
+  --hljs-comment: #a0a1a7; /* Abu-abu untuk komentar */
+  --hljs-punctuation: #383a42; /* Hitam lembut untuk tanda baca */
+  --hljs-tag-property-constant: #e45649; /* Merah untuk tag, properti */
+  --hljs-number-boolean: #a626a4; /* Ungu untuk angka, boolean */
+  --hljs-string-selector-attr-name: #50a14f; /* Hijau untuk string, selector */
+  --hljs-operator-entity-url-variable: #383a42; /* Hitam lembut */
+  --hljs-function-classname-atrule: #c18401; /* Oranye/kuning tua untuk fungsi */
+  --hljs-keyword: #a626a4; /* Biru untuk keyword */
+  --hljs-name: #f28b82;
+  --hljs-regex-important: #50a14f; /* Hijau tua */
+  --hljs-css-string: #a626a4; /* Ungu, agar kontras di CSS */
 
-  --prism-bash-function: #795da3;
-  --prism-json-property: #032f62;
-  --prism-yaml-key: #22863a;
-  --prism-markdown-title: #24292e;
+  --hljs-bash-function: #795da3;
+  --hljs-json-property: #032f62;
+  --hljs-yaml-key: #22863a;
+  --hljs-markdown-title: #24292e;
   
   /* Diff colors */
-  --prism-diff-inserted: #22863a;
-  --prism-diff-inserted-bg: #f0fff4;
-  --prism-diff-deleted: #d73a49;
-  --prism-diff-deleted-bg: #ffeef0;
+  --hljs-diff-inserted: #22863a;
+  --hljs-diff-inserted-bg: #f0fff4;
+  --hljs-diff-deleted: #d73a49;
+  --hljs-diff-deleted-bg: #ffeef0;
   
   /* Highlight */
-  --prism-highlight-bg: #fff3cd;
+  --hljs-highlight-bg: #fff3cd;
+  --hljs-subst: #000;
 }
 
 /* Dark Theme */
@@ -243,32 +245,34 @@ body.dark-theme {
   --success: #57e112ff;
   --warning: #f8e44aff;
 
-  --prism-base: #a2a9b0;
-  --prism-comment: #80868b;
-  --prism-punctuation: #a2a9b0;
-  --prism-tag-property-constant: #f92672;
-  --prism-number-boolean: #ae81ff;
-  --prism-string-selector-attr-name: #81c995;
-  --prism-operator-entity-url-variable: #a2a9b0;
-  --prism-function-classname-atrule: #fdd663;
-  --prism-keyword: #c58af9;
-  --prism-regex-important: #fd971f;
-  --prism-css-string: #f8f8f2;
+  --hljs-base: #a2a9b0;
+  --hljs-comment: #80868b;
+  --hljs-punctuation: #a2a9b0;
+  --hljs-tag-property-constant: #fdd663;
+  --hljs-number-boolean: #fa903e;
+  --hljs-string-selector-attr-name: #81c995;
+  --hljs-operator-entity-url-variable: #a2a9b0;
+  --hljs-function-classname-atrule: #fdd663;
+  --hljs-keyword: #c58af9;
+  --hljs-name: #f28b82;
+  --hljs-regex-important: #8ab4f8;
+  --hljs-css-string: #f8f8f2;
 
   /* Language specific */
-  --prism-bash-function: #bb9af7;
-  --prism-json-property: #7aa2f7;
-  --prism-yaml-key: #9ece6a;
-  --prism-markdown-title: #c0caf5;
+  --hljs-bash-function: #bb9af7;
+  --hljs-json-property: #7aa2f7;
+  --hljs-yaml-key: #9ece6a;
+  --hljs-markdown-title: #c0caf5;
   
   /* Diff colors */
-  --prism-diff-inserted: #9ece6a;
-  --prism-diff-inserted-bg: #1a2332;
-  --prism-diff-deleted: #f7768e;
-  --prism-diff-deleted-bg: #2d1b20;
+  --hljs-diff-inserted: #9ece6a;
+  --hljs-diff-inserted-bg: #1a2332;
+  --hljs-diff-deleted: #f7768e;
+  --hljs-diff-deleted-bg: #2d1b20;
   
   /* Highlight */
-  --prism-highlight-bg: #3d2914;
+  --hljs-highlight-bg: #3d2914;
+  --hljs-subst: #fff;
 }
 
 :root {
@@ -2862,6 +2866,7 @@ input:checked + .slider:before {
   position: relative;
   padding: 0 var(--spacing-xl) var(--spacing-lg) var(--spacing-xl);
   background: var(--bg);
+  z-index: 500;
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -2888,16 +2893,17 @@ input:checked + .slider:before {
 #input-area::before {
   content: "";
   position: absolute;
-  bottom: 10px;
+  bottom: 70px;
   left: 0;
   width: 100%;
-  height: 200px;
-  background: linear-gradient(to bottom, transparent 5%, var(--bg) 40%);
+  height: 100px;
+  background: linear-gradient(to bottom, transparent 0%, var(--bg) 45%);
   background-repeat: no-repeat;
   background-size: cover;
   opacity: 0.8;
   border-radius: inherit;
-  z-index: 1;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .input-container {
@@ -3699,9 +3705,11 @@ blockquote blockquote blockquote blockquote::before {
 .message-text h2,
 .message-text h3,
 .message-text h4 {
-  margin: var(--spacing-lg) 0 var(--spacing-md) 0;
+  position: relative;
+  margin: var(--spacing-lg) 0 var(--spacing-sm) 0;
   font-family: var(--font-ai-bold);
   line-height: 1.3;
+  z-index: 1;
 }
 
 .message-text h5,
@@ -3719,7 +3727,7 @@ blockquote blockquote blockquote blockquote::before {
 .message-text h6 { font-size: 15px; }
 
 .message-text p {
-  margin: 0 0 var(--spacing-sm) 0;
+  margin: 0 0 var(--spacing-xs) 0;
   line-height: 1.6;
 }
 
@@ -4084,9 +4092,11 @@ a:focus-visible {
   border: 0;
 }
 
-/* Base: code blocks & inline with language- */
+/* Base: code blocks & inline */
 .message-text code[class*=language-],
-.message-text pre[class*=language-] {
+.message-text pre[class*=language-],
+.message-text code.hljs,
+.message-text pre.hljs {
   color: #f8f8f2;
   background: transparent;
   font-family: var(--font-mono);
@@ -4106,188 +4116,188 @@ a:focus-visible {
   hyphens: none;
 }
 
-.message-text pre[class*=language-] {
+.message-text pre[class*=language-],
+.message-text pre.hljs {
   background: var(--bg-secondary);
 }
-.message-text :not(pre) > code[class*=language-] {
+
+.message-text :not(pre) > code[class*=language-],
+.message-text :not(pre) > code.hljs {
   background: #272822;
   padding: .1em;
   border-radius: .3em;
   white-space: normal;
 }
 
-.message-text pre code[class*=language-] {
+.message-text pre code[class*=language-],
+.message-text pre code.hljs {
   background: transparent !important;
-  padding: 0 !important;             
-  color: var(--prism-base);   
+  padding: 0 !important;
+  color: var(--hljs-base);
   font-size: 13px;
   font-family: var(--font-mono);
 }
 
-/* ====== Prism tokens ====== */
-.token.cdata,
-.token.comment,
-.token.doctype,
-.token.prolog { 
-  color: var(--prism-comment); 
+.hljs {
+  color: var(--hljs-base);
+  background: transparent;
 }
 
-.token.punctuation { 
-  color: var(--prism-punctuation); 
+/* ====== Highlight.js tokens ====== */
+.hljs-comment,
+.hljs-quote {
+  color: var(--hljs-comment);
 }
 
-.token.namespace { 
-  opacity: .7; 
+.hljs-punctuation,
+.hljs-tag,
+.hljs-variable,
+.hljs-operator,
+.language-css .hljs-attribute {
+  color: var(--hljs-punctuation);
 }
 
-.token.constant,
-.token.deleted,
-.token.property,
-.token.symbol,
-.token.tag { 
-  color: var(--prism-tag-property-constant); 
+.hljs-meta .hljs-keyword {
+  font-weight: bold;
+  color: var(--hljs-regex-important);
 }
 
-.token.boolean,
-.token.number { 
-  color: var(--prism-number-boolean); 
+.hljs-keyword {
+  color: var(--hljs-keyword);
 }
 
-.token.attr-name,
-.token.builtin,
-.token.char,
-.token.inserted,
-.token.selector,
-.token.string { 
-  color: var(--prism-string-selector-attr-name); 
+.hljs-meta, .hljs-built_in {
+  color: var(--hljs-regex-important);
 }
 
-.language-css .token.string,
-.style .token.string {
-  color: var(--prism-css-string);
+.hljs-name {
+  color: var(--hljs-name);
 }
 
-.token.entity,
-.token.operator,
-.token.url,
-.token.variable { 
-  color: var(--prism-operator-entity-url-variable); 
+.hljs-attribute,
+.hljs-property,
+.hljs-template-tag,
+.hljs-title.class_,
+.hljs-title.className {
+  color: var(--hljs-tag-property-constant);
 }
 
-.token.atrule,
-.token.attr-value,
-.token.class-name,
-.token.function { 
-  color: var(--prism-function-classname-atrule); 
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-attr,
+.hljs-bullet {
+  color: var(--hljs-number-boolean);
 }
 
-.token.keyword { 
-  color: var(--prism-keyword); 
+.hljs-string,
+.hljs-doctag,
+.hljs-selector-attr,
+.hljs-template-variable,
+.hljs-meta-string {
+  color: var(--hljs-string-selector-attr-name);
 }
 
-.token.important,
-.token.regex { 
-  color: var(--prism-regex-important); 
+.language-css .hljs-string,
+.css .hljs-string {
+  color: var(--hljs-css-string);
 }
 
-.token.bold,
-.token.important { 
-  font-weight: 700; 
+.hljs-subst {
+  color: var(--hljs-subst);
 }
 
-.token.italic { 
-  font-style: italic; 
+.hljs-type,
+.hljs-params,
+.hljs-variable.language_ {
+  color: var(--hljs-operator-entity-url-variable);
 }
 
-.token.entity { 
-  cursor: help; 
+.hljs-function,
+.hljs-title,
+.hljs-type,
+.hljs-title.function_,
+.hljs-title.function,
+.hljs-title.method {
+  color: var(--hljs-function-classname-atrule);
 }
 
-// New
-.token.annotation,
-.token.parameter,
-.token.generic { 
-  color: var(--prism-tag-property-constant); 
+.hljs-selector-tag,
+.hljs-selector-pseudo,
+.hljs-selector-class,
+.hljs-selector-id {
+  color: var(--hljs-keyword);
 }
 
-/* Script, Macro, Directive */
-.token.script,
-.token.macro,
-.token.directive,
-.token.directive-hash { 
-  color: var(--prism-keyword); 
+.hljs-regexp,
+.hljs-link {
+  color: var(--hljs-regex-important);
 }
 
-/* Placeholder, Interpolation */
-.token.placeholder,
-.token.interpolation { 
-  color: var(--prism-operator-entity-url-variable); 
+.hljs-strong {
+  font-weight: 700;
 }
 
-/* Template strings */
-.token.template-string,
-.token.template-punctuation { 
-  color: var(--prism-string-selector-attr-name); 
-}
-
-/* Hashbang, Shebang */
-.token.hashbang,
-.token.shebang { 
-  color: var(--prism-comment); 
+.hljs-emphasis {
   font-style: italic;
 }
 
-/* Function dan method variations */
-.token.function-variable,
-.token.method-variable { 
-  color: var(--prism-function-classname-atrule); 
+/* Additional semantic mappings */
+.hljs-annotation,
+.hljs-parameter,
+.hljs-generic {
+  color: var(--hljs-tag-property-constant);
 }
 
-/* Property access */
-.token.property-access { 
-  color: var(--prism-tag-property-constant); 
+.hljs-template-tag .hljs-string,
+.hljs-template-variable .hljs-string {
+  color: var(--hljs-string-selector-attr-name);
 }
 
-/* Maybe class name variations */
-.token.class-name.maybe-class-name,
-.token.maybe-class-name,
-.token.exports.maybe-class-name { 
-  color: var(--prism-function-classname-atrule); 
-  font-style: italic;
+.hljs-meta.prompt,
+.hljs-meta.prompt * {
+  color: var(--hljs-comment);
+}
+
+.hljs-meta .hljs-string,
+.hljs-meta .hljs-number {
+  color: var(--hljs-regex-important);
 }
 
 /* Language specific overrides */
-.language-bash .token.function { 
-  color: var(--prism-bash-function); 
+.language-bash .hljs-function {
+  color: var(--hljs-bash-function);
 }
 
-.language-json .token.property { 
-  color: var(--prism-json-property); 
+.language-json .hljs-attr,
+.language-json .hljs-attribute {
+  color: var(--hljs-json-property);
 }
 
-.language-yaml .token.atrule { 
-  color: var(--prism-yaml-key); 
+.language-yaml .hljs-attr,
+.language-yaml .hljs-attribute {
+  color: var(--hljs-yaml-key);
 }
 
-.language-markdown .token.title { 
-  color: var(--prism-markdown-title); 
+.language-markdown .hljs-section {
+  color: var(--hljs-markdown-title);
   font-weight: bold;
 }
 
-.language-diff .token.inserted { 
-  color: var(--prism-diff-inserted); 
-  background-color: var(--prism-diff-inserted-bg);
+.language-diff .hljs-addition {
+  color: var(--hljs-diff-inserted);
+  background-color: var(--hljs-diff-inserted-bg);
 }
 
-.language-diff .token.deleted { 
-  color: var(--prism-diff-deleted); 
-  background-color: var(--prism-diff-deleted-bg);
+.language-diff .hljs-deletion {
+  color: var(--hljs-diff-deleted);
+  background-color: var(--hljs-diff-deleted-bg);
 }
 
-/* Code highlighting */
+.hljs-mark,
 .code-highlight,
-.line-highlight { 
-  background-color: var(--prism-highlight-bg); 
+.line-highlight {
+  background-color: var(--hljs-highlight-bg);
   display: block;
   margin: 0 -1em;
   padding: 0 1em;
@@ -4316,6 +4326,24 @@ a:focus-visible {
   gap: 10px;
 }
 
+/* .code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-lg);
+  background-color: var(--surface-secondary);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+
+  position: sticky;
+  top: 8px;
+
+  filter: drop-shadow(0 -12px 0 var(--bg))    
+        drop-shadow(12px 0 0 var(--bg))     
+        drop-shadow(-12px 0 0 var(--bg));
+  z-index: 3 !important;
+} */
+
 .code-block-header {
   display: flex;
   justify-content: space-between;
@@ -4332,7 +4360,6 @@ a:focus-visible {
   filter: drop-shadow(0 -12px 0 var(--bg))    
         drop-shadow(12px 0 0 var(--bg))     
         drop-shadow(-12px 0 0 var(--bg));
-  z-index: 3 !important;
 }
 
 /* @supports (animation-timeline: scroll()) {

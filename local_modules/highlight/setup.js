@@ -1,0 +1,57 @@
+import hljs from './modules/es/core.js';
+
+import javascript from './modules/es/languages/javascript.js';
+import typescript from './modules/es/languages/typescript.js';
+import python from './modules/es/languages/python.js';
+import java from './modules/es/languages/java.js';
+import c from './modules/es/languages/c.js';
+import cpp from './modules/es/languages/cpp.js';
+import csharp from './modules/es/languages/csharp.js';
+import php from './modules/es/languages/php.js';
+import ruby from './modules/es/languages/ruby.js';
+import go from './modules/es/languages/go.js';
+import rust from './modules/es/languages/rust.js';
+import swift from './modules/es/languages/swift.js';
+import kotlin from './modules/es/languages/kotlin.js';
+import scala from './modules/es/languages/scala.js';
+import xml from './modules/es/languages/xml.js';
+import css from './modules/es/languages/css.js';
+import scss from './modules/es/languages/scss.js';
+import less from './modules/es/languages/less.js';
+import json from './modules/es/languages/json.js';
+import yaml from './modules/es/languages/yaml.js';
+import markdown from './modules/es/languages/markdown.js';
+import bash from './modules/es/languages/bash.js';
+import sql from './modules/es/languages/sql.js';
+import plaintext from './modules/es/languages/plaintext.js';
+import diff from './modules/es/languages/diff.js';
+
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('typescript', typescript);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('java', java);
+hljs.registerLanguage('c', c);
+hljs.registerLanguage('cpp', cpp);
+hljs.registerLanguage('csharp', csharp);
+hljs.registerLanguage('php', php);
+hljs.registerLanguage('ruby', ruby);
+hljs.registerLanguage('go', go);
+hljs.registerLanguage('rust', rust);
+hljs.registerLanguage('swift', swift);
+hljs.registerLanguage('kotlin', kotlin);
+hljs.registerLanguage('scala', scala);
+hljs.registerLanguage('xml', xml);
+hljs.registerLanguage('css', css);
+hljs.registerLanguage('scss', scss);
+hljs.registerLanguage('less', less);
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('yaml', yaml);
+hljs.registerLanguage('markdown', markdown);
+hljs.registerLanguage('bash', bash);
+hljs.registerLanguage('sql', sql);
+hljs.registerLanguage('plaintext', plaintext);
+hljs.registerLanguage('diff', diff);
+
+window.hljs = hljs;
+
+export {};

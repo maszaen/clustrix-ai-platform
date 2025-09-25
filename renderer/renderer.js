@@ -1140,7 +1140,7 @@ function saveCodeArtifact(
 
 // Helper function to create syntax highlighted code HTML
 function createHighlightedCode(code, language) {
-  // Map common language names to Prism language identifiers
+  // Map common language names to Highlight.js language identifiers
   const languageMap = {
     javascript: "javascript",
     js: "javascript",
@@ -1161,7 +1161,8 @@ function createHighlightedCode(code, language) {
     swift: "swift",
     kotlin: "kotlin",
     scala: "scala",
-    html: "html",
+    html: "xml",
+    markup: "xml",
     css: "css",
     scss: "scss",
     less: "less",
@@ -1175,23 +1176,53 @@ function createHighlightedCode(code, language) {
     shell: "bash",
     sh: "bash",
     sql: "sql",
-    text: "text",
-    plain: "text",
+    text: "plaintext",
+    plain: "plaintext",
+    plaintext: "plaintext",
   };
 
-  const prismLanguage = languageMap[language?.toLowerCase()] || "text";
+  const requestedLanguage = language?.toLowerCase();
+  const highlightLanguage = languageMap[requestedLanguage] || "plaintext";
   const escapedCode = escapeHtml(code);
 
   // Create the highlighted HTML structure
   const tempDiv = document.createElement("div");
-  tempDiv.innerHTML = `<pre><code class="language-${prismLanguage}">${escapedCode}</code></pre>`;
+  tempDiv.innerHTML = `<pre class="hljs"><code class="hljs language-${highlightLanguage}">${escapedCode}</code></pre>`;
 
   // Apply syntax highlighting
-  if (tempDiv.querySelector("pre code")) {
-    Prism.highlightAllUnder(tempDiv);
+  const codeElement = tempDiv.querySelector("pre code");
+  if (codeElement && window.hljs && typeof window.hljs.highlightElement === "function") {
+    try {
+      window.hljs.highlightElement(codeElement);
+    } catch (error) {
+      console.error("Highlight.js failed to highlight code:", error);
+    }
   }
 
   return tempDiv.innerHTML;
+}
+
+function highlightAllUnder(container) {
+  if (!container || !window.hljs || typeof window.hljs.highlightElement !== "function") {
+    return;
+  }
+
+  const codeBlocks = container.querySelectorAll("pre code");
+  codeBlocks.forEach((codeBlock) => {
+    if (!codeBlock.classList.contains("hljs")) {
+      codeBlock.classList.add("hljs");
+    }
+    const parentPre = codeBlock.closest("pre");
+    if (parentPre && !parentPre.classList.contains("hljs")) {
+      parentPre.classList.add("hljs");
+    }
+
+    try {
+      window.hljs.highlightElement(codeBlock);
+    } catch (error) {
+      console.error("Highlight.js failed to highlight code:", error);
+    }
+  });
 }
 
 async function loadAllArtifacts() {
@@ -6925,7 +6956,7 @@ function md(src) {
   const html = enhancedMarkdownParse(cleanSrc);
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = html;
-  if (tempDiv.querySelector("pre code")) Prism.highlightAllUnder(tempDiv);
+  if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
   attachCodeBlockListeners(tempDiv);
 
   // Schedule async post-processing to update code blocks with artifact info
@@ -8407,7 +8438,7 @@ function setCurrent(s) {
           if (stream.fullResponse && stream.fullResponse.trim() !== "") {
             contentDiv.innerHTML = md(stream.fullResponse);
             if (contentDiv.querySelector("pre code"))
-              Prism.highlightAllUnder(contentDiv);
+              highlightAllUnder(contentDiv);
           } else {
             contentDiv.innerHTML = getThinkingMarkup();
             scheduleThinkingText(newNode);
@@ -8952,6 +8983,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
     let finalMessageToSave = display;
     if (interrupted) {
+      collapseSpacer();
       const formattedError = formatErrorMessageForSaving(reason);
       finalMessageToSave = hasContent
         ? `${display}\n\n${formattedError}`
@@ -8968,6 +9000,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         { content: finalMessageToSave.substring(0, 50) + "...", modelInfo },
       );
     } else if (interrupted) {
+      collapseSpacer();
       session.messages[messageIndex] = [
         "ai",
         formatErrorMessageForSaving(reason),
@@ -8992,7 +9025,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         } else if (!thinkingContainer) {
           div.innerHTML = md(finalMessageToSave || "");
         }
-        if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
+        if (div.querySelector("pre code")) highlightAllUnder(div);
         renderMathInElement(div);
       }
 
@@ -9121,7 +9154,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         const prevHeight = div.scrollHeight;
         const display = trimEnd(fullResponse);
         div.innerHTML = md(display);
-        if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
+        if (div.querySelector("pre code")) highlightAllUnder(div);
         renderMathInElement(div);
 
         // Check if content actually changed/grew
@@ -11550,7 +11583,7 @@ function setupEventListeners() {
           partial ||
             "*[System] Model not available or system error, try checking the connection or changing the AI model.*",
         );
-        if (div.querySelector("pre code")) Prism.highlightAllUnder(div);
+        if (div.querySelector("pre code")) highlightAllUnder(div);
       }
 
       let footer = aiNode.querySelector(".message-footer");

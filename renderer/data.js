@@ -46,7 +46,7 @@ Sasaran utama: *responsiveness* stabil di bawah 100–150 ms untuk interaksi umu
 * **Defer pekerjaan berat** ke *idle* atau *next tick*:
 
   * Streaming token meng-update DOM per chunk? Batasi via \`requestAnimationFrame\` atau *batching* setiap N karakter.
-  * Syntax highlight: jalankan \`Prism.highlightAllUnder(container)\` **setelah** \`innerHTML\` final untuk mencegah listener hilang saat re-render.
+  * Syntax highlight: jalankan \`highlightAllUnder(container)\` **setelah** \`innerHTML\` final untuk mencegah listener hilang saat re-render.
 * **Hindari layout thrash**:
 
   * Pakai kelas utilitas untuk show/hide (alih-alih set gaya inline berulang).

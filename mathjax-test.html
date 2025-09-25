@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MathJax Test</title>
+    <script>
+        MathJax = {
+            loader: {
+                paths: {
+                    mathjax: 'mjx:/',
+                    '@mathjax': 'mjx:/@mathjax'
+                },
+                load: ['input/tex', 'output/svg']
+            },
+            tex: {
+                inlineMath: [
+                    ['\\(', '\\)']
+                ],
+                displayMath: [
+                    ['$$', '$$'],
+                    ['\\[', '\\]']
+                ]
+            },
+            output: {
+                font: 'mathjax-newcm',
+                fontPath: 'mjx://@mathjax/%%FONT%%-font'
+            },
+            svg: {
+                fontCache: 'global'
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+                ignoreHtmlClass: 'no-mathjax'
+            },
+            startup: {
+                ready: () => {
+                    MathJax.startup.defaultReady();
+                }
+            }
+        };
+    </script>
+    <script defer id="MathJax-script" src="mjx://startup.js"></script>
+</head>
+<body>
+    <h1>MathJax Currency Test</h1>
+    <p>This should NOT be rendered as math: $58 is cheaper than $20</p>
+    <p>This SHOULD be rendered as math: \(E = mc^2\)</p>
+    <p>This SHOULD be rendered as display math: $$F = ma$$</p>
+</body>
+</html>

@@ -1411,7 +1411,23 @@ function log(context, level, contextFunc, message, details = {}) {
   // Helper function for key-value printing
   function printKV(printer, logColor, detailsToPrint = details) {
     Object.entries(detailsToPrint).forEach(([key, value]) => {
-      printer(`%c${key}:`, `color: ${logColor}; font-weight: bold;`, value);
+      // Safely handle large values
+      let displayValue = value;
+      if (typeof value === 'string' && value.length > 1000) {
+        displayValue = value.substring(0, 1000) + '... (truncated)';
+      } else if (typeof value === 'object' && value !== null) {
+        try {
+          const stringified = JSON.stringify(value);
+          if (stringified.length > 1000) {
+            displayValue = '[Large Object - truncated]';
+          } else {
+            displayValue = value;
+          }
+        } catch (e) {
+          displayValue = '[Object - cannot stringify]';
+        }
+      }
+      printer(`%c${key}:`, `color: ${logColor}; font-weight: bold;`, displayValue);
     });
   }
 
@@ -3413,22 +3429,22 @@ function showArtifactModal(artifact) {
   modal.className = "modal";
   modal.innerHTML = `
     <div class="modal-overlay"></div>
-    <div class="modal-card" style="max-width: 800px; max-height: 80vh;">
+    <div class="modal-card" style="width: 70vw; max-height: 90vh;">
       <div class="modal-header">
         <h2>${escapeHtml(artifact.title)}</h2>
         <button class="close-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-          </svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+        </svg>
         </button>
-      </div>
-      <div class="modal-body">
-        <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-          <span class="artifact-language">${escapeHtml(artifact.language)}</span>
+        </div>
+        <div class="modal-body">
+        ${highlightedCode}
+        <div class="artifact-view-actions"">
           <button class="artifact-btn copy-full-code-btn">Copy All</button>
           ${artifact.sessionId ? `<button class="artifact-btn view-in-chat-btn" data-session-id="${artifact.sessionId}" data-message-index="${artifact.messageIndex || ""}">View in Chat</button>` : ""}
         </div>
-        <div style="background: var(--bg-secondary); border-radius: var(--radius-sm); overflow: auto; max-height: 60vh;">${highlightedCode}</div>
+        
       </div>
     </div>
   `;
@@ -3600,20 +3616,15 @@ function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
   const originalLazyState = targetSession._lazyState;
   targetSession._lazyState = null;
 
-  // Set current session and switch to chat view (this also calls renderHistory)
   setCurrent(targetSession);
   renderSessions();
   updateChatHeader();
 
-  // Force load all messages for View in Chat navigation
   renderAllMessagesForNavigation(targetSession);
 
-  // Wait for DOM to be ready and scroll to the specific artifact or message
   setTimeout(() => {
-    // Clear the flag after DOM operations
     window._preventAutoScrollToBottom = false;
 
-    // If artifactId is provided, scroll to specific code block
     if (artifactId) {
       const targetCodeBlock = document.querySelector(
         `[data-artifact-id="${artifactId}"]`
@@ -3628,24 +3639,39 @@ function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
           { artifactId },
         );
 
-        // Get the full code block container (parent of header)
         const codeBlockContainer = targetCodeBlock.closest('.code-block-container');
         
         if (codeBlockContainer) {
-          // Scroll to the code block with some offset for better visibility
           codeBlockContainer.scrollIntoView({
             behavior: "smooth",
             block: "center",
           });
 
-          // Highlight the specific code block
-          codeBlockContainer.style.transition = "box-shadow 0.3s ease";
-          codeBlockContainer.style.boxShadow =
-            "0 0 0 2px var(--accent), 0 0 20px rgba(var(--accent-rgb), 0.3)";
+          const preElement = codeBlockContainer.querySelector('.code-block-header');
 
-          setTimeout(() => {
-            codeBlockContainer.style.boxShadow = "";
-          }, 2000);
+          if (preElement) {
+            const observer = new IntersectionObserver((entries) => {
+              entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                  preElement.style.transition = 'background-color 0.5s ease-in-out';
+                  
+                  preElement.style.backgroundColor = 'var(--border)';
+                  
+                  setTimeout(() => {
+                    preElement.style.backgroundColor = '';
+                    
+                    setTimeout(() => {
+                      preElement.style.transition = '';
+                    }, 1000);
+                  }, 2000);
+
+                  observer.disconnect();
+                }
+              });
+            }, { threshold: 0.5 });
+
+            observer.observe(preElement);
+          }
 
           log(
             "NAVIGATION",
@@ -3667,8 +3693,12 @@ function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
       }
     }
 
+    const targetCodeBlock = document.querySelector(
+        `[data-artifact-id="${artifactId}"]`
+      );
+
     // Fallback: scroll to message if artifactId not found or not provided
-    if (messageIndex !== null && messageIndex >= 0) {
+    if (messageIndex !== null && messageIndex >= 0 && !targetCodeBlock) {
       const messages = document.querySelectorAll(".message");
       const targetMessage = Array.from(messages).find(
         (msg) =>
@@ -3687,7 +3717,7 @@ function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
         // Scroll to the message
         targetMessage.scrollIntoView({
           behavior: "smooth",
-          block: "center",
+          block: 'center',
         });
 
         // Highlight all code blocks in the message briefly if no specific artifact
@@ -3698,7 +3728,7 @@ function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
           codeBlocks.forEach((block) => {
             block.style.transition = "box-shadow 0.3s ease";
             block.style.boxShadow =
-              "0 0 0 2px var(--accent), 0 0 20px rgba(var(--accent-rgb), 0.3)";
+              "0 0 0 2px var(--accent), 0 0 20px var(--accent)";
 
             setTimeout(() => {
               block.style.boxShadow = "";
@@ -6512,7 +6542,7 @@ function enhancedMarkdownParse(src) {
     .replace(/\r\n/g, "\n");
   const codeBlocks = [];
   const latexBlocks = [];
-  const latexRegex = /(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/g;
+  const latexRegex = /(\$\$[\s\S]*?\$\$|\\\(.*?\\\))/g;
 
   let protectedSrc = normalizedSrc.replace(latexRegex, (match) => {
     const placeholder = `__LATEX_${latexBlocks.length}__`;
@@ -9959,6 +9989,431 @@ function initWithRetry(maxRetry = 20, interval = 100) {
   }, interval);
 }
 
+// Search overlay functionality for current session
+let searchOverlay = null;
+let searchMatches = [];
+let currentMatchIndex = -1;
+let searchInput = null;
+let searchResults = null;
+let searchDebounceTimer = null;
+
+function showSearchOverlay() {
+  log("SEARCH", 2, "showSearchOverlay", "Showing search overlay");
+  if (searchOverlay) {
+    searchOverlay.style.display = 'flex';
+    // Always re-query the input element in case DOM was modified
+    searchInput = document.getElementById('search-input');
+    searchResults = document.getElementById('search-results');
+    if (searchInput) {
+      // Re-attach event listeners when reusing overlay
+      attachSearchEventListeners();
+      searchInput.focus();
+    }
+    return;
+  }
+
+  // Create search overlay
+  searchOverlay = document.createElement('div');
+  searchOverlay.id = 'search-overlay';
+  searchOverlay.innerHTML = `
+    <div class="search-container">
+      <input type="text" id="search-input" placeholder="Search in current session..." maxlength="100" />
+      <div class="search-controls">
+        <button id="search-prev">↑</button>
+        <button id="search-next">↓</button>
+        <span id="search-results">0/0</span>
+        <button id="search-close">✕</button>
+      </div>
+    </div>
+  `;
+
+  // Add styles
+  const style = document.createElement('style');
+  style.textContent = `
+    #search-overlay {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 300px;
+    }
+    #search-overlay .search-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    #search-input {
+      flex: 1;
+      padding: 6px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+    #search-input:focus {
+      outline: none;
+      border-color: var(--accent-color);
+    }
+    .search-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .search-controls button {
+      padding: 4px 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 12px;
+      min-width: 24px;
+    }
+    .search-controls button:hover {
+      background: var(--bg-hover);
+    }
+    #search-results {
+      font-size: 12px;
+      color: var(--text-secondary);
+      min-width: 40px;
+      text-align: center;
+    }
+  `;
+  document.head.appendChild(style);
+  document.body.appendChild(searchOverlay);
+
+  searchInput = document.getElementById('search-input');
+  searchResults = document.getElementById('search-results');
+
+  // Attach event listeners for new overlay
+  attachSearchEventListeners();
+
+  // Focus input
+  setTimeout(() => searchInput.focus(), 0);
+}
+
+function attachSearchEventListeners() {
+  if (!searchInput) return;
+
+  // Remove existing event listeners to prevent duplicates
+  searchInput.removeEventListener('input', handleSearchInput);
+  searchInput.removeEventListener('keydown', handleSearchKeydown);
+
+  // Event listeners
+  searchInput.addEventListener('input', handleSearchInput);
+  searchInput.addEventListener('keydown', handleSearchKeydown);
+
+  document.getElementById('search-prev').addEventListener('click', () => navigateSearch(-1));
+  document.getElementById('search-next').addEventListener('click', () => navigateSearch(1));
+  document.getElementById('search-close').addEventListener('click', hideSearchOverlay);
+}
+
+function handleSearchInput(e) {
+  debouncedPerformSearch();
+}
+
+function handleSearchKeydown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (e.shiftKey) {
+      navigateSearch(-1);
+    } else {
+      navigateSearch(1);
+    }
+  } else if (e.key === 'Escape') {
+    hideSearchOverlay();
+  }
+}
+
+function debouncedPerformSearch() {
+  const currentValue = searchInput.value;
+  // Clear existing timer
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer);
+  }
+
+  // Set new timer with 100ms debounce for better responsiveness
+  searchDebounceTimer = setTimeout(() => {
+    performSearch();
+  }, 100);
+}
+
+function hideSearchOverlay() {
+  if (searchOverlay) {
+    searchOverlay.style.display = 'none';
+    clearSearchHighlights();
+  }
+
+  // Clear any pending debounce timer
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = null;
+  }
+}
+
+// Global search state
+let currentSearchId = 0;
+
+function performSearch() {
+  const query = searchInput.value.trim().toLowerCase();
+  const searchId = ++currentSearchId; // Increment and get new search ID
+
+  // This search is now the current active search
+
+  isSearching = true;
+  if (!query) {
+    clearSearchHighlights();
+    updateSearchResults(0, 0);
+    return;
+  }
+
+  const chatContainer = getChatScroller();
+  if (!chatContainer) {
+    log("SEARCH", 3, "performSearch", "Chat container not found");
+    return;
+  }
+
+  // Clear previous highlights
+  clearSearchHighlights();
+
+  // Find all message elements
+  const messageElements = chatContainer.querySelectorAll('.message');
+  searchMatches = [];
+
+  // Variables for highlighting
+  let processedCount = 0;
+  const maxHighlights = 500;
+
+  messageElements.forEach((messageEl, messageIndex) => {
+    // Find all text nodes within this message, including nested elements
+    const allTextNodes = [];
+    const walker = document.createTreeWalker(
+      messageEl,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+
+    let node;
+    while (node = walker.nextNode()) {
+      if (node.textContent && node.textContent.trim()) {
+        allTextNodes.push(node);
+      }
+    }
+
+    // Also search in code blocks and other elements that might contain text
+    const codeElements = messageEl.querySelectorAll('code, pre, .code-block');
+    codeElements.forEach(codeEl => {
+      const codeWalker = document.createTreeWalker(
+        codeEl,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      );
+      let codeNode;
+      while (codeNode = codeWalker.nextNode()) {
+        if (codeNode.textContent && codeNode.textContent.trim()) {
+          allTextNodes.push(codeNode);
+        }
+      }
+    });
+
+    // Search for matches in all collected text nodes
+    allTextNodes.forEach(textNode => {
+      const text = textNode.textContent;
+
+      // Skip extremely large text nodes to prevent performance issues
+      if (text.length > 500000) { // 500KB limit per text node
+        return;
+      }
+
+      const lowerText = text.toLowerCase();
+      let startIndex = 0;
+      let index;
+
+      while ((index = lowerText.indexOf(query, startIndex)) !== -1) {
+        searchMatches.push({
+          node: textNode,
+          start: index,
+          end: index + query.length,
+          text: text,
+          messageIndex: messageIndex
+        });
+        startIndex = index + 1;
+
+        // Limit matches per text node to prevent excessive processing
+        if (searchMatches.length >= 1000) break;
+      }
+
+      // Break if we have too many matches overall
+      if (searchMatches.length >= 1000) return;
+    });
+  });
+
+  // Log search results safely (avoid logging large data)
+  const safeDetails = {
+    query: query,
+    matchCount: searchMatches.length,
+    messageCount: messageElements.length
+  };
+  log("SEARCH", 2, "performSearch", `Search completed for "${query}"`, safeDetails);
+
+  // Group matches by text node to avoid duplication
+  const matchesByNode = new Map();
+  searchMatches.forEach((match, index) => {
+    if (!matchesByNode.has(match.node)) {
+      matchesByNode.set(match.node, []);
+    }
+    matchesByNode.get(match.node).push({ ...match, globalIndex: index });
+  });
+
+  // Highlight matches grouped by text node (limit to prevent performance issues)
+
+  try {
+    for (const [textNode, nodeMatches] of matchesByNode) {
+      if (processedCount >= maxHighlights) break;
+
+      // Sort matches by position
+      nodeMatches.sort((a, b) => a.start - b.start);
+
+      highlightTextNode(textNode, nodeMatches, processedCount);
+      processedCount += nodeMatches.length;
+
+      if (processedCount >= maxHighlights) break;
+    }
+  } catch (error) {
+    log("SEARCH", 4, "performSearch", `Error during highlighting: ${error.message}`);
+    console.error('Search highlighting error:', error);
+  }
+
+  updateSearchResults(0, searchMatches.length);
+  if (searchMatches.length > 0) {
+    currentMatchIndex = 0;
+    updateHighlights();
+    scrollToMatch(0);
+  }
+
+  // Only update UI if this is still the current search (no newer search has started)
+  if (searchId === currentSearchId) {
+    // Additional logging after highlighting
+    log("SEARCH", 2, "performSearch", `Search completed and highlighted ${Math.min(searchMatches.length, maxHighlights)} matches for "${query}"`);
+  }
+}
+
+function highlightTextNode(textNode, matches, startIndex) {
+  const parent = textNode.parentNode;
+  const text = textNode.textContent;
+
+  // Safety check
+  if (!parent || !textNode.isConnected) return;
+
+  // Create document fragment with all highlights
+  const fragment = document.createDocumentFragment();
+  let lastEnd = 0;
+
+  matches.forEach((match, localIndex) => {
+    const globalIndex = startIndex + localIndex;
+
+    // Add text before this match
+    if (match.start > lastEnd) {
+      fragment.appendChild(document.createTextNode(text.substring(lastEnd, match.start)));
+    }
+
+    // Create highlight span for this match
+    const highlightSpan = document.createElement('span');
+    highlightSpan.className = globalIndex === currentMatchIndex ? 'search-text-highlight current-match' : 'search-text-highlight';
+    highlightSpan.dataset.matchIndex = globalIndex;
+
+    const matchText = text.substring(match.start, match.end);
+    highlightSpan.appendChild(document.createTextNode(matchText));
+    fragment.appendChild(highlightSpan);
+
+    lastEnd = match.end;
+  });
+
+  // Add remaining text after last match
+  if (lastEnd < text.length) {
+    fragment.appendChild(document.createTextNode(text.substring(lastEnd)));
+  }
+
+  try {
+    parent.replaceChild(fragment, textNode);
+  } catch (e) {
+    // If replacement fails, skip this node
+    console.warn('Failed to highlight text node:', e);
+  }
+}
+
+function clearSearchHighlights() {
+  // Simply remove all highlight spans - the text content remains intact
+  const highlights = document.querySelectorAll('.search-text-highlight');
+  highlights.forEach(highlight => {
+    try {
+      if (highlight.parentNode) {
+        // Replace the highlight span with its text content
+        const textNode = document.createTextNode(highlight.textContent || '');
+        highlight.parentNode.replaceChild(textNode, highlight);
+      }
+    } catch (e) {
+      // If replacement fails, just remove the highlight
+      try {
+        if (highlight.parentNode) {
+          highlight.parentNode.removeChild(highlight);
+        }
+      } catch (removeError) {
+        // Ignore removal errors
+      }
+    }
+  });
+  searchMatches = [];
+  currentMatchIndex = -1;
+}
+
+function navigateSearch(direction) {
+  if (searchMatches.length === 0) return;
+
+  currentMatchIndex += direction;
+  if (currentMatchIndex < 0) currentMatchIndex = searchMatches.length - 1;
+  if (currentMatchIndex >= searchMatches.length) currentMatchIndex = 0;
+
+  updateHighlights();
+  scrollToMatch(currentMatchIndex);
+  updateSearchResults(currentMatchIndex + 1, searchMatches.length);
+}
+
+function updateHighlights() {
+  document.querySelectorAll('.search-text-highlight').forEach((highlight, index) => {
+    if (index === currentMatchIndex) {
+      highlight.className = 'search-text-highlight current-match';
+    } else {
+      highlight.className = 'search-text-highlight';
+    }
+  });
+}
+
+function scrollToMatch(index) {
+  const highlight = document.querySelector(`.search-text-highlight[data-match-index="${index}"]`);
+  if (highlight) {
+    highlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function updateSearchResults(current, total) {
+  if (searchResults) {
+    searchResults.textContent = total > 0 ? `${current}/${total}` : '0/0';
+  }
+}
+
 function setupEventListeners() {
   let projectsListenersAdded = false;
   if (!projectsListenersAdded) {
@@ -9981,6 +10436,22 @@ function setupEventListeners() {
       setTimeout(() => {
         window.__SMOOTH_RELOAD__();
       }, 0);
+      return false;
+    }
+
+    // Handle Ctrl+F for search in current chat session
+    if (e.ctrlKey && e.key === "f") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      log(
+        "UI",
+        0,
+        "event:keydown-CtrlF",
+        "Ctrl+F pressed, triggering search in current session",
+      );
+      // Show custom search overlay for current session
+      showSearchOverlay();
       return false;
     }
 

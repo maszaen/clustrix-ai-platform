@@ -3648,27 +3648,46 @@ function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
           const preElement = codeBlockContainer.querySelector('.code-block-header');
 
           if (preElement) {
-            const observer = new IntersectionObserver((entries) => {
-              entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                  preElement.style.transition = 'background-color 0.5s ease-in-out';
-                  
-                  preElement.style.backgroundColor = 'var(--border)';
-                  
-                  setTimeout(() => {
-                    preElement.style.backgroundColor = '';
+            setTimeout(() => {
+              const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                  if (entry.isIntersecting) {
+                    let breatheCount = 0;
+                    const maxBreathes = 3;
                     
-                    setTimeout(() => {
-                      preElement.style.transition = '';
-                    }, 1000);
-                  }, 2000);
+                    const breatheAnimation = () => {
+                      if (breatheCount >= maxBreathes) return;
+                      
+                      preElement.style.transition = 'background-color 0.8s ease-in-out';
+                      
+                      // Breathe in (highlight)
+                      preElement.style.backgroundColor = 'var(--border-light)';
+                      
+                      setTimeout(() => {
+                        // Breathe out (fade)
+                        preElement.style.backgroundColor = '';
+                        breatheCount++;
+                        
+                        // Schedule next breathe if not finished
+                        if (breatheCount < maxBreathes) {
+                          setTimeout(breatheAnimation, 600); // Gap between breathes
+                        } else {
+                          // Clean up after final breathe
+                          setTimeout(() => {
+                            preElement.style.transition = '';
+                          }, 800);
+                        }
+                      }, 1200); // Hold the highlight
+                    };
+                    
+                    breatheAnimation();
+                    observer.disconnect();
+                  }
+                });
+              }, { threshold: 1 });
 
-                  observer.disconnect();
-                }
-              });
-            }, { threshold: 0.5 });
-
-            observer.observe(preElement);
+              observer.observe(preElement);
+            }, 1000);
           }
 
           log(

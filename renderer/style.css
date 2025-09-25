@@ -89,6 +89,7 @@
   --shadow-md: 0 2px 15px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
 }
 
 .message.ai strong {
@@ -242,15 +243,15 @@ body.dark-theme {
   --success: #57e112ff;
   --warning: #f8e44aff;
 
-  --prism-base: #FCFCFC;
-  --prism-comment: #8292a2;
-  --prism-punctuation: #f8f8f2;
+  --prism-base: #a2a9b0;
+  --prism-comment: #80868b;
+  --prism-punctuation: #a2a9b0;
   --prism-tag-property-constant: #f92672;
   --prism-number-boolean: #ae81ff;
-  --prism-string-selector-attr-name: #a6e22e;
-  --prism-operator-entity-url-variable: #f8f8f2;
-  --prism-function-classname-atrule: #e6db74;
-  --prism-keyword: #66d9ef;
+  --prism-string-selector-attr-name: #81c995;
+  --prism-operator-entity-url-variable: #a2a9b0;
+  --prism-function-classname-atrule: #fdd663;
+  --prism-keyword: #c58af9;
   --prism-regex-important: #fd971f;
   --prism-css-string: #f8f8f2;
 

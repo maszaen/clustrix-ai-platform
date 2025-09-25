@@ -3418,18 +3418,16 @@ function filterArtifacts(searchTerm) {
 }
 
 function showArtifactModal(artifact) {
-  // Create syntax highlighted code
   const highlightedCode = createHighlightedCode(
     artifact.code,
     artifact.language,
   );
 
-  // Create and show a modal with the full code using proper modal structure
   const modal = document.createElement("div");
   modal.className = "modal";
   modal.innerHTML = `
     <div class="modal-overlay"></div>
-    <div class="modal-card" style="width: 70vw; max-height: 90vh;">
+    <div class="modal-card" style="min-width: 50vw; max-width: 60vw; max-height: 90vh;">
       <div class="modal-header">
         <h2>${escapeHtml(artifact.title)}</h2>
         <button class="close-btn">
@@ -9996,11 +9994,19 @@ let currentMatchIndex = -1;
 let searchInput = null;
 let searchResults = null;
 let searchDebounceTimer = null;
+const handleSearchPrevClick = () => navigateSearch(-1);
+const handleSearchNextClick = () => navigateSearch(1);
+const handleSearchCloseClick = () => hideSearchOverlay();
 
 function showSearchOverlay() {
   log("SEARCH", 2, "showSearchOverlay", "Showing search overlay");
+  
   if (searchOverlay) {
-    searchOverlay.style.display = 'flex';
+    searchOverlay.style.display = 'block';
+    // Trigger slide down animation
+    searchOverlay.classList.remove('slide-out');
+    searchOverlay.classList.add('slide-in');
+    
     // Always re-query the input element in case DOM was modified
     searchInput = document.getElementById('search-input');
     searchResults = document.getElementById('search-results');
@@ -10008,6 +10014,9 @@ function showSearchOverlay() {
       // Re-attach event listeners when reusing overlay
       attachSearchEventListeners();
       searchInput.focus();
+      if (searchInput.value.trim()) {
+        performSearch();
+      }
     }
     return;
   }
@@ -10015,80 +10024,259 @@ function showSearchOverlay() {
   // Create search overlay
   searchOverlay = document.createElement('div');
   searchOverlay.id = 'search-overlay';
+  searchOverlay.className = 'slide-in';
   searchOverlay.innerHTML = `
     <div class="search-container">
-      <input type="text" id="search-input" placeholder="Search in current session..." maxlength="100" />
+      <div class="search-input-wrapper">
+        <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16">
+          <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+        <input type="text" id="search-input" placeholder="Search in current session..." maxlength="100" />
+      </div>
       <div class="search-controls">
-        <button id="search-prev">↑</button>
-        <button id="search-next">↓</button>
-        <span id="search-results">0/0</span>
-        <button id="search-close">✕</button>
+        <button id="search-prev" class="nav-btn" title="Previous">
+          <svg viewBox="0 0 24 24" width="14" height="14">
+            <path d="M18 15l-6-6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button id="search-next" class="nav-btn" title="Next">
+          <svg viewBox="0 0 24 24" width="14" height="14">
+            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <span id="search-results" class="results-count">0/0</span>
+        <button id="search-close" class="close-btn" title="Close">
+          <svg viewBox="0 0 24 24" width="14" height="14">
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
       </div>
     </div>
   `;
 
-  // Add styles
+  // Add enhanced styles with animations
   const style = document.createElement('style');
   style.textContent = `
     #search-overlay {
       position: fixed;
-      top: 20px;
+      top: 48px;
       right: 20px;
       z-index: 10000;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      padding: 12px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 300px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 6px 12px rgba(0, 0, 0, 0.08);
+      min-width: 320px;
+      max-width: 400px;
+      transform-origin: top right;
     }
+
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+      #search-overlay {
+        background: rgba(30, 30, 30, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3), 0 6px 12px rgba(0, 0, 0, 0.2);
+      }
+    }
+
+    /* Slide animations */
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      to {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+      }
+    }
+
+    #search-overlay.slide-in {
+      animation: slideDown 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    #search-overlay.slide-out {
+      animation: slideUp 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    }
+
     #search-overlay .search-container {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
       width: 100%;
     }
+
+    .search-input-wrapper {
+      position: relative;
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      color: #6b7280;
+      z-index: 1;
+      pointer-events: none;
+    }
+
     #search-input {
       flex: 1;
-      padding: 6px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      background: var(--bg-secondary);
-      color: var(--text-primary);
+      padding: 10px 12px 10px 40px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.8);
+      color: #1f2937;
       font-size: 14px;
-    }
-    #search-input:focus {
+      font-weight: 400;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       outline: none;
-      border-color: var(--accent-color);
     }
+
+    #search-input:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      background: rgba(255, 255, 255, 1);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .search-icon {
+        color: #9ca3af;
+      }
+      
+      #search-input {
+        border-color: #374151;
+        background: rgba(55, 65, 81, 0.8);
+        color: #f3f4f6;
+      }
+      
+      #search-input:focus {
+        border-color: #60a5fa;
+        box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+        background: rgba(55, 65, 81, 1);
+      }
+    }
+
     .search-controls {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
     }
-    .search-controls button {
-      padding: 4px 8px;
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      background: var(--bg-secondary);
-      color: var(--text-primary);
+
+    .nav-btn, .close-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      border: none;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.05);
+      color: #6b7280;
       cursor: pointer;
-      font-size: 12px;
-      min-width: 24px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      min-width: 32px;
+      height: 32px;
     }
-    .search-controls button:hover {
-      background: var(--bg-hover);
+
+    .nav-btn:hover, .close-btn:hover {
+      background: rgba(0, 0, 0, 0.1);
+      color: #374151;
+      transform: translateY(-1px);
     }
-    #search-results {
+
+    .nav-btn:active, .close-btn:active {
+      transform: translateY(0);
+      background: rgba(0, 0, 0, 0.15);
+    }
+
+    .close-btn {
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+    }
+
+    .close-btn:hover {
+      background: rgba(239, 68, 68, 0.15);
+      color: #b91c1c;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .nav-btn, .close-btn {
+        background: rgba(255, 255, 255, 0.1);
+        color: #9ca3af;
+      }
+      
+      .nav-btn:hover, .close-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: #d1d5db;
+      }
+      
+      .nav-btn:active, .close-btn:active {
+        background: rgba(255, 255, 255, 0.2);
+      }
+      
+      .close-btn {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+      }
+      
+      .close-btn:hover {
+        background: rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
+      }
+    }
+
+    .results-count {
       font-size: 12px;
-      color: var(--text-secondary);
-      min-width: 40px;
+      font-weight: 500;
+      color: #6b7280;
+      min-width: 45px;
       text-align: center;
+      letter-spacing: 0.02em;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .results-count {
+        color: #9ca3af;
+      }
+    }
+
+    /* Responsive design */
+    @media (max-width: 480px) {
+      #search-overlay {
+        left: 10px;
+        right: 10px;
+        min-width: unset;
+        max-width: unset;
+      }
+      
+      .search-controls {
+        gap: 4px;
+      }
+      
+      .nav-btn, .close-btn {
+        min-width: 28px;
+        height: 28px;
+        padding: 6px;
+      }
     }
   `;
+  
   document.head.appendChild(style);
   document.body.appendChild(searchOverlay);
 
@@ -10098,8 +10286,8 @@ function showSearchOverlay() {
   // Attach event listeners for new overlay
   attachSearchEventListeners();
 
-  // Focus input
-  setTimeout(() => searchInput.focus(), 0);
+  // Focus input after animation
+  setTimeout(() => searchInput.focus(), 100);
 }
 
 function attachSearchEventListeners() {
@@ -10113,9 +10301,24 @@ function attachSearchEventListeners() {
   searchInput.addEventListener('input', handleSearchInput);
   searchInput.addEventListener('keydown', handleSearchKeydown);
 
-  document.getElementById('search-prev').addEventListener('click', () => navigateSearch(-1));
-  document.getElementById('search-next').addEventListener('click', () => navigateSearch(1));
-  document.getElementById('search-close').addEventListener('click', hideSearchOverlay);
+  const prevButton = document.getElementById('search-prev');
+  const nextButton = document.getElementById('search-next');
+  const closeButton = document.getElementById('search-close');
+
+  if (prevButton) {
+    prevButton.removeEventListener('click', handleSearchPrevClick);
+    prevButton.addEventListener('click', handleSearchPrevClick);
+  }
+
+  if (nextButton) {
+    nextButton.removeEventListener('click', handleSearchNextClick);
+    nextButton.addEventListener('click', handleSearchNextClick);
+  }
+
+  if (closeButton) {
+    closeButton.removeEventListener('click', handleSearchCloseClick);
+    closeButton.addEventListener('click', handleSearchCloseClick);
+  }
 }
 
 function handleSearchInput(e) {
@@ -10136,7 +10339,7 @@ function handleSearchKeydown(e) {
 }
 
 function debouncedPerformSearch() {
-  const currentValue = searchInput.value;
+  if (!searchInput) return;
   // Clear existing timer
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer);
@@ -10150,14 +10353,19 @@ function debouncedPerformSearch() {
 
 function hideSearchOverlay() {
   if (searchOverlay) {
-    searchOverlay.style.display = 'none';
+    searchOverlay.classList.remove('slide-in');
+    searchOverlay.classList.add('slide-out');
     clearSearchHighlights();
-  }
-
-  // Clear any pending debounce timer
-  if (searchDebounceTimer) {
-    clearTimeout(searchDebounceTimer);
-    searchDebounceTimer = null;
+    
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = null;
+    }
+    setTimeout(() => {
+      if (searchOverlay) {
+        searchOverlay.style.display = 'none';
+      }
+    }, 200);
   }
 }
 
@@ -10165,12 +10373,11 @@ function hideSearchOverlay() {
 let currentSearchId = 0;
 
 function performSearch() {
+  if (!searchInput) return;
+
   const query = searchInput.value.trim().toLowerCase();
   const searchId = ++currentSearchId; // Increment and get new search ID
 
-  // This search is now the current active search
-
-  isSearching = true;
   if (!query) {
     clearSearchHighlights();
     updateSearchResults(0, 0);
@@ -10183,20 +10390,22 @@ function performSearch() {
     return;
   }
 
-  // Clear previous highlights
+  // Clear previous highlights and merge any split text nodes from earlier searches
   clearSearchHighlights();
 
-  // Find all message elements
-  const messageElements = chatContainer.querySelectorAll('.message');
+  const messageElements = Array.from(chatContainer.querySelectorAll('.message'));
+  const maxMatches = 500;
   searchMatches = [];
 
-  // Variables for highlighting
-  let processedCount = 0;
-  const maxHighlights = 500;
+  for (let messageIndex = 0; messageIndex < messageElements.length; messageIndex++) {
+    const messageEl = messageElements[messageIndex];
 
-  messageElements.forEach((messageEl, messageIndex) => {
-    // Find all text nodes within this message, including nested elements
-    const allTextNodes = [];
+    try {
+      messageEl.normalize();
+    } catch (normalizeError) {
+      // Ignore normalization issues
+    }
+
     const walker = document.createTreeWalker(
       messageEl,
       NodeFilter.SHOW_TEXT,
@@ -10205,36 +10414,12 @@ function performSearch() {
     );
 
     let node;
-    while (node = walker.nextNode()) {
-      if (node.textContent && node.textContent.trim()) {
-        allTextNodes.push(node);
-      }
-    }
+    while ((node = walker.nextNode())) {
+      if (!node.textContent || !node.textContent.trim()) continue;
 
-    // Also search in code blocks and other elements that might contain text
-    const codeElements = messageEl.querySelectorAll('code, pre, .code-block');
-    codeElements.forEach(codeEl => {
-      const codeWalker = document.createTreeWalker(
-        codeEl,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-      );
-      let codeNode;
-      while (codeNode = codeWalker.nextNode()) {
-        if (codeNode.textContent && codeNode.textContent.trim()) {
-          allTextNodes.push(codeNode);
-        }
-      }
-    });
-
-    // Search for matches in all collected text nodes
-    allTextNodes.forEach(textNode => {
-      const text = textNode.textContent;
-
-      // Skip extremely large text nodes to prevent performance issues
-      if (text.length > 500000) { // 500KB limit per text node
-        return;
+      const text = node.textContent;
+      if (text.length > 500000) {
+        continue;
       }
 
       const lowerText = text.toLowerCase();
@@ -10243,138 +10428,179 @@ function performSearch() {
 
       while ((index = lowerText.indexOf(query, startIndex)) !== -1) {
         searchMatches.push({
-          node: textNode,
+          node,
           start: index,
           end: index + query.length,
-          text: text,
-          messageIndex: messageIndex
+          messageIndex,
         });
-        startIndex = index + 1;
 
-        // Limit matches per text node to prevent excessive processing
-        if (searchMatches.length >= 1000) break;
+        startIndex = index + query.length;
+
+        if (searchMatches.length >= maxMatches) {
+          break;
+        }
       }
 
-      // Break if we have too many matches overall
-      if (searchMatches.length >= 1000) return;
-    });
-  });
+      if (searchMatches.length >= maxMatches) {
+        break;
+      }
+    }
 
-  // Log search results safely (avoid logging large data)
+    if (searchMatches.length >= maxMatches) {
+      break;
+    }
+  }
+
   const safeDetails = {
-    query: query,
+    query,
     matchCount: searchMatches.length,
-    messageCount: messageElements.length
+    messageCount: messageElements.length,
   };
   log("SEARCH", 2, "performSearch", `Search completed for "${query}"`, safeDetails);
 
-  // Group matches by text node to avoid duplication
+  if (searchMatches.length === 0) {
+    currentMatchIndex = -1;
+    updateSearchResults(0, 0);
+    return;
+  }
+
   const matchesByNode = new Map();
-  searchMatches.forEach((match, index) => {
-    if (!matchesByNode.has(match.node)) {
-      matchesByNode.set(match.node, []);
-    }
-    matchesByNode.get(match.node).push({ ...match, globalIndex: index });
+  searchMatches.forEach((match) => {
+    const nodeMatches = matchesByNode.get(match.node) || [];
+    nodeMatches.push({ ...match });
+    matchesByNode.set(match.node, nodeMatches);
   });
 
-  // Highlight matches grouped by text node (limit to prevent performance issues)
+  let highlightedCount = 0;
+  for (const [textNode, nodeMatches] of matchesByNode.entries()) {
+    if (highlightedCount >= searchMatches.length) break;
 
-  try {
-    for (const [textNode, nodeMatches] of matchesByNode) {
-      if (processedCount >= maxHighlights) break;
+    nodeMatches.sort((a, b) => a.start - b.start);
 
-      // Sort matches by position
-      nodeMatches.sort((a, b) => a.start - b.start);
-
-      highlightTextNode(textNode, nodeMatches, processedCount);
-      processedCount += nodeMatches.length;
-
-      if (processedCount >= maxHighlights) break;
-    }
-  } catch (error) {
-    log("SEARCH", 4, "performSearch", `Error during highlighting: ${error.message}`);
-    console.error('Search highlighting error:', error);
+    const remainingCapacity = searchMatches.length - highlightedCount;
+    const matchesToHighlight = nodeMatches.slice(0, remainingCapacity);
+    const applied = highlightTextNode(textNode, matchesToHighlight, highlightedCount);
+    highlightedCount += applied;
   }
 
-  updateSearchResults(0, searchMatches.length);
-  if (searchMatches.length > 0) {
-    currentMatchIndex = 0;
-    updateHighlights();
-    scrollToMatch(0);
+  if (highlightedCount === 0) {
+    searchMatches = [];
+    currentMatchIndex = -1;
+    updateSearchResults(0, 0);
+    return;
   }
 
-  // Only update UI if this is still the current search (no newer search has started)
+  searchMatches = Array.from({ length: highlightedCount }, (_, i) => i);
+
+  currentMatchIndex = 0;
+  updateHighlights();
+  scrollToMatch(0);
+  updateSearchResults(currentMatchIndex + 1, searchMatches.length);
+
   if (searchId === currentSearchId) {
-    // Additional logging after highlighting
-    log("SEARCH", 2, "performSearch", `Search completed and highlighted ${Math.min(searchMatches.length, maxHighlights)} matches for "${query}"`);
+    log(
+      "SEARCH",
+      2,
+      "performSearch",
+      `Search completed and highlighted ${highlightedCount} matches for "${query}"`,
+    );
   }
 }
 
-function highlightTextNode(textNode, matches, startIndex) {
+function highlightTextNode(textNode, matches, startIndex = 0) {
   const parent = textNode.parentNode;
-  const text = textNode.textContent;
 
-  // Safety check
-  if (!parent || !textNode.isConnected) return;
+  if (!parent || !textNode.isConnected || matches.length === 0) return 0;
 
-  // Create document fragment with all highlights
-  const fragment = document.createDocumentFragment();
-  let lastEnd = 0;
+  let currentNode = textNode;
+  let consumedUntil = 0;
+  let applied = 0;
+  let nextIndex = startIndex;
 
-  matches.forEach((match, localIndex) => {
-    const globalIndex = startIndex + localIndex;
-
-    // Add text before this match
-    if (match.start > lastEnd) {
-      fragment.appendChild(document.createTextNode(text.substring(lastEnd, match.start)));
+  matches.forEach((match) => {
+    if (!currentNode || !currentNode.parentNode) {
+      consumedUntil = match.end;
+      return;
     }
 
-    // Create highlight span for this match
+    const startOffset = match.start - consumedUntil;
+    const matchLength = match.end - match.start;
+
+    if (startOffset < 0 || matchLength <= 0) {
+      consumedUntil = match.end;
+      return;
+    }
+
+    let matchNode;
+    let afterNode;
+    try {
+      matchNode = currentNode.splitText(startOffset);
+      afterNode = matchNode.splitText(matchLength);
+    } catch (splitError) {
+      console.warn('Failed to split text node for highlighting:', splitError);
+      consumedUntil = match.end;
+      currentNode = afterNode || currentNode;
+      return;
+    }
+
     const highlightSpan = document.createElement('span');
-    highlightSpan.className = globalIndex === currentMatchIndex ? 'search-text-highlight current-match' : 'search-text-highlight';
-    highlightSpan.dataset.matchIndex = globalIndex;
+    highlightSpan.className = 'search-text-highlight';
+    highlightSpan.dataset.matchIndex = String(nextIndex);
 
-    const matchText = text.substring(match.start, match.end);
-    highlightSpan.appendChild(document.createTextNode(matchText));
-    fragment.appendChild(highlightSpan);
+    const matchParent = matchNode.parentNode;
+    if (!matchParent) {
+      consumedUntil = match.end;
+      currentNode = afterNode;
+      return;
+    }
 
-    lastEnd = match.end;
+    matchParent.replaceChild(highlightSpan, matchNode);
+    highlightSpan.appendChild(matchNode);
+
+    applied += 1;
+    currentNode = afterNode;
+    consumedUntil = match.end;
+    nextIndex += 1;
   });
 
-  // Add remaining text after last match
-  if (lastEnd < text.length) {
-    fragment.appendChild(document.createTextNode(text.substring(lastEnd)));
-  }
-
-  try {
-    parent.replaceChild(fragment, textNode);
-  } catch (e) {
-    // If replacement fails, skip this node
-    console.warn('Failed to highlight text node:', e);
-  }
+  return applied;
 }
 
 function clearSearchHighlights() {
-  // Simply remove all highlight spans - the text content remains intact
   const highlights = document.querySelectorAll('.search-text-highlight');
-  highlights.forEach(highlight => {
+  if (highlights.length === 0) {
+    searchMatches = [];
+    currentMatchIndex = -1;
+    return;
+  }
+
+  const parentsToNormalize = new Set();
+
+  highlights.forEach((highlight) => {
+    const parent = highlight.parentNode;
+    if (!parent) return;
+
     try {
-      if (highlight.parentNode) {
-        // Replace the highlight span with its text content
-        const textNode = document.createTextNode(highlight.textContent || '');
-        highlight.parentNode.replaceChild(textNode, highlight);
-      }
-    } catch (e) {
-      // If replacement fails, just remove the highlight
+      const textNode = document.createTextNode(highlight.textContent || '');
+      parent.replaceChild(textNode, highlight);
+      parentsToNormalize.add(parent);
+    } catch (replaceError) {
       try {
-        if (highlight.parentNode) {
-          highlight.parentNode.removeChild(highlight);
-        }
+        parent.removeChild(highlight);
       } catch (removeError) {
         // Ignore removal errors
       }
     }
   });
+
+  parentsToNormalize.forEach((parent) => {
+    try {
+      parent.normalize();
+    } catch (normalizeError) {
+      // Ignore normalization issues
+    }
+  });
+
   searchMatches = [];
   currentMatchIndex = -1;
 }
@@ -10392,8 +10618,9 @@ function navigateSearch(direction) {
 }
 
 function updateHighlights() {
-  document.querySelectorAll('.search-text-highlight').forEach((highlight, index) => {
-    if (index === currentMatchIndex) {
+  document.querySelectorAll('.search-text-highlight').forEach((highlight) => {
+    const matchIndex = Number(highlight.dataset.matchIndex);
+    if (matchIndex === currentMatchIndex) {
       highlight.className = 'search-text-highlight current-match';
     } else {
       highlight.className = 'search-text-highlight';
@@ -10404,7 +10631,20 @@ function updateHighlights() {
 function scrollToMatch(index) {
   const highlight = document.querySelector(`.search-text-highlight[data-match-index="${index}"]`);
   if (highlight) {
-    highlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const chatContainer = getChatScroller();
+    if (chatContainer) {
+      // Calculate the position of the highlight relative to the chat container
+      const containerRect = chatContainer.getBoundingClientRect();
+      const highlightRect = highlight.getBoundingClientRect();
+      const relativeTop = highlightRect.top - containerRect.top + chatContainer.scrollTop;
+
+      // Scroll to center the highlight in the chat container
+      const targetScrollTop = relativeTop - (containerRect.height / 2) + (highlightRect.height / 2);
+      chatContainer.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: 'smooth'
+      });
+    }
   }
 }
 
@@ -11064,18 +11304,7 @@ function setupEventListeners() {
     }
   });
 
-  $("#artifact-btn").addEventListener("click", () => {
-    log("UI", 0, "event:artifacts-page-click", "Artifacts page button clicked");
-
-    // Close mobile sidebar when switching to artifacts page
-    if (window.innerWidth <= 768) {
-      closeMobileSidebar();
-    }
-
-    showArtifactsPage();
-  });
-
-  $("#open-settings").addEventListener("click", (e) => {
+  function handleSettingsClick(e) {
     e.stopPropagation();
     const willShow = $("#settings-menu").classList.contains("hidden");
     log("UI", 0, "event:open-settings-click", "Settings menu toggled", {
@@ -11085,9 +11314,9 @@ function setupEventListeners() {
     $("#quick-model-switch-modal").classList.add("hidden");
 
     // Close mobile sidebar when opening customize/settings menu
-  });
+  }
 
-  $("#open-persona-settings").addEventListener("click", () => {
+  function handlePersonaSettingsClick() {
     const { name, work, prefs } = state.settings.persona;
     const showProjects = state.settings.showProjects !== undefined ? state.settings.showProjects : false;
     const showStarred = state.settings.showStarred !== undefined ? state.settings.showStarred : true;
@@ -11111,7 +11340,24 @@ function setupEventListeners() {
     if (window.innerWidth <= 768) {
       closeMobileSidebar();
     }
+  }
+
+  $("#artifact-btn").addEventListener("click", () => {
+    log("UI", 0, "event:artifacts-page-click", "Artifacts page button clicked");
+
+    // Close mobile sidebar when switching to artifacts page
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+
+    showArtifactsPage();
   });
+
+  $("#open-settings").addEventListener("click", handleSettingsClick);
+
+  // Remove existing event listener to prevent duplicates
+  $("#open-persona-settings").removeEventListener("click", handlePersonaSettingsClick);
+  $("#open-persona-settings").addEventListener("click", handlePersonaSettingsClick);
 
   // Immediate save for sidebar display toggles
   $("#show-projects-toggle").addEventListener("change", async (e) => {

@@ -372,7 +372,7 @@ pre code *::selection {
   color: white !important;
 }
 
-html, body {
+body {
   height: 100%;
   background: var(--bg);
   color: var(--fg);
@@ -2887,12 +2887,13 @@ input:checked + .slider:before {
 #input-area::before {
   content: "";
   position: absolute;
-  top: -30px;
+  bottom: 10px;
   left: 0;
   width: 100%;
   height: 200px;
-  background: var(--bg);
-  filter: blur(20px);
+  background: linear-gradient(to bottom, transparent 5%, var(--bg) 40%);
+  background-repeat: no-repeat;
+  background-size: cover;
   opacity: 0.8;
   border-radius: inherit;
   z-index: 1;
@@ -6187,6 +6188,7 @@ figure:nth-child(3) {
   border-bottom-right-radius: var(--radius-lg) !important;
   margin: 0;
   font-family: var(--font-mono);
+  border-radius: var(--radius-xl);
   font-size: 14px;
   line-height: 1.5;
   padding-bottom: 100px !important;
@@ -6201,6 +6203,8 @@ figure:nth-child(3) {
   padding: 0px !important;
   border-top: 1px solid var(--border);
   height: 100%;
+  border-radius: var(--radius-xl);
+
 }
 
 .artifact-actions {

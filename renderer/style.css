@@ -38,7 +38,6 @@
   src: url('../public/fonts/AnthropicSerif-AI-Text-Bold.woff2') format('woff');
   font-weight: 100 1000;
   font-style: normal;
-  font-display: swap;
   font-optical-sizing: auto;
   font-variation-settings: 'opsz' 48;
 }
@@ -100,7 +99,7 @@
 .message.ai strong {
   font-family: var(--font-ai-bold);
   letter-spacing: 0.03em;
-  color: var(--bold);
+  font-weight: 600;
 }
 
 .message.ai em {
@@ -372,14 +371,14 @@ button {
 
 pre code::selection,
 pre code *::selection {
-  background: #62ad0cff !important;
-  color: white !important;
+  background: var(--primary-light) !important;
+  color: var(--primary) !important;
 }
 
 /* Base Styles */
 *::selection {
-  background: #0a7393ff !important;
-  color: white !important;
+  background: var(--primary-light) !important;
+  color: var(--primary) !important;
 }
 
 body {
@@ -2424,12 +2423,17 @@ input:checked + .slider:before {
   justify-content: center;
   transition: var(--transition-fast);
 }
-
-.copy-btn svg, .edit-btn svg, .regen-btn svg {
+.copy-btn svg {
   width: 14px !important;
   height: 14px !important;
-  min-width: 14px;
-  min-height: 14px;
+  flex-shrink: 0;
+  stroke: currentColor !important;
+  fill: none !important;
+}
+
+.edit-btn svg, .regen-btn svg {
+  width: 15px !important;
+  height: 15px !important;
   flex-shrink: 0;
   stroke: currentColor !important;
   fill: none !important;
@@ -3584,10 +3588,6 @@ blockquote blockquote blockquote blockquote::before {
   position: relative;
 }
 
-.save-code.btn {
-  cursor: pointer;
-}
-
 .message-text {
   border-radius: 20px;
   font-size: 15px;
@@ -4355,26 +4355,8 @@ a:focus-visible {
 .code-block-actions {
   display: flex;
   flex-direction: row;
-  gap: 10px;
+  gap: 0px;
 }
-
-/* .code-block-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-xs) var(--spacing-lg);
-  background-color: var(--surface-secondary);
-  border-top-left-radius: var(--radius-lg);
-  border-top-right-radius: var(--radius-lg);
-
-  position: sticky;
-  top: 8px;
-
-  filter: drop-shadow(0 -12px 0 var(--bg))    
-        drop-shadow(12px 0 0 var(--bg))     
-        drop-shadow(-12px 0 0 var(--bg));
-  z-index: 3 !important;
-} */
 
 .code-block-header {
   display: flex;
@@ -4456,8 +4438,18 @@ a:focus-visible {
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 13px;
-  transition: var(--transition-fast);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(10px);
+  transition: all 0.3s ease;
   z-index: 9999;
+}
+
+.code-block-container:hover .save-code-btn {
+  display: flex;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .save-code-btn:hover {
@@ -4466,8 +4458,8 @@ a:focus-visible {
 }
 
 .save-code-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
 }
 
 .copy-code-btn {
@@ -4492,7 +4484,7 @@ a:focus-visible {
 }
 
 .copy-code-btn.copied {
-  color: var(--success);
+  color: var(--fg);
 }
 
 .copy-code-btn svg {
@@ -4501,10 +4493,6 @@ a:focus-visible {
 }
 
 /* Selection */
-::selection {
-  background: rgba(79, 70, 229, 0.2);
-}
-
 @keyframes pulse-opacity {
   0%, 100% {
     opacity: 1;

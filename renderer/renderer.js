@@ -8150,12 +8150,12 @@ function addMessage(
 
     finalUiContent += ` 
     <div class="message-row">
-      <div class="message-content">
-        <div class="message-text">
-          ${uiContent}${expandButton}
-        </div>
-        ${baseActions}
+    <div class="message-content">
+      <div class="message-text">
+        ${uiContent}${expandButton}
       </div>
+    </div>
+    ${baseActions}
     </div>
     `;
 
@@ -8233,7 +8233,7 @@ function addMessage(
         input.focus();
         scrollToBottom({ force: true });
       });
-      actions.appendChild(editBtn);
+      // actions.appendChild(editBtn); gak dipake
     } else if (role === "ai" && final) {
       renderCopy();
       const regenBtn = document.createElement("button");

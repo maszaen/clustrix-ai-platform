@@ -6790,6 +6790,14 @@ function enhancedMarkdownParse(src) {
   return finalHtml;
 }
 
+// function createPreviewLink(href, label, extraClass = "") {
+//   if (!href) return label;
+//   const sanitizedHref = String(href).replace(/"/g, "&quot;");
+//   const classes = ["link"];
+//   if (extraClass) classes.push(extraClass);
+//   return `<a href="${sanitizedHref}" class="${classes.join(" ")}" data-preview="modal">${label}</a>`;
+// }
+
 function processMarkdownFormatting(text) {
   if (!text) return "";
 
@@ -7095,6 +7103,170 @@ function md(src) {
 
   return tempDiv.innerHTML;
 }
+
+// function setupLinkPreviewModals() {
+//   const chatContainer = document.querySelector(".chat-log-container");
+//   if (!chatContainer) return;
+
+//   let modalElement = null;
+//   let statusTimer = null;
+
+//   const normalizeUrl = (rawHref = "") => {
+//     const trimmed = rawHref.trim();
+//     if (!trimmed) return null;
+
+//     if (/^https?:\/\//i.test(trimmed)) {
+//       try {
+//         return new URL(trimmed).toString();
+//       } catch (error) {
+//         log("UI_LINK", 4, "link-preview-normalize", "Failed to parse absolute URL", {
+//           href: rawHref,
+//           error: error?.message,
+//         });
+//         return null;
+//       }
+//     }
+
+//     if (/^[a-zA-Z][\w+.-]*:/i.test(trimmed)) {
+//       return null;
+//     }
+
+//     try {
+//       return new URL(`https://${trimmed}`).toString();
+//     } catch (error) {
+//       log("UI_LINK", 4, "link-preview-normalize", "Failed to coerce URL", {
+//         href: rawHref,
+//         error: error?.message,
+//       });
+//       return null;
+//     }
+//   };
+
+//   const ensureModalElement = () => {
+//     if (modalElement) return modalElement;
+
+//     modalElement = document.createElement("div");
+//     modalElement.className = "link-preview-modal hidden";
+//     modalElement.innerHTML = `
+//       <div class="link-preview-frame">
+//         <div class="link-preview-header">
+//           <div class="link-preview-title" title=""></div>
+//           <div class="link-preview-controls">
+//             <button type="button" class="link-preview-btn minimize" data-action="minimize" title="Minimize preview" aria-pressed="false">&#8722;</button>
+//             <button type="button" class="link-preview-btn close" data-action="close" title="Close preview">&#10005;</button>
+//           </div>
+//         </div>
+//         <div class="link-preview-body">
+//           <div class="link-preview-status">Memuat pratinjau…</div>
+//           <iframe src="about:blank" title="Link preview" sandbox="allow-scripts allow-same-origin allow-forms" loading="lazy"></iframe>
+//         </div>
+//       </div>`;
+
+//     chatContainer.appendChild(modalElement);
+
+//     const iframe = modalElement.querySelector("iframe");
+//     const status = modalElement.querySelector(".link-preview-status");
+//     const minimizeBtn = modalElement.querySelector('[data-action="minimize"]');
+//     const closeBtn = modalElement.querySelector('[data-action="close"]');
+
+//     const closeModal = () => {
+//       if (!modalElement) return;
+//       modalElement.classList.add("hidden");
+//       modalElement.classList.remove("minimized");
+//       iframe.src = "about:blank";
+//       iframe.removeAttribute("data-current-url");
+//       if (statusTimer) {
+//         clearTimeout(statusTimer);
+//         statusTimer = null;
+//       }
+//       status.classList.remove("hidden");
+//       status.textContent = "Memuat pratinjau…";
+//       log("UI_LINK", 2, "link-preview-close", "Link preview closed");
+//     };
+
+//     closeBtn.addEventListener("click", closeModal);
+
+//     minimizeBtn.addEventListener("click", () => {
+//       const minimized = modalElement.classList.toggle("minimized");
+//       minimizeBtn.setAttribute("aria-pressed", minimized ? "true" : "false");
+//       minimizeBtn.setAttribute(
+//         "title",
+//         minimized ? "Restore preview" : "Minimize preview",
+//       );
+//       log("UI_LINK", 1, "link-preview-toggle", minimized ? "Preview minimized" : "Preview restored");
+//     });
+
+//     iframe.addEventListener("load", () => {
+//       if (!modalElement || modalElement.classList.contains("hidden")) return;
+//       let host = "";
+//       try {
+//         host = new URL(iframe.src).host;
+//       } catch (error) {
+//         host = "";
+//       }
+//       status.textContent = host ? `Pratinjau dimuat dari ${host}` : "Pratinjau dimuat";
+//       status.classList.remove("hidden");
+//       if (statusTimer) clearTimeout(statusTimer);
+//       statusTimer = setTimeout(() => {
+//         status.classList.add("hidden");
+//       }, 5000);
+//     });
+
+//     iframe.addEventListener("error", () => {
+//       status.textContent = "Gagal memuat pratinjau.";
+//       status.classList.remove("hidden");
+//     });
+
+//     return modalElement;
+//   };
+
+//   const openModalWithUrl = (url, label) => {
+//     const modal = ensureModalElement();
+//     const iframe = modal.querySelector("iframe");
+//     const status = modal.querySelector(".link-preview-status");
+//     const title = modal.querySelector(".link-preview-title");
+
+//     title.textContent = label || url;
+//     title.setAttribute("title", label || url);
+//     status.textContent = "Memuat pratinjau…";
+//     status.classList.remove("hidden");
+//     modal.classList.remove("hidden");
+//     modal.classList.remove("minimized");
+
+//     if (statusTimer) {
+//       clearTimeout(statusTimer);
+//       statusTimer = null;
+//     }
+
+//     if (iframe.getAttribute("data-current-url") !== url) {
+//       iframe.src = "about:blank";
+//       iframe.setAttribute("data-current-url", url);
+//       requestAnimationFrame(() => {
+//         iframe.src = url;
+//       });
+//     }
+
+//     log("UI_LINK", 1, "link-preview-open", "Opening link preview", { url });
+//   };
+
+//   chatContainer.addEventListener("click", (event) => {
+//     const anchor = event.target.closest('a[data-preview="modal"]');
+//     if (!anchor) return;
+
+//     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+//       return;
+//     }
+
+//     const href = anchor.getAttribute("href") || anchor.dataset?.href || "";
+//     const normalizedUrl = normalizeUrl(href);
+//     if (!normalizedUrl) return;
+
+//     event.preventDefault();
+
+//     const label = anchor.textContent?.trim() || normalizedUrl;
+//     openModalWithUrl(normalizedUrl, label);
+//   });
+// }
 
 async function updateCodeBlocksWithArtifactInfo(container = document) {
   try {
@@ -11836,6 +12008,7 @@ function initializeApp() {
   setupTextareaCentralResize();
   setupTextareaProjectResize();
   setupResponsiveHandlers();
+  // setupLinkPreviewModals();
   window.addEventListener("beforeunload", () => {
     streamManager.shutdownGracefully();
   });

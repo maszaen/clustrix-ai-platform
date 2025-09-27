@@ -836,12 +836,13 @@ function runStandardStreaming(event, payload) {
               console.log('MAIN: Using RE+ACT pattern for complex project query analysis...');
 
                 try {
+                  // Always initialize the reasoning agent session, even with 0 files
+                  const modelInfo = { provider, model, apiKey: getApiKey(provider, payload), baseUrl };
+                  langchainService.reasoningAgent.initializeSession(sessionId, availableFiles || [], modelInfo);
+                  console.log(`MAIN: ReasoningAgent initialized for session ${sessionId} with ${availableFiles ? availableFiles.length : 0} files.`);
+                  
+                  // Only send FOUND_URLS if we have files to show
                   if (availableFiles && availableFiles.length > 0) {
-                    const modelInfo = { provider, model, apiKey: getApiKey(provider, payload), baseUrl };
-                    langchainService.reasoningAgent.initializeSession(sessionId, availableFiles, modelInfo);
-                    console.log(`MAIN: ReasoningAgent re-initialized for session ${sessionId} with ${availableFiles.length} files.`);
-                    
-                    // Send FOUND_URLS equivalent for project files
                     const projectFiles = availableFiles.map(f => ({
                       title: f.name,
                       link: `file://${f.name}`,

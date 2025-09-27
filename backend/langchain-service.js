@@ -440,17 +440,15 @@ class ClustrixLangChainService {
     console.log(`LangChain: Starting RE+ACT processing for session ${sessionId}`);
     
     try {
-      // Step 1: Initialize RE+ACT agent with project files
-      if (uploadedFiles && uploadedFiles.length > 0) {
-        console.log(`RE+ACT: Initializing with ${uploadedFiles.length} files`);
-        const capabilities = this.reasoningAgent.initializeSession(sessionId, uploadedFiles, {
-          provider,
-          model,
-          apiKey,
-          baseUrl
-        });
-        console.log(`RE+ACT: Session initialized with capabilities:`, capabilities);
-      }
+      // Step 1: Initialize RE+ACT agent with project files (even if empty)
+      console.log(`RE+ACT: Initializing with ${uploadedFiles ? uploadedFiles.length : 0} files`);
+      const capabilities = this.reasoningAgent.initializeSession(sessionId, uploadedFiles || [], {
+        provider,
+        model,
+        apiKey,
+        baseUrl
+      });
+      console.log(`RE+ACT: Session initialized with capabilities:`, capabilities);
       
       // Step 2: Process with reasoning and actions
       const result = await this.reasoningAgent.processWithReasoningAction(
@@ -483,9 +481,18 @@ class ClustrixLangChainService {
   async shouldUseReasoningAction(userMessage, uploadedFiles = [], sessionType = null, sessionMessages = []) {
     console.log(`RE+ACT check called with: sessionType=${sessionType}, uploadedFiles=${uploadedFiles ? uploadedFiles.length : 'null'}, message="${userMessage.slice(0, 50)}..."`);
 
-    if (!uploadedFiles || uploadedFiles.length === 0) {
-      console.log(`RE+ACT decision: SKIP (no uploaded files)`);
-      return false;
+    const hasUploadedFiles = Array.isArray(uploadedFiles) && uploadedFiles.length > 0;
+
+    if (!hasUploadedFiles) {
+      const isFollowUp = this.isFollowUpToResearch(sessionMessages, userMessage);
+      if (isFollowUp) {
+        console.log('RE+ACT decision: USE (continuing research without uploaded files)');
+        return true;
+      }
+
+      const shouldResearchWithoutFiles = this.shouldUseResearchAgentForRegular(userMessage, []);
+      console.log(`RE+ACT decision: ${shouldResearchWithoutFiles ? 'USE' : 'SKIP'} (no uploaded files, intent-based)`);
+      return shouldResearchWithoutFiles;
     }
 
     if (sessionType === 'project') {
@@ -731,15 +738,15 @@ Decision:`;
     return 'BASIC';
   }
 
-  shouldUseResearchAgentForRegular(userMessage, uploadedFiles) {
+  shouldUseResearchAgentForRegular(userMessage, uploadedFiles = []) {
     // Existing logic for regular sessions
     const analysisKeywords = [
       'error', 'bug', 'issue', 'problem', 'not working', 'broken',
       'find', 'search', 'locate', 'where is', 'check',
-      'analyze', 'review', 'debug', 'fix', 'help',
+      'analyze', 'review', 'debug', 'fix', 'help', 'research', 'paper', 'makalah', 'laporan', 'riset',
       'function', 'class', 'method', 'variable',
       'css', 'html', 'javascript', 'style', 'layout',
-      'fungsi', 'kelas', 'metode', 'variabel', 'debug', 'perbaiki',
+      'fungsi', 'kelas', 'metode', 'variabel', 'debug', 'perbaiki', 'penelitian',
       'cek', 'lihat', 'cari', 'temukan', 'analisis', 'ulas',
       'masalah', 'error', 'bug', 'rusak', 'tidak berfungsi'
     ];
@@ -747,7 +754,8 @@ Decision:`;
     const messageText = userMessage.toLowerCase();
     const needsAnalysis = analysisKeywords.some(keyword => messageText.includes(keyword));
 
-    console.log(`Regular RE+ACT decision: ${needsAnalysis ? 'USE' : 'SKIP'} (${uploadedFiles.length} files, analysis keywords: ${needsAnalysis})`);
+    const fileCount = Array.isArray(uploadedFiles) ? uploadedFiles.length : 0;
+    console.log(`Regular RE+ACT decision: ${needsAnalysis ? 'USE' : 'SKIP'} (${fileCount} files, analysis keywords: ${needsAnalysis})`);
 
     return needsAnalysis;
   }

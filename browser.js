@@ -13,13 +13,21 @@ class ClustrixBrowser {
 
         this.init();
         this.setupEventListeners();
+
+        // Trigger the initial URL load as soon as the UI is ready enough
+        // for navigation. This ensures that we don't wait solely on the
+        // webview's `dom-ready` event, while still allowing that event to
+        // act as a fallback.
+        requestAnimationFrame(() => {
+            this.ensureInitialUrlLoad();
+        });
     }
 
     prepareForUrlLoad() {
         // Check if we have a URL to load from hash
         const checkAndPrepare = () => {
-            const hash = window.location.hash.substring(1);
-            const hasUrl = hash && decodeURIComponent(hash) !== 'about:blank';
+            const hashUrl = this.getUrlFromHash();
+            const hasUrl = Boolean(hashUrl);
 
             if (hasUrl) {
                 // Show webview and hide start page immediately
@@ -47,19 +55,13 @@ class ClustrixBrowser {
             this.loading.style.display = 'none';
 
             // Ensure webview is visible if we have a URL to load
-            const hash = window.location.hash.substring(1);
-            const hasUrl = hash && decodeURIComponent(hash) !== 'about:blank';
-
-            if (hasUrl) {
+            if (this.getUrlFromHash()) {
                 this.webview.style.display = 'block';
                 document.getElementById('start-page').style.display = 'none';
             }
 
             // Only load initial URL once when webview is ready
-            if (!this.initialUrlLoaded) {
-                this.initialUrlLoaded = true;
-                this.loadInitialUrl();
-            }
+            this.ensureInitialUrlLoad();
 
             // Try to inject CSS to hide any CSP warnings or overlays
             try {
@@ -170,11 +172,11 @@ class ClustrixBrowser {
 
         if (!url) return;
 
-        // Check if webview is ready
-        if (!this.webview || this.webview.getURL() === undefined) {
-            console.log('Webview not ready yet, cannot navigate');
+        // Check if webview exists before attempting navigation
+        if (!this.webview) {
+            console.log('Webview element missing, cannot navigate');
             // Show a brief message to user
-            this.urlInput.placeholder = 'Webview not ready...';
+            this.urlInput.placeholder = 'Webview unavailable...';
             setTimeout(() => {
                 this.urlInput.placeholder = 'Enter URL or search term';
             }, 2000);
@@ -226,38 +228,55 @@ class ClustrixBrowser {
         }
     }
 
+    ensureInitialUrlLoad() {
+        if (this.initialUrlLoaded) {
+            return;
+        }
+
+        this.loadInitialUrl();
+    }
+
+    getUrlFromHash() {
+        const hash = window.location.hash.substring(1);
+
+        if (!hash) {
+            return null;
+        }
+
+        try {
+            const decoded = decodeURIComponent(hash);
+            return decoded && decoded !== 'about:blank' ? decoded : null;
+        } catch (error) {
+            console.warn('Failed to decode URL hash:', error);
+            return null;
+        }
+    }
+
     loadInitialUrl() {
-        // Get URL from URL hash or default to Google
-        console.log('Loading initial URL, current location:', window.location.href);
-        console.log('Hash:', window.location.hash);
+        if (this.initialUrlLoaded) {
+            return;
+        }
 
-        const hash = window.location.hash.substring(1); // Remove the '#'
-        const initialUrl = hash ? decodeURIComponent(hash) : null;
-        console.log('Initial URL from hash:', initialUrl);
+        const hashUrl = this.getUrlFromHash();
+        const finalUrl = hashUrl || 'https://www.google.com';
 
-        const finalUrl = initialUrl || 'https://www.google.com';
-        console.log('Final URL to load:', finalUrl);
+        if (!this.webview) {
+            console.warn('Webview not available for initial load');
+            return;
+        }
 
-        if (finalUrl && finalUrl !== 'about:blank') {
-            console.log('Loading URL in webview:', finalUrl);
-
-            // Webview should already be visible from prepareForUrlLoad()
-            // Add a small delay to ensure webview is fully ready
-            setTimeout(() => {
-                try {
-                    this.webview.loadURL(finalUrl);
-                    this.urlInput.value = finalUrl;
-                } catch (error) {
-                    console.error('Error loading URL:', error);
-                    // Fallback to external browser
-                    if (window.api && window.api.shell && window.api.shell.openExternal) {
-                        window.api.shell.openExternal(finalUrl);
-                        setTimeout(() => window.close(), 500);
-                    }
-                }
-            }, 100); // Small delay to ensure webview is ready
-        } else {
+        if (!finalUrl || finalUrl === 'about:blank') {
             console.log('No valid URL to load');
+            return;
+        }
+
+        try {
+            console.log('Loading initial URL:', finalUrl);
+            this.webview.setAttribute('src', finalUrl);
+            this.urlInput.value = finalUrl;
+            this.initialUrlLoaded = true;
+        } catch (error) {
+            console.error('Error setting initial webview src:', error);
         }
     }
 }

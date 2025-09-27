@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, session, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, protocol, net, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
@@ -328,6 +328,28 @@ function getChangedDetails(current, previous) {
   });
   ipcMain.on('window:close', () => win.close());
 
+  // Handle external links - open in new browser window with navigation controls
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    // Open external URLs in new browser window with full browser interface
+    const newWin = new BrowserWindow({
+      width: 1000,
+      height: 700,
+      autoHideMenuBar: true,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        webviewTag: true,
+        webSecurity: false // Disable web security to bypass CSP
+      }
+    });
+
+    // Load browser interface with the target URL
+    const browserUrl = `file://${__dirname}/browser.html#${encodeURIComponent(url)}`;
+    newWin.loadURL(browserUrl);
+
+    return { action: 'deny' }; // Prevent default behavior
+  });
+
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 protocol.registerSchemesAsPrivileged([{
@@ -621,15 +643,6 @@ ipcMain.handle('files:open-dialog', async (event) => {
   return results;
 });
 
-// ---------- Helpers ----------
-function mapEffort(mode){
-  if (!mode || mode === 'off') return null;
-  if (mode === 'low') return 'low';
-  if (mode === 'medium') return 'medium';
-  if (mode === 'high') return 'high';
-  return null;
-}
-
 // ---------- Streaming from MAIN (SSE) ----------
 const activeStreams = new Map();
 ipcMain.on('chat:stream-start', async (event, payload) => {
@@ -689,7 +702,7 @@ function runStandardStreaming(event, payload) {
         // For project sessions, use agent system for complex processing
         const lastMessage = messages[messages.length - 1];
         if (lastMessage && lastMessage.role === 'user') {
-          console.log(`💭 MAIN: Processing user query: "${lastMessage.content.substring(0, 100)}..."`);
+          console.log(`MAIN: Processing user query: "${lastMessage.content.substring(0, 100)}..."`);
           
           // Get project files for processing
           let projectFiles = [];
@@ -724,42 +737,41 @@ function runStandardStreaming(event, payload) {
             },
           };
 
-                // Progress callback to send thinking updates
-                const progressCallback = (update) => {
-                  if (update.type === 'thinking_log') {
-                    event.sender.send('search:status', {
-                      step: 'DECIDED',
-                      data: {
-                        reasoning: update.entry?.text || update.content || '',
-                        summary_key: update.entry?.text || update.content || '',
-                        search_queries: [update.entry?.text || update.content || '']
-                      }
-                    });
-                  } else if (update.type === 'searching') {
-                    event.sender.send('search:status', {
-                      step: 'ACTION_EXECUTING',
-                      data: {
-                        actionType: update.data?.summarizedQuery?.split(':')[0] || 'Action',
-                        actionDescription: update.data?.summarizedQuery?.split(':').slice(1).join(':').trim() || 'Processing...',
-                        actionTitle: update.data?.summarizedQuery || 'Action in progress'
-                      }
-                    });
-                  } else if (update.type === 'reading_complete') {
-                    event.sender.send('search:status', {
-                      step: 'ACTION_RESULTS',
-                      data: {
-                        count: update.data?.pageCount || 1,
-                        actionType: update.data?.actionType || 'Analysis',
-                        success: update.data?.success !== false
-                      }
-                    });
-                  } else if (update.type === 'processing') {
-                    event.sender.send('search:status', {
-                      step: 'PROCESSING',
-                      data: { count: update.data?.count || 1 }
-                    });
-                  }
-                };
+          const progressCallback = (update) => {
+            if (update.type === 'thinking_log') {
+              event.sender.send('search:status', {
+                step: 'DECIDED',
+                data: {
+                  reasoning: update.entry?.text || update.content || '',
+                  summary_key: update.entry?.text || update.content || '',
+                  search_queries: [update.entry?.text || update.content || '']
+                }
+              });
+            } else if (update.type === 'searching') {
+              event.sender.send('search:status', {
+                step: 'ACTION_EXECUTING',
+                data: {
+                  actionType: update.data?.summarizedQuery?.split(':')[0] || 'Action',
+                  actionDescription: update.data?.summarizedQuery?.split(':').slice(1).join(':').trim() || 'Processing...',
+                  actionTitle: update.data?.summarizedQuery || 'Action in progress'
+                }
+              });
+            } else if (update.type === 'reading_complete') {
+              event.sender.send('search:status', {
+                step: 'ACTION_RESULTS',
+                data: {
+                  count: update.data?.pageCount || 1,
+                  actionType: update.data?.actionType || 'Analysis',
+                  success: update.data?.success !== false
+                }
+              });
+            } else if (update.type === 'processing') {
+              event.sender.send('search:status', {
+                step: 'PROCESSING',
+                data: { count: update.data?.count || 1 }
+              });
+            }
+          };
 
           // Use agent orchestrator for project sessions (OpenAI only for now)
           let agentResponse = null;
@@ -801,10 +813,8 @@ function runStandardStreaming(event, payload) {
           } else {
             console.log(`MAIN: Agent orchestrator only supports OpenAI, checking if RE+ACT pattern needed for ${provider}...`);
             
-            // Get appropriate files for AI processing
             let availableFiles = session.uploadedFiles || [];
             
-            // For project sessions, use project files from database instead of session files
             if (session.type === 'project' && session.projectId) {
               try {
                 const projects = JSON.parse(fs.readFileSync(projectsFile, 'utf-8'));
@@ -868,6 +878,7 @@ function runStandardStreaming(event, payload) {
                   provider,
                   getApiKey(provider, payload),
                   baseUrl,
+                  payload.searchApiConfig || null,
                   progressCallback,  // Pass progress callback
                   hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null  // Only pass insult detection if keywords detected
                 );
@@ -1044,6 +1055,7 @@ function runStandardStreaming(event, payload) {
               provider,
               getApiKey(provider, payload),
               baseUrl,
+              payload.searchApiConfig || null,
               null, // progressCallback
               hasInsultKeywords ? createInsultDetectionPrompt(currentMessage) : null  // Only pass insult detection if keywords detected
             );

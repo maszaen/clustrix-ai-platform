@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clustrix Browser</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1e1e1e;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            color: #ffffff;
+        }
+
+        .browser-container {
+            background: #1e1e1e;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tabs-container {
+            background: #1e1e1e;
+            border-bottom: 1px solid #333333;
+            display: flex;
+            align-items: flex-end;
+            padding: 0 8px;
+            min-height: 40px;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        .tabs-container::-webkit-scrollbar {
+            height: 0;
+        }
+
+        .tab {
+            background: #2d2d2d;
+            border-radius: 8px 8px 0 0;
+            padding: 10px 16px;
+            margin-right: 2px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #cccccc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            max-width: 240px;
+            min-width: 120px;
+            height: 36px;
+            border: 1px solid #333333;
+            border-bottom: none;
+            transition: all 0.2s ease;
+        }
+
+        /* Animation hanya untuk tab baru */
+        .tab.new-tab-animation {
+            opacity: 0;
+            transform: translateY(-10px);
+            animation: tabSlideIn 0.2s ease forwards;
+        }
+
+        @keyframes tabSlideIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Animation hanya untuk tab yang sedang ditutup */
+        .tab.closing {
+            animation: tabSlideOut 0.2s ease forwards;
+        }
+
+        @keyframes tabSlideOut {
+            to {
+                opacity: 0;
+                transform: translateX(-100px) scale(0.8);
+                width: 0;
+                min-width: 0;
+                max-width: 0;
+                padding: 10px 0;
+                margin-right: 0;
+                border-width: 0;
+            }
+        }
+
+        .tab:hover {
+            background: #3d3d3d;
+        }
+
+        .tab.active {
+            background: #1e1e1e;
+            color: #ffffff;
+            border-color: #333333;
+            border-bottom-color: #1e1e1e;
+        }
+
+        .tab-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .tab-close {
+            width: 18px;
+            height: 18px;
+            border: none;
+            background: transparent;
+            border-radius: 3px;
+            cursor: pointer;
+            color: #888888;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: all 0.15s ease;
+        }
+
+        .tab:hover .tab-close {
+            opacity: 1;
+        }
+
+        .tab-close:hover {
+            background: #ff4444;
+            color: #ffffff;
+        }
+
+        .new-tab {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #888888;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 8px;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        .new-tab:hover {
+            background: #3d3d3d;
+            color: #ffffff;
+            transform: scale(1.1);
+        }
+
+        .toolbar {
+            height: 50px;
+            background: #1e1e1e;
+            border-bottom: 1px solid #333333;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+        }
+
+        .nav-group {
+            display: flex;
+            gap: 4px;
+        }
+
+        .nav-btn {
+            width: 34px;
+            height: 34px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #cccccc;
+            font-size: 16px;
+            transition: all 0.15s ease;
+        }
+
+        .nav-btn:hover {
+            background: #3d3d3d;
+        }
+
+        .nav-btn:disabled {
+            color: #555555;
+            cursor: default;
+        }
+
+        .nav-btn:disabled:hover {
+            background: transparent;
+        }
+
+        .address-container {
+            flex: 1;
+            max-width: 700px;
+            margin: 0 16px;
+        }
+
+        .address-bar {
+            width: 100%;
+            height: 36px;
+            border: 1px solid #333333;
+            border-radius: 18px;
+            padding: 0 18px;
+            font-size: 14px;
+            outline: none;
+            background: #2d2d2d;
+            color: #ffffff;
+            transition: all 0.15s ease;
+        }
+
+        .address-bar:focus {
+            border-color: #0078d4;
+            background: #333333;
+        }
+
+        .address-bar::placeholder {
+            color: #888888;
+        }
+
+        .toolbar-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .action-btn {
+            width: 34px;
+            height: 34px;
+            border: none;
+            background: transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #cccccc;
+            font-size: 16px;
+            transition: all 0.15s ease;
+        }
+
+        .action-btn:hover {
+            background: #3d3d3d;
+        }
+
+        .content-area {
+            flex: 1;
+            position: relative;
+            background: #1e1e1e;
+        }
+
+        .webview {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: none;
+            background: #1e1e1e;
+        }
+
+        .start-page {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #1e1e1e;
+        }
+
+        .start-page h1 {
+            font-size: 36px;
+            font-weight: 300;
+            color: #ffffff;
+            margin-bottom: 8px;
+        }
+
+        .start-page p {
+            color: #888888;
+            font-size: 14px;
+            margin-bottom: 40px;
+        }
+
+        .shortcuts {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            max-width: 400px;
+        }
+
+        .shortcut {
+            width: 84px;
+            height: 84px;
+            border: 1px solid #333333;
+            border-radius: 12px;
+            background: #2d2d2d;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            color: #cccccc;
+            transition: all 0.15s ease;
+        }
+
+        .shortcut:hover {
+            background: #3d3d3d;
+            border-color: #555555;
+            transform: translateY(-2px);
+        }
+
+        .shortcut-icon {
+            width: 28px;
+            height: 28px;
+            background: #555555;
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }
+
+        .shortcut-title {
+            font-size: 11px;
+            text-align: center;
+            color: #cccccc;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #888888;
+            font-size: 14px;
+            display: none;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #333333;
+            border-top: 2px solid #0078d4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .address-container {
+                margin: 0 8px;
+            }
+
+            .shortcuts {
+                grid-template-columns: repeat(3, 1fr);
+                max-width: 300px;
+                gap: 16px;
+            }
+
+            .shortcut {
+                width: 72px;
+                height: 72px;
+            }
+
+            .tab {
+                min-width: 100px;
+                padding: 10px 12px;
+            }
+        }
+
+        /* Icons using CSS */
+        .icon-back::before { content: '←'; }
+        .icon-forward::before { content: '→'; }
+        .icon-refresh::before { content: '↻'; }
+        .icon-star::before { content: '☆'; }
+        .icon-menu::before { content: '⋮'; }
+        .icon-close::before { content: '×'; }
+        .icon-plus::before { content: '+'; }
+
+        /* Scrollbar styling for dark theme */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #555555;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #666666;
+        }
+    </style>
+</head>
+<body>
+    <div class="browser-container">
+        <!-- Tabs -->
+        <div class="tabs-container">
+            <div class="tab active" data-tab-id="main">
+                <span class="tab-title">New Tab</span>
+                <button class="tab-close">
+                    <span class="icon-close"></span>
+                </button>
+            </div>
+            <button class="new-tab" id="new-tab-btn" title="New tab">
+                <span class="icon-plus"></span>
+            </button>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="nav-group">
+                <button class="nav-btn" id="back-btn" title="Back">
+                    <span class="icon-back"></span>
+                </button>
+                <button class="nav-btn" id="forward-btn" title="Forward">
+                    <span class="icon-forward"></span>
+                </button>
+                <button class="nav-btn" id="refresh-btn" title="Refresh">
+                    <span class="icon-refresh"></span>
+                </button>
+            </div>
+
+            <div class="address-container">
+                <input type="text" class="address-bar" id="address-bar" placeholder="Search Google or type a URL">
+            </div>
+
+            <div class="toolbar-actions">
+                <button class="action-btn" id="bookmark-btn" title="Bookmark">
+                    <span class="icon-star"></span>
+                </button>
+                <button class="action-btn" id="menu-btn" title="Menu">
+                    <span class="icon-menu"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content-area">
+            <div class="loading" id="loading">Loading</div>
+            
+            <div class="start-page" id="start-page">
+                <h1>Clustrix</h1>
+                <p>Fast, simple, secure</p>
+                
+                <div class="shortcuts">
+                    <a href="#" class="shortcut" data-url="https://google.com">
+                        <div class="shortcut-icon" style="background: #4285f4;"></div>
+                        <div class="shortcut-title">Google</div>
+                    </a>
+                    <a href="#" class="shortcut" data-url="https://youtube.com">
+                        <div class="shortcut-icon" style="background: #ff0000;"></div>
+                        <div class="shortcut-title">YouTube</div>
+                    </a>
+                    <a href="#" class="shortcut" data-url="https://github.com">
+                        <div class="shortcut-icon" style="background: #ffffff;"></div>
+                        <div class="shortcut-title">GitHub</div>
+                    </a>
+                    <a href="#" class="shortcut" data-url="https://twitter.com">
+                        <div class="shortcut-icon" style="background: #1da1f2;"></div>
+                        <div class="shortcut-title">Twitter</div>
+                    </a>
+                </div>
+            </div>
+
+            <webview class="webview" id="webview" partition="persist:webview" webpreferences="webSecurity=no,allowRunningInsecureContent=yes" allowpopups></webview>
+        </div>
+    </div>
+
+    <script src="browser.js"></script>
+</body>
+</html>

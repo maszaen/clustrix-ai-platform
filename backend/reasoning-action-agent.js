@@ -19,7 +19,7 @@ class ReasoningActionAgent {
    */
   initializeSession(sessionId, files, modelInfo = {}) {
     console.log(`RE+ACT: Initializing session ${sessionId} with ${files.length} files`);
-    
+
     // Use the files passed directly instead of getting from global embedding engine
     // This ensures we have the correct files for this specific session
     const processedFiles = files.map(file => ({
@@ -35,9 +35,12 @@ class ReasoningActionAgent {
     }));
     
     console.log(`RE+ACT: Using ${processedFiles.length} files directly from session`);
-    
+
+    const { searchApiConfig = null, ...modelConfig } = modelInfo || {};
+
     this.searchEngine.loadProjectFiles(processedFiles);
-    
+    this.searchEngine.setSearchConfig(searchApiConfig);
+
     const capabilities = this.searchEngine.getCapabilities();
     this.sessionState.set(sessionId, {
       files: processedFiles, // Store the processed files for this session
@@ -45,9 +48,10 @@ class ReasoningActionAgent {
       actionHistory: [],
       currentPlan: null,
       thinkingState: null,
-      model: modelInfo  // Store model information for API calls
+      model: modelConfig,  // Store model information for API calls
+      searchApiConfig
     });
-    
+
     console.log(`Session initialized with capabilities:`, capabilities);
     return capabilities;
   }
@@ -157,9 +161,11 @@ class ReasoningActionAgent {
           success: Boolean(actionResult.success),
           resultCount: Array.isArray(actionResult.results) ? actionResult.results.length : (actionResult.resultCount || 0),
           results: Array.isArray(actionResult.results) ? actionResult.results.map(r => ({
-            fileName: r.fileName || r.source || '(unknown)',
+            fileName: r.fileName || r.source || r.url || '(unknown)',
             lineNumber: r.lineNumber || r.line || null,
-            snippet: (r.context || r.preview || r.text || '').toString().substring(0, 800)
+            url: r.url || (typeof r.source === 'string' && r.source.startsWith('http') ? r.source : null),
+            snippet: (r.context || r.preview || r.snippet || r.text || r.content || '').toString().substring(0, 800),
+            error: r.error || undefined
           })) : []
         };
 
@@ -272,82 +278,96 @@ class ReasoningActionAgent {
    * Build synthesis prompt for final response
    */
   buildSynthesisPrompt(userQuery, actionHistory, sessionState) {
-    const actionResults = actionHistory.map((action, index) => 
-      `SEARCH ACTION ${index + 1} COMPLETED:\nAction: ${action.action} with ${JSON.stringify(action.params)}\nResult: ${this.formatActionResult(action.result)}`
-    ).join('\n\n');
+    const { summaryText, webSources } = this.prepareActionSummary(actionHistory);
+    const hasFiles = Array.isArray(sessionState.files) && sessionState.files.length > 0;
+    const fileList = hasFiles
+      ? sessionState.files.slice(0, 20).map(f => `- ${f.name} (${f.type})`).join('\n')
+      : '- Tidak ada file lokal yang tersedia untuk sesi ini.';
+    const webSourcesSection = webSources.length > 0
+      ? webSources.slice(0, 6).map((item, idx) => `${idx + 1}. ${item.url} -> ${item.snippet || '(ringkasan tidak tersedia)'}`).join('\n')
+      : 'Tidak ada sumber web yang berhasil diambil.';
+    const userLanguage = this.detectUserLanguage(userQuery);
 
-    const fileList = sessionState.files.map(f => `- ${f.name} (${f.type})`).join('\n');
+    return `You are an autonomous research assistant synthesizing findings from local project files and live internet research.
 
-    return `You are an AI assistant that has analyzed project files using search capabilities. Now provide a comprehensive final answer.
+ACTION LOG:
+${summaryText || 'Tidak ada aksi yang dieksekusi.'}
 
-ORIGINAL USER QUERY: "${userQuery}"
+PRIMARY WEB SOURCES:
+${webSourcesSection}
 
-SEARCH RESULTS PERFORMED:
-${actionResults}
-
-AVAILABLE FILES ANALYZED:
+PROJECT FILE CONTEXT:
 ${fileList}
 
-INSTRUCTIONS FOR FINAL RESPONSE:
-1. Use the SAME LANGUAGE as the user's query (if user asked in Indonesian, respond in Indonesian)
-2. Provide a clear, actionable answer based on the search results
-3. Include thinking/reasoning process in your response using <thinking> tags
-4. Structure your response professionally with clear sections if needed
-5. Reference specific files and findings from the search results
-6. Save your thinking process for future reference
+USER QUESTION:
+"""${userQuery}"""
 
-Format your response with thinking included:
-<thinking>
-[Your analysis and reasoning process]
-</thinking>
-
-[Your final answer in the user's language]
-
-IMPORTANT: The thinking section must be included and will be saved for future reference.`;
+FINAL RESPONSE REQUIREMENTS:
+- Jawab dalam bahasa pengguna (detected: ${userLanguage}).
+- Sertakan <thinking>...</thinking> yang menjelaskan proses analisis internal sebelum jawaban akhir.
+- Gabungkan bukti dari file lokal maupun sumber web; sebutkan nama file atau gunakan format markdown [Label](URL) saat mengutip tautan.
+- Jika informasi masih kurang lengkap, jelaskan keterbatasannya dan sarankan langkah lanjutan yang realistis.
+- Berikan rekomendasi atau next-step yang actionable bila relevan.`;
   }
 
   /**
    * Build initial reasoning prompt
    */
   buildReasoningPrompt(userQuery, sessionState) {
-    const fileList = sessionState.files.map(f => `- ${f.name} (${f.type})`).join('\n');
+    const hasFiles = Array.isArray(sessionState.files) && sessionState.files.length > 0;
+    const fileList = hasFiles
+      ? sessionState.files.map(f => `- ${f.name} (${f.type})`).join('\n')
+      : '- (Tidak ada file proyek yang tersedia, gunakan riset web sebagai sumber utama)';
 
-    return `You are an AI assistant with powerful desktop search capabilities. The user has uploaded project files and needs help.
+    const capabilityLines = [
+      '- searchPattern(pattern, options): Cari pola teks di seluruh file (mirip grep)',
+      '- searchFunctions(functionName): Temukan definisi fungsi',
+      '- searchCSS(selector): Temukan selector, class, atau ID CSS',
+      '- searchHTML(element): Temukan elemen dan tag HTML',
+      '- searchImports(moduleName): Temukan pernyataan import/require',
+      '- analyzeFileStructure(fileName): Ringkas struktur file secara detail'
+    ];
+
+    if (sessionState.capabilities?.supportsWebSearch) {
+      capabilityLines.push(
+        '- webSearch(query, options): Lakukan pencarian internet real-time dan ambil hasil terbaru',
+        '- fetchWebPage(url, options): Unduh konten halaman web untuk dianalisis'
+      );
+    }
+
+    const webFocusNote = !hasFiles
+      ? '\nFOKUS: Tidak ada file lokal, jadi rencanakan minimal satu tindakan research menggunakan webSearch/fetchWebPage untuk mendapatkan informasi yang relevan.'
+      : '';
+
+    return `You are an autonomous research agent with access to project files and live internet tools.
 
 USER FILES:
 ${fileList}
 
-AVAILABLE SEARCH CAPABILITIES:
-- searchPattern(pattern, options): Search for text patterns across all files (like grep)
-- searchFunctions(functionName): Find function definitions
-- searchCSS(selector): Find CSS selectors, classes, IDs
-- searchHTML(element): Find HTML elements and tags
-- searchImports(moduleName): Find import/require statements
-- analyzeFileStructure(fileName): Get detailed file structure analysis
+AVAILABLE CAPABILITIES:
+${capabilityLines.join('\n')}
 
 USER QUERY: "${userQuery}"
 
 INSTRUCTIONS:
-1. REASON about what the user is asking and what information you need
-2. PLAN which search actions would help answer their question
-3. For each planned action, specify:
-   - Action type (e.g., "searchHTML")
-   - Parameters (e.g., {"element": "textarea"})
-   - Why this action is needed
+1. REASON about what information is required to answer the question${webFocusNote}
+2. PLAN a sequence of search actions using the tools above (local file search and/or web research)
+3. For each action specify:
+   - Action type (e.g., "webSearch" atau "searchHTML")
+   - Parameters in JSON (mis. {"query": "berita Nepal terbaru"})
+   - Why this action helps progress the investigation
 
-Respond in this format:
-REASONING: [Your analysis of the problem]
+Respond with this exact template:
+REASONING: [Your thought process]
 
 PLAN:
-1. ACTION: searchHTML with {"element": "textarea"}
-   WHY: Need to find if textarea elements exist and how they're defined
+1. ACTION: <toolName> with {...}
+   WHY: <reason>
+2. ACTION: <toolName> with {...}
+   WHY: <reason>
+[Tambah aksi lain bila perlu]
 
-2. ACTION: searchCSS with {"selector": "textarea"}
-   WHY: Check if there are CSS rules affecting textarea styling
-
-[Continue with more actions as needed]
-
-CURRENT THINKING: [What you expect to find and how it will help]`;
+CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu menjawab pertanyaan pengguna]`;
   }
 
   /**
@@ -718,13 +738,16 @@ IMPORTANT: The thinking section must be included and will be saved for future re
    */
   limitSearchResults(results, maxLines = 100) {
     if (!Array.isArray(results)) return results;
-    
+
     let totalLines = 0;
     const limitedResults = [];
     
     for (const result of results) {
-      const resultLines = result.context ? result.context.split('\n').length : 1;
-      
+      const snippetSource = result.context || result.snippet || result.preview || result.text || result.content || '';
+      const resultLines = typeof snippetSource === 'string' && snippetSource.length > 0
+        ? snippetSource.split('\n').length
+        : 1;
+
       if (totalLines + resultLines <= maxLines) {
         limitedResults.push(result);
         totalLines += resultLines;
@@ -738,8 +761,62 @@ IMPORTANT: The thinking section must be included and will be saved for future re
         break;
       }
     }
-    
+
     return limitedResults;
+  }
+
+  normalizeResultSnippet(result) {
+    if (!result) return '';
+    const raw = result.snippet || result.context || result.preview || result.text || result.content || '';
+    if (typeof raw !== 'string') {
+      return '';
+    }
+    return raw.replace(/\s+/g, ' ').trim().slice(0, 280);
+  }
+
+  prepareActionSummary(actionHistory = []) {
+    const summaries = [];
+    const webSources = [];
+    const seenUrls = new Set();
+
+    actionHistory.forEach((entry, index) => {
+      const action = entry.action || {};
+      const result = entry.result || {};
+      const header = `ACTION ${index + 1}: ${action.type || 'unknown'} with ${JSON.stringify(action.params || {})}`;
+
+      if (!result.success) {
+        const errorMessage = result.error || 'Unknown error';
+        summaries.push(`${header}\nRESULT: FAILED - ${errorMessage}`);
+        return;
+      }
+
+      const items = Array.isArray(result.results) ? result.results : [];
+      if (items.length === 0) {
+        summaries.push(`${header}\nRESULT: Tidak menemukan informasi relevan (0 hasil)`);
+        return;
+      }
+
+      const formattedItems = items.slice(0, 5).map((item, itemIndex) => {
+        const label = item.fileName || item.source || item.url || `Item ${itemIndex + 1}`;
+        const snippet = this.normalizeResultSnippet(item) || '(ringkasan tidak tersedia)';
+        const urlNote = item.url ? ` [${item.url}]` : '';
+        const errorNote = item.error ? ` [ERROR: ${item.error}]` : '';
+
+        if (item.url && !seenUrls.has(item.url)) {
+          seenUrls.add(item.url);
+          webSources.push({ url: item.url, snippet });
+        }
+
+        return `  - ${label}${urlNote}${errorNote}: ${snippet}`;
+      }).join('\n');
+
+      summaries.push(`${header}\nRESULTS:\n${formattedItems}`);
+    });
+
+    return {
+      summaryText: summaries.join('\n\n'),
+      webSources
+    };
   }
 
   /**
@@ -803,67 +880,36 @@ If you have sufficient information to answer the user's question, provide your f
    * Build final synthesis prompt
    */
   buildSynthesisPrompt(userQuery, actionHistory, sessionState) {
-    const searchSummary = actionHistory.map((h, i) => {
-      const result = h.result.success ? `${h.result.resultCount} results` : `Failed: ${h.result.error || 'Unknown error'}`;
-      return `${i + 1}. ${h.action.type}: ${result}`;
-    }).join('\n');
-
-    // Collect all unique files that were found in search results
-    const foundFiles = new Set();
-    actionHistory.forEach(h => {
-      if (h.result.success && h.result.results && Array.isArray(h.result.results)) {
-        h.result.results.forEach(r => {
-          if (r.fileName || r.source) {
-            foundFiles.add(r.fileName || r.source);
-          }
-        });
-      }
-    });
-
-    // Include full content of found files
-    let fileContext = '';
-    if (foundFiles.size > 0) {
-      fileContext = '\n\nRELEVANT FILE CONTENT:\n';
-      sessionState.files.forEach(file => {
-        if (foundFiles.has(file.name)) {
-          fileContext += `--- START OF FILE: ${file.name} ---\n${file.content}\n--- END OF FILE: ${file.name} ---\n\n`;
-        }
-      });
-    }
-
-    const allResults = actionHistory
-      .filter(h => h.result.success && h.result.results)
-      .map(h => {
-        const actionType = h.action.type;
-        const results = Array.isArray(h.result.results)
-          ? h.result.results.map(r => `${r.fileName || r.source || 'unknown'}:${r.lineNumber || r.line || 'N/A'} - ${r.context || r.preview || r.text || r.content || r}`).join('\n')
-          : JSON.stringify(h.result.results, null, 2);
-        return `${actionType.toUpperCase()} RESULTS:\n${results}`;
-      }).join('\n\n---\n\n');
-
+    const { summaryText, webSources } = this.prepareActionSummary(actionHistory);
+    const hasFiles = Array.isArray(sessionState.files) && sessionState.files.length > 0;
+    const fileList = hasFiles
+      ? sessionState.files.slice(0, 20).map(f => `- ${f.name} (${f.type})`).join('\n')
+      : '- Tidak ada file lokal yang tersedia untuk sesi ini.';
+    const webSourcesSection = webSources.length > 0
+      ? webSources.slice(0, 6).map((item, idx) => `${idx + 1}. ${item.url} -> ${item.snippet || '(ringkasan tidak tersedia)'}`).join('\n')
+      : 'Tidak ada sumber web yang berhasil diambil.';
     const userLanguage = this.detectUserLanguage(userQuery);
 
-    return `You are an AI assistant synthesizing information from project files to answer the user's question.
+    return `You are an autonomous research assistant synthesizing findings from local project files and live internet research.
 
-USER QUERY: "${userQuery}"
+ACTION LOG:
+${summaryText || 'Tidak ada aksi yang dieksekusi.'}
 
-SEARCH ACTIONS PERFORMED:
-${searchSummary}
+PRIMARY WEB SOURCES:
+${webSourcesSection}
 
-${allResults ? `SEARCH RESULTS:\n${allResults}\n\n` : ''}${fileContext}INSTRUCTIONS:
-1. Analyze all the search results and the relevant file content provided above
-2. Provide a comprehensive answer to the user's question based on the findings
-3. Include relevant code examples, file references, and explanations
-4. Use the user's language for the final answer: ${userLanguage}
+PROJECT FILE CONTEXT:
+${fileList}
 
-IMPORTANT: Structure your response with:
-<thinking>
-[Your analysis and reasoning process]
-</thinking>
+USER QUESTION:
+"""${userQuery}"""
 
-[Your final answer in the user's language]
-
-IMPORTANT: The thinking section must be included and will be saved for future reference.`;
+FINAL RESPONSE REQUIREMENTS:
+- Jawab dalam bahasa pengguna (detected: ${userLanguage}).
+- Sertakan <thinking>...</thinking> yang menjelaskan proses analisis internal sebelum jawaban akhir.
+- Gabungkan bukti dari file lokal maupun sumber web; sebutkan nama file atau gunakan format markdown [Label](URL) saat mengutip tautan.
+- Jika informasi masih kurang lengkap, jelaskan keterbatasannya dan sarankan langkah lanjutan yang realistis.
+- Berikan rekomendasi atau next-step yang actionable bila relevan.`;
   }
 
   /**
@@ -1000,13 +1046,13 @@ IMPORTANT: The thinking section must be included and will be saved for future re
 
 PLAN:
 1. ACTION: searchHTML with {"element": "textarea"}
-   WHY: Need to check if textarea elements exist in the HTML files
+    WHY: Need to check if textarea elements exist in the HTML files
 
 2. ACTION: searchCSS with {"selector": "textarea"}
-   WHY: Check for CSS rules that might be hiding or styling textarea elements
+    WHY: Check for CSS rules that might be hiding or styling textarea elements
 
 3. ACTION: searchPattern with {"pattern": "display.*none|visibility.*hidden", "options": {"caseSensitive": false}}
-   WHY: Look for CSS rules that might be hiding elements
+    WHY: Look for CSS rules that might be hiding elements
 
 CURRENT THINKING: Will analyze the HTML structure and CSS styling to identify why textarea elements are not visible.`;
     }

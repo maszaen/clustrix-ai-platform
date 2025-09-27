@@ -1,5 +1,7 @@
 const path = require('path');
 const fs = require('fs');
+const cheerio = require('cheerio');
+const { performWebSearch } = require('./web-search');
 
 class DesktopSearchEngine {
   constructor(langchainService) {
@@ -8,12 +10,13 @@ class DesktopSearchEngine {
     this.searchHistory = [];
     this.currentTodos = [];
     this.thinkingState = null;
+    this.searchApiConfig = null;
   }
 
   loadProjectFiles(files) {
     console.log(`Loading ${files.length} files into search engine...`);
     this.projectFiles.clear();
-    
+
     files.forEach(file => {
       this.projectFiles.set(file.name, {
         content: file.content,
@@ -21,8 +24,16 @@ class DesktopSearchEngine {
         lines: file.content.split('\n')
       });
     });
-    
+
     console.log(`Loaded ${this.projectFiles.size} files for searching`);
+  }
+
+  setSearchConfig(config) {
+    if (config && typeof config === 'object') {
+      this.searchApiConfig = { ...config };
+    } else {
+      this.searchApiConfig = null;
+    }
   }
 
   searchPattern(rawParams) {
@@ -302,6 +313,153 @@ class DesktopSearchEngine {
     return maxResults ? deduped.slice(0, maxResults) : deduped;
   }
 
+  async webSearch(rawParams) {
+    const params = this.normalizeCommandParams(rawParams);
+    const query = params.query ?? params.q ?? params.value ?? '';
+    const options = (params.options && typeof params.options === 'object' && !Array.isArray(params.options))
+      ? { ...params.options }
+      : {};
+
+    const normalizedQuery = Array.isArray(query) ? query.filter(Boolean).join(' ') : String(query || '').trim();
+    if (!normalizedQuery) {
+      throw new Error('webSearch requires a non-empty query parameter');
+    }
+
+    const maxCandidate = Number(params.maxResults ?? options.maxResults ?? 5);
+    const maxResults = Number.isFinite(maxCandidate) && maxCandidate > 0
+      ? Math.min(Math.floor(maxCandidate), 10)
+      : 5;
+
+    const autoFetch = params.autoFetch !== undefined ? Boolean(params.autoFetch)
+      : options.autoFetch !== undefined ? Boolean(options.autoFetch)
+      : true;
+    const fetchCountCandidate = Number(params.fetchCount ?? options.fetchCount ?? Math.min(3, maxResults));
+    const fetchCount = Number.isFinite(fetchCountCandidate) && fetchCountCandidate >= 0
+      ? Math.min(Math.floor(fetchCountCandidate), maxResults)
+      : Math.min(3, maxResults);
+    const maxCharsCandidate = Number(params.maxChars ?? options.maxChars ?? 4000);
+    const maxChars = Number.isFinite(maxCharsCandidate) && maxCharsCandidate > 0
+      ? Math.min(Math.floor(maxCharsCandidate), 12000)
+      : 4000;
+    const timeoutCandidate = Number(params.timeoutMs ?? options.timeoutMs ?? 8000);
+    const timeoutMs = Number.isFinite(timeoutCandidate) && timeoutCandidate > 0
+      ? Math.floor(timeoutCandidate)
+      : 8000;
+
+    let results = [];
+
+    if (this.searchApiConfig) {
+      try {
+        const apiResults = await performWebSearch([normalizedQuery], this.searchApiConfig);
+        if (Array.isArray(apiResults)) {
+          results = apiResults
+            .filter(item => item)
+            .map((item, index) => ({
+              title: item.title || item.name || `Result ${index + 1}`,
+              url: item.link || item.url || item.source || '',
+              source: item.link || item.url || item.source || '',
+              snippet: item.snippet || item.content || item.description || '',
+              preview: item.snippet || item.content || item.description || ''
+            }))
+            .filter(item => item.url)
+            .slice(0, maxResults);
+        }
+      } catch (error) {
+        console.warn('webSearch: performWebSearch failed, attempting fallback', error.message);
+      }
+    }
+
+    if (!Array.isArray(results) || results.length === 0) {
+      results = await this.fallbackDuckDuckGoSearch(normalizedQuery, maxResults);
+    }
+
+    if (!Array.isArray(results) || results.length === 0) {
+      throw new Error('No web results found for query');
+    }
+
+    if (autoFetch) {
+      const urlsToFetch = results
+        .filter(item => item && item.url)
+        .slice(0, fetchCount)
+        .map(item => item.url);
+
+      if (urlsToFetch.length > 0) {
+        const fetchedContent = await this.fetchUrlsContent(urlsToFetch, { maxChars, timeoutMs });
+        const fetchedMap = new Map(fetchedContent.map(entry => [entry.url, entry]));
+
+        results = results.map((item) => {
+          const fetched = fetchedMap.get(item.url);
+          if (!fetched) {
+            return item;
+          }
+
+          return {
+            ...item,
+            content: fetched.content || '',
+            snippet: item.snippet || fetched.snippet || '',
+            preview: fetched.snippet || item.preview || '',
+            fetchError: fetched.error || null
+          };
+        });
+      }
+    }
+
+    return results.slice(0, maxResults);
+  }
+
+  async fetchWebPage(rawParams) {
+    const params = this.normalizeCommandParams(rawParams);
+    const options = (params.options && typeof params.options === 'object' && !Array.isArray(params.options))
+      ? { ...params.options }
+      : {};
+
+    const urls = [];
+    if (params.url) {
+      urls.push(params.url);
+    }
+    if (Array.isArray(params.urls)) {
+      params.urls.forEach(url => {
+        if (url && typeof url === 'string') {
+          urls.push(url);
+        }
+      });
+    }
+    if (options.url) {
+      urls.push(options.url);
+    }
+    if (Array.isArray(options.urls)) {
+      options.urls.forEach(url => {
+        if (url && typeof url === 'string') {
+          urls.push(url);
+        }
+      });
+    }
+
+    const uniqueUrls = Array.from(new Set(urls.map(url => String(url).trim()).filter(Boolean)));
+    if (uniqueUrls.length === 0) {
+      throw new Error('fetchWebPage requires at least one URL');
+    }
+
+    const maxCandidate = Number(params.maxChars ?? options.maxChars ?? 4000);
+    const maxChars = Number.isFinite(maxCandidate) && maxCandidate > 0
+      ? Math.min(Math.floor(maxCandidate), 20000)
+      : 4000;
+    const timeoutCandidate = Number(params.timeoutMs ?? options.timeoutMs ?? 8000);
+    const timeoutMs = Number.isFinite(timeoutCandidate) && timeoutCandidate > 0
+      ? Math.floor(timeoutCandidate)
+      : 8000;
+
+    const content = await this.fetchUrlsContent(uniqueUrls, { maxChars, timeoutMs });
+
+    const successful = content.filter(entry => !entry.failed);
+    if (successful.length === 0) {
+      const firstError = content[0] && content[0].error ? content[0].error : 'Unknown network error';
+      throw new Error(firstError);
+    }
+
+    return content;
+  }
+
   analyzeFileStructure(rawParams) {
     const params = this.normalizeCommandParams(rawParams);
     const fileName = params.fileName || params.value;
@@ -434,6 +592,98 @@ class DesktopSearchEngine {
     return structure;
   }
 
+  async fallbackDuckDuckGoSearch(query, maxResults = 5) {
+    try {
+      const url = new URL('https://ddg-webapp-aagd.vercel.app/search');
+      url.searchParams.set('q', query);
+      url.searchParams.set('max_results', String(Math.min(maxResults, 10)));
+
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'ClustrixResearchAgent/1.0 (+https://clustrix.local)'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`DuckDuckGo fallback HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const list = Array.isArray(data?.results) ? data.results : [];
+
+      return list
+        .map((item, index) => ({
+          title: item.title || item.heading || `Result ${index + 1}`,
+          url: item.href || item.url || item.link || '',
+          source: item.href || item.url || item.link || '',
+          snippet: item.body || item.snippet || item.description || '',
+          preview: item.body || item.snippet || item.description || ''
+        }))
+        .filter(item => item.url)
+        .slice(0, maxResults);
+    } catch (error) {
+      console.warn('fallbackDuckDuckGoSearch failed:', error.message);
+      return [];
+    }
+  }
+
+  async fetchUrlsContent(urls, { maxChars = 4000, timeoutMs = 8000 } = {}) {
+    if (!Array.isArray(urls) || urls.length === 0) {
+      return [];
+    }
+
+    const tasks = urls.map(async (rawUrl) => {
+      const url = String(rawUrl).trim();
+      if (!url) {
+        return { url: rawUrl, source: rawUrl, content: '', error: 'Invalid URL provided', failed: true };
+      }
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'ClustrixResearchAgent/1.0 (+https://clustrix.local)',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+          }
+        });
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        let body = await response.text();
+        if (/<html|<!doctype/i.test(body)) {
+          const $ = cheerio.load(body);
+          $('script, style, nav, footer, header, aside, form').remove();
+          body = $('body').text();
+        }
+
+        const normalized = body.replace(/\s+/g, ' ').trim();
+        const truncated = normalized.slice(0, maxChars);
+
+        return {
+          url,
+          source: url,
+          content: truncated,
+          snippet: truncated.slice(0, Math.min(500, truncated.length))
+        };
+      } catch (error) {
+        return {
+          url,
+          source: url,
+          content: '',
+          error: error.message || 'Unknown fetch error',
+          failed: true
+        };
+      }
+    });
+
+    return Promise.all(tasks);
+  }
+
   normalizeCommandParams(rawParams) {
     if (typeof rawParams === 'string') {
       const trimmed = rawParams.trim();
@@ -505,9 +755,13 @@ class DesktopSearchEngine {
         'searchCSS(selector)',
         'searchHTML(element)',
         'searchImports(moduleName)',
-        'analyzeFileStructure(fileName)'
+        'analyzeFileStructure(fileName)',
+        'webSearch(query, options)',
+        'fetchWebPage(urls)'
       ],
-      searchHistory: this.searchHistory.length
+      searchHistory: this.searchHistory.length,
+      supportsWebSearch: true,
+      webSearchConfigured: Boolean(this.searchApiConfig)
     };
   }
 
@@ -555,7 +809,11 @@ class DesktopSearchEngine {
       searchcss: 'searchCSS',
       searchhtml: 'searchHTML',
       searchimports: 'searchImports',
-      analyzefilestructure: 'analyzeFileStructure'
+      analyzefilestructure: 'analyzeFileStructure',
+      websearch: 'webSearch',
+      fetchwebpage: 'fetchWebPage',
+      fetchurl: 'fetchWebPage',
+      scrapeurl: 'fetchWebPage'
     };
 
     const methodName = nameMap[normalizedName] || commandName;
@@ -574,6 +832,10 @@ class DesktopSearchEngine {
           return this.searchImports(params);
         case 'analyzeFileStructure':
           return this.analyzeFileStructure(params);
+        case 'webSearch':
+          return this.webSearch(params);
+        case 'fetchWebPage':
+          return this.fetchWebPage(params);
         default:
           console.warn(`Unknown search command: ${commandName}`);
           return [];

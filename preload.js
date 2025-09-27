@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, shell } = require('electron');
 function rid(){ return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`; }
 
 contextBridge.exposeInMainWorld('api', {
@@ -70,5 +70,8 @@ contextBridge.exposeInMainWorld('api', {
     minimize: () => ipcRenderer.send('window:minimize'),
     maximize: () => ipcRenderer.send('window:maximize'),
     close: () => ipcRenderer.send('window:close'),
+  },
+  shell: {
+    openExternal: (url) => shell.openExternal(url),
   }
 });

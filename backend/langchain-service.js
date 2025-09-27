@@ -436,7 +436,7 @@ class ClustrixLangChainService {
 
   // ==================== REASONING + ACTION PATTERN ====================
   
-  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', progressCallback = null, systemPrompt = null) {
+  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', searchApiConfig = null, progressCallback = null, systemPrompt = null) {
     console.log(`LangChain: Starting RE+ACT processing for session ${sessionId}`);
     
     try {
@@ -446,16 +446,18 @@ class ClustrixLangChainService {
         provider,
         model,
         apiKey,
-        baseUrl
+        baseUrl,
+        searchApiConfig
       });
       console.log(`RE+ACT: Session initialized with capabilities:`, capabilities);
-      
+
       // Step 2: Process with reasoning and actions
       const result = await this.reasoningAgent.processWithReasoningAction(
         userMessage,
         sessionId,
         [],
-        progressCallback
+        progressCallback,
+        systemPrompt
       );
       
       console.log(`RE+ACT: Completed with ${result.actionsExecuted} actions executed`);

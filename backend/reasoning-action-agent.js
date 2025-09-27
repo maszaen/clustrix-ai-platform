@@ -55,7 +55,7 @@ class ReasoningActionAgent {
   /**
    * Process user query with RE+ACT pattern
    */
-  async processWithReasoningAction(userQuery, sessionId, existingMessages = [], progressCallback = null) {
+  async processWithReasoningAction(userQuery, sessionId, existingMessages = [], progressCallback = null, systemPrompt = null) {
     console.log(`RE+ACT: Processing query for session ${sessionId}`);
     
     const sessionState = this.sessionState.get(sessionId);

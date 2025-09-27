@@ -1,0 +1,711 @@
+PS H:\VSCode\Clustrix-AI-Platform> npm run dev
+
+> clustrix@26.2.0 dev
+> electron-forge start
+
+✔ Checking your system
+✔ Locating application
+✔ Loading configuration
+✔ Preparing native dependencies [3s]
+✔ Running generateAssets hook
+✔ Running preStart hook
+✔ Launched Electron app. Type rs in terminal to restart main process.
+
+
+[FLAGS] OverlayScrollbar,OverlayScrollbarFlashAfterAnyScrollUpdate,OverlayScrollbarFlashWhenMouseEnter
+≡ƒôÜ Loaded 4 file summaries from cache
+≡ƒôÜ Local Index: Loaded 9 documents, 647 vocabulary terms
+Initializing LangChain service...
+Found API key for provider: openrouter
+Initializing embeddings with openrouter provider...
+Attempting OpenRouter embeddings...
+LangChain services initialized
+OpenRouter embeddings not supported, using text similarity
+Using simple text-based embeddings...
+LangChain: No existing vector store file found, starting fresh
+LangChain service initialized successfully
+[APP INFO - 07:16:11.968] initializeApp() -> Initializing application.
+[APP INFO - 07:16:12.445] load() -> Successfully loaded data.
+   - sessionCount: 147
+[PAGESTATE TRACE - 07:16:12.594] loadPageState() -> Page state loaded from preload: chat
+[PAGESTATE TRACE - 07:16:12.597] restoreLastActivePage() -> Restoring page: chat
+[APP DEBUG - 07:16:12.600] save() -> Attempting to save data
+   - sessionCount: 147
+[PAGESTATE TRACE - 07:16:12.890] savePageState() -> Page state saved: chat (session: mg1ilqym-v3uy0k7)
+[SESSIONSTATE TRACE - 07:16:12.892] setCurrent() -> Session set as current and saved: Most Effective Point In This File (mg1ilqym-v3uy0k7)
+[SESSION DEBUG - 07:16:12.906] renderHistory() -> Rendering chat history
+   - sessionName: Most Effective Point In This File
+[SESSION DEBUG - 07:16:12.909] renderHistoryLazy() -> Lazy loading chat history
+   - totalMessages: 2
+   - initialLoad: 2
+[SESSION INFO - 07:16:13.093] setCurrent() -> Successfully switch session
+   - newCurrentSession: Most Effective Point In This File
+[APP DEBUG - 07:16:13.095] save() -> Attempting to save data
+   - sessionCount: 147
+[PAGESTATE TRACE - 07:16:13.355] savePageState() -> Page state saved: chat (session: mg1ilqym-v3uy0k7)
+[PAGESTATE TRACE - 07:16:13.357] restoreLastActivePage() -> Restored chat session: Most Effective Point In This File (mg1ilqym-v3uy0k7)
+[APP DEBUG - 07:16:13.359] save() -> Attempting to save data
+   - sessionCount: 147
+[SESSION DEBUG - 07:16:13.705] renderHistoryLazy() -> Instant scrolled to last user message with top 30px offset
+   - messageIndex: 0
+   - elementTop: 36
+   - targetScrollTop: 6
+[UI TRACE - 07:16:14.337] load() -> Loading overlay fade-out sequence started
+[6040:0927/071615.523:ERROR:CONSOLE:1] "Request Autofill.enable failed. {"code":-32601,"message":"'Autofill.enable' wasn't found"}", source: devtools://devtools/bundled/core/protocol_client/protocol_client.js (1)
+[6040:0927/071615.524:ERROR:CONSOLE:1] "Request Autofill.setAddresses failed. {"code":-32601,"message":"'Autofill.setAddresses' wasn't found"}", source: devtools://devtools/bundled/core/protocol_client/protocol_client.js (1)
+[UI TRACE - 07:16:42.727] event:maximize-btn() -> Maximize button clicked
+[UI TRACE - 07:16:48.994] event:projects-page-click() -> Projects page button clicked
+[APP DEBUG - 07:16:48.994] save() -> Attempting to save data
+   - sessionCount: 147
+[PAGESTATE TRACE - 07:16:49.067] savePageState() -> Page state saved: projects
+[UI INFO - 07:16:49.114] showProjectsPage() -> Switched to Projects Page
+[SESSION INFO - 07:17:55.041] createNewSession() -> Creating new session object...
+[APP DEBUG - 07:17:55.042] save() -> Attempting to save data
+   - sessionCount: 148
+[SESSION INFO - 07:17:55.506] createNewSession() -> New session object created.
+   - sessionId: mg1iv1i9-hx6jq8b
+   - type: project
+   - projectId: mfxqt5jr-k211cr1
+[APP DEBUG - 07:17:55.879] save() -> Attempting to save data
+   - sessionCount: 148
+[PAGESTATE TRACE - 07:17:56.214] savePageState() -> Page state saved: chat (session: mg1iv1i9-hx6jq8b)
+[SESSIONSTATE TRACE - 07:17:56.215] setCurrent() -> Session set as current and saved: Untitled (mg1iv1i9-hx6jq8b)
+[SESSION DEBUG - 07:17:56.221] renderHistory() -> Rendering chat history
+   - sessionName: null
+[SESSION DEBUG - 07:17:56.223] renderHistoryLazy() -> Lazy loading chat history
+   - totalMessages: 2
+   - initialLoad: 2
+[SESSION INFO - 07:17:56.453] setCurrent() -> Successfully switch session
+   - newCurrentSession: null
+[TITLE INFO - 07:17:56.485] generateAndSetTitle() -> Executed
+[TITLE INFO - 07:17:56.487] generateAndSetTitle() -> Requesting title suggestion from model
+   - userPrompt: Coba periksa file ini, lalu kamu cek kenapa file ini mendapat nilai B, apa yang perlu di revisi agar mendapat A?
+   - model: qwen-3-coder-480b
+   - provider: cerebras
+   - baseUrl: https://api.cerebras.ai/v1/
+[APP DEBUG - 07:17:56.491] save() -> Attempting to save data
+   - sessionCount: 148
+[STREAM INFO - 07:17:57.942] createStreamHandler() -> Stream handler created
+   - streamId: mg1iv1i9-hx6jq8b-1-16gvw6kfwy8
+   - isFirstInteraction: false
+MAIN: chat:stream-start invoked {
+  reqId: 'mg1iv3rb-t7xlrv',
+  webSearchEnabled: false,
+  aiMessageIndex: undefined
+}
+MAIN: webSearchEnabled is falsey, using standard streaming
+MAIN: Starting LangChain processing...
+MAIN: Vectorizing chat history (2 messages)...
+LangChain: Vectorizing chat history for session mg1iv1i9-hx6jq8b (2 messages)
+Local Index: Saved 9 documents to disk
+LangChain: Successfully vectorized 0 chat messages for session mg1iv1i9-hx6jq8b
+MAIN: Session type detected: PROJECT
+MAIN: PROJECT mode - activating agent system...
+≡ƒÆ¡ MAIN: Processing user query: "Coba periksa file ini, lalu kamu cek kenapa file ini mendapat nilai B, apa yang perlu di revisi agar..."
+MAIN: Processing 1 project files...
+LangChain: Starting PURE LOCAL processing of 1 files for session mg1iv1i9-hx6jq8b
+LangChain: Running LOCAL file optimization and summarization...
+≡ƒôÜ Using cached summary for UAS PKN.docx
+File processing complete: 1 files
+Size optimization: 26969 ΓåÆ 355 chars (99% reduction)
+Token optimization: 99% reduction (6654 tokens saved)
+LangChain: Adding files to LOCAL embedding index...
+≡ƒô¥ Local Index: Adding document UAS PKN.docx
+Local Index: Document UAS PKN.docx indexed with 39 tokens
+Local Index: Added UAS PKN.docx (355 chars)
+Local Index: Saved 9 documents to disk
+LangChain: PURE LOCAL processing complete!
+Files processed: 1/1
+Token savings: 6654 tokens
+Local index: 9 docs, 647 terms
+MAIN: Calling agent orchestrator...
+MAIN: Provider detected: cerebras, session type: project
+MAIN: Agent orchestrator only supports OpenAI, checking if RE+ACT pattern needed for cerebras...
+MAIN: Using 1 project files for AI processing
+DEBUG: session.messages length: 2
+DEBUG: last message (AI): ["ai","",{"provider":"cerebras","model":"qwen-3-coder-480b","label":"Qwen 3 Coder 480B"}]
+DEBUG: second-to-last message (user): ["user","Coba periksa file ini, lalu kamu cek kenapa file ini mendapat nilai B, apa yang perlu di revisi agar mendapat A?",{"files":[]}]
+RE+ACT check called with: sessionType=project, uploadedFiles=1, message="Coba periksa file ini, lalu kamu cek kenapa file i..."
+AI-based RE+ACT analysis: 1 files, message length: 112
+Using active provider openrouter for AI decision
+[REQ INFO - 07:17:57.963] chat:stream-start() -> Request to AI using qwen-3-coder-480b model.
+[APP DEBUG - 07:17:59.423] save() -> Attempting to save data
+   - sessionCount: 148
+AI decision call failed for openrouter: HTTP 404: {"error":{"message":"No endpoints found for meta-llama/llama-3.1-8b-instruct:free.","code":404},"user_id":"user_32P24GtcMechctqBLKPlcpQu84w"}
+AI Decision: RESEARCH -> USE RE+ACT
+MAIN: RE+ACT check - sessionType: project, uploadedFiles: 0, sessionMessageFiles: 0, query: "Coba periksa file ini, lalu kamu cek kenapa file i..."
+MAIN: Using RE+ACT pattern for complex project query analysis...
+RE+ACT: Initializing session mg1iv1i9-hx6jq8b with 1 files
+RE+ACT: Using 1 files directly from session
+Loading 1 files into search engine...
+Loaded 1 files for searching
+Session initialized with capabilities: {
+  totalFiles: 1,
+  fileTypes: [ 'docx' ],
+  searchCommands: [
+    'searchPattern(pattern, options)',
+    'searchFunctions(functionName)',
+    'searchCSS(selector)',
+    'searchHTML(element)',
+    'searchImports(moduleName)',
+    'analyzeFileStructure(fileName)'
+  ],
+  searchHistory: 0
+}
+MAIN: ReasoningAgent re-initialized for session mg1iv1i9-hx6jq8b with 1 files.
+MAIN: Sending REACT_START chat-update { reqId: 'mg1iv3rb-t7xlrv', aiMessageIndex: 1 }
+LangChain: Starting RE+ACT processing for session mg1iv1i9-hx6jq8b
+RE+ACT: Initializing with 1 files
+RE+ACT: Initializing session mg1iv1i9-hx6jq8b with 1 files
+RE+ACT: Using 1 files directly from session
+Loading 1 files into search engine...
+Loaded 1 files for searching
+Session initialized with capabilities: {
+  totalFiles: 1,
+  fileTypes: [ 'docx' ],
+  searchCommands: [
+    'searchPattern(pattern, options)',
+    'searchFunctions(functionName)',
+    'searchCSS(selector)',
+    'searchHTML(element)',
+    'searchImports(moduleName)',
+    'analyzeFileStructure(fileName)'
+  ],
+  searchHistory: 0
+}
+RE+ACT: Session initialized with capabilities: {
+  totalFiles: 1,
+  fileTypes: [ 'docx' ],
+  searchCommands: [
+    'searchPattern(pattern, options)',
+    'searchFunctions(functionName)',
+    'searchCSS(selector)',
+    'searchHTML(element)',
+    'searchImports(moduleName)',
+    'analyzeFileStructure(fileName)'
+  ],
+  searchHistory: 0
+}
+RE+ACT: Processing query for session mg1iv1i9-hx6jq8b
+RE+ACT: Sending reasoning prompt to AI...
+AI Request for session mg1iv1i9-hx6jq8b: You are an AI assistant with powerful desktop search capabilities. The user has uploaded project fil...
+[UI_SEARCH DEBUG - 07:18:00.521] onSearchStatus() -> Event 'FOUND_URLS' added to queue.
+   - queue_length: 1
+[UI_SEARCH DEBUG - 07:18:00.525] processSearchStatusQueue() -> Starting queue V3.
+   - queue_length: 1
+[UI_SEARCH INFO - 07:18:00.529] processSearchStatusQueue() -> Processing step: FOUND_URLS
+[UI_EFFECT DEBUG - 07:18:00.532] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 24
+   - duration_ms: 200
+[UI_SEARCH DEBUG - 07:18:00.560] onSearchStatus() -> Event 'ACTION_EXECUTING' added to queue.
+   - queue_length: 1
+[UI_EFFECT INFO - 07:18:00.915] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:00.917] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 13
+   - duration_ms: 700
+RE+ACT: AI generated plan with 4 actions
+Executing searchPattern with params: { pattern: 'B', options: { fileName: 'UAS PKN.docx' } }
+Action searchPattern returned 136 result(s)
+AI Request for session mg1iv1i9-hx6jq8b: SEARCH ACTION COMPLETED:
+Action: searchPattern with {"pattern":"B","options":{"fileName":"UAS PKN.do...
+[UI_SEARCH DEBUG - 07:18:01.060] onSearchStatus() -> Event 'ACTION_RESULTS' added to queue.
+   - queue_length: 2
+[UI_SEARCH DEBUG - 07:18:01.062] onSearchStatus() -> Event 'ACTION_EXECUTING' added to queue.
+   - queue_length: 3
+[UI_SEARCH DEBUG - 07:18:01.073] onSearchStatus() -> Event 'ACTION_RESULTS' added to queue.
+   - queue_length: 4
+[UI_EFFECT INFO - 07:18:01.621] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:18:01.623] processSearchStatusQueue() -> Processing step: ACTION_EXECUTING
+[UI_EFFECT DEBUG - 07:18:01.624] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 10
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:18:01.916] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:01.918] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 55
+   - duration_ms: 500
+Executing searchPattern with params: {
+  pattern: 'revisi|perbaikan|saran',
+  options: { fileName: 'UAS PKN.docx', caseInsensitive: true }
+}
+Action searchPattern returned 3 result(s)
+AI Request for session mg1iv1i9-hx6jq8b: SEARCH ACTION COMPLETED:
+Action: searchPattern with {"pattern":"revisi|perbaikan|saran","options":{"...
+[UI_SEARCH DEBUG - 07:18:02.178] onSearchStatus() -> Event 'ACTION_EXECUTING' added to queue.
+   - queue_length: 4
+[UI_SEARCH DEBUG - 07:18:02.296] onSearchStatus() -> Event 'PROCESSING' added to queue.
+   - queue_length: 5
+[UI_SEARCH DEBUG - 07:18:02.308] onSearchStatus() -> Event 'ACTION_RESULTS' added to queue.
+   - queue_length: 6
+[UI_EFFECT INFO - 07:18:02.648] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:18:02.653] processSearchStatusQueue() -> Processing step: ACTION_RESULTS
+[UI_EFFECT DEBUG - 07:18:02.655] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 17
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:18:03.156] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:03.157] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 36
+   - duration_ms: 300
+Executing searchPattern with params: {
+  pattern: 'A|grade|nilai',
+  options: { fileName: 'UAS PKN.docx', caseInsensitive: true }
+}
+Action searchPattern returned 215 result(s)
+AI Request for session mg1iv1i9-hx6jq8b: SEARCH ACTION COMPLETED:
+Action: searchPattern with {"pattern":"A|grade|nilai","options":{"fileName"...
+[UI_SEARCH DEBUG - 07:18:03.227] onSearchStatus() -> Event 'ACTION_EXECUTING' added to queue.
+   - queue_length: 6
+[UI_SEARCH DEBUG - 07:18:03.233] onSearchStatus() -> Event 'ACTION_RESULTS' added to queue.
+   - queue_length: 7
+[UI_EFFECT INFO - 07:18:03.504] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:18:03.506] processSearchStatusQueue() -> Processing step: ACTION_EXECUTING
+[UI_EFFECT DEBUG - 07:18:03.510] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 14
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:18:03.774] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:03.775] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 28
+   - duration_ms: 500
+Executing analyzeFileStructure with params: { fileName: 'UAS PKN.docx' }
+Action analyzeFileStructure returned 1 result(s)
+AI Request for session mg1iv1i9-hx6jq8b: You are an AI assistant synthesizing information from project files to answer the user's question.
+
+...
+[UI_SEARCH DEBUG - 07:18:03.925] onSearchStatus() -> Event 'ACTION_EXECUTING' added to queue.
+   - queue_length: 7
+[UI_SEARCH DEBUG - 07:18:03.958] onSearchStatus() -> Event 'ACTION_RESULTS' added to queue.
+   - queue_length: 8
+1. [UI_SEARCH - 18:03.962] onSearchStatus() -> Event 'ACTION_RESULTS' added to queue.
+   - queue_length: 9
+[UI_EFFECT INFO - 07:18:04.307] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:18:04.308] processSearchStatusQueue() -> Processing step: ACTION_RESULTS
+[UI_EFFECT DEBUG - 07:18:04.311] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 22
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:18:04.786] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:04.787] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 37
+   - duration_ms: 300
+[UI_EFFECT INFO - 07:18:05.111] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:18:05.114] processSearchStatusQueue() -> Processing step: ACTION_EXECUTING
+[UI_EFFECT DEBUG - 07:18:05.118] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 14
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:18:05.500] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:05.501] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 28
+   - duration_ms: 500
+[UI_EFFECT INFO - 07:18:06.020] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:18:06.022] processSearchStatusQueue() -> Processing step: PROCESSING
+[UI_SEARCH INFO - 07:18:07.041] processSearchStatusQueue() -> Processing step: ACTION_RESULTS
+[UI_EFFECT DEBUG - 07:18:07.045] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 22
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:18:07.594] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:07.595] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 36
+   - duration_ms: 300
+RE+ACT: Completed processing with 4 actions executed
+RE+ACT: Completed with 4 actions executed
+MAIN: RE+ACT completed with 4 actions
+MAIN: RE+ACT response received (7440 chars), starting streaming...
+MAIN: RE+ACT response preview: <thinking>
+Pertama, saya akan menganalisis struktur dan isi makalah yang bernama "UAS PKN.docx". Makalah ini dikerjakan oleh Zaeni Ahmad untuk mata kuliah Pendidikan Kewarganegaraan. Berdasarkan hasil...
+MAIN: RE+ACT JSON parse failed: Unexpected token '<', "<thinking>"... is not valid JSON, trying HTML tags
+MAIN: RE+ACT parsed HTML tags - thinking: 5138 chars, main: 2277 chars
+MAIN: RE+ACT sending thinking content (5138 chars)
+[UI_EFFECT INFO - 07:18:07.918] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:18:07.921] processSearchStatusQueue() -> Processing step: ACTION_EXECUTING
+[UI_EFFECT DEBUG - 07:18:07.925] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 14
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:18:08.226] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:08.227] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 28
+   - duration_ms: 500
+[APP DEBUG - 07:18:08.499] save() -> Attempting to save data
+   - sessionCount: 148
+2. [APP - 18:09.242] save().
+[UI_EFFECT INFO - 07:18:09.694] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:18:09.699] processSearchStatusQueue() -> Processing step: ACTION_RESULTS
+[UI_EFFECT DEBUG - 07:18:09.702] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 22
+   - duration_ms: 200
+[APP DEBUG - 07:18:09.804] save() -> Attempting to save data
+   - sessionCount: 148
+[UI_EFFECT INFO - 07:18:10.550] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:10.552] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 37
+   - duration_ms: 300
+[APP DEBUG - 07:18:10.593] save() -> Attempting to save data
+   - sessionCount: 148
+[UI_EFFECT INFO - 07:18:11.178] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:18:11.185] processSearchStatusQueue() -> Processing step: ACTION_EXECUTING
+[UI_EFFECT DEBUG - 07:18:11.187] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 21
+   - duration_ms: 200
+[APP DEBUG - 07:18:11.258] save() -> Attempting to save data
+   - sessionCount: 148
+[UI_EFFECT INFO - 07:18:11.923] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:11.924] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 28
+   - duration_ms: 500
+[APP DEBUG - 07:18:11.960] save() -> Attempting to save data
+   - sessionCount: 148
+[UI_EFFECT INFO - 07:18:12.693] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:18:12.696] processSearchStatusQueue() -> Processing step: ACTION_RESULTS
+[UI_EFFECT DEBUG - 07:18:12.698] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 29
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:18:12.962] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:12.964] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 35
+   - duration_ms: 300
+[UI_EFFECT INFO - 07:18:13.332] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:18:13.335] processSearchStatusQueue() -> Processing step: ACTION_RESULTS
+[UI_EFFECT DEBUG - 07:18:13.338] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 18
+   - duration_ms: 200
+[APP DEBUG - 07:18:13.468] save() -> Attempting to save data
+   - sessionCount: 148
+[UI_EFFECT INFO - 07:18:14.350] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:18:14.352] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 36
+   - duration_ms: 300
+[APP DEBUG - 07:18:14.617] save() -> Attempting to save data
+   - sessionCount: 148
+[UI_EFFECT INFO - 07:18:15.068] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH DEBUG - 07:18:15.070] processSearchStatusQueue() -> Queue V3 finished.
+[APP DEBUG - 07:18:15.790] save() -> Attempting to save data
+   - sessionCount: 148
+2. [APP - 18:16.488] save().
+4. [APP - 18:17.290] save().
+6. [APP - 18:17.944] save().
+8. [APP - 18:18.745] save().
+10. [APP - 18:19.380] save().
+12. [APP - 18:20.084] save().
+14. [APP - 18:20.670] save().
+16. [APP - 18:21.238] save().
+18. [APP - 18:22.048] save().
+20. [APP - 18:22.699] save().
+22. [APP - 18:23.242] save().
+24. [APP - 18:23.847] save().
+26. [APP - 18:24.377] save().
+28. [APP - 18:24.810] save().
+30. [APP - 18:25.241] save().
+32. [APP - 18:25.712] save().
+34. [APP - 18:26.183] save().
+36. [APP - 18:26.704] save().
+38. [APP - 18:27.242] save().
+40. [APP - 18:27.931] save().
+42. [APP - 18:28.430] save().
+44. [APP - 18:28.952] save().
+46. [APP - 18:29.649] save().
+48. [APP - 18:30.320] save().
+50. [APP - 18:30.919] save().
+52. [APP - 18:31.648] save().
+54. [APP - 18:32.244] save().
+56. [APP - 18:32.809] save().
+58. [APP - 18:33.766] save().
+60. [APP - 18:34.487] save().
+62. [APP - 18:35.500] save().
+64. [APP - 18:36.041] save().
+66. [APP - 18:36.590] save().
+68. [APP - 18:37.023] save().
+70. [APP - 18:37.469] save().
+72. [APP - 18:37.903] save().
+74. [APP - 18:38.343] save().
+76. [APP - 18:38.877] save().
+78. [APP - 18:39.391] save().
+80. [APP - 18:39.878] save().
+82. [APP - 18:40.339] save().
+84. [APP - 18:40.772] save().
+86. [APP - 18:41.172] save().
+88. [APP - 18:41.606] save().
+90. [APP - 18:42.068] save().
+92. [APP - 18:42.557] save().
+94. [APP - 18:43.039] save().
+96. [APP - 18:43.522] save().
+98. [APP - 18:44.027] save().
+100. [APP - 18:44.505] save().
+102. [APP - 18:44.880] save().
+104. [APP - 18:45.316] save().
+106. [APP - 18:45.699] save().
+108. [APP - 18:46.106] save().
+110. [APP - 18:46.571] save().
+112. [APP - 18:47.039] save().
+114. [APP - 18:47.566] save().
+116. [APP - 18:47.988] save().
+118. [APP - 18:48.420] save().
+120. [APP - 18:48.819] save().
+122. [APP - 18:49.165] save().
+124. [APP - 18:49.519] save().
+126. [APP - 18:49.881] save().
+128. [APP - 18:50.270] save().
+130. [APP - 18:50.703] save().
+132. [APP - 18:51.102] save().
+134. [APP - 18:51.501] save().
+136. [APP - 18:51.886] save().
+138. [APP - 18:52.251] save().
+140. [APP - 18:52.617] save().
+142. [APP - 18:52.953] save().
+144. [APP - 18:53.284] save().
+146. [APP - 18:53.617] save().
+148. [APP - 18:53.984] save().
+150. [APP - 18:54.350] save().
+152. [APP - 18:54.712] save().
+154. [APP - 18:55.111] save().
+156. [APP - 18:55.522] save().
+158. [APP - 18:55.943] save().
+160. [APP - 18:56.299] save().
+162. [APP - 18:56.675] save().
+164. [APP - 18:57.032] save().
+166. [APP - 18:57.378] save().
+168. [APP - 18:57.708] save().
+170. [APP - 18:58.067] save().
+172. [APP - 18:58.472] save().
+174. [APP - 18:58.984] save().
+176. [APP - 18:59.437] save().
+178. [APP - 18:59.883] save().
+180. [APP - 19:00.321] save().
+182. [APP - 19:00.830] save().
+184. [APP - 19:17.268] save().
+186. [APP - 19:18.026] save().
+188. [APP - 19:19.081] save().
+190. [APP - 19:20.126] save().
+192. [APP - 19:21.394] save().
+194. [APP - 19:22.560] save().
+196. [APP - 19:23.772] save().
+198. [APP - 19:24.984] save().
+200. [APP - 19:26.080] save().
+202. [APP - 19:27.267] save().
+204. [APP - 19:28.571] save().
+206. [APP - 19:29.733] save().
+MAIN: RE+ACT streaming completed
+[STREAM INFO - 07:19:30.543] finalize() -> Finalizing stream
+   - streamId: mg1iv1i9-hx6jq8b-1-16gvw6kfwy8
+   - interrupted: false
+   - sawEnd: false
+   - hasContent: true
+[FINALIZE DEBUG - 07:19:30.544] finalize() -> Preparing to save final message.
+   - hasModelInfo: true
+   - modelInfo: {"provider":"cerebras","model":"qwen-3-coder-480b","label":"Qwen 3 Coder 480B"}
+[FINALIZE INFO - 07:19:30.545] finalize() -> Final message saved to state with modelInfo.
+   - content: Berdasarkan hasil pemeriksaan makalah berjudul ΓÇ£UA...
+   - modelInfo: {"provider":"cerebras","model":"qwen-3-coder-480b","label":"Qwen 3 Coder 480B"}
+[RENDER INFO - 07:19:30.553] renderAiFinalActions() -> Fetching modelInfo for index 1 directly from state.
+   - hasModelInfo: true
+   - modelInfo: {"provider":"cerebras","model":"qwen-3-coder-480b","label":"Qwen 3 Coder 480B"}
+[APP DEBUG - 07:19:30.619] save() -> Attempting to save data
+   - sessionCount: 148
+2. [APP - 20:27.259] save().
+[STREAM INFO - 07:20:27.422] createStreamHandler() -> Stream handler created
+   - streamId: mg1iv1i9-hx6jq8b-3-fq9ibl4i8p
+   - isFirstInteraction: false
+MAIN: chat:stream-start invoked {
+  reqId: 'mg1iyb33-vsjwbf',
+  webSearchEnabled: false,
+  aiMessageIndex: undefined
+}
+MAIN: webSearchEnabled is falsey, using standard streaming
+MAIN: Starting LangChain processing...
+MAIN: Vectorizing chat history (4 messages)...
+LangChain: Vectorizing chat history for session mg1iv1i9-hx6jq8b (4 messages)
+Local Index: Saved 9 documents to disk
+LangChain: Successfully vectorized 0 chat messages for session mg1iv1i9-hx6jq8b
+MAIN: Session type detected: PROJECT
+MAIN: PROJECT mode - activating agent system...
+≡ƒÆ¡ MAIN: Processing user query: "coba buat revisinya dong, males nulis ni, boleh cari aja di internet..."
+MAIN: Processing 1 project files...
+LangChain: Starting PURE LOCAL processing of 1 files for session mg1iv1i9-hx6jq8b
+LangChain: Running LOCAL file optimization and summarization...
+≡ƒôÜ Using cached summary for UAS PKN.docx
+File processing complete: 1 files
+Size optimization: 26969 ΓåÆ 355 chars (99% reduction)
+Token optimization: 99% reduction (6654 tokens saved)
+LangChain: Adding files to LOCAL embedding index...
+≡ƒô¥ Local Index: Adding document UAS PKN.docx
+Local Index: Document UAS PKN.docx indexed with 39 tokens
+Local Index: Added UAS PKN.docx (355 chars)
+Local Index: Saved 9 documents to disk
+LangChain: PURE LOCAL processing complete!
+Files processed: 1/1
+Token savings: 6654 tokens
+Local index: 9 docs, 647 terms
+MAIN: Calling agent orchestrator...
+MAIN: Provider detected: cerebras, session type: project
+MAIN: Agent orchestrator only supports OpenAI, checking if RE+ACT pattern needed for cerebras...
+MAIN: Using 1 project files for AI processing
+DEBUG: session.messages length: 4
+DEBUG: last message (AI): ["ai","",{"provider":"cerebras","model":"qwen-3-coder-480b","label":"Qwen 3 Coder 480B"}]
+DEBUG: second-to-last message (user): ["user","coba buat revisinya dong, males nulis ni, boleh cari aja di internet",{"files":[]}]
+RE+ACT check called with: sessionType=project, uploadedFiles=1, message="coba buat revisinya dong, males nulis ni, boleh ca..."
+AI-based RE+ACT analysis: 1 files, message length: 68
+Using active provider openrouter for AI decision
+[REQ INFO - 07:20:27.423] chat:stream-start() -> Request to AI using qwen-3-coder-480b model.
+AI decision call failed for openrouter: HTTP 404: {"error":{"message":"No endpoints found for meta-llama/llama-3.1-8b-instruct:free.","code":404},"user_id":"user_32P24GtcMechctqBLKPlcpQu84w"}
+AI Decision: RESEARCH -> USE RE+ACT
+MAIN: RE+ACT check - sessionType: project, uploadedFiles: 0, sessionMessageFiles: 0, query: "coba buat revisinya dong, males nulis ni, boleh ca..."
+MAIN: Using RE+ACT pattern for complex project query analysis...
+RE+ACT: Initializing session mg1iv1i9-hx6jq8b with 1 files
+RE+ACT: Using 1 files directly from session
+Loading 1 files into search engine...
+Loaded 1 files for searching
+Session initialized with capabilities: {
+  totalFiles: 1,
+  fileTypes: [ 'docx' ],
+  searchCommands: [
+    'searchPattern(pattern, options)',
+    'searchFunctions(functionName)',
+    'searchCSS(selector)',
+    'searchHTML(element)',
+    'searchImports(moduleName)',
+    'analyzeFileStructure(fileName)'
+  ],
+  searchHistory: 4
+}
+MAIN: ReasoningAgent re-initialized for session mg1iv1i9-hx6jq8b with 1 files.
+MAIN: Sending REACT_START chat-update { reqId: 'mg1iyb33-vsjwbf', aiMessageIndex: 3 }
+LangChain: Starting RE+ACT processing for session mg1iv1i9-hx6jq8b
+RE+ACT: Initializing with 1 files
+RE+ACT: Initializing session mg1iv1i9-hx6jq8b with 1 files
+RE+ACT: Using 1 files directly from session
+Loading 1 files into search engine...
+Loaded 1 files for searching
+Session initialized with capabilities: {
+  totalFiles: 1,
+  fileTypes: [ 'docx' ],
+  searchCommands: [
+    'searchPattern(pattern, options)',
+    'searchFunctions(functionName)',
+    'searchCSS(selector)',
+    'searchHTML(element)',
+    'searchImports(moduleName)',
+    'analyzeFileStructure(fileName)'
+  ],
+  searchHistory: 4
+}
+RE+ACT: Session initialized with capabilities: {
+  totalFiles: 1,
+  fileTypes: [ 'docx' ],
+  searchCommands: [
+    'searchPattern(pattern, options)',
+    'searchFunctions(functionName)',
+    'searchCSS(selector)',
+    'searchHTML(element)',
+    'searchImports(moduleName)',
+    'analyzeFileStructure(fileName)'
+  ],
+  searchHistory: 4
+}
+RE+ACT: Processing query for session mg1iv1i9-hx6jq8b
+RE+ACT: Sending reasoning prompt to AI...
+AI Request for session mg1iv1i9-hx6jq8b: You are an AI assistant with powerful desktop search capabilities. The user has uploaded project fil...
+[UI_SEARCH DEBUG - 07:20:30.043] onSearchStatus() -> Event 'FOUND_URLS' added to queue.
+   - queue_length: 1
+[UI_SEARCH DEBUG - 07:20:30.043] processSearchStatusQueue() -> Starting queue V3.
+   - queue_length: 1
+[UI_SEARCH INFO - 07:20:30.044] processSearchStatusQueue() -> Processing step: FOUND_URLS
+[UI_EFFECT DEBUG - 07:20:30.044] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 24
+   - duration_ms: 200
+[UI_SEARCH DEBUG - 07:20:30.054] onSearchStatus() -> Event 'ACTION_EXECUTING' added to queue.
+   - queue_length: 1
+[UI_EFFECT INFO - 07:20:30.262] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:20:30.262] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 13
+   - duration_ms: 700
+RE+ACT: AI generated plan with 1 actions
+Executing analyzeFileStructure with params: { fileName: 'UAS PKN.docx' }
+Action analyzeFileStructure returned 1 result(s)
+AI Request for session mg1iv1i9-hx6jq8b: You are an AI assistant synthesizing information from project files to answer the user's question.
+
+...
+[UI_SEARCH DEBUG - 07:20:30.821] onSearchStatus() -> Event 'ACTION_RESULTS' added to queue.
+   - queue_length: 2
+[UI_SEARCH DEBUG - 07:20:30.822] onSearchStatus() -> Event 'ACTION_EXECUTING' added to queue.
+   - queue_length: 3
+[UI_SEARCH DEBUG - 07:20:30.823] onSearchStatus() -> Event 'ACTION_RESULTS' added to queue.
+   - queue_length: 4
+1. [UI_SEARCH - 20:30.823] onSearchStatus() -> Event 'ACTION_RESULTS' added to queue.
+   - queue_length: 5
+[UI_EFFECT INFO - 07:20:30.968] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:20:30.968] processSearchStatusQueue() -> Processing step: ACTION_EXECUTING
+[UI_EFFECT DEBUG - 07:20:30.969] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 10
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:20:31.294] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:20:31.295] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 55
+   - duration_ms: 500
+RE+ACT: Completed processing with 1 actions executed
+RE+ACT: Completed with 1 actions executed
+MAIN: RE+ACT completed with 1 actions
+MAIN: RE+ACT response received (1779 chars), starting streaming...
+MAIN: RE+ACT response preview: <thinking>
+User meminta untuk dibuatkan revisi untuk file "UAS PKN.docx" dan menunjukkan kemalasan untuk menulis. User mengizinkan untuk mencari referensi di internet. File yang tersedia adalah dokume...
+MAIN: RE+ACT JSON parse failed: Unexpected token '<', "<thinking>"... is not valid JSON, trying HTML tags
+MAIN: RE+ACT parsed HTML tags - thinking: 681 chars, main: 1073 chars
+MAIN: RE+ACT sending thinking content (681 chars)
+[UI_EFFECT INFO - 07:20:31.804] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:20:31.804] processSearchStatusQueue() -> Processing step: ACTION_RESULTS
+[UI_EFFECT DEBUG - 07:20:31.805] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 17
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:20:32.256] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:20:32.257] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 35
+   - duration_ms: 300
+[UI_EFFECT INFO - 07:20:32.574] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:20:32.574] processSearchStatusQueue() -> Processing step: ACTION_EXECUTING
+[UI_EFFECT DEBUG - 07:20:32.575] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 21
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:20:32.883] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:20:32.884] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 28
+   - duration_ms: 500
+[UI_EFFECT INFO - 07:20:33.417] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:20:33.417] processSearchStatusQueue() -> Processing step: ACTION_RESULTS
+[UI_EFFECT DEBUG - 07:20:33.418] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 29
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:20:33.738] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:20:33.738] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 35
+   - duration_ms: 300
+[UI_EFFECT INFO - 07:20:34.150] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH INFO - 07:20:34.150] processSearchStatusQueue() -> Processing step: ACTION_RESULTS
+[UI_EFFECT DEBUG - 07:20:34.151] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 18
+   - duration_ms: 200
+[UI_EFFECT INFO - 07:20:34.587] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_EFFECT DEBUG - 07:20:34.588] typewriterEffectChunked() -> Starting typewriter effect.
+   - text_length: 35
+   - duration_ms: 300
+[UI_EFFECT INFO - 07:20:34.893] typewriterEffectChunked() -> Typewriter effect finished.
+[UI_SEARCH DEBUG - 07:20:34.894] processSearchStatusQueue() -> Queue V3 finished.
+[APP DEBUG - 07:20:35.003] save() -> Attempting to save data
+   - sessionCount: 148
+2. [APP - 20:35.179] save().
+4. [APP - 20:36.577] save().
+6. [APP - 20:37.699] save().
+8. [APP - 20:38.768] save().
+10. [APP - 20:39.837] save().
+12. [APP - 20:40.954] save().
+MAIN: RE+ACT streaming completed
+[STREAM INFO - 07:20:41.733] finalize() -> Finalizing stream
+   - streamId: mg1iv1i9-hx6jq8b-3-fq9ibl4i8p
+   - interrupted: false
+   - sawEnd: false
+   - hasContent: true
+[FINALIZE DEBUG - 07:20:41.736] finalize() -> Preparing to save final message.
+   - hasModelInfo: true
+   - modelInfo: {"provider":"cerebras","model":"qwen-3-coder-480b","label":"Qwen 3 Coder 480B"}
+[FINALIZE INFO - 07:20:41.740] finalize() -> Final message saved to state with modelInfo.
+   - content: Saya melihat Anda memiliki file "UAS PKN.docx" den...
+   - modelInfo: {"provider":"cerebras","model":"qwen-3-coder-480b","label":"Qwen 3 Coder 480B"}
+[RENDER INFO - 07:20:41.748] renderAiFinalActions() -> Fetching modelInfo for index 3 directly from state.
+   - hasModelInfo: true
+   - modelInfo: {"provider":"cerebras","model":"qwen-3-coder-480b","label":"Qwen 3 Coder 480B"}
+[APP DEBUG - 07:20:41.844] save() -> Attempting to save data
+   - sessionCount: 148

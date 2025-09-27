@@ -6674,8 +6674,9 @@ function enhancedMarkdownParse(src) {
         .map((h) => h.trim())
         .filter(Boolean);
       tableHtml += "<thead><tr>";
-      for (const header of headers)
+      for (const header of headers) {
         tableHtml += `<th>${parseInlineMarkdown(header)}</th>`;
+      }
       tableHtml += "</tr></thead><tbody>";
       let tableRowIndex = i + 2;
       while (
@@ -6789,12 +6790,145 @@ function enhancedMarkdownParse(src) {
   return finalHtml;
 }
 
-function parseInlineMarkdown(text) {
+function processMarkdownFormatting(text) {
   if (!text) return "";
+
+  // Handle HTML escaping first
   let html = text
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+
+  // Process inline markdown formatting
+  const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
+  html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
+
+  const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
+  html = html.replace(footnoteGroupRegex, (match) => {
+    const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
+    const links = [];
+    let result;
+    while ((result = individualFootnoteRegex.exec(match)) !== null) {
+      const number = result[1];
+      const url = result[2];
+      links.push(
+        `<a href="${url}" target="_blank" rel="noopener noreferrer">[${number}]</a>`,
+      );
+    }
+    return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
+  });
+
+  const linkRegex = /\[(.*?)\]\((.*?)\)/g;
+  html = html.replace(
+    linkRegex,
+    '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>',
+  );
+
+  html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
+
+  const inlineCodeBlocks = [];
+  html = html.replace(/`([^`]+?)`/g, (match, content) => {
+    const placeholder = `__INLINE_CODE_${inlineCodeBlocks.length}__`;
+    inlineCodeBlocks.push(`<code>${content}</code>`);
+    return placeholder;
+  });
+
+  const tldList = [
+    "com", "net", "org", "io", "gov", "edu", "co", "info", "biz", "online", "app", "id", "me", "site", "tech", "dev", "ai", "cloud", "shop", "store", "live", "blog", "club", "news", "xyz", "link", "cloud", "space", "page", "pro", "design", "agency", "group", "company", "inc", "us", "uk", "au", "ca", "de", "fr", "es", "it", "nl", "se", "no", "fi", "ru", "cn", "jp", "br", "in", "cz", "pl", "be", "ch", "at", "sg", "hk", "nz", "mx", "ar", "cl", "kr", "za", "ae", "sa"
+  ];
+  const tldPattern = tldList.join("|");
+
+  const autoLinkRegex = new RegExp(
+    '(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' +
+      "|" +
+      "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" +
+      tldPattern +
+      ')(?:\\/[^\\s<>"]*)?)',
+    "gi",
+  );
+
+  html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl) => {
+    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`)) {
+      return match;
+    }
+    let href = protocolUrl || domainUrl;
+    if (!/^https?:\/\//i.test(href)) href = "https://" + href;
+    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>`;
+  });
+
+  html = inlineCodeBlocks.reduce(
+    (acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block),
+    html,
+  );
+
+  // Apply text formatting
+  html = html
+    .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
+    .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>")
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__(.*?)__/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/_([^_]+)_/g, "<em>$1</em>")
+    .replace(/~~(.*?)~~/g, "<del>$1</del>");
+
+  return html;
+}
+
+function parseInlineMarkdown(text) {
+  if (!text) return "";
+
+  // Check if content contains <br> followed by bullet points - convert to list
+  if (text.includes('<br>') && (text.includes('<br>•') || text.includes('<br>-'))) {
+    // Split by <br> and process as list items
+    const parts = text.split(/(<br\s*\/?>)/i);
+    let listItems = [];
+    let currentItem = '';
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (part.match(/<br\s*\/?>/i)) {
+        // This is a <br> tag
+        if (currentItem.trim()) {
+          listItems.push(currentItem.trim());
+          currentItem = '';
+        }
+      } else {
+        currentItem += part;
+      }
+    }
+
+    // Add the last item if exists
+    if (currentItem.trim()) {
+      listItems.push(currentItem.trim());
+    }
+
+    // Filter out empty items and create HTML list
+    listItems = listItems.filter(item => item.trim());
+
+    if (listItems.length > 1) {
+      let listHtml = '<ul class="br-list">';
+      listItems.forEach(item => {
+        // Remove leading bullet if present and process markdown
+        const cleanItem = item.replace(/^[-•]\s*/, '');
+        // Process markdown formatting for the list item
+        const processedItem = processMarkdownFormatting(cleanItem);
+        listHtml += `<li>${processedItem}</li>`;
+      });
+      listHtml += '</ul>';
+      return listHtml;
+    }
+  }
+
+  // Handle <br> tags before HTML escaping (original logic)
+  let processedText = text.replace(/<br\s*\/?>/gi, '__BR_TAG__');
+
+  let html = processedText
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+
+  // Restore <br> tags after escaping
+  html = html.replace(/__BR_TAG__/g, '<br>');
 
   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
   html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
@@ -10053,12 +10187,12 @@ function showSearchOverlay() {
   if (searchOverlay) {
     searchOverlay.style.display = 'block';
     // Trigger slide down animation
-    searchOverlay.classList.remove('slide-out');
-    searchOverlay.classList.add('slide-in');
+    searchOverlay.classList.remove('sc-slide-out');
+    searchOverlay.classList.add('sc-slide-in');
     
     // Always re-query the input element in case DOM was modified
     searchInput = document.getElementById('search-input');
-    searchResults = document.getElementById('search-results');
+    searchResults = document.getElementById('sc-search-results');
     if (searchInput) {
       // Re-attach event listeners when reusing overlay
       attachSearchEventListeners();
@@ -10073,28 +10207,28 @@ function showSearchOverlay() {
   // Create search overlay
   searchOverlay = document.createElement('div');
   searchOverlay.id = 'search-overlay';
-  searchOverlay.className = 'slide-in';
+  searchOverlay.className = 'sc-slide-in';
   searchOverlay.innerHTML = `
-    <div class="search-container">
-      <div class="search-input-wrapper">
-        <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16">
-          <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
-        </svg>
+    <div class="sc-search-container">
+      <svg class="sc-search-icon" viewBox="0 0 24 24" width="16" height="16">
+        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="sc-search-input-wrapper">
         <input type="text" id="search-input" placeholder="Search in current session..." maxlength="100" />
       </div>
-      <div class="search-controls">
-        <button id="search-prev" class="nav-btn" title="Previous">
+      <div class="sc-search-controls">
+        <button id="search-prev" class="sc-nav-btn" title="Previous">
           <svg viewBox="0 0 24 24" width="14" height="14">
             <path d="M18 15l-6-6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <button id="search-next" class="nav-btn" title="Next">
+        <button id="search-next" class="sc-nav-btn" title="Next">
           <svg viewBox="0 0 24 24" width="14" height="14">
             <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <span id="search-results" class="results-count">0/0</span>
-        <button id="search-close" class="close-btn" title="Close">
+        <span id="search-results" class="sc-results-count">0/0</span>
+        <button id="search-close" class="sc-close-btn" title="Close">
           <svg viewBox="0 0 24 24" width="14" height="14">
             <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
@@ -10108,32 +10242,23 @@ function showSearchOverlay() {
   style.textContent = `
     #search-overlay {
       position: fixed;
-      top: 48px;
+      top: 51px;
       right: 20px;
       z-index: 10000;
-      background: rgba(255, 255, 255, 0.95);
+      padding: 2px;
+      background: var(--bg-secondary);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(0, 0, 0, 0.1);
       border-radius: 12px;
-      padding: 16px;
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 6px 12px rgba(0, 0, 0, 0.08);
       min-width: 320px;
-      max-width: 400px;
       transform-origin: top right;
-    }
-
-    /* Dark mode support */
-    @media (prefers-color-scheme: dark) {
-      #search-overlay {
-        background: rgba(30, 30, 30, 0.95);
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3), 0 6px 12px rgba(0, 0, 0, 0.2);
-      }
+      align-items: center;
     }
 
     /* Slide animations */
-    @keyframes slideDown {
+    @keyframes sc-slideDown {
       from {
         opacity: 0;
         transform: translateY(-20px) scale(0.95);
@@ -10144,7 +10269,7 @@ function showSearchOverlay() {
       }
     }
 
-    @keyframes slideUp {
+    @keyframes sc-slideUp {
       from {
         opacity: 1;
         transform: translateY(0) scale(1);
@@ -10155,43 +10280,44 @@ function showSearchOverlay() {
       }
     }
 
-    #search-overlay.slide-in {
-      animation: slideDown 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    #search-overlay.sc-slide-in {
+      animation: sc-slideDown 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
     }
 
-    #search-overlay.slide-out {
-      animation: slideUp 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    #search-overlay.sc-slide-out {
+      animation: sc-slideUp 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
     }
 
-    #search-overlay .search-container {
+    #search-overlay .sc-search-container {
       display: flex;
       align-items: center;
       gap: 12px;
       width: 100%;
+      position: relative;
     }
 
-    .search-input-wrapper {
+    .sc-search-input-wrapper {
       position: relative;
       flex: 1;
       display: flex;
       align-items: center;
     }
 
-    .search-icon {
+    .sc-search-icon {
       position: absolute;
       left: 12px;
-      color: #6b7280;
+      color: var(--icon);
       z-index: 1;
       pointer-events: none;
     }
 
     #search-input {
       flex: 1;
-      padding: 10px 12px 10px 40px;
-      border: 1.5px solid #e5e7eb;
+      padding: 8px 12px 8px 40px;
+      border: 1.5px solid transparent;
       border-radius: 8px;
-      background: rgba(255, 255, 255, 0.8);
-      color: #1f2937;
+      background: var(--bg);
+      color: var(--fg);
       font-size: 14px;
       font-weight: 400;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -10199,98 +10325,44 @@ function showSearchOverlay() {
     }
 
     #search-input:focus {
-      border-color: #3b82f6;
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-      background: rgba(255, 255, 255, 1);
+      border-color: var(--border-light);
     }
 
-    @media (prefers-color-scheme: dark) {
-      .search-icon {
-        color: #9ca3af;
-      }
-      
-      #search-input {
-        border-color: #374151;
-        background: rgba(55, 65, 81, 0.8);
-        color: #f3f4f6;
-      }
-      
-      #search-input:focus {
-        border-color: #60a5fa;
-        box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
-        background: rgba(55, 65, 81, 1);
-      }
-    }
-
-    .search-controls {
+    .sc-search-controls {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 3px;
     }
 
-    .nav-btn, .close-btn {
+    .sc-nav-btn, .sc-close-btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 8px;
+      padding: 0px;
       border: none;
       border-radius: 6px;
-      background: rgba(0, 0, 0, 0.05);
-      color: #6b7280;
+      background: transparent;
+      color: var(--icon);
       cursor: pointer;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       min-width: 32px;
       height: 32px;
     }
 
-    .nav-btn:hover, .close-btn:hover {
-      background: rgba(0, 0, 0, 0.1);
-      color: #374151;
+    .sc-nav-btn:hover, .sc-close-btn:hover {
+      color: var(--fg);
       transform: translateY(-1px);
     }
 
-    .nav-btn:active, .close-btn:active {
+    .sc-nav-btn:active, .sc-close-btn:active {
       transform: translateY(0);
-      background: rgba(0, 0, 0, 0.15);
     }
 
-    .close-btn {
-      background: rgba(239, 68, 68, 0.1);
-      color: #dc2626;
+    .sc-close-btn {
+      background: transparent;
     }
 
-    .close-btn:hover {
-      background: rgba(239, 68, 68, 0.15);
-      color: #b91c1c;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .nav-btn, .close-btn {
-        background: rgba(255, 255, 255, 0.1);
-        color: #9ca3af;
-      }
-      
-      .nav-btn:hover, .close-btn:hover {
-        background: rgba(255, 255, 255, 0.15);
-        color: #d1d5db;
-      }
-      
-      .nav-btn:active, .close-btn:active {
-        background: rgba(255, 255, 255, 0.2);
-      }
-      
-      .close-btn {
-        background: rgba(239, 68, 68, 0.2);
-        color: #f87171;
-      }
-      
-      .close-btn:hover {
-        background: rgba(239, 68, 68, 0.3);
-        color: #fca5a5;
-      }
-    }
-
-    .results-count {
+    .sc-results-count {
       font-size: 12px;
       font-weight: 500;
       color: #6b7280;
@@ -10299,26 +10371,20 @@ function showSearchOverlay() {
       letter-spacing: 0.02em;
     }
 
-    @media (prefers-color-scheme: dark) {
-      .results-count {
-        color: #9ca3af;
-      }
-    }
-
     /* Responsive design */
     @media (max-width: 480px) {
       #search-overlay {
         left: 10px;
         right: 10px;
-        min-width: unset;
+        min-width: unset; 
         max-width: unset;
       }
       
-      .search-controls {
-        gap: 4px;
+      .sc-search-controls {
+        gap: 2px;
       }
       
-      .nav-btn, .close-btn {
+      .sc-nav-btn, .sc-close-btn {
         min-width: 28px;
         height: 28px;
         padding: 6px;
@@ -10402,8 +10468,8 @@ function debouncedPerformSearch() {
 
 function hideSearchOverlay() {
   if (searchOverlay) {
-    searchOverlay.classList.remove('slide-in');
-    searchOverlay.classList.add('slide-out');
+    searchOverlay.classList.remove('slide-out');
+    searchOverlay.classList.add('slide-in');
     clearSearchHighlights();
     
     if (searchDebounceTimer) {
@@ -10505,7 +10571,6 @@ function performSearch() {
     matchCount: searchMatches.length,
     messageCount: messageElements.length,
   };
-  log("SEARCH", 2, "performSearch", `Search completed for "${query}"`, safeDetails);
 
   if (searchMatches.length === 0) {
     currentMatchIndex = -1;
@@ -10545,15 +10610,6 @@ function performSearch() {
   updateHighlights();
   scrollToMatch(0);
   updateSearchResults(currentMatchIndex + 1, searchMatches.length);
-
-  if (searchId === currentSearchId) {
-    log(
-      "SEARCH",
-      2,
-      "performSearch",
-      `Search completed and highlighted ${highlightedCount} matches for "${query}"`,
-    );
-  }
 }
 
 function highlightTextNode(textNode, matches, startIndex = 0) {
@@ -11742,6 +11798,7 @@ function initializeApp() {
         scrollToBottom({ fromAI: true });
       } else if (type === "THINKING") {
         try {
+            mainText.innerHTML = getThinkingMarkup();
             const thinkContent = data?.think;
             const sessionId = data?.sessionId || payload.sessionId || current?.id;
             const sess = state.sessions.find(s => s.id === sessionId) || current;
@@ -11800,13 +11857,6 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 window.addEventListener("error", (event) => {
-  log(
-    "UI",
-    4,
-    "window.error",
-    "Uncaught error detected, force removing overlay",
-    { error: event.error?.message },
-  );
   const overlay = document.getElementById("loading-overlay");
   if (overlay) {
     overlay.style.display = "none";

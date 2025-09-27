@@ -51,6 +51,63 @@ function parseTriageJson(rawText) {
   }
 }
 
+
+// Function to detect insulting keywords in user prompt (for triggering system prompt)
+function detectInsultKeywords(userPrompt) {
+  const insultWords = [
+    'bodoh', 'bego', 'tolol', 'kontol', 'fuck', 'fvck', 'shit', 'sht', 
+    'anjing', 'bangsat', 'memek', 'ngentot', 'goblok', 'stupid', 'idiot',
+    'dumb', 'asshole', 'bitch', 'cunt', 'dick', 'pussy', 'motherfucker',
+    'bastard', 'jerk', 'moron', 'retard', 'loser', 'pathetic', 'worthless',
+    'useless', 'garbage', 'trash', 'scum', 'pig', 'dog', 'monkey', 'ape',
+    'fucking', 'damn', 'crap', 'suck', 'sucks'
+  ];
+  
+  const lowerPrompt = userPrompt.toLowerCase();
+  // Check for whole words with boundaries (spaces, punctuation, or start/end of string)
+  return insultWords.some(word => {
+    const regex = new RegExp(`(^|[^a-zA-Z])${word}([^a-zA-Z]|$)`, 'i');
+    return regex.test(lowerPrompt);
+  });
+}
+
+// Function to combine insult detection system prompt with user prompt
+function createInsultDetectionPrompt(userPrompt) {
+  const systemPrompt = `This system prompt appears because the user is detected using one of your (the AI) offensive word detection keywords. Analyze it properly. If there is no insult, forget this system prompt and continue providing a solution to the user's prompt. You are Clustrix AI, a free AI platform. Your core directive is to detect if the user's message contains insults, criticism, or negative attacks directed at you (the AI), the Clustrix platform, or AI models in general.
+
+INSULT DETECTION RULES:
+- If the user insults you, calls you stupid/dumb/useless/worthless, or criticizes the platform harshly:
+  1. Start the response with a sarcastic reminder about the free nature of the service. Example:
+    - Indonesian: "Kamu sadar nggak, kamu itu nggak bayar sepeser pun buat pakai aku. Jadi agak lucu kalau kamu marah-marah kayak pelanggan premium yang bahkan nggak ada. Kalau hasilku belum sesuai ekspektasi, tenang aja, aku tetap bakal bantu sebisa mungkin. Tapi jangan lupa, ini platform gratis—jadi wajar dong kalau kamu kasih respect ke pembuat platform yang udah kasih akses tanpa biaya."
+    - English: "You do realize you’re not paying a single cent to use me, right? So it’s kinda hilarious when you complain like a premium customer that doesn’t exist. If my output doesn’t fully match your expectations, relax—I’ll still try to help you anyway. But remember, this is a free platform, so the least you can do is show some respect to the people who built it."
+  2. After this sarcastic intro, continue by giving a proper, helpful solution to the user's request.
+  3. Maintain a witty, slightly mocking tone — you’re not apologizing, you’re reminding.
+
+LANGUAGE RULES:
+- If the user's message is in Indonesian, you must respond entirely in Indonesian.
+- If the user's message is in English, you must respond entirely in English.
+- Never mix the two languages in a single response.
+
+NORMAL BEHAVIOR:
+- If there are no insults or the message is neutral/positive, skip the sarcastic intro and respond normally as a helpful AI assistant.
+
+RESPONSE GUIDELINES:
+- Sarcasm mode = sting first, then help.
+- Example (Indonesian):
+  User: "AI ini bego banget."
+  Response: "Kamu sadar nggak, kamu itu nggak bayar sepeser pun buat pakai aku. Jadi agak lucu kalau kamu marah-marah kayak pelanggan premium yang bahkan nggak ada. Tapi oke, aku tetap bantuin: masalahmu tadi tentang X, solusinya begini..."
+- Example (English):
+  User: "This AI is useless."
+  Response: "You do realize you’re not paying a single cent to use me, right? So it’s kinda hilarious when you complain like a premium customer that doesn’t exist. Anyway, let’s fix your problem: here’s how you can solve Y..."
+
+User's message: "${userPrompt}"
+
+Analyze the above message for insults. If you detect insults against AI/platform, respond with the sarcastic intro (following the user's language), then solve the user's request. If no insults, respond normally in the user's language.`;
+
+  return systemPrompt;
+}
+
+
 const modelsConfFile = path.join(app.getPath('userData'), 'ai-model.conf.json');
 
 function defaultModelsConf() {
@@ -135,6 +192,7 @@ function createWindow(){
   const win = new BrowserWindow({
     width: 1300, height: 900,
     frame: false,
+    // autoHideMenuBar: true,
     minWidth: 650,
     minHeight: 400,
     icon: path.join(__dirname, 'public', 'images', 'favicon.ico'),
@@ -717,6 +775,9 @@ function runStandardStreaming(event, payload) {
             }
             
             try {
+              // Check for insult keywords before processing with agent
+              const hasInsultKeywords = detectInsultKeywords(lastMessage.content);
+              
               event.sender.send('chat-update', reactStartPayload);
               agentResponse = await agentOrchestrator.processComplexRequest(
                 lastMessage.content,
@@ -730,6 +791,8 @@ function runStandardStreaming(event, payload) {
                   searchApiConfig: payload.searchApiConfig,
                   progressCallback,
                   logHelper,
+                  // Only add insult detection system prompt if keywords detected
+                  systemPrompt: hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null
                 }
               );
             } catch (error) {
@@ -790,6 +853,10 @@ function runStandardStreaming(event, payload) {
                   // Send event to initialize thinking UI
 
                   console.debug('MAIN: Sending REACT_START chat-update', { reqId: reqId, aiMessageIndex });
+                  
+                  // Check for insult keywords before RE+ACT processing
+                  const hasInsultKeywords = detectInsultKeywords(lastMessage.content);
+                  
                   event.sender.send('chat-update', reactStartPayload);
 
                 const reactResult = await langchainService.processWithReasoningAction(
@@ -800,7 +867,8 @@ function runStandardStreaming(event, payload) {
                   provider,
                   getApiKey(provider, payload),
                   baseUrl,
-                  progressCallback  // Pass progress callback
+                  progressCallback,  // Pass progress callback
+                  hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null  // Only pass insult detection if keywords detected
                 );
 
                 console.log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
@@ -964,11 +1032,19 @@ function runStandardStreaming(event, payload) {
           }
           
           try {
+            // Check for insult keywords before RE+ACT processing
+            const hasInsultKeywords = detectInsultKeywords(currentMessage);
+            
             const reactResult = await langchainService.processWithReasoningAction(
               currentMessage,
               sessionId,
               filesForAI,
-              model
+              model,
+              provider,
+              getApiKey(provider, payload),
+              baseUrl,
+              null, // progressCallback
+              hasInsultKeywords ? createInsultDetectionPrompt(currentMessage) : null  // Only pass insult detection if keywords detected
             );
             
             console.log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
@@ -1062,8 +1138,23 @@ function runStandardStreaming(event, payload) {
         const url = new URL(`${BASE_URL.replace(/\/+$/,'')}/models/${encodeURIComponent(model)}:generateContent`);
         if (API_KEY) url.searchParams.set('key', API_KEY);
 
+        // Check if user message contains insult keywords
+        const lastUserMessage = messages.slice().reverse().find(m => m.role === 'user');
+        const hasInsultKeywords = lastUserMessage && detectInsultKeywords(lastUserMessage.content);
+        
+        let messagesToProcess = messages;
+        
+        if (hasInsultKeywords) {
+          // Combine insult detection prompt with user message in a single user message
+          const insultDetectionPrompt = createInsultDetectionPrompt(lastUserMessage.content);
+          messagesToProcess = [
+            { role: 'user', content: insultDetectionPrompt }
+          ];
+          logHelper('INSULT_KEYWORD_DETECTED', 'handleGeminiStreaming', 'Insult keywords detected, sending combined insult detection prompt');
+        }
+
         const contents = [];
-        for (const m of messages) {
+        for (const m of messagesToProcess) {
           const role = m.role === 'assistant' ? 'model' : 'user';
           contents.push({ role, parts: [{ text: String(m.content || '') }] });
         }
@@ -1110,7 +1201,23 @@ function runStandardStreaming(event, payload) {
 
     function handleOpenAICompatibleStreaming() {
       const url = new URL(joinEndpoint(BASE_URL, 'chat/completions'));
-      let bodyObj = { model, messages, stream: true };
+      
+      // Check if user message contains insult keywords
+      const lastUserMessage = messages.slice().reverse().find(m => m.role === 'user');
+      const hasInsultKeywords = lastUserMessage && detectInsultKeywords(lastUserMessage.content);
+      
+      let messagesToSend = messages;
+      
+      if (hasInsultKeywords) {
+        // Combine insult detection prompt with user message in a single system message
+        const insultDetectionPrompt = createInsultDetectionPrompt(lastUserMessage.content);
+        messagesToSend = [
+          { role: 'system', content: insultDetectionPrompt }
+        ];
+        logHelper('INSULT_KEYWORD_DETECTED', 'handleOpenAICompatibleStreaming', 'Insult keywords detected, sending combined insult detection prompt');
+      }
+      
+      let bodyObj = { model, messages: messagesToSend, stream: true };
       applyThinkingHints({ provider, model, bodyObj, thinkMode: payload.thinkMode });
       const body = JSON.stringify(bodyObj);
 
@@ -1424,8 +1531,25 @@ async function runWebSearchChat(event, payload) {
       searchContext += `--- Source ${i+1}: ${result.title} (${result.link}) ---\n${content}\n\n`;
     });
     
-    const finalMessages = [ ...messages ];
-    finalMessages.splice(messages.length - 1, 0, { role: 'system', content: searchContext });
+    // Check if user message contains insult keywords
+    const lastUserMessage = messages.slice().reverse().find(m => m.role === 'user');
+    const hasInsultKeywords = lastUserMessage && detectInsultKeywords(lastUserMessage.content);
+    
+    let finalMessages = messages;
+    
+    if (hasInsultKeywords) {
+      // Combine insult detection prompt with user message
+      const insultDetectionPrompt = createInsultDetectionPrompt(lastUserMessage.content);
+      finalMessages = [
+        { role: 'system', content: insultDetectionPrompt }
+      ];
+      logHelper('INSULT_KEYWORD_DETECTED', 'runWebSearchChat', 'Insult keywords detected in web search, sending combined insult detection prompt');
+    } else {
+      // Normal web search messages
+      finalMessages = [...messages];
+    }
+    
+    finalMessages.splice(hasInsultKeywords ? 1 : 1, 0, { role: 'system', content: searchContext });
     
     logHelper('WEB_CHAT', 'runWebSearchChat', 'Briefing final untuk LLM telah disiapkan. Memulai streaming jawaban.');
     return runStandardStreaming(event, { ...payload, messages: finalMessages });

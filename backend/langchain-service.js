@@ -436,7 +436,7 @@ class ClustrixLangChainService {
 
   // ==================== REASONING + ACTION PATTERN ====================
   
-  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', progressCallback = null) {
+  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', progressCallback = null, systemPrompt = null) {
     console.log(`LangChain: Starting RE+ACT processing for session ${sessionId}`);
     
     try {
@@ -483,18 +483,15 @@ class ClustrixLangChainService {
   async shouldUseReasoningAction(userMessage, uploadedFiles = [], sessionType = null, sessionMessages = []) {
     console.log(`RE+ACT check called with: sessionType=${sessionType}, uploadedFiles=${uploadedFiles ? uploadedFiles.length : 'null'}, message="${userMessage.slice(0, 50)}..."`);
 
-    // Skip RE+ACT if no files available
     if (!uploadedFiles || uploadedFiles.length === 0) {
       console.log(`RE+ACT decision: SKIP (no uploaded files)`);
       return false;
     }
 
-    // For project sessions, do intelligent analysis instead of always using RE+ACT
     if (sessionType === 'project') {
       return await this.shouldUseResearchAgentForProject(userMessage, uploadedFiles, sessionMessages);
     }
 
-    // For regular sessions, use existing logic
     return this.shouldUseResearchAgentForRegular(userMessage, uploadedFiles);
   }
 

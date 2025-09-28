@@ -1109,6 +1109,35 @@ const saveDraftDebounced = (() => {
   });
 })();
 
+// Temporary storage for web search data until message is finalized
+const pendingWebSearchData = new Map();
+
+function storePendingWebSearchData(sessionId, pageCount) {
+  pendingWebSearchData.set(sessionId, { pageCount, timestamp: Date.now() });
+  console.log("Stored pending web search data:", { sessionId, pageCount });
+}
+
+function getAndClearPendingWebSearchData(sessionId) {
+  const data = pendingWebSearchData.get(sessionId);
+  if (data) {
+    pendingWebSearchData.delete(sessionId);
+    console.log("Retrieved and cleared pending web search data:", { sessionId, pageCount: data.pageCount });
+    return data.pageCount;
+  }
+  return null;
+}
+
+// Clean up old pending data (older than 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, data] of pendingWebSearchData.entries()) {
+    if (now - data.timestamp > 5 * 60 * 1000) {
+      pendingWebSearchData.delete(sessionId);
+      console.log("Cleaned up old pending web search data for session:", sessionId);
+    }
+  }
+}, 60 * 1000);
+
 // Artifacts management functions
 function saveCodeArtifact(
   title,
@@ -8477,7 +8506,19 @@ function addMessage(
   } else {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
     const thinking = `<div class="thinking-container"><div class="typing-indicator"><span></span><span></span><span></span></div><span class="thinking-text-indicator"></span></div>`;
-    node.innerHTML = `<div class="web-search-indicator" style="display: none;"></div><div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
+    
+    // Show web search indicator if available
+    let webSearchIndicatorHTML = `<div class="web-search-indicator" style="display: none;"></div>`;
+    if (role === "ai" && metadata?.webSearchPages && metadata.webSearchPages > 0) {
+      webSearchIndicatorHTML = `
+        <div class="web-search-indicator" style="display: flex;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
+          <span class="status-text">Read ${metadata.webSearchPages} web pages</span>
+          <span class="page-count-pill">${metadata.webSearchPages}</span>
+        </div>`;
+    }
+    
+    node.innerHTML = `${webSearchIndicatorHTML}<div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
     if (role === "ai" && !final) {
       node.style.opacity = "0";
       node.style.transform = "translateY(20px)";
@@ -8818,6 +8859,53 @@ async function load() {
           });
         }
       });
+      
+      // Migration: Clean up web search info from existing AI messages - remove prepended text since we now use UI indicator
+      state.sessions.forEach((session) => {
+        if (session.messages) {
+          session.messages.forEach((message) => {
+            try {
+              if (Array.isArray(message) && message.length >= 3 && message[0] === "ai") {
+                const content = message[1];
+                const modelInfo = message[2] || {};
+                if (modelInfo.webSearchPages && modelInfo.webSearchPages > 0 && typeof content === 'string' && content.startsWith("Read ")) {
+                  // Remove the prepended text since we now show it in UI
+                  const lines = content.split('\n');
+                  if (lines.length > 0 && lines[0].startsWith("Read ")) {
+                    message[1] = lines.slice(1).join('\n').replace(/^\n+/, ''); // Remove leading newlines
+                  }
+                  log("MIGRATION", 2, "webSearchCleanup", "Removed prepended web search info from existing message", {
+                    sessionId: session.id,
+                    webSearchPages: modelInfo.webSearchPages
+                  });
+                }
+              }
+            } catch (e) {
+              console.error("Migration error for message:", message, e);
+            }
+          });
+        }
+        // Also update _lazyState if it exists
+        if (session._lazyState && session._lazyState.allMessages) {
+          session._lazyState.allMessages.forEach((message) => {
+            try {
+              if (Array.isArray(message) && message.length >= 3 && message[0] === "ai") {
+                const content = message[1];
+                const modelInfo = message[2] || {};
+                if (modelInfo.webSearchPages && modelInfo.webSearchPages > 0 && typeof content === 'string' && content.startsWith("Read ")) {
+                  // Remove the prepended text
+                  const lines = content.split('\n');
+                  if (lines.length > 0 && lines[0].startsWith("Read ")) {
+                    message[1] = lines.slice(1).join('\n').replace(/^\n+/, ''); // Remove leading newlines
+                  }
+                }
+              }
+            } catch (e) {
+              console.error("Migration error for lazyState message:", message, e);
+            }
+          });
+        }
+      });
     }
   } catch (e) {
     log("APP", 4, "load", "Failed to load data.", { error: e });
@@ -8889,7 +8977,9 @@ async function save() {
     } else {
       await window.api.sessions.save(dataToSave);
     }
+    log("APP", 2, "save", "Data saved successfully");
   } catch (e) {
+    console.error("Save failed:", e);
     log("APP", 4, "save", "Failed to save data.", { error: e });
   }
 }
@@ -9261,7 +9351,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
     const s = getState();
     if (!s) return;
-    const { session, aiNode, messageIndex } = s;
+    const { session: streamSession, aiNode, messageIndex } = s;
+
+    // Get the actual session from state.sessions to ensure we're working with the same object
+    const session = state.sessions.find(sess => sess.id === streamSession.id);
+    if (!session) return;
 
     const existingMessageData = session.messages[messageIndex];
     const modelInfo =
@@ -9294,6 +9388,13 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     }
 
     if (finalMessageToSave || interrupted) {
+      // Check for pending web search data and apply it to modelInfo
+      const pendingPageCount = getAndClearPendingWebSearchData(session.id);
+      if (pendingPageCount !== null) {
+        modelInfo.webSearchPages = pendingPageCount;
+        console.log("Applied pending web search data to finalized message:", { sessionId: session.id, pageCount: pendingPageCount });
+      }
+      
       session.messages[messageIndex] = ["ai", finalMessageToSave, modelInfo];
       log(
         "FINALIZE",
@@ -11957,13 +12058,20 @@ function initializeApp() {
           <span class="status-text">Searching for "${data.summarizedQuery}"...</span>`;
         scrollToBottom({ fromAI: true });
       } else if (type === "READING_COMPLETE") {
+        console.log("READING_COMPLETE received:", { messageIndex, data, payload });
         indicator.classList.remove("searching");
         indicator.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="m19 19-7-7 7-7"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
           <span class="status-text">Read ${data.pageCount} web pages</span>
           <span class="page-count-pill">${data.pageCount}</span>`;
         mainText.innerHTML = getThinkingMarkup();
         scrollToBottom({ fromAI: true });
+
+        // Store web search page count temporarily until message is finalized
+        const sessionId = payload.sessionId || current?.id;
+        if (sessionId) {
+          storePendingWebSearchData(sessionId, data.pageCount);
+        }
       } else if (type === "REACT_START") {
         // Initialize thinking UI for RE+ACT pattern
         mainText.innerHTML = getThinkingMarkup();

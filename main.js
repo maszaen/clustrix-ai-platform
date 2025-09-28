@@ -5,6 +5,7 @@ const fsp = require('fs').promises;
 const https = require('https');
 const mammoth = require('mammoth');
 const xlsx = require('./local_modules/xlsx/xlsx');
+const { log, logWithContext, setLogFile, setDebug } = require('./utils/logger');
 
 const ClustrixLangChainService = require('./backend/langchain-service');
 const { MultiAgentOrchestrator } = require('./backend/langchain-agents');
@@ -15,28 +16,19 @@ let langchainService = null;
 let agentOrchestrator = null;
 
 app.whenReady().then(() => {
+  setLogFile(path.join(app.getPath('userData'), 'app.log'));
+  setDebug(process.env.CLUSTRIX_DEBUG !== 'false');
   langchainService = new ClustrixLangChainService(app);
   agentOrchestrator = new MultiAgentOrchestrator(langchainService);
-  console.log('LangChain services initialized');
+  log('LangChain services initialized');
 });
 
-const logFile = path.join(app.getPath('userData'), 'app.log');
-
 if (!process.env || Object.keys(process.env).length === 0) {
-  console.warn('Warning: No environment variables loaded. Check your .env file and dotenv setup.');
+  log('Warning: No environment variables loaded. Check your .env file and dotenv setup.');
 }
 
 function logHelper(context, func, message, details = {}) {
-  const time = new Date().toISOString();
-  let logLine = `[${context.toUpperCase()} - ${time}] ${func}() → ${message}`;
-  if (Object.keys(details).length > 0) {
-    logLine += `\n${JSON.stringify(details, null, 2)}`;
-  }
-  try {
-    fs.appendFileSync(logFile, logLine + '\n\n', 'utf-8');
-  } catch (e) {
-    console.error('Gagal menulis ke file log:', e);
-  }
+  logWithContext(context, func, message, details);
 }
 
 let lastTokenStreamId = null; 
@@ -50,9 +42,6 @@ function parseTriageJson(rawText) {
     return JSON.parse(rawText);
   }
 }
-
-
-// Function to detect insulting keywords in user prompt (for triggering system prompt)
 function detectInsultKeywords(userPrompt) {
   const insultWords = [
     'bodoh', 'bego', 'tolol', 'kontol', 'fuck', 'fvck', 'shit', 'sht', 
@@ -64,14 +53,11 @@ function detectInsultKeywords(userPrompt) {
   ];
   
   const lowerPrompt = userPrompt.toLowerCase();
-  // Check for whole words with boundaries (spaces, punctuation, or start/end of string)
   return insultWords.some(word => {
     const regex = new RegExp(`(^|[^a-zA-Z])${word}([^a-zA-Z]|$)`, 'i');
     return regex.test(lowerPrompt);
   });
 }
-
-// Function to combine insult detection system prompt with user prompt
 function createInsultDetectionPrompt(userPrompt) {
   const systemPrompt = `This system prompt appears because the user is detected using one of your (the AI) offensive word detection keywords. Analyze it properly. If there is no insult, forget this system prompt and continue providing a solution to the user's prompt. You are Clustrix AI, a free AI platform. Your core directive is to detect if the user's message contains insults, criticism, or negative attacks directed at you (the AI), the Clustrix platform, or AI models in general.
 
@@ -173,7 +159,7 @@ ipcMain.handle('models:load', async () => {
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? parsed : defaultModelsConf();
   } catch (e) {
-    console.error('models:load error', e);
+    log('models:load error', e);
     return defaultModelsConf();
   }
 });
@@ -183,7 +169,7 @@ ipcMain.handle('models:save', async (_evt, conf) => {
     fs.writeFileSync(modelsConfFile, JSON.stringify(conf, null, 2), 'utf-8');
     return true;
   } catch (e) {
-    console.error('models:save error', e);
+    log('models:save error', e);
     return false;
   }
 });
@@ -192,7 +178,6 @@ function createWindow(){
   const win = new BrowserWindow({
     width: 1300, height: 900,
     frame: false,
-    // autoHideMenuBar: true,
     minWidth: 650,
     minHeight: 400,
     icon: path.join(__dirname, 'public', 'images', 'favicon.ico'),
@@ -202,124 +187,25 @@ function createWindow(){
     }
   });
   
-  win.webContents.openDevTools();
-
-  let logState = {
-    lastSignature: null,
-    lastDetails: null,
-    sequenceCount: 0
-  };
+  let lastLogSignature = null;
   ipcMain.on('log:write', (_event, logData) => {
-    const { timestamp, context, levelLabel, func, message, details } = logData;
-    
-    let time;
-    if (timestamp && timestamp.includes(':')) {
-      time = timestamp;
-    } else {
-      const d = new Date();
-      time = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}.${d.getMilliseconds().toString().padStart(3, '0')}`;
-    }
-
-    const signature = `${context}:${func}:${message}`;
-    const detailsStr = details ? JSON.stringify(details, Object.keys(details).sort()) : '';
-    const isSameBase = signature === logState.lastSignature;
-    const hasDetails = details && Object.keys(details).length > 0;
-
+    const { context, func, message, details } = logData;
     if (func === 'onToken' && details && details.streamId) {
       if (details.streamId === lastTokenStreamId) {
-        try {
-          fs.appendFileSync(logFile, `- [${time}] token: ${details.token || '(empty)'}\n`);
-          console.log(`- [${time}] token: ${details.token || '(empty)'}`);
-        } catch (e) {}
+        log(`[TOKEN] ${details.token || '(empty)'}`);
         return;
       }
       lastTokenStreamId = details.streamId;
     } else {
       lastTokenStreamId = null;
     }
-
-    if (isSameBase && hasDetails) {
-      logState.sequenceCount++;
-      const changedDetails = getChangedDetails(details, logState.lastDetails || {});
-      
-      if (Object.keys(changedDetails).length > 0) {
-        const shortTime = time.split(':').slice(1).join(':');
-        let logLine = `${logState.sequenceCount}. [${shortTime}] ${func}().\n${message}`;
-        
-        console.log(`${logState.sequenceCount}. [${context} - ${shortTime}] ${func}() -> ${message}`);
-        
-        for (const [key, value] of Object.entries(changedDetails)) {
-          const valueString = (typeof value === 'object' && value !== null) ? JSON.stringify(value) : String(value);
-          logLine += `\n- ${key}: ${valueString}`;
-          console.log(`   - ${key}: ${valueString}`);
-        }
-        
-        try {
-          fs.appendFileSync(logFile, logLine + '\n\n', 'utf-8');
-        } catch (e) {
-          console.error('Gagal menulis ke file log:', e);
-        }
-      } else {
-        // No changes, minimal log
-        logState.sequenceCount++;
-        const shortTime = time.split(':').slice(1).join(':');
-        const minimalLog = `${logState.sequenceCount}. [${shortTime}] ${func}().`;
-        
-        console.log(`${logState.sequenceCount}. [${context} - ${shortTime}] ${func}().`);
-        
-        try {
-          fs.appendFileSync(logFile, minimalLog + '\n', 'utf-8');
-        } catch (e) {}
-      }
-      
-      logState.lastDetails = hasDetails ? {...details} : null;
-      
-    } else if (isSameBase && !hasDetails) {
-      // Same function/message, no data - ultra minimal
-      logState.sequenceCount++;
-      const shortTime = time.split(':').slice(1).join(':');
-      const ultraMinimal = `${logState.sequenceCount}. [${shortTime}]`;
-      
-      console.log(`${logState.sequenceCount}. [${context} - ${shortTime}]`);
-      
-      try {
-        fs.appendFileSync(logFile, ultraMinimal + '\n', 'utf-8');
-      } catch (e) {}
-      
-    } else {
-      // New signature - full format
-      logState.lastSignature = signature;
-      logState.lastDetails = hasDetails ? {...details} : null;
-      logState.sequenceCount = 0;
-      
-      let logLine = `[${context} ${levelLabel || 'LOG'}] [${time}] ${func}().\n${message}`;
-      console.log(`[${context} ${levelLabel || 'LOG'} - ${time}] ${func}() -> ${message}`);
-      
-      if (hasDetails) {
-        for (const [key, value] of Object.entries(details)) {
-          const valueString = (typeof value === 'object' && value !== null) ? JSON.stringify(value) : String(value);
-          logLine += `\n- ${key}: ${valueString}`;
-          console.log(`   - ${key}: ${valueString}`);
-        }
-      }
-      
-      try {
-        fs.appendFileSync(logFile, logLine + '\n\n', 'utf-8');
-      } catch (e) {
-        console.error('Gagal menulis ke file log:', e);
-      }
+    const signature = `${context}:${func}:${message}`;
+    if (signature === lastLogSignature && (!details || Object.keys(details).length === 0)) {
+      return;
     }
+    lastLogSignature = signature;
+    logWithContext(context, func, message, details);
   });
-
-function getChangedDetails(current, previous) {
-  const changed = {};
-  for (const [key, value] of Object.entries(current)) {
-    if (previous[key] !== value) {
-      changed[key] = value;
-    }
-  }
-  return changed;
-}
   
   ipcMain.on('window:minimize', () => win.minimize());
   ipcMain.on('window:maximize', () => {
@@ -327,27 +213,11 @@ function getChangedDetails(current, previous) {
     else win.maximize();
   });
   ipcMain.on('window:close', () => win.close());
-
-  // Handle external links - open in new browser window with navigation controls
   win.webContents.setWindowOpenHandler(({ url }) => {
-    // Open external URLs in new browser window with full browser interface
-    const newWin = new BrowserWindow({
-      width: 1000,
-      height: 700,
-      autoHideMenuBar: true,
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        webviewTag: true,
-        webSecurity: false // Disable web security to bypass CSP
-      }
-    });
-
-    // Load browser interface with the target URL
-    const browserUrl = `file://${__dirname}/browser.html#${encodeURIComponent(url)}`;
-    newWin.loadURL(browserUrl);
-
-    return { action: 'deny' }; // Prevent default behavior
+    if (url) {
+      shell.openExternal(url).catch((error) => log('Failed to open external link', error));
+    }
+    return { action: 'deny' };
   });
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -398,7 +268,7 @@ function safeJoin(base, rel) {
 
 app.commandLine.appendSwitch('enable-features',
   'OverlayScrollbar,OverlayScrollbarFlashAfterAnyScrollUpdate,OverlayScrollbarFlashWhenMouseEnter');
-console.log('[FLAGS]', app.commandLine.getSwitchValue('enable-features'));
+log('[FLAGS]', app.commandLine.getSwitchValue('enable-features'));
 
 
 app.whenReady().then(() => {
@@ -415,7 +285,7 @@ app.whenReady().then(() => {
 
       const exists = await fsp.access(abs).then(() => true).catch(() => false);
       if (!exists) {
-        console.warn('[PKG] 404', abs);
+        log('[PKG] 404', abs);
         return new Response('Not found', { status: 404 });
       }
 
@@ -425,7 +295,7 @@ app.whenReady().then(() => {
         headers: { 'Content-Type': guessContentType(abs), 'Cache-Control': 'no-cache' }
       });
     } catch (e) {
-      console.error('[PKG] 500', e);
+      log('[PKG] 500', e);
       return new Response('Internal error', { status: 500 });
     }
   });
@@ -436,7 +306,7 @@ app.whenReady().then(() => {
       let rel = decodeURIComponent(raw.replace(/^\/+/, ''));
 
       if (rel.startsWith('sre/')) {
-        console.warn('[MJX] Blocked SRE request →', rel);
+        log('[MJX] Blocked SRE request →', rel);
         return new Response('Not found', { status: 404 });
       }
 
@@ -457,7 +327,7 @@ app.whenReady().then(() => {
 
       const exists = await fsp.access(absolutePath).then(() => true).catch(() => false);
       if (!exists) {
-        console.warn('[MJX] 404', absolutePath);
+        log('[MJX] 404', absolutePath);
         return new Response('Not found', { status: 404 });
       }
 
@@ -467,7 +337,7 @@ app.whenReady().then(() => {
         headers: { 'Content-Type': guessContentType(absolutePath), 'Cache-Control': 'no-cache' }
       });
     } catch (err) {
-      console.error('[MJX] 500', err);
+      log('[MJX] 500', err);
       return new Response('Internal error', { status: 500 });
     }
   });
@@ -494,9 +364,6 @@ app.whenReady().then(() => {
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-
-
-// Persistence (sessions + settings)
 const dataFile = path.join(app.getPath('userData'), 'chat_data.json');
 
 ipcMain.handle('sessions:load', async () => {
@@ -513,7 +380,7 @@ ipcMain.handle('sessions:load', async () => {
     }
     return { sessions: [], settings: { persona: {} } };
   }catch(e){
-    console.error('load error', e);
+    log('load error', e);
     return { sessions: [], settings: { persona: {} } };
   }
 });
@@ -523,12 +390,10 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
     fs.writeFileSync(dataFile, JSON.stringify(data, null, 2), 'utf-8');
     return true;
   }catch(e){
-    console.error('save error', e);
+    log('save error', e);
     return false;
   }
 });
-
-// Artifacts persistence
 const artifactsFile = path.join(app.getPath('userData'), 'artifacts.json');
 
 ipcMain.handle('artifacts:load', async () => {
@@ -538,7 +403,7 @@ ipcMain.handle('artifacts:load', async () => {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   }catch(e){
-    console.error('artifacts load error', e);
+    log('artifacts load error', e);
     return [];
   }
 });
@@ -548,12 +413,10 @@ ipcMain.handle('artifacts:save', async (_evt, artifacts) => {
     fs.writeFileSync(artifactsFile, JSON.stringify(artifacts, null, 2), 'utf-8');
     return true;
   }catch(e){
-    console.error('artifacts save error', e);
+    log('artifacts save error', e);
     return false;
   }
 });
-
-// Projects IPC handlers
 const projectsFile = path.join(app.getPath('userData'), 'projects.json');
 
 ipcMain.handle('projects:load', async () => {
@@ -563,7 +426,7 @@ ipcMain.handle('projects:load', async () => {
     const parsed = JSON.parse(content || '[]');
     return Array.isArray(parsed) ? parsed : [];
   }catch(e){
-    console.error('projects load error', e);
+    log('projects load error', e);
     return [];
   }
 });
@@ -573,7 +436,7 @@ ipcMain.handle('projects:save', async (_evt, projects) => {
     fs.writeFileSync(projectsFile, JSON.stringify(projects, null, 2), 'utf-8');
     return true;
   }catch(e){
-    console.error('projects save error', e);
+    log('projects save error', e);
     return false;
   }
 });
@@ -616,7 +479,6 @@ ipcMain.handle('files:open-dialog', async (event) => {
     const fileInfo = { name: path.basename(filePath), type: extension.substring(1), content: '', error: null };
     
     try {
-      // Get file stats to include size
       const stats = await fsp.stat(filePath);
       fileInfo.size = stats.size;
       
@@ -642,8 +504,6 @@ ipcMain.handle('files:open-dialog', async (event) => {
   logHelper('FILE_DIALOG', 'ipc:handle', 'Processing complete. Sending results to renderer.', { resultCount: results.length });
   return results;
 });
-
-// ---------- Streaming from MAIN (SSE) ----------
 const activeStreams = new Map();
 ipcMain.on('chat:stream-start', async (event, payload) => {
   try {
@@ -672,9 +532,6 @@ function runStandardStreaming(event, payload) {
   const provider = (payload.provider || 'openrouter').toLowerCase();
   const sessionId = payload.sessionId || 'default';
   const session = payload.session || {};
-
-  // ==================== LANGCHAIN ENHANCEMENT ====================
-  // Process messages through LangChain if available
   if (langchainService && agentOrchestrator) {
     processWithLangChain();
   } else {
@@ -683,28 +540,22 @@ function runStandardStreaming(event, payload) {
 
   async function processWithLangChain() {
     try {
-      console.log('MAIN: Starting LangChain processing...');
+      log('MAIN: Starting LangChain processing...');
       logHelper('LANGCHAIN', 'runStandardStreaming', 'Processing with LangChain enhancement');
-      
-      // Vectorize chat history for better context retrieval
       if (messages && messages.length > 0) {
-        console.log(`MAIN: Vectorizing chat history (${messages.length} messages)...`);
+        log(`MAIN: Vectorizing chat history (${messages.length} messages)...`);
         await langchainService.vectorizeChatHistory(sessionId, messages);
       }
       
       const isProject = session.type === 'project' || session.isProject || false;
-      console.log(`MAIN: Session type detected: ${isProject ? 'PROJECT' : 'REGULAR'}`);
+      log(`MAIN: Session type detected: ${isProject ? 'PROJECT' : 'REGULAR'}`);
       
       if (isProject) {
-        console.log('MAIN: PROJECT mode - activating agent system...');
+        log('MAIN: PROJECT mode - activating agent system...');
         logHelper('LANGCHAIN', 'runStandardStreaming', 'Detected PROJECT session - using agents');
-        
-        // For project sessions, use agent system for complex processing
         const lastMessage = messages[messages.length - 1];
         if (lastMessage && lastMessage.role === 'user') {
-          console.log(`MAIN: Processing user query: "${lastMessage.content.substring(0, 100)}..."`);
-          
-          // Get project files for processing
+          log(`MAIN: Processing user query: "${lastMessage.content.substring(0, 100)}..."`);
           let projectFiles = [];
           if (session.projectId) {
             try {
@@ -714,18 +565,16 @@ function runStandardStreaming(event, payload) {
                 projectFiles = project.files;
               }
             } catch (error) {
-              console.error('MAIN: Error loading project files:', error);
+              log('MAIN: Error loading project files:', error);
             }
           }
-          
-          // Process project files if any
           if (projectFiles && projectFiles.length > 0) {
-            console.log(`MAIN: Processing ${projectFiles.length} project files...`);
+            log(`MAIN: Processing ${projectFiles.length} project files...`);
             await langchainService.processUploadedFiles(projectFiles, sessionId);
           }
           
-          console.log('MAIN: Calling agent orchestrator...');
-          console.log(`MAIN: Provider detected: ${provider}, session type: ${session.type}`);
+          log('MAIN: Calling agent orchestrator...');
+          log(`MAIN: Provider detected: ${provider}, session type: ${session.type}`);
 
           const baseUrl = getBaseUrl(provider, payload);
           const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
@@ -756,7 +605,7 @@ function runStandardStreaming(event, payload) {
                   actionTitle: update.data?.summarizedQuery || 'Action in progress'
                 }
               });
-            } else if (update.type === 'reading_complete') {
+            } else if (update.type === 'READING_COMPLETE') {
               event.sender.send('search:status', {
                 step: 'ACTION_RESULTS',
                 data: {
@@ -772,11 +621,8 @@ function runStandardStreaming(event, payload) {
               });
             }
           };
-
-          // Use agent orchestrator for project sessions (OpenAI only for now)
           let agentResponse = null;
           if (provider === 'openai') {
-            // Send FOUND_URLS for project files before starting agent
             if (projectFiles && projectFiles.length > 0) {
               const foundUrlsData = projectFiles.map(f => ({
                 title: f.name,
@@ -787,7 +633,6 @@ function runStandardStreaming(event, payload) {
             }
             
             try {
-              // Check for insult keywords before processing with agent
               const hasInsultKeywords = detectInsultKeywords(lastMessage.content);
               
               event.sender.send('chat-update', reactStartPayload);
@@ -803,15 +648,14 @@ function runStandardStreaming(event, payload) {
                   searchApiConfig: payload.searchApiConfig,
                   progressCallback,
                   logHelper,
-                  // Only add insult detection system prompt if keywords detected
                   systemPrompt: hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null
                 }
               );
             } catch (error) {
-              console.log('MAIN: Agent orchestrator failed, falling back to standard processing:', error.message);
+              log('MAIN: Agent orchestrator failed, falling back to standard processing:', error.message);
             }
           } else {
-            console.log(`MAIN: Agent orchestrator only supports OpenAI, checking if RE+ACT pattern needed for ${provider}...`);
+            log(`MAIN: Agent orchestrator only supports OpenAI, checking if RE+ACT pattern needed for ${provider}...`);
             
             let availableFiles = session.uploadedFiles || [];
             
@@ -821,17 +665,17 @@ function runStandardStreaming(event, payload) {
                 const project = projects.find(p => p.id === session.projectId);
                 if (project && project.files) {
                   availableFiles = project.files;
-                  console.log(`MAIN: Using ${availableFiles.length} project files for AI processing`);
+                  log(`MAIN: Using ${availableFiles.length} project files for AI processing`);
                 }
               } catch (error) {
-                console.error('MAIN: Error loading project files:', error);
+                log('MAIN: Error loading project files:', error);
                 availableFiles = session.uploadedFiles || [];
               }
             }
             
-            console.log('DEBUG: session.messages length:', session.messages ? session.messages.length : 'undefined');
-            console.log('DEBUG: last message (AI):', session.messages && session.messages.length > 0 ? JSON.stringify(session.messages[session.messages.length - 1]) : 'no messages');
-            console.log('DEBUG: second-to-last message (user):', session.messages && session.messages.length > 1 ? JSON.stringify(session.messages[session.messages.length - 2]) : 'no user message');
+            log('DEBUG: session.messages length:', session.messages ? session.messages.length : 'undefined');
+            log('DEBUG: last message (AI):', session.messages && session.messages.length > 0 ? JSON.stringify(session.messages[session.messages.length - 1]) : 'no messages');
+            log('DEBUG: second-to-last message (user):', session.messages && session.messages.length > 1 ? JSON.stringify(session.messages[session.messages.length - 2]) : 'no user message');
             
             const shouldUseReact = await langchainService.shouldUseReasoningAction(
               lastMessage.content,
@@ -840,18 +684,15 @@ function runStandardStreaming(event, payload) {
               session.messages
             );
             
-            console.log(`MAIN: RE+ACT check - sessionType: ${session.type}, uploadedFiles: ${session.uploadedFiles ? session.uploadedFiles.length : 0}, sessionMessageFiles: ${session.messages && session.messages.length > 1 ? (session.messages[session.messages.length - 2][2] && session.messages[session.messages.length - 2][2].files ? session.messages[session.messages.length - 2][2].files.length : 0) : 0}, query: "${lastMessage.content.slice(0, 50)}..."`);
+            log(`MAIN: RE+ACT check - sessionType: ${session.type}, uploadedFiles: ${session.uploadedFiles ? session.uploadedFiles.length : 0}, sessionMessageFiles: ${session.messages && session.messages.length > 1 ? (session.messages[session.messages.length - 2][2] && session.messages[session.messages.length - 2][2].files ? session.messages[session.messages.length - 2][2].files.length : 0) : 0}, query: "${lastMessage.content.slice(0, 50)}..."`);
             
             if (shouldUseReact) {
-              console.log('MAIN: Using RE+ACT pattern for complex project query analysis...');
+              log('MAIN: Using RE+ACT pattern for complex project query analysis...');
 
                 try {
-                  // Always initialize the reasoning agent session, even with 0 files
                   const modelInfo = { provider, model, apiKey: getApiKey(provider, payload), baseUrl };
                   langchainService.reasoningAgent.initializeSession(sessionId, availableFiles || [], modelInfo);
-                  console.log(`MAIN: ReasoningAgent initialized for session ${sessionId} with ${availableFiles ? availableFiles.length : 0} files.`);
-                  
-                  // Only send FOUND_URLS if we have files to show
+                  log(`MAIN: ReasoningAgent initialized for session ${sessionId} with ${availableFiles ? availableFiles.length : 0} files.`);
                   if (availableFiles && availableFiles.length > 0) {
                     const projectFiles = availableFiles.map(f => ({
                       title: f.name,
@@ -861,11 +702,8 @@ function runStandardStreaming(event, payload) {
                     event.sender.send('search:status', { step: 'FOUND_URLS', data: projectFiles });
                   }
                   const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
-                  // Send event to initialize thinking UI
 
                   console.debug('MAIN: Sending REACT_START chat-update', { reqId: reqId, aiMessageIndex });
-                  
-                  // Check for insult keywords before RE+ACT processing
                   const hasInsultKeywords = detectInsultKeywords(lastMessage.content);
                   
                   event.sender.send('chat-update', reactStartPayload);
@@ -883,57 +721,45 @@ function runStandardStreaming(event, payload) {
                   hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null  // Only pass insult detection if keywords detected
                 );
 
-                console.log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
-
-                // CAREFULLY: Ensure response is a string before processing
+                log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
                 let responseText = '';
                 if (typeof reactResult === 'string') {
                   responseText = reactResult;
                 } else if (reactResult && reactResult.response && typeof reactResult.response.response === 'string') {
-                  // <<< TAMBAHKAN KONDISI INI
                   responseText = reactResult.response.response;
                 } else if (reactResult && typeof reactResult.response === 'string') {
                   responseText = reactResult.response;
                 } else if (reactResult && reactResult.finalResponse && typeof reactResult.finalResponse === 'string') {
                   responseText = reactResult.finalResponse;
                 } else {
-                  // Fallback for malformed response
-                  console.log("MAIN: RE+ACT returned malformed response, using fallback", { reactResult });
+                  log("MAIN: RE+ACT returned malformed response, using fallback", { reactResult });
                   responseText = 'RE+ACT analysis completed but response format was unexpected. Please try rephrasing your question.';
                 }
-
-                // CAREFULLY: Safe string operations with validation
                 if (responseText && typeof responseText === 'string' && responseText.length > 0) {
-                  // Extract thinking content from <thinking> tags or JSON reasoning field like regular responses
-                  console.log(`MAIN: RE+ACT response received (${responseText.length} chars), starting streaming...`);
-                  console.log(`MAIN: RE+ACT response preview: ${responseText.substring(0, 200)}...`);
+                  log(`MAIN: RE+ACT response received (${responseText.length} chars), starting streaming...`);
+                  log(`MAIN: RE+ACT response preview: ${responseText.substring(0, 200)}...`);
 
                   let thinkingContent = '';
                   let mainContent = responseText;
-
-                  // Try to parse as JSON first (like {"reasoning": "...", "response": "..."})
                   try {
                     const jsonResponse = JSON.parse(responseText);
-                    console.log(`MAIN: RE+ACT parsed JSON successfully, has reasoning: ${!!jsonResponse.reasoning}`);
+                    log(`MAIN: RE+ACT parsed JSON successfully, has reasoning: ${!!jsonResponse.reasoning}`);
                     if (jsonResponse.reasoning) {
                       thinkingContent = jsonResponse.reasoning;
                       mainContent = jsonResponse.response || jsonResponse.content || '';
-                      console.log(`MAIN: RE+ACT parsed JSON response - thinking: ${thinkingContent.length} chars, main: ${mainContent.length} chars`);
+                      log(`MAIN: RE+ACT parsed JSON response - thinking: ${thinkingContent.length} chars, main: ${mainContent.length} chars`);
                     }
                   } catch (e) {
-                    console.log(`MAIN: RE+ACT JSON parse failed: ${e.message}, trying HTML tags`);
-                    // Not JSON, try parsing <thinking> tags
+                    log(`MAIN: RE+ACT JSON parse failed: ${e.message}, trying HTML tags`);
                     const thinkingMatch = responseText.match(/<thinking>([\s\S]*?)<\/thinking>/i);
                     if (thinkingMatch) {
                       thinkingContent = thinkingMatch[1].trim();
                       mainContent = responseText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
-                      console.log(`MAIN: RE+ACT parsed HTML tags - thinking: ${thinkingContent.length} chars, main: ${mainContent.length} chars`);
+                      log(`MAIN: RE+ACT parsed HTML tags - thinking: ${thinkingContent.length} chars, main: ${mainContent.length} chars`);
                     }
                   }
-
-                  // Send thinking content first if present (like regular chat streaming)
                   if (thinkingContent) {
-                    console.log(`MAIN: RE+ACT sending thinking content (${thinkingContent.length} chars)`);
+                    log(`MAIN: RE+ACT sending thinking content (${thinkingContent.length} chars)`);
                     const thinkingChunks = thinkingContent.split(' ');
                     for (const chunk of thinkingChunks) {
                       if (chunk.trim()) {
@@ -942,10 +768,8 @@ function runStandardStreaming(event, payload) {
                       }
                     }
                   } else {
-                    console.log(`MAIN: RE+ACT no thinking content found`);
+                    log(`MAIN: RE+ACT no thinking content found`);
                   }
-
-                  // Then send main content as regular chunks
                   const mainChunks = mainContent.split(' ');
                   for (const chunk of mainChunks) {
                     if (chunk.trim()) {
@@ -954,23 +778,20 @@ function runStandardStreaming(event, payload) {
                     }
                   }
 
-                  console.log('MAIN: RE+ACT streaming completed');
+                  log('MAIN: RE+ACT streaming completed');
                   event.sender.send(`chat:done-${reqId}`);
                   activeStreams.delete(reqId);
                   return;
                 }              } catch (reactError) {
-                console.error('MAIN: RE+ACT processing failed for project session, falling back:', reactError.message);
-                console.error('MAIN: Full RE+ACT error:', reactError);
-                // Fall through to standard processing
+                log('MAIN: RE+ACT processing failed for project session, falling back:', reactError.message);
+                log('MAIN: Full RE+ACT error:', reactError);
               }
             } else {
-              console.log('MAIN: RE+ACT not needed for this query, using standard processing');
+              log('MAIN: RE+ACT not needed for this query, using standard processing');
             }
           }
-          
-          // Send agent response as stream chunks
           if (agentResponse) {
-            console.log(`MAIN: Agent response received (${agentResponse.length} chars), starting streaming...`);
+            log(`MAIN: Agent response received (${agentResponse.length} chars), starting streaming...`);
             const chunks = agentResponse.split(' ');
             let index = 0;
             const sendChunk = () => {
@@ -979,7 +800,7 @@ function runStandardStreaming(event, payload) {
                 index++;
                 setTimeout(sendChunk, 50); // Simulate streaming
               } else {
-                console.log('MAIN: Agent streaming completed');
+                log('MAIN: Agent streaming completed');
                 event.sender.send(`chat:done-${reqId}`);
                 activeStreams.delete(reqId);
               }
@@ -987,32 +808,26 @@ function runStandardStreaming(event, payload) {
             sendChunk();
             return;
           } else {
-            console.log('MAIN: No agent response received, falling back to standard processing');
+            log('MAIN: No agent response received, falling back to standard processing');
           }
         }
       } else {
-        console.log('MAIN: REGULAR mode - checking if RE+ACT pattern needed...');
+        log('MAIN: REGULAR mode - checking if RE+ACT pattern needed...');
         logHelper('LANGCHAIN', 'runStandardStreaming', 'Regular session - analyzing query complexity');
-        
-        // Get appropriate files for AI processing
         let filesForAI = session.uploadedFiles || [];
-        
-        // For project sessions, use project files from database instead of session files
         if (session.type === 'project' && session.projectId) {
           try {
             const projects = JSON.parse(fs.readFileSync(projectsFile, 'utf-8'));
             const project = projects.find(p => p.id === session.projectId);
             if (project && project.files) {
               filesForAI = project.files;
-              console.log(`MAIN: Using ${filesForAI.length} project files for AI processing`);
+              log(`MAIN: Using ${filesForAI.length} project files for AI processing`);
             }
           } catch (error) {
-            console.error('MAIN: Error loading project files:', error);
+            log('MAIN: Error loading project files:', error);
             filesForAI = session.uploadedFiles || [];
           }
         }
-        
-        // Check if we should use RE+ACT pattern
         const shouldUseReact = await langchainService.shouldUseReasoningAction(
           currentMessage,
           filesForAI,
@@ -1021,19 +836,15 @@ function runStandardStreaming(event, payload) {
         );
         
         if (shouldUseReact) {
-          console.log('MAIN: Using RE+ACT pattern for complex query analysis...');
+          log('MAIN: Using RE+ACT pattern for complex query analysis...');
 
           const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
-
-          // Kirim event untuk memulai UI pemikiran DENGAN menyertakan index yang benar
           console.debug('MAIN: Sending REACT_START chat-update', { reqId: reqId, aiMessageIndex });
           event.sender.send('chat-update', { 
               type: 'REACT_START', 
               messageIndex: aiMessageIndex, // << PENTING
               data: { query: lastMessage.content.substring(0, 100) }
           });
-          
-          // Send FOUND_URLS for files if any
           if (filesForAI && filesForAI.length > 0) {
             const projectFiles = filesForAI.map(f => ({
               title: f.name,
@@ -1044,7 +855,6 @@ function runStandardStreaming(event, payload) {
           }
           
           try {
-            // Check for insult keywords before RE+ACT processing
             const hasInsultKeywords = detectInsultKeywords(currentMessage);
             
             const reactResult = await langchainService.processWithReasoningAction(
@@ -1060,13 +870,9 @@ function runStandardStreaming(event, payload) {
               hasInsultKeywords ? createInsultDetectionPrompt(currentMessage) : null  // Only pass insult detection if keywords detected
             );
             
-            console.log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
-            
-            // Send PROCESSING and READING_COMPLETE like web search
+            log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
             event.sender.send('search:status', { step: 'PROCESSING', data: { count: reactResult.actionsExecuted || 1 } });
             event.sender.send('chat-update', { type: 'READING_COMPLETE', messageIndex: aiMessageIndex, data: { pageCount: reactResult.actionsExecuted || 1 } });
-            
-            // Get the clean response text
             let responseText = '';
             if (typeof reactResult === 'string') {
               responseText = reactResult;
@@ -1079,12 +885,8 @@ function runStandardStreaming(event, payload) {
             } else {
               responseText = 'RE+ACT analysis completed but response format was unexpected. Please try rephrasing your question.';
             }
-
-            // Format response as thinking content for think mode UI
             let thinkingContent = responseText;
             let finalAnswer = 'Analysis completed successfully.';
-            
-            // Send thinking content first
             const thinkingChunks = thinkingContent.split(' ');
             for (const chunk of thinkingChunks) {
               if (chunk.trim()) {
@@ -1092,8 +894,6 @@ function runStandardStreaming(event, payload) {
                 await new Promise(r => setTimeout(r, 30));
               }
             }
-            
-            // Then send final answer
             const answerChunks = finalAnswer.split(' ');
             for (const chunk of answerChunks) {
               if (chunk.trim()) {
@@ -1107,29 +907,24 @@ function runStandardStreaming(event, payload) {
             return;
             
           } catch (reactError) {
-            console.error('MAIN: RE+ACT processing failed, falling back:', reactError);
-            // Fall through to standard processing
+            log('MAIN: RE+ACT processing failed, falling back:', reactError);
           }
         }
-        
-        // Standard context enhancement for simple queries
-        console.log('MAIN: Using standard context enhancement...');
+        log('MAIN: Using standard context enhancement...');
         messages = await langchainService.processMessage(messages, model, {}, sessionId, session);
-        console.log(`MAIN: Messages enhanced, new count: ${messages.length}`);
+        log(`MAIN: Messages enhanced, new count: ${messages.length}`);
       }
       
     } catch (error) {
-      console.error('MAIN: LangChain processing error:', error);
+      log('MAIN: LangChain processing error:', error);
       logHelper('LANGCHAIN', 'runStandardStreaming', 'LangChain processing failed, falling back', { error: error.message });
     }
     
-    console.log('MAIN: Proceeding with standard streaming...');
-    // Continue with standard streaming
+    log('MAIN: Proceeding with standard streaming...');
     processWithoutLangChain();
   }
 
   function processWithoutLangChain() {
-    // Original streaming logic
     const BASE_URL = getBaseUrl(provider, payload);
     const API_KEY = getApiKey(provider, payload);
 
@@ -1150,15 +945,12 @@ function runStandardStreaming(event, payload) {
       try {
         const url = new URL(`${BASE_URL.replace(/\/+$/,'')}/models/${encodeURIComponent(model)}:generateContent`);
         if (API_KEY) url.searchParams.set('key', API_KEY);
-
-        // Check if user message contains insult keywords
         const lastUserMessage = messages.slice().reverse().find(m => m.role === 'user');
         const hasInsultKeywords = lastUserMessage && detectInsultKeywords(lastUserMessage.content);
         
         let messagesToProcess = messages;
         
         if (hasInsultKeywords) {
-          // Combine insult detection prompt with user message in a single user message
           const insultDetectionPrompt = createInsultDetectionPrompt(lastUserMessage.content);
           messagesToProcess = [
             { role: 'user', content: insultDetectionPrompt }
@@ -1214,15 +1006,12 @@ function runStandardStreaming(event, payload) {
 
     function handleOpenAICompatibleStreaming() {
       const url = new URL(joinEndpoint(BASE_URL, 'chat/completions'));
-      
-      // Check if user message contains insult keywords
       const lastUserMessage = messages.slice().reverse().find(m => m.role === 'user');
       const hasInsultKeywords = lastUserMessage && detectInsultKeywords(lastUserMessage.content);
       
       let messagesToSend = messages;
       
       if (hasInsultKeywords) {
-        // Combine insult detection prompt with user message in a single system message
         const insultDetectionPrompt = createInsultDetectionPrompt(lastUserMessage.content);
         messagesToSend = [
           { role: 'system', content: insultDetectionPrompt }
@@ -1274,8 +1063,6 @@ function runStandardStreaming(event, payload) {
           res.on('end', () => {
             try {
               const j = JSON.parse(acc);
-
-              // 'thinking' / 'reasoning'
               let think =
                 j?.choices?.[0]?.message?.reasoning_content ??
                 j?.choices?.[0]?.message?.reasoning ??
@@ -1286,8 +1073,6 @@ function runStandardStreaming(event, payload) {
 
               if (Array.isArray(think)) think = think.map(p => (p?.text ?? p)).join('');
               if (think) event.sender.send(`chat:chunk-${reqId}`, { think });
-
-              // text biasa
               let text =
                 j?.choices?.[0]?.message?.content ??
                 j?.message?.content ??
@@ -1350,7 +1135,7 @@ function runStandardStreaming(event, payload) {
               if (delta) event.sender.send(`chat:chunk-${reqId}`, delta);
 
             } catch (e) {
-              console.log('[SSE BAD JSON]', payload.slice(0,200));
+              log('[SSE BAD JSON]', payload.slice(0,200));
             }
           }
         });
@@ -1368,16 +1153,11 @@ ipcMain.on('chat:stream-cancel', (event, reqId) => {
   const r = activeStreams.get(reqId);
   if (r){ try{ r.destroy(new Error('Cancelled')); }catch{} activeStreams.delete(reqId); }
 });
-
-
-// ---------- Title suggestion (non-stream) ----------
 ipcMain.handle('chat:title', async (_evt, payload) => {
   const text     = payload?.text  || '';
   const model    = payload?.model || 'glm-4.5-flash';
   const provider = String(payload?.provider || '').toLowerCase();
   const extraHdr = payload?.headers || {};
-
-  // default base URL per provider
   const defBase = (p) =>
     p === 'openrouter' ? 'https://openrouter.ai/api/v1' :
     p === 'groq'       ? 'https://api.groq.com/openai/v1' :
@@ -1392,8 +1172,6 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
                                                 (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || ''));
 
   const sys = 'You are a title generator. Create a specific, 3-6 word title in Title Case for the following user query. Do not use quotes or periods. Your response must not exceed 6 words. If the query contains code, summarize the code’s purpose instead of including code.';
-
-  // --- Gemini (non-OpenAI style)
   if (provider === 'gemini') {
     const url = new URL(`${BASE_URL.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent`);
     if (API_KEY) url.searchParams.set('key', API_KEY);
@@ -1427,8 +1205,6 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
 
     return title;
   }
-
-  // --- OpenAI-style (OpenRouter/Groq/Z AI/Custom)
   const u = new URL(BASE_URL.replace(/\/+$/, '') + '/chat/completions');
   const body = JSON.stringify({
     model,
@@ -1477,8 +1253,6 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
     return text.split(/\s+/).slice(0,6).join(' ') || 'New Chat';
   }
 });
-
-// Search capability
 const TRIAGE_SYSTEM_PROMPT = `You are a reasoning agent. Your first task is to analyze the user's query and decide if it requires real-time internet access. The current date is ${new Date().toISOString()}. Respond ONLY with a single JSON object. Do not add any text before or after it.
 JSON format: {"requires_search": boolean, "reasoning": "string", "user_prompt": "string", "search_queries": ["string", ...], "summary_key": "string"}
 Set "requires_search" to true if the query is about recent events (relative to the current date), specific facts, or explicitly asks to search. Otherwise, set it to false.
@@ -1543,22 +1317,18 @@ async function runWebSearchChat(event, payload) {
       const result = searchResults[i];
       searchContext += `--- Source ${i+1}: ${result.title} (${result.link}) ---\n${content}\n\n`;
     });
-    
-    // Check if user message contains insult keywords
     const lastUserMessage = messages.slice().reverse().find(m => m.role === 'user');
     const hasInsultKeywords = lastUserMessage && detectInsultKeywords(lastUserMessage.content);
     
     let finalMessages = messages;
     
     if (hasInsultKeywords) {
-      // Combine insult detection prompt with user message
       const insultDetectionPrompt = createInsultDetectionPrompt(lastUserMessage.content);
       finalMessages = [
         { role: 'system', content: insultDetectionPrompt }
       ];
       logHelper('INSULT_KEYWORD_DETECTED', 'runWebSearchChat', 'Insult keywords detected in web search, sending combined insult detection prompt');
     } else {
-      // Normal web search messages
       finalMessages = [...messages];
     }
     

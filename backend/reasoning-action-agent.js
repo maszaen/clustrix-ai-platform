@@ -1,9 +1,7 @@
-/**
- * AI Reasoning + Action (RE+ACT) Orchestrator
- * Enables AI to perform multi-step analysis with desktop search capabilities
- */
+
 
 const DesktopSearchEngine = require('./desktop-search-engine');
+const { log } = require('../utils/logger');
 
 class ReasoningActionAgent {
   constructor(langchainService) {
@@ -11,22 +9,17 @@ class ReasoningActionAgent {
     this.searchEngine = new DesktopSearchEngine(langchainService);
     this.currentThinking = null;
     this.actionHistory = [];
-    this.sessionState = new Map(); // sessionId -> state
+    this.sessionState = new Map();
   }
 
-  /**
-   * Initialize with project files for current session
-   */
+  
   initializeSession(sessionId, files, modelInfo = {}) {
-    console.log(`RE+ACT: Initializing session ${sessionId} with ${files.length} files`);
-
-    // Use the files passed directly instead of getting from global embedding engine
-    // This ensures we have the correct files for this specific session
+    log(`RE+ACT: Initializing session ${sessionId} with ${files.length} files`);
     const processedFiles = files.map(file => ({
       name: file.name,
       type: file.type || 'unknown',
       content: file.content || '',
-      path: file.name, // Use filename as path for search engine
+      path: file.name,
       metadata: {
         sessionId,
         uploadedAt: new Date().toISOString(),
@@ -34,7 +27,7 @@ class ReasoningActionAgent {
       }
     }));
     
-    console.log(`RE+ACT: Using ${processedFiles.length} files directly from session`);
+    log(`RE+ACT: Using ${processedFiles.length} files directly from session`);
 
     const { searchApiConfig = null, ...modelConfig } = modelInfo || {};
 
@@ -43,49 +36,39 @@ class ReasoningActionAgent {
 
     const capabilities = this.searchEngine.getCapabilities();
     this.sessionState.set(sessionId, {
-      files: processedFiles, // Store the processed files for this session
+      files: processedFiles,
       capabilities,
       actionHistory: [],
       currentPlan: null,
       thinkingState: null,
-      model: modelConfig,  // Store model information for API calls
+      model: modelConfig,
       searchApiConfig
     });
 
-    console.log(`Session initialized with capabilities:`, capabilities);
+    log(`Session initialized with capabilities:`, capabilities);
     return capabilities;
   }
 
-  /**
-   * Process user query with RE+ACT pattern
-   */
+  
   async processWithReasoningAction(userQuery, sessionId, existingMessages = [], progressCallback = null, systemPrompt = null) {
-    console.log(`RE+ACT: Processing query for session ${sessionId}`);
+    log(`RE+ACT: Processing query for session ${sessionId}`);
     
     const sessionState = this.sessionState.get(sessionId);
     if (!sessionState) {
       throw new Error(`Session ${sessionId} not initialized`);
     }
-
-    // Send initial thinking update
     if (progressCallback) {
       progressCallback({
         type: 'searching',
         data: { summarizedQuery: `Analyzing: "${userQuery.substring(0, 50)}${userQuery.length > 50 ? '...' : ''}"` }
       });
     }
-
-    // Step 1: Initial reasoning - let AI understand the problem and plan actions
     const reasoningPrompt = this.buildReasoningPrompt(userQuery, sessionState);
-    console.log(`RE+ACT: Sending reasoning prompt to AI...`);
+    log(`RE+ACT: Sending reasoning prompt to AI...`);
     
     const reasoningResponse = await this.makeAIRequest(reasoningPrompt, sessionId);
-    
-    // Step 2: Parse AI's plan and execute actions
     const plan = this.parseReasoningResponse(reasoningResponse);
-    console.log(`RE+ACT: AI generated plan with ${plan.actions.length} actions`);
-    
-    // Update thinking with plan
+    log(`RE+ACT: AI generated plan with ${plan.actions.length} actions`);
     if (progressCallback) {
       progressCallback({
         type: 'reading_complete',
@@ -96,15 +79,13 @@ class ReasoningActionAgent {
         }
       });
     }
-
-    // Step 3: Execute actions one by one, updating AI with results
     let finalResponse = reasoningResponse;
-    const MAX_ACTIONS = 10; // Prevent infinite loops
+    const MAX_ACTIONS = 10;
     let totalActionsExecuted = 0;
     
     for (const [index, action] of plan.actions.entries()) {
       if (totalActionsExecuted >= MAX_ACTIONS) {
-        console.log(`RE+ACT: Stopping execution after ${MAX_ACTIONS} actions to prevent infinite loops`);
+        log(`RE+ACT: Stopping execution after ${MAX_ACTIONS} actions to prevent infinite loops`);
         if (progressCallback) {
           progressCallback({
             type: 'thinking',
@@ -113,8 +94,6 @@ class ReasoningActionAgent {
         }
         break;
       }
-      
-      // Send SEARCHING update like websearch
       if (progressCallback) {
         progressCallback({
           type: 'searching',
@@ -130,16 +109,12 @@ class ReasoningActionAgent {
       });
       
       totalActionsExecuted++;
-      
-      // Send PROCESSING update after first few actions to show progress
       if (progressCallback && totalActionsExecuted === 2) {
         progressCallback({
           type: 'processing',
           data: { count: totalActionsExecuted }
         });
       }
-      
-      // Send READING_COMPLETE update like websearch
       if (progressCallback) {
         const resultCount = Array.isArray(actionResult.results) ? actionResult.results.length : (actionResult.resultCount || 0);
         progressCallback({
@@ -151,9 +126,6 @@ class ReasoningActionAgent {
           }
         });
       }
-
-      // Also send a structured action_result payload so the main process can render
-      // results similarly to web-search (FOUND_URLS / READING_COMPLETE).
       try {
         const structured = {
           action: action.type,
@@ -175,25 +147,19 @@ class ReasoningActionAgent {
           data: structured
         });
       } catch (e) {
-        // Non-fatal - continue
-        console.warn('RE+ACT: Failed to emit structured action_result', e);
+        log('RE+ACT: Failed to emit structured action_result', e);
       }
-      
-      // Send action result back to AI for next step
       if (index < plan.actions.length - 1 || actionResult.requiresFollowup) {
         const followupPrompt = this.buildFollowupPrompt(action, actionResult, plan, index);
         finalResponse = await this.makeAIRequest(followupPrompt, sessionId);
-        
-        // Check if AI wants to perform additional actions
         const additionalPlan = this.parseReasoningResponse(finalResponse);
         if (additionalPlan.actions.length > 0 && totalActionsExecuted < MAX_ACTIONS) {
-          // Filter out invalid actions
           const validActions = additionalPlan.actions.filter(action => {
             return action.type && action.params && Object.keys(action.params).length > 0;
           });
           
           if (validActions.length > 0) {
-            console.log(`\nRE+ACT: AI requested ${validActions.length} additional actions`);
+            log(`\nRE+ACT: AI requested ${validActions.length} additional actions`);
             if (progressCallback) {
               progressCallback({
                 type: 'thinking',
@@ -202,14 +168,12 @@ class ReasoningActionAgent {
             }
             plan.actions.push(...validActions);
           } else {
-            console.log(`RE+ACT: AI requested additional actions but all were invalid, stopping`);
+            log(`RE+ACT: AI requested additional actions but all were invalid, stopping`);
             break;
           }
         }
       }
     }
-    
-    // Step 4: Final synthesis
     if (sessionState.actionHistory.length > 0) {
       if (progressCallback) {
         progressCallback({
@@ -226,39 +190,17 @@ class ReasoningActionAgent {
       finalResponse = await this.makeAIRequest(synthesisPrompt, sessionId);
     }
     
-    console.log(`RE+ACT: Completed processing with ${sessionState.actionHistory.length} actions executed`);
+    log(`RE+ACT: Completed processing with ${sessionState.actionHistory.length} actions executed`);
     
     let hasText = typeof finalResponse === "string" && finalResponse.trim().length > 0;
     let looksLikePlanOnly = hasText && /(^|\n)\s*PLAN\s*:|^\s*\*\*REASONING\*\*|^REASONING:/i.test(finalResponse) && !/FINAL ANSWER|JAWABAN AKHIR|KESIMPULAN|SOLUTION|SOLUSI/i.test(finalResponse);
-    
-    // Clean up uninformative prefixes but preserve thinking tags
     if (hasText) {
       finalResponse = finalResponse.replace(/^Based on the (content|search analysis|findings?|results?)\.?\s*/i, '');
       finalResponse = finalResponse.replace(/^Here is (my|the) analysis:?\s*/i, '');
       finalResponse = finalResponse.replace(/^I have analyzed your project files?:?\s*/i, '');
-      // Remove REASONING section if it exists but preserve thinking tags
       finalResponse = finalResponse.replace(/^(\*\*)?REASONING(\*\*)?:\s*(.*?)(?=\n\n|\n?$)/s, '$3');
-      // Remove PLAN section if it exists
       finalResponse = finalResponse.replace(/^(\*\*)?PLAN(\*\*)?:\s*(.*?)(?=\n\n|\n?$)/s, '$3');
     }
-
-    // For RE+ACT responses, don't strip thinking content like we do for planning sections
-    // Let the frontend handle thinking mode display like regular responses
-    // if (hasText && looksLikePlanOnly) {
-    //   // Try to extract the actual response from after the planning section
-    //   const currentThinkingMatch = finalResponse.match(/CURRENT THINKING:\s*(.*?)$/s);
-    //   if (currentThinkingMatch && currentThinkingMatch[1].trim().length > 50) {
-    //     // Use the content after CURRENT THINKING as the response
-    //     finalResponse = currentThinkingMatch[1].trim();
-    //     looksLikePlanOnly = false;
-    //   } else {
-    //     // If no CURRENT THINKING section, try to extract content after REASONING section
-    //     const reasoningMatch = finalResponse.match(/^(\*\*)?REASONING(\*\*)?:\s*(.*?)(?=\n\n|\n?$)/s);
-    //     if (reasoningMatch && reasoningMatch[3].trim().length > 50) {
-    //       finalResponse = reasoningMatch[3].trim();
-    //     }
-    //   }
-    // }
 
     if (!hasText || looksLikePlanOnly) {
       const planText = typeof plan === "string" ? plan : JSON.stringify(plan);
@@ -274,9 +216,7 @@ class ReasoningActionAgent {
     };
   }
 
-  /**
-   * Build synthesis prompt for final response
-   */
+  
   buildSynthesisPrompt(userQuery, actionHistory, sessionState) {
     const { summaryText, webSources } = this.prepareActionSummary(actionHistory);
     const hasFiles = Array.isArray(sessionState.files) && sessionState.files.length > 0;
@@ -310,9 +250,7 @@ FINAL RESPONSE REQUIREMENTS:
 - Berikan rekomendasi atau next-step yang actionable bila relevan.`;
   }
 
-  /**
-   * Build initial reasoning prompt
-   */
+  
   buildReasoningPrompt(userQuery, sessionState) {
     const hasFiles = Array.isArray(sessionState.files) && sessionState.files.length > 0;
     const fileList = hasFiles
@@ -370,13 +308,9 @@ PLAN:
 CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu menjawab pertanyaan pengguna]`;
   }
 
-  /**
-   * Build synthesis prompt for final answer
-   */
+  
   buildSynthesisPrompt(userQuery, sessionState, actionResults, userLanguage = 'en') {
     const fileList = sessionState.files.map(f => `- ${f.name} (${f.type})`).join('\n');
-
-    // Format action results for context
     const resultsContext = actionResults.map((result, index) => {
       if (result.success) {
         return `ACTION ${index + 1}: ${result.action}
@@ -414,60 +348,41 @@ IMPORTANT: Structure your response with:
 IMPORTANT: The thinking section must be included and will be saved for future reference.`;
   }
 
-  /**
-   * Detect user's language from their query
-   */
+  
   detectUserLanguage(userQuery) {
-    // Simple language detection based on common words and characters
     const query = userQuery.toLowerCase();
-
-    // Indonesian indicators
     if (/\b(apa|bagaimana|dimana|kapan|mengapa|siapa|yang|dan|atau|dengan|untuk|dari|pada|ke|di)\b/.test(query) ||
-        /[àâäéèêëïîôöùûüÿç]/.test(query) === false && // Not French
-        /[ñ¿¡]/.test(query) === false && // Not Spanish
+        /[àâäéèêëïîôöùûüÿç]/.test(query) === false &&
+        /[ñ¿¡]/.test(query) === false &&
         query.includes('yang') || query.includes('untuk') || query.includes('dengan')) {
-      return 'id'; // Indonesian
+      return 'id';
     }
-
-    // French indicators
     if (/\b(le|la|les|du|de|des|et|à|un|une|dans|sur|avec|pour|par|mais|ou|si|nous|vous|ils|elles)\b/.test(query) ||
         /[àâäéèêëïîôöùûüÿç]/.test(query)) {
-      return 'fr'; // French
+      return 'fr';
     }
-
-    // Spanish indicators
     if (/\b(el|la|los|las|de|del|en|con|por|para|como|que|es|son|está|están|y|o|si|no|muy|más)\b/.test(query) ||
         /[ñ¿¡]/.test(query)) {
-      return 'es'; // Spanish
+      return 'es';
     }
-
-    // German indicators
     if (/\b(der|die|das|den|dem|des|und|mit|für|auf|ist|sind|war|waren|sein|haben|hatte)\b/.test(query) ||
         /[äöüß]/.test(query)) {
-      return 'de'; // German
+      return 'de';
     }
-
-    // Default to English
     return 'en';
   }
 
-  /**
-   * Parse AI's reasoning response to extract action plan
-   */
+  
   parseReasoningResponse(response) {
     const plan = {
       reasoning: '',
       actions: [],
       thinking: ''
     };
-
-    // Extract reasoning
     const reasoningMatch = response.match(/REASONING:\s*(.*?)(?=\n\nPLAN:|$)/s);
     if (reasoningMatch) {
       plan.reasoning = reasoningMatch[1].trim();
     }
-
-    // Extract actions
     const extractPlanSection = () => {
       const planMatch = response.match(/PLAN\s*:\s*([\s\S]*)/i);
       if (!planMatch) {
@@ -607,7 +522,7 @@ IMPORTANT: The thinking section must be included and will be saved for future re
         try {
           return JSON.parse(cleaned);
         } catch (error) {
-          console.warn(`Could not parse action parameters: ${cleaned}`);
+          log(`Could not parse action parameters: ${cleaned}`);
         }
       }
 
@@ -654,18 +569,13 @@ IMPORTANT: The thinking section must be included and will be saved for future re
         });
       }
     }
-
-    // Fallback: some models output PLAN as a markdown table. Try parsing that into actions.
     if (plan.actions.length === 0) {
       try {
-        // Find a markdown table under PLAN: header
         const tableMatch = response.match(/\n\s*\|\s*#\s*\|[\s\S]*?\n\s*\|[-\s|:]+\n([\s\S]*?)\n\s*\n/);
         if (tableMatch && tableMatch[1]) {
           const rows = tableMatch[1].trim().split(/\n+/);
           for (const row of rows) {
-            // table columns split by |, trim each cell
             const cols = row.split('|').map(c => c.trim()).filter((v,i) => v !== '' || i>0);
-            // Expected col layout: [index, ACTION, PARAMETERS, WHY]
             if (cols.length >= 3) {
               const rawAction = cols[1].replace(/\*+/g, '').trim();
               let actionType = rawAction.replace(/[*`]/g, '').split(/\s+/)[0];
@@ -682,11 +592,8 @@ IMPORTANT: The thinking section must be included and will be saved for future re
           }
         }
       } catch (e) {
-        // ignore fallback parsing errors
       }
     }
-
-    // Extract current thinking
     const thinkingMatch = response.match(/CURRENT THINKING:\s*(.*?)$/s);
     if (thinkingMatch) {
       plan.thinking = thinkingMatch[1].trim();
@@ -695,20 +602,16 @@ IMPORTANT: The thinking section must be included and will be saved for future re
     return plan;
   }
 
-  /**
-   * Execute a single action
-   */
+  
   async executeAction(action, sessionId) {
-    console.log(`Executing ${action.type} with params:`, action.params);
+    log(`Executing ${action.type} with params:`, action.params);
 
     try {
       const result = await this.searchEngine.executeSearchCommand(action.type, action.params);
-
-      // Limit results to prevent token overflow
       const limitedResult = this.limitSearchResults(result, 100);
       const resultCount = Array.isArray(result) ? result.length : (result ? 1 : 0);
 
-      console.log(`Action ${action.type} returned ${resultCount} result(s)`);
+      log(`Action ${action.type} returned ${resultCount} result(s)`);
 
       action.executed = true;
 
@@ -722,7 +625,7 @@ IMPORTANT: The thinking section must be included and will be saved for future re
       };
 
     } catch (error) {
-      console.error(`Action ${action.type} failed:`, error);
+      log(`Action ${action.type} failed:`, error);
       return {
         success: false,
         action: action.type,
@@ -733,9 +636,7 @@ IMPORTANT: The thinking section must be included and will be saved for future re
     }
   }
 
-  /**
-   * Limit search results to prevent token overflow
-   */
+  
   limitSearchResults(results, maxLines = 100) {
     if (!Array.isArray(results)) return results;
 
@@ -752,7 +653,6 @@ IMPORTANT: The thinking section must be included and will be saved for future re
         limitedResults.push(result);
         totalLines += resultLines;
       } else {
-        // Add a truncation note
         limitedResults.push({
           ...result,
           context: `[TRUNCATED - Found ${results.length - limitedResults.length} more matches]`,
@@ -819,16 +719,11 @@ IMPORTANT: The thinking section must be included and will be saved for future re
     };
   }
 
-  /**
-   * Determine if action requires followup
-   */
+  
   shouldRequireFollowup(action, result) {
-    // If no results found, might need different search strategy
     if (Array.isArray(result) && result.length === 0) {
       return true;
     }
-    
-    // If too many results, might need to refine search
     if (Array.isArray(result) && result.length > 50) {
       return true;
     }
@@ -836,9 +731,7 @@ IMPORTANT: The thinking section must be included and will be saved for future re
     return false;
   }
 
-  /**
-   * Build followup prompt after action execution
-   */
+  
   buildFollowupPrompt(action, actionResult, originalPlan, actionIndex) {
     const resultSummary = actionResult.success 
       ? `Found ${actionResult.resultCount} results`
@@ -876,9 +769,7 @@ WHY: Explanation
 If you have sufficient information to answer the user's question, provide your final analysis without requesting more actions.`;
   }
 
-  /**
-   * Build final synthesis prompt
-   */
+  
   buildSynthesisPrompt(userQuery, actionHistory, sessionState) {
     const { summaryText, webSources } = this.prepareActionSummary(actionHistory);
     const hasFiles = Array.isArray(sessionState.files) && sessionState.files.length > 0;
@@ -912,15 +803,13 @@ FINAL RESPONSE REQUIREMENTS:
 - Berikan rekomendasi atau next-step yang actionable bila relevan.`;
   }
 
-  /**
-   * Make AI request (integrated with existing LangChain service)
-   */
+  
   async makeAIRequest(prompt, sessionId) {
-    console.log(`AI Request for session ${sessionId}:`, prompt.slice(0, 100) + '...');
+    log(`AI Request for session ${sessionId}:`, prompt.slice(0, 100) + '...');
 
     const sessionData = this.sessionState.get(sessionId);
     if (!sessionData || !sessionData.model) {
-      console.error('AI request failed: Session not properly initialized with model information');
+      log('AI request failed: Session not properly initialized with model information');
       return this.generateFallbackResponse(prompt);
     }
 
@@ -1020,25 +909,22 @@ FINAL RESPONSE REQUIREMENTS:
           const backoff = baseDelay * Math.pow(2, attempt - 1);
           const jitter = Math.floor(Math.random() * 200);
           const delay = backoff + jitter;
-          console.warn(`AI request attempt ${attempt} failed (${status || error.code || 'error'}). Retrying in ${delay}ms...`);
+          log(`AI request attempt ${attempt} failed (${status || error.code || 'error'}). Retrying in ${delay}ms...`);
           await sleep(delay);
           continue;
         }
 
-        console.error(`AI request attempt ${attempt} failed:`, error);
+        log(`AI request attempt ${attempt} failed:`, error);
         break;
       }
     }
 
-    console.error('AI request failed after retries:', lastError);
+    log('AI request failed after retries:', lastError);
     return this.generateFallbackResponse(prompt);
   }
 
-  /**
-   * Generate fallback response when AI is not available
-   */
+  
   generateFallbackResponse(prompt) {
-    // Simple pattern-based response generation
     const lowerPrompt = prompt.toLowerCase();
     
     if (lowerPrompt.includes('textarea') && lowerPrompt.includes('not')) {
@@ -1056,8 +942,6 @@ PLAN:
 
 CURRENT THINKING: Will analyze the HTML structure and CSS styling to identify why textarea elements are not visible.`;
     }
-    
-    // Generic analysis response
     return `REASONING: Analyzing the uploaded files to understand the structure and identify potential issues.
 
 PLAN:
@@ -1070,9 +954,7 @@ PLAN:
 CURRENT THINKING: Will examine the file structure and search for relevant patterns to provide helpful analysis.`;
   }
 
-  /**
-   * Get session statistics
-   */
+  
   getSessionStats(sessionId) {
     const sessionState = this.sessionState.get(sessionId);
     if (!sessionState) return null;

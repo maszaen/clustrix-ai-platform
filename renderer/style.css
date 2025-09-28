@@ -4758,6 +4758,48 @@ a:focus-visible {
   user-select: none !important;
 }
 
+.message.ai .thinking-toggle .thinking-toggle-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.message.ai .thinking-toggle .web-search-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0;
+  padding: 0;
+  font-size: 14px;
+  color: var(--fg-muted);
+  font-family: var(--font-display-italic);
+  animation: none;
+}
+
+.message.ai .thinking-toggle .web-search-indicator svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--icon);
+}
+
+.message.ai .thinking-toggle .web-search-indicator .status-text {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.message.ai .thinking-toggle .web-search-indicator .page-count-pill {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-weight: bold;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  margin-left: 4px;
+}
+
 .message.ai .thinking-body {
   transition: margin .4s ease;
   margin: 0 8px;

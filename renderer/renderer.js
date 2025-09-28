@@ -721,7 +721,7 @@ async function processSearchStatusQueue() {
         
         if (isProjectSession) {
           // Project session analysis
-          thinkEl.toggle.querySelector("span").textContent =
+          thinkEl.toggle.querySelector(".thinking-toggle-content span").textContent =
             `Planning analysis approach...`;
           thinkEl.text.innerHTML = "";
           if (!thinkEl.body.classList.contains("expanded")) {
@@ -746,7 +746,7 @@ async function processSearchStatusQueue() {
           );
         } else {
           // Web search session
-          thinkEl.toggle.querySelector("span").textContent =
+          thinkEl.toggle.querySelector(".thinking-toggle-content span").textContent =
             `Searching for "${status.data.summary_key}"...`;
           thinkEl.text.innerHTML = "";
           if (!thinkEl.body.classList.contains("expanded")) {
@@ -853,12 +853,20 @@ async function processSearchStatusQueue() {
         const isProjectProcessing = searchStatusQueue.some(s => s.step === 'FOUND_URLS' && 
           s.data && s.data.some && s.data.some(item => item.link && item.link.startsWith('file://')));
         
-        if (isProjectProcessing) {
-          thinkEl.toggle.querySelector("span").textContent =
-            `Analyzing ${status.data.count} search results & synthesizing answer...`;
-        } else {
-          thinkEl.toggle.querySelector("span").textContent =
-            `Reading ${status.data.count} pages & preparing answer...`;
+        const toggleContent = thinkEl.toggle.querySelector(".thinking-toggle-content");
+        if (toggleContent) {
+          const statusText = isProjectProcessing 
+            ? `Analyzing ${status.data.count} search results & synthesizing answer...`
+            : `Reading ${status.data.count} pages & preparing answer...`;
+          
+          toggleContent.innerHTML = `
+            <div class="web-search-indicator searching" style="display: flex; align-items: center; gap: 6px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
+              <span class="status-text">${statusText}</span>
+              <span class="page-count-pill">${status.data.count}</span>
+            </div>
+            <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+          `;
         }
         await new Promise((r) => setTimeout(r, 1000));
         break;
@@ -958,8 +966,10 @@ function ensureThinkingUI(aiNode) {
   toggle.className = "thinking-toggle";
   toggle.setAttribute("aria-expanded", "false");
   toggle.innerHTML = `
-    <span>Thinking</span>
-    <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+    <div class="thinking-toggle-content">
+      <span>Thinking</span>
+      <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
   `;
 
   const body = document.createElement("div");
@@ -980,7 +990,8 @@ function ensureThinkingUI(aiNode) {
   const content = aiNode.querySelector(".message-content") || aiNode;
   content.prepend(wrap);
 
-  aiNode._thinkingEl = { wrap, toggle, body, text };
+  const toggleContent = toggle.querySelector(".thinking-toggle-content");
+  aiNode._thinkingEl = { wrap, toggle, body, text, toggleContent };
 }
 
 // Anda bisa menyederhanakan fungsi ini
@@ -8507,18 +8518,23 @@ function addMessage(
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
     const thinking = `<div class="thinking-container"><div class="typing-indicator"><span></span><span></span><span></span></div><span class="thinking-text-indicator"></span></div>`;
     
-    // Show web search indicator if available
-    let webSearchIndicatorHTML = `<div class="web-search-indicator" style="display: none;"></div>`;
-    if (role === "ai" && metadata?.webSearchPages && metadata.webSearchPages > 0) {
-      webSearchIndicatorHTML = `
-        <div class="web-search-indicator" style="display: flex;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
-          <span class="status-text">Read ${metadata.webSearchPages} web pages</span>
-          <span class="page-count-pill">${metadata.webSearchPages}</span>
-        </div>`;
+    // Show web search indicator in toggle if available and final
+    if (role === "ai" && final && metadata?.webSearchPages && metadata.webSearchPages > 0) {
+      // Update toggle content to include web search indicator for final messages
+      const toggleContent = node.querySelector(".thinking-toggle-content");
+      if (toggleContent) {
+        toggleContent.innerHTML = `
+          <div class="web-search-indicator" style="display: flex; align-items: center; gap: 6px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
+            <span class="status-text">Read ${metadata.webSearchPages} web pages</span>
+            <span class="page-count-pill">${metadata.webSearchPages}</span>
+          </div>
+          <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+        `;
+      }
     }
     
-    node.innerHTML = `${webSearchIndicatorHTML}<div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
+    node.innerHTML = `<div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
     if (role === "ai" && !final) {
       node.style.opacity = "0";
       node.style.transform = "translateY(20px)";
@@ -12046,24 +12062,35 @@ function initializeApp() {
           return;
       }
 
-      const indicator = bubbleNode.querySelector(".web-search-indicator");
+      const indicator = bubbleNode.querySelector(".thinking-toggle .web-search-indicator");
       const mainText = bubbleNode.querySelector(".message-text");
 
       if (type === "SEARCHING") {
         mainText.innerHTML = "";
-        indicator.style.display = "flex";
-        indicator.classList.add("searching");
-        indicator.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.54 12a9.5 9.5 0 1 1-9.5-9.5 9.5 9.5 0 0 1 9.5 9.5Z"/><path d="M22 12h-2"/></svg>
-          <span class="status-text">Searching for "${data.summarizedQuery}"...</span>`;
+        const toggleContent = bubbleNode.querySelector(".thinking-toggle-content");
+        if (toggleContent) {
+          toggleContent.innerHTML = `
+            <div class="web-search-indicator searching" style="display: flex; align-items: center; gap: 6px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.54 12a9.5 9.5 0 1 1-9.5-9.5 9.5 9.5 0 0 1 9.5 9.5Z"/><path d="M22 12h-2"/></svg>
+              <span class="status-text">Searching for "${data.summarizedQuery}"...</span>
+            </div>
+            <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+          `;
+        }
         scrollToBottom({ fromAI: true });
       } else if (type === "READING_COMPLETE") {
         console.log("READING_COMPLETE received:", { messageIndex, data, payload });
-        indicator.classList.remove("searching");
-        indicator.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
-          <span class="status-text">Read ${data.pageCount} web pages</span>
-          <span class="page-count-pill">${data.pageCount}</span>`;
+        const toggleContent = bubbleNode.querySelector(".thinking-toggle-content");
+        if (toggleContent) {
+          toggleContent.innerHTML = `
+            <div class="web-search-indicator" style="display: flex; align-items: center; gap: 6px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
+              <span class="status-text">Read ${data.pageCount} web pages</span>
+              <span class="page-count-pill">${data.pageCount}</span>
+            </div>
+            <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+          `;
+        }
         mainText.innerHTML = getThinkingMarkup();
         scrollToBottom({ fromAI: true });
 

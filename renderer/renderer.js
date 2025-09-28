@@ -1345,12 +1345,26 @@ function toggleArtifactFavorite(artifactId) {
   }
 }
 
-function finalizeThinkingUI(aiNode, duration) {
+function finalizeThinkingUI(aiNode, duration, metadataOverride = null) {
   if (!aiNode) return;
   const el = aiNode._thinkingEl;
   if (!el || !el.toggle) return;
 
-  const textSpan = el.toggle.querySelector("span");
+  const metadata =
+    metadataOverride ||
+    aiNode._messageMetadata ||
+    (aiNode.dataset?.webSearchPages
+      ? { webSearchPages: Number(aiNode.dataset.webSearchPages) }
+      : {});
+
+  const pageCount = Number(metadata?.webSearchPages) || 0;
+  if (pageCount > 0) {
+    updateThinkingToggleForWebSearch(aiNode, pageCount);
+    return;
+  }
+
+  const textSpan =
+    el.toggleContent?.querySelector?.("span") || el.toggle.querySelector("span");
   if (textSpan) {
     textSpan.innerHTML = `Thought for ${duration.toFixed(1)}s`;
   }
@@ -8430,6 +8444,47 @@ function updateChatHeader({ animate = false } = {}) {
   }
 }
 
+function getWebSearchToggleMarkup(pageCount) {
+  const count = Number(pageCount) || 0;
+  const pageLabel = count === 1 ? "web page" : "web pages";
+  return `
+          <div class="web-search-indicator" style="display: flex; align-items: center; gap: 6px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
+            <span class="status-text">Read ${count} ${pageLabel}</span>
+            <span class="page-count-pill">${count}</span>
+          </div>
+          <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+        `;
+}
+
+function updateThinkingToggleForWebSearch(node, pageCount) {
+  if (!node) return false;
+  const markup = getWebSearchToggleMarkup(pageCount);
+  const toggleContent =
+    node._thinkingEl?.toggleContent ||
+    node.querySelector?.(".thinking-toggle-content") ||
+    null;
+  if (!toggleContent) return false;
+  toggleContent.innerHTML = markup;
+  if (node._thinkingEl?.toggle) {
+    node._thinkingEl.toggle.setAttribute("data-web-search", "true");
+  }
+  return true;
+}
+
+function setNodeMetadata(node, metadata = {}) {
+  if (!node) return;
+  const normalized =
+    metadata && typeof metadata === "object" ? metadata : {};
+  node._messageMetadata = normalized;
+  if (!node.dataset) return;
+  if (normalized.webSearchPages && normalized.webSearchPages > 0) {
+    node.dataset.webSearchPages = String(normalized.webSearchPages);
+  } else {
+    delete node.dataset.webSearchPages;
+  }
+}
+
 function addMessage(
   role,
   content,
@@ -8450,6 +8505,8 @@ function addMessage(
   const editIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
   const regenIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>`;
   const baseActions = `<div class="message-actions"></div>`;
+
+  setNodeMetadata(node, metadata);
 
   if (role === "user") {
     let uiContent = "";
@@ -8519,19 +8576,13 @@ function addMessage(
     const thinking = `<div class="thinking-container"><div class="typing-indicator"><span></span><span></span><span></span></div><span class="thinking-text-indicator"></span></div>`;
     
     // Show web search indicator in toggle if available and final
-    if (role === "ai" && final && metadata?.webSearchPages && metadata.webSearchPages > 0) {
-      // Update toggle content to include web search indicator for final messages
-      const toggleContent = node.querySelector(".thinking-toggle-content");
-      if (toggleContent) {
-        toggleContent.innerHTML = `
-          <div class="web-search-indicator" style="display: flex; align-items: center; gap: 6px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
-            <span class="status-text">Read ${metadata.webSearchPages} web pages</span>
-            <span class="page-count-pill">${metadata.webSearchPages}</span>
-          </div>
-          <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
-        `;
-      }
+    if (
+      role === "ai" &&
+      final &&
+      metadata?.webSearchPages &&
+      metadata.webSearchPages > 0
+    ) {
+      updateThinkingToggleForWebSearch(node, metadata.webSearchPages);
     }
     
     node.innerHTML = `<div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
@@ -9180,6 +9231,16 @@ function saveSwitchModelForm() {
 }
 
 function hydrateThinkingIfAny(aiNode, session, messageIndex) {
+  const messageData =
+    session &&
+    Array.isArray(session.messages) &&
+    Array.isArray(session.messages[messageIndex])
+      ? session.messages[messageIndex]
+      : null;
+  const messageMetadata =
+    messageData && typeof messageData[2] === "object" ? messageData[2] : {};
+  setNodeMetadata(aiNode, messageMetadata);
+
   const thinkData = session?._x_think && session._x_think[messageIndex];
   if (!thinkData || thinkData.text == "") return;
 
@@ -9200,7 +9261,7 @@ function hydrateThinkingIfAny(aiNode, session, messageIndex) {
 
   if (typeof thinkDuration === "number" && thinkDuration > 0) {
     ensureThinkingUI(aiNode);
-    finalizeThinkingUI(aiNode, thinkDuration);
+    finalizeThinkingUI(aiNode, thinkDuration, messageMetadata);
   }
 }
 
@@ -9410,7 +9471,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         modelInfo.webSearchPages = pendingPageCount;
         console.log("Applied pending web search data to finalized message:", { sessionId: session.id, pageCount: pendingPageCount });
       }
-      
+
       session.messages[messageIndex] = ["ai", finalMessageToSave, modelInfo];
       log(
         "FINALIZE",
@@ -9426,6 +9487,18 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         formatErrorMessageForSaving(reason),
         modelInfo,
       ];
+    }
+
+    if (aiNode) {
+      setNodeMetadata(aiNode, modelInfo || {});
+      if (
+        aiNode._thinkingEl &&
+        modelInfo &&
+        modelInfo.webSearchPages &&
+        modelInfo.webSearchPages > 0
+      ) {
+        updateThinkingToggleForWebSearch(aiNode, modelInfo.webSearchPages);
+      }
     }
 
     if (aiNode && document.contains(aiNode)) {
@@ -9542,7 +9615,16 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         session._x_think[messageIndex].duration = durationSeconds;
         saveThinkingDebounced();
 
-        finalizeThinkingUI(s.aiNode, durationSeconds);
+        const messageData =
+          Array.isArray(session.messages) &&
+          Array.isArray(session.messages[messageIndex])
+            ? session.messages[messageIndex]
+            : null;
+        const messageMetadata =
+          messageData && typeof messageData[2] === "object" ? messageData[2] : {};
+        setNodeMetadata(s.aiNode, messageMetadata);
+
+        finalizeThinkingUI(s.aiNode, durationSeconds, messageMetadata);
         delete s.thinkStartTime;
       }
       if (s.aiNode && document.contains(s.aiNode)) {

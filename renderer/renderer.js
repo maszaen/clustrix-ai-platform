@@ -6698,7 +6698,9 @@ function enhancedMarkdownParse(src) {
 
       if (
         listStack.length > 0 &&
-        (nextLine.match(/^(\s*)[*-]\s+/) || nextLine.match(/^(\s*)\d+\.\s+/))
+        (nextLine.match(/^(\s*)[*-]\s+/) ||
+          nextLine.match(/^(\s*)\d+\.\s+/) ||
+          nextLine.startsWith("__CODEBLOCK_"))
       ) {
         continue;
       }
@@ -6815,12 +6817,21 @@ function enhancedMarkdownParse(src) {
         .join("\n");
 
       html += `<blockquote>${enhancedMarkdownParse(nestedContent)}</blockquote>`;
-    } else if (hMatch || hrMatch || codeMatch) {
+    } else if (codeMatch) {
+      if (listStack.length > 0) {
+        const lastLiPos = html.lastIndexOf("</li>");
+        if (lastLiPos !== -1) {
+          html = `${html.substring(0, lastLiPos)}${trimmedLine}</li>`;
+        }
+      } else {
+        closeOpenBlocks();
+        html += trimmedLine;
+      }
+    } else if (hMatch || hrMatch) {
       closeOpenBlocks();
       if (hMatch)
         html += `<h${hMatch[1].length}>${parseInlineMarkdown(hMatch[2])}</h${hMatch[1].length}>`;
       else if (hrMatch) html += "<hr>";
-      else if (codeMatch) html += trimmedLine;
     } else {
       if (listStack.length > 0) {
         const lastLiPos = html.lastIndexOf("</li>");

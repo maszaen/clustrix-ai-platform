@@ -102,6 +102,11 @@
   font-weight: 600;
 }
 
+.message.ai li *:not(.code-block-container) {
+  position: relative;
+  z-index: 5;
+}
+
 .message.ai em {
   margin-right: 3px;
 }

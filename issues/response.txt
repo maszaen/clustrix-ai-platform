@@ -1,0 +1,135 @@
+
+# 📝 Demo Blockquotes di Dalam List & Numbering (Jaksel Style)
+
+## 📋 Unordered List dengan Blockquote
+
+- **Item Pertama**  
+  Ini adalah item list pertama dengan blockquote:
+  
+  > **Blockquote level 1:**  
+  > "Kode itu puisi, dan programmer adalah penyair digital."  
+  > - Para senior
+  
+  > **Blockquote level 2:**  
+  > > "Belajar itu seperti menanam pohon, butuh kesabaran."  
+  > > - Guru IT
+  
+  > **Blockquote level 3:**  
+  > > > "Jangan takut gagal, karena setiap error adalah pelajaran."  
+  > > > - Senior Developer
+
+- **Item Kedua**  
+  Ini item kedua dengan blockquote dan kode:
+  
+  > **Blockquote dengan kode:**  
+  > "Tips dari senior:"  
+  > 
+  > ```python
+  > # Selalu tulis kode yang mudah dibaca
+  > def hitung_total(items):
+  >     return sum(items)
+  > ```
+  
+  > **Blockquote dengan tabel:**  
+  > "Tools yang wajib dipelajari:"  
+  > 
+  > | Tool | Level | Prioritas |
+  > |------|-------|-----------|
+  > | Git  | ✅    | Tinggi    |
+  > | Docker | ⏳  | Sedang    |
+  > | K8s  | ❌    | Rendah    |
+
+## 🔢 Ordered List dengan Blockquote
+
+1. **Langkah Pertama**  
+   Langkah pertama dalam belajar programming:
+   
+   > **Blockquote motivasi:**  
+   > "Langkah pertama adalah instalasi tools."  
+   > - Tutorial Basic
+   
+   > **Blockquote dengan checklist:**  
+   > > "Pastikan sudah siap:"  
+   > > - [x] Laptop/PC  
+   > > - [x] Koneksi internet  
+   > > - [ ] Minuman hangat (opsional tapi recommended) 😉
+
+2. **Langkah Kedua**  
+   Setup environment:
+   
+   > **Blockquote dengan kode:**  
+   > "Setup Python:"  
+   > 
+   > ```bash
+   > # Install Python
+   > sudo apt update
+   > sudo apt install python3 python3-pip
+   > 
+   > # Verifikasi
+   > python3 --version
+   > pip3 --version
+   > ```
+   
+   > **Blockquote nested:**  
+   > > "Kalau ada error, cek dokumentasi resmi atau StackOverflow."  
+   > > - Community Helper
+
+3. **Langkah Ketiga**  
+   Mulai coding:
+   
+   > **Blockquote dengan tabel:**  
+   > "Struktur proyek dasar:"  
+   > 
+   > | Folder | Isi | Keterangan |
+   > |--------|-----|------------|
+   > | src    | Kode sumber | Utama |
+   | tests  | Test case | Untuk QA |
+   | docs   | Dokumentasi | Bisa skip dulu |
+   
+   > **Blockquote triple nested:**  
+   > > > "Jangan lupa commit sering-sering ya!"  
+   > > > - Git Master
+
+## 🔄 Nested List dengan Blockquote
+
+- **Sub Item 1**  
+  Sub item dengan blockquote:
+  
+  > **Blockquote sederhana:**  
+  > "Markdown itu mudah dipelajari."  
+  > - Content Writer
+  
+  - **Sub-sub item 1**  
+    > **Blockquote dalam sub-sub item:**  
+    > > "Gunakan heading dengan benar."  
+    > > - SEO Specialist
+  
+  - **Sub-sub item 2**  
+    > **Blockquote dengan kode:**  
+    > > "Contoh heading:"  
+    > > 
+    > > ```markdown
+    > > # Heading 1
+    > > ## Heading 2
+    > > ### Heading 3
+    > > ```
+
+- **Sub Item 2**  
+  Sub item lain dengan blockquote:
+  
+  > **Blockquote CSS:**  
+  > "CSS itu styling, pilih font yang enak dibaca."  
+  > - UI Designer
+  
+  > **Blockquote dengan tabel:**  
+  > "Property CSS penting:"  
+  > 
+  > | Property | Value | Keterangan |
+  > |----------|-------|------------|
+  > | font-family | Arial | Font utama |
+  | color | #333 | Warna teks |
+  | margin | 0 auto | Centering |
+
+---
+
+Semoga contoh ini membantu Zaen dalam testing markdown formatter! 🚀 Kalau ada yang mau ditambah atau diubah, tinggal bilang aja ya! 😊

@@ -103,16 +103,12 @@ const LOGGING = true;
 function getFilesForDisplay(session, context = 'form') {
   if (!session || !session.uploadedFiles) return [];
 
-  // Project files are now stored separately in project database
-  // Only session-specific files are stored in session.uploadedFiles
   return session.uploadedFiles;
 }
 
 function getFilesForMessage(session, messageType = 'conversation') {
   if (!session || !session.uploadedFiles) return [];
 
-  // Project files are now stored separately in project database
-  // Only session-specific files are returned
   return session.uploadedFiles;
 }
 
@@ -132,22 +128,18 @@ function analyzeFileVisibility(session) {
   return {
     sessionType: isProjectSession ? 'project' : 'regular',
     totalFiles: allFiles.length,
-    projectFiles: 0, // Project files are now stored separately
-    userFiles: allFiles.length, // All files in session are user-uploaded for that session
+    projectFiles: 0, 
+    userFiles: allFiles.length, 
     formDisplay: getFilesForDisplay(session, 'form').length,
     messageDisplay: getFilesForDisplay(session, 'message').length,
     aiProcessing: getFilesForAI(session).length,
     visibility: {
-      form: 'all-files', // All session files are shown in form
-      message: 'all-files', // All session files are shown in messages
+      form: 'all-files',
+      message: 'all-files',
       ai: 'all-files'
     }
   };
 }
-
-// ============================================================================
-// END FILE MANAGEMENT SYSTEM
-// ============================================================================
 
 let currentPageState = "welcome";
 
@@ -171,12 +163,6 @@ function savePageState(pageState, sessionId = null) {
 
     save();
 
-    log(
-      "PageState",
-      0,
-      "savePageState",
-      `Page state saved: ${pageState}${sessionId ? ` (session: ${sessionId})` : ""}`,
-    );
   } catch (error) {
     log("PageState", 2, "savePageState", "Failed to save page state", {
       error: error.message,
@@ -189,12 +175,6 @@ function loadPageState() {
     const preloadedSettings = window.__PRELOADED_SETTINGS__;
     if (preloadedSettings && preloadedSettings.currentPage) {
       currentPageState = preloadedSettings.currentPage;
-      log(
-        "PageState",
-        0,
-        "loadPageState",
-        `Page state loaded from preload: ${preloadedSettings.currentPage}`,
-      );
       return preloadedSettings.currentPage;
     }
 
@@ -217,12 +197,6 @@ function loadPageState() {
           const session = state.sessions.find((s) => s.id === savedSessionId);
           if (session) {
             setCurrent(session);
-            log(
-              "PageState",
-              0,
-              "loadPageState",
-              `Restored session: ${savedSessionId}`,
-            );
           }
         }
       }
@@ -231,12 +205,6 @@ function loadPageState() {
       return savedPage;
     } else {
       currentPageState = "welcome";
-      log(
-        "PageState",
-        0,
-        "loadPageState",
-        "No valid saved page state, defaulting to welcome",
-      );
       return "welcome";
     }
   } catch (error) {
@@ -250,8 +218,6 @@ function loadPageState() {
 
 function restoreLastActivePage() {
   const lastPage = loadPageState();
-
-  log("PageState", 0, "restoreLastActivePage", `Restoring page: ${lastPage}`);
 
   switch (lastPage) {
     case "chats":
@@ -283,20 +249,8 @@ function restoreLastActivePage() {
         if (sessionToRestore) {
           setCurrent(sessionToRestore);
           restoreNormalView();
-          log(
-            "PageState",
-            0,
-            "restoreLastActivePage",
-            `Restored chat session: ${sessionToRestore.name || "Untitled"} (${sessionToRestore.id})`,
-          );
         } else {
           showWelcomeScreen();
-          log(
-            "PageState",
-            0,
-            "restoreLastActivePage",
-            "No sessions available, falling back to welcome",
-          );
         }
       } catch (error) {
         log(
@@ -849,7 +803,6 @@ async function processSearchStatusQueue() {
         break;
 
       case "PROCESSING":
-        // Check if this is project session by looking for file:// links in recent FOUND_URLS
         const isProjectProcessing = searchStatusQueue.some(s => s.step === 'FOUND_URLS' && 
           s.data && s.data.some && s.data.some(item => item.link && item.link.startsWith('file://')));
         
@@ -861,9 +814,8 @@ async function processSearchStatusQueue() {
           
           toggleContent.innerHTML = `
             <div class="web-search-indicator searching" style="display: flex; align-items: center; gap: 6px;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chromium-icon lucide-chromium"><path d="M10.88 21.94 15.46 14"/><path d="M21.17 8H12"/><path d="M3.95 6.06 8.54 14"/><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
               <span class="status-text">${statusText}</span>
-              <span class="page-count-pill">${status.data.count}</span>
             </div>
             <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
           `;
@@ -6686,6 +6638,16 @@ function enhancedMarkdownParse(src) {
       paragraphBuffer = [];
     }
   };
+  const appendToCurrentListItem = (content) => {
+    if (listStack.length > 0) {
+      const lastLiPos = html.lastIndexOf("</li>");
+      if (lastLiPos !== -1) {
+        html = `${html.substring(0, lastLiPos)}${content}</li>`;
+        return true;
+      }
+    }
+    return false;
+  };
   const closeOpenBlocks = () => {
     flushParagraph();
     while (listStack.length > 0) html += `</${listStack.pop().type}>`;
@@ -6694,16 +6656,30 @@ function enhancedMarkdownParse(src) {
     const line = lines[i];
     const trimmedLine = line.trim();
     if (!trimmedLine) {
-      const nextLine = lines[i + 1] ? lines[i + 1].trim() : "";
+      const nextLine = lines[i + 1] || "";
+      const nextTrimmed = nextLine.trim();
+      const nextLineIndent = nextLine.length - nextLine.trimStart().length;
+      const nextNextLine = lines[i + 2] ? lines[i + 2].trim() : "";
+      const upcomingTableSeparator =
+        nextNextLine &&
+        nextNextLine.includes("|") &&
+        nextNextLine.includes("-") &&
+        !/[^|:-\s]/.test(nextNextLine);
+      const isUpcomingTableHeader =
+        nextLine && nextLine.includes("|") && upcomingTableSeparator;
 
-      if (
-        listStack.length > 0 &&
-        (nextLine.match(/^(\s*)[*-]\s+/) ||
-          nextLine.match(/^(\s*)\d+\.\s+/) ||
-          nextLine.startsWith("__CODEBLOCK_"))
-      ) {
-        continue;
-      }
+      if (listStack.length > 0) {
+    const currentIndent = listStack[listStack.length - 1].indent;
+    // Tetap di list kalau next line masih relevan ATAU punya indentasi cukup
+    if (nextTrimmed.match(/^[*-]\s+/) ||
+        nextTrimmed.match(/^\d+\.\s+/) ||
+        nextTrimmed.startsWith("__CODEBLOCK_") ||
+        nextTrimmed.startsWith(">") ||
+        isUpcomingTableHeader ||
+        (nextTrimmed && nextLineIndent > currentIndent + 1)) {
+      continue;
+    }
+  }
 
       closeOpenBlocks();
       continue;
@@ -6723,7 +6699,6 @@ function enhancedMarkdownParse(src) {
       nextLine.includes("-") &&
       !/[^|:-\s]/.test(nextLine);
     if (isTableHeader && isNextLineSeparator) {
-      closeOpenBlocks();
       let tableHtml = '<div class="table-container"><table>';
       const headers = trimmedLine
         .split("|")
@@ -6753,7 +6728,10 @@ function enhancedMarkdownParse(src) {
         tableRowIndex++;
       }
       tableHtml += "</tbody></table></div>";
-      html += tableHtml;
+      if (!appendToCurrentListItem(tableHtml)) {
+        closeOpenBlocks();
+        html += tableHtml;
+      }
       i = tableRowIndex - 1;
       continue;
     }
@@ -6806,7 +6784,6 @@ function enhancedMarkdownParse(src) {
       }
       html += `<li>${parseInlineMarkdown(content)}</li>`;
     } else if (bqMatch) {
-      closeOpenBlocks();
       const bqBlockLines = [line];
       while (i + 1 < lines.length && lines[i + 1].trim().startsWith(">")) {
         i++;
@@ -6816,14 +6793,15 @@ function enhancedMarkdownParse(src) {
         .map((l) => l.replace(/^\s*>\s?/, ""))
         .join("\n");
 
-      html += `<blockquote>${enhancedMarkdownParse(nestedContent)}</blockquote>`;
+      const blockquoteHtml = `<blockquote>${enhancedMarkdownParse(
+        nestedContent,
+      )}</blockquote>`;
+      if (!appendToCurrentListItem(blockquoteHtml)) {
+        closeOpenBlocks();
+        html += blockquoteHtml;
+      }
     } else if (codeMatch) {
-      if (listStack.length > 0) {
-        const lastLiPos = html.lastIndexOf("</li>");
-        if (lastLiPos !== -1) {
-          html = `${html.substring(0, lastLiPos)}${trimmedLine}</li>`;
-        }
-      } else {
+      if (!appendToCurrentListItem(trimmedLine)) {
         closeOpenBlocks();
         html += trimmedLine;
       }
@@ -6855,24 +6833,14 @@ function enhancedMarkdownParse(src) {
   return finalHtml;
 }
 
-// function createPreviewLink(href, label, extraClass = "") {
-//   if (!href) return label;
-//   const sanitizedHref = String(href).replace(/"/g, "&quot;");
-//   const classes = ["link"];
-//   if (extraClass) classes.push(extraClass);
-//   return `<a href="${sanitizedHref}" class="${classes.join(" ")}" data-preview="modal">${label}</a>`;
-// }
-
 function processMarkdownFormatting(text) {
   if (!text) return "";
 
-  // Handle HTML escaping first
   let html = text
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
-  // Process inline markdown formatting
   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
   html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
 
@@ -6934,7 +6902,6 @@ function processMarkdownFormatting(text) {
     html,
   );
 
-  // Apply text formatting
   html = html
     .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
     .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>")
@@ -6950,9 +6917,7 @@ function processMarkdownFormatting(text) {
 function parseInlineMarkdown(text) {
   if (!text) return "";
 
-  // Check if content contains <br> followed by bullet points - convert to list
   if (text.includes('<br>') && (text.includes('<br>•') || text.includes('<br>-'))) {
-    // Split by <br> and process as list items
     const parts = text.split(/(<br\s*\/?>)/i);
     let listItems = [];
     let currentItem = '';
@@ -6960,7 +6925,6 @@ function parseInlineMarkdown(text) {
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       if (part.match(/<br\s*\/?>/i)) {
-        // This is a <br> tag
         if (currentItem.trim()) {
           listItems.push(currentItem.trim());
           currentItem = '';
@@ -6970,20 +6934,16 @@ function parseInlineMarkdown(text) {
       }
     }
 
-    // Add the last item if exists
     if (currentItem.trim()) {
       listItems.push(currentItem.trim());
     }
 
-    // Filter out empty items and create HTML list
     listItems = listItems.filter(item => item.trim());
 
     if (listItems.length > 1) {
       let listHtml = '<ul class="br-list">';
       listItems.forEach(item => {
-        // Remove leading bullet if present and process markdown
         const cleanItem = item.replace(/^[-•]\s*/, '');
-        // Process markdown formatting for the list item
         const processedItem = processMarkdownFormatting(cleanItem);
         listHtml += `<li>${processedItem}</li>`;
       });
@@ -6992,7 +6952,6 @@ function parseInlineMarkdown(text) {
     }
   }
 
-  // Handle <br> tags before HTML escaping (original logic)
   let processedText = text.replace(/<br\s*\/?>/gi, '__BR_TAG__');
 
   let html = processedText
@@ -7000,7 +6959,6 @@ function parseInlineMarkdown(text) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
-  // Restore <br> tags after escaping
   html = html.replace(/__BR_TAG__/g, '<br>');
 
   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
@@ -7163,175 +7121,10 @@ function md(src) {
   if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
   attachCodeBlockListeners(tempDiv);
 
-  // Schedule async post-processing to update code blocks with artifact info
   setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
 
   return tempDiv.innerHTML;
 }
-
-// function setupLinkPreviewModals() {
-//   const chatContainer = document.querySelector(".chat-log-container");
-//   if (!chatContainer) return;
-
-//   let modalElement = null;
-//   let statusTimer = null;
-
-//   const normalizeUrl = (rawHref = "") => {
-//     const trimmed = rawHref.trim();
-//     if (!trimmed) return null;
-
-//     if (/^https?:\/\//i.test(trimmed)) {
-//       try {
-//         return new URL(trimmed).toString();
-//       } catch (error) {
-//         log("UI_LINK", 4, "link-preview-normalize", "Failed to parse absolute URL", {
-//           href: rawHref,
-//           error: error?.message,
-//         });
-//         return null;
-//       }
-//     }
-
-//     if (/^[a-zA-Z][\w+.-]*:/i.test(trimmed)) {
-//       return null;
-//     }
-
-//     try {
-//       return new URL(`https://${trimmed}`).toString();
-//     } catch (error) {
-//       log("UI_LINK", 4, "link-preview-normalize", "Failed to coerce URL", {
-//         href: rawHref,
-//         error: error?.message,
-//       });
-//       return null;
-//     }
-//   };
-
-//   const ensureModalElement = () => {
-//     if (modalElement) return modalElement;
-
-//     modalElement = document.createElement("div");
-//     modalElement.className = "link-preview-modal hidden";
-//     modalElement.innerHTML = `
-//       <div class="link-preview-frame">
-//         <div class="link-preview-header">
-//           <div class="link-preview-title" title=""></div>
-//           <div class="link-preview-controls">
-//             <button type="button" class="link-preview-btn minimize" data-action="minimize" title="Minimize preview" aria-pressed="false">&#8722;</button>
-//             <button type="button" class="link-preview-btn close" data-action="close" title="Close preview">&#10005;</button>
-//           </div>
-//         </div>
-//         <div class="link-preview-body">
-//           <div class="link-preview-status">Memuat pratinjau…</div>
-//           <iframe src="about:blank" title="Link preview" sandbox="allow-scripts allow-same-origin allow-forms" loading="lazy"></iframe>
-//         </div>
-//       </div>`;
-
-//     chatContainer.appendChild(modalElement);
-
-//     const iframe = modalElement.querySelector("iframe");
-//     const status = modalElement.querySelector(".link-preview-status");
-//     const minimizeBtn = modalElement.querySelector('[data-action="minimize"]');
-//     const closeBtn = modalElement.querySelector('[data-action="close"]');
-
-//     const closeModal = () => {
-//       if (!modalElement) return;
-//       modalElement.classList.add("hidden");
-//       modalElement.classList.remove("minimized");
-//       iframe.src = "about:blank";
-//       iframe.removeAttribute("data-current-url");
-//       if (statusTimer) {
-//         clearTimeout(statusTimer);
-//         statusTimer = null;
-//       }
-//       status.classList.remove("hidden");
-//       status.textContent = "Memuat pratinjau…";
-//       log("UI_LINK", 2, "link-preview-close", "Link preview closed");
-//     };
-
-//     closeBtn.addEventListener("click", closeModal);
-
-//     minimizeBtn.addEventListener("click", () => {
-//       const minimized = modalElement.classList.toggle("minimized");
-//       minimizeBtn.setAttribute("aria-pressed", minimized ? "true" : "false");
-//       minimizeBtn.setAttribute(
-//         "title",
-//         minimized ? "Restore preview" : "Minimize preview",
-//       );
-//       log("UI_LINK", 1, "link-preview-toggle", minimized ? "Preview minimized" : "Preview restored");
-//     });
-
-//     iframe.addEventListener("load", () => {
-//       if (!modalElement || modalElement.classList.contains("hidden")) return;
-//       let host = "";
-//       try {
-//         host = new URL(iframe.src).host;
-//       } catch (error) {
-//         host = "";
-//       }
-//       status.textContent = host ? `Pratinjau dimuat dari ${host}` : "Pratinjau dimuat";
-//       status.classList.remove("hidden");
-//       if (statusTimer) clearTimeout(statusTimer);
-//       statusTimer = setTimeout(() => {
-//         status.classList.add("hidden");
-//       }, 5000);
-//     });
-
-//     iframe.addEventListener("error", () => {
-//       status.textContent = "Gagal memuat pratinjau.";
-//       status.classList.remove("hidden");
-//     });
-
-//     return modalElement;
-//   };
-
-//   const openModalWithUrl = (url, label) => {
-//     const modal = ensureModalElement();
-//     const iframe = modal.querySelector("iframe");
-//     const status = modal.querySelector(".link-preview-status");
-//     const title = modal.querySelector(".link-preview-title");
-
-//     title.textContent = label || url;
-//     title.setAttribute("title", label || url);
-//     status.textContent = "Memuat pratinjau…";
-//     status.classList.remove("hidden");
-//     modal.classList.remove("hidden");
-//     modal.classList.remove("minimized");
-
-//     if (statusTimer) {
-//       clearTimeout(statusTimer);
-//       statusTimer = null;
-//     }
-
-//     if (iframe.getAttribute("data-current-url") !== url) {
-//       iframe.src = "about:blank";
-//       iframe.setAttribute("data-current-url", url);
-//       requestAnimationFrame(() => {
-//         iframe.src = url;
-//       });
-//     }
-
-//     log("UI_LINK", 1, "link-preview-open", "Opening link preview", { url });
-//   };
-
-//   chatContainer.addEventListener("click", (event) => {
-//     const anchor = event.target.closest('a[data-preview="modal"]');
-//     if (!anchor) return;
-
-//     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-//       return;
-//     }
-
-//     const href = anchor.getAttribute("href") || anchor.dataset?.href || "";
-//     const normalizedUrl = normalizeUrl(href);
-//     if (!normalizedUrl) return;
-
-//     event.preventDefault();
-
-//     const label = anchor.textContent?.trim() || normalizedUrl;
-//     openModalWithUrl(normalizedUrl, label);
-//   });
-// }
 
 async function updateCodeBlocksWithArtifactInfo(container = document) {
   try {
@@ -7359,18 +7152,15 @@ async function updateCodeBlocksWithArtifactInfo(container = document) {
         const codeContent = codeElement.textContent;
         const language = saveButton.getAttribute("data-language");
 
-        // Find matching artifact
         const matchingArtifact = artifacts.find(
           (artifact) =>
             artifact.code === codeContent && artifact.language === language,
         );
 
         if (matchingArtifact) {
-          // Update language display to include artifact title
           languageSpan.innerHTML = `${language} <span>${esc(matchingArtifact.title)}</span>`;
           idData.dataset.artifactId = matchingArtifact.id;
 
-          // Hide save button for saved artifacts
           saveButton.style.display = "none";
 
           log(
@@ -8460,9 +8250,8 @@ function getWebSearchToggleMarkup(pageCount) {
   const pageLabel = count === 1 ? "web page" : "web pages";
   return `
           <div class="web-search-indicator" style="display: flex; align-items: center; gap: 6px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
-            <span class="status-text">Read ${count} ${pageLabel}</span>
-            <span class="page-count-pill">${count}</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chromium-icon lucide-chromium"><path d="M10.88 21.94 15.46 14"/><path d="M21.17 8H12"/><path d="M3.95 6.06 8.54 14"/><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+              <span class="status-text">Read ${count} ${pageLabel}</span>
           </div>
           <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
         `;
@@ -9046,9 +8835,6 @@ async function load() {
 
 async function save() {
   try {
-    log("APP", 1, "save", "Attempting to save data", {
-      sessionCount: state.sessions.length,
-    });
     const dataToSave = { sessions: state.sessions, settings: state.settings };
     if (DEBUG_MODE) {
       localStorage.setItem("clustrix-data", JSON.stringify(dataToSave));
@@ -11888,7 +11674,6 @@ function setupEventListeners() {
     });
     state.settings.persona = persona;
     await save();
-    // Note: showProjects and showStarred are saved immediately when toggles change
     $("#settings-modal").classList.add("hidden");
   });
 
@@ -11923,22 +11708,9 @@ function setupEventListeners() {
     });
   });
 
-  // Sidebar search has been removed - search functionality now available on Chats page
-  // $("#search").addEventListener("input", () => {
-  //   log("UI", 0, "event:search-input", "Search input changed", { valueLength: $("#search").value.length });
-  //   renderSessions();
-  // });
-
-  // $("#advanced-search-switch").addEventListener("change", (e) => {
-  //   isAdvancedSearch = e.target.checked;
-  //   log("UI", 0, "event:advanced-search-change", "Advanced search toggled", { checked: isAdvancedSearch });
-  //   renderSessions();
-  // });
-
   $("#web-search-switch").addEventListener("change", (e) => {
     state.settings.webSearchEnabled = e.target.checked;
 
-    // Save to localStorage immediately for instant loading
     localStorage.setItem(
       "clustrix-web-search",
       state.settings.webSearchEnabled.toString(),
@@ -12145,7 +11917,6 @@ function initializeApp() {
 
   if (window.api) {
     window.api.on("chat-update", (payload) => {
-      // Debug: log incoming chat-update payloads to verify RE+ACT/web-search events
       try { console.debug('RENDERER: chat-update received', payload); } catch (e) {}
       const { type, messageIndex, data } = payload;
       const bubbleNode = $(`#chat-log .message[data-message-index="${messageIndex}"]`) || $('#chat-log .message.ai:last-child');
@@ -12177,9 +11948,8 @@ function initializeApp() {
         if (toggleContent) {
           toggleContent.innerHTML = `
             <div class="web-search-indicator" style="display: flex; align-items: center; gap: 6px;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-scan-text-icon lucide-scan-text"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8h8"/><path d="M7 12h10"/><path d="M7 16h6"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chromium-icon lucide-chromium"><path d="M10.88 21.94 15.46 14"/><path d="M21.17 8H12"/><path d="M3.95 6.06 8.54 14"/><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
               <span class="status-text">Read ${data.pageCount} web pages</span>
-              <span class="page-count-pill">${data.pageCount}</span>
             </div>
             <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
           `;
@@ -12187,13 +11957,11 @@ function initializeApp() {
         mainText.innerHTML = getThinkingMarkup();
         scrollToBottom({ fromAI: true });
 
-        // Store web search page count temporarily until message is finalized
         const sessionId = payload.sessionId || current?.id;
         if (sessionId) {
           storePendingWebSearchData(sessionId, data.pageCount);
         }
       } else if (type === "REACT_START") {
-        // Initialize thinking UI for RE+ACT pattern
         mainText.innerHTML = getThinkingMarkup();
         scrollToBottom({ fromAI: true });
       } else if (type === "THINKING") {
@@ -12204,7 +11972,6 @@ function initializeApp() {
             const sess = state.sessions.find(s => s.id === sessionId) || current;
 
             if (thinkContent && sess) {
-                // Langsung gunakan bubbleNode, tidak perlu mencari ulang
                 appendThinking(bubbleNode, thinkContent, sess, messageIndex);
                 scrollToBottom({ fromAI: true });
             }
@@ -12224,9 +11991,6 @@ function initializeApp() {
       );
       processSearchStatusQueue();
     });
-
-    // Thinking events are now sent via 'chat-update' with type 'THINKING'.
-    // The handler above will process these.
   }
 
   setupEventListeners();
@@ -12236,7 +12000,6 @@ function initializeApp() {
   setupTextareaCentralResize();
   setupTextareaProjectResize();
   setupResponsiveHandlers();
-  // setupLinkPreviewModals();
   window.addEventListener("beforeunload", () => {
     streamManager.shutdownGracefully();
   });

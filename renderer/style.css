@@ -2663,7 +2663,7 @@ input:checked + .slider:before {
 .title-info:has(#chat-title) {
   justify-content: center;
   width: 53.34%;
-  font-family: var(--font-display);
+  font-family: var(--font-ai-bold);
 }
 
 .title-info:has(#model-title) {
@@ -4786,6 +4786,7 @@ a:focus-visible {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
+  margin-bottom: 4px;
   color: var(--icon);
 }
 

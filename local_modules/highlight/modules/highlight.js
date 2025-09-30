@@ -1633,6 +1633,7 @@ var hljs = (function () {
       classPrefix: 'hljs-',
       cssSelector: 'pre code',
       languages: null,
+      debugMode: false,
       // beta configuration options, subject to change, welcome to discuss
       // https://github.com/highlightjs/highlight.js/issues/1086
       __emitter: TokenTreeEmitter

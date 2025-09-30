@@ -6926,6 +6926,21 @@ function ensureMarkdownRenderer() {
 
   md.enable(["table", "strikethrough"]);
 
+  // Enhanced table cell processing to handle multiline content and lists
+  // Create a separate markdown instance for cell content processing
+  const cellMd = new MarkdownIt({
+    html: true,  // Allow HTML tags to be preserved
+    breaks: true,
+    linkify: true,
+    typographer: false,
+  });
+  cellMd.enable(["strikethrough", "linkify", "list", "paragraph"]);
+  // Disable table processing in cell content to prevent nested table issues
+  cellMd.disable(["table"]);
+
+  // Enhanced table cell processing to handle multiline content and lists
+  // We'll override the table_close rule after it's declared below
+
   const originalLinkOpen =
     md.renderer.rules.link_open ||
     ((tokens, idx, options, env, self) =>
@@ -7010,9 +7025,7 @@ function ensureMarkdownRenderer() {
 
   md.renderer.rules.table_close = (tokens, idx, options, env, self) => {
     return `${originalTableClose(tokens, idx, options, env, self)}</div>`;
-  };
-
-  md.renderer.rules.hardbreak = () => "<br>";
+  };  md.renderer.rules.hardbreak = () => "<br>";
 
   if (md.linkify && typeof md.linkify.set === "function") {
     md.linkify.set({ fuzzyLink: true, fuzzyIP: true, fuzzyEmail: false });
@@ -7197,6 +7210,46 @@ function md(src) {
   const rendered = renderer.render(text.trim());
   let html = restoreLatexPlaceholders(rendered, latex);
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
+
+  // Enhanced table cell processing
+  html = html.replace(/<div class="table-container">([\s\S]*?)<\/div>/g, function(match, tableContent) {
+    let processedTable = tableContent.replace(/<(td|th)>([\s\S]*?)<\/\1>/g, function(cellMatch, tag, cellContent) {
+      // Decode HTML entities first
+      const decodedContent = cellContent
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ');
+
+      // Check if cell content contains list markers that need special processing
+      if (/^(\s*[-*+•]\s|\s*\d+\.\s)/m.test(decodedContent) || decodedContent.includes('<br>')) {
+        // Create a temporary markdown instance for cell processing
+        const cellMd = new MarkdownIt({
+          html: true,
+          breaks: true,
+          linkify: true,
+          typographer: false,
+        });
+        cellMd.enable(["strikethrough", "linkify", "list", "paragraph"]);
+        cellMd.disable(["table"]);
+
+        // Convert bullet points and line breaks to markdown format
+        let markdownContent = decodedContent
+          .replace(/•/g, '-')  // Convert all • to -
+          .replace(/<br\s*\/?>/gi, '\n')  // Convert <br> to newlines
+          .trim();
+
+        // Process the cell content with markdown-it that supports lists and paragraphs
+        const processedCell = cellMd.render(markdownContent);
+        return `<${tag}>${processedCell.trim()}</${tag}>`;
+      }
+      // For simple cells, return as-is
+      return cellMatch;
+    });
+    return `<div class="table-container">${processedTable}</div>`;
+  });
 
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = html;

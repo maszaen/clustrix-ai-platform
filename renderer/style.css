@@ -3643,6 +3643,15 @@ li.bold-marker-item::marker {
   line-height: 1.4;
 }
 
+.rel {
+  display: flex;
+  position: relative;
+}
+
+.mm-prov-title {
+  font-family: var(--font-display-italic)
+}
+
 blockquote {
   width: 100%;
   border: none;
@@ -3656,15 +3665,6 @@ blockquote {
   display: flex;
   flex-direction: column;
   gap: 0 !important;
-}
-
-.rel {
-  display: flex;
-  position: relative;
-}
-
-.mm-prov-title {
-  font-family: var(--font-display-italic)
 }
 
 blockquote::before {
@@ -4027,13 +4027,13 @@ blockquote blockquote blockquote blockquote::before {
   border: none;
   border-radius: var(--radius-lg);
   background: var(--bg-secondary);
-  /* border: 1px solid var(--border); */
   margin: var(--spacing-md) 0;
   padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm) calc(var(--quote-pillar-left) + var(--quote-pillar-w) + 10px);
   position: relative;
   color: var(--fg-muted);
 }
 
+/* Left pillar decoration */
 .message-text blockquote::before {
   content: '';
   position: absolute;
@@ -4045,26 +4045,103 @@ blockquote blockquote blockquote blockquote::before {
   border-radius: var(--radius-full);
 }
 
-.message-text blockquote blockquote,
-.message-text blockquote blockquote blockquote blockquote {
-  margin: 0;                    
-  margin-left: 0;
-  background: var(--bg);
-  padding-left: calc(var(--quote-indent) + 10px); 
-}
-
-.message-text blockquote blockquote blockquote,
-.message-text blockquote blockquote blockquote blockquote blockquote {
-  margin: 0;                    
-  margin-left: 0;
-  background: var(--bg-secondary);
-  padding-left: calc(var(--quote-indent) + 10px); 
+/* Pillar styling for all nested levels */
+.message-text blockquote blockquote::before {
+  background-color: var(--border);
 }
 
 .message-text blockquote blockquote::before,
+.message-text blockquote blockquote blockquote blockquote::before,
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote::before,
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote::before,
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote::before,
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote::before,
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote::before {
+  opacity: 0.5;
+}
+
+.message-text blockquote::before,
 .message-text blockquote blockquote blockquote::before,
-.message-text blockquote blockquote blockquote blockquote::before {
-  background-color: var(--border);
+.message-text blockquote blockquote blockquote blockquote blockquote::before,
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote::before,
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote::before,
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote::before,
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote::before {
+  opacity: 1;
+}
+
+/* Nested blockquotes - alternating backgrounds */
+/* Level 2 */
+.message-text blockquote blockquote {
+  margin: 0;
+  margin-left: 0;
+  background: var(--bg);
+  padding-left: calc(var(--quote-indent) + 10px);
+}
+
+/* Level 3 */
+.message-text blockquote blockquote blockquote {
+  background: var(--bg-secondary);
+}
+
+/* Level 4 */
+.message-text blockquote blockquote blockquote blockquote {
+  background: var(--bg);
+}
+
+/* Level 5 */
+.message-text blockquote blockquote blockquote blockquote blockquote {
+  background: var(--bg-secondary);
+}
+
+/* Level 6 */
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote {
+  background: var(--bg);
+}
+
+/* Level 7 */
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote {
+  background: var(--bg-secondary);
+}
+
+/* Level 8 */
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote {
+  background: var(--bg);
+}
+
+/* Level 9 */
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote {
+  background: var(--bg-secondary);
+}
+
+/* Level 10 */
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote {
+  background: var(--bg);
+}
+
+/* Level 11 */
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote {
+  background: var(--bg-secondary);
+}
+
+/* Level 12 */
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote {
+  background: var(--bg);
+}
+
+/* Level 13 */
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote {
+  background: var(--bg-secondary);
+}
+
+/* Level 14 */
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote {
+  background: var(--bg);
+}
+
+/* Level 15 */
+.message-text blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote {
+  background: var(--bg-secondary);
 }
 
 
@@ -4552,117 +4629,165 @@ a:focus-visible {
         drop-shadow(12px 0 0 var(--bg))     
         drop-shadow(-12px 0 0 var(--bg));
 }
-
-blockquote .code-block-container .code-block-header {
+:where(blockquote) .code-block-container .code-block-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-xs) var(--spacing-lg);
   background-color: var(--bg) !important;
-  /* border: 1px solid var(--border); */
   border-top-left-radius: var(--radius-lg);
   border-top-right-radius: var(--radius-lg);
-
   position: relative !important;
   top: 8px;
-
-  /* border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border); */
   filter: none;
 }
 
-blockquote .code-block-container pre[class*=language-],
-blockquote .code-block-container pre.hljs {
+:where(blockquote) .code-block-container pre[class*=language-],
+:where(blockquote) .code-block-container pre.hljs {
   background: var(--bg);
   border-top: none !important;
-  /* border-bottom: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border); */
 }
 
-blockquote blockquote .code-block-container .code-block-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-2xs) var(--spacing-lg);
+/* Level 2 */
+:where(blockquote blockquote) .code-block-container .code-block-header {
   background-color: var(--bg-secondary) !important;
-  /* border: 1px solid var(--border); */
-  border-top-left-radius: var(--radius-lg);
-  border-top-right-radius: var(--radius-lg);
-
-  position: sticky;
-  top: 8px;
-
-  /* border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border); */
-  filter: none;
-}
-
-blockquote blockquote .code-block-container pre[class*=language-],
-blockquote blockquote .code-block-container pre.hljs {
-  background: var(--bg-secondary);
-  border-top: none;
-  /* border-bottom: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border); */
-}
-
-blockquote blockquote blockquote .code-block-container .code-block-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   padding: var(--spacing-2xs) var(--spacing-lg);
+  position: sticky;
+}
+
+:where(blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg-secondary);
+}
+
+/* Level 3 */
+:where(blockquote blockquote blockquote) .code-block-container .code-block-header {
   background-color: var(--bg) !important;
-  /* border: 1px solid var(--border); */
-  border-top-left-radius: var(--radius-lg);
-  border-top-right-radius: var(--radius-lg);
-
-  position: sticky;
-  top: 8px;
-
-  /* border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border); */
-  filter: none;
 }
 
-blockquote blockquote blockquote .code-block-container pre[class*=language-],
-blockquote blockquote blockquote .code-block-container pre.hljs {
+:where(blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote) .code-block-container pre.hljs {
   background: var(--bg);
-  border-top: none;
-  /* border-bottom: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border); */
 }
 
-blockquote blockquote blockquote blockquote .code-block-container .code-block-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-2xs) var(--spacing-lg);
+/* Level 4 */
+:where(blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
   background-color: var(--bg-secondary) !important;
-  /* border: 1px solid var(--border); */
-  border-top-left-radius: var(--radius-lg);
-  border-top-right-radius: var(--radius-lg);
-
-  position: sticky;
-  top: 8px;
-
-  /* border-top: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border); */
-  filter: none;
 }
 
-blockquote blockquote blockquote blockquote .code-block-container pre[class*=language-],
-blockquote blockquote blockquote blockquote .code-block-container pre.hljs {
+:where(blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
   background: var(--bg-secondary);
-  border-top: none;
-  /* border-bottom: 1px solid var(--border);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border); */
+}
+
+/* Level 5 */
+:where(blockquote blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
+  background-color: var(--bg) !important;
+}
+
+:where(blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg);
+}
+
+/* Level 6 */
+:where(blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
+  background-color: var(--bg-secondary) !important;
+}
+
+:where(blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg-secondary);
+}
+
+/* Level 7 */
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
+  background-color: var(--bg) !important;
+}
+
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg);
+}
+
+/* Level 8 */
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
+  background-color: var(--bg-secondary) !important;
+}
+
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg-secondary);
+}
+
+/* Level 9 */
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
+  background-color: var(--bg) !important;
+}
+
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg);
+}
+
+/* Level 10 */
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
+  background-color: var(--bg-secondary) !important;
+}
+
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg-secondary);
+}
+
+/* Level 11 */
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
+  background-color: var(--bg) !important;
+}
+
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg);
+}
+
+/* Level 12 */
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
+  background-color: var(--bg-secondary) !important;
+}
+
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg-secondary);
+}
+
+/* Level 13 */
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
+  background-color: var(--bg) !important;
+}
+
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg);
+}
+
+/* Level 14 */
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
+  background-color: var(--bg-secondary) !important;
+}
+
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg-secondary);
+}
+
+/* Level 15 */
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container .code-block-header {
+  background-color: var(--bg) !important;
+}
+
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
+:where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
+  background: var(--bg);
 }
 
 .language-name {

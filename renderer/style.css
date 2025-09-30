@@ -3203,6 +3203,20 @@ textarea::-webkit-scrollbar {
   transform: none;
 }
 
+.debug-markdown-btn {
+  background: var(--accent) !important;
+  margin-right: 8px;
+}
+
+.debug-markdown-btn:hover {
+  background: var(--accent-hover) !important;
+}
+
+.debug-markdown-btn svg {
+  color: white !important;
+  stroke: white !important;
+}
+
 .input-footer {
   padding-top: 0;
   text-align: center;

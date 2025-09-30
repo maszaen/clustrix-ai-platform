@@ -59,6 +59,7 @@
     "highlight.js": "^11.11.1",
     "langchain": "^0.3.0",
     "mammoth": "^1.10.0",
+    "markdown-it": "^14.1.0",
     "mathjax": "^4.0.0",
     "perfect-scrollbar": "^1.5.6",
     "serpapi": "^2.2.1",

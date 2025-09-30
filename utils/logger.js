@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-let logFilePath = path.join(process.cwd(), 'clustrix-app.log');
+let logFilePath = path.join(process.cwd(), 'app.log');
 let debugEnabled = process.env.CLUSTRIX_DEBUG !== 'false';
 
 function setLogFile(filePath) {

@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 let logFilePath = path.join(process.cwd(), 'app.log');
-let debugEnabled = process.env.CLUSTRIX_DEBUG !== 'false';
+let debugEnabled = false;
 
 function setLogFile(filePath) {
   if (typeof filePath === 'string' && filePath.trim().length > 0) {

@@ -982,7 +982,7 @@ var hljs = (function () {
    * @param {string} message
    */
   const error = (message) => {
-    console.error(message);
+    // console.error(message);
   };
 
   /**
@@ -990,7 +990,7 @@ var hljs = (function () {
    * @param {any} args
    */
   const warn = (message, ...args) => {
-    console.log(`WARN: ${message}`, ...args);
+    // console.log(`WARN: ${message}`, ...args);
   };
 
   /**
@@ -1000,7 +1000,7 @@ var hljs = (function () {
   const deprecated = (version, message) => {
     if (seenDeprecations[`${version}/${message}`]) return;
 
-    console.log(`Deprecated as of ${version}. ${message}`);
+    // console.log(`Deprecated as of ${version}. ${message}`);
     seenDeprecations[`${version}/${message}`] = true;
   };
 
@@ -1067,12 +1067,12 @@ var hljs = (function () {
     if (!Array.isArray(mode.begin)) return;
 
     if (mode.skip || mode.excludeBegin || mode.returnBegin) {
-      error("skip, excludeBegin, returnBegin not compatible with beginScope: {}");
+      // error("skip, excludeBegin, returnBegin not compatible with beginScope: {}");
       throw MultiClassError;
     }
 
     if (typeof mode.beginScope !== "object" || mode.beginScope === null) {
-      error("beginScope must be object");
+      // error("beginScope must be object");
       throw MultiClassError;
     }
 
@@ -1087,12 +1087,12 @@ var hljs = (function () {
     if (!Array.isArray(mode.end)) return;
 
     if (mode.skip || mode.excludeEnd || mode.returnEnd) {
-      error("skip, excludeEnd, returnEnd not compatible with endScope: {}");
+      // error("skip, excludeEnd, returnEnd not compatible with endScope: {}");
       throw MultiClassError;
     }
 
     if (typeof mode.endScope !== "object" || mode.endScope === null) {
-      error("endScope must be object");
+      // error("endScope must be object");
       throw MultiClassError;
     }
 
@@ -1633,7 +1633,6 @@ var hljs = (function () {
       classPrefix: 'hljs-',
       cssSelector: 'pre code',
       languages: null,
-      debugMode: false,
       // beta configuration options, subject to change, welcome to discuss
       // https://github.com/highlightjs/highlight.js/issues/1086
       __emitter: TokenTreeEmitter
@@ -1662,8 +1661,8 @@ var hljs = (function () {
       if (match) {
         const language = getLanguage(match[1]);
         if (!language) {
-          warn(LANGUAGE_NOT_FOUND.replace("{}", match[1]));
-          warn("Falling back to no-highlight mode for this block.", block);
+          // warn(LANGUAGE_NOT_FOUND.replace("{}", match[1]));
+          // warn("Falling back to no-highlight mode for this block.", block);
         }
         return language ? match[1] : 'no-highlight';
       }
@@ -2113,7 +2112,7 @@ var hljs = (function () {
 
       const language = getLanguage(languageName);
       if (!language) {
-        error(LANGUAGE_NOT_FOUND.replace("{}", languageName));
+        // error(LANGUAGE_NOT_FOUND.replace("{}", languageName));
         throw new Error('Unknown language: "' + languageName + '"');
       }
 
@@ -2305,7 +2304,7 @@ var hljs = (function () {
         { el: element, language });
 
       if (element.dataset.highlighted) {
-        console.log("Element previously highlighted. To highlight again, first unset `dataset.highlighted`.", element);
+        // console.log("Element previously highlighted. To highlight again, first unset `dataset.highlighted`.", element);
         return;
       }
 
@@ -2316,10 +2315,10 @@ var hljs = (function () {
       // more likely to be caught in development before making it to production
       if (element.children.length > 0) {
         if (!options.ignoreUnescapedHTML) {
-          console.warn("One of your code blocks includes unescaped HTML. This is a potentially serious security risk.");
-          console.warn("https://github.com/highlightjs/highlight.js/wiki/security");
-          console.warn("The element with unescaped HTML:");
-          console.warn(element);
+          // console.warn("One of your code blocks includes unescaped HTML. This is a potentially serious security risk.");
+          // console.warn("https://github.com/highlightjs/highlight.js/wiki/security");
+          // console.warn("The element with unescaped HTML:");
+          // console.warn(element);
         }
         if (options.throwUnescapedHTML) {
           const err = new HTMLInjectionError(
@@ -2410,7 +2409,7 @@ var hljs = (function () {
       try {
         lang = languageDefinition(hljs);
       } catch (error$1) {
-        error("Language definition for '{}' could not be registered.".replace("{}", languageName));
+        // error("Language definition for '{}' could not be registered.".replace("{}", languageName));
         // hard or soft error
         if (!SAFE_MODE) { throw error$1; } else { error(error$1); }
         // languages that have serious errors are replaced with essentially a

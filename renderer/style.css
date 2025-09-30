@@ -4324,6 +4324,7 @@ a:focus-visible {
 .message-text pre[class*=language-],
 .message-text pre.hljs {
   background: var(--bg-secondary);
+  border-top: 2px solid var(--bg);
 }
 
 .message-text :not(pre) > code[class*=language-],
@@ -4358,6 +4359,7 @@ a:focus-visible {
 .hljs-tag,
 .hljs-variable,
 .hljs-operator,
+.hljs-property,
 .language-css .hljs-attribute {
   color: var(--hljs-punctuation);
 }
@@ -4371,7 +4373,7 @@ a:focus-visible {
   color: var(--hljs-keyword);
 }
 
-.hljs-meta, .hljs-built_in {
+.hljs-meta, .hljs-built_in, .hljs-variable.language_ {
   color: var(--hljs-regex-important);
 }
 
@@ -4380,7 +4382,6 @@ a:focus-visible {
 }
 
 .hljs-attribute,
-.hljs-property,
 .hljs-template-tag,
 .hljs-title.class_,
 .hljs-title.className {
@@ -4413,8 +4414,7 @@ a:focus-visible {
 }
 
 .hljs-type,
-.hljs-params,
-.hljs-variable.language_ {
+.hljs-params {
   color: var(--hljs-operator-entity-url-variable);
 }
 
@@ -4536,7 +4536,7 @@ a:focus-visible {
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-2xs) var(--spacing-lg);
-  background-color: var(--surface-secondary);
+  background-color: var(--bg-secondary) !important;
   /* border: 1px solid var(--border); */
   border-top-left-radius: var(--radius-lg);
   border-top-right-radius: var(--radius-lg);
@@ -4547,30 +4547,6 @@ a:focus-visible {
   filter: drop-shadow(0 -12px 0 var(--bg))    
         drop-shadow(12px 0 0 var(--bg))     
         drop-shadow(-12px 0 0 var(--bg));
-}
-
-/* @supports (animation-timeline: scroll()) {
-    .code-block-header {
-        animation: sticky-radius both linear;
-        animation-timeline: scroll(block nearest);
-        animation-range: exit-crossing 80% exit-crossing 100%;
-    }
-    @keyframes sticky-radius {
-        0% {
-            border-bottom-left-radius: 0;
-            border-bottom-right-radius: 0;
-        }
-        100% {
-            border-bottom-left-radius: var(--radius-lg);
-            border-bottom-right-radius: var(--radius-lg);
-        }
-    }
-} */
-
-
-
-.dark-theme .code-block-header {
-  background-color: #333537;
 }
 
 .language-name {

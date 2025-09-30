@@ -101,6 +101,305 @@ const DEBUG_MODE = typeof window.api === "undefined";
 const DEBUG_MARKDOWN = true;
 const LOGGING = true;
 
+const MARKDOWN_TEST_SESSION_TYPE = "markdown-test";
+const MARKDOWN_TEST_TITLE = "Markdown Test Session";
+const MARKDOWN_TEST_PROMPT = "[MARKDOWN TEST]";
+const MARKDOWN_TEST_MODEL_INFO = Object.freeze({
+  provider: "local",
+  model: "markdown-test",
+  label: "Markdown Test",
+});
+
+const DEFAULT_MARKDOWN_TEST_TEMPLATE = Object.freeze({
+  think:
+    "Tidak ada isi form. Tampilkan contoh markdown bawaan agar renderer dapat diperiksa.",
+  response: `## Markdown Showcase
+
+Berikut contoh elemen markdown umum:
+
+- **Teks tebal** dan _teks miring_
+- Daftar bernomor:
+  1. Langkah pertama
+  2. Langkah kedua dengan tautan [Clustrix](https://example.com)
+- Kutipan blok untuk catatan penting.
+
+> Markdown membantu menjaga struktur jawaban.
+
+### Potongan kode
+
+\`\`\`js
+function greet(name) {
+  return \`Halo, \${name}!\`;
+}
+console.log(greet("Markdown Test"));
+\`\`\`
+
+| Komponen | Status |
+| --- | --- |
+| Heading | ✅ |
+| List | ✅ |
+| Code block | ✅ |
+
+Tambahkan juga rumus inline seperti $E = mc^2$ dan teks akhir yang ringkas.
+`,
+});
+
+function buildMarkdownTestScenario(rawInput) {
+  const text = typeof rawInput === "string" ? rawInput.replace(/\r\n/g, "\n") : "";
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    return DEFAULT_MARKDOWN_TEST_TEMPLATE;
+  }
+
+  return {
+    think:
+      "Salin isi form ke balasan markdown agar mudah diverifikasi secara lokal tanpa request eksternal.",
+    response: text,
+  };
+}
+
+function isMarkdownTestSession(session) {
+  return (
+    !!session &&
+    (session.type === MARKDOWN_TEST_SESSION_TYPE || session.isMarkdownTest === true)
+  );
+}
+
+function splitMarkdownForStreaming(text) {
+  if (!text) return [];
+  return text.split(/(\s+)/).filter((token) => token.length > 0);
+}
+
+function updateMarkdownControls() {
+  const welcomeBtn = document.getElementById("markdown-test-welcome");
+  if (welcomeBtn) {
+    welcomeBtn.style.display = DEBUG_MARKDOWN ? "" : "none";
+  }
+
+  const chatBtn = document.getElementById("markdown-test-chat");
+  const sendBtn = document.getElementById("send");
+
+  if (!DEBUG_MARKDOWN) {
+    if (chatBtn) chatBtn.style.display = "none";
+    if (sendBtn) sendBtn.style.display = "";
+    return;
+  }
+
+  const shouldShowMarkdownControls = isMarkdownTestSession(current);
+
+  if (chatBtn) {
+    chatBtn.style.display = shouldShowMarkdownControls ? "" : "none";
+  }
+  if (sendBtn) {
+    sendBtn.style.display = shouldShowMarkdownControls ? "none" : "";
+  }
+}
+
+async function startMarkdownTestFromWelcome() {
+  if (!DEBUG_MARKDOWN) return;
+
+  const input = $("#msg-central");
+  const originalText = input ? input.value : "";
+  if (input) {
+    input.value = "";
+    try {
+      saveDraftDebounced.cancel();
+    } catch {}
+    sessionDrafts.delete("welcome-screen");
+    saveDraftForSession("welcome-screen", "");
+    const shell = input.closest(".ta-shell");
+    if (shell && shell.__taScroll) {
+      shell.__taScroll.updateLayout(true);
+    } else {
+      input.style.height = "auto";
+    }
+  }
+
+  welcomeScreenStagedFiles = [];
+  renderWelcomeScreenFiles();
+
+  const session = await createNewSession([], { type: MARKDOWN_TEST_SESSION_TYPE });
+  session.name = MARKDOWN_TEST_TITLE;
+  session.type = MARKDOWN_TEST_SESSION_TYPE;
+  session.isMarkdownTest = true;
+  session.last_updated = nowISO();
+
+  await save();
+
+  setCurrent(session);
+  updateMarkdownControls();
+  runMarkdownTestTurn(session, originalText);
+}
+
+function runMarkdownTestTurn(session = current, rawInput) {
+  if (!DEBUG_MARKDOWN) return;
+  const activeSession = session || current;
+  if (!isMarkdownTestSession(activeSession)) return;
+  if (streamManager.isStreamingInSession(activeSession)) return;
+
+  window._isLazyLoading = false;
+  isUserScrolledUp = false;
+  autoScrollEnabled = true;
+  scrollDetectionCooldown = false;
+  clearTimeout(cooldownTimeout);
+
+  if (!Array.isArray(activeSession.uploadedFiles)) {
+    activeSession.uploadedFiles = [];
+  }
+
+  activeSession.last_updated = nowISO();
+
+  let composerValue = typeof rawInput === "string" ? rawInput : undefined;
+
+  const input = $("#msg");
+  if (composerValue === undefined && activeSession === current && input) {
+    composerValue = input.value;
+  }
+
+  if (input) {
+    input.value = "";
+    const shell = input.closest(".ta-shell");
+    if (shell && shell._scrollbarInstance) {
+      shell._scrollbarInstance.updateLayout();
+    } else {
+      input.style.height = "auto";
+      input.style.height = `${Math.min(input.scrollHeight, 350)}px`;
+    }
+  }
+
+  try {
+    saveDraftDebounced.cancel();
+  } catch {}
+  if (activeSession.id) {
+    sessionDrafts.delete(activeSession.id);
+    saveDraftForSession(activeSession.id, "");
+  }
+
+  justSentMessage = true;
+  setTimeout(() => {
+    justSentMessage = false;
+  }, 1000);
+
+  const userIndex = activeSession.messages.length;
+  activeSession.messages.push(["user", MARKDOWN_TEST_PROMPT]);
+
+  addMessage("user", MARKDOWN_TEST_PROMPT, {
+    final: true,
+    index: userIndex,
+  });
+
+  const modelInfo = { ...MARKDOWN_TEST_MODEL_INFO };
+  activeSession.messages.push(["ai", "", modelInfo]);
+
+  const aiMessageIndex = activeSession.messages.length - 1;
+  const aiNode = addMessage("ai", "", {
+    final: false,
+    index: aiMessageIndex,
+    metadata: modelInfo,
+  });
+  aiNode.dataset.index = String(aiMessageIndex);
+
+  createResponseSpacer();
+  setTimeout(() => {
+    expandSpacer();
+  }, 50);
+
+  scheduleThinkingText(aiNode);
+
+  const scenario = buildMarkdownTestScenario(
+    typeof composerValue === "string" ? composerValue : "",
+  );
+  streamMarkdownTestResponse(activeSession, aiNode, aiMessageIndex, scenario);
+
+  renderSessions();
+  updateChatHeader();
+  try {
+    save();
+  } catch {}
+}
+
+function streamMarkdownTestResponse(session, aiNode, aiMessageIndex, scenario) {
+  if (!DEBUG_MARKDOWN) return;
+  const streamId = `${session.id}-${aiMessageIndex}-markdown-${Date.now()}`;
+  const handler = createStreamHandler(streamId, MARKDOWN_TEST_PROMPT, false);
+
+  let thinkTimer = null;
+  let streamTimer = null;
+  let finished = false;
+
+  const clearTimers = () => {
+    if (thinkTimer) {
+      clearTimeout(thinkTimer);
+      thinkTimer = null;
+    }
+    if (streamTimer) {
+      clearInterval(streamTimer);
+      streamTimer = null;
+    }
+  };
+
+  const controller = {
+    cancel: () => {
+      if (finished) return;
+      finished = true;
+      clearTimers();
+      handler({ error: "Markdown test cancelled" });
+    },
+  };
+
+  streamManager.startStream(streamId, {
+    controller,
+    aiNode,
+    session,
+    messageIndex: aiMessageIndex,
+    messages: [],
+    contextPrompt: MARKDOWN_TEST_PROMPT,
+    fullResponse: "",
+    startedAt: Date.now(),
+    thinkStartTime: Date.now(),
+  });
+
+  const beginStreaming = () => {
+    const active = streamManager.activeStreams[streamId];
+    if (!active) return;
+
+    appendThinking(aiNode, scenario.think, session, aiMessageIndex);
+    const thinkDuration = Math.max(
+      (Date.now() - (active.thinkStartTime || active.startedAt || Date.now())) / 1000,
+      0.1,
+    );
+    session._x_think = session._x_think || {};
+    session._x_think[aiMessageIndex] = {
+      text: scenario.think,
+      duration: thinkDuration,
+    };
+    finalizeThinkingUI(aiNode, thinkDuration, MARKDOWN_TEST_MODEL_INFO);
+
+    const tokens = splitMarkdownForStreaming(scenario.response);
+    let idx = 0;
+
+    streamTimer = setInterval(() => {
+      const currentState = streamManager.activeStreams[streamId];
+      if (!currentState) {
+        clearTimers();
+        return;
+      }
+
+      if (idx < tokens.length) {
+        handler(tokens[idx]);
+        idx += 1;
+      } else {
+        clearTimers();
+        finished = true;
+        handler(null);
+      }
+    }, 24);
+  };
+
+  thinkTimer = setTimeout(beginStreaming, 120);
+}
+
 function getFilesForDisplay(session, context = 'form') {
   if (!session || !session.uploadedFiles) return [];
 
@@ -2083,6 +2382,8 @@ function showWelcomeScreen() {
   current = null;
   welcomeScreenStagedFiles = [];
   renderWelcomeScreenFiles();
+
+  updateMarkdownControls();
 
   $(".chat-area").classList.remove("chats-active");
   $(".chat-area").classList.remove("artifacts-active");
@@ -8891,6 +9192,8 @@ function updateInputState() {
     msgCentral.placeholder = "How can i help you today?";
   }
 
+  updateMarkdownControls();
+
   // Update project title indicator
   const projectIndicator = $("#project-title-indicator");
   const projectTitleText = projectIndicator?.querySelector(".project-title-text");
@@ -9696,16 +9999,18 @@ function renderAiFinalActions(aiNode, content, messageIndex) {
   });
   actions.appendChild(copyBtn);
 
-  const regenBtn = document.createElement("button");
-  regenBtn.className = "regen-btn";
-  regenBtn.title = "Regenerate this response";
-  regenBtn.innerHTML = regenIconSVG;
-  regenBtn.addEventListener("click", () => {
-    if (streamManager.isStreamingInSession(current)) return;
-    const idx = parseInt(aiNode.dataset.index || "-1", 10);
-    if (Number.isInteger(idx) && idx >= 0) regenerateFromIndex(idx);
-  });
-  actions.appendChild(regenBtn);
+  if (!isMarkdownTestSession(current)) {
+    const regenBtn = document.createElement("button");
+    regenBtn.className = "regen-btn";
+    regenBtn.title = "Regenerate this response";
+    regenBtn.innerHTML = regenIconSVG;
+    regenBtn.addEventListener("click", () => {
+      if (streamManager.isStreamingInSession(current)) return;
+      const idx = parseInt(aiNode.dataset.index || "-1", 10);
+      if (Number.isInteger(idx) && idx >= 0) regenerateFromIndex(idx);
+    });
+    actions.appendChild(regenBtn);
+  }
 
   if (modelInfo && modelInfo.provider && modelInfo.model) {
     const modelInfoEl = document.createElement("span");
@@ -9746,6 +10051,11 @@ async function createNewSession(initialMessages = [], options = {}) {
 }
 
 async function send() {
+  if (DEBUG_MARKDOWN && current && isMarkdownTestSession(current)) {
+    runMarkdownTestTurn(current);
+    return;
+  }
+
   const input = $("#msg");
   const originalText = (input.value || "").trim();
 
@@ -11325,6 +11635,26 @@ function setupEventListeners() {
         sendFromWelcome();
       });
     }
+
+    const markdownBtn = $("#markdown-test-welcome");
+    if (markdownBtn) {
+      const newMarkdownBtn = markdownBtn.cloneNode(true);
+      markdownBtn.parentNode.replaceChild(newMarkdownBtn, markdownBtn);
+      if (DEBUG_MARKDOWN) {
+        newMarkdownBtn.style.display = "";
+      }
+      newMarkdownBtn.addEventListener("click", () => {
+        log(
+          "UI",
+          0,
+          "event:markdown-test-welcome",
+          "Markdown test button clicked on welcome screen",
+        );
+        startMarkdownTestFromWelcome();
+      });
+    }
+
+    updateMarkdownControls();
   })();
 
   $("#open-model-mgmt").addEventListener("click", () => {
@@ -11744,6 +12074,13 @@ function setupEventListeners() {
 
   $("#msg").addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
+      if (DEBUG_MARKDOWN && current && isMarkdownTestSession(current)) {
+        e.preventDefault();
+        if (!streamManager.isStreamingInSession(current)) {
+          runMarkdownTestTurn(current, e.target?.value ?? "");
+        }
+        return;
+      }
       if (streamManager.isStreamingInSession(current)) {
         e.preventDefault();
         return;
@@ -11753,9 +12090,35 @@ function setupEventListeners() {
     }
   });
 
+  const markdownChatBtn = $("#markdown-test-chat");
+  if (markdownChatBtn) {
+    markdownChatBtn.addEventListener("click", () => {
+      if (!DEBUG_MARKDOWN) return;
+      if (!current || !isMarkdownTestSession(current)) return;
+      if (streamManager.isStreamingInSession(current)) return;
+      log(
+        "UI",
+        0,
+        "event:markdown-test-chat",
+        "Markdown test button clicked in chat",
+        { sessionId: current.id },
+      );
+      const composer = $("#msg");
+      runMarkdownTestTurn(current, composer ? composer.value : "");
+    });
+  }
+
   $("#send").addEventListener("click", () => {
     const modal = $("#quick-model-switch-modal");
     modal.classList.add("hidden");
+
+    if (DEBUG_MARKDOWN && current && isMarkdownTestSession(current)) {
+      if (!streamManager.isStreamingInSession(current)) {
+        const composer = $("#msg");
+        runMarkdownTestTurn(current, composer ? composer.value : "");
+      }
+      return;
+    }
 
     if (!current) return;
 

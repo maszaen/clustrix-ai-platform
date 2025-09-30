@@ -98,6 +98,7 @@ const $$ = (sel) => document.querySelectorAll(sel);
 const THINKING_TIMER = new WeakMap();
 const SESSIONS_PER_PAGE = 30;
 const DEBUG_MODE = typeof window.api === "undefined";
+const DEBUG_MARKDOWN = true;
 const LOGGING = true;
 
 function getFilesForDisplay(session, context = 'form') {
@@ -6656,9 +6657,7 @@ function enhancedMarkdownParse(src) {
     const line = lines[i];
     const trimmedLine = line.trim();
     if (!trimmedLine) {
-      const nextLine = lines[i + 1] || "";
-      const nextTrimmed = nextLine.trim();
-      const nextLineIndent = nextLine.length - nextLine.trimStart().length;
+      const nextLine = lines[i + 1] ? lines[i + 1].trim() : "";
       const nextNextLine = lines[i + 2] ? lines[i + 2].trim() : "";
       const upcomingTableSeparator =
         nextNextLine &&
@@ -6668,18 +6667,16 @@ function enhancedMarkdownParse(src) {
       const isUpcomingTableHeader =
         nextLine && nextLine.includes("|") && upcomingTableSeparator;
 
-      if (listStack.length > 0) {
-    const currentIndent = listStack[listStack.length - 1].indent;
-    // Tetap di list kalau next line masih relevan ATAU punya indentasi cukup
-    if (nextTrimmed.match(/^[*-]\s+/) ||
-        nextTrimmed.match(/^\d+\.\s+/) ||
-        nextTrimmed.startsWith("__CODEBLOCK_") ||
-        nextTrimmed.startsWith(">") ||
-        isUpcomingTableHeader ||
-        (nextTrimmed && nextLineIndent > currentIndent + 1)) {
-      continue;
-    }
-  }
+      if (
+        listStack.length > 0 &&
+        (nextLine.match(/^(\s*)[*-]\s+/) ||
+          nextLine.match(/^(\s*)\d+\.\s+/) ||
+          nextLine.startsWith("__CODEBLOCK_") ||
+          nextLine.startsWith(">") ||
+          isUpcomingTableHeader)
+      ) {
+        continue;
+      }
 
       closeOpenBlocks();
       continue;
@@ -6785,9 +6782,14 @@ function enhancedMarkdownParse(src) {
       html += `<li>${parseInlineMarkdown(content)}</li>`;
     } else if (bqMatch) {
       const bqBlockLines = [line];
-      while (i + 1 < lines.length && lines[i + 1].trim().startsWith(">")) {
+      while (i + 1 < lines.length && lines[i + 1].trim() !== "") {
+        const nextLine = lines[i + 1];
+        const nextTrimmed = nextLine.trim();
+        const isNewBlock = /^(#|---|```|[*-] |\d+\.\s)/.test(nextTrimmed) && (nextLine.length - nextTrimmed.length === 0);
+        if (isNewBlock) break;
+
         i++;
-        bqBlockLines.push(lines[i]);
+        bqBlockLines.push(nextLine);
       }
       const nestedContent = bqBlockLines
         .map((l) => l.replace(/^\s*>\s?/, ""))

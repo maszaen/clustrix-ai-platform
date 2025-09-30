@@ -1,135 +1,382 @@
+mantap, Zaen. gua drop **paket Markdown stress-test super lengkap** di satu blok—langsung copas ke renderer lu buat ngetes semua edge-case: nested list, code block habis list, blockquote habis list, mix ordered/unordered, H1–H6, table aneh, footnote, link referensi, task list, definisi, rules, escape, inline HTML, dsb. gas 👇
 
-# 📝 Demo Blockquotes di Dalam List & Numbering (Jaksel Style)
+````markdown
+<!-- =============================================== -->
+<!--         FULL CASE MARKDOWN STRESS PLAYGROUND     -->
+<!-- =============================================== -->
 
-## 📋 Unordered List dengan Blockquote
+# H1: Heading Satu
+## H2: Heading Dua
+### H3: Heading Tiga
+#### H4: Heading Empat
+##### H5: Heading Lima
+###### H6: Heading Enam
 
-- **Item Pertama**  
-  Ini adalah item list pertama dengan blockquote:
-  
-  > **Blockquote level 1:**  
-  > "Kode itu puisi, dan programmer adalah penyair digital."  
-  > - Para senior
-  
-  > **Blockquote level 2:**  
-  > > "Belajar itu seperti menanam pohon, butuh kesabaran."  
-  > > - Guru IT
-  
-  > **Blockquote level 3:**  
-  > > > "Jangan takut gagal, karena setiap error adalah pelajaran."  
-  > > > - Senior Developer
+Paragraf pembuka dengan **bold**, *italic*, ***bold-italic***, ~~strikethrough~~, `inline code`, dan tautan [inline](https://example.com "Example Title").\
+Autolink: <https://example.org> dan email: <hello@example.org>.
 
-- **Item Kedua**  
-  Ini item kedua dengan blockquote dan kode:
-  
-  > **Blockquote dengan kode:**  
-  > "Tips dari senior:"  
-  > 
-  > ```python
-  > # Selalu tulis kode yang mudah dibaca
-  > def hitung_total(items):
-  >     return sum(items)
-  > ```
-  
-  > **Blockquote dengan tabel:**  
-  > "Tools yang wajib dipelajari:"  
-  > 
-  > | Tool | Level | Prioritas |
-  > |------|-------|-----------|
-  > | Git  | ✅    | Tinggi    |
-  > | Docker | ⏳  | Sedang    |
-  > | K8s  | ❌    | Rendah    |
-
-## 🔢 Ordered List dengan Blockquote
-
-1. **Langkah Pertama**  
-   Langkah pertama dalam belajar programming:
-   
-   > **Blockquote motivasi:**  
-   > "Langkah pertama adalah instalasi tools."  
-   > - Tutorial Basic
-   
-   > **Blockquote dengan checklist:**  
-   > > "Pastikan sudah siap:"  
-   > > - [x] Laptop/PC  
-   > > - [x] Koneksi internet  
-   > > - [ ] Minuman hangat (opsional tapi recommended) 😉
-
-2. **Langkah Kedua**  
-   Setup environment:
-   
-   > **Blockquote dengan kode:**  
-   > "Setup Python:"  
-   > 
-   > ```bash
-   > # Install Python
-   > sudo apt update
-   > sudo apt install python3 python3-pip
-   > 
-   > # Verifikasi
-   > python3 --version
-   > pip3 --version
-   > ```
-   
-   > **Blockquote nested:**  
-   > > "Kalau ada error, cek dokumentasi resmi atau StackOverflow."  
-   > > - Community Helper
-
-3. **Langkah Ketiga**  
-   Mulai coding:
-   
-   > **Blockquote dengan tabel:**  
-   > "Struktur proyek dasar:"  
-   > 
-   > | Folder | Isi | Keterangan |
-   > |--------|-----|------------|
-   > | src    | Kode sumber | Utama |
-   | tests  | Test case | Untuk QA |
-   | docs   | Dokumentasi | Bisa skip dulu |
-   
-   > **Blockquote triple nested:**  
-   > > > "Jangan lupa commit sering-sering ya!"  
-   > > > - Git Master
-
-## 🔄 Nested List dengan Blockquote
-
-- **Sub Item 1**  
-  Sub item dengan blockquote:
-  
-  > **Blockquote sederhana:**  
-  > "Markdown itu mudah dipelajari."  
-  > - Content Writer
-  
-  - **Sub-sub item 1**  
-    > **Blockquote dalam sub-sub item:**  
-    > > "Gunakan heading dengan benar."  
-    > > - SEO Specialist
-  
-  - **Sub-sub item 2**  
-    > **Blockquote dengan kode:**  
-    > > "Contoh heading:"  
-    > > 
-    > > ```markdown
-    > > # Heading 1
-    > > ## Heading 2
-    > > ### Heading 3
-    > > ```
-
-- **Sub Item 2**  
-  Sub item lain dengan blockquote:
-  
-  > **Blockquote CSS:**  
-  > "CSS itu styling, pilih font yang enak dibaca."  
-  > - UI Designer
-  
-  > **Blockquote dengan tabel:**  
-  > "Property CSS penting:"  
-  > 
-  > | Property | Value | Keterangan |
-  > |----------|-------|------------|
-  > | font-family | Arial | Font utama |
-  | color | #333 | Warna teks |
-  | margin | 0 auto | Centering |
+Teks dengan karakter spesial yang di-*escape*: \* \_ \` \# \\ \[ \] \( \) \> \| \{ \} \. \! \$.
 
 ---
 
-Semoga contoh ini membantu Zaen dalam testing markdown formatter! 🚀 Kalau ada yang mau ditambah atau diubah, tinggal bilang aja ya! 😊
+## Unordered List (campur-campur)
+- Item A (teks biasa)
+- Item B dengan *italic* dan `code`
+  - Sub B.1 (nested 1)
+    - Sub B.1.a (nested 2)
+      - Sub B.1.a.i (nested 3)
+- Item C dengan paragraf multi:
+  
+  Ini paragraf kedua di dalam item C. Harus tetap **1 `<li>`**.
+
+  Dan ini paragraf ketiga dalam item C.
+
+- Item D diakhiri dengan code block setelah list (edge-case):
+
+```js
+// code block langsung setelah list (tanpa `<li>` baru)
+const msg = "Code block setelah list";
+console.log(msg);
+````
+
+Teks lanjutan setelah code block di atas. Pastikan parser tidak nempel ke list sebelumnya.
+
+---
+
+## Ordered List + Nested Numbering
+
+1. Step 1: init
+   1.1. Substep 1.1 (format pseudo-numbering di satu paragraf, bukan list sebenarnya)
+   1.2. Substep 1.2
+
+   * Campur bullet di bawah ordered:
+
+     * bullet dalam ordered
+
+       1. Nested ordered di dalam bullet
+       2. Masih nested ordered
+2. Step 2: process
+
+   1. Substep (true nested ordered)
+   2. Substep lagi
+
+      * bullet campuran
+
+        * deep bullet
+3. Step 3: finalize
+
+Code block setelah **ordered list** (edge-case):
+
+```bash
+echo "ini code block setelah ordered list"
+```
+
+Lanjut paragraf biasa.
+
+---
+
+## Task List
+
+* [ ] Todo kosong
+* [x] Todo selesai
+* [ ] Todo dengan **bold** dan *italic*
+
+  * [x] Nested done
+  * [ ] Nested pending
+
+---
+
+## List Variasi Bullet
+
+* bintang
+
+- plus
+
+* minus
+
+---
+
+## Blockquote Dasar
+
+> Satu baris quote.
+> Baris kedua masih quote.
+>
+> * Boleh ada list di dalam quote
+> * Item kedua
+>
+> ```python
+> # code block di dalam quote
+> print("Hello from blockquote")
+> ```
+>
+> > Nested blockquote level 2
+> >
+> > * item A
+> >
+> > * item B
+> >
+> > > Level 3, makin dalam.
+
+Blockquote setelahnya selesai, ini paragraf normal.
+
+---
+
+## Code Fences Variasi (``` dan ~~~)
+
+```python
+def greet(name: str) -> str:
+    return f"Hello, {name}"
+print(greet("Zaen"))
+```
+
+```json
+{
+  "user": "zaen",
+  "role": "engineer",
+  "skills": ["ai", "ml", "db"]
+}
+```
+
+````
+```
+triple backticks di dalam quad fence
+```
+````
+
+Inline code backtick di teks: `gunakan `dua` backtick kalau perlu`.
+
+---
+
+## Tabel (align, pipes, markdown di dalam sel)
+
+| Kolom | Align Kiri    |          Align Tengah         | Align Kanan |
+| :---- | :------------ | :---------------------------: | ----------: |
+| A     | kiri          |             tengah            |       kanan |
+| **B** | *italic*      |             `code`            |   [link](#) |
+| C     | multi<br>line | sel dengan quote: `"> block"` |       12345 |
+
+Tabel tanpa header (flavor-dependent, mungkin gagal di CommonMark):
+
+| A | B |
+| - | - |
+| 1 | 2 |
+
+---
+
+## Definition List (flavor-dependent)
+
+Term 1
+: Definisi satu baris
+
+Term 2
+: Definisi paragraf pertama
+: Definisi paragraf kedua
+
+---
+
+## Horizontal Rules Variasi
+
+---
+
+---
+
+---
+
+---
+
+## Footnotes
+
+Teks dengan footnote[^1] dan footnote kedua[^dup].
+
+[^1]: Ini footnote pertama, bisa multi-paragraf.
+    Lanjutan baris footnote.
+
+[^dup]: Footnote kedua.
+
+---
+
+## Referenced Links & Images
+
+Ini link referensi gaya lama: [Docs][docs], [Site][site].
+
+[docs]: https://developer.mozilla.org/ "MDN"
+[site]: https://www.wikipedia.org/
+
+Gambar (jika renderer support):
+![Alt teks contoh](https://via.placeholder.com/120x60 "Placeholder")
+
+Ref-image: ![Logo][imgref]
+
+[imgref]: https://via.placeholder.com/100 "Ref Img"
+
+---
+
+## Images with titles & escaped parentheses
+
+![Alt (esc)](https://via.placeholder.com/80x40 "(title)")
+
+---
+
+## Inline HTML (harus aman kalau disanitize)
+
+<div class="note">
+  <strong>Inline HTML:</strong> Jika sanitizer aktif, elemen/atribut tertentu mungkin di-drop.
+</div>
+
+Paragraf lanjutan setelah HTML.
+
+---
+
+## Mixing Paragraphs, Lists, Code, Quotes (Stress Mix)
+
+* Satu item dengan paragraf panjang:
+
+  Paragraf kedua dalam `<li>`, memastikan tidak split jadi `<li>` baru.
+
+  > Quote di dalam item list.
+  > Tetap dalam `<li>` yang sama.
+
+  ```sql
+  -- code block di dalam `<li>`
+  SELECT 1 AS ok;
+  ```
+
+  Kalimat setelah code di `<li>` yang sama.
+
+* Item berikutnya langsung code fence di bawah (harus bukan bagian `<li>`):
+
+```yaml
+key: value
+arr:
+  - x
+  - y
+```
+
+> Blockquote setelah list dan code—pastikan tidak melekat ke `<li>` manapun.
+
+---
+
+## Escapes & Entities
+
+Tampilkan huruf literal: <div> bukan HTML.
+Karakter: & © ® (entities jika renderer dukung).
+
+---
+
+## Smart Typography (flavor-dependent)
+
+Quotes “cerdas” dan ‘single smart’. Em-dash — en–dash, 1/2, 3×5.
+
+---
+
+## Codeblock After Paragraph (No List Context)
+
+```txt
+baris biasa
+```
+
+---
+
+## Nested Ordered Syntactic Edge
+
+1. format dengan tanda kurung
+2. format angka titik
+
+3) campur gaya dalam satu blok
+
+   a) sub-alpha
+   b) sub-beta
+
+---
+
+## Fenced Code Language Hints (non-standard)
+
+```mermaid
+graph TD
+  A[Start] --> B{Check}
+  B -- Yes --> C[Pass]
+  B -- No --> D[Fail]
+```
+
+```plantuml
+@startuml
+Alice -> Bob: Hi
+@enduml
+```
+
+---
+
+## Long Paragraph + Line Breaks
+
+Baris satu dengan dua spasi di ujung␠␠
+Baris kedua harus *softbreak* via `<br>` pada renderer.
+
+Baris ketiga normal.
+
+---
+
+## Multicolumn-ish via Tables + Lists in Cells
+
+| Section | Content              |
+| ------: | :------------------- |
+|    Left | - item 1<br>- item 2 |
+|   Right | 1. one<br>2. two     |
+
+---
+
+## Code Within Blockquote After List (Edge Again)
+
+* Bullet terakhir
+
+  * sub terakhir
+
+> Sekarang blockquote muncul setelah list.
+> Lalu code di dalam quote:
+>
+> ```bash
+> echo "edge after list + quote + code"
+> ```
+
+Paragraf clean setelah blok di atas.
+
+---
+
+## HTML Comments & Markdown Around
+
+Teks sebelum <!-- komentar yang disembunyikan --> dan sesudah komentar.
+
+---
+
+## Mixed Strong/Emphasis Nesting
+
+Teks ***tebal-miring*** dan ***tebal *miring* nested*** serta **tebal dengan *miring* di dalam**.
+
+---
+
+## Math-ish (plain text / code fences, bukan TeX render)
+
+`$E = mc^2$` (inline literal)\
+
+```tex
+\int_a^b f(x)\,dx = F(b) - F(a)
+```
+
+---
+
+## Final Sanity Check
+
+* List
+* Code setelah list:
+
+```python
+print("last fence after list")
+```
+
+> Quote terakhir.
+
+Paragraf penutup. Selesai.
+
+```
+
+kalau ada case spesifik lain yang lu mau siksa—misal “list -> table -> code -> quote” dalam satu napas, tinggal bilang. gua siap tambah batch brutal lagi 😅
+```

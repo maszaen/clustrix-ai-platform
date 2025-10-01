@@ -538,7 +538,7 @@ hr {
 
 #app.sidebar-collapsed .sidebar {
   width: 64px;
-  border-right: 1px solid var(--border-light);
+  /* border-right: 1px solid var(--border-light); */
   background: var(--bg);
 }
 
@@ -593,6 +593,7 @@ hr {
 #little-icon svg {
   width: 85px;
   color: var(--fg);
+  flex-shrink: 0;
 }
 
 .mobile-toggle-sidebar {
@@ -728,7 +729,7 @@ hr {
   height: 30px;
   position: relative;
   opacity: 1;
-  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-radius 1s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-radius 1s cubic-bezier(0.16, 1, 0.3, 1), padding 1s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .icon-btn2 span {
@@ -2379,7 +2380,7 @@ input:checked + .slider:before {
   background: var(--bg);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 3px var(--spacing-md);
+  padding: 5px var(--spacing-md);
   font-size: 13px;
   color: var(--fg);
   white-space: nowrap;
@@ -2406,7 +2407,7 @@ input:checked + .slider:before {
 .file-icon svg {
   flex-shrink: 0;
   margin: auto 0;
-  color: var(--icon);
+  color: var(--fg-muted);
 }
 
 .file-extension {
@@ -2629,7 +2630,7 @@ input:checked + .slider:before {
   height: 40px;
   border-bottom: 1px solid transparent;
   border-image: radial-gradient(circle, var(--border-light) 50%, transparent, transparent) 1; 
-  background: var(--surface);
+  background: var(--bg);
   flex-shrink: 0;
   
   backdrop-filter: blur(10px);
@@ -4231,7 +4232,7 @@ blockquote blockquote blockquote blockquote::before {
     max-width: 320px;
     z-index: 200;
     transform: translateX(-100%);
-    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.4s ease;
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
     box-shadow: 0 0 0 rgba(0, 0, 0, 0);
     will-change: transform;
   }

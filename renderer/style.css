@@ -168,6 +168,7 @@ body.light-theme {
   --input-bg: #F0F5F9; /* done: search input or other */
   --primary: #0842a0; /* done: for accent like text */
   --primary-light: #D3E3FD; /* done: for session list */
+  --primary-light-user: #d3e3fd7f; 
   --primary-light-hover: #c5dafbff;
   --accent: #1752afff;
   --highlight-color: #ffeb3b;
@@ -238,6 +239,7 @@ body.dark-theme {
   --input-bg: #282A2D; /* done */
   --primary: #D3E3FD; /* done */
   --primary-light: #1f3760; /* done */
+  --primary-light-user: #1f3760; 
   --primary-light-hover: #28489fff;
   --accent: #0e4baeff;
   --highlight-color: #ffeb3b;
@@ -2952,7 +2954,7 @@ input:checked + .slider:before {
 
 /* Messages */
 .message {
-  margin: var(--spacing-lg) 0;
+  margin: var(--spacing-md) 0;
   animation: slideInPage 0.4s cubic-bezier(0.4, 0, 0.2, 1)
 }
 
@@ -3802,7 +3804,7 @@ blockquote blockquote blockquote blockquote::before {
 
 .message.user .message-text {
   padding: var(--spacing-md) var(--spacing-lg);
-  background: var(--surface-secondary); 
+  background: var(--primary-light-user); /* surface-secondary */
   color: var(--fg);
   border-top-right-radius: var(--spacing-xs);
   display: flex;
@@ -3991,8 +3993,9 @@ blockquote blockquote blockquote blockquote::before {
 .message-text pre, pre[class*="language-"]  {
   max-width: 100% !important;
   overflow-x: scroll;
-  background: #272822;
+  background: var(--bg-secondary);
   padding: var(--spacing-lg);
+  border-top: 2px solid var(--bg) !important;
   border-bottom-left-radius: var(--radius-lg) !important;
   border-bottom-right-radius: var(--radius-lg) !important;
   margin: 0;
@@ -4000,7 +4003,6 @@ blockquote blockquote blockquote blockquote::before {
   font-size: 14px;
   line-height: 1.5;
   /* border: 1px solid var(--border); */
-  border-top: none;
   /* scrollbar-width: none !important;
   -ms-overflow-style: none !important; */
   overflow: auto;
@@ -4427,13 +4429,14 @@ a:focus-visible {
 .message-text pre[class*=language-],
 .message-text pre.hljs {
   background: var(--bg-secondary);
-  border-top: 2px solid var(--bg);
+  border-top: 2px solid var(--bg) !important;
 }
 
 .message-text :not(pre) > code[class*=language-],
 .message-text :not(pre) > code.hljs {
-  background: #272822;
+  background: var(--bg-secondary);
   padding: .1em;
+  border-top: 2px solid var(--bg) !important;
   border-radius: .3em;
   white-space: normal;
 }
@@ -5139,6 +5142,13 @@ a:focus-visible {
   gap: var(--spacing-md);
   min-height: 24px;
   vertical-align: middle;
+}
+
+.ai-content-stream {
+  margin-top: var(--spacing-sm);
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
 }
 
 /* .thinking-text:empty, .thinking-container:empty {

@@ -216,7 +216,7 @@ const ICONS = {
   code: `
 <div class="file-icon" aria-hidden="true">
 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"
-  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
   stroke-linecap="round" stroke-linejoin="round"
   class="lucide lucide-file-code-icon lucide-file-code">
   <path d="M10 12.5 8 15l2 2.5"/>
@@ -229,7 +229,7 @@ const ICONS = {
   text: `
 <div class="file-icon" aria-hidden="true">
 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"
-  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
   stroke-linecap="round" stroke-linejoin="round"
   class="lucide lucide-file-text-icon lucide-file-text">
   <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
@@ -243,7 +243,7 @@ const ICONS = {
   spreadsheet: `
 <div class="file-icon" aria-hidden="true">
 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"
-  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
   stroke-linecap="round" stroke-linejoin="round"
   class="lucide lucide-file-spreadsheet-icon lucide-file-spreadsheet">
   <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
@@ -258,7 +258,7 @@ const ICONS = {
   terminal: `
 <div class="file-icon" aria-hidden="true">
 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"
-  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
   stroke-linecap="round" stroke-linejoin="round"
   class="lucide lucide-file-terminal-icon lucide-file-terminal">
   <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
@@ -271,7 +271,7 @@ const ICONS = {
   json: `
 <div class="file-icon" aria-hidden="true">
 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"
-  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
   stroke-linecap="round" stroke-linejoin="round"
   class="lucide lucide-file-json-icon lucide-file-json">
   <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
@@ -284,7 +284,7 @@ const ICONS = {
   unknown: `
 <div class="file-icon" aria-hidden="true">
 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"
-  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
   stroke-linecap="round" stroke-linejoin="round"
   class="lucide lucide-file-question-mark-icon lucide-file-question-mark">
   <path d="M12 17h.01"/>

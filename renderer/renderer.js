@@ -1,6 +1,6 @@
 let state = {
   sessions: [],
-  settings: { persona: { name: "", work: "", prefs: "" }, theme: "light" },
+  settings: { persona: { name: "", work: "", prefs: "" }, theme: "dark" },
 };
 let welcomeScreenStagedFiles = [];
 let projectMessageStagedFiles = [];
@@ -330,7 +330,7 @@ function runMarkdownTestTurn(session = current, rawInput) {
 function streamMarkdownTestResponse(session, aiNode, aiMessageIndex, scenario) {
   if (!DEBUG_MARKDOWN) return;
   const streamId = `${session.id}-${aiMessageIndex}-markdown-${Date.now()}`;
-  const handler = createStreamHandler(streamId, MARKDOWN_TEST_PROMPT, false);
+  const handler = createStreamHandler(streamId, MARKDOWN_TEST_PROMPT, false, "");
 
   let thinkTimer = null;
   let streamTimer = null;
@@ -6858,47 +6858,28 @@ function handleSaveButtonClick(event) {
   }
 }
 
-function attachCodeBlockListeners(container) {
-  const copyButtons = container.querySelectorAll(".copy-code-btn");
-  const saveButtons = container.querySelectorAll(".save-code-btn");
-  const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
-  const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
-  const saveIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>`;
-
-  copyButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const container = btn.closest(".code-block-container");
-      const codeElement = container.querySelector("code");
-      if (codeElement) {
-        navigator.clipboard
-          .writeText(codeElement.textContent)
-          .then(() => {
-            const originalText = btn.querySelector("span").textContent;
-            btn.innerHTML = `${checkIconSVG} <span>Copied!</span>`;
-            btn.classList.add("copied");
-            setTimeout(() => {
-              btn.innerHTML = `${copyIconSVG} <span>${originalText}</span>`;
-              btn.classList.remove("copied");
-            }, 2000);
-          })
-          .catch((err) => {
-            btn.querySelector("span").textContent = "Failed!";
-            log(
-              "UI",
-              4,
-              "attachCodeBlockListeners",
-              "Failed to copy text to clipboard",
-              { error: err },
-            );
-          });
-      }
-    });
-  });
-}
-
 const MARKDOWN_LATEX_PLACEHOLDER_PREFIX = "¤LATEX_";
 
 let markdownRendererInstance = null;
+let markdownCellRenderer = null;
+let markdownWorkerInstance = null;
+const markdownWorkerListeners = new Map();
+let markdownWorkerSupported =
+  typeof window !== "undefined" && typeof window.Worker === "function";
+
+function ensureMarkdownWorker() {
+  if (!markdownWorkerSupported) return null;
+  if (!markdownWorkerInstance) {
+    try {
+      markdownWorkerInstance = new Worker("markdown.worker.js");
+    } catch (error) {
+      console.warn("Failed to initialize markdown worker:", error);
+      markdownWorkerSupported = false;
+      markdownWorkerInstance = null;
+    }
+  }
+  return markdownWorkerInstance;
+}
 
 function ensureMarkdownRenderer() {
   if (markdownRendererInstance) return markdownRendererInstance;
@@ -6925,21 +6906,83 @@ function ensureMarkdownRenderer() {
   });
 
   md.enable(["table", "strikethrough"]);
+  if (!markdownCellRenderer) {
+    markdownCellRenderer = new MarkdownIt({
+      html: true,
+      breaks: true,
+      linkify: true,
+      typographer: false,
+    });
+    markdownCellRenderer.enable(["strikethrough", "linkify", "list", "paragraph"]);
+    markdownCellRenderer.disable(["table"]);
+  }
 
-  // Enhanced table cell processing to handle multiline content and lists
-  // Create a separate markdown instance for cell content processing
-  const cellMd = new MarkdownIt({
-    html: true,  // Allow HTML tags to be preserved
-    breaks: true,
-    linkify: true,
-    typographer: false,
-  });
-  cellMd.enable(["strikethrough", "linkify", "list", "paragraph"]);
-  // Disable table processing in cell content to prevent nested table issues
-  cellMd.disable(["table"]);
+  const languageAliases = {
+    js: "javascript",
+    jsx: "javascript",
+    ts: "typescript",
+    tsx: "typescript",
+    sh: "bash",
+    shell: "bash",
+    bash: "bash",
+    py: "python",
+    plaintext: "plaintext",
+    plain: "plaintext",
+    text: "plaintext",
+    yml: "yaml",
+    md: "markdown",
+    csharp: "csharp",
+    cs: "csharp",
+  };
 
-  // Enhanced table cell processing to handle multiline content and lists
-  // We'll override the table_close rule after it's declared below
+  const normalizeLanguage = (lang) => {
+    if (!lang) return "text";
+    return lang.toLowerCase().replace(/[^\w+-]+/g, "");
+  };
+
+  const highlightCode = (code, language) => {
+    const normalized = normalizeLanguage(language);
+    const target = languageAliases[normalized] || normalized;
+    const highlighter = window.hljs;
+    if (highlighter && typeof highlighter.highlight === "function") {
+      try {
+        if (target && highlighter.getLanguage?.(target)) {
+          return highlighter.highlight(code, { language: target }).value;
+        }
+      } catch (error) {
+        log(
+          "MARKDOWN",
+          4,
+          "highlightCode",
+          "Failed to highlight code block",
+          { error },
+        );
+      }
+    }
+    return esc(code);
+  };
+
+  const renderCodeContainer = (code, info = "") => {
+    const language = normalizeLanguage(info.split(/\s+/)[0] || "text");
+    const normalized = code.endsWith("\n") ? code.slice(0, -1) : code;
+    const highlighted = highlightCode(normalized, language);
+    const attributeCode = esc(normalized).replace(/"/g, "&quot;");
+    return `
+      <div class="code-block-container">
+        <div class="code-block-header">
+          <span class="language-name">${language}</span>
+          <div class="code-block-actions">
+            <button class="save-code-btn" title="Save to artifacts" data-code="${attributeCode}" data-language="${language}">
+              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
+            </button>
+            <button class="copy-code-btn" title="Copy code">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            </button>
+          </div>
+        </div>
+        <pre><code class="hljs language-${language}">${highlighted}</code></pre>
+      </div>`;
+  };
 
   const originalLinkOpen =
     md.renderer.rules.link_open ||
@@ -6958,28 +7001,6 @@ function ensureMarkdownRenderer() {
     ((tokens, idx, options, env, self) =>
       self.renderToken(tokens, idx, options));
 
-  const renderCodeContainer = (code, info = "") => {
-    const language = info.trim().split(/\s+/)[0] || "text";
-    const normalized = code.endsWith("\n") ? code.slice(0, -1) : code;
-    const escapedCode = esc(normalized);
-    const buttonCode = escapedCode.replace(/"/g, "&quot;");
-    return `
-      <div class="code-block-container">
-        <div class="code-block-header">
-          <span class="language-name">${language}</span>
-          <div class="code-block-actions">
-            <button class="save-code-btn" title="Save to artifacts" data-code="${buttonCode}" data-language="${language}">
-              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
-            </button>
-            <button class="copy-code-btn" title="Copy code">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-            </button>
-          </div>
-        </div>
-        <pre><code class="language-${language}">${escapedCode}</code></pre>
-      </div>`;
-  };
-
   md.renderer.rules.fence = (tokens, idx) => {
     const token = tokens[idx];
     return renderCodeContainer(token.content || "", token.info || "");
@@ -6994,9 +7015,9 @@ function ensureMarkdownRenderer() {
     const token = tokens[idx];
     const existingClass = token.attrGet("class");
     if (existingClass) {
-      if (!existingClass.split(/\s+/).includes("link")) {
-        token.attrSet("class", `${existingClass} link`.trim());
-      }
+      const parts = new Set(existingClass.split(/\s+/).filter(Boolean));
+      parts.add("link");
+      token.attrSet("class", Array.from(parts).join(" "));
     } else {
       token.attrSet("class", "link");
     }
@@ -7025,7 +7046,8 @@ function ensureMarkdownRenderer() {
 
   md.renderer.rules.table_close = (tokens, idx, options, env, self) => {
     return `${originalTableClose(tokens, idx, options, env, self)}</div>`;
-  };  md.renderer.rules.hardbreak = () => "<br>";
+  };
+  md.renderer.rules.hardbreak = () => "<br>";
 
   if (md.linkify && typeof md.linkify.set === "function") {
     md.linkify.set({ fuzzyLink: true, fuzzyIP: true, fuzzyEmail: false });
@@ -7088,6 +7110,50 @@ function ensureBreakSeparatedLists(container) {
     });
     paragraph.replaceWith(list);
   });
+}
+
+function handleChatLogClick(event) {
+  const copyBtn = event.target.closest(".copy-code-btn");
+  if (copyBtn) {
+    event.preventDefault();
+    event.stopPropagation();
+    const block = copyBtn.closest(".code-block-container");
+    const codeEl = block?.querySelector("pre code");
+    if (!codeEl) return;
+    const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+    const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+    navigator.clipboard
+      .writeText(codeEl.textContent)
+      .then(() => {
+        copyBtn.innerHTML = `${checkIconSVG}`;
+        copyBtn.classList.add("copied");
+        setTimeout(() => {
+          copyBtn.innerHTML = `${copyIconSVG}`;
+          copyBtn.classList.remove("copied");
+        }, 2000);
+      })
+      .catch((err) => {
+        log("UI", 4, "copy-code-btn:click", "Failed to copy code block", {
+          error: err,
+        });
+        const span = copyBtn.querySelector("span");
+        if (span) span.textContent = "Failed!";
+      });
+    return;
+  }
+
+  const saveButton = event.target.closest(".save-code-btn");
+  if (saveButton) {
+    handleSaveButtonClick(event);
+  }
+}
+
+function ensureChatLogDelegation() {
+  const chatLog = document.getElementById("chat-log");
+  if (chatLog && !chatLog._delegatedCodeActions) {
+    chatLog.addEventListener("click", handleChatLogClick);
+    chatLog._delegatedCodeActions = true;
+  }
 }
 
 function transformSourceFootnotes(container) {
@@ -7202,67 +7268,103 @@ async function renderMathInElement(element) {
   }
 }
 
+function postprocessMarkdownHtml(html) {
+  if (!html) return "";
+  let processed = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
+  processed = processed.replace(
+    /<div class="table-container">([\s\S]*?)<\/div>/g,
+    (match, tableContent) =>
+      `<div class="table-container">${tableContent.replace(
+        /<(td|th)>([\s\S]*?)<\/\1>/g,
+        (cellMatch, tag, cellContent) => {
+          if (!markdownCellRenderer) return cellMatch;
+          const decodedContent = cellContent
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&amp;/g, "&")
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&nbsp;/g, " ");
+
+          if (
+            /(\s*[-*+•]\s|\s*\d+\.\s)/m.test(decodedContent) ||
+            decodedContent.includes("<br>")
+          ) {
+            const markdownContent = decodedContent
+              .replace(/•/g, "-")
+              .replace(/<br\s*\/?>/gi, "\n")
+              .trim();
+            try {
+              const renderedCell = markdownCellRenderer.render(markdownContent);
+              return `<${tag}>${renderedCell.trim()}</${tag}>`;
+            } catch (error) {
+              log(
+                "MARKDOWN",
+                3,
+                "postprocessMarkdownHtml",
+                "Failed to render table cell markdown",
+                { error },
+              );
+            }
+          }
+          return cellMatch;
+        },
+      )}</div>`,
+  );
+  return processed;
+}
+
 function md(src) {
   if (!src) return "";
 
   const { text, latex } = preprocessMarkdownSource(src);
   const renderer = ensureMarkdownRenderer();
   const rendered = renderer.render(text.trim());
-  let html = restoreLatexPlaceholders(rendered, latex);
-  html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
+  const htmlWithLatex = restoreLatexPlaceholders(rendered, latex);
+  return postprocessMarkdownHtml(htmlWithLatex);
+}
 
-  // Enhanced table cell processing
-  html = html.replace(/<div class="table-container">([\s\S]*?)<\/div>/g, function(match, tableContent) {
-    let processedTable = tableContent.replace(/<(td|th)>([\s\S]*?)<\/\1>/g, function(cellMatch, tag, cellContent) {
-      // Decode HTML entities first
-      const decodedContent = cellContent
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&nbsp;/g, ' ');
-
-      // Check if cell content contains list markers that need special processing
-      if (/^(\s*[-*+•]\s|\s*\d+\.\s)/m.test(decodedContent) || decodedContent.includes('<br>')) {
-        // Create a temporary markdown instance for cell processing
-        const cellMd = new MarkdownIt({
-          html: true,
-          breaks: true,
-          linkify: true,
-          typographer: false,
-        });
-        cellMd.enable(["strikethrough", "linkify", "list", "paragraph"]);
-        cellMd.disable(["table"]);
-
-        // Convert bullet points and line breaks to markdown format
-        let markdownContent = decodedContent
-          .replace(/•/g, '-')  // Convert all • to -
-          .replace(/<br\s*\/?>/gi, '\n')  // Convert <br> to newlines
-          .trim();
-
-        // Process the cell content with markdown-it that supports lists and paragraphs
-        const processedCell = cellMd.render(markdownContent);
-        return `<${tag}>${processedCell.trim()}</${tag}>`;
-      }
-      // For simple cells, return as-is
-      return cellMatch;
+function finalizeAndEnhanceMessage(container) {
+  if (!container) return;
+  try {
+    transformSourceFootnotes(container);
+  } catch (error) {
+    log("MARKDOWN", 3, "finalizeAndEnhanceMessage", "Failed to transform footnotes", {
+      error,
     });
-    return `<div class="table-container">${processedTable}</div>`;
-  });
-
-  const tempDiv = document.createElement("div");
-  tempDiv.innerHTML = html;
-
-  transformSourceFootnotes(tempDiv);
-  ensureBreakSeparatedLists(tempDiv);
-
-  if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
-  attachCodeBlockListeners(tempDiv);
-
-  setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
-
-  return tempDiv.innerHTML;
+  }
+  try {
+    ensureBreakSeparatedLists(container);
+  } catch (error) {
+    log("MARKDOWN", 3, "finalizeAndEnhanceMessage", "Failed to adjust break-separated lists", {
+      error,
+    });
+  }
+  try {
+    if (container.querySelector("pre code")) {
+      highlightAllUnder(container);
+    }
+  } catch (error) {
+    log("MARKDOWN", 3, "finalizeAndEnhanceMessage", "Failed to highlight code blocks", {
+      error,
+    });
+  }
+  renderMathInElement(container).catch((error) =>
+    log("MARKDOWN", 3, "finalizeAndEnhanceMessage", "MathJax render error", { error }),
+  );
+  setTimeout(() => {
+    try {
+      updateCodeBlocksWithArtifactInfo(container);
+    } catch (error) {
+      log(
+        "MARKDOWN",
+        3,
+        "finalizeAndEnhanceMessage",
+        "Failed to update artifact metadata",
+        { error },
+      );
+    }
+  }, 0);
 }
 
 async function updateCodeBlocksWithArtifactInfo(container = document) {
@@ -8524,6 +8626,10 @@ function addMessage(
     }
     
     node.innerHTML = `<div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
+    if (role === "ai" && final) {
+      const messageText = node.querySelector(".message-text");
+      finalizeAndEnhanceMessage(messageText);
+    }
     if (role === "ai" && !final) {
       node.style.opacity = "0";
       node.style.transform = "translateY(20px)";
@@ -8762,6 +8868,8 @@ function setCurrent(s) {
     `;
   }
 
+  ensureChatLogDelegation();
+
   if (current) {
     current._lazyState = null;
     const scroller = getChatScroller();
@@ -8786,8 +8894,7 @@ function setCurrent(s) {
         if (contentDiv) {
           if (stream.fullResponse && stream.fullResponse.trim() !== "") {
             contentDiv.innerHTML = md(stream.fullResponse);
-            if (contentDiv.querySelector("pre code"))
-              highlightAllUnder(contentDiv);
+            finalizeAndEnhanceMessage(contentDiv);
           } else {
             contentDiv.innerHTML = getThinkingMarkup();
             scheduleThinkingText(newNode);
@@ -9203,20 +9310,39 @@ function hydrateThinkingIfAny(aiNode, session, messageIndex) {
 }
 
 // Stream Handling
-function createStreamHandler(streamId, text, isFirstInteraction = false) {
+function createStreamHandler(
+  streamId,
+  text,
+  isFirstInteraction = false,
+  initialFullResponse = "",
+) {
   log("STREAM", 2, "createStreamHandler", "Stream handler created", {
     streamId,
     isFirstInteraction,
   });
-  let fullResponse = "";
+  let fullResponse = initialFullResponse || "";
   let sawEnd = false;
   let seenMeaningfulToken = false;
   let finalized = false;
+
+  const worker = ensureMarkdownWorker();
+  const useWorker = !!worker;
+  let workerListener = null;
+  let latestWorkerHtml = "";
+  let targetDiv = null;
 
   const END_RX = /<!--\s*\[\/END\]\s*-->[\s]*$/;
   const trimEnd = (s) => s.replace(/\s*<!--\s*\[\/END\]\s*-->\s*$/, "");
 
   const getState = () => streamManager.activeStreams?.[streamId] || null;
+
+  const resolveTargetDiv = () => {
+    if (targetDiv && document.contains(targetDiv)) return targetDiv;
+    const state = getState();
+    const candidate = state?.aiNode?.querySelector(".message-text");
+    if (candidate) targetDiv = candidate;
+    return targetDiv;
+  };
 
   const cleanupStream = () => {
     const st = streamManager.activeStreams?.[streamId];
@@ -9229,6 +9355,57 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     }
     updateInputState?.();
   };
+
+  const handleWorkerMessage = (event) => {
+    const data = event.data;
+    if (!data || data.streamId !== streamId) return;
+    if (data.type !== "update" && data.type !== "final") return;
+
+    const div = resolveTargetDiv();
+    if (!div) return;
+
+    latestWorkerHtml = data.html || "";
+    const prevHeight = div.scrollHeight;
+
+    if (data.type === "final" && div.querySelector(".thinking-wrap")) {
+      const finalDiv = document.createElement("div");
+      finalDiv.className = "final-ai-response";
+      finalDiv.innerHTML = latestWorkerHtml;
+      div.appendChild(finalDiv);
+      finalizeAndEnhanceMessage(div);
+    } else {
+      div.innerHTML = latestWorkerHtml;
+      if (data.type === "update" && div.scrollHeight > prevHeight) {
+        debouncedScrollToBottom();
+      }
+      if (data.type === "final") {
+        finalizeAndEnhanceMessage(div);
+      }
+    }
+
+    if (data.type === "final") {
+      if (workerListener) {
+        worker.removeEventListener("message", workerListener);
+        markdownWorkerListeners.delete(streamId);
+        workerListener = null;
+      }
+    }
+  };
+
+  if (useWorker) {
+    workerListener = handleWorkerMessage;
+    worker.addEventListener("message", workerListener);
+    markdownWorkerListeners.set(streamId, workerListener);
+    try {
+      worker.postMessage({
+        type: "init",
+        streamId,
+        payload: initialFullResponse || "",
+      });
+    } catch (error) {
+      console.warn("Failed to post init message to markdown worker", error);
+    }
+  }
 
   const showThinking = () => {
     const s = getState();
@@ -9348,6 +9525,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         messageIndex,
         false,
         msgs,
+        seedText,
       );
       updateInputState?.();
     });
@@ -9401,6 +9579,23 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         : formattedError;
     }
 
+    const cachedDiv = resolveTargetDiv() || aiNode?.querySelector?.(".message-text");
+    if (cachedDiv) {
+      targetDiv = cachedDiv;
+    }
+
+    if (useWorker) {
+      try {
+        worker.postMessage({
+          type: "end",
+          streamId,
+          payload: finalMessageToSave || "",
+        });
+      } catch (error) {
+        console.warn("Failed to send end message to markdown worker", error);
+      }
+    }
+
     if (finalMessageToSave || interrupted) {
       // Check for pending web search data and apply it to modelInfo
       const pendingPageCount = getAndClearPendingWebSearchData(session.id);
@@ -9440,23 +9635,29 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
     if (aiNode && document.contains(aiNode)) {
       hideLoader();
-      const div = aiNode.querySelector(".message-text");
-      if (div) {
+      const div = resolveTargetDiv() || aiNode.querySelector(".message-text");
+      if (div && !useWorker) {
         const thinkingContainer = div.querySelector('.thinking-wrap');
-        const thinkingText = session._x_think && session._x_think[messageIndex] ? session._x_think[messageIndex].text : '';
+        const thinkingText =
+          session._x_think && session._x_think[messageIndex]
+            ? session._x_think[messageIndex].text
+            : '';
+        let shouldEnhance = false;
         if (thinkingContainer && finalMessageToSave && finalMessageToSave.trim() === thinkingText.trim()) {
           // Don't append duplicate thinking content
         } else if (thinkingContainer && finalMessageToSave) {
-          // Append final content after thinking
           const finalDiv = document.createElement('div');
           finalDiv.className = 'final-ai-response';
           finalDiv.innerHTML = md(finalMessageToSave);
           div.appendChild(finalDiv);
+          shouldEnhance = true;
         } else if (!thinkingContainer) {
           div.innerHTML = md(finalMessageToSave || "");
+          shouldEnhance = true;
         }
-        if (div.querySelector("pre code")) highlightAllUnder(div);
-        renderMathInElement(div);
+        if (shouldEnhance) {
+          finalizeAndEnhanceMessage(div);
+        }
       }
 
       clearContinuePlaceholder(aiNode);
@@ -9572,34 +9773,53 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     }
 
     if (s.aiNode && document.contains(s.aiNode)) {
-      const div = s.aiNode.querySelector(".message-text");
-      if (div && !div.__seededOnce && s.session.messages[s.messageIndex]?.[1]) {
-        const seed = s.session.messages[s.messageIndex][1];
-        if (seed) {
+      const div = resolveTargetDiv();
+      const seed = s.session.messages[s.messageIndex]?.[1];
+      if (div && !div.__seededOnce && seed) {
+        if (!useWorker) {
           div.innerHTML = md(seed);
-          div.__seededOnce = true;
-          fullResponse = seed;
+          finalizeAndEnhanceMessage(div);
+        } else {
+          latestWorkerHtml = "";
+          try {
+            worker.postMessage({
+              type: "init",
+              streamId,
+              payload: seed,
+            });
+          } catch (error) {
+            console.warn("Failed to seed markdown worker", error);
+          }
         }
+        div.__seededOnce = true;
+        fullResponse = seed;
       }
     }
 
-    fullResponse += String(token);
+    const tokenText = String(token);
+    fullResponse += tokenText;
     const gotEnd = END_RX.test(fullResponse);
     if (gotEnd) sawEnd = true;
 
-    if (s.aiNode && document.contains(s.aiNode)) {
-      const div = s.aiNode.querySelector(".message-text");
+    const display = trimEnd(fullResponse);
+
+    if (useWorker) {
+      try {
+        worker.postMessage({
+          type: "token",
+          streamId,
+          payload: tokenText,
+        });
+      } catch (error) {
+        console.warn("Failed to send token to markdown worker", error);
+      }
+    } else if (s.aiNode && document.contains(s.aiNode)) {
+      const div = resolveTargetDiv();
       if (div) {
         const prevHeight = div.scrollHeight;
-        const display = trimEnd(fullResponse);
         div.innerHTML = md(display);
-        if (div.querySelector("pre code")) highlightAllUnder(div);
-        renderMathInElement(div);
-
-        // Check if content actually changed/grew
         const newHeight = div.scrollHeight;
         if (newHeight > prevHeight) {
-          // Content grew - trigger smart scroll
           debouncedScrollToBottom();
         }
       }
@@ -11261,17 +11481,6 @@ function setupEventListeners() {
     }
   });
 
-  const chatArea = $(".chat-area");
-  if (chatArea) {
-    chatArea.addEventListener("click", (event) => {
-      const saveButton = event.target.closest(".save-code-btn");
-      if (saveButton) {
-        // console.log("DEBUG: Save button click handled by persistent delegation."); // Removed console.log
-        handleSaveButtonClick(event);
-      }
-    });
-  }
-
   ["welcome", "chat", "project"].forEach((screen) => {
     const searchBtn = $(`#btn-web-search-${screen}`);
     if (searchBtn)
@@ -12056,7 +12265,7 @@ function setupEventListeners() {
           partial ||
             "*[System] Model not available or system error, try checking the connection or changing the AI model.*",
         );
-        if (div.querySelector("pre code")) highlightAllUnder(div);
+        finalizeAndEnhanceMessage(div);
       }
 
       let footer = aiNode.querySelector(".message-footer");
@@ -12127,33 +12336,6 @@ function setupEventListeners() {
   });
 
   document.addEventListener("click", (event) => {
-    const copyBtn = event.target.closest(".copy-code-btn");
-
-    if (copyBtn) {
-      const block = copyBtn.closest(".code-block-container");
-      const codeEl = block?.querySelector("pre code");
-      const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
-      const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
-      if (!codeEl) return;
-      navigator.clipboard
-        .writeText(codeEl.textContent)
-        .then(() => {
-          copyBtn.innerHTML = `${checkIconSVG}`;
-          copyBtn.classList.add("copied");
-          setTimeout(() => {
-            copyBtn.innerHTML = `${copyIconSVG}`;
-            copyBtn.classList.remove("copied");
-          }, 2000);
-        })
-        .catch((err) => {
-          log("UI", 4, "copy-code-btn:click", "Failed to copy code block", {
-            error: err,
-          });
-          const span = copyBtn.querySelector("span");
-          if (span) span.textContent = "Failed!";
-        });
-    }
-
     if (!$("#settings-container").contains(event.target)) {
       $("#settings-menu").classList.add("hidden");
     }
@@ -12180,6 +12362,7 @@ function initializeApp() {
   log("APP", 2, "initializeApp", "Initializing application.");
 
   initializeSmartScroll();
+  ensureChatLogDelegation();
 
   if (window.api) {
     window.api.on("chat-update", (payload) => {

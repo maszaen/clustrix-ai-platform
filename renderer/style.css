@@ -716,7 +716,7 @@ hr {
   color: var(--fg-muted);
   border: none;
   padding: 0 var(--spacing-md) 0 9px;
-  border-radius: var(--radius-full);
+  border-radius: 50px;
   cursor: pointer;
   transition: var(--transition-fast);
   display: flex;
@@ -728,13 +728,17 @@ hr {
   height: 30px;
   position: relative;
   opacity: 1;
-  transition: all 0.3s ease !important  ;
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-radius 1s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .icon-btn2 span {
   padding-top: 0px;
   position: absolute;
   left: 42px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: calc(100% - 42px);
 }
 
 .icon-btn2:hover {
@@ -855,6 +859,18 @@ hr {
   transition: all 0.2s ease;
   /* scrollbar-width: thin;
   scrollbar-color: var(--border-input) transparent; */
+}
+
+.sessions-container::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 55px;
+  width: 8px;
+  height: 50%;
+  z-index: 70;
+  background: linear-gradient(to top, var(--bg-secondary), transparent);
+  pointer-events: none;
 }
 
 #session-list {
@@ -3719,6 +3735,11 @@ blockquote blockquote blockquote blockquote::before {
 #app.sidebar-collapsed #session-list li .menu,
 #app.sidebar-collapsed #settings-menu {
   display: none;
+}
+
+#app.sidebar-collapsed .icon-btn2 {
+  padding: 20px var(--spacing-md) 20px 9px !important;
+  border-radius: 10px;
 }
 
 #app.sidebar-collapsed .primary-btn,

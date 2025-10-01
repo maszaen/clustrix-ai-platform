@@ -96,10 +96,10 @@ function getFileIcon(nameOrExt) {
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 const THINKING_TIMER = new WeakMap();
-const SESSIONS_PER_PAGE = 30;
+const SESSIONS_PER_PAGE = 70;
 const DEBUG_MODE = typeof window.api === "undefined";
-const DEBUG_MARKDOWN = true;
-const LOGGING = true;
+const DEBUG_MARKDOWN = false;
+const LOGGING = false;
 
 const MARKDOWN_TEST_SESSION_TYPE = "markdown-test";
 const MARKDOWN_TEST_TITLE = "Markdown Test Session";
@@ -10340,7 +10340,7 @@ function handleSidebarToggle() {
           const span = btn.querySelector("span");
           span.style.opacity = "1";
         });
-      }, 250);
+      }, 0);
       document.querySelectorAll(".disappearing").forEach((btn) => {
         const span = btn.querySelector("span");
         span.style.display = "flex";
@@ -10358,7 +10358,7 @@ function handleSidebarToggle() {
       });
       setTimeout(() => {
         logo.style.display = "none";
-      }, 180);
+      }, 0);
       toggleBtn.innerHTML = openedBtn;
     }
     $("#app").classList.toggle("sidebar-collapsed", collapsed);

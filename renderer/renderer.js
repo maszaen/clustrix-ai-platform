@@ -99,7 +99,7 @@ const THINKING_TIMER = new WeakMap();
 const SESSIONS_PER_PAGE = 70;
 const DEBUG_MODE = typeof window.api === "undefined";
 const DEBUG_MARKDOWN = false;
-const LOGGING = false;
+const LOGGING = true;
 
 const MARKDOWN_TEST_SESSION_TYPE = "markdown-test";
 const MARKDOWN_TEST_TITLE = "Markdown Test Session";
@@ -10285,6 +10285,75 @@ function closeMobileSidebar() {
   sidebar._backdrop = null;
 }
 
+function setupTextareaCentralResize() {
+  const msgCentral = $("#msg-central");
+  msgCentral.addEventListener("input", function () {
+    // console.log("DEBUG: Input event on msg-central, current session:", current?.id, "value length:", this.value.length); // Removed console.log
+    if (current && current.id && !justSentMessage) {
+      saveDraftDebounced(current.id, this.value);
+    } else if (!current) {
+      // Always save draft for welcome screen, even if empty (to clear it)
+      saveDraftDebounced("welcome-screen", this.value);
+    }
+
+    const shell = this.closest(".ta-shell");
+    if (shell && shell.__taScroll) {
+      return;
+    }
+
+    this.style.height = "auto";
+    this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
+  });
+}
+
+function setupMobileSidebar() {
+  const toggleBtn = $("#toggle-sidebar");
+  const newBtn = toggleBtn.cloneNode(true);
+  toggleBtn.parentNode.replaceChild(newBtn, toggleBtn);
+  newBtn.addEventListener("click", handleSidebarToggle);
+  const toggleBtn2 = $("#toggle-sidebar-2");
+  const newBtn2 = toggleBtn2.cloneNode(true);
+  toggleBtn2.parentNode.replaceChild(newBtn2, toggleBtn2);
+  newBtn2.addEventListener("click", handleSidebarToggle);
+}
+
+function setupTextareaResize() {
+  const msgInput = $("#msg");
+  msgInput.addEventListener("input", function () {
+    if (current && current.id && !justSentMessage) {
+      saveDraftDebounced(current.id, this.value);
+    }
+
+    const shell = this.closest(".ta-shell");
+    if (shell && shell.__taScroll) {
+      return;
+    }
+
+    this.style.height = "auto";
+    this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
+  });
+}
+
+function setupTextareaProjectResize() {
+  const projectInput = $("#project-message-input");
+  if (projectInput) {
+    projectInput.addEventListener("input", function () {
+      // Save draft for current project session
+      if (currentProject && currentProject.id) {
+        saveDraftDebounced(`project-${currentProject.id}`, this.value);
+      }
+
+      const shell = this.closest(".ta-shell");
+      if (shell && shell.__taScroll) {
+        return;
+      }
+
+      this.style.height = "auto";
+      this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
+    });
+  }
+}
+
 function handleSidebarToggle() {
   const toggleBtn = $("#toggle-sidebar");
   const openedBtn = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 group-hover:scale-80 transition scale-100 text-text-300" aria-hidden="true"><path d="M16.5 4C17.3284 4 18 4.67157 18 5.5V14.5C18 15.3284 17.3284 16 16.5 16H3.5C2.67157 16 2 15.3284 2 14.5V5.5C2 4.67157 2.67157 4 3.5 4H16.5ZM7 15H16.5C16.7761 15 17 14.7761 17 14.5V5.5C17 5.22386 16.7761 5 16.5 5H7V15ZM3.5 5C3.22386 5 3 5.22386 3 5.5V14.5C3 14.7761 3.22386 15 3.5 15H6V5H3.5Z"></path></svg>`;
@@ -10365,86 +10434,84 @@ function handleSidebarToggle() {
   }
 }
 
-function setupMobileSidebar() {
-  const toggleBtn = $("#toggle-sidebar");
-  const newBtn = toggleBtn.cloneNode(true);
-  toggleBtn.parentNode.replaceChild(newBtn, toggleBtn);
-  newBtn.addEventListener("click", handleSidebarToggle);
-  const toggleBtn2 = $("#toggle-sidebar-2");
-  const newBtn2 = toggleBtn2.cloneNode(true);
-  toggleBtn2.parentNode.replaceChild(newBtn2, toggleBtn2);
-  newBtn2.addEventListener("click", handleSidebarToggle);
-}
-
-function setupTextareaResize() {
-  const msgInput = $("#msg");
-  msgInput.addEventListener("input", function () {
-    if (current && current.id && !justSentMessage) {
-      saveDraftDebounced(current.id, this.value);
-    }
-
-    const shell = this.closest(".ta-shell");
-    if (shell && shell.__taScroll) {
-      return;
-    }
-
-    this.style.height = "auto";
-    this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
-  });
-}
-
-function setupTextareaCentralResize() {
-  const msgCentral = $("#msg-central");
-  msgCentral.addEventListener("input", function () {
-    // console.log("DEBUG: Input event on msg-central, current session:", current?.id, "value length:", this.value.length); // Removed console.log
-    if (current && current.id && !justSentMessage) {
-      saveDraftDebounced(current.id, this.value);
-    } else if (!current) {
-      // Always save draft for welcome screen, even if empty (to clear it)
-      saveDraftDebounced("welcome-screen", this.value);
-    }
-
-    const shell = this.closest(".ta-shell");
-    if (shell && shell.__taScroll) {
-      return;
-    }
-
-    this.style.height = "auto";
-    this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
-  });
-}
-
-function setupTextareaProjectResize() {
-  const projectInput = $("#project-message-input");
-  if (projectInput) {
-    projectInput.addEventListener("input", function () {
-      // Save draft for current project session
-      if (currentProject && currentProject.id) {
-        saveDraftDebounced(`project-${currentProject.id}`, this.value);
-      }
-
-      const shell = this.closest(".ta-shell");
-      if (shell && shell.__taScroll) {
-        return;
-      }
-
-      this.style.height = "auto";
-      this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
-    });
-  }
-}
-
 function setupResponsiveHandlers() {
   let isMobile = window.innerWidth <= 768;
+  let desktopCollapsedState = collapsed; // Track desktop sidebar state
+  
   window.addEventListener("resize", () => {
     const stillMobile = window.innerWidth <= 768;
+    
     if (isMobile !== stillMobile) {
       isMobile = stillMobile;
-      $("#app").classList.remove("sidebar-collapsed");
-      $("#sidebar").classList.remove("open");
-
-      // Close mobile sidebar when switching between mobile/desktop
-      closeMobileSidebar();
+      const sidebar = $("#sidebar");
+      const toggleBtn = $("#toggle-sidebar");
+      const logo = $("#little-icon");
+      
+      if (!stillMobile) {
+        // Switching to DESKTOP - restore previous desktop state
+        log("UI", 2, "setupResponsiveHandlers", "Switch to desktop size");
+        
+        // Close mobile sidebar properly
+        closeMobileSidebar();
+        
+        // Restore desktop sidebar state
+        collapsed = desktopCollapsedState;
+        $("#app").classList.toggle("sidebar-collapsed", collapsed);
+        
+        const openedBtn = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 group-hover:scale-80 transition scale-100 text-text-300" aria-hidden="true"><path d="M16.5 4C17.3284 4 18 4.67157 18 5.5V14.5C18 15.3284 17.3284 16 16.5 16H3.5C2.67157 16 2 15.3284 2 14.5V5.5C2 4.67157 2.67157 4 3.5 4H16.5ZM7 15H16.5C16.7761 15 17 14.7761 17 14.5V5.5C17 5.22386 16.7761 5 16.5 5H7V15ZM3.5 5C3.22386 5 3 5.22386 3 5.5V14.5C3 14.7761 3.22386 15 3.5 15H6V5H3.5Z"></path></svg>`;
+        const closedBtn = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 !opacity-100 !scale-100 opacity-0 scale-75 absolute inset-0 group-hover:scale-100 group-hover:opacity-100 transition-all text-text-200" aria-hidden="true"><path d="M3.5 3C3.77614 3 4 3.22386 4 3.5V16.5L3.99023 16.6006C3.94371 16.8286 3.74171 17 3.5 17C3.25829 17 3.05629 16.8286 3.00977 16.6006L3 16.5V3.5C3 3.22386 3.22386 3 3.5 3ZM11.2471 5.06836C11.4476 4.95058 11.7104 4.98547 11.8721 5.16504C12.0338 5.34471 12.0407 5.60979 11.9023 5.79688L11.835 5.87207L7.80371 9.5H16.5C16.7761 9.5 17 9.72386 17 10C17 10.2761 16.7761 10.5 16.5 10.5H7.80371L11.835 14.1279C12.0402 14.3127 12.0568 14.6297 11.8721 14.835C11.6873 15.0402 11.3703 15.0568 11.165 14.8721L6.16504 10.3721L6.09473 10.2939C6.03333 10.2093 6 10.1063 6 10C6 9.85828 6.05972 9.72275 6.16504 9.62793L11.165 5.12793L11.2471 5.06836Z"></path></svg>`;
+        
+        if (collapsed) {
+          // Was collapsed before mobile
+          logo.style.display = "none";
+          logo.style.opacity = "0";
+          document.querySelectorAll(".disappearing").forEach((btn) => {
+            const span = btn.querySelector("span");
+            span.style.display = "none";
+            span.style.opacity = "0";
+          });
+          toggleBtn.innerHTML = openedBtn;
+        } else {
+          // Was expanded before mobile
+          logo.style.display = "flex";
+          setTimeout(() => {
+            logo.style.opacity = "1";
+          }, 0);
+          document.querySelectorAll(".disappearing").forEach((btn) => {
+            const span = btn.querySelector("span");
+            span.style.display = "flex";
+            setTimeout(() => {
+              span.style.opacity = "1";
+            }, 0);
+          });
+          toggleBtn.innerHTML = closedBtn;
+        }
+        
+      } else {
+        // Switching to MOBILE - save current desktop state
+        desktopCollapsedState = collapsed; // Save before switching
+        log("UI", 2, "setupResponsiveHandlers", "Switch to mobile size");
+        
+        // Make sure mobile sidebar starts closed
+        sidebar.classList.remove("open", "content-visible");
+        $("#app").classList.remove("sidebar-collapsed");
+        
+        // Reset all elements to visible for mobile (in case desktop was collapsed)
+        logo.style.display = "flex";
+        logo.style.opacity = "1";
+        
+        document.querySelectorAll(".disappearing").forEach((btn) => {
+          const span = btn.querySelector("span");
+          span.style.display = "flex";
+          span.style.opacity = "1";
+        });
+        
+        // Remove any existing backdrop
+        const backdrop = document.getElementById("mobile-sidebar-backdrop");
+        if (backdrop) {
+          backdrop.classList.remove("active");
+        }
+      }
     }
   });
 }

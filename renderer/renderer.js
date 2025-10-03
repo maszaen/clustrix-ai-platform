@@ -1432,11 +1432,26 @@ function ensureThinkingUI(aiNode) {
   wrap.appendChild(toggle);
   wrap.appendChild(body);
 
+  // Add user scroll detection for thinking body
+  let thinkingUserScrolled = false;
+  body.addEventListener('scroll', () => {
+    if (!body.classList.contains('expanded')) return;
+    
+    const isAtBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 10;
+    if (!isAtBottom) {
+      thinkingUserScrolled = true;
+      console.log('🤔 User scrolled up in thinking body');
+    } else if (thinkingUserScrolled) {
+      thinkingUserScrolled = false;
+      console.log('🤔 User scrolled back to bottom in thinking body');
+    }
+  });
+
   const content = aiNode.querySelector(".message-content") || aiNode;
   content.prepend(wrap);
 
   const toggleContent = toggle.querySelector(".thinking-toggle-content");
-  aiNode._thinkingEl = { wrap, toggle, body, text, toggleContent };
+  aiNode._thinkingEl = { wrap, toggle, body, text, toggleContent, userScrolled: () => thinkingUserScrolled };
 }
 
 // Anda bisa menyederhanakan fungsi ini
@@ -1445,11 +1460,13 @@ async function appendThinking(aiNode, chunk, session, messageIndex) {
   
   ensureThinkingUI(aiNode);
   
-  await updateThinkingUI(aiNode, chunk, session, messageIndex);
-
+  // Update session data first
   session._x_think = session._x_think || {};
   const prev = String(session._x_think[messageIndex] || "");
-  session._x_think[messageIndex] = prev + chunk; 
+  session._x_think[messageIndex] = prev + chunk;
+  
+  // Then update UI with the complete data
+  await updateThinkingUI(aiNode, chunk, session, messageIndex);
   
   saveThinkingDebounced();
 }
@@ -1463,11 +1480,63 @@ function cleanLeadingWhitespace(text) {
   );
 }
 
+// Autoscroll function specifically for thinking-body during streaming
+function scrollThinkingToBottom(thinkingElement) {
+  if (!thinkingElement) return;
+  
+  const thinkingBody = thinkingElement.body;
+  if (!thinkingBody) return;
+  
+  // Only autoscroll if thinking body is expanded
+  if (!thinkingBody.classList.contains('expanded')) return;
+  
+  // Multiple attempts to ensure scroll works during streaming
+  const attemptScroll = () => {
+    const scrollContainer = thinkingBody;
+    const scrollTop = scrollContainer.scrollTop;
+    const clientHeight = scrollContainer.clientHeight;
+    const scrollHeight = scrollContainer.scrollHeight;
+    
+    console.log('🤔 Thinking scroll attempt:', {
+      scrollTop,
+      clientHeight, 
+      scrollHeight,
+      needsScroll: scrollHeight > clientHeight,
+      maxHeight: scrollContainer.style.maxHeight || 'CSS max-height'
+    });
+    
+    const needsScroll = scrollHeight > clientHeight;
+    const userHasScrolledUp = thinkingElement.userScrolled && thinkingElement.userScrolled();
+    
+    // Simple: always scroll to bottom if content overflows and user hasn't manually scrolled up
+    if (needsScroll && !userHasScrolledUp) {
+      console.log('🤔 Forcing scroll to bottom');
+      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      
+      // Verify the scroll worked
+      setTimeout(() => {
+        const newScrollTop = scrollContainer.scrollTop;
+        console.log('🤔 Scroll verification:', {
+          intended: scrollContainer.scrollHeight,
+          actual: newScrollTop,
+          success: newScrollTop > scrollTop
+        });
+      }, 10);
+    }
+  };
+  
+  // Try immediately and after a short delay
+  attemptScroll();
+  setTimeout(attemptScroll, 50);
+  setTimeout(attemptScroll, 100);
+}
+
 async function updateThinkingUI(aiNode, content, session, messageIndex) {
   const el = aiNode._thinkingEl;
   if (!el) return;
 
   if (!el.body.classList.contains('expanded')) {
+    console.log('🤔 Expanding thinking body');
     el.body.classList.add('expanded');
     el.toggle.setAttribute('aria-expanded', 'true');
   }
@@ -1479,15 +1548,25 @@ async function updateThinkingUI(aiNode, content, session, messageIndex) {
     // Use custom formatter for thinking text (no action buttons)
     if (window.mdThinking) {
       el.text.innerHTML = window.mdThinking(thinkText);
+      // Auto-scroll after sync rendering with multiple timing attempts
+      scrollThinkingToBottom(el);
     } else {
-      el.text.innerHTML = await customMarkdownFormat(thinkText);
+      const formattedHtml = await customMarkdownFormat(thinkText);
+      el.text.innerHTML = formattedHtml;
+      // Auto-scroll after async rendering with multiple timing attempts
+      scrollThinkingToBottom(el);
     }
   } else {
     // Fallback for when session data isn't available yet
     if (window.mdThinking) {
       el.text.innerHTML = window.mdThinking(content);
+      // Auto-scroll after sync rendering with multiple timing attempts
+      scrollThinkingToBottom(el);
     } else {
-      el.text.innerHTML = await customMarkdownFormat(content);
+      const formattedHtml = await customMarkdownFormat(content);
+      el.text.innerHTML = formattedHtml;
+      // Auto-scroll after async rendering with multiple timing attempts
+      scrollThinkingToBottom(el);
     }
   }
   
@@ -7078,15 +7157,23 @@ function initializeSmartScroll() {
       const scrollingUp = e.deltaY < 0;
 
       if (scrollingUp && !isUserScrolledUp) {
-        isUserScrolledUp = true;
-        autoScrollEnabled = false;
+        // Only disable autoscroll if user scrolls up significantly (not just small movements)
+        const currentScroll = scroller.scrollTop;
+        const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+        const scrollPercent = currentScroll / maxScroll;
+        
+        // Only disable if user scrolls more than 5% up from bottom
+        if (scrollPercent < 0.95) {
+          isUserScrolledUp = true;
+          autoScrollEnabled = false;
 
-        scrollDetectionCooldown = true;
-        clearTimeout(cooldownTimeout);
-        cooldownTimeout = setTimeout(() => {
-          scrollDetectionCooldown = false;
-
-        }, 2000);
+          scrollDetectionCooldown = true;
+          clearTimeout(cooldownTimeout);
+          // Reduced cooldown from 2000ms to 1000ms for better responsiveness
+          cooldownTimeout = setTimeout(() => {
+            scrollDetectionCooldown = false;
+          }, 1000);
+        }
       }
     },
     { passive: true },
@@ -7130,12 +7217,14 @@ function  scrollToBottom({ force = false, fromAI = false } = {}) {
   }
 
   if (fromAI && !force) {
-    const nearBottomForAI = isNearBottom(scroller, 180);
+    // More permissive threshold for AI streaming - 300px instead of 180px
+    const nearBottomForAI = isNearBottom(scroller, 300);
     if (!autoScrollEnabled && isUserScrolledUp && !nearBottomForAI) {
       // console.log('🤖 AI scroll blocked - user scrolled up'); // Removed console.log
       return;
     }
 
+    // Auto-enable scroll if user is reasonably near bottom during AI streaming
     if (nearBottomForAI && isUserScrolledUp) {
       autoScrollEnabled = true;
       isUserScrolledUp = false;
@@ -7144,7 +7233,11 @@ function  scrollToBottom({ force = false, fromAI = false } = {}) {
   }
 
   const shouldScroll =
-    force || isNearBottom(scroller, 120) || (fromAI && autoScrollEnabled);
+    force || 
+    isNearBottom(scroller, 120) || 
+    (fromAI && autoScrollEnabled) ||
+    (fromAI && isNearBottom(scroller, 200)); // Extra condition for AI streaming
+    
   if (shouldScroll) {
     // Simple, direct scroll - no complex animations that cause conflicts
     scroller.scrollTop = scroller.scrollHeight;
@@ -8363,10 +8456,18 @@ function renderHistory() {
 
 function hydrateInteractiveElements() {
   // Re-setup interactive elements that need event listeners
-  const expandBtns = document.querySelectorAll('.message-expand-btn:not([data-setup-complete])');
+  
+  // Handle message expand/collapse buttons for user messages
+  const expandBtns = document.querySelectorAll('.message-expand-btn');
   expandBtns.forEach(btn => {
     const messageNode = btn.closest('.message');
     if (messageNode) {
+      // Reset setup state to force re-hydration
+      btn.removeAttribute('data-setup-complete');
+      // Remove existing event listeners by cloning
+      const newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
+      // Re-setup with fresh listeners
       setTimeout(() => setupUserMessageExpandCollapse(messageNode), 0);
     }
   });
@@ -10556,11 +10657,21 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
             div.innerHTML = html;
             if (div.querySelector("pre code")) highlightAllUnder(div);
             renderMathInElement(div);
+            
+            // Ensure autoscroll happens after content is fully rendered
+            requestAnimationFrame(() => {
+              scrollToBottom({ fromAI: true });
+            });
           }).catch(err => {
             console.warn('Markdown rendering error:', err);
             div.innerHTML = mdFallback(display);
             if (div.querySelector("pre code")) highlightAllUnder(div);
             renderMathInElement(div);
+            
+            // Ensure autoscroll happens after fallback content is rendered
+            requestAnimationFrame(() => {
+              scrollToBottom({ fromAI: true });
+            });
           });
         };
         
@@ -10575,12 +10686,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           renderTimeout = setTimeout(performSmartRender, 10);
         }
 
-        // Check if content actually changed/grew
-        const newHeight = div.scrollHeight;
-        if (newHeight > prevHeight) {
-          // Content grew - trigger smart scroll
-          debouncedScrollToBottom();
-        }
+        // Height checking moved inside the rendering promise to avoid race conditions
+        // The autoscroll is now handled directly in the .then() callback above
       }
     }
 

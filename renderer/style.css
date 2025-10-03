@@ -393,6 +393,11 @@ pre code *::selection {
   color: var(--primary) !important;
 }
 
+.message.user .message-text .user-text-content::selection {
+  background: var(--bg) !important;
+  color: var(--fg) !important;
+}
+
 /* Base Styles */
 *::selection {
   background: var(--primary-light) !important;
@@ -5213,6 +5218,27 @@ a:focus-visible {
   pointer-events: none;
 }
 
+/* Custom scrollbar for thinking-body */
+.message.ai .thinking-body.expanded::-webkit-scrollbar {
+  width: 6px;
+}
+
+.message.ai .thinking-body.expanded::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 3px;
+}
+
+.message.ai .thinking-body.expanded::-webkit-scrollbar-thumb {
+  background: var(--fg-muted);
+  border-radius: 3px;
+  opacity: 0.6;
+}
+
+.message.ai .thinking-body.expanded::-webkit-scrollbar-thumb:hover {
+  background: var(--fg);
+  opacity: 0.8;
+}
+
 .message.ai .thinking-text {
   color: var(--fg-muted);
   font-size: 15px;
@@ -5435,7 +5461,50 @@ a:focus-visible {
   filter: none !important;
 }
 
+
+
 .thinking-text ul,
+.thinking-text ol {
+  margin: 0 0 12px 0;
+  list-style-position: outside;
+}
+
+.thinking-text li {
+  margin-bottom: var(--spacing-sm);
+  line-height: 1.6;
+}
+
+.thinking-text ul {
+  padding-left: 33px;
+}
+
+.thinking-text ul li,
+.thinking-text ol li {
+  padding-left: 0.6em;
+  margin-bottom: 0;
+  line-height: 1.8;
+}
+
+.thinking-text ol {
+  padding-left: 32px; 
+}
+
+
+.thinking-text li:last-child {
+  margin-bottom: 0;
+}
+
+.thinking-text ul ul,
+.thinking-text ol ol,
+.thinking-text ul ol,
+.thinking-text ol ul {
+  margin-top: 0;
+}
+
+
+
+
+/* .thinking-text ul,
 .thinking-text ol {
   margin: 0 0 10px 0;
   list-style-position: outside;
@@ -5475,7 +5544,7 @@ a:focus-visible {
 .thinking-text ul ol,
 .thinking-text ol ul {
   margin-top: 0;
-}
+} */
 
 .thinking-text blockquote {
   border: none;

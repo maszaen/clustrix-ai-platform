@@ -1,4 +1,5 @@
-function enhancedMarkdownParse(src) {
+function enhancedMarkdownParse(src, options = {}) {
+  const isThinkingText = options.isThinkingText || false;
   let sanitizedSrc = src.trimStart();
   const boldListFixRegex = /^(\s*)\*\*(\d+\.|[*-])\s+(.*?)\*\*/gm;
   sanitizedSrc = sanitizedSrc.replace(boldListFixRegex, "$1$2 **$3**");
@@ -15,7 +16,11 @@ function enhancedMarkdownParse(src) {
     const placeholder = `\n__CODEBLOCK_${codeBlocks.length}__\n`;
     const codeContent = code.trim();
     const language = lang || "text";
-    const newStructure = `
+    
+    // Different structure for thinking-text (no action buttons)
+    const newStructure = isThinkingText ? 
+      `<div class="code-block-container thinking-code"><div class="code-block-header"><span class="language-name">${language}</span></div><pre><code class="language-${language}">${esc(codeContent)}</code></pre></div>` :
+      `
       <div class="code-block-container">
         <div class="code-block-header">
           <span class="language-name">${language}</span>
@@ -280,14 +285,26 @@ function parseInlineMarkdown(text) {
   return html;
 }
 
-function md(src) {
+function md(src, options = {}) {
   if (!src) return "";
   const cleanSrc = src.trim();
-  const html = enhancedMarkdownParse(cleanSrc);
+  const html = enhancedMarkdownParse(cleanSrc, options);
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = html;
   if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
   attachCodeBlockListeners(tempDiv);
   setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
+  return tempDiv.innerHTML;
+}
+
+// Wrapper for thinking-text formatting (no action buttons)
+function mdThinking(src) {
+  if (!src) return "";
+  const cleanSrc = src.trim();
+  const html = enhancedMarkdownParse(cleanSrc, { isThinkingText: true });
+  const tempDiv = document.createElement("div");
+  tempDiv.innerHTML = html;
+  if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
+  attachCodeBlockListeners(tempDiv);
   return tempDiv.innerHTML;
 }

@@ -24,6 +24,149 @@ let justSentMessage = false;
 let currentProject = null;
 let projectsData = [];
 
+// Smart Session Caching System
+const sessionCache = new Map();
+const MAX_CACHED_SESSIONS = 5;
+const CACHE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+
+// Hover State Preservation System for Streaming
+const hoverStates = new WeakMap();
+const activeHoverElements = new Set();
+
+class SessionCacheEntry {
+  constructor(sessionId, renderedHTML, scrollPosition = 0) {
+    this.sessionId = sessionId;
+    this.renderedHTML = renderedHTML;
+    this.scrollPosition = scrollPosition;
+    this.timestamp = Date.now();
+    this.accessCount = 1;
+    this.lastAccessed = Date.now();
+  }
+  
+  isExpired() {
+    return Date.now() - this.timestamp > CACHE_EXPIRY_MS;
+  }
+  
+  touch() {
+    this.lastAccessed = Date.now();
+    this.accessCount++;
+  }
+  
+  getAge() {
+    return Date.now() - this.timestamp;
+  }
+}
+
+function getCachedSession(sessionId) {
+  const entry = sessionCache.get(sessionId);
+  if (!entry || entry.isExpired()) {
+    sessionCache.delete(sessionId);
+    return null;
+  }
+  entry.touch();
+  log('CACHE', 1, 'getCachedSession', 'Cache hit', { 
+    sessionId, 
+    age: entry.getAge(),
+    accessCount: entry.accessCount 
+  });
+  return entry;
+}
+
+function cacheSession(sessionId, renderedHTML, scrollPosition = 0) {
+  // Clean up expired entries
+  for (const [id, entry] of sessionCache.entries()) {
+    if (entry.isExpired()) {
+      sessionCache.delete(id);
+    }
+  }
+  
+  // Implement LRU eviction if cache is full
+  if (sessionCache.size >= MAX_CACHED_SESSIONS) {
+    let oldestEntry = null;
+    let oldestTime = Date.now();
+    
+    for (const [id, entry] of sessionCache.entries()) {
+      if (entry.lastAccessed < oldestTime) {
+        oldestTime = entry.lastAccessed;
+        oldestEntry = id;
+      }
+    }
+    
+    if (oldestEntry) {
+      sessionCache.delete(oldestEntry);
+      log('CACHE', 1, 'cacheSession', 'Evicted LRU entry', { evictedId: oldestEntry });
+    }
+  }
+  
+  const cacheEntry = new SessionCacheEntry(sessionId, renderedHTML, scrollPosition);
+  sessionCache.set(sessionId, cacheEntry);
+  
+  log('CACHE', 1, 'cacheSession', 'Session cached', { 
+    sessionId, 
+    htmlLength: renderedHTML.length,
+    cacheSize: sessionCache.size 
+  });
+}
+
+function invalidateSessionCache(sessionId) {
+  const deleted = sessionCache.delete(sessionId);
+  if (deleted) {
+    log('CACHE', 1, 'invalidateSessionCache', 'Cache invalidated', { sessionId });
+  }
+}
+
+function clearSessionCache() {
+  const size = sessionCache.size;
+  sessionCache.clear();
+  log('CACHE', 1, 'clearSessionCache', 'All cache cleared', { clearedEntries: size });
+}
+
+// Intelligent cache preloading for frequently accessed sessions
+function preloadFrequentSessions() {
+  if (!state.sessions || state.sessions.length === 0) return;
+  
+  // Find most recently accessed sessions
+  const recentSessions = state.sessions
+    .filter(s => s.messages && s.messages.length > 0)
+    .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
+    .slice(0, 3); // Top 3 most recent
+  
+  recentSessions.forEach((session, index) => {
+    if (!sessionCache.has(session.id)) {
+      // Preload with slight delay to avoid blocking UI
+      setTimeout(() => {
+        log('CACHE', 1, 'preloadFrequentSessions', 'Background preloading session', { 
+          sessionId: session.id,
+          messageCount: session.messages.length 
+        });
+        // Could implement background rendering here if needed
+      }, index * 100);
+    }
+  });
+}
+
+// Cache statistics for debugging
+function getCacheStats() {
+  const stats = {
+    size: sessionCache.size,
+    maxSize: MAX_CACHED_SESSIONS,
+    entries: []
+  };
+  
+  for (const [id, entry] of sessionCache.entries()) {
+    stats.entries.push({
+      sessionId: id,
+      age: entry.getAge(),
+      accessCount: entry.accessCount,
+      htmlSize: entry.renderedHTML.length,
+      isExpired: entry.isExpired()
+    });
+  }
+  
+  stats.entries.sort((a, b) => b.accessCount - a.accessCount);
+  return stats;
+}
+
 // Utility functions
 function escapeHtml(text) {
   const div = document.createElement("div");
@@ -98,6 +241,47 @@ const $$ = (sel) => document.querySelectorAll(sel);
 const THINKING_TIMER = new WeakMap();
 const SESSIONS_PER_PAGE = 70;
 const DEBUG_MODE = typeof window.api === "undefined";
+
+// Markdown Worker Management
+let markdownWorker = null;
+let workerMessageId = 0;
+const workerPromises = new Map();
+
+function initMarkdownWorker() {
+  if (markdownWorker) return;
+  
+  try {
+    log('WORKER', 1, 'initMarkdownWorker', 'Initializing markdown worker...');
+    markdownWorker = new Worker('./markdown.worker.js');
+    
+    markdownWorker.onmessage = function(event) {
+      const { type, html, streamId, messageId } = event.data || {};
+      
+      if (messageId && workerPromises.has(messageId)) {
+        const { resolve } = workerPromises.get(messageId);
+        workerPromises.delete(messageId);
+        log('WORKER', 1, 'onmessage', 'Worker resolved message', { messageId, htmlLength: html?.length || 0 });
+        resolve(html || '');
+      }
+    };
+    
+    markdownWorker.onerror = function(error) {
+      log('WORKER', 3, 'onerror', 'Markdown worker error', { error: error.message });
+      // Clear worker to force fallback
+      markdownWorker = null;
+    };
+    
+    markdownWorker.onmessageerror = function(error) {
+      log('WORKER', 3, 'onmessageerror', 'Worker message error', { error: error.message });
+      markdownWorker = null;
+    };
+    
+    log('WORKER', 1, 'initMarkdownWorker', 'Markdown worker initialized successfully');
+  } catch (error) {
+    log('WORKER', 3, 'initMarkdownWorker', 'Failed to initialize markdown worker', { error: error.message });
+    markdownWorker = null;
+  }
+}
 const DEBUG_MARKDOWN = false;
 const LOGGING = true;
 
@@ -372,7 +556,8 @@ function streamMarkdownTestResponse(session, aiNode, aiMessageIndex, scenario) {
     const active = streamManager.activeStreams[streamId];
     if (!active) return;
 
-    appendThinking(aiNode, scenario.think, session, aiMessageIndex);
+    // Fire and forget for async thinking update
+    appendThinking(aiNode, scenario.think, session, aiMessageIndex).catch(console.error);
     const thinkDuration = Math.max(
       (Date.now() - (active.thinkStartTime || active.startedAt || Date.now())) / 1000,
       0.1,
@@ -1255,12 +1440,12 @@ function ensureThinkingUI(aiNode) {
 }
 
 // Anda bisa menyederhanakan fungsi ini
-function appendThinking(aiNode, chunk, session, messageIndex) {
+async function appendThinking(aiNode, chunk, session, messageIndex) {
   if (!chunk || !aiNode || !session || messageIndex == null) return;
   
   ensureThinkingUI(aiNode);
   
-  updateThinkingUI(aiNode, chunk, session, messageIndex);
+  await updateThinkingUI(aiNode, chunk, session, messageIndex);
 
   session._x_think = session._x_think || {};
   const prev = String(session._x_think[messageIndex] || "");
@@ -1278,7 +1463,7 @@ function cleanLeadingWhitespace(text) {
   );
 }
 
-function updateThinkingUI(aiNode, content, session, messageIndex) {
+async function updateThinkingUI(aiNode, content, session, messageIndex) {
   const el = aiNode._thinkingEl;
   if (!el) return;
 
@@ -1291,12 +1476,182 @@ function updateThinkingUI(aiNode, content, session, messageIndex) {
   if (session && session._x_think && session._x_think[messageIndex]) {
     const thinkData = session._x_think[messageIndex];
     const thinkText = (typeof thinkData === "object" ? thinkData.text : thinkData) || "";
-    el.text.innerHTML = renderWithExistingFormatter(thinkText);
+    // Use custom formatter for thinking text (no action buttons)
+    if (window.mdThinking) {
+      el.text.innerHTML = window.mdThinking(thinkText);
+    } else {
+      el.text.innerHTML = await customMarkdownFormat(thinkText);
+    }
   } else {
     // Fallback for when session data isn't available yet
-    const newContent = renderWithExistingFormatter(content);
-    el.text.innerHTML = newContent;
+    if (window.mdThinking) {
+      el.text.innerHTML = window.mdThinking(content);
+    } else {
+      el.text.innerHTML = await customMarkdownFormat(content);
+    }
   }
+  
+  // Debug thinking text content (remove this after fixing)
+  // debugThinkingTextContent(el.text);
+}
+
+async function customMarkdownFormat(raw) {
+  if (raw == null) return "";
+  const cleaned = cleanLeadingWhitespace(String(raw));
+  
+  // Use the enhanced custom formatter from local_modules/custom-formatter/md.js
+  if (typeof md === 'function') {
+    try {
+      const result = md(cleaned);
+      let finalResult;
+      
+      // Check if it's a Promise
+      if (result && typeof result.then === 'function') {
+        finalResult = await result;
+      } else {
+        finalResult = result;
+      }
+      
+      // Clean up invisible/selectable content for thinking-text
+      finalResult = cleanInvisibleContent(finalResult);
+      
+      return finalResult;
+    } catch (error) {
+      console.warn('Custom formatter error:', error);
+      return renderWithExistingFormatter(raw);
+    }
+  }
+  
+  // Fallback to basic formatting if custom formatter not available
+  return renderWithExistingFormatter(raw);
+}
+
+function cleanInvisibleContent(html) {
+  if (!html) return html;
+  
+  // First pass: clean the HTML string directly
+  let cleanedHtml = html
+    .replace(/[\u200B-\u200D\uFEFF]/g, '') // Remove zero-width spaces
+    .replace(/\u00A0/g, ' ') // Replace non-breaking spaces with regular spaces
+    .replace(/\s+(\r?\n|\r)\s*/g, '') // Remove whitespace around line breaks
+    .replace(/(\r?\n|\r)+/g, '\n') // Normalize line breaks
+    .trim();
+  
+  // Create a temporary div to process the HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = cleanedHtml;
+  
+  // Remove empty elements and whitespace-only text nodes
+  const walker = document.createTreeWalker(
+    tempDiv,
+    NodeFilter.SHOW_ALL,
+    {
+      acceptNode: function(node) {
+        // Remove empty elements (except br, hr, img)
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const tagName = node.tagName.toLowerCase();
+          if (!['br', 'hr', 'img', 'input'].includes(tagName) && 
+              !node.textContent.trim() && 
+              node.children.length === 0) {
+            return NodeFilter.FILTER_ACCEPT;
+          }
+        }
+        // Remove text nodes that are only whitespace
+        else if (node.nodeType === Node.TEXT_NODE) {
+          if (/^\s*$/.test(node.nodeValue)) {
+            return NodeFilter.FILTER_ACCEPT;
+          }
+        }
+        return NodeFilter.FILTER_REJECT;
+      }
+    }
+  );
+  
+  const nodesToRemove = [];
+  let node;
+  while (node = walker.nextNode()) {
+    nodesToRemove.push(node);
+  }
+  
+  // Remove the problematic nodes
+  nodesToRemove.forEach(node => {
+    if (node.parentNode) {
+      node.parentNode.removeChild(node);
+    }
+  });
+  
+  // Final cleanup: normalize the resulting HTML
+  let finalHtml = tempDiv.innerHTML
+    .replace(/>\s+</g, '><') // Remove whitespace between tags
+    .replace(/\s+/g, ' ') // Normalize multiple spaces
+    .trim();
+  
+  return finalHtml;
+}
+
+// Debug function to analyze thinking-text content
+function debugThinkingTextContent(element) {
+  if (!element) return;
+  
+  console.log('=== Thinking Text Debug ===');
+  console.log('HTML:', element.innerHTML);
+  console.log('Text Content:', JSON.stringify(element.textContent));
+  console.log('Child Nodes:', element.childNodes.length);
+  
+  element.childNodes.forEach((node, index) => {
+    console.log(`Node ${index}:`, {
+      type: node.nodeType,
+      nodeName: node.nodeName,
+      nodeValue: JSON.stringify(node.nodeValue),
+      textContent: JSON.stringify(node.textContent)
+    });
+  });
+  
+  // Check for invisible characters
+  const text = element.textContent || '';
+  const invisibleChars = text.match(/[\u200B-\u200D\uFEFF\u00A0]/g);
+  if (invisibleChars) {
+    console.log('Invisible characters found:', invisibleChars);
+  }
+}
+
+function renderThinkingText(raw) {
+  if (raw == null) return "";
+  const cleaned = cleanLeadingWhitespace(String(raw));
+  
+  // For thinking text, we want more natural line break handling
+  // Single line breaks become <br>, double line breaks become paragraph breaks
+  const escapeHtml = (str) => {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  };
+  
+  // Handle basic markdown formatting while preserving natural line breaks
+  let formatted = escapeHtml(cleaned);
+  
+  // Handle bold and italic
+  formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  
+  // Handle inline code
+  formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
+  
+  // Handle line breaks: single \n becomes <br>, double \n\n becomes paragraph break
+  formatted = formatted.replace(/\n\n+/g, '</p><p>');
+  formatted = formatted.replace(/\n/g, '<br>');
+  
+  // Wrap in paragraph tags
+  formatted = '<p>' + formatted + '</p>';
+  
+  // Clean up empty paragraphs
+  formatted = formatted.replace(/<p>\s*<\/p>/g, '');
+  formatted = formatted.replace(/<p><\/p>/g, '');
+  
+  return formatted;
 }
 
 function renderWithExistingFormatter(raw) {
@@ -3858,8 +4213,139 @@ function showArtifactModal(artifact) {
   }
 }
 
+// Cached scroller reference to avoid repeated DOM queries
+let _cachedScroller = null;
+
 function getChatScroller() {
-  return document.querySelector(".chat-log-container");
+  if (!_cachedScroller || !document.contains(_cachedScroller)) {
+    _cachedScroller = document.querySelector(".chat-log-container");
+  }
+  return _cachedScroller;
+}
+
+function invalidateScrollerCache() {
+  _cachedScroller = null;
+}
+
+// Hover State Preservation Functions
+function preserveHoverStates(containerElement) {
+  if (!containerElement) return;
+  
+  const preservedStates = [];
+  
+  // Use activeHoverElements Set to find currently hovered elements
+  // :hover pseudo-selector doesn't work with querySelectorAll
+  activeHoverElements.forEach(element => {
+    // Check if this element is still in the container
+    if (containerElement.contains(element)) {
+      const codeContent = element.querySelector('pre code')?.textContent || '';
+      const language = element.querySelector('.language-name')?.textContent || '';
+      const allCodeBlocks = containerElement.querySelectorAll('.code-block-container');
+      const elementIndex = Array.from(allCodeBlocks).indexOf(element);
+      
+      preservedStates.push({
+        index: elementIndex,
+        identifier: `${language}-${codeContent.substring(0, 50)}`,
+        wasHovered: true
+      });
+    }
+  });
+  
+  // Store in WeakMap for this container
+  if (preservedStates.length > 0) {
+    hoverStates.set(containerElement, preservedStates);
+    log(`preserveHoverStates(). Preserved ${preservedStates.length} hover states`, 'HOVER', 'DEBUG');
+  }
+}
+
+function restoreHoverStates(containerElement, preservedStates) {
+  if (!containerElement || !preservedStates.length) return;
+  
+  let restoredCount = 0;
+  log(`restoreHoverStates(). Attempting to restore ${preservedStates.length} states`, 'HOVER', 'DEBUG');
+  
+  preservedStates.forEach((state, stateIndex) => {
+    if (state.wasHovered) {
+      const codeBlocks = containerElement.querySelectorAll('.code-block-container');
+      log(`restoreHoverStates(). Found ${codeBlocks.length} code blocks, looking for state: "${state.identifier}"`, 'HOVER', 'DEBUG');
+      
+      codeBlocks.forEach((block, blockIndex) => {
+        const language = block.querySelector('.language-name')?.textContent || '';
+        const codeContent = block.querySelector('pre code')?.textContent || '';
+        const blockIdentifier = `${language}-${codeContent.substring(0, 50)}`;
+        
+        // Use both content matching and position-based fallback
+        const isMatch = blockIdentifier === state.identifier || 
+                       (blockIndex === state.index && language && state.identifier.startsWith(language));
+        
+        if (isMatch) {
+          // Force hover state by adding a persistent class
+          block.classList.add('force-hover-state');
+          activeHoverElements.add(block);
+          restoredCount++;
+          
+          log(`restoreHoverStates(). MATCHED and restored block ${blockIndex}: "${blockIdentifier}"`, 'HOVER', 'DEBUG');
+          
+          // Auto-remove the forced hover after a very short time during streaming
+          setTimeout(() => {
+            if (block.classList.contains('force-hover-state')) {
+              block.classList.remove('force-hover-state');
+              activeHoverElements.delete(block);
+            }
+          }, 300); // Very short timeout for streaming scenarios
+        } else {
+          log(`restoreHoverStates(). NO MATCH block ${blockIndex}: "${blockIdentifier}" vs "${state.identifier}"`, 'HOVER', 'TRACE');
+        }
+      });
+    }
+  });
+  
+  // Always log the result
+  log(`restoreHoverStates(). Restored ${restoredCount} out of ${preservedStates.length} hover states`, 'HOVER', 'DEBUG');
+}
+
+// Overload for single parameter using WeakMap-based system
+function restoreHoverStates(containerElement) {
+  if (!containerElement) return;
+  
+  // If called with only container, use WeakMap system
+  if (arguments.length === 1) {
+    const preservedStates = hoverStates.get(containerElement);
+    if (preservedStates && preservedStates.length > 0) {
+      // Call the main function with preserved states
+      restoreHoverStates(containerElement, preservedStates);
+      // Clear the preserved states after restoration
+      hoverStates.delete(containerElement);
+    }
+    return;
+  }
+  
+  // If called with 2 parameters, delegate to main function above
+  // This is handled by the function above
+}
+
+function setupHoverStateManagement() {
+  // Global mouse tracking for better hover state detection
+  let lastHoveredCodeBlock = null;
+  
+  document.addEventListener('mouseover', (e) => {
+    const codeBlock = e.target.closest('.code-block-container');
+    if (codeBlock) {
+      lastHoveredCodeBlock = codeBlock;
+      activeHoverElements.add(codeBlock);
+    }
+  });
+  
+  document.addEventListener('mouseout', (e) => {
+    const codeBlock = e.target.closest('.code-block-container');
+    if (codeBlock && !codeBlock.contains(e.relatedTarget)) {
+      activeHoverElements.delete(codeBlock);
+      lastHoveredCodeBlock = null;
+    }
+  });
+  
+  // Store reference for use in streaming updates
+  window._lastHoveredCodeBlock = () => lastHoveredCodeBlock;
 }
 
 function renderAllMessagesForNavigation(session) {
@@ -6267,7 +6753,6 @@ let autoScrollEnabled = true;
 let scrollDetectionCooldown = false; // NEW: Cooldown flag
 let cooldownTimeout = null; // NEW: Cooldown timer
 
-// Smart autoscroll with newline detection - SIMPLIFIED
 let lastContentHeight = 0;
 
 function smartScrollToBottom() {
@@ -7204,7 +7689,97 @@ async function renderMathInElement(element) {
   }
 }
 
-function md(src) {
+// Smart hybrid markdown processing with layout shift prevention
+async function md(src, options = {}) {
+  if (!src) return "";
+  
+  const { 
+    forceSync = false,           // Force synchronous for critical UX
+    forceWorker = false,         // Force worker for heavy content
+    isStreaming = false,         // Is this for streaming content?
+    isSessionSwitch = false      // Is this for session switching?
+  } = options;
+  
+  // Smart content analysis for processing strategy
+  const contentSize = src.length;
+  const hasComplexElements = /```[\s\S]*?```|<[^>]+>|\$\$[\s\S]*?\$\$|\|.*\|.*\|/.test(src);
+  const hasLotsOfCode = (src.match(/```/g) || []).length > 4;
+  
+  // Decision matrix for processing strategy
+  let useWorker = false;
+  
+  if (forceSync) {
+    useWorker = false;
+  } else if (forceWorker) {
+    useWorker = true;
+  } else if (isSessionSwitch) {
+    // Session switching: strongly prefer sync for instant UX
+    useWorker = false; // Always use sync for session switching to prevent layout shifts
+  } else if (isStreaming) {
+    // Streaming: progressive adoption - start sync, move to worker for heavy content
+    useWorker = contentSize > 3000 || hasLotsOfCode || hasComplexElements;
+  } else {
+    // General case: worker for heavy content
+    useWorker = contentSize > 2000 || hasLotsOfCode || hasComplexElements;
+  }
+  
+  // Execute based on strategy
+  if (!useWorker) {
+    log('MARKDOWN', 1, 'md', 'Using sync rendering', { 
+      contentSize, 
+      reason: forceSync ? 'forced' : (isSessionSwitch ? 'session-switch' : 'light-content')
+    });
+    return mdFallback(src);
+  }
+  
+  try {
+    // Initialize worker if not already done
+    if (!markdownWorker) {
+      initMarkdownWorker();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    
+    // If worker failed, fallback to sync
+    if (!markdownWorker) {
+      log('MARKDOWN', 2, 'md', 'Worker unavailable, fallback to sync');
+      return mdFallback(src);
+    }
+    
+    log('MARKDOWN', 1, 'md', 'Using worker rendering', { 
+      contentSize, 
+      hasComplexElements,
+      reason: forceWorker ? 'forced' : 'heavy-content'
+    });
+    
+    // Use worker for processing
+    return new Promise((resolve) => {
+      const messageId = ++workerMessageId;
+      workerPromises.set(messageId, { resolve });
+      
+      markdownWorker.postMessage({
+        type: 'init',
+        payload: src,
+        streamId: `sync-${messageId}`,
+        messageId
+      });
+      
+      // Faster timeout for better UX
+      setTimeout(() => {
+        if (workerPromises.has(messageId)) {
+          workerPromises.delete(messageId);
+          log('MARKDOWN', 2, 'md', 'Worker timeout, fallback to sync');
+          resolve(mdFallback(src));
+        }
+      }, 800); // Even faster for better UX
+    });
+  } catch (error) {
+    log('MARKDOWN', 3, 'md', 'Worker error, fallback to sync', { error: error.message });
+    return mdFallback(src);
+  }
+}
+
+// Fallback synchronous markdown processing
+function mdFallback(src) {
   if (!src) return "";
 
   const { text, latex } = preprocessMarkdownSource(src);
@@ -7751,7 +8326,53 @@ function renderHistory() {
   currentProject = null;
   if (!current || !current.messages) return;
 
+  // Try cache first for ultra-fast switching
+  const cached = getCachedSession(current.id);
+  if (cached) {
+    const renderStartTime = performance.now();
+    
+    // Ultra-fast cache restoration
+    const chatLog = $("#chat-log");
+    chatLog.innerHTML = cached.renderedHTML;
+    
+    // Restore scroll position instantly (no smooth behavior)
+    const scroller = getChatScroller();
+    if (scroller && cached.scrollPosition > 0) {
+      // Force instant scroll by temporarily disabling smooth behavior
+      const originalBehavior = scroller.style.scrollBehavior;
+      scroller.style.scrollBehavior = "auto";
+      scroller.scrollTop = cached.scrollPosition;
+      scroller.style.scrollBehavior = originalBehavior;
+    }
+    
+    // Re-hydrate interactive elements without full re-render
+    hydrateInteractiveElements();
+    
+    const renderTime = performance.now() - renderStartTime;
+    log("SESSION", 1, "renderHistory", `Ultra-fast cache restore completed`, {
+      renderTime: `${renderTime.toFixed(2)}ms`,
+      cacheAge: `${cached.getAge()}ms`
+    });
+    
+    return;
+  }
+
+  // Fallback to normal rendering if no cache
   renderHistoryLazy();
+}
+
+function hydrateInteractiveElements() {
+  // Re-setup interactive elements that need event listeners
+  const expandBtns = document.querySelectorAll('.message-expand-btn:not([data-setup-complete])');
+  expandBtns.forEach(btn => {
+    const messageNode = btn.closest('.message');
+    if (messageNode) {
+      setTimeout(() => setupUserMessageExpandCollapse(messageNode), 0);
+    }
+  });
+  
+  // Re-setup any other interactive elements as needed
+  renderMathInElement(document.getElementById('chat-log'));
 }
 
 function renderHistoryLazy() {
@@ -7776,6 +8397,10 @@ function renderHistoryLazy() {
     };
   }
 
+  // Batch process all messages and pre-format thinking-text
+  const processingPromises = [];
+  const createdNodes = [];
+
   for (let i = 0; i < initialMessages.length; i++) {
     const actualIndex = startIndex + i;
     const messageData = initialMessages[i];
@@ -7793,10 +8418,15 @@ function renderHistoryLazy() {
     if (node) {
       node.dataset.index = String(actualIndex);
       node.dataset.lazyLoaded = "true";
+      createdNodes.push({ node, role, actualIndex, isPlaceholder });
     }
+  }
 
+  // Process all AI messages with thinking-text in parallel
+  for (const { node, role, actualIndex, isPlaceholder } of createdNodes) {
     if (role === "ai" && !isPlaceholder) {
-      hydrateThinkingIfAny(node, current, actualIndex);
+      // Add async hydration to batch processing
+      processingPromises.push(hydrateThinkingIfAnyAsync(node, current, actualIndex));
       renderMathInElement(node);
     }
 
@@ -7807,6 +8437,13 @@ function renderHistoryLazy() {
       }
     }
   }
+
+  // Wait for all thinking-text formatting to complete before displaying
+  Promise.all(processingPromises).then(() => {
+    log("SESSION", 1, "renderHistoryLazy", "All thinking-text formatting completed");
+  }).catch(error => {
+    console.warn("Some thinking-text formatting failed:", error);
+  });
 
   setupLazyScrollListener();
 
@@ -7842,9 +8479,21 @@ function renderHistoryLazy() {
             targetScrollTop,
           },
         );
+        
+        // Cache the fully rendered session for next time
+        const chatLog = $("#chat-log");
+        if (chatLog && current && current.id) {
+          cacheSession(current.id, chatLog.innerHTML, targetScrollTop);
+        }
       } else {
         // Fallback to bottom if no user messages found
         scroller.scrollTop = scroller.scrollHeight;
+        
+        // Cache with bottom scroll position
+        const chatLog = $("#chat-log");
+        if (chatLog && current && current.id) {
+          cacheSession(current.id, chatLog.innerHTML, scroller.scrollHeight);
+        }
       }
     }
 
@@ -7901,7 +8550,7 @@ function setupLazyScrollListener() {
   };
 }
 
-window.loadOlderMessages = function (smoothScroll = true) {
+window.loadOlderMessages = async function (smoothScroll = true) {
   if (!current?._lazyState || current._lazyState.loadedStartIndex <= 0) return;
 
   window._isLazyLoading = true;
@@ -7934,7 +8583,9 @@ window.loadOlderMessages = function (smoothScroll = true) {
   }
 
   const fragment = document.createDocumentFragment();
+  const formatterPromises = [];
 
+  // First pass: create nodes and collect formatter promises
   for (let i = 0; i < messagesToLoad.length; i++) {
     const actualIndex = newStartIndex + i;
     const messageData = messagesToLoad[i];
@@ -7955,7 +8606,8 @@ window.loadOlderMessages = function (smoothScroll = true) {
       fragment.appendChild(node);
 
       if (role === "ai") {
-        hydrateThinkingIfAny(node, current, actualIndex);
+        // Collect formatter promises to wait for completion
+        formatterPromises.push(hydrateThinkingIfAnyAsync(node, current, actualIndex));
         renderMathInElement(node);
       }
 
@@ -7969,6 +8621,9 @@ window.loadOlderMessages = function (smoothScroll = true) {
       }
     }
   }
+
+  // Wait for all formatters to complete before height calculation
+  await Promise.all(formatterPromises);
 
   let preservedScrollTop = null;
   if (scroller && !smoothScroll) {
@@ -8065,9 +8720,11 @@ function renderSessions() {
   let sessions = Array.isArray(state.sessions) ? state.sessions.slice() : [];
 
   sessions.sort((a, b) => {
-    // First sort by favorite status
-    if (a.isFavorite && !b.isFavorite) return -1;
-    if (!a.isFavorite && b.isFavorite) return 1;
+    // Only prioritize starred sessions if showStarred is enabled
+    if (showStarred) {
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
+    }
 
     // Then sort by last_updated (newest first)
     const da = new Date(a?.last_updated || a?.created_at || 0).getTime();
@@ -8430,6 +9087,11 @@ function addMessage(
   content,
   { final = false, index = -1, metadata = {}, skipContainer = false } = {},
 ) {
+  // Invalidate cache when new messages are added
+  if (current && current.id && !window._isSessionSwitching) {
+    invalidateSessionCache(current.id);
+  }
+  
   const log = $("#chat-log");
   const node = document.createElement("div");
   const span = document.createElement("span");
@@ -8525,7 +9187,54 @@ function addMessage(
       updateThinkingToggleForWebSearch(node, metadata.webSearchPages);
     }
     
-    node.innerHTML = `<div class="message-text">${final ? md(content) : thinking}</div>${baseActions}</div></div>`;
+    if (final) {
+      // Smart hybrid rendering: sync for session switching, async for heavy content
+      const isFromSessionSwitch = window._isSessionSwitching === true;
+      const isLazyLoading = window._isLazyLoading === true;
+      
+      // Use instant formatter for lazy loading to avoid delays
+      if (isLazyLoading) {
+        const instantHtml = window.formatMarkdownInstant ? window.formatMarkdownInstant(content) : mdFallback(content);
+        node.innerHTML = `<div class="message-text">${instantHtml}</div>${baseActions}</div></div>`;
+        
+        // Apply syntax highlighting and math rendering immediately
+        const messageText = node.querySelector('.message-text');
+        if (messageText) {
+          if (messageText.querySelector("pre code")) highlightAllUnder(messageText);
+          renderMathInElement(messageText);
+        }
+      } else {
+        // Use smart markdown processing for normal rendering
+        md(content, { 
+          isSessionSwitch: isFromSessionSwitch,
+          forceSync: isFromSessionSwitch 
+        }).then(html => {
+          const messageText = node.querySelector('.message-text');
+          if (messageText) {
+            messageText.innerHTML = html;
+            if (messageText.querySelector("pre code")) highlightAllUnder(messageText);
+            renderMathInElement(messageText);
+          }
+        }).catch(err => {
+          console.warn('Markdown rendering error in createMessageNode:', err);
+          const messageText = node.querySelector('.message-text');
+          if (messageText) {
+            messageText.innerHTML = mdFallback(content);
+            if (messageText.querySelector("pre code")) highlightAllUnder(messageText);
+            renderMathInElement(messageText);
+          }
+        });
+        
+        // For session switching, start with sync-rendered content to avoid layout shift
+        if (isFromSessionSwitch) {
+          node.innerHTML = `<div class="message-text">${mdFallback(content)}</div>${baseActions}</div></div>`;
+        } else {
+          node.innerHTML = `<div class="message-text">Loading...</div>${baseActions}</div></div>`;
+        }
+      }
+    } else {
+      node.innerHTML = `<div class="message-text">${thinking}</div>${baseActions}</div></div>`;
+    }
     if (role === "ai" && !final) {
       node.style.opacity = "0";
       node.style.transform = "translateY(20px)";
@@ -8612,7 +9321,7 @@ function addMessage(
     }
   }
 
-  if (!skipContainer) {
+  if (!skipContainer && !window._isLazyLoading) {
     scrollToBottom({ force: true });
   }
 
@@ -8699,16 +9408,31 @@ function setCurrent(s) {
     return;
   }
 
+  const switchStartTime = performance.now();
+  
   if (window.innerWidth <= 768) {
     closeMobileSidebar();
   }
 
+  // Save current session scroll position and cache rendered content
   if (current && current.id) {
     const msgInput = $("#msg");
     if (msgInput) {
       saveDraftForSession(current.id, msgInput.value);
     }
+    
+    // Cache current session before switching
+    const chatLog = $("#chat-log");
+    if (chatLog && chatLog.innerHTML.trim()) {
+      const scroller = getChatScroller();
+      const scrollPos = scroller ? scroller.scrollTop : 0;
+      cacheSession(current.id, chatLog.innerHTML, scrollPos);
+    }
   }
+  
+  // Set session switching flag for optimized rendering and disable smooth scrolling
+  window._isSessionSwitching = true;
+  document.body.classList.add('session-switching');
   current = s;
 
   if (current && current.id) {
@@ -8783,13 +9507,25 @@ function setCurrent(s) {
       );
       if (newNode) {
         stream.aiNode = newNode;
-        hydrateThinkingIfAny(newNode, current, stream.messageIndex);
+        hydrateThinkingIfAnyAsync(newNode, current, stream.messageIndex);
         const contentDiv = newNode.querySelector(".message-text");
         if (contentDiv) {
           if (stream.fullResponse && stream.fullResponse.trim() !== "") {
-            contentDiv.innerHTML = md(stream.fullResponse);
-            if (contentDiv.querySelector("pre code"))
-              highlightAllUnder(contentDiv);
+            md(stream.fullResponse, { 
+              isStreaming: true,
+              isSessionSwitch: window._isSessionSwitching === true 
+            }).then(html => {
+              contentDiv.innerHTML = html;
+              if (contentDiv.querySelector("pre code"))
+                highlightAllUnder(contentDiv);
+              renderMathInElement(contentDiv);
+            }).catch(err => {
+              console.warn('Markdown rendering error in stream restore:', err);
+              contentDiv.innerHTML = mdFallback(stream.fullResponse);
+              if (contentDiv.querySelector("pre code"))
+                highlightAllUnder(contentDiv);
+              renderMathInElement(contentDiv);
+            });
           } else {
             contentDiv.innerHTML = getThinkingMarkup();
             scheduleThinkingText(newNode);
@@ -8804,6 +9540,23 @@ function setCurrent(s) {
   renderSessions();
   updateChatHeader({ animate: false });
   updateInputState();
+  
+  // Clear session switching flag after rendering is complete
+  setTimeout(() => {
+    window._isSessionSwitching = false;
+    document.body.classList.remove('session-switching');
+    
+    // Log performance metrics
+    const switchEndTime = performance.now();
+    const totalSwitchTime = switchEndTime - switchStartTime;
+    
+    log("SESSION", 1, "setCurrent", "Session switch performance", {
+      totalTime: `${totalSwitchTime.toFixed(2)}ms`,
+      wasFromCache: !!getCachedSession(current.id),
+      cacheSize: sessionCache.size
+    });
+  }, 100);
+  
   log("SESSION", 2, "setCurrent", "Successfully switch session", {
     newCurrentSession: current.name,
   });
@@ -8954,6 +9707,14 @@ async function load() {
   await loadModelsConf();
   renderSessions();
   updateModelHeader();
+
+  // Preload frequently accessed sessions in background
+  setTimeout(() => {
+    preloadFrequentSessions();
+  }, 1000);
+
+  // Setup hover state management for streaming
+  setupHoverStateManagement();
 
   restoreLastActivePage();
 
@@ -9192,10 +9953,69 @@ function hydrateThinkingIfAny(aiNode, session, messageIndex) {
     ensureThinkingUI(aiNode);
     const el = aiNode._thinkingEl;
     if (el) {
-      el.text.innerHTML = renderWithExistingFormatter(thinkText);
+      // Use custom formatter for thinking text (no action buttons)
+      if (window.mdThinking) {
+        el.text.innerHTML = window.mdThinking(thinkText);
+      } else {
+        customMarkdownFormat(thinkText).then(formattedHtml => {
+          el.text.innerHTML = formattedHtml;
+        }).catch(error => {
+          console.warn('Custom formatter error during hydration:', error);
+          el.text.innerHTML = renderWithExistingFormatter(thinkText);
+        });
+      }
       el.body.classList.add("collapsed");
       el.toggle.setAttribute("aria-collapsed", "true");
     }
+  }
+}
+
+// Async version for batch processing during lazy loading
+async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
+  const messageData =
+    session &&
+    Array.isArray(session.messages) &&
+    Array.isArray(session.messages[messageIndex])
+      ? session.messages[messageIndex]
+      : null;
+  const messageMetadata =
+    messageData && typeof messageData[2] === "object" ? messageData[2] : {};
+  setNodeMetadata(aiNode, messageMetadata);
+
+  const thinkData = session?._x_think && session._x_think[messageIndex];
+  if (!thinkData || thinkData.text == "") return;
+
+  const thinkText =
+    (typeof thinkData === "object" ? thinkData.text : thinkData) || "";
+  const thinkDuration =
+    typeof thinkData === "object" ? thinkData.duration : null;
+
+  if (thinkText.trim()) {
+    ensureThinkingUI(aiNode);
+    const el = aiNode._thinkingEl;
+    if (el) {
+      // Pre-format thinking text during loading for smooth display
+      try {
+        // Always use custom formatter for thinking text (no action buttons)
+        if (window.mdThinking) {
+          const formattedHtml = window.mdThinking(thinkText);
+          el.text.innerHTML = formattedHtml;
+        } else {
+          const formattedHtml = await customMarkdownFormat(thinkText);
+          el.text.innerHTML = formattedHtml;
+        }
+      } catch (error) {
+        console.warn('Custom formatter error during async hydration:', error);
+        el.text.innerHTML = renderWithExistingFormatter(thinkText);
+      }
+      el.body.classList.add("collapsed");
+      el.toggle.setAttribute("aria-collapsed", "true");
+    }
+  }
+
+  if (typeof thinkDuration === "number" && thinkDuration > 0) {
+    ensureThinkingUI(aiNode);
+    finalizeThinkingUI(aiNode, thinkDuration, messageMetadata);
   }
 
   if (typeof thinkDuration === "number" && thinkDuration > 0) {
@@ -9214,6 +10034,12 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
   let sawEnd = false;
   let seenMeaningfulToken = false;
   let finalized = false;
+  
+  // Smart rendering throttling system
+  let lastRenderTime = 0;
+  let lastRenderLength = 0;
+  let renderTimeout = null;
+  let isUsingWorker = false;
 
   const END_RX = /<!--\s*\[\/END\]\s*-->[\s]*$/;
   const trimEnd = (s) => s.replace(/\s*<!--\s*\[\/END\]\s*-->\s*$/, "");
@@ -9452,13 +10278,30 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           // Append final content after thinking
           const finalDiv = document.createElement('div');
           finalDiv.className = 'final-ai-response';
-          finalDiv.innerHTML = md(finalMessageToSave);
-          div.appendChild(finalDiv);
+          md(finalMessageToSave).then(html => {
+            finalDiv.innerHTML = html;
+            div.appendChild(finalDiv);
+            if (div.querySelector("pre code")) highlightAllUnder(div);
+            renderMathInElement(div);
+          }).catch(err => {
+            console.warn('Markdown finalization error:', err);
+            finalDiv.innerHTML = mdFallback(finalMessageToSave);
+            div.appendChild(finalDiv);
+            if (div.querySelector("pre code")) highlightAllUnder(div);
+            renderMathInElement(div);
+          });
         } else if (!thinkingContainer) {
-          div.innerHTML = md(finalMessageToSave || "");
+          md(finalMessageToSave || "").then(html => {
+            div.innerHTML = html;
+            if (div.querySelector("pre code")) highlightAllUnder(div);
+            renderMathInElement(div);
+          }).catch(err => {
+            console.warn('Markdown finalization error:', err);
+            div.innerHTML = mdFallback(finalMessageToSave || "");
+            if (div.querySelector("pre code")) highlightAllUnder(div);
+            renderMathInElement(div);
+          });
         }
-        if (div.querySelector("pre code")) highlightAllUnder(div);
-        renderMathInElement(div);
       }
 
       clearContinuePlaceholder(aiNode);
@@ -9478,6 +10321,12 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     s.sawEnd = isComplete;
     s.endSeen = isComplete;
     cleanupStream();
+
+    // Remove streaming-active class from the specific AI message
+    if (aiNode) {
+      aiNode.classList.remove('streaming-active');
+      log("STREAM", 1, "finalize", "Removed streaming-active class from AI message", {});
+    }
 
     try {
       renderSessions?.();
@@ -9597,8 +10446,14 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       if (div && !div.__seededOnce && s.session.messages[s.messageIndex]?.[1]) {
         const seed = s.session.messages[s.messageIndex][1];
         if (seed) {
-          div.innerHTML = md(seed);
-          div.__seededOnce = true;
+          md(seed).then(html => {
+            div.innerHTML = html;
+            div.__seededOnce = true;
+          }).catch(err => {
+            console.warn('Markdown seeding error:', err);
+            div.innerHTML = mdFallback(seed);
+            div.__seededOnce = true;
+          });
           fullResponse = seed;
         }
       }
@@ -9614,10 +10469,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         const prevHeight = div.scrollHeight;
         const display = trimEnd(fullResponse);
         
-        // Check if we have a thinking container that needs to be transitioned out
         const thinkingContainer = div.querySelector('.thinking-container');
         if (thinkingContainer && display.trim().length > 0) {
-          // Remove thinking container smoothly as we start displaying content
           thinkingContainer.style.opacity = '0';
           thinkingContainer.style.transition = 'opacity 0.3s ease-out';
           setTimeout(() => {
@@ -9627,9 +10480,73 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           }, 300);
         }
         
-        div.innerHTML = md(display);
-        if (div.querySelector("pre code")) highlightAllUnder(div);
-        renderMathInElement(div);
+        // Smart throttled rendering with progressive worker adoption
+        const performSmartRender = () => {
+          const now = Date.now();
+          const contentGrowth = display.length - lastRenderLength;
+          const timeSinceLastRender = now - lastRenderTime;
+          
+          // Decision matrix for rendering strategy
+          const shouldUseWorkerForStreaming = display.length > 3000 || 
+                                            (display.match(/```/g) || []).length > 3 ||
+                                            /\$\$[\s\S]*?\$\$/.test(display);
+          
+          // Adaptive throttling based on content size and worker usage
+          let throttleMs = 50; // Base throttle
+          if (shouldUseWorkerForStreaming) {
+            throttleMs = 150; // Slower for worker processing
+            isUsingWorker = true;
+          } else if (display.length > 1500) {
+            throttleMs = 100; // Medium throttle for medium content
+          }
+          
+          // Skip render if throttling and no significant change
+          if (timeSinceLastRender < throttleMs && contentGrowth < 50 && !gotEnd) {
+            return;
+          }
+          
+          lastRenderTime = now;
+          lastRenderLength = display.length;
+          
+          if (isUsingWorker && !shouldUseWorkerForStreaming) {
+            log('STREAM', 1, 'smartRender', 'Switching back to sync rendering', { 
+              contentLength: display.length,
+              workerToSync: true 
+            });
+            isUsingWorker = false;
+          } else if (!isUsingWorker && shouldUseWorkerForStreaming) {
+            log('STREAM', 1, 'smartRender', 'Switching to worker rendering', { 
+              contentLength: display.length,
+              syncToWorker: true 
+            });
+          }
+          
+          md(display, { 
+            isStreaming: true,
+            forceWorker: shouldUseWorkerForStreaming,
+            forceSync: !shouldUseWorkerForStreaming && display.length < 1000
+          }).then(html => {
+            div.innerHTML = html;
+            if (div.querySelector("pre code")) highlightAllUnder(div);
+            renderMathInElement(div);
+          }).catch(err => {
+            console.warn('Markdown rendering error:', err);
+            div.innerHTML = mdFallback(display);
+            if (div.querySelector("pre code")) highlightAllUnder(div);
+            renderMathInElement(div);
+          });
+        };
+        
+        // Execute smart rendering
+        if (gotEnd) {
+          // Final render - no throttling
+          clearTimeout(renderTimeout);
+          performSmartRender();
+        } else {
+          // Throttled streaming render
+          clearTimeout(renderTimeout);
+          renderTimeout = setTimeout(performSmartRender, 10);
+        }
 
         // Check if content actually changed/grew
         const newHeight = div.scrollHeight;
@@ -9801,7 +10718,8 @@ async function startStream(
         if (evt.think) {
           const s = streamManager.activeStreams?.[streamId];
           if (s && s.aiNode && document.contains(s.aiNode)) {
-            appendThinking(s.aiNode, evt.think, s.session, s.messageIndex);
+            // Fire and forget for async thinking update
+            appendThinking(s.aiNode, evt.think, s.session, s.messageIndex).catch(console.error);
           }
           return;
         }
@@ -9811,6 +10729,12 @@ async function startStream(
   );
 
   log("REQ", 2, "chat:stream-start", `Request to AI using ${act.model} model.`);
+
+  // Add streaming-active class to the specific AI message being streamed
+  if (aiNode) {
+    aiNode.classList.add('streaming-active');
+    log("STREAM", 1, "chat:stream-start", "Added streaming-active class to current AI message", {});
+  }
 
   streamManager.startStream(streamId, {
     controller,
@@ -9947,10 +10871,8 @@ async function send() {
   )
     return;
 
-  // 📨 Use the new file attachment strategist for conversation messages
   const filesToAttach = getFilesForMessage(current, 'conversation');
   
-  // 🎭 Update form display after determining attachments
   renderUploadedFiles();
 
   current.last_updated = nowISO();
@@ -9973,7 +10895,6 @@ async function send() {
     metadata: { files: filesToAttach },
   });
 
-  // 🧹 Clear uploaded files from form after attaching to message
   current.uploadedFiles = [];
   renderUploadedFiles();
 
@@ -12087,11 +13008,19 @@ function setupEventListeners() {
 
       const div = aiNode.querySelector(".message-text");
       if (div) {
-        div.innerHTML = md(
-          partial ||
-            "*[System] Model not available or system error, try checking the connection or changing the AI model.*",
-        );
-        if (div.querySelector("pre code")) highlightAllUnder(div);
+        const content = partial ||
+          "*[System] Model not available or system error, try checking the connection or changing the AI model.*";
+        
+        md(content).then(html => {
+          div.innerHTML = html;
+          if (div.querySelector("pre code")) highlightAllUnder(div);
+          renderMathInElement(div);
+        }).catch(err => {
+          console.warn('Markdown rendering error in error handler:', err);
+          div.innerHTML = mdFallback(content);
+          if (div.querySelector("pre code")) highlightAllUnder(div);
+          renderMathInElement(div);
+        });
       }
 
       let footer = aiNode.querySelector(".message-footer");
@@ -12273,7 +13202,8 @@ function initializeApp() {
             const sess = state.sessions.find(s => s.id === sessionId) || current;
 
             if (thinkContent && sess) {
-                appendThinking(bubbleNode, thinkContent, sess, messageIndex);
+                // Fire and forget for async thinking update
+                appendThinking(bubbleNode, thinkContent, sess, messageIndex).catch(console.error);
                 scrollToBottom({ fromAI: true });
             }
         } catch (e) {
@@ -12303,7 +13233,16 @@ function initializeApp() {
   setupResponsiveHandlers();
   window.addEventListener("beforeunload", () => {
     streamManager.shutdownGracefully();
+    // Terminate worker on unload
+    if (markdownWorker) {
+      markdownWorker.terminate();
+      markdownWorker = null;
+    }
   });
+  
+  // Initialize markdown worker
+  initMarkdownWorker();
+  
   load();
 }
 
@@ -12327,3 +13266,82 @@ window.addEventListener("error", (event) => {
     overlay.style.display = "none";
   }
 });
+
+// Debug utilities for performance monitoring
+window.DEBUG = {
+  // Cache management
+  getCacheStats,
+  clearSessionCache,
+  preloadFrequentSessions,
+  invalidateSessionCache: (id) => invalidateSessionCache(id || (current && current.id)),
+  
+  // Performance profiling
+  profileSessionSwitch: (sessionId) => {
+    const startTime = performance.now();
+    const targetSession = state.sessions.find(s => s.id === sessionId);
+    if (targetSession) {
+      console.log(`Switching to session: ${targetSession.name}`);
+      setCurrent(targetSession);
+      setTimeout(() => {
+        const endTime = performance.now();
+        console.log(`✅ Session switch took ${(endTime - startTime).toFixed(2)}ms`);
+        console.log('Cache stats:', getCacheStats());
+      }, 150);
+    } else {
+      console.log('Session not found:', sessionId);
+    }
+  },
+  
+  // Batch profile multiple switches
+  profileMultipleSwitches: (count = 5) => {
+    const sessions = state.sessions.slice(0, count);
+    let totalTime = 0;
+    let switchCount = 0;
+    
+    console.log(`🚀 Profiling ${sessions.length} session switches...`);
+    
+    function switchNext(index) {
+      if (index >= sessions.length) {
+        console.log(`📊 Average switch time: ${(totalTime / switchCount).toFixed(2)}ms`);
+        console.log('Final cache stats:', getCacheStats());
+        return;
+      }
+      
+      const startTime = performance.now();
+      setCurrent(sessions[index]);
+      
+      setTimeout(() => {
+        const endTime = performance.now();
+        const switchTime = endTime - startTime;
+        totalTime += switchTime;
+        switchCount++;
+        
+        console.log(`Switch ${index + 1}: ${switchTime.toFixed(2)}ms (${sessions[index].name})`);
+        
+        setTimeout(() => switchNext(index + 1), 200);
+      }, 100);
+    }
+    
+    switchNext(0);
+  },
+  
+  // Utility functions
+  log,
+  md,
+  addMessage,
+  clearLog,
+  
+  // Hover state debugging
+  getActiveHovers: () => Array.from(activeHoverElements).map(el => ({
+    language: el.querySelector('.language-name')?.textContent,
+    codeSnippet: el.querySelector('pre code')?.textContent?.substring(0, 30),
+    hasForceHover: el.classList.contains('force-hover-state')
+  })),
+  
+  clearHoverStates: () => {
+    activeHoverElements.forEach(el => {
+      el.classList.remove('force-hover-state');
+    });
+    activeHoverElements.clear();
+  }
+};

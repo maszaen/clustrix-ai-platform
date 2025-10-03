@@ -8370,6 +8370,33 @@ function hydrateInteractiveElements() {
       setTimeout(() => setupUserMessageExpandCollapse(messageNode), 0);
     }
   });
+
+  const thinkingToggles = document.querySelectorAll('.thinking-toggle');
+  thinkingToggles.forEach(toggle => {
+    // Remove existing listeners and add new ones
+    const newToggle = toggle.cloneNode(true);
+    toggle.parentNode.replaceChild(newToggle, toggle);
+    
+    // Re-add click listener
+    newToggle.addEventListener("click", () => {
+      const ex = newToggle.getAttribute("aria-expanded") === "true";
+      newToggle.setAttribute("aria-expanded", ex ? "false" : "true");
+      const body = newToggle.nextElementSibling;
+      if (body && body.classList.contains('thinking-body')) {
+        body.classList.toggle("expanded", !ex);
+      }
+    });
+    
+    // Update aiNode reference if it exists
+    const aiNode = newToggle.closest('.message.ai');
+    if (aiNode) {
+      const wrap = newToggle.parentElement;
+      const body = newToggle.nextElementSibling;
+      const text = body?.querySelector('.thinking-text');
+      const toggleContent = newToggle.querySelector('.thinking-toggle-content');
+      aiNode._thinkingEl = { wrap, toggle: newToggle, body, text, toggleContent };
+    }
+  });
   
   // Re-setup any other interactive elements as needed
   renderMathInElement(document.getElementById('chat-log'));

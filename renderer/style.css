@@ -2802,6 +2802,7 @@ input:checked + .slider:before {
   position: relative;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   margin: 0 auto;
   flex: 1;
   width: 100%;
@@ -2983,10 +2984,66 @@ input:checked + .slider:before {
   background: var(--fg-muted);
 } */
 
+
+
+@keyframes overlaySlideDiagonal {
+  0% {
+    transform: translate(-40%, -70%); /* Hanya horizontal */
+  }
+  100% {
+    transform: translate(100%, 100%); /* Horizontal + vertikal */
+  }
+}
+
 /* Messages */
+.message:not(.message.user)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 250%;
+  height: 250%;
+  background: linear-gradient(
+    103deg,
+    transparent 0%,
+    transparent 20%,
+    var(--bg) 50%,
+    var(--bg) 100%
+  );
+  transform: translateY(-59%);
+  animation: overlaySlideDiagonal 1.5s linear forwards;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Selector kedua untuk pesan USER */
+.message.user .message-text::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 250%;
+  height: 250%;
+  background: linear-gradient(
+    103deg,
+    transparent 0%,
+    transparent 20%,
+    var(--bg) 50%,
+    var(--bg) 100%
+  );
+  transform: translateY(-59%);
+  animation: overlaySlideDiagonal 1.5s ease-out forwards; /* BEDA: ease-out */
+  pointer-events: none;
+  z-index: 10;
+}
+
+.message::before .message.user .message-text::before {
+  animation: overlaySlideDiagonal 1.5s ease-out forwards;
+}
+
 .message {
   margin: var(--spacing-md) 0;
-  animation: slideInPage 0.4s cubic-bezier(0.4, 0, 0.2, 1)
+  animation: slideInMessage 0.8s cubic-bezier(0.4, 0.0, 0.2, 1);
 }
 
 .response-spacer {
@@ -3006,6 +3063,8 @@ input:checked + .slider:before {
 }
 
 .message.ai {
+  overflow: hidden;
+  position: relative;
   transition: min-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
@@ -3029,6 +3088,8 @@ input:checked + .slider:before {
 }
 
 .message.user {
+  position: relative;
+  overflow: hidden;
   display: flex;
   justify-content: flex-end;
 }
@@ -3825,12 +3886,14 @@ blockquote blockquote blockquote blockquote::before {
 }
 
 .message-text {
+  position: relative;
   border-radius: 20px;
   font-size: 15px;
   line-height: 1.6;
   word-wrap: break-word;
   transition: var(--transition-fast);
   min-width: 0 !important;
+  overflow: hidden;
 }
 
 .message-text:empty {
@@ -5252,7 +5315,7 @@ a:focus-visible {
   background-clip: text;
   
   animation: 
-    fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+    fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
     shimmer 4s 0.4s infinite ease-in-out;          
 }
 
@@ -5263,8 +5326,9 @@ a:focus-visible {
 .thinking-text h4 {
   position: relative;
   margin: var(--spacing-lg) 0 var(--spacing-sm) 0;
-  font-family: var(--font-ai-bold);
+  font-family: var(--font-sans);
   z-index: 1;
+  font-weight: normal;
   color: var(--fg-muted);
 }
 
@@ -5275,11 +5339,11 @@ a:focus-visible {
   color: var(--fg-muted);
 }
 
-.thinking-text h1 { font-size: 17px; }
-.thinking-text h2 { font-size: 16.4px; }
-.thinking-text h3 { font-size: 15.8px; }
-.thinking-text h4 { font-size: 15.2px; }
-.thinking-text h5 { font-size: 14.6px; }
+.thinking-text h1 { font-size: 14px; }
+.thinking-text h2 { font-size: 14px; }
+.thinking-text h3 { font-size: 14px; }
+.thinking-text h4 { font-size: 14px; }
+.thinking-text h5 { font-size: 14px; }
 .thinking-text h6 { font-size: 14px; }
 
 .thinking-text p {
@@ -5314,6 +5378,10 @@ a:focus-visible {
   white-space: normal;
 }
 
+.thinking-text strong {
+  font-weight: normal;
+}
+
 /* Remove any lingering text nodes that are whitespace only */
 .thinking-text br + br {
   display: none;
@@ -5325,7 +5393,7 @@ a:focus-visible {
   background: transparent !important;
   padding: 2px 0px !important;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 13px;
   border: none !important;
 }
 
@@ -5342,23 +5410,22 @@ a:focus-visible {
 .thinking-text pre, .thinking-text pre[class*="language-"] {
   max-width: 100% !important;
   overflow-x: auto;
-  background: var(--bg-secondary);
-  padding: var(--spacing-md);
+  background: var(--bg);
+  padding: var(--spacing-xl);
   border-top: 0px solid var(--bg) !important;
   border-bottom-left-radius: var(--radius-lg) !important;
   border-bottom-right-radius: var(--radius-lg) !important;
-  margin: var(--spacing-sm) 0;
+  margin: 0 0 var(--spacing-sm) 0;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .thinking-text .code-block-header {
-
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-2xs) var(--spacing-lg);
-  background-color: var(--bg-secondary) !important;
+  padding: var(--spacing-md) var(--spacing-md) 0 var(--spacing-xl);
+  background-color: var(--bg) !important;
   /* border: 1px solid var(--border); */
   border-top-left-radius: var(--radius-lg);
   border-top-right-radius: var(--radius-lg);

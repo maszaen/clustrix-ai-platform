@@ -17,7 +17,7 @@ class FileSummarizer {
         Object.entries(summaries).forEach(([key, value]) => {
           this.summaryCache.set(key, value);
         });
-        console.log(`📚 Loaded ${this.summaryCache.size} file summaries from cache`);
+        console.log(`Loaded ${this.summaryCache.size} file summaries from cache`);
       }
     } catch (error) {
       console.error('Error loading summary cache:', error);
@@ -442,7 +442,7 @@ class FileSummarizer {
     const cacheKey = this.generateCacheKey(fileName, content);
     
     if (this.summaryCache.has(cacheKey)) {
-      console.log(`📚 Using cached summary for ${fileName}`);
+      console.log(`Using cached summary for ${fileName}`);
       return this.summaryCache.get(cacheKey);
     }
 

@@ -71,7 +71,7 @@ class LocalEmbeddingEngine {
           });
         }
         
-        console.log(`📚 Local Index: Loaded ${this.documentIndex.size} documents, ${this.vocabulary.size} vocabulary terms`);
+        console.log(`Local Index: Loaded ${this.documentIndex.size} documents, ${this.vocabulary.size} vocabulary terms`);
       }
     } catch (error) {
       console.error('Error loading local index:', error);

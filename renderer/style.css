@@ -330,6 +330,11 @@ body.dark-theme {
   -webkit-font-smoothing: antialiased !important;
 }
 
+/* Disable smooth scrolling during session switching for instant response */
+.session-switching * {
+  scroll-behavior: auto !important;
+}
+
 html {
   /* scrollbar-width: thin;
   scrollbar-color: var(--border-input) transparent; */
@@ -438,7 +443,7 @@ hr {
   border: 0;
   border-top: 1px solid var(--border);
   padding: 0;
-  margin: 10px 0 20px 0;
+  margin: 13px 0 20px 0;
 }
 
 .hr-custom {
@@ -576,7 +581,7 @@ hr {
 
 #little-icon {
   background: transparent;
-  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 0;
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-md) 0;
   cursor: pointer;
   transition: var(--transition-fast);
   display: flex;
@@ -1100,7 +1105,6 @@ h3.date-separator {
   color: var(--fg);
 }
 
-
 /* Sidebar Footer */
 .sidebar-footer {
   position: relative;
@@ -1113,6 +1117,8 @@ h3.date-separator {
   left: 0;
   right: 0;
   height: 20px;
+  opacity: 1;
+  z-index: 999;
   background: linear-gradient(to bottom, transparent, var(--bg-secondary));
   pointer-events: none;
 }
@@ -1123,7 +1129,6 @@ h3.date-separator {
 
 #app.sidebar-collapsed .settings-btn {
   border-radius: var(--radius-md);
-  border: 1px solid var(--border);
 }
 
 .settings-btn {
@@ -1138,6 +1143,27 @@ h3.date-separator {
   color: var(--fg-muted);
   transition: var(--transition-fast);
   font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative;
+}
+
+.settings-btn svg {
+  flex-shrink: 0;
+}
+
+#app.sidebar-collapsed .settings-btn svg{
+  display: flex !important;
+}
+
+#app.sidebar-collapsed .sidebar-footer {
+  justify-content: flex-end;
+  margin-top: auto;
+}
+
+#app.sidebar-collapsed .sidebar-footer::before {
+opacity: 0;
 }
 
 .settings-btn:hover {
@@ -2791,6 +2817,11 @@ input:checked + .slider:before {
   background: var(--bg);
   scroll-behavior: smooth;
 }
+
+/* Ensure instant scrolling during session switching */
+.session-switching .chat-log-container {
+  scroll-behavior: auto !important;
+}
 /* 
 .link-preview-modal {
   position: absolute;
@@ -3732,7 +3763,6 @@ blockquote blockquote blockquote blockquote::before {
 #app.sidebar-collapsed #theme-label,
 #app.sidebar-collapsed .search-container,
 #app.sidebar-collapsed .sessions-container,
-#app.sidebar-collapsed .sidebar-footer,
 #app.sidebar-collapsed .theme-switcher,
 #app.sidebar-collapsed #session-list li .tokens,
 #app.sidebar-collapsed #session-list li .menu,
@@ -3740,7 +3770,8 @@ blockquote blockquote blockquote blockquote::before {
   display: none;
 }
 
-#app.sidebar-collapsed .icon-btn2 {
+#app.sidebar-collapsed .icon-btn2,
+#app.sidebar-collapsed .settings-btn {
   padding: 20px var(--spacing-md) 20px 9px !important;
   border-radius: 10px;
 }
@@ -3752,6 +3783,10 @@ blockquote blockquote blockquote blockquote::before {
   width: 40px;
   padding: var(--spacing-sm);
   justify-content: center;
+}
+
+#app.sidebar-collapsed .settings-btn {
+  height: 40px;
 }
 
 #app.sidebar-collapsed #session-list li {
@@ -4631,6 +4666,21 @@ a:focus-visible {
   padding-bottom: 10px;
 }
 
+/* Thinking-text code blocks without action buttons */
+.thinking-text .code-block-container.thinking-code .code-block-header {
+  justify-content: flex-start;
+}
+
+.thinking-text .code-block-container.thinking-code .code-block-actions {
+  display: none !important;
+}
+
+/* Also hide any copy/save buttons that might slip through */
+.thinking-text .code-block-container.thinking-code .copy-code-btn,
+.thinking-text .code-block-container.thinking-code .save-code-btn {
+  display: none !important;
+}
+
 .code-block-actions {
   display: flex;
   flex-direction: row;
@@ -4654,6 +4704,7 @@ a:focus-visible {
         drop-shadow(12px 0 0 var(--bg))     
         drop-shadow(-12px 0 0 var(--bg));
 }
+
 :where(blockquote) .code-block-container .code-block-header {
   display: flex;
   justify-content: space-between;
@@ -4856,16 +4907,24 @@ a:focus-visible {
   opacity: 0;
   visibility: hidden;
   transform: translateX(10px);
-  transition: all 0.3s ease;
+  transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
   z-index: 9999;
 }
 
+/* Show save buttons on hover only when not streaming */
 .code-block-container:hover .save-code-btn {
   display: flex;
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
 }
+
+/* Hide save buttons only in the message being streamed */
+.message.streaming-active .code-block-container .save-code-btn {
+  display: none !important;
+}
+
+
 
 .save-code-btn:hover {
   background-color: var(--hover-bg);
@@ -5196,6 +5255,206 @@ a:focus-visible {
     fadeInScale 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
     shimmer 4s 0.4s infinite ease-in-out;          
 }
+
+/* Markdown styling for thinking-text */
+.thinking-text h1,
+.thinking-text h2,
+.thinking-text h3,
+.thinking-text h4 {
+  position: relative;
+  margin: var(--spacing-lg) 0 var(--spacing-sm) 0;
+  font-family: var(--font-ai-bold);
+  z-index: 1;
+  color: var(--fg-muted);
+}
+
+.thinking-text h5,
+.thinking-text h6 {
+  margin: var(--spacing-md) 0 var(--spacing-sm) 0;
+  font-family: var(--font-ai-bold);
+  color: var(--fg-muted);
+}
+
+.thinking-text h1 { font-size: 17px; }
+.thinking-text h2 { font-size: 16.4px; }
+.thinking-text h3 { font-size: 15.8px; }
+.thinking-text h4 { font-size: 15.2px; }
+.thinking-text h5 { font-size: 14.6px; }
+.thinking-text h6 { font-size: 14px; }
+
+.thinking-text p {
+  margin: 0 0 10px 0;
+  line-height: 1.6;
+  z-index: 2;
+  position: relative;
+  color: var(--fg-muted);
+}
+
+.thinking-text p:has(+ ul),
+.thinking-text p:has(+ ol) {
+  margin-bottom: 3px;
+}
+
+.thinking-text p:last-child {
+  margin-bottom: 0px;
+}
+
+/* Hide empty paragraphs that might cause spacing issues */
+.thinking-text p:empty {
+  display: none;
+}
+
+/* Remove any invisible but selectable content */
+.thinking-text *:empty {
+  display: none;
+}
+
+/* Prevent selection of whitespace-only content */
+.thinking-text {
+  white-space: normal;
+}
+
+/* Remove any lingering text nodes that are whitespace only */
+.thinking-text br + br {
+  display: none;
+}
+
+.thinking-text pre code {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  background: transparent !important;
+  padding: 2px 0px !important;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  border: none !important;
+}
+
+.thinking-text code {
+  background: var(--surface-secondary);
+  padding: 0px 5px;
+  color: var(--fg-muted);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: normal;
+}
+
+.thinking-text pre, .thinking-text pre[class*="language-"] {
+  max-width: 100% !important;
+  overflow-x: auto;
+  background: var(--bg-secondary);
+  padding: var(--spacing-md);
+  border-top: 0px solid var(--bg) !important;
+  border-bottom-left-radius: var(--radius-lg) !important;
+  border-bottom-right-radius: var(--radius-lg) !important;
+  margin: var(--spacing-sm) 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.thinking-text .code-block-header {
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-2xs) var(--spacing-lg);
+  background-color: var(--bg-secondary) !important;
+  /* border: 1px solid var(--border); */
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+
+  top: 8px;
+
+  filter: none !important;
+}
+
+.thinking-text ul,
+.thinking-text ol {
+  margin: 0 0 10px 0;
+  list-style-position: outside;
+  color: var(--fg-muted);
+}
+
+.thinking-text li {
+  margin-bottom: var(--spacing-xs);
+  line-height: 1.6;
+  color: var(--fg-muted);
+}
+
+.thinking-text ul {
+  padding-left: 30px;
+}
+
+.thinking-text ul li {
+  padding-left: 0.5em;
+  margin-bottom: 0;
+  line-height: 1.7;
+}
+
+.thinking-text ol {
+  padding-left: 35px; 
+}
+
+.thinking-text ol li {
+  padding-left: 0em;
+}
+
+.thinking-text li:last-child {
+  margin-bottom: 0;
+}
+
+.thinking-text ul ul,
+.thinking-text ol ol,
+.thinking-text ul ol,
+.thinking-text ol ul {
+  margin-top: 0;
+}
+
+.thinking-text blockquote {
+  border: none;
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  margin: var(--spacing-sm) 0;
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) calc(var(--quote-pillar-left) + var(--quote-pillar-w) + 8px);
+  position: relative;
+  color: var(--fg-muted);
+  opacity: 0.9;
+}
+
+.thinking-text blockquote::before {
+  content: '';
+  position: absolute;
+  left: var(--quote-pillar-left);
+  top: 6px;
+  bottom: 6px;
+  width: var(--quote-pillar-w);
+  background: var(--primary);
+  border-radius: var(--quote-pillar-radius);
+  opacity: 0.8;
+}
+
+.thinking-text strong {
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.thinking-text em {
+  font-style: italic;
+  color: var(--fg-muted);
+}
+
+.thinking-text a {
+  color: var(--primary);
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+.thinking-text a:hover {
+  text-decoration: underline;
+  opacity: 1;
+}
+
+/* Remove base line-height as it's already defined in the main .thinking-text rule above */
 
 .thinking-text-indicator {
   color: var(--fg-muted);

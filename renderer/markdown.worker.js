@@ -248,15 +248,23 @@ function handleUpdate(streamId) {
 }
 
 self.onmessage = function onmessage(event) {
-  const { type, payload = "", streamId } = event.data || {};
+  const { type, payload = "", streamId, messageId } = event.data || {};
   if (!type || !streamId) return;
 
   if (type === "init") {
     fullResponse = typeof payload === "string" ? payload : "";
-    if (fullResponse) {
-      handleUpdate(streamId);
+    const html = renderMarkdown(fullResponse);
+    
+    // For sync rendering (used by main thread md() function)
+    if (messageId) {
+      self.postMessage({ type: "update", html, streamId, messageId });
     } else {
-      self.postMessage({ type: "update", html: "", streamId });
+      // For streaming
+      if (fullResponse) {
+        handleUpdate(streamId);
+      } else {
+        self.postMessage({ type: "update", html: "", streamId });
+      }
     }
     return;
   }

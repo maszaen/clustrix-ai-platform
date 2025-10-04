@@ -111,6 +111,12 @@
   margin-right: 3px;
 }
 
+.help-text {
+  font-size: 12px;
+  padding-left: 6px;
+  padding-top: 4px;
+  color: var(--fg-muted) !important;
+}
 /* ===== SMOOTH LOADING OVERLAY ===== */
 .loading-overlay {
   position: fixed;
@@ -3632,6 +3638,13 @@ textarea::-webkit-scrollbar {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.form-hint {
+  color: var(--fg-subtle);
+  font-size: 13px;
+  margin-top: var(--spacing-xs);
+  line-height: 1.4;
 }
 
 /* Modal Actions */

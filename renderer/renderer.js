@@ -1,6 +1,10 @@
 let state = {
   sessions: [],
-  settings: { persona: { name: "", work: "", prefs: "" }, theme: "light" },
+  settings: { 
+    persona: { name: "", work: "", prefs: "" }, 
+    theme: "light",
+    streamThrottling: "auto"
+  },
 };
 let welcomeScreenStagedFiles = [];
 let projectMessageStagedFiles = [];
@@ -1440,10 +1444,8 @@ function ensureThinkingUI(aiNode) {
     const isAtBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 10;
     if (!isAtBottom) {
       thinkingUserScrolled = true;
-      console.log('🤔 User scrolled up in thinking body');
     } else if (thinkingUserScrolled) {
       thinkingUserScrolled = false;
-      console.log('🤔 User scrolled back to bottom in thinking body');
     }
   });
 
@@ -1496,31 +1498,17 @@ function scrollThinkingToBottom(thinkingElement) {
     const scrollTop = scrollContainer.scrollTop;
     const clientHeight = scrollContainer.clientHeight;
     const scrollHeight = scrollContainer.scrollHeight;
-    
-    console.log('🤔 Thinking scroll attempt:', {
-      scrollTop,
-      clientHeight, 
-      scrollHeight,
-      needsScroll: scrollHeight > clientHeight,
-      maxHeight: scrollContainer.style.maxHeight || 'CSS max-height'
-    });
-    
+  
     const needsScroll = scrollHeight > clientHeight;
     const userHasScrolledUp = thinkingElement.userScrolled && thinkingElement.userScrolled();
     
     // Simple: always scroll to bottom if content overflows and user hasn't manually scrolled up
     if (needsScroll && !userHasScrolledUp) {
-      console.log('🤔 Forcing scroll to bottom');
       scrollContainer.scrollTop = scrollContainer.scrollHeight;
       
       // Verify the scroll worked
       setTimeout(() => {
         const newScrollTop = scrollContainer.scrollTop;
-        console.log('🤔 Scroll verification:', {
-          intended: scrollContainer.scrollHeight,
-          actual: newScrollTop,
-          success: newScrollTop > scrollTop
-        });
       }, 10);
     }
   };
@@ -1536,7 +1524,6 @@ async function updateThinkingUI(aiNode, content, session, messageIndex) {
   if (!el) return;
 
   if (!el.body.classList.contains('expanded')) {
-    console.log('🤔 Expanding thinking body');
     el.body.classList.add('expanded');
     el.toggle.setAttribute('aria-expanded', 'true');
   }
@@ -10506,6 +10493,16 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     }
     if (!token) return;
 
+    // Debug logging to trace token flow
+    const currentSetting = state.settings.streamThrottling || "auto";
+    log("STREAM", 0, "TOKEN_RECEIVED", "Token received in handler", {
+      token: String(token).substring(0, 30),
+      tokenLength: token.length,
+      currentSetting,
+      hasState: !!s,
+      hasAiNode: !!s.aiNode
+    });
+
     try {
       bumpToken(s.session, s.messageIndex);
     } catch {}
@@ -10574,14 +10571,22 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       if (div && !div.__seededOnce && s.session.messages[s.messageIndex]?.[1]) {
         const seed = s.session.messages[s.messageIndex][1];
         if (seed) {
-          md(seed).then(html => {
-            div.innerHTML = html;
-            div.__seededOnce = true;
-          }).catch(err => {
-            console.warn('Markdown seeding error:', err);
+          const userSetting = state.settings.streamThrottling || "auto";
+          if (userSetting === "none") {
+            // Synchronous seeding for No Throttling
             div.innerHTML = mdFallback(seed);
             div.__seededOnce = true;
-          });
+          } else {
+            // Async seeding for other settings
+            md(seed).then(html => {
+              div.innerHTML = html;
+              div.__seededOnce = true;
+            }).catch(err => {
+              console.warn('Markdown seeding error:', err);
+              div.innerHTML = mdFallback(seed);
+              div.__seededOnce = true;
+            });
+          }
           fullResponse = seed;
         }
       }
@@ -10597,6 +10602,46 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         const prevHeight = div.scrollHeight;
         const display = trimEnd(fullResponse);
         
+        const userSetting = state.settings.streamThrottling || "auto";
+        
+        log("STREAM", 0, "TOKEN_HANDLER", "Token processing", {
+          token: String(token).substring(0, 20),
+          userSetting,
+          displayLength: display.length,
+          hasThinkingContainer: !!div.querySelector('.thinking-container')
+        });
+        
+        // FAST PATH for No Throttling - bypass all complex logic
+        if (userSetting === "none") {
+          log("STREAM", 0, "FAST_PATH", "No Throttling FAST PATH activated", {
+            token: String(token).substring(0, 20),
+            displayLength: display.length,
+            gotEnd
+          });
+          
+          // Remove thinking container immediately if exists
+          const thinkingContainer = div.querySelector('.thinking-container');
+          if (thinkingContainer && display.trim().length > 0 && thinkingContainer.parentNode) {
+            thinkingContainer.parentNode.removeChild(thinkingContainer);
+          }
+          
+          // Immediate synchronous render - no delays, no conditions, no workers
+          const html = mdFallback(display);
+          div.innerHTML = html;
+          if (div.querySelector("pre code")) highlightAllUnder(div);
+          renderMathInElement(div);
+          scrollToBottom({ fromAI: true });
+          
+          log("STREAM", 0, "FAST_PATH", "No Throttling render completed", {
+            htmlLength: html.length
+          });
+          
+          // Update state and exit early
+          if (gotEnd) finalize();
+          return;
+        }
+        
+        // For other settings (not "none"), handle thinking container with animation
         const thinkingContainer = div.querySelector('.thinking-container');
         if (thinkingContainer && display.trim().length > 0) {
           thinkingContainer.style.opacity = '0';
@@ -10614,23 +10659,87 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           const contentGrowth = display.length - lastRenderLength;
           const timeSinceLastRender = now - lastRenderTime;
           
-          // Decision matrix for rendering strategy
-          const shouldUseWorkerForStreaming = display.length > 3000 || 
-                                            (display.match(/```/g) || []).length > 3 ||
-                                            /\$\$[\s\S]*?\$\$/.test(display);
-          
-          // Adaptive throttling based on content size and worker usage
-          let throttleMs = 50; // Base throttle
-          if (shouldUseWorkerForStreaming) {
-            throttleMs = 150; // Slower for worker processing
-            isUsingWorker = true;
-          } else if (display.length > 1500) {
-            throttleMs = 100; // Medium throttle for medium content
+          const userSetting = state.settings.streamThrottling || "auto";
+          if (userSetting === "none") {
+            log("STREAM", 0, "performSmartRender", "No Throttling render called", {
+              displayLength: display.length,
+              contentGrowth,
+              timeSinceLastRender,
+              gotEnd
+            });
           }
           
-          // Skip render if throttling and no significant change
-          if (timeSinceLastRender < throttleMs && contentGrowth < 50 && !gotEnd) {
+          // Decision matrix for rendering strategy
+          const shouldUseWorkerForStreaming = userSetting !== "none" && (
+            display.length > 3000 || 
+            (display.match(/```/g) || []).length > 3 ||
+            /\$\$[\s\S]*?\$\$/.test(display)
+          );
+          
+          // Get user's throttling preference
+          const getThrottleMs = () => {
+            switch (userSetting) {
+              case "none":
+                return 0; // No throttling - maximum speed
+              case "high":
+                return 10; // High performance
+              case "medium":
+                return 50; // Medium performance
+              case "low":
+                return 100; // Low performance
+              case "minimal":
+                return 150; // Minimal performance
+              case "auto":
+              default:
+                // Auto-adaptive based on content
+                if (shouldUseWorkerForStreaming) {
+                  return 150; // Slower for worker processing
+                } else if (display.length > 1500) {
+                  return 100; // Medium throttle for medium content
+                } else {
+                  return 50; // Base throttle
+                }
+            }
+          };
+
+          // Adaptive throttling based on user setting and content
+          let throttleMs = getThrottleMs();
+          if (shouldUseWorkerForStreaming) {
+            isUsingWorker = true;
+          }
+          
+          // Adjust content growth threshold based on user setting
+          const getContentGrowthThreshold = () => {
+            switch (userSetting) {
+              case "none":
+                return 1; // Minimal threshold - render every single character
+              case "high":
+                return 10; // Lower threshold for faster updates
+              case "medium":
+                return 30; // Medium threshold
+              case "low":
+                return 50; // Higher threshold
+              case "minimal":
+                return 80; // Highest threshold
+              case "auto":
+              default:
+                return 50; // Default threshold
+            }
+          };
+
+          const contentGrowthThreshold = getContentGrowthThreshold();
+          
+          // Skip render if throttling and no significant change (but never skip for "none" setting)
+          if (userSetting !== "none" && timeSinceLastRender < throttleMs && contentGrowth < contentGrowthThreshold && !gotEnd) {
             return;
+          }
+          
+          if (userSetting === "none") {
+            log("STREAM", 0, "performSmartRender", "No Throttling proceeding to render", {
+              displayLength: display.length,
+              contentGrowth,
+              willRenderSync: true
+            });
           }
           
           lastRenderTime = now;
@@ -10649,30 +10758,48 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
             });
           }
           
-          md(display, { 
-            isStreaming: true,
-            forceWorker: shouldUseWorkerForStreaming,
-            forceSync: !shouldUseWorkerForStreaming && display.length < 1000
-          }).then(html => {
+          // For "No Throttling", use synchronous rendering for maximum speed
+          if (userSetting === "none") {
+            // Immediate synchronous rendering - no async delay
+            log("STREAM", 0, "performSmartRender", "Executing synchronous render", {
+              displayLength: display.length,
+              trimmedLength: display.trim().length
+            });
+            const html = mdFallback(display);
             div.innerHTML = html;
             if (div.querySelector("pre code")) highlightAllUnder(div);
             renderMathInElement(div);
-            
-            // Ensure autoscroll happens after content is fully rendered
-            requestAnimationFrame(() => {
-              scrollToBottom({ fromAI: true });
+            scrollToBottom({ fromAI: true });
+            log("STREAM", 0, "performSmartRender", "Synchronous render completed", {
+              htmlLength: html.length
             });
-          }).catch(err => {
-            console.warn('Markdown rendering error:', err);
-            div.innerHTML = mdFallback(display);
-            if (div.querySelector("pre code")) highlightAllUnder(div);
-            renderMathInElement(div);
-            
-            // Ensure autoscroll happens after fallback content is rendered
-            requestAnimationFrame(() => {
-              scrollToBottom({ fromAI: true });
+          } else {
+            // Async rendering for other settings
+            md(display, { 
+              isStreaming: true,
+              forceWorker: shouldUseWorkerForStreaming,
+              forceSync: !shouldUseWorkerForStreaming && display.length < 1000
+            }).then(html => {
+              div.innerHTML = html;
+              if (div.querySelector("pre code")) highlightAllUnder(div);
+              renderMathInElement(div);
+              
+              // Ensure autoscroll happens after content is fully rendered
+              requestAnimationFrame(() => {
+                scrollToBottom({ fromAI: true });
+              });
+            }).catch(err => {
+              console.warn('Markdown rendering error:', err);
+              div.innerHTML = mdFallback(display);
+              if (div.querySelector("pre code")) highlightAllUnder(div);
+              renderMathInElement(div);
+              
+              // Ensure autoscroll happens after fallback content is rendered
+              requestAnimationFrame(() => {
+                scrollToBottom({ fromAI: true });
+              });
             });
-          });
+          }
         };
         
         // Execute smart rendering
@@ -10681,9 +10808,15 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           clearTimeout(renderTimeout);
           performSmartRender();
         } else {
-          // Throttled streaming render
+          // Throttled streaming render based on user setting
           clearTimeout(renderTimeout);
-          renderTimeout = setTimeout(performSmartRender, 10);
+          if (userSetting === "none") {
+            // No throttling - render immediately
+            performSmartRender();
+          } else {
+            // Use minimal delay for other settings
+            renderTimeout = setTimeout(performSmartRender, 1);
+          }
         }
 
         // Height checking moved inside the rendering promise to avoid race conditions
@@ -12916,18 +13049,20 @@ function setupEventListeners() {
     const { name, work, prefs } = state.settings.persona;
     const showProjects = state.settings.showProjects !== undefined ? state.settings.showProjects : false;
     const showStarred = state.settings.showStarred !== undefined ? state.settings.showStarred : true;
+    const streamThrottling = state.settings.streamThrottling || "auto";
     log(
       "UI",
       0,
       "event:open-persona-settings-click",
       "Persona settings modal opened",
-      { hasName: !!name, hasWork: !!work, hasPrefs: !!prefs, showProjects, showStarred },
+      { hasName: !!name, hasWork: !!work, hasPrefs: !!prefs, showProjects, showStarred, streamThrottling },
     );
     $("#persona-name").value = name || "";
     $("#persona-work").value = work || "";
     $("#persona-prefs").value = prefs || "";
     $("#show-projects-toggle").checked = showProjects;
     $("#show-starred-toggle").checked = showStarred;
+    $("#stream-throttling").value = streamThrottling;
     $("#settings-modal").classList.remove("hidden");
     $("#settings-menu").classList.add("hidden");
     $("#quick-model-switch-modal").classList.add("hidden");
@@ -12990,12 +13125,15 @@ function setupEventListeners() {
       work: $("#persona-work").value.trim(),
       prefs: $("#persona-prefs").value.trim(),
     };
+    const streamThrottling = $("#stream-throttling").value;
     log("SETTINGS", 2, "event:save-settings-click", "Saving persona settings", {
       hasName: !!persona.name,
       hasWork: !!persona.work,
       hasPrefs: !!persona.prefs,
+      streamThrottling,
     });
     state.settings.persona = persona;
+    state.settings.streamThrottling = streamThrottling;
     await save();
     $("#settings-modal").classList.add("hidden");
   });

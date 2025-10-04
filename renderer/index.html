@@ -810,6 +810,19 @@
         </div>
 
         <div class="form-group">
+          <label for="stream-throttling">Stream Throttling</label>
+          <select id="stream-throttling" class="select-input">
+            <option value="auto">Auto (Adaptive based on content)</option>
+            <option value="none">No Throttling (0ms - Maximum Speed)</option>
+            <option value="high">High Performance (10ms)</option>
+            <option value="medium">Medium (50ms)</option>
+            <option value="low">Low (100ms)</option>
+            <option value="minimal">Minimal (150ms)</option>
+          </select>
+          <p class="help-text">Controls how fast AI responses appear during streaming. Higher performance is faster token display but more CPU usage.</p>
+        </div>
+
+        <div class="form-group">
           <div class="toggle-group">
             <div class="toggle-item">
               <label for="show-projects-toggle" class="toggle-label">
@@ -827,6 +840,8 @@
             </div>
           </div>
         </div>
+
+        
       </div>
       <div class="modal-actions">
         <button id="delete-all" class="danger-btn">Delete all sessions</button>

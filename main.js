@@ -987,8 +987,19 @@ function runStandardStreaming(event, payload) {
             }
             try {
               const j = JSON.parse(acc);
-              const text = (j.candidates?.[0]?.content?.parts || [])
+              let text = (j.candidates?.[0]?.content?.parts || [])
                 .map(p => p.text || '').join('');
+              
+              // Handle Gemini's *(Internal Reasoning: ...)* pattern
+              const internalReasoningMatch = text.match(/\*\(Internal Reasoning:\s*([\s\S]*?)\)\*/i);
+              if (internalReasoningMatch) {
+                const reasoning = internalReasoningMatch[1].trim();
+                // Send reasoning as thinking content
+                event.sender.send(`chat:chunk-${reqId}`, { think: reasoning });
+                // Remove the Internal Reasoning from main content
+                text = text.replace(/\*\(Internal Reasoning:\s*[\s\S]*?\)\*/gi, '').trim();
+              }
+              
               if (text) event.sender.send(`chat:chunk-${reqId}`, text);
               sendDone();
             } catch (e) {
@@ -1073,12 +1084,26 @@ function runStandardStreaming(event, payload) {
 
               if (Array.isArray(think)) think = think.map(p => (p?.text ?? p)).join('');
               if (think) event.sender.send(`chat:chunk-${reqId}`, { think });
+              
               let text =
                 j?.choices?.[0]?.message?.content ??
                 j?.message?.content ??
                 j?.output_text ?? '';
 
               if (Array.isArray(text)) text = text.map(p => (p?.text ?? p)).join('');
+              
+              // Handle Gemini's *(Internal Reasoning: ...)* pattern in OpenAI-compatible responses
+              const internalReasoningMatch = text.match(/\*\(Internal Reasoning:\s*([\s\S]*?)\)\*/i);
+              if (internalReasoningMatch) {
+                const reasoning = internalReasoningMatch[1].trim();
+                // Send reasoning as thinking content if not already present
+                if (!think) {
+                  event.sender.send(`chat:chunk-${reqId}`, { think: reasoning });
+                }
+                // Remove the Internal Reasoning from main content
+                text = text.replace(/\*\(Internal Reasoning:\s*[\s\S]*?\)\*/gi, '').trim();
+              }
+              
               if (text) event.sender.send(`chat:chunk-${reqId}`, text);
 
               sendDone();
@@ -1091,6 +1116,10 @@ function runStandardStreaming(event, payload) {
 
         res.setEncoding('utf8');
         let buffer = '';
+        let contentBuffer = ''; // Buffer to detect (Internal Reasoning: ...) pattern
+        let inInternalReasoning = false;
+        let reasoningBuffer = '';
+        
         res.on('data', (chunk) => {
           buffer += chunk;
 
@@ -1127,12 +1156,54 @@ function runStandardStreaming(event, payload) {
               if (Array.isArray(rdelta)) rdelta = rdelta.map(p => (p?.text ?? p)).join('');
               if (rdelta) event.sender.send(`chat:chunk-${reqId}`, { think: rdelta });
 
-              const delta =
+              let delta =
                 j?.choices?.[0]?.delta?.content ??
                 j?.delta?.content ??
                 j?.content ?? '';
 
-              if (delta) event.sender.send(`chat:chunk-${reqId}`, delta);
+              if (delta) {
+                // Accumulate content to detect *(Internal Reasoning: ...)* pattern
+                contentBuffer += delta;
+                
+                // Check if we're starting Internal Reasoning pattern
+                if (!inInternalReasoning && contentBuffer.includes('*(Internal Reasoning:')) {
+                  inInternalReasoning = true;
+                  const beforeReasoning = contentBuffer.split('*(Internal Reasoning:')[0];
+                  if (beforeReasoning) {
+                    event.sender.send(`chat:chunk-${reqId}`, beforeReasoning);
+                  }
+                  reasoningBuffer = '';
+                  contentBuffer = contentBuffer.substring(beforeReasoning.length + '*(Internal Reasoning:'.length);
+                }
+                
+                // If inside Internal Reasoning, accumulate it
+                if (inInternalReasoning) {
+                  if (contentBuffer.includes(')*')) {
+                    const endIndex = contentBuffer.indexOf(')*');
+                    reasoningBuffer += contentBuffer.substring(0, endIndex);
+                    // Send accumulated reasoning as thinking
+                    if (reasoningBuffer.trim()) {
+                      event.sender.send(`chat:chunk-${reqId}`, { think: reasoningBuffer.trim() });
+                    }
+                    // Continue with content after the closing )*
+                    contentBuffer = contentBuffer.substring(endIndex + 2);
+                    inInternalReasoning = false;
+                    reasoningBuffer = '';
+                    // Send remaining content
+                    if (contentBuffer) {
+                      event.sender.send(`chat:chunk-${reqId}`, contentBuffer);
+                      contentBuffer = '';
+                    }
+                  } else {
+                    reasoningBuffer += contentBuffer;
+                    contentBuffer = '';
+                  }
+                } else {
+                  // Normal content, send it
+                  event.sender.send(`chat:chunk-${reqId}`, delta);
+                  contentBuffer = '';
+                }
+              }
 
             } catch (e) {
               log('[SSE BAD JSON]', payload.slice(0,200));

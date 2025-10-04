@@ -28,10 +28,16 @@ let justSentMessage = false;
 let currentProject = null;
 let projectsData = [];
 
-// Smart Session Caching System
+// Smart Session Caching System - DISABLED
 const sessionCache = new Map();
-const MAX_CACHED_SESSIONS = 5;
-const CACHE_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_CACHED_SESSIONS = 0; // Disabled - set to 0 to disable caching
+const CACHE_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
+
+// CLEAR CACHE ON PAGE LOAD/REFRESH to prevent stale data
+window.addEventListener('DOMContentLoaded', () => {
+  sessionCache.clear();
+  log('CACHE', 1, 'clearCache', 'Session cache cleared on page load');
+});
 
 // Hover State Preservation System for Streaming
 const hoverStates = new WeakMap();
@@ -1483,8 +1489,9 @@ function cleanLeadingWhitespace(text) {
 }
 
 // Autoscroll function specifically for thinking-body during streaming
+// DISABLED - No auto-scroll for thinking body, same as main chat
 function scrollThinkingToBottom(thinkingElement) {
-  if (!thinkingElement) return;
+    if (!thinkingElement) return;
   
   const thinkingBody = thinkingElement.body;
   if (!thinkingBody) return;
@@ -1512,11 +1519,12 @@ function scrollThinkingToBottom(thinkingElement) {
       }, 10);
     }
   };
-  
-  // Try immediately and after a short delay
+
   attemptScroll();
   setTimeout(attemptScroll, 50);
   setTimeout(attemptScroll, 100);
+
+  return;
 }
 
 async function updateThinkingUI(aiNode, content, session, messageIndex) {
@@ -2547,9 +2555,9 @@ function renderMgmtModel(pkey, mid) {
 
   const body = $("#mgmt-body");
   body.innerHTML = `
-    <div class="form-group">
-      <label>Model ID</label>
-      <input type="text" id="mm-id" value="${meta.id}" disabled>
+  <div class="form-group">
+  <label>Model ID</label>
+      <input type="text" id="mm-id" value="${meta.id}">
     </div>
     <div class="form-group">
       <label>Label</label>
@@ -2566,33 +2574,75 @@ function renderMgmtModel(pkey, mid) {
       </select>
     </div>
     <div class="form-group">
-      <label>Notes</label>
+    <label>Notes</label>
       <textarea id="mm-note" spellcheck="false" autocorrect="off" rows="3" placeholder="Model notes...">${meta.note || ""}</textarea>
     </div>
+    <div id="mm-error" class="help-text" style="color: var(--error); display: none; margin-bottom: 16px;"></div>
   `;
 
   $("#mm-think").value = meta.think || "off";
 
-  $("#mgmt-close").onclick = async () => {
+  $("#mgmt-close").onclick = async (e) => {
+    const errorEl = $("#mm-error");
+    errorEl.style.display = "none";
+    errorEl.textContent = "";
+
+    const newId = $("#mm-id").value.trim();
     const label = $("#mm-label").value.trim();
     const note = $("#mm-note").value.trim();
     const think = $("#mm-think").value;
+
+    if (!newId) {
+      errorEl.textContent = "Model ID cannot be empty.";
+      errorEl.style.display = "block";
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
     const conf2 = state.settings.models || defaultModels();
     const arr2 = normalizeProviderModels(conf2.providers?.[pkey]?.models || []);
     const i = arr2.findIndex((m) => m.id === mid);
 
     if (i >= 0) {
-      arr2[i] = { ...arr2[i], label, note, think };
+      // If model ID changed, check for duplicates
+      if (newId !== mid && arr2.find((m) => m.id === newId)) {
+        errorEl.textContent = "Model ID already exists.";
+        errorEl.style.display = "block";
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      arr2[i] = { ...arr2[i], id: newId, label, note, think };
     } else {
-      arr2.unshift({ id: mid, label, note, think });
+      // Adding new model
+      if (arr2.find((m) => m.id === newId)) {
+        errorEl.textContent = "Model ID already exists.";
+        errorEl.style.display = "block";
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+      arr2.unshift({ id: newId, label, note, think });
     }
 
     conf2.providers[pkey].models = arr2;
+
+    // Update active model if it was changed
+    if (conf2.active?.platform === pkey && conf2.active?.model === mid && newId !== mid) {
+      conf2.active.model = newId;
+    }
+
     await persistModels(conf2);
 
-    if (conf2.active?.platform === pkey && conf2.active?.model === mid) {
+    if (conf2.active?.platform === pkey && (conf2.active?.model === newId || conf2.active?.model === mid)) {
       updateModelHeader?.();
     }
+
+    // Close modal and return to provider model list
+    closeModelMgmt();
+    renderMgmtProvider(pkey);
+    populateTitleModelOptions?.(pkey);
   };
 }
 
@@ -4519,7 +4569,11 @@ function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
 
   renderAllMessagesForNavigation(targetSession);
 
-  setTimeout(() => {
+  // Ensure artifact IDs are updated before scrolling
+  setTimeout(async () => {
+    // Update code blocks with artifact info FIRST
+    await updateCodeBlocksWithArtifactInfo();
+    
     window._preventAutoScrollToBottom = false;
 
     if (artifactId) {
@@ -4527,21 +4581,21 @@ function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
         `[data-artifact-id="${artifactId}"]`
       );
 
-      if (targetCodeBlock) {
-        log(
-          "NAVIGATION",
-          2,
-          "viewInChatFromArtifact",
-          "Found target code block, scrolling",
-          { artifactId },
-        );
+      log("NAVIGATION", 1, "viewInChatFromArtifact", "Searching for artifact code block", {
+        artifactId,
+        found: !!targetCodeBlock,
+        allArtifactElements: document.querySelectorAll('[data-artifact-id]').length
+      });
 
+      if (targetCodeBlock) {
         const codeBlockContainer = targetCodeBlock.closest('.code-block-container');
         
         if (codeBlockContainer) {
+          // Use scrollIntoView - it works with column-reverse!
           codeBlockContainer.scrollIntoView({
             behavior: "smooth",
             block: "center",
+            inline: "nearest"
           });
 
           const preElement = codeBlockContainer.querySelector('.code-block-header');
@@ -4589,23 +4643,8 @@ function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
             }, 1000);
           }
 
-          log(
-            "NAVIGATION",
-            1,
-            "viewInChatFromArtifact",
-            "Successfully scrolled to artifact",
-            { artifactId },
-          );
           return;
         }
-      } else {
-        log(
-          "NAVIGATION",
-          3,
-          "viewInChatFromArtifact",
-          "Target code block not found, falling back to message",
-          { artifactId },
-        );
       }
     }
 
@@ -4626,15 +4665,34 @@ function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
           "NAVIGATION",
           2,
           "viewInChatFromArtifact",
-          "Found target message, scrolling",
+          "Found target message, scrolling (column-reverse)",
           { messageIndex },
         );
 
-        // Scroll to the message
-        targetMessage.scrollIntoView({
-          behavior: "smooth",
-          block: 'center',
-        });
+        // Column-reverse scroll: Use custom scroll logic
+        const scroller = getChatScroller();
+        if (scroller) {
+          // Calculate scroll position for column-reverse
+          const containerRect = scroller.getBoundingClientRect();
+          const messageRect = targetMessage.getBoundingClientRect();
+          
+          // In column-reverse: scrollTop increases as we scroll UP
+          // We want to center the message in viewport
+          const currentScrollTop = scroller.scrollTop;
+          const messageBottomOffset = containerRect.bottom - messageRect.bottom;
+          const messageTopOffset = containerRect.bottom - messageRect.top;
+          const viewportHeight = containerRect.height;
+          const messageHeight = messageRect.height;
+          
+          // Target: center the message
+          const targetScrollTop = currentScrollTop + messageBottomOffset - (viewportHeight / 2) + (messageHeight / 2);
+          
+          // Smooth scroll
+          scroller.scrollTo({
+            top: targetScrollTop,
+            behavior: "smooth"
+          });
+        }
 
         // Highlight all code blocks in the message briefly if no specific artifact
         if (!artifactId) {
@@ -6846,13 +6904,125 @@ function smartScrollToBottom() {
 
 // Simplified debounced autoscroll - remove aggressive debouncing
 let debouncedScrollTimeout = null;
-const SCROLL_DEBOUNCE_MS = 50; // Reduced debounce for responsiveness
+const SCROLL_DEBOUNCE_MS = 20; // Reduced from 50ms to 20ms for better responsiveness during streaming
 
 function debouncedScrollToBottom() {
   clearTimeout(debouncedScrollTimeout);
   debouncedScrollTimeout = setTimeout(() => {
     smartScrollToBottom();
   }, SCROLL_DEBOUNCE_MS);
+}
+
+// ============================================================================
+// OLD AUTOSCROLL SYSTEM - DISABLED FOR TESTING
+// ============================================================================
+// Debounced scroll specifically for AI streaming with fromAI flag
+let debouncedAIScrollTimeout = null;
+let lastAIScrollTime = 0;
+let consecutiveScrollSkips = 0;
+
+function debouncedAIScrollToBottom_OLD_DISABLED() {
+  clearTimeout(debouncedAIScrollTimeout);
+  
+  debouncedAIScrollTimeout = setTimeout(() => {
+    // For Fast Path streaming, always scroll to bottom regardless of user scroll state
+    const scroller = getChatScroller();
+    if (!scroller) return;
+    
+    const now = Date.now();
+    const timeSinceLastScroll = now - lastAIScrollTime;
+    
+    // Force immediate scroll if we haven't scrolled in 100ms (prevents stuck scroll)
+    if (timeSinceLastScroll > 100) {
+      consecutiveScrollSkips++;
+      
+      // If we've skipped too many times, force multiple scroll attempts
+      if (consecutiveScrollSkips > 3) {
+        // Triple scroll attempt to overcome any browser throttling
+        scroller.scrollTop = scroller.scrollHeight;
+        requestAnimationFrame(() => {
+          scroller.scrollTop = scroller.scrollHeight;
+        });
+        consecutiveScrollSkips = 0;
+      } else {
+        scroller.scrollTop = scroller.scrollHeight;
+      }
+    } else {
+      // Normal scroll
+      scroller.scrollTop = scroller.scrollHeight;
+      consecutiveScrollSkips = 0;
+    }
+    
+    lastAIScrollTime = now;
+  }, SCROLL_DEBOUNCE_MS);
+}
+
+// ============================================================================
+// NEW COLUMN-REVERSE AUTOSCROLL SYSTEM (INSPIRED BY CLAUDE BLUEPRINT)
+// ============================================================================
+let userHasScrolledUp = false;
+let isStreamingActive = false; // Track if AI is currently streaming
+
+// NO MORE AUTO-SCROLL DURING STREAMING!
+// Only manual scroll via button click
+function debouncedAIScrollToBottom() {
+  // DISABLED - No auto-scroll, only button
+  return;
+}
+
+// Detect if user has scrolled up manually
+function initColumnReverseScrollDetection() {
+  const scroller = getChatScroller();
+  if (!scroller || scroller._columnReverseScrollInit) return;
+  
+  scroller._columnReverseScrollInit = true;
+  
+  scroller.addEventListener('scroll', () => {
+    const scrollTop = scroller.scrollTop;
+    const isNearBottom = scrollTop > -200;
+    
+    if (!isNearBottom) {
+      showScrollToBottomButton();
+    } else {
+      hideScrollToBottomButton();
+    }
+  }, { passive: true });
+  
+  log("SCROLL", 1, "initColumnReverseScrollDetection", "Column-reverse scroll detection initialized - threshold: -200px");
+}
+
+// Show/hide scroll to bottom button
+function showScrollToBottomButton() {
+  const btn = document.getElementById('scrollToBottomBtn');
+  if (btn) {
+    btn.classList.add('show');
+  }
+}
+
+function hideScrollToBottomButton() {
+  const btn = document.getElementById('scrollToBottomBtn');
+  if (btn) {
+    btn.classList.remove('show');
+  }
+}
+
+// Handle scroll to bottom button click
+function initScrollToBottomButton() {
+  const btn = document.getElementById('scrollToBottomBtn');
+  if (!btn || btn._initialized) return;
+  
+  btn._initialized = true;
+  
+  btn.addEventListener('click', () => {
+    const scroller = getChatScroller();
+    if (scroller) {
+      scroller.scrollTop = 0; // 0 is bottom in column-reverse
+      userHasScrolledUp = false;
+      hideScrollToBottomButton();
+    }
+  });
+  
+  log("SCROLL", 1, "initScrollToBottomButton", "Scroll to bottom button initialized");
 }
 
 function isNearBottom(el, threshold = 120) {
@@ -7051,16 +7221,7 @@ function createResponseSpacer() {
     // Setup AI message pre-allocation instead of spacer
     setupAiMessagePreAllocation(lastAiMessage);
     // console.log("✅ Brilliant AI message height system activated"); // Removed console.log
-  } else {
-    log(
-      "UI",
-      3,
-      "createAiMessageHeightSystem",
-      "No AI message found for height pre-allocation",
-      {},
-    );
   }
-
   return null; // No spacer element needed anymore!
 }
 
@@ -7149,8 +7310,8 @@ function initializeSmartScroll() {
         const maxScroll = scroller.scrollHeight - scroller.clientHeight;
         const scrollPercent = currentScroll / maxScroll;
         
-        // Only disable if user scrolls more than 5% up from bottom
-        if (scrollPercent < 0.95) {
+        // Increased threshold from 0.95 to 0.90 to prevent false positives from mouse jitter
+        if (scrollPercent < 0.90 && Math.abs(e.deltaY) > 5) {
           isUserScrolledUp = true;
           autoScrollEnabled = false;
 
@@ -7189,7 +7350,7 @@ function initializeSmartScroll() {
   );
 }
 
-function  scrollToBottom({ force = false, fromAI = false } = {}) {
+function scrollToBottom({ force = false, fromAI = false } = {}) {
   const scroller = getChatScroller();
   if (!scroller) return;
 
@@ -7207,7 +7368,6 @@ function  scrollToBottom({ force = false, fromAI = false } = {}) {
     // More permissive threshold for AI streaming - 300px instead of 180px
     const nearBottomForAI = isNearBottom(scroller, 300);
     if (!autoScrollEnabled && isUserScrolledUp && !nearBottomForAI) {
-      // console.log('🤖 AI scroll blocked - user scrolled up'); // Removed console.log
       return;
     }
 
@@ -7215,7 +7375,6 @@ function  scrollToBottom({ force = false, fromAI = false } = {}) {
     if (nearBottomForAI && isUserScrolledUp) {
       autoScrollEnabled = true;
       isUserScrolledUp = false;
-      // console.log('🤖 AI auto-scroll re-enabled - user very close to bottom'); // Removed console.log
     }
   }
 
@@ -7237,7 +7396,7 @@ function getThinkingMarkup() {
   if (thinkMode === "off") return "";
 
   return `<div class="thinking-container">
-    <div class="typing-indicator"><span></span><span></span><span></span></div>
+    <div class="typing-indicator"><span></span></div>
     <span class="thinking-text-indicator"></span>
   </div>`;
 }
@@ -7416,11 +7575,6 @@ function handleSaveButtonClick(event) {
           });
         }
       },
-    });
-  } else {
-    log("UI", 3, "handleSaveButtonClick", "No code found to save", {
-      hasDataset: !!saveButton.dataset,
-      datasetCode: saveButton.dataset.code,
     });
   }
 }
@@ -8035,13 +8189,6 @@ function formatErrorMessageForSaving(reason) {
       "LOG 2: Bagian HTTP diekstrak.",
       { parts_array: parts, sisa_string: processingString },
     );
-  } else {
-    log(
-      "FORMATTER",
-      3,
-      "formatErrorMessageForSaving",
-      "LOG 1: Pola HTTP TIDAK ditemukan.",
-    );
   }
 
   const messageMatch = reason.match(/"message"\s*:\s*"(.*?)"/);
@@ -8054,13 +8201,6 @@ function formatErrorMessageForSaving(reason) {
       { message: messageMatch[1] },
     );
     parts.push(messageMatch[1]);
-  } else {
-    log(
-      "FORMATTER",
-      3,
-      "formatErrorMessageForSaving",
-      "LOG 3: GAGAL, 'message' tidak ditemukan di dalam string.",
-    );
   }
 
   if (parts.length === 0) {
@@ -8406,36 +8546,46 @@ function renderHistory() {
   currentProject = null;
   if (!current || !current.messages) return;
 
-  // Try cache first for ultra-fast switching
-  const cached = getCachedSession(current.id);
-  if (cached) {
-    const renderStartTime = performance.now();
+  // Try cache first for ultra-fast switching - DISABLED
+  // const cached = getCachedSession(current.id);
+  // if (cached) {
+  //   const renderStartTime = performance.now();
     
-    // Ultra-fast cache restoration
-    const chatLog = $("#chat-log");
-    chatLog.innerHTML = cached.renderedHTML;
+  //   // Ultra-fast cache restoration with scroll position lock
+  //   const chatLog = $("#chat-log");
+  //   const scroller = getChatScroller();
     
-    // Restore scroll position instantly (no smooth behavior)
-    const scroller = getChatScroller();
-    if (scroller && cached.scrollPosition > 0) {
-      // Force instant scroll by temporarily disabling smooth behavior
-      const originalBehavior = scroller.style.scrollBehavior;
-      scroller.style.scrollBehavior = "auto";
-      scroller.scrollTop = cached.scrollPosition;
-      scroller.style.scrollBehavior = originalBehavior;
-    }
+  //   // Lock scroll position BEFORE DOM manipulation to prevent jump
+  //   if (scroller) {
+  //     scroller.style.scrollBehavior = "auto";
+  //     scroller.style.overflow = "hidden"; // Prevent scroll during restoration
+  //   }
     
-    // Re-hydrate interactive elements without full re-render
-    hydrateInteractiveElements();
+  //   // Restore HTML content
+  //   chatLog.innerHTML = cached.renderedHTML;
     
-    const renderTime = performance.now() - renderStartTime;
-    log("SESSION", 1, "renderHistory", `Ultra-fast cache restore completed`, {
-      renderTime: `${renderTime.toFixed(2)}ms`,
-      cacheAge: `${cached.getAge()}ms`
-    });
+  //   // Force immediate scroll position restore (before browser can calculate layout)
+  //   if (scroller && cached.scrollPosition !== undefined) {
+  //     // Use requestAnimationFrame to ensure DOM is ready but before paint
+  //     requestAnimationFrame(() => {
+  //       scroller.scrollTop = cached.scrollPosition;
+  //       scroller.style.overflow = ""; // Re-enable scrolling
+  //       scroller.style.scrollBehavior = ""; // Restore smooth behavior
+  //     });
+  //   }
     
-    return;
-  }
+  //   // Re-hydrate interactive elements without full re-render
+  //   hydrateInteractiveElements();
+    
+  //   const renderTime = performance.now() - renderStartTime;
+  //   log("CACHE", 1, "renderHistory", `Ultra-fast cache restore completed`, {
+  //     renderTime: `${renderTime.toFixed(2)}ms`,
+  //     cacheAge: `${cached.getAge()}ms`,
+  //     scrollRestored: cached.scrollPosition
+  //   });
+    
+  //   return;
+  // }
 
   // Fallback to normal rendering if no cache
   renderHistoryLazy();
@@ -8443,6 +8593,10 @@ function renderHistory() {
 
 function hydrateInteractiveElements() {
   // Re-setup interactive elements that need event listeners
+  
+  // Define SVG icons for action buttons
+  const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+  const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
   
   // Handle message expand/collapse buttons for user messages
   const expandBtns = document.querySelectorAll('.message-expand-btn');
@@ -8485,9 +8639,164 @@ function hydrateInteractiveElements() {
       aiNode._thinkingEl = { wrap, toggle: newToggle, body, text, toggleContent };
     }
   });
+
+  // Handle message action buttons (copy, edit, regenerate)
+  const messageActions = document.querySelectorAll('.message-actions');
+  messageActions.forEach(actions => {
+    const messageNode = actions.closest('.message');
+    if (!messageNode) return;
+
+    const isUserMessage = messageNode.classList.contains('user');
+    const isAIMessage = messageNode.classList.contains('ai');
+    const content = messageNode.querySelector('.user-text-content, .ai-text-content')?.textContent || '';
+
+    // Re-hydrate copy buttons
+    const copyBtn = actions.querySelector('.copy-btn');
+    if (copyBtn) {
+      const newCopyBtn = copyBtn.cloneNode(true);
+      copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
+      newCopyBtn.addEventListener("click", () => {
+        navigator.clipboard
+          .writeText(content)
+          .then(() => {
+            newCopyBtn.innerHTML = checkIconSVG;
+            newCopyBtn.style.color = "var(--success)";
+            setTimeout(() => {
+              newCopyBtn.innerHTML = copyIconSVG;
+              newCopyBtn.style.color = "var(--fg-muted)";
+            }, 1500);
+          })
+          .catch((err) =>
+            log("UI", 4, "copy-btn:click", "Failed to copy message text", {
+              error: err,
+            }),
+          );
+      });
+    }
+
+    // Re-hydrate edit buttons (only for user messages)
+    if (isUserMessage) {
+      const editBtn = actions.querySelector('.edit-btn');
+      if (editBtn) {
+        const newEditBtn = editBtn.cloneNode(true);
+        editBtn.parentNode.replaceChild(newEditBtn, editBtn);
+        newEditBtn.addEventListener("click", () => {
+          if (streamManager.isStreamingInSession(current)) return;
+          const input = $("#msg");
+          input.value = content;
+          input.style.height = "auto";
+          input.style.height = `${Math.min(input.scrollHeight, 350)}px`;
+          input.focus();
+          scrollToBottom({ force: true });
+        });
+      }
+    }
+
+    // Re-hydrate regenerate buttons (only for AI messages)
+    if (isAIMessage) {
+      const regenBtn = actions.querySelector('.regen-btn');
+      if (regenBtn) {
+        const newRegenBtn = regenBtn.cloneNode(true);
+        regenBtn.parentNode.replaceChild(newRegenBtn, regenBtn);
+        newRegenBtn.addEventListener("click", () => {
+          if (streamManager.isStreamingInSession(current)) return;
+          const idx = parseInt(messageNode.dataset.index || "-1", 10);
+          if (Number.isInteger(idx) && idx >= 0) regenerateFromIndex(idx);
+        });
+      }
+    }
+  });
   
   // Re-setup any other interactive elements as needed
   renderMathInElement(document.getElementById('chat-log'));
+}
+
+/**
+ * Migrate thinking patterns from old messages to _x_think database
+ * This handles legacy messages that have thinking content embedded in the message text
+ */
+function migrateThinkingPatterns(session) {
+  if (!session || !session.messages) {
+    log("MIGRATION", 1, "migrateThinkingPatterns", "No session or messages to migrate");
+    return 0;
+  }
+  
+  log("MIGRATION", 1, "migrateThinkingPatterns", `Starting migration check`, {
+    sessionId: session.id,
+    messageCount: session.messages.length,
+    hasExistingThinkData: !!session._x_think
+  });
+  
+  session._x_think = session._x_think || {};
+  let migrationCount = 0;
+  let checkedCount = 0;
+  
+  for (let idx = 0; idx < session.messages.length; idx++) {
+    const messageData = session.messages[idx];
+    if (!Array.isArray(messageData)) continue;
+    
+    const [role, content, metadata] = messageData;
+    if (role !== 'ai' || !content) continue;
+    
+    checkedCount++;
+    
+    // Skip ONLY if already has _x_think data WITH non-empty text
+    const hasValidThinkData = session._x_think[idx] && session._x_think[idx].text && session._x_think[idx].text.trim().length > 0;
+    
+    if (hasValidThinkData) {
+      log("MIGRATION", 1, "migrateThinkingPatterns", `Message ${idx} already has valid _x_think data, skipping`);
+      continue;
+    }
+    
+    let thinkingContent = null;
+    let cleanContent = content;
+    let patternFound = null;
+    
+    // Pattern 1: <thinking>...</thinking>
+    const thinkingTagMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/i);
+    if (thinkingTagMatch) {
+      thinkingContent = thinkingTagMatch[1].trim();
+      cleanContent = content.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+      patternFound = '<thinking>';
+      migrationCount++;
+    }
+    
+    // Pattern 2: *(Internal Reasoning: ...)*
+    if (!thinkingContent) {
+      const internalReasoningMatch = content.match(/\*\(Internal Reasoning:\s*([\s\S]*?)\)\*/i);
+      if (internalReasoningMatch) {
+        thinkingContent = internalReasoningMatch[1].trim();
+        cleanContent = content.replace(/\*\(Internal Reasoning:\s*[\s\S]*?\)\*/gi, '').trim();
+        patternFound = '*(Internal Reasoning:)*';
+        migrationCount++;
+      }
+    }
+    
+    // If thinking content found, migrate it
+    if (thinkingContent && cleanContent !== content) {
+      session._x_think[idx] = {
+        text: thinkingContent,
+        expanded: false
+      };
+      // Update message content to remove thinking
+      session.messages[idx][1] = cleanContent;
+      log("MIGRATION", 2, "migrateThinkingPatterns", `✓ Migrated thinking from message ${idx}`, {
+        sessionId: session.id,
+        pattern: patternFound,
+        thinkingLength: thinkingContent.length,
+        contentLength: cleanContent.length,
+        thinkingPreview: thinkingContent.substring(0, 100)
+      });
+    }
+  }
+  
+  log("MIGRATION", 1, "migrateThinkingPatterns", `Migration check completed`, {
+    sessionId: session.id,
+    checkedMessages: checkedCount,
+    migratedCount: migrationCount
+  });
+  
+  return migrationCount;
 }
 
 function renderHistoryLazy() {
@@ -8501,14 +8810,26 @@ function renderHistoryLazy() {
     initialLoad: Math.min(INITIAL_LOAD_COUNT, totalMessages),
   });
 
+  // Migration: Extract thinking patterns from old messages to _x_think
+  // DISABLED: Causing lag - uncomment if needed
+  // const migrationCount = migrateThinkingPatterns(current);
+  
+  // if (migrationCount > 0) {
+  //   log("SESSION", 1, "renderHistoryLazy", `Migrated ${migrationCount} messages with thinking content`);
+  //   // Save session after migration
+  //   saveSession();
+  // }
+
   const startIndex = Math.max(0, totalMessages - INITIAL_LOAD_COUNT);
   const initialMessages = current.messages.slice(startIndex);
 
+  // Initialize lazy state without cloning - just track indices
   if (!current._lazyState) {
     current._lazyState = {
-      allMessages: current.messages,
       loadedStartIndex: startIndex,
+      loadedEndIndex: totalMessages - 1,
       totalMessages: totalMessages,
+      isFullyLoaded: startIndex === 0
     };
   }
 
@@ -8570,14 +8891,19 @@ function renderHistoryLazy() {
   requestAnimationFrame(() => {
     const scroller = getChatScroller();
     if (scroller) {
-      // Find the last user message and scroll to it directly (no animation)
+      // Find the last user message and scroll to it directly (INSTANT)
       const lastUserMessageElement = findLastUserMessageElement();
       if (lastUserMessageElement) {
-        // Custom scroll positioning: message user at top with 30px breathing room (INSTANT)
-        const elementTop = lastUserMessageElement.offsetTop;
-        const targetScrollTop = Math.max(0, elementTop - 30);
+        // Column-reverse: Custom scroll positioning for last user message
+        const containerRect = scroller.getBoundingClientRect();
+        const messageRect = lastUserMessageElement.getBoundingClientRect();
+        const currentScrollTop = scroller.scrollTop;
+        
+        // Calculate offset to position user message at top + 30px
+        const messageTopInContainer = messageRect.top - containerRect.top;
+        const targetScrollTop = currentScrollTop + messageTopInContainer - 30;
 
-        // Force instant scroll by temporarily disabling smooth behavior
+        // Force instant scroll
         const originalBehavior = scroller.style.scrollBehavior;
         scroller.style.scrollBehavior = "auto";
         scroller.scrollTop = targetScrollTop;
@@ -8587,28 +8913,27 @@ function renderHistoryLazy() {
           "SESSION",
           1,
           "renderHistoryLazy",
-          "Instant scrolled to last user message with top 30px offset",
+          "Instant scrolled to last user message with top 30px offset (column-reverse)",
           {
             messageIndex: lastUserMessageElement.dataset.index,
-            elementTop,
             targetScrollTop,
           },
         );
         
-        // Cache the fully rendered session for next time
-        const chatLog = $("#chat-log");
-        if (chatLog && current && current.id) {
-          cacheSession(current.id, chatLog.innerHTML, targetScrollTop);
-        }
+        // Cache the fully rendered session for next time - DISABLED
+        // const chatLog = $("#chat-log");
+        // if (chatLog && current && current.id) {
+        //   cacheSession(current.id, chatLog.innerHTML, targetScrollTop);
+        // }
       } else {
         // Fallback to bottom if no user messages found
-        scroller.scrollTop = scroller.scrollHeight;
+        scroller.scrollTop = 0; // 0 is bottom in column-reverse
         
-        // Cache with bottom scroll position
-        const chatLog = $("#chat-log");
-        if (chatLog && current && current.id) {
-          cacheSession(current.id, chatLog.innerHTML, scroller.scrollHeight);
-        }
+        // Cache with bottom scroll position - DISABLED
+        // const chatLog = $("#chat-log");
+        // if (chatLog && current && current.id) {
+        //   cacheSession(current.id, chatLog.innerHTML, 0);
+        // }
       }
     }
 
@@ -8675,7 +9000,9 @@ window.loadOlderMessages = async function (smoothScroll = true) {
     0,
     current._lazyState.loadedStartIndex - LOAD_BATCH_SIZE,
   );
-  const messagesToLoad = current._lazyState.allMessages.slice(
+  
+  // Direct access to current.messages instead of cloned allMessages
+  const messagesToLoad = current.messages.slice(
     newStartIndex,
     current._lazyState.loadedStartIndex,
   );
@@ -8769,8 +9096,6 @@ window.loadOlderMessages = async function (smoothScroll = true) {
     scroller.style.scrollBehavior = originalScrollBehavior;
 
     preservedScrollTop = newScrollTop;
-  } else {
-    logContainer.insertBefore(fragment, logContainer.firstChild);
   }
 
   current._lazyState.loadedStartIndex = newStartIndex;
@@ -9290,7 +9615,7 @@ function addMessage(
     node.innerHTML = `<div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${content}</span><button class="primary-btn regenerate-cancelled" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate?</button></div></div></div></div>`;
   } else {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
-    const thinking = `<div class="thinking-container"><div class="typing-indicator"><span></span><span></span><span></span></div><span class="thinking-text-indicator"></span></div>`;
+    const thinking = `<div class="thinking-container"><div class="typing-indicator"><span></span></div><span class="thinking-text-indicator"></span></div>`;
     
     // Show web search indicator in toggle if available and final
     if (
@@ -9435,11 +9760,10 @@ function addMessage(
       }
     }
   }
-
-  if (!skipContainer && !window._isLazyLoading) {
-    scrollToBottom({ force: true });
-  }
-
+  
+  // Don't auto-scroll on every addMessage - only during specific events
+  // Auto-scroll handled by debouncedAIScrollToBottom during streaming
+  
   return node;
 }
 
@@ -9487,7 +9811,7 @@ function setupUserMessageExpandCollapse(messageNode) {
     textContent.style.setProperty("--collapsed-height", `${maxHeight}px`);
     textContent.style.setProperty(
       "--expanded-height",
-      `${actualHeight + 30}px`,
+      `${actualHeight + 300}px`,
     );
 
     expandBtn.addEventListener("click", (e) => {
@@ -9536,13 +9860,13 @@ function setCurrent(s) {
       saveDraftForSession(current.id, msgInput.value);
     }
     
-    // Cache current session before switching
-    const chatLog = $("#chat-log");
-    if (chatLog && chatLog.innerHTML.trim()) {
-      const scroller = getChatScroller();
-      const scrollPos = scroller ? scroller.scrollTop : 0;
-      cacheSession(current.id, chatLog.innerHTML, scrollPos);
-    }
+    // Cache current session before switching - DISABLED
+    // const chatLog = $("#chat-log");
+    // if (chatLog && chatLog.innerHTML.trim()) {
+    //   const scroller = getChatScroller();
+    //   const scrollPos = scroller ? scroller.scrollTop : 0;
+    //   cacheSession(current.id, chatLog.innerHTML, scrollPos);
+    // }
   }
   
   // Set session switching flag for optimized rendering and disable smooth scrolling
@@ -9645,7 +9969,7 @@ function setCurrent(s) {
             contentDiv.innerHTML = getThinkingMarkup();
             scheduleThinkingText(newNode);
           }
-          scrollToBottom({ force: true });
+          // Don't scroll here - already handled by renderHistory
         }
       }
     }
@@ -9667,8 +9991,8 @@ function setCurrent(s) {
     
     log("SESSION", 1, "setCurrent", "Session switch performance", {
       totalTime: `${totalSwitchTime.toFixed(2)}ms`,
-      wasFromCache: !!getCachedSession(current.id),
-      cacheSize: sessionCache.size
+      // wasFromCache: !!getCachedSession(current.id), // DISABLED
+      // cacheSize: sessionCache.size // DISABLED
     });
   }, 100);
   
@@ -9760,27 +10084,34 @@ async function load() {
             }
           });
         }
-        // Also update _lazyState if it exists
-        if (session._lazyState && session._lazyState.allMessages) {
-          session._lazyState.allMessages.forEach((message) => {
-            try {
-              if (Array.isArray(message) && message.length >= 3 && message[0] === "ai") {
-                const content = message[1];
-                const modelInfo = message[2] || {};
-                if (modelInfo.webSearchPages && modelInfo.webSearchPages > 0 && typeof content === 'string' && content.startsWith("Read ")) {
-                  // Remove the prepended text
-                  const lines = content.split('\n');
-                  if (lines.length > 0 && lines[0].startsWith("Read ")) {
-                    message[1] = lines.slice(1).join('\n').replace(/^\n+/, ''); // Remove leading newlines
-                  }
-                }
-              }
-            } catch (e) {
-              console.error("Migration error for lazyState message:", message, e);
-            }
-          });
-        }
+        // No need to update _lazyState separately - it now references messages directly
       });
+      
+      // Migration: Extract thinking patterns from old messages to _x_think
+      // DISABLED: Causing lag - uncomment if needed
+      // log("MIGRATION", 1, "appLoad", "Starting thinking pattern migration check for all sessions", {
+      //   totalSessions: state.sessions.length
+      // });
+      
+      // let totalThinkingMigrations = 0;
+      // state.sessions.forEach((session) => {
+      //   const migratedCount = migrateThinkingPatterns(session);
+      //   if (migratedCount > 0) {
+      //     totalThinkingMigrations += migratedCount;
+      //     log("MIGRATION", 2, "appLoad", `✓ Migrated ${migratedCount} thinking patterns from session`, {
+      //       sessionId: session.id,
+      //       sessionName: session.name
+      //     });
+      //   }
+      // });
+      
+      // if (totalThinkingMigrations > 0) {
+      //   log("MIGRATION", 2, "appLoad", `✅ Total thinking patterns migrated: ${totalThinkingMigrations}`);
+      //   // Save all sessions after migration
+      //   await save();
+      // } else {
+      //   log("MIGRATION", 1, "appLoad", "No thinking patterns found to migrate");
+      // }
     }
   } catch (e) {
     log("APP", 4, "load", "Failed to load data.", { error: e });
@@ -9858,6 +10189,17 @@ async function save() {
       await window.api.sessions.save(dataToSave);
     }
     log("APP", 2, "save", "Data saved successfully");
+    
+    // Auto-cache current session after save for consistency - DISABLED
+    // if (current && current.id) {
+    //   const chatLog = $("#chat-log");
+    //   if (chatLog && chatLog.innerHTML.trim()) {
+    //     const scroller = getChatScroller();
+    //     const scrollPos = scroller ? scroller.scrollTop : 0;
+    //     cacheSession(current.id, chatLog.innerHTML, scrollPos);
+    //     log("CACHE", 1, "save", "Auto-cached current session after save");
+    //   }
+    // }
   } catch (e) {
     console.error("Save failed:", e);
     log("APP", 4, "save", "Failed to save data.", { error: e });
@@ -10443,6 +10785,9 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       log("STREAM", 1, "finalize", "Removed streaming-active class from AI message", {});
     }
 
+    // Reset streaming active flag for column-reverse autoscroll
+    isStreamingActive = false;
+
     try {
       renderSessions?.();
     } catch {}
@@ -10452,6 +10797,21 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     try {
       save?.();
     } catch {}
+    
+    // Auto-cache session after streaming completes for instant restore - DISABLED
+    // try {
+    //   if (session && session.id) {
+    //     const chatLog = $("#chat-log");
+    //     if (chatLog && chatLog.innerHTML.trim()) {
+    //       const scroller = getChatScroller();
+    //       const scrollPos = scroller ? scroller.scrollTop : 0;
+    //       cacheSession(session.id, chatLog.innerHTML, scrollPos);
+    //       log("CACHE", 1, "finalize", "Auto-cached session after streaming completed");
+    //     }
+    //   }
+    // } catch (err) {
+    //   log("CACHE", 3, "finalize", "Failed to cache session after streaming", { error: err });
+    // }
 
     // if (hasContent && (!session.name || /untitled/i.test(session.name))) {
     //   try { generateAndSetTitle?.(session); } catch {}
@@ -10495,13 +10855,6 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
     // Debug logging to trace token flow
     const currentSetting = state.settings.streamThrottling || "auto";
-    log("STREAM", 0, "TOKEN_RECEIVED", "Token received in handler", {
-      token: String(token).substring(0, 30),
-      tokenLength: token.length,
-      currentSetting,
-      hasState: !!s,
-      hasAiNode: !!s.aiNode
-    });
 
     try {
       bumpToken(s.session, s.messageIndex);
@@ -10604,20 +10957,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         
         const userSetting = state.settings.streamThrottling || "auto";
         
-        log("STREAM", 0, "TOKEN_HANDLER", "Token processing", {
-          token: String(token).substring(0, 20),
-          userSetting,
-          displayLength: display.length,
-          hasThinkingContainer: !!div.querySelector('.thinking-container')
-        });
-        
         // FAST PATH for No Throttling - bypass all complex logic
         if (userSetting === "none") {
-          log("STREAM", 0, "FAST_PATH", "No Throttling FAST PATH activated", {
-            token: String(token).substring(0, 20),
-            displayLength: display.length,
-            gotEnd
-          });
           
           // Remove thinking container immediately if exists
           const thinkingContainer = div.querySelector('.thinking-container');
@@ -10630,13 +10971,9 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           div.innerHTML = html;
           if (div.querySelector("pre code")) highlightAllUnder(div);
           renderMathInElement(div);
-          scrollToBottom({ fromAI: true });
           
-          log("STREAM", 0, "FAST_PATH", "No Throttling render completed", {
-            htmlLength: html.length
-          });
+          debouncedAIScrollToBottom();
           
-          // Update state and exit early
           if (gotEnd) finalize();
           return;
         }
@@ -10661,12 +10998,6 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           
           const userSetting = state.settings.streamThrottling || "auto";
           if (userSetting === "none") {
-            log("STREAM", 0, "performSmartRender", "No Throttling render called", {
-              displayLength: display.length,
-              contentGrowth,
-              timeSinceLastRender,
-              gotEnd
-            });
           }
           
           // Decision matrix for rendering strategy
@@ -10734,45 +11065,22 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
             return;
           }
           
-          if (userSetting === "none") {
-            log("STREAM", 0, "performSmartRender", "No Throttling proceeding to render", {
-              displayLength: display.length,
-              contentGrowth,
-              willRenderSync: true
-            });
-          }
-          
           lastRenderTime = now;
           lastRenderLength = display.length;
           
           if (isUsingWorker && !shouldUseWorkerForStreaming) {
-            log('STREAM', 1, 'smartRender', 'Switching back to sync rendering', { 
-              contentLength: display.length,
-              workerToSync: true 
-            });
             isUsingWorker = false;
           } else if (!isUsingWorker && shouldUseWorkerForStreaming) {
-            log('STREAM', 1, 'smartRender', 'Switching to worker rendering', { 
-              contentLength: display.length,
-              syncToWorker: true 
-            });
           }
           
           // For "No Throttling", use synchronous rendering for maximum speed
           if (userSetting === "none") {
             // Immediate synchronous rendering - no async delay
-            log("STREAM", 0, "performSmartRender", "Executing synchronous render", {
-              displayLength: display.length,
-              trimmedLength: display.trim().length
-            });
             const html = mdFallback(display);
             div.innerHTML = html;
             if (div.querySelector("pre code")) highlightAllUnder(div);
             renderMathInElement(div);
             scrollToBottom({ fromAI: true });
-            log("STREAM", 0, "performSmartRender", "Synchronous render completed", {
-              htmlLength: html.length
-            });
           } else {
             // Async rendering for other settings
             md(display, { 
@@ -10997,6 +11305,9 @@ async function startStream(
 
   log("REQ", 2, "chat:stream-start", `Request to AI using ${act.model} model.`);
 
+  // Set streaming active flag for column-reverse autoscroll
+  isStreamingActive = true;
+
   // Add streaming-active class to the specific AI message being streamed
   if (aiNode) {
     aiNode.classList.add('streaming-active');
@@ -11173,6 +11484,17 @@ async function send() {
   });
   aiNode.dataset.index = String(aiMessageIndex);
 
+  // Smooth scroll to bottom after sending message
+  const scroller = getChatScroller();
+  if (scroller) {
+    requestAnimationFrame(() => {
+      scroller.scrollTo({
+        top: 0, // 0 is bottom in column-reverse
+        behavior: 'smooth'
+      });
+    });
+  }
+
   createResponseSpacer();
   setTimeout(() => {
     expandSpacer();
@@ -11221,6 +11543,7 @@ async function sendFromWelcome() {
 
   isUserScrolledUp = false;
   autoScrollEnabled = true;
+  userHasScrolledUp = false; // NEW: Reset column-reverse scroll state
 
   if (!originalText && welcomeScreenStagedFiles.length === 0) return;
 
@@ -11282,6 +11605,17 @@ async function sendFromWelcome() {
     metadata: modelInfo,
   });
   aiNode.dataset.index = String(aiMessageIndex);
+
+  // Smooth scroll to bottom after sending message from welcome
+  const scroller = getChatScroller();
+  if (scroller) {
+    requestAnimationFrame(() => {
+      scroller.scrollTo({
+        top: 0, // 0 is bottom in column-reverse
+        behavior: 'smooth'
+      });
+    });
+  }
 
   createResponseSpacer();
   setTimeout(() => {
@@ -12796,6 +13130,7 @@ function setupEventListeners() {
     const modelsConf = state.settings.models || defaultModels();
     const platformEl = $("#platform-select");
     const modelSelEl = $("#model-select");
+    const modelIdManualEl = $("#model-id-manual");
     const baseUrlEl = $("#base-url");
     const apiKeyEl = $("#api-key");
     // const labelEl    = $("#model-label"); // form dimatikan
@@ -12806,6 +13141,12 @@ function setupEventListeners() {
     if (window.innerWidth <= 768) {
       closeMobileSidebar();
     }
+
+    // Populate platform select with available providers
+    const providers = Object.keys(modelsConf.providers || {}).sort();
+    platformEl.innerHTML = providers
+      .map(p => `<option value="${p}">${p.charAt(0).toUpperCase() + p.slice(1)}</option>`)
+      .join("");
 
     $("#extended-thinking").value = modelsConf.active?.thinkMode || "off";
 
@@ -12831,25 +13172,39 @@ function setupEventListeners() {
           opt.textContent = m.label || m.id;
           modelSelEl.appendChild(opt);
         }
+        // Add manual entry option
+        const opt = document.createElement("option");
+        opt.value = "__manual__";
+        opt.textContent = "+ New model ID";
+        modelSelEl.appendChild(opt);
       } else {
         const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = "(ketik manual di bawah)";
+        opt.value = "__manual__";
+        opt.textContent = "+ New model ID";
         modelSelEl.appendChild(opt);
       }
 
       const act = modelsConf.active || {};
       if (keepCurrent && act.platform === p && act.model) {
-        modelSelEl.value = act.model;
-        if (!modelSelEl.value) modelSelEl.selectedIndex = 0;
+        if (list.find(m => m.id === act.model)) {
+          modelSelEl.value = act.model;
+          modelIdManualEl.style.display = "none";
+          modelIdManualEl.value = "";
+        } else {
+          modelSelEl.value = "__manual__";
+          modelIdManualEl.style.display = "block";
+          modelIdManualEl.value = act.model;
+        }
       } else {
         modelSelEl.selectedIndex = 0;
+        modelIdManualEl.style.display = "none";
+        modelIdManualEl.value = "";
       }
 
       baseUrlEl.value = prov.baseUrl || "";
       apiKeyEl.value = prov.apiKey || "";
 
-      const selectedId = modelSelEl.value;
+      const selectedId = modelSelEl.value === "__manual__" ? modelIdManualEl.value : modelSelEl.value;
       const meta = list.find((m) => m.id === selectedId) || {
         id: selectedId,
         label: selectedId,
@@ -12870,6 +13225,9 @@ function setupEventListeners() {
       const p = e.target.value;
       fillForProvider(p, false);
       populateTitleModelOptions(p);
+      // Hide manual input when switching platforms
+      modelIdManualEl.style.display = "none";
+      modelIdManualEl.value = "";
     };
 
     modelSelEl.onchange = () => {
@@ -12877,15 +13235,25 @@ function setupEventListeners() {
       const list = normalizeProviderModels(
         modelsConf.providers?.[p]?.models || [],
       );
-      const meta = list.find((m) => m.id === modelSelEl.value) || {
-        id: modelSelEl.value,
-        label: modelSelEl.value,
-        note: "",
-      };
+      
+      if (modelSelEl.value === "__manual__") {
+        modelIdManualEl.style.display = "block";
+        modelIdManualEl.focus();
+        applyNotePreview("");
+      } else {
+        modelIdManualEl.style.display = "none";
+        modelIdManualEl.value = "";
+        const meta = list.find((m) => m.id === modelSelEl.value) || {
+          id: modelSelEl.value,
+          label: modelSelEl.value,
+          note: "",
+        };
+        applyNotePreview(meta.note);
+      }
+    };
 
-      // if (labelEl) labelEl.value = meta.label || meta.id; // form dimatikan
-      // if (noteEl)  noteEl.value  = meta.note  || '';      // form dimatikan
-      applyNotePreview(meta.note);
+    modelIdManualEl.oninput = () => {
+      applyNotePreview("");
     };
 
     // $("#model-note").addEventListener("input", (e) => applyNotePreview(e.target.value)); // form dimatikan
@@ -12893,13 +13261,29 @@ function setupEventListeners() {
     $("#models-modal").classList.remove("hidden");
     $("#settings-menu").classList.add("hidden");
     $("#quick-model-switch-modal").classList.add("hidden");
+
+    // Hide any previous error messages
+    $("#switch-error").style.display = "none";
+    $("#switch-error").textContent = "";
   });
 
   $("#save-models").addEventListener("click", async () => {
+    const errorEl = $("#switch-error");
+    errorEl.style.display = "none";
+    errorEl.textContent = "";
+
     const platform = $("#platform-select").value;
-    const modelId = $("#model-select").value.trim();
+    const modelSelectValue = $("#model-select").value;
+    const modelIdManual = $("#model-id-manual").value.trim();
+    const modelId = modelSelectValue === "__manual__" ? modelIdManual : modelSelectValue;
     const baseUrl = $("#base-url").value.trim();
     const apiKey = $("#api-key").value.trim();
+
+    if (modelSelectValue === "__manual__" && !modelId) {
+      errorEl.textContent = "* Please enter a model ID.";
+      errorEl.style.display = "block";
+      return;
+    }
 
     const thinkMode = $("#extended-thinking").value;
 
@@ -13415,7 +13799,30 @@ function setupEventListeners() {
 function initializeApp() {
   log("APP", 2, "initializeApp", "Initializing application.");
 
+  // CLEAR ALL CACHES on app start
+  sessionCache.clear();
+  log('CACHE', 1, 'initializeApp', 'Session cache cleared on app initialization');
+
   initializeSmartScroll();
+  initColumnReverseScrollDetection(); // NEW: Initialize column-reverse scroll detection
+  initScrollToBottomButton(); // NEW: Initialize scroll to bottom button
+  
+  // Force check button visibility immediately on init
+  setTimeout(() => {
+    const scroller = getChatScroller();
+    if (scroller) {
+      const scrollTop = scroller.scrollTop;
+      const isNearBottom = scrollTop > -200;
+      log('SCROLL', 1, 'initializeApp', `Initial scroll check - scrollTop: ${scrollTop}px, isNearBottom: ${isNearBottom}`);
+      if (!isNearBottom) {
+        showScrollToBottomButton();
+        log('SCROLL', 1, 'initializeApp', 'Scroll button SHOWN on init (scrolled up)');
+      } else {
+        hideScrollToBottomButton();
+        log('SCROLL', 1, 'initializeApp', 'Scroll button HIDDEN on init (near bottom)');
+      }
+    }
+  }, 100);
 
   if (window.api) {
     window.api.on("chat-update", (payload) => {

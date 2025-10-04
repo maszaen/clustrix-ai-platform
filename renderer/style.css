@@ -96,6 +96,10 @@
 
 }
 
+select {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 .message.ai strong {
   font-family: var(--font-ai-bold);
   letter-spacing: 0.03em;
@@ -160,6 +164,7 @@ body.light-theme {
   --bck: #00000008;
   --bg: #FFFFFF; /* done: background paling belakang, base */
   --bg-secondary: #F0F4F9; /* done, sidebar dan code bg */
+  --bg-secondary-50: #f0f4f980; /* done, sidebar dan code bg */
   --fg: #1f1f1f; /* done: font paling kontras */
   --fg-muted: #575B60; /* done: font redup, di sidebar, dan di form */
   --fg-death: #53575bff;
@@ -233,6 +238,7 @@ body.dark-theme {
   --bck: #000;
   --bg: #1b1c1d; /* done: background paling belakang, base */
   --bg-secondary: #282A2C; /* done, sidebar dan code bg */
+  --bg-secondary-50: #282a2c7a; /* done, sidebar dan code bg */
   --fg: #FCFCFC; /* done: font paling kontras */
   --fg-muted: #BDC1C6; /* done: font di sidebar atau form */
   --fg-death: #8f9296ff;
@@ -2813,7 +2819,6 @@ input:checked + .slider:before {
   position: relative;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
   margin: 0 auto;
   flex: 1;
   width: 100%;
@@ -2828,181 +2833,77 @@ input:checked + .slider:before {
   padding: var(--spacing-xs) var(--spacing-xl) var(--spacing-2xl) var(--spacing-xl);
   background: var(--bg);
   scroll-behavior: smooth;
+  
+  /* EXPERIMENTAL: Column-reverse for natural bottom-scrolling */
+  display: flex;
+  flex-direction: column-reverse;
+  
+  /* Optimize rendering for column-reverse to prevent layout shift */
+  will-change: scroll-position;
+  contain: layout style paint;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Scroll to Bottom Button - At TOP CENTER of form area with semi-transparent background */
+.scroll-to-bottom-btn {
+  position: absolute;
+  top: -60px; /* Above the form */
+  left: 50%;
+  transform: translateX(-50%) scale(0);
+  background: var(--bg-secondary); /* 50% opacity */
+  color: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.scroll-to-bottom-btn.show {
+  transform: translateX(-50%) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.scroll-to-bottom-btn:hover {
+  background: var(--hover-bg); /* More opaque on hover */
+  transform: translateX(-50%) scale(1.1);
+}
+
+.scroll-to-bottom-btn svg {
+  flex-shrink: 0;
+  color: var(--icon);
 }
 
 /* Ensure instant scrolling during session switching */
 .session-switching .chat-log-container {
   scroll-behavior: auto !important;
 }
-/* 
-.link-preview-modal {
-  position: absolute;
-  right: var(--spacing-xl);
-  bottom: var(--spacing-xl);
-  width: min(520px, calc(100% - 2 * var(--spacing-xl)));
-  max-height: 70vh;
-  background: var(--surface);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-lg);
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition: var(--transition-fast);
-}
 
-.link-preview-modal.hidden {
-  display: none;
-}
-
-.link-preview-frame {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.link-preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border-light);
-  gap: var(--spacing-md);
-}
-
-.link-preview-title {
-  font-family: var(--font-ai-bold);
-  font-size: 14px;
-  color: var(--fg);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.link-preview-controls {
-  display: flex;
-  gap: var(--spacing-2xs);
-}
-
-.link-preview-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  line-height: 1;
-  transition: var(--transition-fast);
-}
-
-.link-preview-btn:hover {
-  background: var(--surface-secondary);
-  color: var(--fg);
-}
-
-.link-preview-body {
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  flex: 1;
-  min-height: 0;
-}
-
-.link-preview-status {
-  padding: var(--spacing-sm) var(--spacing-md);
-  font-size: 13px;
-  color: var(--fg-muted);
-  border-bottom: 1px solid var(--border-light);
-}
-
-.link-preview-status.hidden {
-  display: none;
-}
-
-.link-preview-body iframe {
-  flex: 1;
-  width: 100%;
-  border: none;
-  background: var(--bg-secondary);
-}
-
-.link-preview-modal.minimized {
-  width: auto;
-  max-width: none;
-  bottom: var(--spacing-xl);
-}
-
-.link-preview-modal.minimized .link-preview-body {
-  display: none;
-}
-
-.link-preview-modal.minimized .link-preview-title {
-  max-width: 220px;
-}
-
-@media (max-width: 900px) {
-  .link-preview-modal {
-    left: 50%;
-    transform: translateX(-50%);
-    right: auto;
-    width: calc(100% - 2 * var(--spacing-xl));
-    max-width: 520px;
+@keyframes slideDiagonal {
+  0% {
+    clip-path: polygon(0 0, 0 0, 0 100%, 0 100%);
+  }
+  100% {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
   }
 }
-
-@media (max-width: 640px) {
-  .link-preview-modal {
-    width: calc(100% - 2 * var(--spacing-lg));
-    bottom: var(--spacing-lg);
-    border-radius: var(--radius-xl);
-  }
-} */
-
-/* .chat-log-container::before {
-  content: "";
-  position: absolute;
-  top: 40px;
-  left: 0;
-  right: 0;
-  height: px;
-  background: linear-gradient(to bottom, var(--bg), transparent);
-  pointer-events: none;
-  z-index: 1;
-} */
-
-/* #chat-log::-webkit-scrollbar {
-  width: 1px;
-}
-
-#chat-log::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-#chat-log::-webkit-scrollbar-thumb {
-  background: var(--border-input);
-  border-radius: var(--radius-full);
-}
-
-#chat-log::-webkit-scrollbar-thumb:hover {
-  background: var(--fg-muted);
-} */
-
-
 
 @keyframes overlaySlideDiagonal {
   0% {
-    transform: translate(-40%, -70%); /* Hanya horizontal */
+    transform: translate(-40%, -70%);
   }
   100% {
-    transform: translate(100%, 100%); /* Horizontal + vertikal */
+    transform: translate(100%, 100%);
   }
 }
 
@@ -3034,7 +2935,7 @@ input:checked + .slider:before {
   top: 0;
   left: 0;
   width: 250%;
-  height: 250%;
+  height: 100%;
   background: linear-gradient(
     103deg,
     transparent 0%,
@@ -3048,11 +2949,9 @@ input:checked + .slider:before {
   z-index: 10;
 }
 
-.message::before .message.user .message-text::before {
-  animation: overlaySlideDiagonal 1.5s ease-out forwards;
-}
 
 .message {
+  contain: paint;
   margin: var(--spacing-md) 0;
   animation: slideInMessage 0.4s cubic-bezier(0.4, 0.0, 0.2, 1);
 }
@@ -3074,7 +2973,6 @@ input:checked + .slider:before {
 }
 
 .message.ai {
-  overflow: hidden;
   position: relative;
   transition: min-height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
@@ -3140,11 +3038,11 @@ input:checked + .slider:before {
 }
 
 .typing-indicator span {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   background-color: var(--fg-muted);
   border-radius: 50%;
-  animation: typingPulse 1.4s infinite ease-in-out;
+  animation: typingPulse 2.4s infinite ease-in-out;
 }
 
 .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
@@ -3154,7 +3052,7 @@ input:checked + .slider:before {
 @keyframes typingPulse {
   0%, 80%, 100% {
     transform: scale(0.8);
-    opacity: 0.5;
+    opacity: 0.6;
   }
   40% {
     transform: scale(1);
@@ -3377,7 +3275,7 @@ textarea::-webkit-scrollbar {
 .modal-overlay {
   position: absolute;
   inset: 0;
-  cursor: pointer;
+  cursor: default;
 }
 
 .modal-card {
@@ -3911,7 +3809,6 @@ blockquote blockquote blockquote blockquote::before {
   word-wrap: break-word;
   transition: var(--transition-fast);
   min-width: 0 !important;
-  overflow: hidden;
 }
 
 .message-text:empty {
@@ -4041,6 +3938,7 @@ blockquote blockquote blockquote blockquote::before {
 }
 
 .message.ai .message-text {
+  position: relative;
   padding: var(--spacing-xs) var(--spacing-sm);
   background: transparent;
   color: var(--fg);
@@ -5205,6 +5103,7 @@ a:focus-visible {
   overflow: auto;
   margin-top: 8px;
   padding: var(--spacing-xl) 0 var(--spacing-2xl) 0;
+  /* NO column-reverse - normal scroll, just disabled auto-scroll */
 }
 
 .message.ai .thinking-body.expanded::before {

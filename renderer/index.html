@@ -324,7 +324,6 @@
               <path d="m6 6 12 12" />
             </svg>
           </button>
-        </div>
       </header>
       <div class="chat-log-container">
         <div id="chat-log">
@@ -661,6 +660,12 @@
         <div id="artifacts-list" class="artifacts-list"></div>
       </div>
       <div id="input-area">
+        <!-- Scroll to Bottom Button - Absolute positioned at TOP CENTER of form with semi-transparent background -->
+        <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" title="Scroll ke bawah">
+          <svg viewBox="0 0 24 24" width="24" height="24">
+            <path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
         <div class="input-container-parent">
           <div id="active-chat-file-upload-container" class="file-upload-container"></div>
           <div class="input-container">
@@ -778,7 +783,7 @@
   <div id="quick-model-switch-modal" class="hidden">
     <div class="modal-overlay"></div>
     <div id="quick-model-switch-card" class="mini-modal-card" style="position: fixed; max-width: 400px; width: auto;">
-      <div class="modal-body" id="quick-model-switch-body" style="padding: 0; max-height: 400px; overflow-y: auto;"></div>
+      <div class="modal-body" id="quick-model-switch-body" style="padding: 0; overflow-y: auto;"></div>
     </div>
   </div>
   <!-- Settings Modal -->
@@ -871,16 +876,13 @@
         <div class="form-group">
           <label for="platform-select">Platform</label>
           <select id="platform-select">
-            <option value="cerebras">Cerebras</option>
-            <option value="openrouter">Openrouter</option>
-            <option value="groq">Groq</option>
-            <option value="gemini">Gemini</option>
-            <option value="zhipu">Zhipu</option>
           </select>
         </div>
         <div class="form-group">
           <label for="model-select">Model</label>
           <select id="model-select"></select>
+          <input type="text" id="model-id-manual" placeholder="Enter model ID..." style="margin-top: 8px; display: none;">
+          <div id="switch-error" class="help-text" style="color: var(--error); display: none; margin-bottom: 16px;"></div>
         </div>
         <div class="rel">
           <blockquote>

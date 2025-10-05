@@ -542,6 +542,16 @@ hr {
     color: var(--link-hover);
 }
 
+.message.ai a:not(:not([href])):not([href=""]) {
+  color: var(--link);
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.message.ai a:not(:not([href])):not([href=""]):hover {
+  color: var(--link-hover);
+}
+
 .modal-card hr {
   width: 100%;
   display: block;
@@ -4991,7 +5001,7 @@ a:focus-visible {
 .message.ai .thinking-toggle {
   display: flex;
   position: sticky;
-  z-index: 5;
+  z-index: 999;
   top: 0;
   align-items: center;
   gap: 8px;
@@ -5058,6 +5068,7 @@ a:focus-visible {
   padding: 0;
   font-size: 14px;
   color: var(--fg-muted);
+  z-index: 999;
   font-family: var(--font-display-italic);
   animation: none;
 }

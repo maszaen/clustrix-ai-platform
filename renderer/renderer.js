@@ -28,9 +28,9 @@ let justSentMessage = false;
 let currentProject = null;
 let projectsData = [];
 
-// Smart Session Caching System - DISABLED
+// Smart Session Caching System
 const sessionCache = new Map();
-const MAX_CACHED_SESSIONS = 0; // Disabled - set to 0 to disable caching
+const MAX_CACHED_SESSIONS = 10; // Re-enabled for fast session switching
 const CACHE_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
 // CLEAR CACHE ON PAGE LOAD/REFRESH to prevent stale data
@@ -44,10 +44,11 @@ const hoverStates = new WeakMap();
 const activeHoverElements = new Set();
 
 class SessionCacheEntry {
-  constructor(sessionId, renderedHTML, scrollPosition = 0) {
+  constructor(sessionId, renderedHTML, scrollPosition = 0, lazyState = null) {
     this.sessionId = sessionId;
     this.renderedHTML = renderedHTML;
     this.scrollPosition = scrollPosition;
+    this.lazyState = lazyState; // Store lazy loading state
     this.timestamp = Date.now();
     this.accessCount = 1;
     this.lastAccessed = Date.now();
@@ -82,7 +83,7 @@ function getCachedSession(sessionId) {
   return entry;
 }
 
-function cacheSession(sessionId, renderedHTML, scrollPosition = 0) {
+function cacheSession(sessionId, renderedHTML, scrollPosition = 0, lazyState = null) {
   // Clean up expired entries
   for (const [id, entry] of sessionCache.entries()) {
     if (entry.isExpired()) {
@@ -108,13 +109,19 @@ function cacheSession(sessionId, renderedHTML, scrollPosition = 0) {
     }
   }
   
-  const cacheEntry = new SessionCacheEntry(sessionId, renderedHTML, scrollPosition);
+  const cacheEntry = new SessionCacheEntry(sessionId, renderedHTML, scrollPosition, lazyState);
   sessionCache.set(sessionId, cacheEntry);
   
   log('CACHE', 1, 'cacheSession', 'Session cached', { 
     sessionId, 
     htmlLength: renderedHTML.length,
-    cacheSize: sessionCache.size 
+    cacheSize: sessionCache.size,
+    hasLazyState: !!lazyState,
+    lazyState: lazyState ? {
+      loadedStartIndex: lazyState.loadedStartIndex,
+      isFullyLoaded: lazyState.isFullyLoaded,
+      totalMessages: lazyState.totalMessages
+    } : null
   });
 }
 
@@ -1243,7 +1250,6 @@ async function processSearchStatusQueue() {
         const urlsTitle = createTitleSpan();
         thinkEl.text.appendChild(urlsTitle);
         
-        // Check if this is project session (has file:// links)
         const isProjectFiles = status.data && status.data.some && status.data.some(item => item.link && item.link.startsWith('file://'));
         
         if (isProjectFiles) {
@@ -8546,46 +8552,87 @@ function renderHistory() {
   currentProject = null;
   if (!current || !current.messages) return;
 
-  // Try cache first for ultra-fast switching - DISABLED
-  // const cached = getCachedSession(current.id);
-  // if (cached) {
-  //   const renderStartTime = performance.now();
+  // Try cache first for ultra-fast switching
+  const cached = getCachedSession(current.id);
+  if (cached) {
+    const renderStartTime = performance.now();
     
-  //   // Ultra-fast cache restoration with scroll position lock
-  //   const chatLog = $("#chat-log");
-  //   const scroller = getChatScroller();
+    // Ultra-fast cache restoration with scroll position lock
+    const chatLog = $("#chat-log");
+    const scroller = getChatScroller();
     
-  //   // Lock scroll position BEFORE DOM manipulation to prevent jump
-  //   if (scroller) {
-  //     scroller.style.scrollBehavior = "auto";
-  //     scroller.style.overflow = "hidden"; // Prevent scroll during restoration
-  //   }
+    // IMPORTANT: Disable scroll listener temporarily during cache restore
+    if (scroller) {
+      scroller._lazyListenerDisabled = true;
+    }
     
-  //   // Restore HTML content
-  //   chatLog.innerHTML = cached.renderedHTML;
+    // Lock scroll position BEFORE DOM manipulation to prevent jump
+    if (scroller) {
+      scroller.style.scrollBehavior = "auto";
+      scroller.style.overflow = "hidden"; // Prevent scroll during restoration
+    }
     
-  //   // Force immediate scroll position restore (before browser can calculate layout)
-  //   if (scroller && cached.scrollPosition !== undefined) {
-  //     // Use requestAnimationFrame to ensure DOM is ready but before paint
-  //     requestAnimationFrame(() => {
-  //       scroller.scrollTop = cached.scrollPosition;
-  //       scroller.style.overflow = ""; // Re-enable scrolling
-  //       scroller.style.scrollBehavior = ""; // Restore smooth behavior
-  //     });
-  //   }
+    // Restore HTML content
+    chatLog.innerHTML = cached.renderedHTML;
     
-  //   // Re-hydrate interactive elements without full re-render
-  //   hydrateInteractiveElements();
+    // CRITICAL: Restore lazy state from cache
+    if (cached.lazyState) {
+      current._lazyState = cached.lazyState;
+      log("CACHE", 1, "renderHistory", "Restored lazy state from cache", {
+        loadedStartIndex: cached.lazyState.loadedStartIndex,
+        isFullyLoaded: cached.lazyState.isFullyLoaded,
+        totalMessages: cached.lazyState.totalMessages
+      });
+    } else {
+      log("CACHE", 2, "renderHistory", "No lazy state in cache to restore!");
+    }
     
-  //   const renderTime = performance.now() - renderStartTime;
-  //   log("CACHE", 1, "renderHistory", `Ultra-fast cache restore completed`, {
-  //     renderTime: `${renderTime.toFixed(2)}ms`,
-  //     cacheAge: `${cached.getAge()}ms`,
-  //     scrollRestored: cached.scrollPosition
-  //   });
+    // DO NOT set isFullyLoaded = true!
+    // We need to allow lazy loading if user scrolls to top
+    // Just temporarily disable the listener during restore
     
-  //   return;
-  // }
+    // Force immediate scroll position restore (before browser can calculate layout)
+    if (scroller && cached.scrollPosition !== undefined) {
+      // Use requestAnimationFrame to ensure DOM is ready but before paint
+      requestAnimationFrame(() => {
+        scroller.scrollTop = cached.scrollPosition;
+        scroller.style.overflow = ""; // Re-enable scrolling
+        scroller.style.scrollBehavior = ""; // Restore smooth behavior
+        
+        // Re-enable scroll listener after a delay to prevent immediate trigger
+        setTimeout(() => {
+          if (scroller) {
+            scroller._lazyListenerDisabled = false;
+          }
+        }, 500); // 500ms delay to prevent trigger from restore scroll
+      });
+    }
+    
+    // Re-hydrate interactive elements without full re-render
+    hydrateInteractiveElements();
+    
+    // CRITICAL: Re-setup lazy scroll listener after cache restore
+    // This ensures user can load older messages if they scroll to top
+    setupLazyScrollListener();
+    
+    // Add load older indicator if there are more messages to load
+    if (current._lazyState && current._lazyState.loadedStartIndex > 0) {
+      addLoadOlderIndicator(current._lazyState.loadedStartIndex);
+      log("CACHE", 1, "renderHistory", `Added load older indicator`, {
+        remainingCount: current._lazyState.loadedStartIndex
+      });
+    }
+    
+    const renderTime = performance.now() - renderStartTime;
+    log("CACHE", 1, "renderHistory", `Ultra-fast cache restore completed`, {
+      renderTime: `${renderTime.toFixed(2)}ms`,
+      cacheAge: `${cached.getAge()}ms`,
+      scrollRestored: cached.scrollPosition,
+      lazyLoadEnabled: !!(current._lazyState && current._lazyState.loadedStartIndex > 0)
+    });
+    
+    return;
+  }
 
   // Fallback to normal rendering if no cache
   renderHistoryLazy();
@@ -8876,7 +8923,6 @@ function renderHistoryLazy() {
 
   // Wait for all thinking-text formatting to complete before displaying
   Promise.all(processingPromises).then(() => {
-    log("SESSION", 1, "renderHistoryLazy", "All thinking-text formatting completed");
   }).catch(error => {
     console.warn("Some thinking-text formatting failed:", error);
   });
@@ -8909,35 +8955,20 @@ function renderHistoryLazy() {
         scroller.scrollTop = targetScrollTop;
         scroller.style.scrollBehavior = originalBehavior;
 
-        log(
-          "SESSION",
-          1,
-          "renderHistoryLazy",
-          "Instant scrolled to last user message with top 30px offset (column-reverse)",
-          {
-            messageIndex: lastUserMessageElement.dataset.index,
-            targetScrollTop,
-          },
-        );
-        
-        // Cache the fully rendered session for next time - DISABLED
-        // const chatLog = $("#chat-log");
-        // if (chatLog && current && current.id) {
-        //   cacheSession(current.id, chatLog.innerHTML, targetScrollTop);
-        // }
+        const chatLog = $("#chat-log");
+        if (chatLog && current && current.id) {
+          cacheSession(current.id, chatLog.innerHTML, targetScrollTop, current._lazyState);
+        }
       } else {
-        // Fallback to bottom if no user messages found
         scroller.scrollTop = 0; // 0 is bottom in column-reverse
         
-        // Cache with bottom scroll position - DISABLED
-        // const chatLog = $("#chat-log");
-        // if (chatLog && current && current.id) {
-        //   cacheSession(current.id, chatLog.innerHTML, 0);
-        // }
+        const chatLog = $("#chat-log");
+        if (chatLog && current && current.id) {
+          cacheSession(current.id, chatLog.innerHTML, 0, current._lazyState);
+        }
       }
     }
 
-    // Update code blocks with artifact info after rendering
     setTimeout(() => updateCodeBlocksWithArtifactInfo(), 100);
   });
 }
@@ -8946,6 +8977,12 @@ function addLoadOlderIndicator(remainingCount) {
   const logContainer = $("#chat-log");
   if (!logContainer) {
     return;
+  }
+
+  // Remove existing indicator first to prevent duplicates
+  const existingIndicator = document.getElementById("load-older-indicator");
+  if (existingIndicator) {
+    existingIndicator.remove();
   }
 
   const indicator = document.createElement("div");
@@ -8963,7 +9000,12 @@ function addLoadOlderIndicator(remainingCount) {
 
 function setupLazyScrollListener() {
   const scroller = getChatScroller();
-  if (!scroller || scroller._lazyListenerAdded) {
+  if (!scroller) {
+    log("SESSION", 2, "setupLazyScrollListener", "Cannot setup: scroller not found");
+    return;
+  }
+  
+  if (scroller._lazyListenerAdded) {
     return;
   }
 
@@ -8972,14 +9014,42 @@ function setupLazyScrollListener() {
   scroller.addEventListener(
     "scroll",
     throttle(() => {
-      if (scroller.scrollTop < 100 && current?._lazyState) {
+      if (scroller._lazyListenerDisabled) {
+        return;
+      }
+      
+      if (!current?._lazyState || current._lazyState.loadedStartIndex <= 0) {
+        return;
+      }
+      
+      if (current._lazyState.isFullyLoaded) {
+        return;
+      }
+
+      const scrollHeight = scroller.scrollHeight;
+      const clientHeight = scroller.clientHeight;
+      const scrollTop = scroller.scrollTop;
+      
+      let isNearTop = false;
+      if (scrollTop < 0) {
+        const maxNegativeScroll = -(scrollHeight - clientHeight);
+        const distanceFromTopNegative = Math.abs(scrollTop - maxNegativeScroll);
+        isNearTop = distanceFromTopNegative < 100;
+        
+      } else {
+        const maxScrollTop = scrollHeight - clientHeight;
+        const distanceFromTop = maxScrollTop - scrollTop;
+        isNearTop = distanceFromTop < 100;
+      }
+      
+      if (isNearTop) {
         const indicator = document.getElementById("load-older-indicator");
 
-        if (indicator && current._lazyState.loadedStartIndex > 0) {
-          loadOlderMessages(false);
-        }
+        if (!window._isLazyLoading && indicator) {
+          loadOlderMessages();
+        } 
       }
-    }, 100),
+    }, 200), // Throttle to 200ms to reduce triggering
   );
 
   window.testLazyScroll = function () {
@@ -8990,140 +9060,98 @@ function setupLazyScrollListener() {
   };
 }
 
-window.loadOlderMessages = async function (smoothScroll = true) {
-  if (!current?._lazyState || current._lazyState.loadedStartIndex <= 0) return;
-
-  window._isLazyLoading = true;
-
-  const LOAD_BATCH_SIZE = 10;
-  const newStartIndex = Math.max(
-    0,
-    current._lazyState.loadedStartIndex - LOAD_BATCH_SIZE,
-  );
-  
-  // Direct access to current.messages instead of cloned allMessages
-  const messagesToLoad = current.messages.slice(
-    newStartIndex,
-    current._lazyState.loadedStartIndex,
-  );
-
-  log("SESSION", 1, "loadOlderMessages", `Loading older messages`, {
-    newStartIndex,
-    loadCount: messagesToLoad.length,
-    smoothScroll,
-  });
-
-  const scroller = getChatScroller();
-  const oldScrollHeight = scroller ? scroller.scrollHeight : 0;
-
-  const oldIndicator = document.getElementById("load-older-indicator");
-  if (oldIndicator) oldIndicator.remove();
-
-  const logContainer = $("#chat-log");
-  if (!logContainer) {
+window.loadOlderMessages = async function () {
+  if (!current?._lazyState || current._lazyState.loadedStartIndex <= 0) {
     return;
   }
+  
+  // Prevent multiple loads
+  if (window._isLazyLoading) {
+    return;
+  }
+  
+  window._isLazyLoading = true;
 
-  const fragment = document.createDocumentFragment();
-  const formatterPromises = [];
+  try {
+    const LOAD_BATCH_SIZE = 10;
+    const newStartIndex = Math.max(
+      0,
+      current._lazyState.loadedStartIndex - LOAD_BATCH_SIZE,
+    );
+    
+    // Direct access to current.messages instead of cloned allMessages
+    const messagesToLoad = current.messages.slice(
+      newStartIndex,
+      current._lazyState.loadedStartIndex,
+    );
 
-  // First pass: create nodes and collect formatter promises
-  for (let i = 0; i < messagesToLoad.length; i++) {
-    const actualIndex = newStartIndex + i;
-    const messageData = messagesToLoad[i];
-    if (!Array.isArray(messageData)) continue;
+    const oldIndicator = document.getElementById("load-older-indicator");
+    if (oldIndicator) oldIndicator.remove();
 
-    const [role, content, metadata] = messageData;
+    const logContainer = $("#chat-log");
+    if (!logContainer) {
+      log("SESSION", 2, "loadOlderMessages", "No chat-log container found");
+      return;
+    }
 
-    const node = addMessage(role, content, {
-      final: true,
-      index: actualIndex,
-      metadata: metadata || {},
-      skipContainer: true,
-    });
+    const fragment = document.createDocumentFragment();
+    const formatterPromises = [];
 
-    if (node) {
-      node.dataset.index = String(actualIndex);
-      node.dataset.lazyLoaded = "true";
-      fragment.appendChild(node);
+    // Create nodes and collect formatter promises
+    for (let i = 0; i < messagesToLoad.length; i++) {
+      const actualIndex = newStartIndex + i;
+      const messageData = messagesToLoad[i];
+      if (!Array.isArray(messageData)) continue;
 
-      if (role === "ai") {
-        // Collect formatter promises to wait for completion
-        formatterPromises.push(hydrateThinkingIfAnyAsync(node, current, actualIndex));
-        renderMathInElement(node);
-      }
+      const [role, content, metadata] = messageData;
 
-      // Setup expand/collapse for user messages in lazy loading
-      if (role === "user") {
-        // Only setup if not already done
-        const expandBtn = node.querySelector(".message-expand-btn");
-        if (expandBtn && !expandBtn.dataset.setupComplete) {
-          setTimeout(() => setupUserMessageExpandCollapse(node), 0);
+      const node = addMessage(role, content, {
+        final: true,
+        index: actualIndex,
+        metadata: metadata || {},
+        skipContainer: true,
+      });
+
+      if (node) {
+        node.dataset.index = String(actualIndex);
+        node.dataset.lazyLoaded = "true";
+        fragment.appendChild(node);
+
+        if (role === "ai") {
+          formatterPromises.push(hydrateThinkingIfAnyAsync(node, current, actualIndex));
+          renderMathInElement(node);
+        }
+
+        if (role === "user") {
+          const expandBtn = node.querySelector(".message-expand-btn");
+          if (expandBtn && !expandBtn.dataset.setupComplete) {
+            setTimeout(() => setupUserMessageExpandCollapse(node), 0);
+          }
         }
       }
     }
-  }
 
-  // Wait for all formatters to complete before height calculation
-  await Promise.all(formatterPromises);
+    // Wait for formatters
+    await Promise.all(formatterPromises);
 
-  let preservedScrollTop = null;
-  if (scroller && !smoothScroll) {
-    preservedScrollTop = scroller.scrollTop;
-
-    const originalScrollBehavior = scroller.style.scrollBehavior;
-    scroller.style.scrollBehavior = "auto";
-
-    const scrollLock = document.createElement("div");
-    scrollLock.style.position = "absolute";
-    scrollLock.style.top = "0";
-    scrollLock.style.left = "0";
-    scrollLock.style.width = "100%";
-    scrollLock.style.height = "100%";
-    scrollLock.style.pointerEvents = "none";
-    scrollLock.style.zIndex = "9999";
-    scroller.appendChild(scrollLock);
     logContainer.insertBefore(fragment, logContainer.firstChild);
-    const heightDifference = scroller.scrollHeight - oldScrollHeight;
-    const newScrollTop = preservedScrollTop + heightDifference;
 
-    scroller.scrollTo({
-      top: newScrollTop,
-      behavior: "auto",
-    });
+    current._lazyState.loadedStartIndex = newStartIndex;
 
-    scroller.removeChild(scrollLock);
-    scroller.style.scrollBehavior = originalScrollBehavior;
-
-    preservedScrollTop = newScrollTop;
-  }
-
-  current._lazyState.loadedStartIndex = newStartIndex;
-
-  if (newStartIndex > 0) {
-    addLoadOlderIndicator(newStartIndex);
-  }
-
-  if (preservedScrollTop !== null) {
-    requestAnimationFrame(() => {
-      if (Math.abs(scroller.scrollTop - preservedScrollTop) > 2) {
-        scroller.scrollTo({
-          top: preservedScrollTop,
-          behavior: "auto",
-        });
-      }
-
-      setTimeout(() => {
-        window._isLazyLoading = false;
-        // Update code blocks with artifact info for newly loaded messages
-        updateCodeBlocksWithArtifactInfo();
-      }, 50);
-    });
-  } else {
+    if (newStartIndex > 0) {
+      addLoadOlderIndicator(newStartIndex);
+    }
+    
+    log("SESSION", 1, "loadOlderMessages", "Load completed successfully");
+  } catch (error) {
+    console.error("Error loading older messages:", error);
+    log("SESSION", 3, "loadOlderMessages", "Error occurred", { error: error.message });
+  } finally {
+    // ALWAYS cleanup, even if error occurs
     setTimeout(() => {
       window._isLazyLoading = false;
-      // Update code blocks with artifact info for newly loaded messages
       updateCodeBlocksWithArtifactInfo();
+      log("SESSION", 1, "loadOlderMessages", "Cleanup completed, ready for next load");
     }, 50);
   }
 };
@@ -9860,13 +9888,13 @@ function setCurrent(s) {
       saveDraftForSession(current.id, msgInput.value);
     }
     
-    // Cache current session before switching - DISABLED
-    // const chatLog = $("#chat-log");
-    // if (chatLog && chatLog.innerHTML.trim()) {
-    //   const scroller = getChatScroller();
-    //   const scrollPos = scroller ? scroller.scrollTop : 0;
-    //   cacheSession(current.id, chatLog.innerHTML, scrollPos);
-    // }
+    // Cache current session before switching
+    const chatLog = $("#chat-log");
+    if (chatLog && chatLog.innerHTML.trim()) {
+      const scroller = getChatScroller();
+      const scrollPos = scroller ? scroller.scrollTop : 0;
+      cacheSession(current.id, chatLog.innerHTML, scrollPos, current._lazyState);
+    }
   }
   
   // Set session switching flag for optimized rendering and disable smooth scrolling
@@ -9991,8 +10019,8 @@ function setCurrent(s) {
     
     log("SESSION", 1, "setCurrent", "Session switch performance", {
       totalTime: `${totalSwitchTime.toFixed(2)}ms`,
-      // wasFromCache: !!getCachedSession(current.id), // DISABLED
-      // cacheSize: sessionCache.size // DISABLED
+      wasFromCache: !!getCachedSession(current.id),
+      cacheSize: sessionCache.size
     });
   }, 100);
   
@@ -10190,16 +10218,16 @@ async function save() {
     }
     log("APP", 2, "save", "Data saved successfully");
     
-    // Auto-cache current session after save for consistency - DISABLED
-    // if (current && current.id) {
-    //   const chatLog = $("#chat-log");
-    //   if (chatLog && chatLog.innerHTML.trim()) {
-    //     const scroller = getChatScroller();
-    //     const scrollPos = scroller ? scroller.scrollTop : 0;
-    //     cacheSession(current.id, chatLog.innerHTML, scrollPos);
-    //     log("CACHE", 1, "save", "Auto-cached current session after save");
-    //   }
-    // }
+    // Auto-cache current session after save for consistency
+    if (current && current.id) {
+      const chatLog = $("#chat-log");
+      if (chatLog && chatLog.innerHTML.trim()) {
+        const scroller = getChatScroller();
+        const scrollPos = scroller ? scroller.scrollTop : 0;
+        cacheSession(current.id, chatLog.innerHTML, scrollPos, current._lazyState);
+        log("CACHE", 1, "save", "Auto-cached current session after save");
+      }
+    }
   } catch (e) {
     console.error("Save failed:", e);
     log("APP", 4, "save", "Failed to save data.", { error: e });
@@ -10798,20 +10826,20 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       save?.();
     } catch {}
     
-    // Auto-cache session after streaming completes for instant restore - DISABLED
-    // try {
-    //   if (session && session.id) {
-    //     const chatLog = $("#chat-log");
-    //     if (chatLog && chatLog.innerHTML.trim()) {
-    //       const scroller = getChatScroller();
-    //       const scrollPos = scroller ? scroller.scrollTop : 0;
-    //       cacheSession(session.id, chatLog.innerHTML, scrollPos);
-    //       log("CACHE", 1, "finalize", "Auto-cached session after streaming completed");
-    //     }
-    //   }
-    // } catch (err) {
-    //   log("CACHE", 3, "finalize", "Failed to cache session after streaming", { error: err });
-    // }
+    // Auto-cache session after streaming completes for instant restore
+    try {
+      if (session && session.id) {
+        const chatLog = $("#chat-log");
+        if (chatLog && chatLog.innerHTML.trim()) {
+          const scroller = getChatScroller();
+          const scrollPos = scroller ? scroller.scrollTop : 0;
+          cacheSession(session.id, chatLog.innerHTML, scrollPos, session._lazyState);
+          log("CACHE", 1, "finalize", "Auto-cached session after streaming completed");
+        }
+      }
+    } catch (err) {
+      log("CACHE", 3, "finalize", "Failed to cache session after streaming", { error: err });
+    }
 
     // if (hasContent && (!session.name || /untitled/i.test(session.name))) {
     //   try { generateAndSetTitle?.(session); } catch {}
@@ -11907,6 +11935,22 @@ function setupTextareaProjectResize() {
 
       this.style.height = "auto";
       this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
+    });
+
+    // Add Ctrl+Enter to send message
+    projectInput.addEventListener("keydown", function (e) {
+      if (e.ctrlKey && e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        log(
+          "UI",
+          0,
+          "event:keydown-CtrlEnter-project",
+          "Ctrl+Enter pressed in project input, sending message",
+        );
+        handleProjectSend();
+        return false;
+      }
     });
   }
 }
@@ -13799,7 +13843,6 @@ function setupEventListeners() {
 function initializeApp() {
   log("APP", 2, "initializeApp", "Initializing application.");
 
-  // CLEAR ALL CACHES on app start
   sessionCache.clear();
   log('CACHE', 1, 'initializeApp', 'Session cache cleared on app initialization');
 

@@ -1,10 +1,22 @@
-function enhancedMarkdownParse(src, options = {}) {
+// HTML escape function
+function esc(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   const isThinkingText = options.isThinkingText || false;
   let sanitizedSrc = src.trimStart();
   const boldListFixRegex = /^(\s*)\*\*(\d+\.|[*-])\s+(.*?)\*\*/gm;
   sanitizedSrc = sanitizedSrc.replace(boldListFixRegex, "$1$2 **$3**");
   const normalizedSrc = sanitizedSrc.replace(/\u00A0/g, " ").replace(/\r\n/g, "\n");
-  const codeBlocks = [];
+  const codeBlocks = sharedCodeBlocks || [];
+  const isTopLevel = !sharedCodeBlocks;
   const latexBlocks = [];
   const latexRegex = /(\$\$[\s\S]*?\$\$|\\\(.*?\\\))/g;
   let protectedSrc = normalizedSrc.replace(latexRegex, match => {
@@ -12,25 +24,30 @@ function enhancedMarkdownParse(src, options = {}) {
     latexBlocks.push(match);
     return placeholder;
   });
-  let processedSrc = normalizedSrc.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
-    const placeholder = `\n__CODEBLOCK_${codeBlocks.length}__\n`;
-    let codeContent = code.trim();
-    const language = lang || "text";
+  
+  // Only process codeblocks at top level, not in recursive calls
+  let processedSrc = normalizedSrc;
+  if (isTopLevel) {
+    processedSrc = normalizedSrc.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
+      const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
+      let codeContent = code.trim();
+      const language = lang || "text";
     
     // Clean blockquote markers from code content if present
     // This handles codeblocks inside blockquotes where the content includes blockquote prefixes
     const lines = codeContent.split('\n');
     const cleanedLines = lines.map(line => {
-      // Remove leading > markers that are likely from blockquote nesting
-      const trimmed = line.trimStart();
-      if (trimmed.startsWith('>') && trimmed.length > 1) {
-        // Check if this looks like a blockquote marker followed by content
-        const afterMarker = trimmed.substring(1).trimStart();
-        if (afterMarker && !afterMarker.startsWith('>')) {
-          return afterMarker;
-        }
+      // Remove all leading > markers and whitespace that are from blockquote nesting
+      let cleaned = line;
+      // Keep removing > markers at the start (after optional whitespace)
+      while (true) {
+        const beforeClean = cleaned;
+        // Remove leading whitespace + > + optional space
+        cleaned = cleaned.replace(/^\s*>\s?/, '');
+        // If nothing changed, we're done
+        if (cleaned === beforeClean) break;
       }
-      return line;
+      return cleaned;
     });
     codeContent = cleanedLines.join('\n').trim();
     
@@ -54,7 +71,8 @@ function enhancedMarkdownParse(src, options = {}) {
       </div>`;
     codeBlocks.push(newStructure);
     return placeholder;
-  });
+    });
+  }
   const lines = processedSrc.split("\n");
   let html = "";
   const listStack = [];
@@ -203,22 +221,53 @@ function enhancedMarkdownParse(src, options = {}) {
       currentListItemEndPos = html.length - 5; // Position before "</li>"
     } else if (bqMatch) {
       const bqBlockLines = [line];
-      while (i + 1 < lines.length && lines[i + 1].trim() !== "") {
+      // Collect all consecutive blockquote lines (including empty lines within blockquotes)
+      while (i + 1 < lines.length) {
         const nextLine = lines[i + 1];
         const nextTrimmed = nextLine.trim();
+        
+        // Stop if we hit a truly empty line (no > marker)
+        if (nextTrimmed === "" && !nextLine.match(/^\s*>/)) break;
+        
+        // Stop if we hit a non-blockquote block-level element at root level
         const isNewBlock = /^(#|---|```|[*-] |\d+\.\s)/.test(nextTrimmed) && (nextLine.length - nextTrimmed.length === 0);
         if (isNewBlock) break;
+        
+        // Stop if line doesn't start with > and isn't empty
+        if (!nextLine.match(/^\s*>/) && nextTrimmed !== "") break;
+        
         i++;
         bqBlockLines.push(nextLine);
       }
-      const nestedContent = bqBlockLines.map(l => l.replace(/^\s*>\s?/, "")).join("\n");
+      
+      // Count the minimum number of > markers to determine the depth
+      let minDepth = Infinity;
+      const depthMap = bqBlockLines.map(l => {
+        const match = l.match(/^(\s*>)+/);
+        if (match) {
+          const depth = (match[0].match(/>/g) || []).length;
+          minDepth = Math.min(minDepth, depth);
+          return { line: l, depth };
+        }
+        return { line: l, depth: 0 };
+      });
+      
+      // Remove only the minimum depth level (one blockquote level)
+      const nestedContent = depthMap.map(({ line, depth }) => {
+        if (depth > 0) {
+          // Remove exactly one > marker (the first one)
+          return line.replace(/^\s*>\s?/, "");
+        }
+        return line;
+      }).join("\n");
+      
       // Replace any codeblock placeholders in nested content with special tokens
       const processedNestedContent = nestedContent.replace(/__CODEBLOCK_(\d+)__/g, (match, index) => {
         return `CODEBLOCKEMBED${index}PLACEHOLDER`;
       });
       
-      // Process the content with full markdown parsing
-      const parsedContent = enhancedMarkdownParse(processedNestedContent);
+      // Process the content with full markdown parsing, passing shared codeBlocks array
+      const parsedContent = enhancedMarkdownParse(processedNestedContent, options, codeBlocks);
       
       // Replace embedded codeblock tokens with actual HTML
       const blockquoteContent = parsedContent.replace(/CODEBLOCKEMBED(\d+)PLACEHOLDER/g, (match, index) => {
@@ -406,4 +455,9 @@ function mdThinking(src) {
   if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
   attachCodeBlockListeners(tempDiv);
   return tempDiv.innerHTML;
+}
+
+// Export for Node.js testing
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { md, mdThinking, enhancedMarkdownParse, parseInlineMarkdown };
 }

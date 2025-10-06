@@ -1,4 +1,4 @@
-# Clustrix AI Platform
+# Clustrix AI Platform (This is deprecated readme file)
 
 **Clustrix** adalah platform AI desktop canggih berbasis Electron yang menggabungkan kemampuan AI mutakhir dengan pengalaman chat yang intuitif. Dirancang untuk power-user yang membutuhkan kontrol penuh atas model AI, kemampuan reasoning yang mendalam, dan integrasi yang mulus dengan workflow pengembangan.
 
@@ -414,7 +414,7 @@ npm test
 │   ├── renderer.js         # UI logic dan state management
 │   ├── index.html          # Main UI template
 │   ├── style.css           # Styling dan themes
-│   └── markdown.worker.js  # Markdown processing worker
+│   └── md.worker.js  # Markdown processing worker
 ├── backend/
 │   ├── langchain-service.js    # AI orchestration
 │   ├── langchain-agents.js     # Multi-agent system

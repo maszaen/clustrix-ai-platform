@@ -18,14 +18,14 @@ Clustrix is a desktop chat assistant built with Electron. The main process (`mai
 ## Renderer & UX
 - `renderer/renderer.js` owns application state: multi-session chat history, drafts, project data, artifacts, selection modes, and markdown test sessions.
 - Handles streaming UI/UX (thinking logs, resume banners, autoscroll, spacers), attachment workflows, code artifact highlighting, and perfect-scrollbar styling.
-- Uses `renderer/data.js` for canned UI data, `renderer/style.css` for theming (dark/light), and `renderer/markdown.worker.js` for Markdown processing.
+- Uses `renderer/data.js` for canned UI data, `renderer/style.css` for theming (dark/light), and `renderer/md.worker.js` for Markdown processing.
 - `public/` contains custom textarea scrollbar logic (`rolling/`), images, and static assets referenced by the renderer.
 
 ## Third-Party Package Imports
 - Runtime packages are served through Electron custom protocols. `protocol.handle('pkg')` maps `pkg://<module>/...` requests to files under `node_modules`, so browser contexts can load libraries without breaking CSP (`main.js`).
 - MathJax is exposed via the `mjx://` protocol. Requests to `mjx://mathjax/...` resolve to `node_modules/mathjax`, and font lookups like `mathjax/mathjax-newcm-font` are rewritten to `@mathjax/…` so both the core and font packages work offline (`main.js`).
 - The renderer boots MathJax with `<script defer id="MathJax-script" src="mjx://startup.js"></script>` and a `MathJax.loader.paths` mapping that points both `mathjax` and `@mathjax` namespaces to the `mjx://` protocol (`renderer/index.html`). Fonts and other assets are pulled through the same handler.
-- `renderer/markdown.worker.js` dynamically pulls Markdown-It with `self.importScripts('../node_modules/markdown-it/dist/markdown-it.min.js')`, matching the renderer’s fallback `<script src="pkg://markdown-it/dist/markdown-it.min.js"></script>` when the worker is unavailable.
+- `renderer/md.worker.js` dynamically pulls Markdown-It with `self.importScripts('../node_modules/markdown-it/dist/markdown-it.min.js')`, matching the renderer’s fallback `<script src="pkg://markdown-it/dist/markdown-it.min.js"></script>` when the worker is unavailable.
 
 ## IPC Bridge
 `preload.js` exposes a whitelisted `window.api` API: session/artifact/project persistence, chat streaming controls, model configuration, logging passthrough, window chrome commands, and shell helpers. Streaming callbacks receive chunk events and support cancellation.

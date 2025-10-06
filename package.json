@@ -7,47 +7,38 @@
   "main": "main.js",
   "type": "commonjs",
   "scripts": {
-    "start": "electron-forge start",
-    "dev": "electron-forge start",
-    "make": "electron-forge make",
-    "package": "electron-forge package",
-    "publish": "electron-forge publish",
+    "start": "electron .",
+    "dev": "electron .",
+    "make": "electron-builder",
+    "package": "electron-builder --dir",
+    "publish": "electron-builder --publish=always",
     "node": "cross-env BASE_URL=https://api.z.ai/api/paas/v4/ Z_API_KEY=b7f88f50fbeb465b8318ae2270473c80.rWD9EyijW0zniHA1 npm run start"
   },
-  "config": {
-    "forge": {
-      "packagerConfig": {
-        "prune": false,
-        "name": "Clustrix",
-        "executableName": "clustrix",
-        "icon": "public/images/favicon",
-        "out": "out",
-        "ignore": [
-          "/\\.git($|/)",
-          "/\\.gitignore($|/)",
-          "/\\.gitattributes($|/)",
-          "/README\\.md$/i"
-        ]
-      },
-      "makers": [
-        {
-          "name": "@electron-forge/maker-squirrel",
-          "config": {
-            "name": "clustrix",
-            "authors": "Zaen",
-            "description": "Clustrix - A smart AI chat assistant.",
-            "noMsi": true,
-            "setupExe": "Clustrix-Setup.exe"
-          }
-        }
-      ],
-      "publishers": [],
-      "plugins": []
+  "build": {
+    "appId": "com.zaen.clustrix",
+    "productName": "Clustrix",
+    "directories": {
+      "output": "out"
+    },
+    "files": [
+      "**/*",
+      "!out/**",
+      "!\\.git/**",
+      "!README.md"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "public/images/favicon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "installerIcon": "public/images/favicon.ico",
+      "installerHeaderIcon": "public/images/favicon.ico",
+      "allowToChangeInstallationDirectory": true
     }
   },
   "devDependencies": {
-    "@electron-forge/cli": "^7.8.3",
-    "@electron-forge/maker-squirrel": "^7.8.3",
+    "electron-builder": "^24.13.3",
     "cross-env": "^7.0.3",
     "electron": "^38.1.0"
   },

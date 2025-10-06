@@ -18,14 +18,14 @@ let agentOrchestrator = null;
 app.whenReady().then(() => {
   setLogFile(path.join(app.getPath('userData'), 'app.log'));
   setDebug(process.env.CLUSTRIX_DEBUG !== 'false');
+  log('[FLAGS]', app.commandLine.getSwitchValue('enable-features'));
   langchainService = new ClustrixLangChainService(app);
   agentOrchestrator = new MultiAgentOrchestrator(langchainService);
   log('LangChain services initialized');
+  if (!process.env || Object.keys(process.env).length === 0) {
+    log('Warning: No environment variables loaded. Check your .env file and dotenv setup.');
+  }
 });
-
-if (!process.env || Object.keys(process.env).length === 0) {
-  log('Warning: No environment variables loaded. Check your .env file and dotenv setup.');
-}
 
 function logHelper(context, func, message, details = {}) {
   logWithContext(context, func, message, details);
@@ -270,7 +270,6 @@ function safeJoin(base, rel) {
 
 app.commandLine.appendSwitch('enable-features',
   'OverlayScrollbar,OverlayScrollbarFlashAfterAnyScrollUpdate,OverlayScrollbarFlashWhenMouseEnter');
-log('[FLAGS]', app.commandLine.getSwitchValue('enable-features'));
 
 
 app.whenReady().then(() => {

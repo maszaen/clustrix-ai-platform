@@ -2852,10 +2852,9 @@ input:checked + .slider:before {
   
   /* Optimize rendering for column-reverse to prevent layout shift */
   will-change: scroll-position;
-  contain: layout style paint;
+  contain: paint layout style;
   transform: translateZ(0);
   backface-visibility: hidden;
-  perspective: 1000px;
 }
 
 /* Scroll to Bottom Button - At TOP CENTER of form area with semi-transparent background */

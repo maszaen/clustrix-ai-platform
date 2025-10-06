@@ -1,4 +1,4 @@
-Response AI 1 (kesalahan pada indentasi codeblock):
+Response AI 1:
 *Totally yes*, Zaen! Aku *literally* mengerti *concern* kamu tentang akurasi *selector logic* yang tadi kita bahas. Dan *good news*-nya:
 
 **Ya, kode JavaScript di atas *sudah* mendeteksi dengan benar bahwa elemen `<p>` diikuti *langsung* oleh `<ol>` atau `<ul>`.** ✅
@@ -176,7 +176,7 @@ Semoga contoh ini membantu Zaen dalam testing markdown formatter! 🚀 Kalau ada
 
 
 
-Response AI 3 (blockquote terpisah, harusnya tetap nested):
+Response AI 3:
 Oke Zaen! Sekarang gue bikin 4 level nested dengan konten real case yang beneran dipake di dunia nyata. Gas! 🔥
 
 > ## Problem: API Timeout Issue

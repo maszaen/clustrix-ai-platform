@@ -39,62 +39,6 @@ function normalizeLanguage(lang) {
   return lang.toLowerCase().replace(/[^\w+-]+/g, "");
 }
 
-// Parse markdown links with balanced parentheses support
-// function parseMarkdownLinks(text) {
-//   let result = text;
-//   let i = 0;
-
-//   while (i < text.length) {
-//     // Find opening bracket
-//     if (text[i] === '[') {
-//       const startBracket = i;
-//       let bracketCount = 1;
-//       let j = i + 1;
-
-//       // Find matching closing bracket
-//       while (j < text.length && bracketCount > 0) {
-//         if (text[j] === '[') bracketCount++;
-//         else if (text[j] === ']') bracketCount--;
-//         j++;
-//       }
-
-//       if (bracketCount === 0) {
-//         const linkText = text.substring(startBracket + 1, j - 1);
-
-//         // Check for opening parenthesis after closing bracket
-//         if (j < text.length && text[j] === '(') {
-//           const startParen = j;
-//           let parenCount = 1;
-//           let k = j + 1;
-
-//           // Find matching closing parenthesis using stack
-//           while (k < text.length && parenCount > 0) {
-//             if (text[k] === '(') parenCount++;
-//             else if (text[k] === ')') parenCount--;
-//             k++;
-//           }
-
-//           if (parenCount === 0) {
-//             const url = text.substring(startParen + 1, k - 1);
-//             const fullMatch = text.substring(startBracket, k);
-
-//             // Replace with HTML link
-//             const htmlLink = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${linkText}</a>`;
-//             result = result.replace(fullMatch, htmlLink);
-
-//             // Skip the processed part
-//             i = startBracket + htmlLink.length;
-//             continue;
-//           }
-//         }
-//       }
-//     }
-//     i++;
-//   }
-
-//   return result;
-// }
-
 function enhancedMarkdownParse(src, options = {}) {
   const isThinkingText = options.isThinkingText || false;
   let sanitizedSrc = src.trimStart();
@@ -439,6 +383,9 @@ function parseInlineMarkdown(text) {
     }
     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
   });
+  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+  
+  html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
   const inlineCodeBlocks = [];
   html = html.replace(/`([^`]+?)`/g, (match, content) => {

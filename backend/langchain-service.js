@@ -443,11 +443,20 @@ class ClustrixLangChainService {
   // ==================== REASONING + ACTION PATTERN ====================
   
   async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', searchApiConfig = null, progressCallback = null, systemPrompt = null) {
-    console.log(`LangChain: Starting RE+ACT processing for session ${sessionId}`);
+    const { log } = require('../utils/logger');
+    const logHelper = { sessionId };
+    
+    log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
+      `Starting RE+ACT processing\n  Session: ${sessionId}\n  User message: "${userMessage}"\n  Model: ${model}\n  Provider: ${provider}\n  Base URL: ${baseUrl}\n  Files: ${uploadedFiles ? uploadedFiles.length : 0}\n  Search API configured: ${searchApiConfig ? 'Yes' : 'No'}`);
     
     try {
-      // Step 1: Initialize RE+ACT agent with project files (even if empty)
-      console.log(`RE+ACT: Initializing with ${uploadedFiles ? uploadedFiles.length : 0} files`);
+      log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
+        `Initializing RE+ACT agent with ${uploadedFiles ? uploadedFiles.length : 0} files`);
+      
+      const fileDetails = uploadedFiles ? uploadedFiles.map(f => `  - ${f.name} (${f.type || 'unknown'}, ${f.content?.length || 0} bytes)`).join('\n') : '  (no files)';
+      log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
+        `File details:\n${fileDetails}`);
+      
       const capabilities = this.reasoningAgent.initializeSession(sessionId, uploadedFiles || [], {
         provider,
         model,
@@ -455,9 +464,13 @@ class ClustrixLangChainService {
         baseUrl,
         searchApiConfig
       });
-      console.log(`RE+ACT: Session initialized with capabilities:`, capabilities);
+      
+      log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
+        `Session initialized with capabilities:\n${JSON.stringify(capabilities, null, 2)}`);
 
-      // Step 2: Process with reasoning and actions
+      log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
+        `Starting reasoning and action processing...`);
+      
       const result = await this.reasoningAgent.processWithReasoningAction(
         userMessage,
         sessionId,
@@ -466,7 +479,11 @@ class ClustrixLangChainService {
         systemPrompt
       );
       
-      console.log(`RE+ACT: Completed with ${result.actionsExecuted} actions executed`);
+      log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
+        `RE+ACT processing completed:\n  Actions executed: ${result.actionsExecuted}\n  Response length: ${result.response?.length || 0} chars\n  Reasoning: ${result.reasoning?.substring(0, 200)}...\n  Search results: ${result.searchResults?.length || 0} items`);
+      
+      log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
+        `Full response:\n---FINAL RESPONSE START---\n${result.response}\n---FINAL RESPONSE END---`);
       
       return {
         enhanced: true,
@@ -478,7 +495,8 @@ class ClustrixLangChainService {
       };
       
     } catch (error) {
-      console.error('RE+ACT processing failed:', error);
+      log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
+        `RE+ACT processing failed:\n  Error: ${error.message}\n  Stack: ${error.stack}`);
       throw error;
     }
   }

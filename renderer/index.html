@@ -16,12 +16,21 @@
         let currentPage = localStorage.getItem('clustrix-current-page');
         let currentSession = localStorage.getItem('clustrix-current-session');
         
+        console.log('[WEBSEARCH] Initial load from localStorage:', {
+          webSearchEnabled,
+          rawValue: webSearchEnabled,
+          type: typeof webSearchEnabled
+        });
+        
         const savedData = localStorage.getItem('clustrix-data');
         if (savedData) {
           try {
             const data = JSON.parse(savedData);
             if (!savedTheme) savedTheme = data.settings?.theme;
-            if (webSearchEnabled === null) webSearchEnabled = data.settings?.webSearchEnabled;
+            if (webSearchEnabled === null) {
+              webSearchEnabled = data.settings?.webSearchEnabled;
+              console.log('[WEBSEARCH] Loaded from saved data:', webSearchEnabled);
+            }
             if (!currentPage) currentPage = data.settings?.currentPage;
             if (!currentSession) currentSession = data.settings?.currentSession;
           } catch (e) {
@@ -32,6 +41,11 @@
         finalTheme = theme;
         const webSearch = webSearchEnabled !== null ? webSearchEnabled === 'true' : false;
         const page = currentPage || 'welcome';
+        
+        console.log('[WEBSEARCH] Computed webSearch state:', {
+          raw: webSearchEnabled,
+          parsed: webSearch
+        });
         
         if (document.documentElement) {
           document.documentElement.className = theme === 'dark' ? 'dark-theme' : 'light-theme';
@@ -56,7 +70,10 @@
           currentSession: currentSession
         };
         
+        console.log('[WEBSEARCH] Preloaded settings set:', window.__PRELOADED_SETTINGS__);
+        
       } catch (error) {
+        console.error('[WEBSEARCH] Error during initial load:', error);
         if (document.documentElement) {
           document.documentElement.className = 'dark-theme';
         }
@@ -1030,7 +1047,7 @@
     };
   </script>
   <script defer id="MathJax-script" src="mjx://startup.js"></script>
-  <script src="pkg://markdown-it/dist/markdown-it.min.js"></script>
+  <!-- <script src="pkg://markdown-it/dist/markdown-it.min.js"></script> -->
   <script type="module" src="../local_modules/highlight/setup.js"></script>
   <script src="consts.js"></script>
   <script src="../local_modules/custom-formatter/md.js"></script>

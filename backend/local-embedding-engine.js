@@ -118,7 +118,7 @@ class LocalEmbeddingEngine {
     this.vocabulary = new Map();
     this.idfCache = new Map();
     this.documentIndex = new Map();
-    console.log('🆕 Local Index: Initialized empty index');
+    console.log('Local Index: Initialized empty index');
   }
 
   /**
@@ -198,7 +198,7 @@ class LocalEmbeddingEngine {
    * Add document to index
    */
   addDocument(fileName, content, metadata = {}) {
-    console.log(`📝 Local Index: Adding document ${fileName}`);
+    console.log(`Local Index: Adding document ${fileName}`);
     
     const tokens = this.tokenize(content);
     if (tokens.length === 0) {
@@ -387,7 +387,7 @@ class LocalEmbeddingEngine {
     if (fs.existsSync(this.indexFile)) {
       fs.unlinkSync(this.indexFile);
     }
-    console.log('🧹 Local Index: Cleared all documents');
+    console.log('Local Index: Cleared all documents');
   }
 
   /**

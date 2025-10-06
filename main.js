@@ -187,7 +187,7 @@ function createWindow(){
     }
   });
 
-  win.webContents.openDevTools();
+  // win.webContents.openDevTools();
   
   let lastLogSignature = null;
   ipcMain.on('log:write', (_event, logData) => {
@@ -598,20 +598,27 @@ function runStandardStreaming(event, payload) {
                 }
               });
             } else if (update.type === 'searching') {
-              event.sender.send('search:status', {
-                step: 'ACTION_EXECUTING',
-                data: {
-                  actionType: update.data?.summarizedQuery?.split(':')[0] || 'Action',
-                  actionDescription: update.data?.summarizedQuery?.split(':').slice(1).join(':').trim() || 'Processing...',
-                  actionTitle: update.data?.summarizedQuery || 'Action in progress'
-                }
-              });
+              // Skip if no actionType provided
+              if (update.data?.actionType) {
+                event.sender.send('search:status', {
+                  step: 'ACTION_EXECUTING',
+                  data: {
+                    actionType: update.data.actionType,
+                    actionParams: update.data.actionParams || {},
+                    actionReason: update.data.actionReason || '',
+                    actionIndex: update.data.actionIndex ?? 0,
+                    totalActions: update.data.totalActions ?? 1,
+                    isLastAction: update.data.isLastAction ?? false
+                  }
+                });
+              }
             } else if (update.type === 'READING_COMPLETE') {
               event.sender.send('search:status', {
                 step: 'ACTION_RESULTS',
                 data: {
                   count: update.data?.pageCount || 1,
                   actionType: update.data?.actionType || 'Analysis',
+                  actionIndex: update.data?.actionIndex ?? 0,
                   success: update.data?.success !== false
                 }
               });

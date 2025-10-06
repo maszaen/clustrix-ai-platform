@@ -27,6 +27,7 @@ let selectedProjectIds = new Set();
 let justSentMessage = false;
 let currentProject = null;
 let projectsData = [];
+let previousWebSearchState = null; // Track websearch state before entering project
 
 // Smart Session Caching System
 const sessionCache = new Map();
@@ -311,13 +312,13 @@ const MARKDOWN_TEST_MODEL_INFO = Object.freeze({
   label: "Markdown Test",
 });
 
-function ensureMarkdownItAlias() {
-  if (!window.MarkdownIt && window.markdownit) {
-    window.MarkdownIt = window.markdownit;
-  }
-}
+// function ensureMarkdownItAlias() {
+//   if (!window.MarkdownIt && window.markdownit) {
+//     window.MarkdownIt = window.markdownit;
+//   }
+// }
 
-ensureMarkdownItAlias();
+// ensureMarkdownItAlias();
 
 const DEFAULT_MARKDOWN_TEST_TEMPLATE = Object.freeze({
   think:
@@ -1126,6 +1127,76 @@ function toggleGoogleCseInput() {
   );
 }
 
+/**
+ * Format research agent action to human-readable text
+ */
+function formatResearchAction(actionType, actionParams, actionReason) {
+  let description = '';
+  const params = actionParams || {};
+  
+  // Convert technical action type to human-readable
+  switch (actionType) {
+    case 'analyzeFileStructure':
+      description = params.fileName 
+        ? `Analyzing file structure of "${params.fileName}"`
+        : 'Analyzing file structure';
+      break;
+    
+    case 'searchPattern':
+      if (params.pattern && params.files && params.files[0]) {
+        description = `Searching for "${params.pattern}" in ${params.files[0]}`;
+      } else if (params.pattern) {
+        description = `Searching for pattern "${params.pattern}"`;
+      } else {
+        description = 'Searching file content';
+      }
+      break;
+    
+    case 'searchFunctions':
+      description = params.functionName
+        ? `Searching for function "${params.functionName}"`
+        : 'Searching for function definitions';
+      break;
+    
+    case 'searchCSS':
+      description = params.selector
+        ? `Searching for CSS selector "${params.selector}"`
+        : 'Searching for CSS styles';
+      break;
+    
+    case 'searchHTML':
+      description = params.element
+        ? `Searching for HTML element "<${params.element}>"`
+        : 'Searching for HTML elements';
+      break;
+    
+    case 'searchImports':
+      description = params.moduleName
+        ? `Searching for imports of "${params.moduleName}"`
+        : 'Searching for import statements';
+      break;
+    
+    case 'webSearch':
+      description = params.query
+        ? `Searching web for "${params.query}"`
+        : 'Searching web information';
+      break;
+    
+    case 'fetchWebPage':
+      description = params.url
+        ? `Fetching content from ${params.url}`
+        : 'Fetching web page content';
+      break;
+    
+    default:
+      // Generic fallback: convert camelCase to readable
+      description = actionType.replace(/([A-Z])/g, ' $1').trim();
+      description = description.charAt(0).toUpperCase() + description.slice(1);
+  }
+  
+  return { description, reason: actionReason || '' };
+}
+
 async function processSearchStatusQueue() {
   if (isProcessingQueue) return;
   isProcessingQueue = true;
@@ -1219,29 +1290,36 @@ async function processSearchStatusQueue() {
 
           const reasoningTitle = createTitleSpan();
           thinkEl.text.appendChild(reasoningTitle);
-          await typewriterEffectChunked(reasoningTitle, "Reasoning:", 100, 4);
+          await typewriterEffectChunked(reasoningTitle, "Reasoning:", 50, 4);
 
-          thinkEl.text.appendChild(document.createElement("br"));
+          thinkEl.text.innerHTML += "<br>";
           const reasoningContent = document.createElement("span");
+          reasoningContent.style.display = "block";
+          reasoningContent.style.marginTop = "8px";
+          reasoningContent.style.lineHeight = "1.6";
           thinkEl.text.appendChild(reasoningContent);
           await typewriterEffectChunked(
             reasoningContent,
             status.data.reasoning,
-            1000,
+            200,
           );
 
           thinkEl.text.innerHTML += "<br><br>";
           const keywordsTitle = createTitleSpan();
           thinkEl.text.appendChild(keywordsTitle);
-          await typewriterEffectChunked(keywordsTitle, "Keywords:", 200, 3);
+          await typewriterEffectChunked(keywordsTitle, "Keywords:", 50, 3);
 
-          thinkEl.text.appendChild(document.createElement("br"));
+          thinkEl.text.innerHTML += "<br>";
           const keywordsContent = document.createElement("span");
+          keywordsContent.style.display = "block";
+          keywordsContent.style.marginTop = "8px";
+          keywordsContent.style.lineHeight = "1.6";
+          keywordsContent.style.whiteSpace = "pre-line";
           thinkEl.text.appendChild(keywordsContent);
           await typewriterEffectChunked(
             keywordsContent,
             status.data.search_queries.join("\n"),
-            700,
+            200,
           );
         }
         break;
@@ -1253,19 +1331,18 @@ async function processSearchStatusQueue() {
         const isProjectFiles = status.data && status.data.some && status.data.some(item => item.link && item.link.startsWith('file://'));
         
         if (isProjectFiles) {
-          await typewriterEffectChunked(urlsTitle, "Analyzing Project Files:", 200, 3);
+          await typewriterEffectChunked(urlsTitle, "Analyzing files: ", 50, 3);
           
-          thinkEl.text.appendChild(document.createElement("br"));
           const filesContent = document.createElement("span");
           thinkEl.text.appendChild(filesContent);
           await typewriterEffectChunked(
             filesContent,
-            status.data.map((r) => `${r.title} `).join("\n"),
-            700,
+            status.data.map((r) => `${r.title}`).join(", "),
+            200,
           );
         } else {
           thinkEl.text.innerHTML += "<br><br>";
-          await typewriterEffectChunked(urlsTitle, "Found URLs:", 200, 3);
+          await typewriterEffectChunked(urlsTitle, "Found URLs:", 50, 3);
 
           thinkEl.text.appendChild(document.createElement("br"));
           const urlsContent = document.createElement("span");
@@ -1273,42 +1350,64 @@ async function processSearchStatusQueue() {
           await typewriterEffectChunked(
             urlsContent,
             status.data.map((r) => r.link).join("\n"),
-            700,
+            200,
           );
         }
         break;
 
       case "ACTION_EXECUTING":
+        // Generate unique action ID
+        const actionId = `${status.data.actionType}_${status.data.actionIndex}`;
+        
+        // Format action to human-readable
+        const { description, reason } = formatResearchAction(
+          status.data.actionType,
+          status.data.actionParams,
+          status.data.actionReason
+        );
+        
+        // Build display text
         thinkEl.text.innerHTML += "<br><br>";
-        const actionTitle = createTitleSpan();
-        thinkEl.text.appendChild(actionTitle);
-        const actionType = status.data.actionType || "Action";
-        await typewriterEffectChunked(actionTitle, `${actionType}:`, 200, 3);
-
-        thinkEl.text.appendChild(document.createElement("br"));
-        const actionContent = document.createElement("span");
-        thinkEl.text.appendChild(actionContent);
-        const actionDesc = status.data.actionDescription || status.data.actionTitle || "Processing...";
-        await typewriterEffectChunked(actionContent, actionDesc, 500);
+        const actionContainer = document.createElement("div");
+        actionContainer.style.lineHeight = "1.6";
+        
+        // Action title (no dots, same font as "Analyzing files:")
+        const actionLine = document.createElement("div");
+        actionLine.textContent = description;
+        actionContainer.appendChild(actionLine);
+        
+        // AI reasoning (if available) - will be added with typewriter effect
+        if (reason && reason.trim()) {
+          const reasonLine = document.createElement("div");
+          reasonLine.style.opacity = "0.85";
+          reasonLine.style.fontSize = "0.95em";
+          reasonLine.style.marginTop = "4px";
+          reasonLine.style.marginLeft = "24px";
+          reasonLine.style.whiteSpace = "pre-wrap"; // Preserve newlines!
+          actionContainer.appendChild(reasonLine);
+          
+          // Add to container first
+          thinkEl.text.appendChild(actionContainer);
+          
+          // Apply typewriter effect to reason with faster speed
+          await typewriterEffectChunked(reasonLine, reason, 100, 5);
+        } else {
+          thinkEl.text.appendChild(actionContainer);
+        }
         break;
 
       case "ACTION_RESULTS":
-        thinkEl.text.innerHTML += "<br><br>";
-        const resultsTitle = createTitleSpan();
-        thinkEl.text.appendChild(resultsTitle);
-        const resultActionType = status.data.actionType || "Analysis";
-        await typewriterEffectChunked(resultsTitle, `${resultActionType} Results:`, 200, 3);
-
-        thinkEl.text.appendChild(document.createElement("br"));
-        const resultsContent = document.createElement("span");
-        thinkEl.text.appendChild(resultsContent);
-        const resultCount = status.data.count || 1;
-        const resultStatus = status.data.success !== false ? "completed" : "failed";
-        await typewriterEffectChunked(
-          resultsContent,
-          `Found ${resultCount} relevant ${resultCount === 1 ? 'result' : 'results'} (${resultStatus})`,
-          300,
-        );
+        // Optionally show result count
+        if (status.data.count > 0) {
+          thinkEl.text.innerHTML += "<br>";
+          const resultSummary = document.createElement("div");
+          resultSummary.style.marginLeft = "24px";
+          resultSummary.style.fontSize = "0.9em";
+          resultSummary.style.opacity = "0.7";
+          const resultCount = status.data.count || 0;
+          resultSummary.textContent = `→ Found ${resultCount} result${resultCount !== 1 ? 's' : ''}`;
+          thinkEl.text.appendChild(resultSummary);
+        }
         break;
 
       case "PROCESSING":
@@ -1418,6 +1517,60 @@ function esc(s) {
 
 function ensureThinkingUI(aiNode) {
   if (aiNode._thinkingReady) return;
+  
+  // CRITICAL: Check if thinking-wrap already exists in DOM (from cache restore)
+  const content = aiNode.querySelector(".message-content") || aiNode;
+  const existingWrap = content.querySelector('.thinking-wrap');
+  
+  if (existingWrap) {
+    // Rehydrate existing thinking UI instead of creating duplicate
+    aiNode._thinkingReady = true;
+    
+    const toggle = existingWrap.querySelector('.thinking-toggle');
+    const body = existingWrap.querySelector('.thinking-body');
+    const text = existingWrap.querySelector('.thinking-text');
+    const toggleContent = toggle?.querySelector('.thinking-toggle-content');
+    
+    // Re-attach event listener to toggle (was lost during cache restore)
+    if (toggle && body) {
+      // Clone to remove old listeners
+      const newToggle = toggle.cloneNode(true);
+      toggle.parentNode.replaceChild(newToggle, toggle);
+      
+      newToggle.addEventListener("click", () => {
+        const ex = newToggle.getAttribute("aria-expanded") === "true";
+        newToggle.setAttribute("aria-expanded", ex ? "false" : "true");
+        body.classList.toggle("expanded", !ex);
+      });
+      
+      // Re-attach scroll detection
+      let thinkingUserScrolled = false;
+      body.addEventListener('scroll', () => {
+        if (!body.classList.contains('expanded')) return;
+        
+        const isAtBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 10;
+        if (!isAtBottom) {
+          thinkingUserScrolled = true;
+        } else if (thinkingUserScrolled) {
+          thinkingUserScrolled = false;
+        }
+      });
+      
+      aiNode._thinkingEl = { 
+        wrap: existingWrap, 
+        toggle: newToggle, 
+        body, 
+        text, 
+        toggleContent: newToggle.querySelector('.thinking-toggle-content'), 
+        userScrolled: () => thinkingUserScrolled 
+      };
+    }
+    
+    log('THINKING', 1, 'ensureThinkingUI', 'Rehydrated existing thinking-wrap from cache', {});
+    return;
+  }
+  
+  // No existing wrap found, create new one
   aiNode._thinkingReady = true;
 
   const wrap = document.createElement("div");
@@ -1461,11 +1614,12 @@ function ensureThinkingUI(aiNode) {
     }
   });
 
-  const content = aiNode.querySelector(".message-content") || aiNode;
   content.prepend(wrap);
 
   const toggleContent = toggle.querySelector(".thinking-toggle-content");
   aiNode._thinkingEl = { wrap, toggle, body, text, toggleContent, userScrolled: () => thinkingUserScrolled };
+  
+  log('THINKING', 1, 'ensureThinkingUI', 'Created new thinking-wrap', {});
 }
 
 // Anda bisa menyederhanakan fungsi ini
@@ -7629,137 +7783,20 @@ let markdownRendererInstance = null;
 
 function ensureMarkdownRenderer() {
   if (markdownRendererInstance) return markdownRendererInstance;
-  ensureMarkdownItAlias();
+  // ensureMarkdownItAlias(); // Removed markdown-it dependency
 
-  if (!window.MarkdownIt) {
-    console.warn("MarkdownIt belum dimuat. Menggunakan fallback renderer sederhana.");
-    return {
-      render: (text) =>
-        text
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;")
-          .replace(/\n/g, "<br>"),
-    };
-  }
-
-  const MarkdownIt = window.MarkdownIt || window.markdownit;
-  const md = new MarkdownIt({
-    html: false,
-    breaks: true,
-    linkify: true,
-    typographer: false,
-  });
-
-  md.enable(["table", "strikethrough"]);
-
-  // Enhanced table cell processing to handle multiline content and lists
-  // Create a separate markdown instance for cell content processing
-  const cellMd = new MarkdownIt({
-    html: true,  // Allow HTML tags to be preserved
-    breaks: true,
-    linkify: true,
-    typographer: false,
-  });
-  cellMd.enable(["strikethrough", "linkify", "list", "paragraph"]);
-  // Disable table processing in cell content to prevent nested table issues
-  cellMd.disable(["table"]);
-
-  // Enhanced table cell processing to handle multiline content and lists
-  // We'll override the table_close rule after it's declared below
-
-  const originalLinkOpen =
-    md.renderer.rules.link_open ||
-    ((tokens, idx, options, env, self) =>
-      self.renderToken(tokens, idx, options));
-  const originalImage =
-    md.renderer.rules.image ||
-    ((tokens, idx, options, env, self) =>
-      self.renderToken(tokens, idx, options));
-  const originalTableOpen =
-    md.renderer.rules.table_open ||
-    ((tokens, idx, options, env, self) =>
-      self.renderToken(tokens, idx, options));
-  const originalTableClose =
-    md.renderer.rules.table_close ||
-    ((tokens, idx, options, env, self) =>
-      self.renderToken(tokens, idx, options));
-
-  const renderCodeContainer = (code, info = "") => {
-    const language = info.trim().split(/\s+/)[0] || "text";
-    const normalized = code.endsWith("\n") ? code.slice(0, -1) : code;
-    const escapedCode = esc(normalized);
-    const buttonCode = escapedCode.replace(/"/g, "&quot;");
-    return `
-      <div class="code-block-container">
-        <div class="code-block-header">
-          <span class="language-name">${language}</span>
-          <div class="code-block-actions">
-            <button class="save-code-btn" title="Save to artifacts" data-code="${buttonCode}" data-language="${language}">
-              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
-            </button>
-            <button class="copy-code-btn" title="Copy code">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-            </button>
-          </div>
-        </div>
-        <pre><code class="language-${language}">${escapedCode}</code></pre>
-      </div>`;
+  // Always use simple fallback without markdown-it
+  console.warn("Using simple markdown renderer fallback.");
+  return {
+    render: (text) =>
+      text
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replace(/\n/g, "<br>"),
   };
 
-  md.renderer.rules.fence = (tokens, idx) => {
-    const token = tokens[idx];
-    return renderCodeContainer(token.content || "", token.info || "");
-  };
-
-  md.renderer.rules.code_block = (tokens, idx) => {
-    const token = tokens[idx];
-    return renderCodeContainer(token.content || "", "");
-  };
-
-  md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
-    const token = tokens[idx];
-    const existingClass = token.attrGet("class");
-    if (existingClass) {
-      if (!existingClass.split(/\s+/).includes("link")) {
-        token.attrSet("class", `${existingClass} link`.trim());
-      }
-    } else {
-      token.attrSet("class", "link");
-    }
-    token.attrSet("target", "_blank");
-    const rel = token.attrGet("rel");
-    if (rel) {
-      const relParts = new Set(rel.split(/\s+/).filter(Boolean));
-      relParts.add("noopener");
-      relParts.add("noreferrer");
-      token.attrSet("rel", Array.from(relParts).join(" "));
-    } else {
-      token.attrSet("rel", "noopener noreferrer");
-    }
-    return originalLinkOpen(tokens, idx, options, env, self);
-  };
-
-  md.renderer.rules.image = (tokens, idx, options, env, self) => {
-    const token = tokens[idx];
-    token.attrJoin("class", "md-image");
-    return originalImage(tokens, idx, options, env, self);
-  };
-
-  md.renderer.rules.table_open = (tokens, idx, options, env, self) => {
-    return `<div class="table-container">${originalTableOpen(tokens, idx, options, env, self)}`;
-  };
-
-  md.renderer.rules.table_close = (tokens, idx, options, env, self) => {
-    return `${originalTableClose(tokens, idx, options, env, self)}</div>`;
-  };  md.renderer.rules.hardbreak = () => "<br>";
-
-  if (md.linkify && typeof md.linkify.set === "function") {
-    md.linkify.set({ fuzzyLink: true, fuzzyIP: true, fuzzyEmail: false });
-  }
-
-  markdownRendererInstance = md;
-  return markdownRendererInstance;
+  // Removed all MarkdownIt code
 }
 
 function preprocessMarkdownSource(src) {
@@ -8067,15 +8104,15 @@ function mdFallback(src) {
 
       // Check if cell content contains list markers that need special processing
       if (/^(\s*[-*+•]\s|\s*\d+\.\s)/m.test(decodedContent) || decodedContent.includes('<br>')) {
-        // Create a temporary markdown instance for cell processing
-        const cellMd = new MarkdownIt({
-          html: true,
-          breaks: true,
-          linkify: true,
-          typographer: false,
-        });
-        cellMd.enable(["strikethrough", "linkify", "list", "paragraph"]);
-        cellMd.disable(["table"]);
+        // Use custom parser instead of markdown-it
+        // const cellMd = new MarkdownIt({
+        //   html: true,
+        //   breaks: true,
+        //   linkify: true,
+        //   typographer: false,
+        // });
+        // cellMd.enable(["strikethrough", "linkify", "list", "paragraph"]);
+        // cellMd.disable(["table"]);
 
         // Convert bullet points and line breaks to markdown format
         let markdownContent = decodedContent
@@ -8083,8 +8120,8 @@ function mdFallback(src) {
           .replace(/<br\s*\/?>/gi, '\n')  // Convert <br> to newlines
           .trim();
 
-        // Process the cell content with markdown-it that supports lists and paragraphs
-        const processedCell = cellMd.render(markdownContent);
+        // Process the cell content with custom parser
+        const processedCell = enhancedMarkdownParse(markdownContent);
         return `<${tag}>${processedCell.trim()}</${tag}>`;
       }
       // For simple cells, return as-is
@@ -9931,6 +9968,42 @@ function setCurrent(s) {
     closeMobileSidebar();
   }
 
+  // Handle websearch state when switching between regular and project sessions
+  const currentIsProject = current && current.type === 'project';
+  const nextIsProject = s && s.type === 'project';
+  
+  if (!currentIsProject && nextIsProject) {
+    // Switching TO project session: save websearch state and disable
+    previousWebSearchState = state.settings.webSearchEnabled;
+    log('WEBSEARCH', 2, 'toggle', 'Entering project session - saving and disabling websearch', { 
+      previousState: previousWebSearchState,
+      projectSession: s?.name 
+    });
+    if (state.settings.webSearchEnabled) {
+      state.settings.webSearchEnabled = false;
+      const webSearchSwitch = document.getElementById('web-search-switch');
+      if (webSearchSwitch) webSearchSwitch.checked = false;
+      log('WEBSEARCH', 2, 'toggle', 'WebSearch disabled for project session', { 
+        newState: false 
+      });
+    }
+  } else if (currentIsProject && !nextIsProject) {
+    // Switching FROM project session: restore previous websearch state
+    if (previousWebSearchState !== null) {
+      log('WEBSEARCH', 2, 'toggle', 'Leaving project session - restoring websearch', { 
+        restoreState: previousWebSearchState,
+        regularSession: s?.name 
+      });
+      state.settings.webSearchEnabled = previousWebSearchState;
+      const webSearchSwitch = document.getElementById('web-search-switch');
+      if (webSearchSwitch) webSearchSwitch.checked = previousWebSearchState;
+      previousWebSearchState = null;
+      log('WEBSEARCH', 2, 'toggle', 'WebSearch state restored', { 
+        newState: state.settings.webSearchEnabled 
+      });
+    }
+  }
+
   // Save current session scroll position and cache rendered content
   if (current && current.id) {
     const msgInput = $("#msg");
@@ -10200,11 +10273,18 @@ async function load() {
   );
   if (typeof state.settings.webSearchEnabled !== "boolean") {
     state.settings.webSearchEnabled = false;
+    log('WEBSEARCH', 2, 'init', 'WebSearch state initialized to default', { 
+      value: false 
+    });
   }
   $("#web-search-switch").checked = state.settings.webSearchEnabled;
   $$('[id^="btn-web-search-"]').forEach((b) =>
     b.classList.toggle("toggled", state.settings.webSearchEnabled),
   );
+  log('WEBSEARCH', 2, 'init', 'WebSearch UI initialized', { 
+    enabled: state.settings.webSearchEnabled,
+    switchChecked: $("#web-search-switch").checked
+  });
   log("APP", 2, "load", "Successfully loaded data.", {
     sessionCount: state.sessions.length,
   });
@@ -10222,11 +10302,17 @@ async function load() {
 
   if (preloadedSettings.webSearchEnabled !== undefined) {
     state.settings.webSearchEnabled = preloadedSettings.webSearchEnabled;
+    log('WEBSEARCH', 2, 'load', 'WebSearch state loaded from preloaded settings', { 
+      value: preloadedSettings.webSearchEnabled 
+    });
   }
   $("#web-search-switch").checked = state.settings.webSearchEnabled;
   $$('[id^="btn-web-search-"]').forEach((b) =>
     b.classList.toggle("toggled", state.settings.webSearchEnabled),
   );
+  log('WEBSEARCH', 2, 'load', 'WebSearch UI synced after preload', { 
+    enabled: state.settings.webSearchEnabled 
+  });
 
   await loadModelsConf();
   renderSessions();
@@ -10287,6 +10373,7 @@ async function save() {
 function updateInputState() {
   const isStreaming = streamManager.isStreamingInSession(current);
   const isCurrentNull = !current;
+  const isProjectSession = current && current.type === 'project';
 
   const msgEl = $("#msg");
   msgEl.disabled = isCurrentNull;
@@ -10326,6 +10413,42 @@ function updateInputState() {
   }
 
   updateMarkdownControls();
+  
+  // Hide websearch toggle in project sessions (research agent includes websearch)
+  const webSearchSwitch = document.getElementById('web-search-switch');
+  if (webSearchSwitch) {
+    // Get the parent .theme-switcher container
+    const webSearchToggle = webSearchSwitch.closest('.theme-switcher');
+    if (webSearchToggle) {
+      const wasHidden = webSearchToggle.style.display === 'none';
+      const willHide = isProjectSession;
+      webSearchToggle.style.display = isProjectSession ? 'none' : '';
+      
+      if (wasHidden !== willHide) {
+        log('WEBSEARCH', 2, 'toggle', 'WebSearch sidebar toggle visibility changed', { 
+          isProjectSession,
+          visible: !willHide,
+          currentState: state.settings.webSearchEnabled
+        });
+      }
+    }
+  }
+  
+  // Hide websearch button in chat form when in project session
+  const webSearchChatBtn = document.getElementById('btn-web-search-chat');
+  if (webSearchChatBtn) {
+    const wasHidden = webSearchChatBtn.style.display === 'none';
+    const willHide = isProjectSession;
+    webSearchChatBtn.style.display = isProjectSession ? 'none' : '';
+    
+    if (wasHidden !== willHide) {
+      log('WEBSEARCH', 2, 'toggle', 'WebSearch chat button visibility changed', { 
+        isProjectSession,
+        visible: !willHide,
+        currentState: state.settings.webSearchEnabled
+      });
+    }
+  }
 
   // Update project title indicator
   const projectIndicator = $("#project-title-indicator");
@@ -13652,6 +13775,11 @@ function setupEventListeners() {
   });
 
   $("#web-search-switch").addEventListener("change", (e) => {
+    log('WEBSEARCH', 2, 'toggle', 'WebSearch switch toggled by user', { 
+      oldState: state.settings.webSearchEnabled,
+      newState: e.target.checked 
+    });
+    
     state.settings.webSearchEnabled = e.target.checked;
 
     localStorage.setItem(
@@ -13663,6 +13791,11 @@ function setupEventListeners() {
     $$('[id^="btn-web-search-"]').forEach((b) =>
       b.classList.toggle("toggled", state.settings.webSearchEnabled),
     );
+    
+    log("WEBSEARCH", 2, "toggle", "WebSearch state updated and saved", {
+      enabled: e.target.checked,
+      savedToLocalStorage: true
+    });
     log("SETTINGS", 2, "event:web-search-change", "Web Search Toggled", {
       enabled: e.target.checked,
     });
@@ -13847,7 +13980,6 @@ function setupEventListeners() {
   });
 
   document.addEventListener("click", (event) => {
-    // Handle copy code button clicks
     const copyBtn = event.target.closest(".copy-code-btn");
     if (copyBtn) {
       const block = copyBtn.closest(".code-block-container");
@@ -13875,7 +14007,6 @@ function setupEventListeners() {
       return;
     }
 
-    // Handle save code button clicks
     const saveBtn = event.target.closest(".save-code-btn");
 
     if (saveBtn) {
@@ -13886,11 +14017,9 @@ function setupEventListeners() {
       const code = codeEl.textContent;
       const language = saveBtn.dataset.language || "text";
 
-      // Get session and message context for AI messages
       let sessionId = null;
       let messageIndex = null;
 
-      // Find the message container to get context
       const messageEl = saveBtn.closest(".message");
       if (messageEl) {
         const messageIndexAttr = messageEl.getAttribute("data-message-index");
@@ -13900,7 +14029,6 @@ function setupEventListeners() {
         }
       }
 
-      // Generate title from first line or use default
       const firstLine = code.split('\n')[0].trim();
       const title = firstLine.length > 50 ? `Code snippet (${language})` : firstLine || `Code snippet (${language})`;
 
@@ -13913,7 +14041,6 @@ function setupEventListeners() {
           messageIndex,
         });
 
-        // Visual feedback
         const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
         const saveIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>`;
 
@@ -13960,10 +14087,9 @@ function initializeApp() {
   log('CACHE', 1, 'initializeApp', 'Session cache cleared on app initialization');
 
   initializeSmartScroll();
-  initColumnReverseScrollDetection(); // NEW: Initialize column-reverse scroll detection
-  initScrollToBottomButton(); // NEW: Initialize scroll to bottom button
-  
-  // Force check button visibility immediately on init
+  initColumnReverseScrollDetection(); 
+  initScrollToBottomButton(); 
+
   setTimeout(() => {
     const scroller = getChatScroller();
     if (scroller) {
@@ -14037,7 +14163,6 @@ function initializeApp() {
             const sess = state.sessions.find(s => s.id === sessionId) || current;
 
             if (thinkContent && sess) {
-                // Fire and forget for async thinking update
                 appendThinking(bubbleNode, thinkContent, sess, messageIndex).catch(console.error);
                 scrollToBottom({ fromAI: true });
             }
@@ -14068,14 +14193,12 @@ function initializeApp() {
   setupResponsiveHandlers();
   window.addEventListener("beforeunload", () => {
     streamManager.shutdownGracefully();
-    // Terminate worker on unload
     if (markdownWorker) {
       markdownWorker.terminate();
       markdownWorker = null;
     }
   });
   
-  // Initialize markdown worker
   initMarkdownWorker();
   
   load();
@@ -14102,9 +14225,7 @@ window.addEventListener("error", (event) => {
   }
 });
 
-// Debug utilities for performance monitoring
 window.DEBUG = {
-  // Cache management
   getCacheStats,
   clearSessionCache,
   preloadFrequentSessions,
@@ -14127,7 +14248,6 @@ window.DEBUG = {
     }
   },
   
-  // Batch profile multiple switches
   profileMultipleSwitches: (count = 5) => {
     const sessions = state.sessions.slice(0, count);
     let totalTime = 0;
@@ -14160,13 +14280,11 @@ window.DEBUG = {
     switchNext(0);
   },
   
-  // Utility functions
   log,
   md,
   addMessage,
   clearLog,
   
-  // Hover state debugging
   getActiveHovers: () => Array.from(activeHoverElements).map(el => ({
     language: el.querySelector('.language-name')?.textContent,
     codeSnippet: el.querySelector('pre code')?.textContent?.substring(0, 30),

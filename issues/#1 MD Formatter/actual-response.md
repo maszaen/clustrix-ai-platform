@@ -39,7 +39,7 @@ Jadi, *feel free* untuk implementasi kode itu, Zaen. *It’s literally* solusi y
 
 
 Response AI 2:
-# 📝 Demo Blockquotes di Dalam List & Numbering (Jaksel Style)
+# Demo Blockquotes di Dalam List & Numbering (Jaksel Style)
 
 ## 📋 Unordered List dengan Blockquote
 

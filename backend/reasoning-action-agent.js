@@ -14,7 +14,10 @@ class ReasoningActionAgent {
 
   
   initializeSession(sessionId, files, modelInfo = {}) {
-    log(`RE+ACT: Initializing session ${sessionId} with ${files.length} files`);
+    const logHelper = { sessionId };
+    log(logHelper, 'REASONING_ACTION_AGENT', 'initializeSession', 
+      `Initializing session with ${files.length} files`);
+    
     const processedFiles = files.map(file => ({
       name: file.name,
       type: file.type || 'unknown',
@@ -27,7 +30,8 @@ class ReasoningActionAgent {
       }
     }));
     
-    log(`RE+ACT: Using ${processedFiles.length} files directly from session`);
+    log(logHelper, 'REASONING_ACTION_AGENT', 'initializeSession',
+      `Processed ${processedFiles.length} files:\n${processedFiles.map(f => `  - ${f.name} (${f.type})`).join('\n')}`);
 
     const { searchApiConfig = null, ...modelConfig } = modelInfo || {};
 
@@ -51,7 +55,9 @@ class ReasoningActionAgent {
 
   
   async processWithReasoningAction(userQuery, sessionId, existingMessages = [], progressCallback = null, systemPrompt = null) {
-    log(`RE+ACT: Processing query for session ${sessionId}`);
+    const logHelper = { sessionId };
+    log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction', 
+      `Starting query processing\nQuery: "${userQuery}"\nSession: ${sessionId}`);
     
     const sessionState = this.sessionState.get(sessionId);
     if (!sessionState) {
@@ -63,12 +69,55 @@ class ReasoningActionAgent {
         data: { summarizedQuery: `Analyzing: "${userQuery.substring(0, 50)}${userQuery.length > 50 ? '...' : ''}"` }
       });
     }
+    
     const reasoningPrompt = this.buildReasoningPrompt(userQuery, sessionState);
-    log(`RE+ACT: Sending reasoning prompt to AI...`);
+    log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+      `Built reasoning prompt (${reasoningPrompt.length} chars):\n---PROMPT START---\n${reasoningPrompt}\n---PROMPT END---`);
+    
+    log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction', 
+      `Sending reasoning prompt to AI model: ${sessionState.model?.model || 'unknown'}`);
     
     const reasoningResponse = await this.makeAIRequest(reasoningPrompt, sessionId);
+    log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+      `Received AI response (${reasoningResponse.length} chars):\n---RESPONSE START---\n${reasoningResponse}\n---RESPONSE END---`);
+    
     const plan = this.parseReasoningResponse(reasoningResponse);
-    log(`RE+ACT: AI generated plan with ${plan.actions.length} actions`);
+    log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+      `Parsed plan:\n  - Reasoning: ${plan.reasoning}\n  - Actions: ${plan.actions.length}\n  - Thinking: ${plan.thinking}\n  - Action details: ${JSON.stringify(plan.actions, null, 2)}`);
+    
+    // QUALITY CHECK: If AI only created 1 action, encourage more thorough research
+    if (plan.actions.length === 1 && sessionState.files && sessionState.files.length > 0) {
+      log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+        `WARNING: AI only created 1 action. Encouraging more thorough research.`);
+      
+      // Add a complementary search action to ensure thorough coverage
+      const firstAction = plan.actions[0];
+      if (firstAction.type === 'analyzeFileStructure') {
+        // If only analyzing structure, also add a pattern search
+        plan.actions.push({
+          type: 'searchPattern',
+          params: { 
+            pattern: '.{10,}',
+            options: { maxResults: 20, contextLines: 3 }
+          },
+          reason: 'Complementary: Search for substantial content to supplement structure analysis',
+          executed: false
+        });
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `Added complementary searchPattern action to ensure thorough research`);
+      } else if (firstAction.type === 'searchPattern') {
+        // If only doing pattern search, also try to analyze structure
+        plan.actions.push({
+          type: 'analyzeFileStructure',
+          params: { fileName: sessionState.files[0].name },
+          reason: 'Complementary: Analyze document structure to provide complete context',
+          executed: false
+        });
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `Added complementary analyzeFileStructure action to ensure thorough research`);
+      }
+    }
+    
     if (progressCallback) {
       progressCallback({
         type: 'reading_complete',
@@ -84,8 +133,10 @@ class ReasoningActionAgent {
     let totalActionsExecuted = 0;
     
     for (const [index, action] of plan.actions.entries()) {
+      const logHelper = { sessionId };
       if (totalActionsExecuted >= MAX_ACTIONS) {
-        log(`RE+ACT: Stopping execution after ${MAX_ACTIONS} actions to prevent infinite loops`);
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `Stopping execution after ${MAX_ACTIONS} actions to prevent infinite loops`);
         if (progressCallback) {
           progressCallback({
             type: 'thinking',
@@ -94,14 +145,28 @@ class ReasoningActionAgent {
         }
         break;
       }
+      
+      log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+        `Executing action ${index + 1}/${plan.actions.length}:\n  Type: ${action.type}\n  Params: ${JSON.stringify(action.params)}\n  Reason: ${action.reason}`);
+      
       if (progressCallback) {
         progressCallback({
           type: 'searching',
-          data: { summarizedQuery: `${action.type}: ${action.why || 'Searching for information...'}` }
+          data: { 
+            actionType: action.type,
+            actionParams: action.params,
+            actionReason: action.reason || '',
+            actionIndex: index,
+            totalActions: plan.actions.length,
+            isLastAction: index === plan.actions.length - 1
+          }
         });
       }
       
       const actionResult = await this.executeAction(action, sessionId);
+      log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+        `Action ${index + 1} completed:\n  Success: ${actionResult.success}\n  Result count: ${actionResult.resultCount}\n  Requires followup: ${actionResult.requiresFollowup}`);
+      
       sessionState.actionHistory.push({
         action,
         result: actionResult,
@@ -109,6 +174,42 @@ class ReasoningActionAgent {
       });
       
       totalActionsExecuted++;
+      
+      // AUTO-TRIGGER: If action returns 0 results and it's the first/second action, force additional search
+      if (actionResult.resultCount === 0 && totalActionsExecuted <= 2 && index === plan.actions.length - 1) {
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `Action ${index + 1} returned 0 results. Auto-triggering additional search strategies.`);
+        
+        // Add fallback search actions based on the failed action type
+        const fallbackActions = [];
+        
+        if (action.type === 'analyzeFileStructure') {
+          // If structure analysis failed, try broad pattern search
+          fallbackActions.push({
+            type: 'searchPattern',
+            params: { pattern: '.+', options: { maxResults: 20 } },
+            reason: 'Fallback: Broad search after structure analysis returned no results',
+            executed: false
+          });
+        }
+        
+        if (action.type === 'searchPattern' && sessionState.files && sessionState.files.length > 0) {
+          // If pattern search failed, try different patterns
+          const fileName = sessionState.files[0].name;
+          fallbackActions.push({
+            type: 'searchPattern',
+            params: { pattern: '[\\w\\s]+', options: { maxResults: 30, files: [fileName] } },
+            reason: 'Fallback: Alternative pattern search in specific file',
+            executed: false
+          });
+        }
+        
+        if (fallbackActions.length > 0) {
+          log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+            `Adding ${fallbackActions.length} fallback actions to plan`);
+          plan.actions.push(...fallbackActions);
+        }
+      }
       if (progressCallback && totalActionsExecuted === 2) {
         progressCallback({
           type: 'processing',
@@ -122,6 +223,7 @@ class ReasoningActionAgent {
           data: { 
             pageCount: resultCount,
             actionType: action.type,
+            actionIndex: index,
             success: actionResult.success
           }
         });
@@ -150,16 +252,35 @@ class ReasoningActionAgent {
         log('RE+ACT: Failed to emit structured action_result', e);
       }
       if (index < plan.actions.length - 1 || actionResult.requiresFollowup) {
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `Building followup prompt for action ${index + 1}`);
+        
         const followupPrompt = this.buildFollowupPrompt(action, actionResult, plan, index);
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `Followup prompt built (${followupPrompt.length} chars):\n---FOLLOWUP PROMPT START---\n${followupPrompt}\n---FOLLOWUP PROMPT END---`);
+        
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `Sending followup prompt to AI`);
+        
         finalResponse = await this.makeAIRequest(followupPrompt, sessionId);
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `Received followup response (${finalResponse.length} chars):\n---FOLLOWUP RESPONSE START---\n${finalResponse}\n---FOLLOWUP RESPONSE END---`);
+        
         const additionalPlan = this.parseReasoningResponse(finalResponse);
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `Parsed additional plan: ${additionalPlan.actions.length} actions`);
+        
         if (additionalPlan.actions.length > 0 && totalActionsExecuted < MAX_ACTIONS) {
           const validActions = additionalPlan.actions.filter(action => {
             return action.type && action.params && Object.keys(action.params).length > 0;
           });
           
+          log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+            `Filtered valid actions: ${validActions.length}/${additionalPlan.actions.length}\nValid actions: ${JSON.stringify(validActions, null, 2)}`);
+          
           if (validActions.length > 0) {
-            log(`\nRE+ACT: AI requested ${validActions.length} additional actions`);
+            log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+              `AI requested ${validActions.length} additional actions, adding to plan`);
             if (progressCallback) {
               progressCallback({
                 type: 'thinking',
@@ -168,13 +289,18 @@ class ReasoningActionAgent {
             }
             plan.actions.push(...validActions);
           } else {
-            log(`RE+ACT: AI requested additional actions but all were invalid, stopping`);
+            log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+              `AI requested additional actions but all were invalid, stopping execution`);
             break;
           }
         }
       }
     }
+    
     if (sessionState.actionHistory.length > 0) {
+      log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+        `Building synthesis prompt from ${sessionState.actionHistory.length} actions`);
+      
       if (progressCallback) {
         progressCallback({
           type: 'reading_complete',
@@ -187,10 +313,19 @@ class ReasoningActionAgent {
       }
       
       const synthesisPrompt = this.buildSynthesisPrompt(userQuery, sessionState.actionHistory, sessionState);
+      log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+        `Synthesis prompt built (${synthesisPrompt.length} chars):\n---SYNTHESIS PROMPT START---\n${synthesisPrompt}\n---SYNTHESIS PROMPT END---`);
+      
+      log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+        `Sending synthesis prompt to AI`);
+      
       finalResponse = await this.makeAIRequest(synthesisPrompt, sessionId);
+      log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+        `Received synthesis response (${finalResponse.length} chars):\n---SYNTHESIS RESPONSE START---\n${finalResponse}\n---SYNTHESIS RESPONSE END---`);
     }
     
-    log(`RE+ACT: Completed processing with ${sessionState.actionHistory.length} actions executed`);
+    log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+      `Completed processing with ${sessionState.actionHistory.length} actions executed`);
     
     let hasText = typeof finalResponse === "string" && finalResponse.trim().length > 0;
     let looksLikePlanOnly = hasText && /(^|\n)\s*PLAN\s*:|^\s*\*\*REASONING\*\*|^REASONING:/i.test(finalResponse) && !/FINAL ANSWER|JAWABAN AKHIR|KESIMPULAN|SOLUTION|SOLUSI/i.test(finalResponse);
@@ -227,8 +362,19 @@ class ReasoningActionAgent {
       ? webSources.slice(0, 6).map((item, idx) => `${idx + 1}. ${item.url} -> ${item.snippet || '(ringkasan tidak tersedia)'}`).join('\n')
       : 'Tidak ada sumber web yang berhasil diambil.';
     const userLanguage = this.detectUserLanguage(userQuery);
+    
+    // Count total results from all actions
+    const totalResults = actionHistory.reduce((sum, entry) => {
+      return sum + (entry.result?.resultCount || 0);
+    }, 0);
+    
+    // Determine confidence level based on results
+    const hasGoodData = totalResults > 50;
+    const confidenceInstruction = hasGoodData
+      ? 'IMPORTANT: You have extensive data from the files. Be CONFIDENT and COMPREHENSIVE in your analysis. Provide detailed insights based on the data you found. Do NOT use disclaimers like "keterbatasan" or "perlu verifikasi" - you have direct access to the content.'
+      : 'You have some data from the files. Provide analysis based on what you found, and suggest specific additional searches if more information is needed.';
 
-    return `You are an autonomous research assistant synthesizing findings from local project files and live internet research.
+    return `You are an expert research assistant with FULL ACCESS to project files and comprehensive search results.
 
 ACTION LOG:
 ${summaryText || 'Tidak ada aksi yang dieksekusi.'}
@@ -239,15 +385,29 @@ ${webSourcesSection}
 PROJECT FILE CONTEXT:
 ${fileList}
 
+TOTAL DATA GATHERED: ${totalResults} results from ${actionHistory.length} search actions
+
 USER QUESTION:
 """${userQuery}"""
 
-FINAL RESPONSE REQUIREMENTS:
-- Jawab dalam bahasa pengguna (detected: ${userLanguage}).
-- Sertakan <thinking>...</thinking> yang menjelaskan proses analisis internal sebelum jawaban akhir.
-- Gabungkan bukti dari file lokal maupun sumber web; sebutkan nama file atau gunakan format markdown [Label](URL) saat mengutip tautan.
-- Jika informasi masih kurang lengkap, jelaskan keterbatasannya dan sarankan langkah lanjutan yang realistis.
-- Berikan rekomendasi atau next-step yang actionable bila relevan.`;
+${confidenceInstruction}
+
+RESPONSE REQUIREMENTS:
+- Jawab dalam bahasa pengguna (detected: ${userLanguage})
+- Sertakan <thinking>...</thinking> untuk proses analisis internal
+- BE COMPREHENSIVE: Extract and present ALL relevant information you found
+- BE CONFIDENT: You have direct access to file content - present findings authoritatively
+- Cite specific details: line numbers, section names, actual content from files
+- DO NOT say "kemungkinan", "mungkin", "tampaknya" if you have concrete data
+- DO NOT add disclaimers about "keterbatasan" or "perlu membuka file" - you already have the data
+- If data is truly insufficient (< 10 results), then suggest specific additional searches
+
+STRUCTURE YOUR RESPONSE:
+1. Direct findings from the files (be specific and detailed)
+2. Analysis and insights (comprehensive, not speculative)
+3. Only if truly needed: actionable next steps (but prefer giving complete answer now)
+
+Remember: You have ${totalResults} pieces of data. Use them confidently!`;
   }
 
   
@@ -287,65 +447,31 @@ ${capabilityLines.join('\n')}
 
 USER QUERY: "${userQuery}"
 
-INSTRUCTIONS:
-1. REASON about what information is required to answer the question${webFocusNote}
-2. PLAN a sequence of search actions using the tools above (local file search and/or web research)
-3. For each action specify:
+CRITICAL INSTRUCTIONS:
+1. REASON thoroughly about what information is required to answer the question${webFocusNote}
+2. PLAN a comprehensive sequence of search actions - BE THOROUGH, NOT MINIMAL
+3. You MUST create AT LEAST 2-3 different search actions to gather sufficient information
+4. DO NOT create just 1 action - that's insufficient for quality research
+5. For each action specify:
    - Action type (e.g., "webSearch" atau "searchHTML")
    - Parameters in JSON (mis. {"query": "berita Nepal terbaru"})
    - Why this action helps progress the investigation
 
+IMPORTANT: If you're analyzing files, use MULTIPLE different search patterns to find relevant information. Don't rely on just one search.
+
 Respond with this exact template:
-REASONING: [Your thought process]
+REASONING: [Your comprehensive thought process - explain what you need to find and WHY multiple searches are necessary]
 
 PLAN:
 1. ACTION: <toolName> with {...}
    WHY: <reason>
 2. ACTION: <toolName> with {...}
    WHY: <reason>
-[Tambah aksi lain bila perlu]
+3. ACTION: <toolName> with {...}
+   WHY: <reason>
+[Add more actions as needed - minimum 2-3 actions required]
 
-CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu menjawab pertanyaan pengguna]`;
-  }
-
-  
-  buildSynthesisPrompt(userQuery, sessionState, actionResults, userLanguage = 'en') {
-    const fileList = sessionState.files.map(f => `- ${f.name} (${f.type})`).join('\n');
-    const resultsContext = actionResults.map((result, index) => {
-      if (result.success) {
-        return `ACTION ${index + 1}: ${result.action}
-PARAMETERS: ${JSON.stringify(result.params)}
-RESULTS (${result.resultCount} items):
-${Array.isArray(result.results) ? result.results.map(r => `- ${r}`).join('\n') : result.results}`;
-      } else {
-        return `ACTION ${index + 1}: ${result.action} - FAILED`;
-      }
-    }).join('\n\n');
-
-    return `You are an AI assistant synthesizing information from project files to answer the user's question.
-
-USER FILES:
-${fileList}
-
-USER QUERY: "${userQuery}"
-
-SEARCH RESULTS FROM ANALYSIS:
-${resultsContext}
-
-INSTRUCTIONS:
-1. Analyze all the search results and file information
-2. Provide a comprehensive answer to the user's question
-3. Include relevant code examples, file references, and explanations
-4. Use the user's language for the final answer: ${userLanguage}
-
-IMPORTANT: Structure your response with:
-<thinking>
-[Your analysis and reasoning process]
-</thinking>
-
-[Your final answer in the user's language]
-
-IMPORTANT: The thinking section must be included and will be saved for future reference.`;
+CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu menjawab pertanyaan pengguna secara lengkap]`;
   }
 
   
@@ -604,14 +730,20 @@ IMPORTANT: The thinking section must be included and will be saved for future re
 
   
   async executeAction(action, sessionId) {
-    log(`Executing ${action.type} with params:`, action.params);
+    const logHelper = { sessionId };
+    log(logHelper, 'REASONING_ACTION_AGENT', 'executeAction',
+      `Starting action execution:\n  Type: ${action.type}\n  Params: ${JSON.stringify(action.params, null, 2)}`);
 
     try {
       const result = await this.searchEngine.executeSearchCommand(action.type, action.params);
+      log(logHelper, 'REASONING_ACTION_AGENT', 'executeAction',
+        `Search engine returned: ${Array.isArray(result) ? result.length : 1} raw results`);
+      
       const limitedResult = this.limitSearchResults(result, 100);
       const resultCount = Array.isArray(result) ? result.length : (result ? 1 : 0);
 
-      log(`Action ${action.type} returned ${resultCount} result(s)`);
+      log(logHelper, 'REASONING_ACTION_AGENT', 'executeAction',
+        `Action ${action.type} completed successfully:\n  Total results: ${resultCount}\n  Limited results: ${Array.isArray(limitedResult) ? limitedResult.length : 1}\n  Full result preview:\n${JSON.stringify(limitedResult, null, 2).substring(0, 1000)}...`);
 
       action.executed = true;
 
@@ -625,7 +757,8 @@ IMPORTANT: The thinking section must be included and will be saved for future re
       };
 
     } catch (error) {
-      log(`Action ${action.type} failed:`, error);
+      log(logHelper, 'REASONING_ACTION_AGENT', 'executeAction',
+        `Action ${action.type} failed with error:\n  Message: ${error.message}\n  Stack: ${error.stack}`);
       return {
         success: false,
         action: action.type,
@@ -748,7 +881,7 @@ IMPORTANT: The thinking section must be included and will be saved for future re
       }
     }
 
-    return `SEARCH ACTION COMPLETED:
+    const followupPromptText = `SEARCH ACTION COMPLETED:
 Action: ${action.type} with ${JSON.stringify(action.params)}
 Result: ${resultSummary}
 
@@ -759,61 +892,42 @@ REMAINING ACTIONS: ${originalPlan.actions.length - actionIndex - 1}
 
 Based on these search results, continue your analysis. 
 
-IMPORTANT: Only request additional actions if you absolutely need more information to answer the user's question. If you have enough information to provide a helpful answer, do not request more actions.
+CRITICAL INSTRUCTIONS:
+1. If the previous action returned 0 or very few results, you MUST try different search strategies
+2. DO NOT give up easily - try alternative patterns, keywords, or approaches
+3. Only stop searching if you have gathered SUFFICIENT information to answer the user's question comprehensively
+4. If results are insufficient, request 1-2 MORE targeted actions with different approaches
 
-If you need to perform additional searches, specify new actions in the same format:
+DECISION POINT:
+- If you have COMPLETE information: Provide your final analysis
+- If information is INCOMPLETE or MISSING: Request additional specific searches
 
-ACTION: searchType with {"param": "value"}
-WHY: Explanation
+Format for additional searches:
+ACTION: <searchType> with {"param": "value"}
+WHY: <specific reason explaining why this different approach will help>
 
-If you have sufficient information to answer the user's question, provide your final analysis without requesting more actions.`;
-  }
+Remember: Quality answers require thorough research. Don't settle for incomplete information.`;
 
-  
-  buildSynthesisPrompt(userQuery, actionHistory, sessionState) {
-    const { summaryText, webSources } = this.prepareActionSummary(actionHistory);
-    const hasFiles = Array.isArray(sessionState.files) && sessionState.files.length > 0;
-    const fileList = hasFiles
-      ? sessionState.files.slice(0, 20).map(f => `- ${f.name} (${f.type})`).join('\n')
-      : '- Tidak ada file lokal yang tersedia untuk sesi ini.';
-    const webSourcesSection = webSources.length > 0
-      ? webSources.slice(0, 6).map((item, idx) => `${idx + 1}. ${item.url} -> ${item.snippet || '(ringkasan tidak tersedia)'}`).join('\n')
-      : 'Tidak ada sumber web yang berhasil diambil.';
-    const userLanguage = this.detectUserLanguage(userQuery);
-
-    return `You are an autonomous research assistant synthesizing findings from local project files and live internet research.
-
-ACTION LOG:
-${summaryText || 'Tidak ada aksi yang dieksekusi.'}
-
-PRIMARY WEB SOURCES:
-${webSourcesSection}
-
-PROJECT FILE CONTEXT:
-${fileList}
-
-USER QUESTION:
-"""${userQuery}"""
-
-FINAL RESPONSE REQUIREMENTS:
-- Jawab dalam bahasa pengguna (detected: ${userLanguage}).
-- Sertakan <thinking>...</thinking> yang menjelaskan proses analisis internal sebelum jawaban akhir.
-- Gabungkan bukti dari file lokal maupun sumber web; sebutkan nama file atau gunakan format markdown [Label](URL) saat mengutip tautan.
-- Jika informasi masih kurang lengkap, jelaskan keterbatasannya dan sarankan langkah lanjutan yang realistis.
-- Berikan rekomendasi atau next-step yang actionable bila relevan.`;
+    return followupPromptText;
   }
 
   
   async makeAIRequest(prompt, sessionId) {
-    log(`AI Request for session ${sessionId}:`, prompt.slice(0, 100) + '...');
+    const logHelper = { sessionId };
+    log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+      `AI Request initiated for session ${sessionId}\nPrompt length: ${prompt.length} chars\n---FULL PROMPT START---\n${prompt}\n---FULL PROMPT END---`);
 
     const sessionData = this.sessionState.get(sessionId);
     if (!sessionData || !sessionData.model) {
-      log('AI request failed: Session not properly initialized with model information');
+      log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+        `AI request failed: Session not properly initialized with model information`);
       return this.generateFallbackResponse(prompt);
     }
 
     const { provider, model, apiKey, baseUrl } = sessionData.model;
+    log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+      `Using AI model configuration:\n  Provider: ${provider}\n  Model: ${model}\n  Base URL: ${baseUrl}\n  API Key: ${apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT SET'}`);
+    
     const https = require('https');
 
     const url = new URL(`${baseUrl.replace(/\/+$/,'')}/chat/completions`);
@@ -824,6 +938,9 @@ FINAL RESPONSE REQUIREMENTS:
     };
 
     const body = JSON.stringify(bodyObj);
+    log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+      `Request body:\n${JSON.stringify(bodyObj, null, 2)}`);
+    
     const headers = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`
@@ -833,6 +950,9 @@ FINAL RESPONSE REQUIREMENTS:
       headers['HTTP-Referer'] = 'https://clustrix.local';
       headers['X-Title'] = 'Clustrix Desktop';
     }
+
+    log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+      `Request headers (sanitized):\n${JSON.stringify({...headers, Authorization: 'Bearer ***'}, null, 2)}`);
 
     const makeHttpRequest = () => new Promise((resolve, reject) => {
       const opts = {
@@ -844,14 +964,29 @@ FINAL RESPONSE REQUIREMENTS:
         headers
       };
 
+      log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+        `HTTP request options:\n${JSON.stringify(opts, null, 2)}`);
+
       const req = https.request(opts, (res) => {
+        log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+          `Received response with status: ${res.statusCode}`);
+        
         let data = '';
-        res.on('data', chunk => data += chunk);
+        res.on('data', chunk => {
+          data += chunk;
+          log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+            `Received data chunk: ${chunk.length} bytes`);
+        });
         res.on('end', () => {
+          log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+            `Response complete. Total size: ${data.length} bytes\n---FULL RESPONSE START---\n${data}\n---FULL RESPONSE END---`);
+          
           if (res.statusCode < 200 || res.statusCode >= 300) {
             const error = new Error(`HTTP ${res.statusCode}: ${data}`);
             error.statusCode = res.statusCode;
             error.responseBody = data;
+            log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+              `HTTP error response:\n  Status: ${res.statusCode}\n  Body: ${data}`);
             reject(error);
             return;
           }
@@ -860,6 +995,8 @@ FINAL RESPONSE REQUIREMENTS:
       });
 
       req.on('error', (error) => {
+        log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+          `HTTP request error:\n  Message: ${error.message}\n  Code: ${error.code}\n  Stack: ${error.stack}`);
         reject(error);
       });
 
@@ -893,33 +1030,56 @@ FINAL RESPONSE REQUIREMENTS:
     let lastError = null;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+        `Attempt ${attempt}/${maxAttempts}: Sending HTTP request`);
+      
       try {
         const responseText = await makeHttpRequest();
+        log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+          `Parsing JSON response (${responseText.length} chars)`);
+        
         const jsonResponse = JSON.parse(responseText);
+        log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+          `Parsed JSON response:\n${JSON.stringify(jsonResponse, null, 2)}`);
+        
         const content = jsonResponse?.choices?.[0]?.message?.content ||
                         jsonResponse?.message?.content ||
                         jsonResponse?.output_text || '';
+        
+        log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+          `Extracted content (${content.length} chars):\n---AI CONTENT START---\n${content}\n---AI CONTENT END---`);
+        
         return content;
       } catch (error) {
         lastError = error;
         const status = extractStatusCode(error);
         const shouldRetry = attempt < maxAttempts && isRetryable(error);
 
+        log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+          `Attempt ${attempt} failed:\n  Status: ${status || 'N/A'}\n  Code: ${error.code || 'N/A'}\n  Message: ${error.message}\n  Should retry: ${shouldRetry}\n  Stack: ${error.stack}`);
+
         if (shouldRetry) {
           const backoff = baseDelay * Math.pow(2, attempt - 1);
           const jitter = Math.floor(Math.random() * 200);
           const delay = backoff + jitter;
-          log(`AI request attempt ${attempt} failed (${status || error.code || 'error'}). Retrying in ${delay}ms...`);
+          log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+            `Retrying in ${delay}ms (backoff: ${backoff}ms, jitter: ${jitter}ms)`);
           await sleep(delay);
           continue;
         }
 
-        log(`AI request attempt ${attempt} failed:`, error);
+        log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+          `Not retrying. Final error on attempt ${attempt}`);
         break;
       }
     }
 
-    log('AI request failed after retries:', lastError);
+    log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+      `All ${maxAttempts} attempts failed. Last error:\n  Message: ${lastError?.message}\n  Code: ${lastError?.code}\n  Stack: ${lastError?.stack}\n  Response body: ${lastError?.responseBody || 'N/A'}`);
+    
+    log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+      `Falling back to generated response`);
+    
     return this.generateFallbackResponse(prompt);
   }
 

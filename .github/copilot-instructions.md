@@ -1,4 +1,4 @@
-# Clustrix AI – Codebase Orientation
+# Clustrix AI – Codebase Or- `renderer/md.worker.js` uses custom markdown parser from `md.js` for all markdown processing.entation
 
 ## High-Level Overview
 Clustrix is a desktop chat assistant built with Electron. The main process (`main.js`) boots logging, manages the application window, mediates IPC, and wires a LangChain-powered backend to the renderer UI. The renderer (assets under `renderer/`) handles session state, streaming UI, markdown rendering, artifacts management, and project workflows. A preload script (`preload.js`) exposes a hardened IPC bridge.

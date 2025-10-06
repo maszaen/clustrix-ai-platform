@@ -532,24 +532,26 @@ hr {
   align-items: center;
 }
 
-.link {
-  color: var(--link);
-  text-decoration: underline;
-  transition: color 0.2s;
-  }
-
-.link:hover {
-    color: var(--link-hover);
-}
-
 .message.ai a:not(:not([href])):not([href=""]) {
+  font-size: 12px;
+  background: var(--bg-secondary);
+  padding: 0px 12px;
+  white-space: nowrap;
+  margin: 0 3px;
+  display: inline-flex;
+  max-width: 300px;
+  min-width: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--link);
-  text-decoration: underline;
+  text-decoration: none;
+  border-radius: var(--radius-full);
   transition: color 0.2s;
 }
 
 .message.ai a:not(:not([href])):not([href=""]):hover {
   color: var(--link-hover);
+  background: var(--hover-bg);
 }
 
 .modal-card hr {

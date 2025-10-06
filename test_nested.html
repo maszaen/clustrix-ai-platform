@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Nested List</title>
+    <script src="local_modules/custom-formatter/md.js"></script>
+</head>
+<body>
+    <div id="test"></div>
+    <script>
+        const testMarkdown = `- Item 1
+- Item 2
+  \`\`\`javascript
+  console.log('code in list');
+  \`\`\`
+- Item 3
+
+| Header 1 | Header 2 |
+|----------|----------|
+| Cell 1   | Cell 2   |
+
+- Item 4
+  > This is a blockquote in a list
+  > with multiple lines
+- Item 5`;
+
+        document.getElementById('test').innerHTML = md(testMarkdown);
+        console.log('Rendered HTML:', md(testMarkdown));
+    </script>
+</body>
+</html>

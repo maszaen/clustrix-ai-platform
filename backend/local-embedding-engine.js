@@ -356,6 +356,30 @@ class LocalEmbeddingEngine {
   }
 
   /**
+   * Clear all documents for a specific session
+   */
+  clearSessionDocuments(sessionId) {
+    if (!sessionId) return 0;
+
+    const initialSize = this.documentIndex.size;
+    let removedCount = 0;
+
+    for (const [key, doc] of this.documentIndex.entries()) {
+      if (doc.metadata && doc.metadata.sessionId === sessionId) {
+        this.documentIndex.delete(key);
+        removedCount++;
+      }
+    }
+
+    if (removedCount > 0) {
+      this.idfCache.clear(); // Invalidate IDF cache
+      console.log(`🧹 Local Index: Cleared ${removedCount} documents for session ${sessionId}`);
+    }
+
+    return removedCount;
+  }
+
+  /**
    * Clear entire index
    */
   clearIndex() {

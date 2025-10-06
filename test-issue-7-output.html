@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Issue #7 Test</title>
+<style>
+body { font-family: Arial; padding: 20px; max-width: 900px; margin: 0 auto; }
+ol, ul { margin: 10px 0; padding-left: 30px; }
+li { margin: 5px 0; }
+.code-block-container { margin: 10px 0; border: 1px solid #ddd; }
+.code-block-header { background: #e8e8e8; padding: 5px 10px; }
+pre { background: #f4f4f4; padding: 10px; margin: 0; }
+code { background: #f0f0f0; padding: 2px 4px; }
+</style></head><body><ol><li><strong><code>let nextEl = p.nextElementSibling;</code></strong><ul><li>Ini adalah <em>key</em> utamanya. Dalam struktur HTML yang kamu berikan:
+      <div class="code-block-container">
+        <div class="code-block-header">
+          <span class="language-name">html</span>
+          <div class="code-block-actions">
+            <button class="save-code-btn" title="Save to artifacts" data-code="<p>teks p</p>
+        <ol>...</ol>" data-language="html">
+              <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17,21 17,13 7,13 7,21"></polyline><polyline points="7,3 7,8 15,8"></polyline></svg>
+            </button>
+            <button class="copy-code-btn" title="Copy code">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+            </button>
+          </div>
+        </div>
+        <pre><code class="language-html">&lt;p&gt;teks p&lt;/p&gt;
+        &lt;ol&gt;...&lt;/ol&gt;</code></pre>
+      </div>Ketika JavaScript memanggil <code>p.nextElementSibling</code>, ia akan <strong>melewati <em>whitespace</em></strong>.</li></ul></li></ol></body></html>

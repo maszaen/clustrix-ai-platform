@@ -30,7 +30,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   if (isTopLevel) {
     processedSrc = normalizedSrc.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
       const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
-      let codeContent = code.trim();
+      let codeContent = code; // Don't trim yet - we need original whitespace for dedent
       const language = lang || "text";
     
     // Clean blockquote markers from code content if present
@@ -49,6 +49,25 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
       return cleaned;
     });
+    
+    // Normalize indentation: remove common leading whitespace from all non-empty lines
+    // This handles codeblocks in nested lists where markdown indentation should not appear in code
+    const nonEmptyLines = cleanedLines.filter(line => line.trim().length > 0);
+    if (nonEmptyLines.length > 0) {
+      const indents = nonEmptyLines.map(line => {
+        const match = line.match(/^(\s*)/);
+        return match ? match[1].length : 0;
+      });
+      const minIndent = Math.min(...indents);
+      if (minIndent > 0) {
+        for (let i = 0; i < cleanedLines.length; i++) {
+          if (cleanedLines[i].trim().length > 0) {
+            cleanedLines[i] = cleanedLines[i].substring(minIndent);
+          }
+        }
+      }
+    }
+    
     codeContent = cleanedLines.join('\n').trim();
     
     // Different structure for thinking-text (no action buttons)
@@ -99,6 +118,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     flushParagraph();
     while (listStack.length > 0) html += `</${listStack.pop().type}>`;
   };
+  let lastLineWasCodeblock = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmedLine = line.trim();
@@ -150,9 +170,11 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
 
       if (shouldContinueList) {
+        lastLineWasCodeblock = false;
         continue;
       }
       closeOpenBlocks();
+      lastLineWasCodeblock = false;
       continue;
     }
     const hMatch = line.match(/^(#+)\s+(.*)/);
@@ -190,6 +212,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         closeOpenBlocks();
         html += tableHtml;
       }
+      lastLineWasCodeblock = false;
       i = tableRowIndex - 1;
       continue;
     }
@@ -219,6 +242,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       html += `<li>${parseInlineMarkdown(content)}</li>`;
       // Track the end position of this list item for appending nested content
       currentListItemEndPos = html.length - 5; // Position before "</li>"
+      lastLineWasCodeblock = false;
     } else if (bqMatch) {
       const bqBlockLines = [line];
       // Collect all consecutive blockquote lines (including empty lines within blockquotes)
@@ -232,6 +256,19 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         // Stop if we hit a non-blockquote block-level element at root level
         const isNewBlock = /^(#|---|```|[*-] |\d+\.\s)/.test(nextTrimmed) && (nextLine.length - nextTrimmed.length === 0);
         if (isNewBlock) break;
+        
+        // Special case: Allow table rows without > prefix if previous line was a table row
+        const prevLine = bqBlockLines[bqBlockLines.length - 1];
+        const prevTrimmed = prevLine.replace(/^\s*>\s?/, '').trim();
+        const isTableRow = nextTrimmed.startsWith('|') && nextTrimmed.includes('|');
+        const prevWasTableRow = prevTrimmed.includes('|');
+        
+        if (isTableRow && prevWasTableRow) {
+          // Continue collecting table row even without > prefix
+          i++;
+          bqBlockLines.push(nextLine);
+          continue;
+        }
         
         // Stop if line doesn't start with > and isn't empty
         if (!nextLine.match(/^\s*>/) && nextTrimmed !== "") break;
@@ -282,6 +319,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         closeOpenBlocks();
         html += blockquoteHtml;
       }
+      lastLineWasCodeblock = false;
     } else if (codeMatch) {
       // For codeblocks in lists, always append to current list item to maintain proper nesting
       if (listStack.length > 0) {
@@ -290,21 +328,26 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         closeOpenBlocks();
         html += trimmedLine;
       }
+      lastLineWasCodeblock = true;
     } else if (hMatch || hrMatch) {
       closeOpenBlocks();
       if (hMatch) html += `<h${hMatch[1].length}>${parseInlineMarkdown(hMatch[2])}</h${hMatch[1].length}>`;
       else if (hrMatch) html += "<hr>";
+      lastLineWasCodeblock = false;
     } else {
       if (listStack.length > 0) {
         // For regular text in lists, append to current list item using the tracked position
         if (currentListItemEndPos !== -1) {
-          const textHtml = `<br>${parseInlineMarkdown(line.trim())}`;
+          // Don't add <br> if previous line was a codeblock
+          const prefix = lastLineWasCodeblock ? '' : '<br>';
+          const textHtml = `${prefix}${parseInlineMarkdown(line.trim())}`;
           html = `${html.substring(0, currentListItemEndPos)}${textHtml}${html.substring(currentListItemEndPos)}`;
           currentListItemEndPos += textHtml.length;
         }
       } else {
         paragraphBuffer.push(parseInlineMarkdown(line));
       }
+      lastLineWasCodeblock = false;
     }
   }
   closeOpenBlocks();

@@ -110,25 +110,45 @@ function enhancedMarkdownParse(src, options = {}) {
     return placeholder;
   });
   let processedSrc = normalizedSrc.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
-    const placeholder = `\n__CODEBLOCK_${codeBlocks.length}__\n`;
-    let codeContent = code.trim();
+    const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
+    let codeContent = code; // Don't trim yet - we need original whitespace for dedent
     const language = lang || "text";
     
     // Clean blockquote markers from code content if present
     // This handles codeblocks inside blockquotes where the content includes blockquote prefixes
     const lines = codeContent.split('\n');
     const cleanedLines = lines.map(line => {
-      // Remove leading > markers that are likely from blockquote nesting
-      const trimmed = line.trimStart();
-      if (trimmed.startsWith('>') && trimmed.length > 1) {
-        // Check if this looks like a blockquote marker followed by content
-        const afterMarker = trimmed.substring(1).trimStart();
-        if (afterMarker && !afterMarker.startsWith('>')) {
-          return afterMarker;
+      // Remove all leading > markers and whitespace that are from blockquote nesting
+      let cleaned = line;
+      // Keep removing > markers at the start (after optional whitespace)
+      while (true) {
+        const beforeClean = cleaned;
+        // Remove leading whitespace + > + optional space
+        cleaned = cleaned.replace(/^\s*>\s?/, '');
+        // If nothing changed, we're done
+        if (cleaned === beforeClean) break;
+      }
+      return cleaned;
+    });
+    
+    // Normalize indentation: remove common leading whitespace from all non-empty lines
+    // This handles codeblocks in nested lists where markdown indentation should not appear in code
+    const nonEmptyLines = cleanedLines.filter(line => line.trim().length > 0);
+    if (nonEmptyLines.length > 0) {
+      const indents = nonEmptyLines.map(line => {
+        const match = line.match(/^(\s*)/);
+        return match ? match[1].length : 0;
+      });
+      const minIndent = Math.min(...indents);
+      if (minIndent > 0) {
+        for (let i = 0; i < cleanedLines.length; i++) {
+          if (cleanedLines[i].trim().length > 0) {
+            cleanedLines[i] = cleanedLines[i].substring(minIndent);
+          }
         }
       }
-      return line;
-    });
+    }
+    
     codeContent = cleanedLines.join('\n').trim();
 
     // Different structure for thinking-text (no action buttons)
@@ -157,6 +177,7 @@ function enhancedMarkdownParse(src, options = {}) {
   const listStack = [];
   let paragraphBuffer = [];
   let currentListItemEndPos = -1; // Track end position of current list item
+  let lastLineWasCodeblock = false;
   const flushParagraph = () => {
     if (paragraphBuffer.length > 0) {
       html += `<p>${paragraphBuffer.join("<br>")}</p>`;
@@ -226,9 +247,11 @@ function enhancedMarkdownParse(src, options = {}) {
       }
 
       if (shouldContinueList) {
+        lastLineWasCodeblock = false;
         continue;
       }
       closeOpenBlocks();
+      lastLineWasCodeblock = false;
       continue;
     }
     const hMatch = line.match(/^(#+)\s+(.*)/);
@@ -266,6 +289,7 @@ function enhancedMarkdownParse(src, options = {}) {
         closeOpenBlocks();
         html += tableHtml;
       }
+      lastLineWasCodeblock = false;
       i = tableRowIndex - 1;
       continue;
     }
@@ -294,6 +318,7 @@ function enhancedMarkdownParse(src, options = {}) {
       }
       html += `<li>${parseInlineMarkdown(content)}</li>`;
       currentListItemEndPos = html.length - 5; // Position before </li>
+      lastLineWasCodeblock = false;
     } else if (bqMatch) {
       const bqBlockLines = [line];
       while (i + 1 < lines.length && lines[i + 1].trim() !== "") {
@@ -326,6 +351,7 @@ function enhancedMarkdownParse(src, options = {}) {
         closeOpenBlocks();
         html += blockquoteHtml;
       }
+      lastLineWasCodeblock = false;
     } else if (codeMatch) {
       // For codeblocks in lists, always append to current list item to maintain proper nesting
       if (listStack.length > 0) {
@@ -334,17 +360,26 @@ function enhancedMarkdownParse(src, options = {}) {
         closeOpenBlocks();
         html += trimmedLine;
       }
+      lastLineWasCodeblock = true;
     } else if (hMatch || hrMatch) {
       closeOpenBlocks();
       if (hMatch) html += `<h${hMatch[1].length}>${parseInlineMarkdown(hMatch[2])}</h${hMatch[1].length}>`;
       else if (hrMatch) html += "<hr>";
+      lastLineWasCodeblock = false;
     } else {
       if (listStack.length > 0) {
-        const lastLiPos = html.lastIndexOf("</li>");
-        if (lastLiPos !== -1) html = `${html.substring(0, lastLiPos)}<br>${parseInlineMarkdown(line.trim())}</li>`;
+        // For regular text in lists, append to current list item using the tracked position
+        if (currentListItemEndPos !== -1) {
+          // Don't add <br> if previous line was a codeblock
+          const prefix = lastLineWasCodeblock ? '' : '<br>';
+          const textHtml = `${prefix}${parseInlineMarkdown(line.trim())}`;
+          html = `${html.substring(0, currentListItemEndPos)}${textHtml}${html.substring(currentListItemEndPos)}`;
+          currentListItemEndPos += textHtml.length;
+        }
       } else {
         paragraphBuffer.push(parseInlineMarkdown(line));
       }
+      lastLineWasCodeblock = false;
     }
   }
   closeOpenBlocks();

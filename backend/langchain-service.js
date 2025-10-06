@@ -275,13 +275,19 @@ class ClustrixLangChainService {
   
   async processUploadedFiles(files, sessionId) {
     if (!files || files.length === 0) {
-      console.log('LangChain: No files to process');
+      // Even if no files are provided, we should clear the old ones for this session
+      this.localEmbedding.clearSessionDocuments(sessionId);
+      this.localEmbedding.saveIndex();
+      console.log(`LangChain: No files to process for session ${sessionId}, cleared existing session documents.`);
       return;
     }
 
     console.log(`LangChain: Starting PURE LOCAL processing of ${files.length} files for session ${sessionId}`);
     
     try {
+      // Step 0: Clear any existing documents for this session to ensure a fresh start
+      this.localEmbedding.clearSessionDocuments(sessionId);
+
       // Step 1: Optimize files with LOCAL summarization (NO AI)
       console.log('LangChain: Running LOCAL file optimization and summarization...');
       const optimizedResult = await this.fileSummarizer.processFiles(files);

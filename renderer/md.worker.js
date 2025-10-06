@@ -1,3 +1,100 @@
+/*
+ * md.worker.js
+ * Offloads custom markdown rendering to a background thread
+ * Based on md.js formatter with improved nested list support
+ */
+
+/* global self */
+
+const MARKDOWN_LATEX_PLACEHOLDER_PREFIX = "¤LATEX_";
+let fullResponse = "";
+let markdownRendererInstance = null;
+
+// Import highlight.js for syntax highlighting
+if (typeof self.importScripts === "function") {
+  try {
+    self.importScripts("../local_modules/highlight/modules/highlight.min.js");
+  } catch (err) {
+    console.warn("Failed to import highlight.js in worker", err);
+  }
+}
+
+// Copy core functions from md.js
+function esc(value) {
+  if (!value) return "";
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeAttribute(value) {
+  return esc(value).replace(/`/g, "&#96;");
+}
+
+function normalizeLanguage(lang) {
+  if (!lang) return "text";
+  return lang.toLowerCase().replace(/[^\w+-]+/g, "");
+}
+
+// Parse markdown links with balanced parentheses support
+// function parseMarkdownLinks(text) {
+//   let result = text;
+//   let i = 0;
+
+//   while (i < text.length) {
+//     // Find opening bracket
+//     if (text[i] === '[') {
+//       const startBracket = i;
+//       let bracketCount = 1;
+//       let j = i + 1;
+
+//       // Find matching closing bracket
+//       while (j < text.length && bracketCount > 0) {
+//         if (text[j] === '[') bracketCount++;
+//         else if (text[j] === ']') bracketCount--;
+//         j++;
+//       }
+
+//       if (bracketCount === 0) {
+//         const linkText = text.substring(startBracket + 1, j - 1);
+
+//         // Check for opening parenthesis after closing bracket
+//         if (j < text.length && text[j] === '(') {
+//           const startParen = j;
+//           let parenCount = 1;
+//           let k = j + 1;
+
+//           // Find matching closing parenthesis using stack
+//           while (k < text.length && parenCount > 0) {
+//             if (text[k] === '(') parenCount++;
+//             else if (text[k] === ')') parenCount--;
+//             k++;
+//           }
+
+//           if (parenCount === 0) {
+//             const url = text.substring(startParen + 1, k - 1);
+//             const fullMatch = text.substring(startBracket, k);
+
+//             // Replace with HTML link
+//             const htmlLink = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${linkText}</a>`;
+//             result = result.replace(fullMatch, htmlLink);
+
+//             // Skip the processed part
+//             i = startBracket + htmlLink.length;
+//             continue;
+//           }
+//         }
+//       }
+//     }
+//     i++;
+//   }
+
+//   return result;
+// }
+
 function enhancedMarkdownParse(src, options = {}) {
   const isThinkingText = options.isThinkingText || false;
   let sanitizedSrc = src.trimStart();
@@ -33,9 +130,9 @@ function enhancedMarkdownParse(src, options = {}) {
       return line;
     });
     codeContent = cleanedLines.join('\n').trim();
-    
+
     // Different structure for thinking-text (no action buttons)
-    const newStructure = isThinkingText ? 
+    const newStructure = isThinkingText ?
       `<div class="code-block-container thinking-code"><div class="code-block-header"><span class="language-name">${language}</span></div><pre><code class="language-${language}">${esc(codeContent)}</code></pre></div>` :
       `
       <div class="code-block-container">
@@ -60,7 +157,6 @@ function enhancedMarkdownParse(src, options = {}) {
   const listStack = [];
   let paragraphBuffer = [];
   let currentListItemEndPos = -1; // Track end position of current list item
-
   const flushParagraph = () => {
     if (paragraphBuffer.length > 0) {
       html += `<p>${paragraphBuffer.join("<br>")}</p>`;
@@ -69,9 +165,7 @@ function enhancedMarkdownParse(src, options = {}) {
   };
   const appendToCurrentListItem = content => {
     if (listStack.length > 0 && currentListItemEndPos !== -1) {
-      // Insert content before the closing </li> tag of current list item
       html = `${html.substring(0, currentListItemEndPos)}${content}${html.substring(currentListItemEndPos)}`;
-      // Update the end position since we inserted content
       currentListItemEndPos += content.length;
       return true;
     }
@@ -80,7 +174,9 @@ function enhancedMarkdownParse(src, options = {}) {
   const closeOpenBlocks = () => {
     flushParagraph();
     while (listStack.length > 0) html += `</${listStack.pop().type}>`;
+    currentListItemEndPos = -1; // Reset when closing list blocks
   };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmedLine = line.trim();
@@ -92,42 +188,40 @@ function enhancedMarkdownParse(src, options = {}) {
       const upcomingTableSeparator = nextNextLine && nextNextLine.includes("|") && nextNextLine.includes("-") && !/[^|:-\s]/.test(nextNextLine);
       const isUpcomingTableHeader = nextLineTrimmed && nextLineTrimmed.includes("|") && upcomingTableSeparator;
 
-      // Check if we should continue the list
+      // Check if we should continue the list with enhanced look-ahead
       let shouldContinueList = false;
       if (listStack.length > 0) {
         const currentListIndent = listStack[listStack.length - 1].indent;
 
-        // Continue list if next line is a list item at same or greater indent
-        if (nextLineTrimmed.match(/^(\s*)[*-]\s+/) || nextLineTrimmed.match(/^(\s*)\d+\.\s+/)) {
-          const nextListMatch = nextLineTrimmed.match(/^(\s*)[*-]\s+/) || nextLineTrimmed.match(/^(\s*)\d+\.\s+/);
-          const nextListIndent = nextListMatch[1].length;
-          if (nextListIndent >= currentListIndent) {
-            shouldContinueList = true;
-          }
-        }
-        // Continue list if next line is codeblock, blockquote, or table at proper indent
-        else if (nextLineTrimmed.startsWith("__CODEBLOCK_") || nextLineTrimmed.startsWith(">") || isUpcomingTableHeader) {
-          // For nested content, allow same indent as list item (more flexible than markdown-it strict rules)
-          if (nextLineIndent >= currentListIndent) {
-            shouldContinueList = true;
-          }
-        }
-        // If next line is empty or end of content, check a few lines ahead for nested content
-        else if (!nextLineTrimmed) {
-          // Look ahead up to 3 lines for nested content
-          for (let lookAhead = 1; lookAhead <= 3 && i + lookAhead < lines.length; lookAhead++) {
-            const lookAheadLine = lines[i + lookAhead];
-            const lookAheadTrimmed = lookAheadLine.trim();
-            const lookAheadIndent = lookAheadLine.length - lookAheadLine.trimStart().length;
-            
-            if (lookAheadTrimmed.startsWith("__CODEBLOCK_") || lookAheadTrimmed.startsWith(">") || 
-                (lookAheadTrimmed.includes("|") && lines[i + lookAhead + 1] && lines[i + lookAhead + 1].trim().includes("|") && lines[i + lookAhead + 1].trim().includes("-"))) {
-              if (lookAheadIndent >= currentListIndent) {
-                shouldContinueList = true;
-                break;
-              }
+        // Look ahead up to 3 lines to find continuation content
+        for (let lookAhead = 1; lookAhead <= 3 && i + lookAhead < lines.length; lookAhead++) {
+          const lookAheadLine = lines[i + lookAhead];
+          const lookAheadTrimmed = lookAheadLine.trim();
+          const lookAheadIndent = lookAheadLine.length - lookAheadTrimmed.length;
+
+          // Skip empty lines
+          if (lookAheadTrimmed === "") continue;
+
+          // Continue list if next non-empty line is a list item at same or greater indent
+          if (lookAheadTrimmed.match(/^(\s*)[*-]\s+/) || lookAheadTrimmed.match(/^(\s*)\d+\.\s+/)) {
+            const nextListMatch = lookAheadTrimmed.match(/^(\s*)[*-]\s+/) || lookAheadTrimmed.match(/^(\s*)\d+\.\s+/);
+            const nextListIndent = nextListMatch[1].length;
+            if (nextListIndent >= currentListIndent) {
+              shouldContinueList = true;
+              break;
             }
           }
+          // Continue list if next non-empty line is codeblock, blockquote, or table at proper indent
+          else if (lookAheadTrimmed.startsWith("__CODEBLOCK_") || lookAheadTrimmed.startsWith(">") || 
+                   (lookAheadTrimmed.includes("|") && !lookAheadTrimmed.match(/^(\s*)[*-]\s+/) && !lookAheadTrimmed.match(/^(\s*)\d+\.\s+/))) {
+            // For nested content, check if it's indented properly (at least current list indent + 2)
+            if (lookAheadIndent >= currentListIndent + 2) {
+              shouldContinueList = true;
+              break;
+            }
+          }
+          // If we hit content that doesn't continue the list, stop looking
+          break;
         }
       }
 
@@ -199,8 +293,7 @@ function enhancedMarkdownParse(src, options = {}) {
         listStack.push({ type, indent, implicit: isImplicit });
       }
       html += `<li>${parseInlineMarkdown(content)}</li>`;
-      // Track the end position of this list item for appending nested content
-      currentListItemEndPos = html.length - 5; // Position before "</li>"
+      currentListItemEndPos = html.length - 5; // Position before </li>
     } else if (bqMatch) {
       const bqBlockLines = [line];
       while (i + 1 < lines.length && lines[i + 1].trim() !== "") {
@@ -247,12 +340,8 @@ function enhancedMarkdownParse(src, options = {}) {
       else if (hrMatch) html += "<hr>";
     } else {
       if (listStack.length > 0) {
-        // For regular text in lists, append to current list item using the tracked position
-        if (currentListItemEndPos !== -1) {
-          const textHtml = `<br>${parseInlineMarkdown(line.trim())}`;
-          html = `${html.substring(0, currentListItemEndPos)}${textHtml}${html.substring(currentListItemEndPos)}`;
-          currentListItemEndPos += textHtml.length;
-        }
+        const lastLiPos = html.lastIndexOf("</li>");
+        if (lastLiPos !== -1) html = `${html.substring(0, lastLiPos)}<br>${parseInlineMarkdown(line.trim())}</li>`;
       } else {
         paragraphBuffer.push(parseInlineMarkdown(line));
       }
@@ -262,51 +351,6 @@ function enhancedMarkdownParse(src, options = {}) {
   let finalHtml = codeBlocks.reduce((acc, block, i) => acc.replace(`__CODEBLOCK_${i}__`, block), html);
   finalHtml = latexBlocks.reduce((acc, block, i) => acc.replace(`__LATEX_${i}__`, block), finalHtml);
   return finalHtml;
-}
-
-function processMarkdownFormatting(text) {
-  if (!text) return "";
-  
-  // Parse links BEFORE HTML escaping to handle parentheses in URLs
-  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
-  let processedText = text.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
-  
-  let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-  const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
-  html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
-  const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
-  html = html.replace(footnoteGroupRegex, match => {
-    const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
-    const links = [];
-    let result;
-    while ((result = individualFootnoteRegex.exec(match)) !== null) {
-      const number = result[1];
-      const url = result[2];
-      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer">[${number}]</a>`);
-    }
-    return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
-  });
-  
-  html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
-  html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
-  const inlineCodeBlocks = [];
-  html = html.replace(/`([^`]+?)`/g, (match, content) => {
-    const placeholder = `__INLINE_CODE_${inlineCodeBlocks.length}__`;
-    inlineCodeBlocks.push(`<code>${content}</code>`);
-    return placeholder;
-  });
-  const tldList = ["com","net","org","io","gov","edu","co","info","biz","online","app","id","me","site","tech","dev","ai","cloud","shop","store","live","blog","club","news","xyz","link","cloud","space","page","pro","design","agency","group","company","inc","us","uk","au","ca","de","fr","es","it","nl","se","no","fi","ru","cn","jp","br","in","cz","pl","be","ch","at","sg","hk","nz","mx","ar","cl","kr","za","ae","sa"];
-  const tldPattern = tldList.join("|");
-  const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
-  html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl) => {
-    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`)) return match;
-    let href = protocolUrl || domainUrl;
-    if (!/^https?:\/\//i.test(href)) href = "https://" + href;
-    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>`;
-  });
-  html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
-  html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/___(.*?)___/g, "<strong><em>$1</em></strong>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>").replace(/~~(.*?)~~/g, "<del>$1</del>");
-  return html;
 }
 
 function parseInlineMarkdown(text) {
@@ -340,10 +384,10 @@ function parseInlineMarkdown(text) {
     }
   }
   let processedText = text.replace(/<br\s*\/?>/gi, "__BR_TAG__");
-  
+
   // Parse links BEFORE HTML escaping to handle parentheses in URLs
   // processedText = parseMarkdownLinks(processedText);
-  
+
   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   html = html.replace(/__BR_TAG__/g, "<br>");
   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
@@ -360,9 +404,6 @@ function parseInlineMarkdown(text) {
     }
     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
   });
-  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
-  
-  html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
   const inlineCodeBlocks = [];
   html = html.replace(/`([^`]+?)`/g, (match, content) => {
@@ -384,26 +425,157 @@ function parseInlineMarkdown(text) {
   return html;
 }
 
-function md(src, options = {}) {
-  if (!src) return "";
-  const cleanSrc = src.trim();
-  const html = enhancedMarkdownParse(cleanSrc, options);
-  const tempDiv = document.createElement("div");
-  tempDiv.innerHTML = html;
-  if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
-  attachCodeBlockListeners(tempDiv);
-  setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
-  return tempDiv.innerHTML;
+function processMarkdownFormatting(text) {
+  if (!text) return "";
+
+  // Parse links BEFORE HTML escaping to handle parentheses in URLs
+  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+  let processedText = text.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
+
+  let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
+  html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
+  const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
+  html = html.replace(footnoteGroupRegex, match => {
+    const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
+    const links = [];
+    let result;
+    while ((result = individualFootnoteRegex.exec(match)) !== null) {
+      const number = result[1];
+      const url = result[2];
+      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer">[${number}]</a>`);
+    }
+    return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
+  });
+
+  html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
+  const inlineCodeBlocks = [];
+  html = html.replace(/`([^`]+?)`/g, (match, content) => {
+    const placeholder = `__INLINE_CODE_${inlineCodeBlocks.length}__`;
+    inlineCodeBlocks.push(`<code>${content}</code>`);
+    return placeholder;
+  });
+  const tldList = ["com","net","org","io","gov","edu","co","info","biz","online","app","id","me","site","tech","dev","ai","cloud","shop","store","live","blog","club","news","xyz","link","cloud","space","page","pro","design","agency","group","company","inc","us","uk","au","ca","de","fr","es","it","nl","se","no","fi","ru","cn","jp","br","in","cz","pl","be","ch","at","sg","hk","nz","mx","ar","cl","kr","za","ae","sa"];
+  const tldPattern = tldList.join("|");
+  const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
+  html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl) => {
+    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`)) return match;
+    let href = protocolUrl || domainUrl;
+    if (!/^https?:\/\//i.test(href)) href = "https://" + href;
+    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>`;
+  });
+  html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
+  html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/___(.*?)___/g, "<strong><em>$1</em></strong>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>").replace(/~~(.*?)~~/g, "<del>$1</del>");
+  return html;
 }
 
-// Wrapper for thinking-text formatting (no action buttons)
-function mdThinking(src) {
-  if (!src) return "";
-  const cleanSrc = src.trim();
-  const html = enhancedMarkdownParse(cleanSrc, { isThinkingText: true });
-  const tempDiv = document.createElement("div");
-  tempDiv.innerHTML = html;
-  if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
-  attachCodeBlockListeners(tempDiv);
-  return tempDiv.innerHTML;
+function ensureRenderer() {
+  if (markdownRendererInstance) return markdownRendererInstance;
+
+  markdownRendererInstance = {
+    render: (text) => {
+      try {
+        return enhancedMarkdownParse(text);
+      } catch (error) {
+        console.warn('Custom markdown rendering error:', error);
+        return esc(text).replace(/\n/g, "<br>");
+      }
+    }
+  };
+
+  return markdownRendererInstance;
 }
+
+function preprocessMarkdownSource(src) {
+  const latex = [];
+  const text = src.replace(/(\$\$[\s\S]*?\$\$|\\\(.*?\\\))/g, (match) => {
+    const placeholder = `${MARKDOWN_LATEX_PLACEHOLDER_PREFIX}${latex.length}`;
+    latex.push(match);
+    return placeholder;
+  });
+  return { text, latex };
+}
+
+function restoreLatexPlaceholders(html, latex) {
+  return latex.reduce((result, latexBlock, index) => {
+    return result.replace(`${MARKDOWN_LATEX_PLACEHOLDER_PREFIX}${index}`, latexBlock);
+  }, html);
+}
+
+function postRenderAdjustments(html) {
+  return html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>")
+    .replace(/<div class="table-container">([\s\S]*?)<\/div>/g, (match, tableContent) => {
+      return `<div class="table-container">${tableContent.replace(/<(td|th)>([\s\S]*?)<\/\1>/g, (cellMatch, tag, cellContent) => {
+        const decodedContent = cellContent
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&amp;/g, '&')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&nbsp;/g, ' ');
+
+        if (/(^|\n)\s*[-*+•]\s+/m.test(decodedContent) || decodedContent.includes('<br>')) {
+          const markdownContent = decodedContent.replace(/•/g, '-').replace(/<br\s*\/?>/gi, '\n').trim();
+          const processedCell = enhancedMarkdownParse(markdownContent);
+          return `<${tag}>${processedCell.trim()}</${tag}>`;
+        }
+        return cellMatch;
+      })}</div>`;
+    });
+}
+
+function renderMarkdown(src) {
+  const renderer = ensureRenderer();
+  const { text, latex } = preprocessMarkdownSource(src);
+  const rendered = renderer.render(text.trim());
+  const withLatex = restoreLatexPlaceholders(rendered, latex);
+  return postRenderAdjustments(withLatex);
+}
+
+function trimEndMarker(value) {
+  if (!value) return "";
+  return value.replace(/\s*<!--\s*\[\/END\]\s*-->\s*$/g, "");
+}
+
+function handleUpdate(streamId) {
+  const display = trimEndMarker(fullResponse);
+  const html = renderMarkdown(display);
+  self.postMessage({ type: "update", html, streamId });
+}
+
+self.onmessage = function onmessage(event) {
+  const { type, payload = "", streamId, messageId } = event.data || {};
+  if (!type || !streamId) return;
+
+  if (type === "init") {
+    fullResponse = typeof payload === "string" ? payload : "";
+    const html = renderMarkdown(fullResponse);
+
+    // For sync rendering (used by main thread md() function)
+    if (messageId) {
+      self.postMessage({ type: "update", html, streamId, messageId });
+    } else {
+      // For streaming
+      if (fullResponse) {
+        handleUpdate(streamId);
+      } else {
+        self.postMessage({ type: "update", html: "", streamId });
+      }
+    }
+    return;
+  }
+
+  if (type === "token") {
+    fullResponse += typeof payload === "string" ? payload : "";
+    handleUpdate(streamId);
+    return;
+  }
+
+  if (type === "end") {
+    const finalText = typeof payload === "string" ? payload : trimEndMarker(fullResponse);
+    const html = renderMarkdown(finalText);
+    self.postMessage({ type: "final", html, streamId });
+    fullResponse = "";
+    return;
+  }
+};

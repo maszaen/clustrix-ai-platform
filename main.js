@@ -186,6 +186,8 @@ function createWindow(){
       contextIsolation: true, nodeIntegration: false
     }
   });
+
+  win.webContents.openDevTools();
   
   let lastLogSignature = null;
   ipcMain.on('log:write', (_event, logData) => {

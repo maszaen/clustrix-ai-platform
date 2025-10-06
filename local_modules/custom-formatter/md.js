@@ -433,9 +433,6 @@ function parseInlineMarkdown(text) {
   }
   let processedText = text.replace(/<br\s*\/?>/gi, "__BR_TAG__");
   
-  // Parse links BEFORE HTML escaping to handle parentheses in URLs
-  // processedText = parseMarkdownLinks(processedText);
-  
   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   html = html.replace(/__BR_TAG__/g, "<br>");
   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
@@ -488,7 +485,6 @@ function md(src, options = {}) {
   return tempDiv.innerHTML;
 }
 
-// Wrapper for thinking-text formatting (no action buttons)
 function mdThinking(src) {
   if (!src) return "";
   const cleanSrc = src.trim();

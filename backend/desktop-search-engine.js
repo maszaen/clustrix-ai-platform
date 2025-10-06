@@ -766,6 +766,12 @@ class DesktopSearchEngine {
   }
 
   async executeSearchCommand(commandOrTool, providedParams = {}) {
+    const { log } = require('../utils/logger');
+    const logHelper = { component: 'DESKTOP_SEARCH_ENGINE' };
+    
+    log(logHelper, 'DESKTOP_SEARCH_ENGINE', 'executeSearchCommand',
+      `Executing search command:\n  Command/Tool: ${JSON.stringify(commandOrTool)}\n  Provided params: ${JSON.stringify(providedParams)}`);
+    
     let commandName = '';
     let params = providedParams;
 
@@ -793,7 +799,13 @@ class DesktopSearchEngine {
     }
 
     commandName = typeof commandName === 'string' ? commandName.trim() : '';
+    
+    log(logHelper, 'DESKTOP_SEARCH_ENGINE', 'executeSearchCommand',
+      `Extracted command name: "${commandName}"\nExtracted params: ${JSON.stringify(params)}`);
+    
     if (!commandName) {
+      log(logHelper, 'DESKTOP_SEARCH_ENGINE', 'executeSearchCommand',
+        `No command name found, returning empty array`);
       return [];
     }
 
@@ -817,6 +829,9 @@ class DesktopSearchEngine {
     };
 
     const methodName = nameMap[normalizedName] || commandName;
+    
+    log(logHelper, 'DESKTOP_SEARCH_ENGINE', 'executeSearchCommand',
+      `Mapped command:\n  Normalized: "${normalizedName}"\n  Method: "${methodName}"`);
 
     const execute = () => {
       switch (methodName) {
@@ -837,13 +852,21 @@ class DesktopSearchEngine {
         case 'fetchWebPage':
           return this.fetchWebPage(params);
         default:
-          console.warn(`Unknown search command: ${commandName}`);
+          log(logHelper, 'DESKTOP_SEARCH_ENGINE', 'executeSearchCommand',
+            `Unknown search command: ${commandName}`);
           return [];
       }
     };
 
     try {
+      log(logHelper, 'DESKTOP_SEARCH_ENGINE', 'executeSearchCommand',
+        `Executing method: ${methodName}`);
+      
       const result = await Promise.resolve(execute());
+      
+      log(logHelper, 'DESKTOP_SEARCH_ENGINE', 'executeSearchCommand',
+        `Method ${methodName} completed:\n  Result type: ${Array.isArray(result) ? 'array' : typeof result}\n  Result count: ${Array.isArray(result) ? result.length : 1}\n  Result preview:\n${JSON.stringify(result, null, 2).substring(0, 2000)}...`);
+      
       this.searchHistory.push({
         command: methodName,
         params: this.normalizeCommandParams(params),

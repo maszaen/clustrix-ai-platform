@@ -1292,9 +1292,8 @@ async function processSearchStatusQueue() {
           thinkEl.text.appendChild(reasoningTitle);
           await typewriterEffectChunked(reasoningTitle, "Reasoning:", 50, 4);
 
-          thinkEl.text.innerHTML += "<br>";
-          const reasoningContent = document.createElement("span");
-          reasoningContent.style.display = "block";
+          thinkEl.text.appendChild(document.createElement("br"));
+          const reasoningContent = document.createElement("div");
           reasoningContent.style.marginTop = "8px";
           reasoningContent.style.lineHeight = "1.6";
           thinkEl.text.appendChild(reasoningContent);
@@ -1304,23 +1303,32 @@ async function processSearchStatusQueue() {
             200,
           );
 
-          thinkEl.text.innerHTML += "<br><br>";
+          thinkEl.text.appendChild(document.createElement("br"));
+          thinkEl.text.appendChild(document.createElement("br"));
           const keywordsTitle = createTitleSpan();
           thinkEl.text.appendChild(keywordsTitle);
           await typewriterEffectChunked(keywordsTitle, "Keywords:", 50, 3);
 
-          thinkEl.text.innerHTML += "<br>";
-          const keywordsContent = document.createElement("span");
-          keywordsContent.style.display = "block";
+          thinkEl.text.appendChild(document.createElement("br"));
+          const keywordsContent = document.createElement("div");
           keywordsContent.style.marginTop = "8px";
           keywordsContent.style.lineHeight = "1.6";
-          keywordsContent.style.whiteSpace = "pre-line";
           thinkEl.text.appendChild(keywordsContent);
-          await typewriterEffectChunked(
-            keywordsContent,
-            status.data.search_queries.join("\n"),
-            200,
-          );
+          
+          // Add each keyword with proper line breaks
+          console.log('DEBUG: Keywords count:', status.data.search_queries.length);
+          for (let i = 0; i < status.data.search_queries.length; i++) {
+            console.log(`DEBUG: Adding keyword ${i}:`, status.data.search_queries[i]);
+            const kwSpan = document.createElement("span");
+            keywordsContent.appendChild(kwSpan);
+            await typewriterEffectChunked(kwSpan, status.data.search_queries[i], 200);
+            if (i < status.data.search_queries.length - 1) {
+              const br = document.createElement("br");
+              console.log('DEBUG: Adding BR after keyword', i);
+              keywordsContent.appendChild(br);
+            }
+          }
+          console.log('DEBUG: Final keywordsContent HTML:', keywordsContent.innerHTML);
         }
         break;
 
@@ -1341,17 +1349,28 @@ async function processSearchStatusQueue() {
             200,
           );
         } else {
-          thinkEl.text.innerHTML += "<br><br>";
           await typewriterEffectChunked(urlsTitle, "Found URLs:", 50, 3);
 
           thinkEl.text.appendChild(document.createElement("br"));
-          const urlsContent = document.createElement("span");
+          const urlsContent = document.createElement("div");
+          urlsContent.style.marginTop = "8px";
+          urlsContent.style.lineHeight = "1.6";
           thinkEl.text.appendChild(urlsContent);
-          await typewriterEffectChunked(
-            urlsContent,
-            status.data.map((r) => r.link).join("\n"),
-            200,
-          );
+          
+          // Add each URL with proper line breaks
+          console.log('DEBUG: URLs count:', status.data.length);
+          for (let i = 0; i < status.data.length; i++) {
+            console.log(`DEBUG: Adding URL ${i}:`, status.data[i].link);
+            const urlSpan = document.createElement("span");
+            urlsContent.appendChild(urlSpan);
+            await typewriterEffectChunked(urlSpan, status.data[i].link, 200);
+            if (i < status.data.length - 1) {
+              const br = document.createElement("br");
+              console.log('DEBUG: Adding BR after URL', i);
+              urlsContent.appendChild(br);
+            }
+          }
+          console.log('DEBUG: Final urlsContent HTML:', urlsContent.innerHTML);
         }
         break;
 
@@ -1816,7 +1835,13 @@ function cleanInvisibleContent(html) {
   
   // Final cleanup: normalize the resulting HTML
   let finalHtml = tempDiv.innerHTML
-    .replace(/>\s+</g, '><') // Remove whitespace between tags
+    .replace(/>\s+</g, (match) => {
+      // Keep whitespace around <br> tags to preserve line breaks
+      if (tempDiv.innerHTML.includes('<br>')) {
+        return match; // Don't remove whitespace if there are <br> tags
+      }
+      return '><'; // Otherwise remove whitespace between tags
+    })
     .replace(/\s+/g, ' ') // Normalize multiple spaces
     .trim();
   
@@ -2137,22 +2162,18 @@ async function loadAllArtifacts() {
         // Migrate to file-based storage
         codeArtifacts = legacyArtifacts.map((artifact) => ({
           ...artifact,
-          isFavorite: artifact.isFavorite || false, // Add isFavorite if missing
-          sessionId: null, // Legacy artifacts don't have origin tracking
+          isFavorite: artifact.isFavorite || false,
+          sessionId: null,
           messageIndex: null,
         }));
 
-        // Save to new file-based system
         await saveArtifactsToFile();
 
-        // Clear localStorage after successful migration
         localStorage.removeItem("code-artifacts");
-        // console.log('✅ Migrated artifacts from localStorage to file-based storage'); // Removed console.log
         return codeArtifacts;
       }
     }
 
-    // Return empty array if no artifacts found
     codeArtifacts = [];
     return codeArtifacts;
   } catch (e) {
@@ -2169,7 +2190,6 @@ async function saveArtifactsToFile() {
     if (window.api && window.api.artifacts) {
       await window.api.artifacts.save(codeArtifacts);
     } else {
-      // Fallback to localStorage if API not available
       localStorage.setItem("code-artifacts", JSON.stringify(codeArtifacts));
     }
   } catch (e) {
@@ -2190,7 +2210,7 @@ function toggleArtifactFavorite(artifactId) {
     artifact.isFavorite = !artifact.isFavorite;
     artifact.updated_at = new Date().toISOString();
     saveArtifactsToFile();
-    renderArtifactsPage(); // Refresh to update star/unstar text
+    renderArtifactsPage(); 
   }
 }
 
@@ -2253,14 +2273,12 @@ function log(context, level, contextFunc, message, details = {}) {
 
   const hasDetails = details && Object.keys(details).length > 0;
 
-  // Create signatures for duplicate detection
   const baseSignature = `${context}:${level}:${contextFunc}:${message}`;
   const dataSignature = hasDetails
     ? JSON.stringify(details, Object.keys(details).sort())
     : "";
   const fullSignature = `${baseSignature}:${dataSignature}`;
 
-  // Initialize logging state
   if (!window._logState) {
     window._logState = {
       lastSignature: null,
@@ -2276,22 +2294,19 @@ function log(context, level, contextFunc, message, details = {}) {
   const isCompleteMatch = isSameBase && isSameData;
 
   if (isCompleteMatch) {
-    // Exact same log (message + data) - show minimal format
     state.sequenceCount++;
     const minimalMessage = `%c${state.sequenceCount}. [${shortTime}] ${contextFunc}().`;
     const minimalStyle = `color: ${color}; font-weight: normal; opacity: 0.7;`;
 
     console[out](minimalMessage, minimalStyle);
   } else if (isSameBase && !isSameData && hasDetails) {
-    // Same message but different data - show only changed fields
     state.sequenceCount++;
 
     const changeMessage = `%c${state.sequenceCount}. [${shortTime}] ${contextFunc}().`;
     const changeStyle = `color: ${color}; font-weight: normal;`;
 
-    // Get only changed details
     const changedDetails = getChangedDetails(details, state.lastDetails || {});
-    state.lastDetails = { ...details }; // Store current details for next comparison
+    state.lastDetails = { ...details };
     state.lastDataSignature = dataSignature;
 
     if (Object.keys(changedDetails).length > 0) {
@@ -2306,18 +2321,15 @@ function log(context, level, contextFunc, message, details = {}) {
         console.groupEnd();
       }
     } else {
-      // No actual changes, treat as complete match
       console[out](changeMessage, `${changeStyle}; opacity: 0.7;`);
     }
   } else if (isSameBase && !hasDetails) {
-    // Same message, no data - ultra minimal
     state.sequenceCount++;
     const ultraMinimal = `%c${state.sequenceCount}. [${shortTime}]`;
     const ultraStyle = `color: ${color}; font-weight: normal; opacity: 0.5;`;
 
     console[out](ultraMinimal, ultraStyle);
   } else {
-    // New signature or significantly different - show full format
     state.lastSignature = baseSignature;
     state.lastDataSignature = dataSignature;
     state.lastDetails = hasDetails ? { ...details } : null;
@@ -2342,10 +2354,8 @@ function log(context, level, contextFunc, message, details = {}) {
     }
   }
 
-  // Helper function for key-value printing
   function printKV(printer, logColor, detailsToPrint = details) {
     Object.entries(detailsToPrint).forEach(([key, value]) => {
-      // Safely handle large values
       let displayValue = value;
       if (typeof value === 'string' && value.length > 1000) {
         displayValue = value.substring(0, 1000) + '... (truncated)';
@@ -2365,7 +2375,6 @@ function log(context, level, contextFunc, message, details = {}) {
     });
   }
 
-  // Helper function to get only changed details
   function getChangedDetails(current, previous) {
     const changed = {};
     for (const [key, value] of Object.entries(current)) {
@@ -2376,7 +2385,6 @@ function log(context, level, contextFunc, message, details = {}) {
     return changed;
   }
 
-  // Backend logging - always send full format for analysis
   try {
     const logEntry = {
       timestamp: time,
@@ -2431,7 +2439,6 @@ function ensureTokenFields(session) {
   ) {
     session.tokens_by_message = {};
   }
-  // Ensure uploadedFiles array exists for file upload functionality
   if (!Array.isArray(session.uploadedFiles)) {
     session.uploadedFiles = [];
   }
@@ -2441,8 +2448,6 @@ function updateTokensUI(session) {
   try {
     if (session === current) {
       updateChatHeader();
-      // const activeTok = document.querySelector("#session-list li.active .tokens");
-      // if (activeTok) activeTok.textContent = `${session.tokens_used || 0} tokens`;
     }
   } catch {}
 }
@@ -2460,15 +2465,6 @@ function bumpToken(session, messageIndex) {
     if (typeof save === "function" && session.tokens_used % 25 === 0) save();
   } catch {}
 }
-
-// function normalizeProviderModels(list) {
-//   if (!Array.isArray(list)) return [];
-//   return list.map((m) => {
-//     if (typeof m === 'string') return { id: m, label: m, note: '' };
-//     const id = m?.id || '';
-//     return { id, label: m?.label || id, note: m?.note || '' };
-//   });
-// }
 
 function normalizeProviderModels(list) {
   const arr = Array.isArray(list) ? list : [];
@@ -4028,11 +4024,8 @@ function showArtifactsPage() {
 function renderArtifactsPage() {
   const artifactsList = document.getElementById("artifacts-list");
   if (!artifactsList) {
-    // console.log('DEBUG: artifacts-list element not found'); // Removed console.log
     return;
   }
-
-  // console.log('DEBUG: Artifacts count:', codeArtifacts.length); // Removed console.log
 
   if (codeArtifacts.length === 0) {
     artifactsList.innerHTML = `
@@ -4125,7 +4118,6 @@ function renderArtifactsPage() {
     artifactsList.appendChild(artifactItem);
   });
 
-  // console.log('DEBUG: renderArtifactsPage completed, artifacts rendered:', codeArtifacts.length); // Removed console.log
 }
 
 function setupArtifactsPageListeners() {
@@ -7203,31 +7195,18 @@ let aiMessageHeightData = {
   observer: null,
 };
 
-// Brilliant AI Message Height Calculation (replacing spacer calculation)
 function calculateAiMessageTargetHeight() {
   const scroller = getChatScroller();
-  if (!scroller) return 300; // fallback
+  if (!scroller) return 300; 
 
-  // Get viewport dimensions
   const viewportHeight = scroller.clientHeight;
 
-  // Find the last user message to position properly
   const lastUserMessage = findLastUserMessageElement();
-  if (!lastUserMessage) return viewportHeight * 0.7; // fallback to 70vh
+  if (!lastUserMessage) return viewportHeight * 0.7;
 
-  // Calculate AI message height needed to push user message to top+30px
-  // Logic: AI message harus cukup tinggi agar user message scroll ke posisi top+30px
   const userMessageHeight = lastUserMessage.offsetHeight;
 
-  // Target: viewportHeight - 30px (untuk posisi user di top+30px) - sedikit margin
-  const targetHeight = Math.max(200, viewportHeight - 30 - 50); // 30px positioning + 50px safety margin
-
-  // console.log("🧮 Brilliant AI message height calculation (FIXED):", { // Removed console.log
-  //   viewportHeight,
-  //   userMessageHeight,
-  //   targetHeight,
-  //   formula: "viewportHeight - 30px(positioning) - 50px(safety)"
-  // });
+  const targetHeight = Math.max(200, viewportHeight - 30 - 50);
 
   return targetHeight;
 }
@@ -7243,13 +7222,6 @@ function setupAiMessagePreAllocation(aiMessageElement) {
   aiMessageHeightData.isPreAllocated = true;
 
   aiMessageElement.style.minHeight = `${calculatedHeight}px`;
-
-  // console.log("✨ Brilliant AI message pre-allocation setup:", { // Removed console.log
-  //   naturalHeight: aiMessageHeightData.naturalHeight,
-  //   targetHeight: calculatedHeight,
-  //   element: aiMessageElement
-  // });
-
   scrollToBottom({ force: true });
 
   setupAiContentBottomDetection(aiMessageElement);
@@ -7266,7 +7238,7 @@ function setupAiContentBottomDetection(aiMessageElement) {
   }
 
   let lastCheck = 0;
-  const checkInterval = 100; // 100ms throttle
+  const checkInterval = 100;
 
   const checkContentReachBottom = () => {
     const now = Date.now();
@@ -7279,7 +7251,6 @@ function setupAiContentBottomDetection(aiMessageElement) {
     const threshold = allocatedHeight * 0.8;
 
     if (contentHeight >= threshold) {
-      // console.log("� AI content approaching bottom - preparing for auto-height"); // Removed console.log
     }
   };
 
@@ -7296,14 +7267,11 @@ function setupAiContentBottomDetection(aiMessageElement) {
     }
   });
 
-  // Observe text content changes
   aiMessageHeightData.observer.observe(aiMessageText, {
     childList: true,
     subtree: true,
     characterData: true,
   });
-
-  // console.log("👁️ Brilliant AI content bottom detection setup"); // Removed console.log
 }
 
 function restoreAiMessageAutoHeight() {
@@ -7320,46 +7288,26 @@ function restoreAiMessageAutoHeight() {
   }
 
   const aiElement = aiMessageHeightData.aiMessageElement;
-
-  // console.log("🔄 Starting SUPER smooth collapse..."); // Removed console.log
-
-  // DEBUG: Check current state
   const currentHeight = aiElement.offsetHeight;
   const currentMinHeight = aiElement.style.minHeight;
-  // console.log("� Before collapse:", { currentHeight, currentMinHeight }); // Removed console.log
+  aiElement.style.transition = "none";
+  aiElement.offsetHeight; 
 
-  // RADICAL APPROACH: Skip measurement, direct smooth collapse to auto
-  aiElement.style.transition = "none"; // Disable all CSS transitions first
-  aiElement.offsetHeight; // Force layout
-
-  // console.log("🎯 RADICAL: Direct smooth collapse to auto-height"); // Removed console.log
-
-  // Apply smooth transition and immediately go to auto-height
   requestAnimationFrame(() => {
-    // Set smooth ease-out transition - professional feel
     aiElement.style.transition =
       "min-height 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)";
-    aiElement.offsetHeight; // Force layout
+    aiElement.offsetHeight;
 
-    // Direct collapse to auto (no intermediate height)
     aiElement.style.minHeight = "0px";
 
-    // console.log("🎬 RADICAL: Direct collapse to 0px"); // Removed console.log
-
-    // After animation, remove all constraints
     setTimeout(() => {
       if (aiElement && aiElement.style) {
         aiElement.style.minHeight = "";
         aiElement.style.transition = "";
 
-        // console.log("✅ RADICAL: All constraints removed - CLEAN!"); // Removed console.log
       }
-    }, 450); // Wait for animation (0.4s + buffer)
+    }, 450); 
   });
-
-  // console.log("🔄 RADICAL smooth collapse initiated!"); // Removed console.log
-
-  // Reset data
   aiMessageHeightData = {
     targetHeight: 0,
     aiMessageElement: null,
@@ -7369,34 +7317,24 @@ function restoreAiMessageAutoHeight() {
   };
 }
 
-// Legacy spacer functions - now simplified to use AI message height
 function createResponseSpacer() {
-  // console.log("🚀 Creating brilliant AI message height system (no more spacer!)"); // Removed console.log
-
-  // Find the AI message that will be growing
   const aiMessages = document.querySelectorAll(".message.ai");
   const lastAiMessage = aiMessages[aiMessages.length - 1];
 
   if (lastAiMessage) {
-    // Setup AI message pre-allocation instead of spacer
     setupAiMessagePreAllocation(lastAiMessage);
-    // console.log("✅ Brilliant AI message height system activated"); // Removed console.log
   }
-  return null; // No spacer element needed anymore!
+  return null;
 }
 
 function expandSpacer() {
-  // console.log("� Brilliant system already expanded via AI message height!"); // Removed console.log
-  // Nothing needed - AI message already pre-allocated
 }
 
 function collapseSpacer() {
-  // console.log("📉 Brilliant AI message auto-height restoration..."); // Removed console.log
   restoreAiMessageAutoHeight();
 }
 
 function removeSpacer() {
-  // console.log("🗑️ Brilliant system cleanup"); // Removed console.log
   restoreAiMessageAutoHeight();
 }
 
@@ -7406,7 +7344,6 @@ function scrollToSpacerWithContext() {
   const scroller = getChatScroller();
   if (!scroller) return;
 
-  // Get user's last message
   const messages = document.querySelectorAll(".message.user");
   const lastUserMessage = messages[messages.length - 1];
 
@@ -7421,7 +7358,6 @@ function scrollToSpacerWithContext() {
       const scrollerRect = scroller.getBoundingClientRect();
       const messageRect = lastUserMessage.getBoundingClientRect();
 
-      // Calculate target scroll position
       const spacerBottom =
         currentResponseSpacer.offsetTop + currentResponseSpacer.offsetHeight;
       const userMessageVisiblePortion = Math.min(
@@ -7487,23 +7423,18 @@ function initializeSmartScroll() {
     { passive: true },
   );
 
-  // Position-based listener - ONLY for manual re-enabling AFTER cooldown ends
   scroller.addEventListener(
     "scroll",
     (e) => {
       if (window._isLazyLoading || scrollDetectionCooldown) {
-        // During cooldown, COMPLETELY IGNORE all scroll events
         return;
       }
 
-      // Only process scroll events AFTER cooldown has ended
       const nearBottom = isNearBottom(scroller, 120);
 
       if (nearBottom && isUserScrolledUp) {
-        // User manually scrolled back to bottom AFTER cooldown ended
         isUserScrolledUp = false;
         autoScrollEnabled = true;
-        // console.log('� User manually returned to bottom AFTER cooldown - re-enabled'); // Removed console.log
       }
     },
     { passive: true },
@@ -7515,12 +7446,10 @@ function scrollToBottom({ force = false, fromAI = false } = {}) {
   if (!scroller) return;
 
   if (window._preventAutoScrollToBottom && !force) {
-    // console.log('🚫 Auto-scroll blocked by prevent flag (View in Chat navigation)'); // Removed console.log
     return;
   }
 
   if (window._isLazyLoading && !force) {
-    // console.log('🚫 Auto-scroll blocked during lazy loading'); // Removed console.log
     return;
   }
 
@@ -7634,20 +7563,12 @@ function formatTimestamp(dateString) {
   });
 }
 
-// Event delegation handler for save buttons
 function handleSaveButtonClick(event) {
-  // console.log("DEBUG: Click event detected on container:", event.target); // Removed console.log
 
   const saveButton = event.target.closest(".save-code-btn");
   if (!saveButton) {
-    // console.log("DEBUG: Click was not on a save button"); // Removed console.log
     return;
   }
-
-  // console.log("DEBUG: Save button clicked via event delegation!", { // Removed console.log
-  //   button: saveButton,
-  //   event: event
-  // });
 
   event.preventDefault();
   event.stopPropagation();
@@ -8522,9 +8443,6 @@ function buildMessagesForProject(session) {
     if (role === "user") {
       let fullUserPrompt = content;
 
-      // For project sessions, don't embed project files in message text
-      // They should be handled by RE+ACT or other mechanisms
-      // Only embed user-uploaded files for this specific message
       if (metadata && metadata.files && metadata.files.length > 0) {
         let fileContext = "\n\nAttached files for context:\n\n";
         metadata.files.forEach((file) => {
@@ -8577,11 +8495,9 @@ function buildResumeMessagesFromSession(
   ];
 }
 
-// Helper function to find last user message element for professional scroll UX
 function findLastUserMessageElement() {
   if (!current || !current.messages) return null;
 
-  // Find last user message index in the session
   let lastUserMessageIndex = -1;
   for (let i = current.messages.length - 1; i >= 0; i--) {
     const [role] = current.messages[i];
@@ -8593,7 +8509,6 @@ function findLastUserMessageElement() {
 
   if (lastUserMessageIndex === -1) return null;
 
-  // Find corresponding DOM element
   const messages = document.querySelectorAll(".message[data-index]");
   for (const messageEl of messages) {
     const index = parseInt(messageEl.dataset.index);
@@ -8615,30 +8530,24 @@ function renderHistory() {
   currentProject = null;
   if (!current || !current.messages) return;
 
-  // Try cache first for ultra-fast switching
   const cached = getCachedSession(current.id);
   if (cached) {
     const renderStartTime = performance.now();
     
-    // Ultra-fast cache restoration with scroll position lock
     const chatLog = $("#chat-log");
     const scroller = getChatScroller();
     
-    // IMPORTANT: Disable scroll listener temporarily during cache restore
     if (scroller) {
       scroller._lazyListenerDisabled = true;
     }
     
-    // Lock scroll position BEFORE DOM manipulation to prevent jump
     if (scroller) {
       scroller.style.scrollBehavior = "auto";
-      scroller.style.overflow = "hidden"; // Prevent scroll during restoration
+      scroller.style.overflow = "hidden";
     }
     
-    // Restore HTML content
     chatLog.innerHTML = cached.renderedHTML;
     
-    // CRITICAL: Restore lazy state from cache
     if (cached.lazyState) {
       current._lazyState = cached.lazyState;
       log("CACHE", 1, "renderHistory", "Restored lazy state from cache", {
@@ -8649,36 +8558,25 @@ function renderHistory() {
     } else {
       log("CACHE", 2, "renderHistory", "No lazy state in cache to restore!");
     }
-    
-    // DO NOT set isFullyLoaded = true!
-    // We need to allow lazy loading if user scrolls to top
-    // Just temporarily disable the listener during restore
-    
-    // Force immediate scroll position restore (before browser can calculate layout)
+
     if (scroller && cached.scrollPosition !== undefined) {
-      // Use requestAnimationFrame to ensure DOM is ready but before paint
       requestAnimationFrame(() => {
         scroller.scrollTop = cached.scrollPosition;
-        scroller.style.overflow = ""; // Re-enable scrolling
-        scroller.style.scrollBehavior = ""; // Restore smooth behavior
+        scroller.style.overflow = "";
+        scroller.style.scrollBehavior = ""; 
         
-        // Re-enable scroll listener after a delay to prevent immediate trigger
         setTimeout(() => {
           if (scroller) {
             scroller._lazyListenerDisabled = false;
           }
-        }, 500); // 500ms delay to prevent trigger from restore scroll
+        }, 500);
       });
     }
     
-    // Re-hydrate interactive elements without full re-render
     hydrateInteractiveElements();
     
-    // CRITICAL: Re-setup lazy scroll listener after cache restore
-    // This ensures user can load older messages if they scroll to top
     setupLazyScrollListener();
     
-    // Add load older indicator if there are more messages to load
     if (current._lazyState && current._lazyState.loadedStartIndex > 0) {
       addLoadOlderIndicator(current._lazyState.loadedStartIndex);
       log("CACHE", 1, "renderHistory", `Added load older indicator`, {
@@ -8697,28 +8595,20 @@ function renderHistory() {
     return;
   }
 
-  // Fallback to normal rendering if no cache
   renderHistoryLazy();
 }
 
 function hydrateInteractiveElements() {
-  // Re-setup interactive elements that need event listeners
-  
-  // Define SVG icons for action buttons
   const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
   const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
   
-  // Handle message expand/collapse buttons for user messages
   const expandBtns = document.querySelectorAll('.message-expand-btn');
   expandBtns.forEach(btn => {
     const messageNode = btn.closest('.message');
     if (messageNode) {
-      // Reset setup state to force re-hydration
       btn.removeAttribute('data-setup-complete');
-      // Remove existing event listeners by cloning
       const newBtn = btn.cloneNode(true);
       btn.parentNode.replaceChild(newBtn, btn);
-      // Re-setup with fresh listeners
       setTimeout(() => setupUserMessageExpandCollapse(messageNode), 0);
     }
   });
@@ -9375,7 +9265,6 @@ function renderSessions() {
         projectHeader.title = `Click to view all ${projectSessionsList.length} sessions in ${project.name || "this project"}`;
       }
       
-      // Event listener untuk show more functionality
       if (hasMore) {
         projectHeader.addEventListener("click", (e) => {
           e.preventDefault();
@@ -9384,24 +9273,21 @@ function renderSessions() {
           console.log("Found project:", project);
           
           if (project) {
-            // If currently in project detail view for the SAME project, do nothing
             if (currentProject && currentProject.id === projectId) {
               return; // Don't execute anything
             }
-            // If currently in project detail view for a DIFFERENT project, use showProjectsListView() then navigate to detail view
             else if (currentProject) {
               closeMobileSidebar();
               showProjectsListView();
               setTimeout(() => {
                 showProjectDetailView(project);
-              }, 350); // Wait for list view animation to complete
+              }, 350);
             } else {
-              // Not in project detail view, activate projects page first
               showProjectsPage();
               closeMobileSidebar();
               setTimeout(() => {
                 showProjectDetailView(project);
-              }, 100); // Small delay to ensure page is fully activated
+              }, 100);
             }
           }
         });
@@ -9409,17 +9295,14 @@ function renderSessions() {
       
       ul.appendChild(projectHeader);
 
-      // Render sessions for this project
       for (const s of sessionsToShow) {
         const li = createSessionListItem(s);
         ul.appendChild(li);
       }
       
-      // Gak perlu moreLi lagi, udah di handle sama projectHeader
     }
   }
 
-  // Render regular sessions with date grouping
   let lastDateGroup = null;
   for (const s of regularSessions) {
     const basisDate =
@@ -9506,7 +9389,6 @@ function updateSessionTitle(sessionId, newTitle, useTypewriter = true) {
   }
 }
 
-// Function to convert session placeholder to full session item
 function convertPlaceholderToSession(sessionId, sessionData) {
   const sessionElement = document.querySelector(
     `#session-list li[data-session-id="${sessionId}"]`,
@@ -9517,7 +9399,6 @@ function convertPlaceholderToSession(sessionId, sessionData) {
   )
     return;
 
-  // Remove placeholder class and update structure
   sessionElement.classList.remove("session-placeholder");
   if (sessionData === current) {
     sessionElement.className = "active";
@@ -9525,7 +9406,6 @@ function convertPlaceholderToSession(sessionId, sessionData) {
     sessionElement.className = "";
   }
 
-  // Update the HTML structure to match normal session items
   sessionElement.innerHTML = `
     <span class="name">${esc(sessionData.name)}</span>
     <div class="session-meta">

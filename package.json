@@ -3,7 +3,7 @@
   "version": "26.2.0",
   "private": true,
   "description": "Clustrix - A smart AI chat assistant.",
-  "author": "Zaen",
+  "author": "Maszaen Corporation",
   "main": "main.js",
   "type": "commonjs",
   "scripts": {
@@ -21,8 +21,9 @@
       "output": "out"
     },
     "files": [
+      "*",
       "**/*",
-      "!out/**",
+      "node_modules/**/*",
       "!\\.git/**",
       "!README.md"
     ],
@@ -38,22 +39,19 @@
     }
   },
   "devDependencies": {
-    "electron-builder": "^24.13.3",
     "cross-env": "^7.0.3",
-    "electron": "^38.1.0"
+    "electron": "^38.1.0",
+    "electron-builder": "^24.13.3"
   },
   "dependencies": {
-    "@langchain/community": "^0.3.0",
-    "@langchain/openai": "^0.3.0",
-    "@mathjax/mathjax-newcm-font": "^4.0.0",
+    "@langchain/core": "^0.3.78",
+    "@langchain/openai": "^0.6.14",
+    "@langchain/textsplitters": "^0.1.0",
     "cheerio": "^1.1.2",
-    "highlight.js": "^11.11.1",
-    "langchain": "^0.3.0",
+    "langchain": "^0.3.35",
     "mammoth": "^1.10.0",
     "mathjax": "^4.0.0",
-    "perfect-scrollbar": "^1.5.6",
     "serpapi": "^2.2.1",
-    "uuid": "^10.0.0",
-    "xlsx": "file:./local_modules/xlsx"
+    "uuid": "^10.0.0"
   }
 }

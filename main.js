@@ -368,23 +368,70 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 const dataFile = path.join(app.getPath('userData'), 'chat_data.json');
 
 ipcMain.handle('sessions:load', async () => {
-  try{
-    if (!fs.existsSync(dataFile)) return { sessions: [], settings: { persona: {} } };
-    const raw = fs.readFileSync(dataFile, 'utf-8');
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return { sessions: parsed, settings: { persona: {} } }; // legacy
-    if (parsed && typeof parsed === 'object') {
-        if (typeof parsed.settings.persona === 'string') {
-            parsed.settings.persona = { name: '', work: '', preferences: parsed.settings.persona };
-        }
-        return parsed;
+  try {
+    if (!fs.existsSync(dataFile)) {
+      app.quit();
+      return;
     }
-    return { sessions: [], settings: { persona: {} } };
-  }catch(e){
+
+    const raw = fs.readFileSync(dataFile, 'utf-8');
+    let line = 1;
+    let col = 1;
+    let foundInvalid = false;
+
+    for (let i = 0; i < raw.length; i++) {
+      const code = raw.charCodeAt(i);
+
+      if (code === 0x0a) {
+        line++;
+        col = 1;
+      } else {
+        col++;
+      }
+
+      if (code < 0x20 && ![0x09, 0x0a, 0x0d].includes(code)) {
+        const hex = "0x" + code.toString(16).padStart(2, "0");
+        const preview = raw
+          .slice(Math.max(0, i - 10), Math.min(raw.length, i + 10))
+          .replace(/\n/g, "\\n");
+        log(
+          `Control character ${hex} at position ${i} (row ${line}, col ${col}). Context: “…${preview}…”`
+        );
+        foundInvalid = true;
+      }
+    }
+
+    if (foundInvalid) {
+      app.quit();
+      return;
+    }
+
+    const parsed = JSON.parse(raw);
+
+    if (Array.isArray(parsed)) {
+      return { sessions: parsed, settings: { persona: {} } };
+    }
+    
+    if (parsed && typeof parsed === 'object') {
+      if (typeof parsed.settings?.persona === 'string') {
+        parsed.settings.persona = {
+          name: '',
+          work: '',
+          preferences: parsed.settings.persona
+        };
+      }
+      return parsed;
+    }
+    
+    app.quit();
+  } catch (e) {
+    console.error('JSON parse/load error:', e.message);
+    console.error(e.stack);
     log('load error', e);
-    return { sessions: [], settings: { persona: {} } };
+    app.quit();
   }
 });
+
 
 ipcMain.handle('sessions:save', async (_evt, data) => {
   try{

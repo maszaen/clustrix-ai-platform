@@ -1,0 +1,1279 @@
+[2025-10-07T19:54:54.090Z] DATABASE 1 init Using SQLite database
+[2025-10-07T19:54:55.179Z] APP initializeApp -> Initializing application. {}
+[2025-10-07T19:54:55.180Z] CACHE initializeApp -> Session cache cleared on app initialization {}
+[2025-10-07T19:54:55.181Z] SCROLL initColumnReverseScrollDetection -> Column-reverse scroll detection initialized - threshold: -200px {}
+[2025-10-07T19:54:55.182Z] SCROLL initScrollToBottomButton -> Scroll to bottom button initialized {}
+[2025-10-07T19:54:55.188Z] WORKER initMarkdownWorker -> Initializing markdown worker... {}
+[2025-10-07T19:54:55.189Z] WORKER initMarkdownWorker -> Markdown worker initialized successfully {}
+[2025-10-07T19:54:55.193Z] CACHE clearCache -> Session cache cleared on page load {}
+[2025-10-07T19:54:55.219Z] WEBSEARCH init -> WebSearch UI initialized {
+  "enabled": false,
+  "switchChecked": false
+}
+[2025-10-07T19:54:55.220Z] APP load -> Successfully loaded data. {
+  "sessionCount": 33
+}
+[2025-10-07T19:54:55.222Z] WEBSEARCH load -> WebSearch state loaded from preloaded settings {
+  "value": false
+}
+[2025-10-07T19:54:55.223Z] WEBSEARCH load -> WebSearch UI synced after preload {
+  "enabled": false
+}
+[2025-10-07T19:54:55.333Z] SESSIONSTATE setCurrent -> Session set as current and saved: Markdown Formatting Test Suite (mfjpud7x-fhdn616) {}
+[2025-10-07T19:54:55.545Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": "Markdown Formatting Test Suite"
+}
+[2025-10-07T19:54:55.547Z] SESSION renderHistoryLazy -> Lazy loading chat history {
+  "totalMessages": 10,
+  "initialLoad": 6
+}
+[2025-10-07T19:54:55.551Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 1916,
+  "reason": "forced"
+}
+[2025-10-07T19:54:55.613Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 7174,
+  "reason": "forced"
+}
+[2025-10-07T19:54:55.643Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 7853,
+  "reason": "forced"
+}
+[2025-10-07T19:54:55.909Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": "Markdown Formatting Test Suite"
+}
+[2025-10-07T19:54:56.075Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfjpud7x-fhdn616",
+  "htmlLength": 63787,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 4,
+    "isFullyLoaded": false,
+    "totalMessages": 10
+  }
+}
+[2025-10-07T19:54:56.094Z] APP save -> Data saved successfully {}
+[2025-10-07T19:54:56.098Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfjpud7x-fhdn616",
+  "htmlLength": 63787,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 4,
+    "isFullyLoaded": false,
+    "totalMessages": 10
+  }
+}
+[2025-10-07T19:54:56.099Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:54:56.106Z] SCROLL initializeApp -> Initial scroll check - scrollTop: -4096.15380859375px, isNearBottom: false {}
+[2025-10-07T19:54:56.107Z] SCROLL initializeApp -> Scroll button SHOWN on init (scrolled up) {}
+[2025-10-07T19:54:56.108Z] APP save -> Data saved successfully {}
+[2025-10-07T19:54:56.110Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfjpud7x-fhdn616",
+  "htmlLength": 63922,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 4,
+    "isFullyLoaded": false,
+    "totalMessages": 10
+  }
+}
+[2025-10-07T19:54:56.112Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:54:56.113Z] APP save -> Data saved successfully {}
+[2025-10-07T19:54:56.115Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfjpud7x-fhdn616",
+  "htmlLength": 63922,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 4,
+    "isFullyLoaded": false,
+    "totalMessages": 10
+  }
+}
+[2025-10-07T19:54:56.117Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:54:56.119Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mfjpud7x-fhdn616",
+  "age": 1,
+  "accessCount": 2
+}
+[2025-10-07T19:54:56.120Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "823.90ms",
+  "wasFromCache": true,
+  "cacheSize": 1
+}
+[2025-10-07T19:54:56.220Z] UI load -> Loading overlay fade-out sequence started {}
+[2025-10-07T19:54:56.301Z] CACHE preloadFrequentSessions -> Background preloading session {
+  "sessionId": "mfflnkuu-4g1x414",
+  "messageCount": 2
+}
+[2025-10-07T19:54:56.412Z] CACHE preloadFrequentSessions -> Background preloading session {
+  "sessionId": "mfflm3l1-4hnn7w0",
+  "messageCount": 2
+}
+[2025-10-07T19:54:56.500Z] CACHE preloadFrequentSessions -> Background preloading session {
+  "sessionId": "mffu182a-6otdown",
+  "messageCount": 10
+}
+[2025-10-07T19:54:59.570Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfjpud7x-fhdn616",
+  "htmlLength": 155798,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 4,
+    "isFullyLoaded": false,
+    "totalMessages": 10
+  }
+}
+[2025-10-07T19:54:59.590Z] SESSIONSTATE setCurrent -> Session set as current and saved: Explanation Of This Application (mfjok892-wj5i4b4) {}
+[2025-10-07T19:54:59.643Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": "Explanation Of This Application"
+}
+[2025-10-07T19:54:59.649Z] SESSION renderHistoryLazy -> Lazy loading chat history {
+  "totalMessages": 2,
+  "initialLoad": 2
+}
+[2025-10-07T19:54:59.650Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 3001,
+  "reason": "forced"
+}
+[2025-10-07T19:54:59.680Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": "Explanation Of This Application"
+}
+[2025-10-07T19:54:59.693Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfjok892-wj5i4b4",
+  "htmlLength": 6998,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:54:59.699Z] APP save -> Data saved successfully {}
+[2025-10-07T19:54:59.701Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfjok892-wj5i4b4",
+  "htmlLength": 6998,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:54:59.702Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:54:59.781Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mfjok892-wj5i4b4",
+  "age": 81,
+  "accessCount": 2
+}
+[2025-10-07T19:54:59.782Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "216.60ms",
+  "wasFromCache": true,
+  "cacheSize": 2
+}
+[2025-10-07T19:55:01.923Z] UI setupResponsiveHandlers -> Switch to mobile size {}
+[2025-10-07T19:55:07.546Z] UI setupResponsiveHandlers -> Switch to desktop size {}
+[2025-10-07T19:55:08.903Z] UI event:new-chat-click -> New chat button clicked {}
+[2025-10-07T19:55:09.080Z] WEBSEARCH toggle -> WebSearch sidebar toggle visibility changed {
+  "isProjectSession": null,
+  "visible": true,
+  "currentState": false
+}
+[2025-10-07T19:55:09.088Z] WEBSEARCH toggle -> WebSearch chat button visibility changed {
+  "isProjectSession": null,
+  "visible": true,
+  "currentState": false
+}
+[2025-10-07T19:55:09.095Z] UI showWelcomeScreen -> Switched to Welcome Screen {
+  "currentSession": null
+}
+[2025-10-07T19:55:09.128Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:16.587Z] UI event:msg-central-keydown -> Enter pressed on welcome screen to start chat {
+  "key": "Enter",
+  "shift": false
+}
+[2025-10-07T19:55:16.589Z] SESSION createNewSession -> Creating new session object... {}
+[2025-10-07T19:55:16.621Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:16.623Z] SESSION createNewSession -> New session object created. {
+  "sessionId": "mggzbnjn-l5a0038",
+  "type": "regular",
+  "projectId": null
+}
+[2025-10-07T19:55:16.646Z] SESSIONSTATE setCurrent -> Session set as current and saved: Untitled (mggzbnjn-l5a0038) {}
+[2025-10-07T19:55:16.669Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": null
+}
+[2025-10-07T19:55:16.670Z] SESSION renderHistoryLazy -> Lazy loading chat history {
+  "totalMessages": 0,
+  "initialLoad": 0
+}
+[2025-10-07T19:55:16.693Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": null
+}
+[2025-10-07T19:55:16.697Z] TITLE generateAndSetTitle -> Executed {}
+[2025-10-07T19:55:16.698Z] TITLE generateAndSetTitle -> Requesting title suggestion from model {
+  "userPrompt": "haloo broo, welcome backk!",
+  "model": "glm-4.5-flash",
+  "provider": "zhipu",
+  "baseUrl": "https://api.z.ai/api/paas/v4/"
+}
+[2025-10-07T19:55:16.718Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 1471,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:16.719Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:16.724Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 1530,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:16.725Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:16.726Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:16.727Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 1557,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:16.728Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:16.743Z] STREAM createStreamHandler -> Stream handler created {
+  "streamId": "mggzbnjn-l5a0038-1-xybjinwqdlo",
+  "isFirstInteraction": true
+}
+[2025-10-07T19:55:16.747Z] ROUTER chat:stream-start -> Web search nonaktif. Menjalankan chat standar. {}
+[2025-10-07T19:55:16.749Z] MAIN: Starting LangChain processing...
+[2025-10-07T19:55:16.749Z] LANGCHAIN runStandardStreaming -> Processing with LangChain enhancement {}
+[2025-10-07T19:55:16.750Z] MAIN: Vectorizing chat history (2 messages)...
+[2025-10-07T19:55:16.754Z] MAIN: Session type detected: REGULAR
+[2025-10-07T19:55:16.755Z] MAIN: REGULAR mode - checking if RE+ACT pattern needed...
+[2025-10-07T19:55:16.756Z] LANGCHAIN runStandardStreaming -> Regular session - analyzing query complexity {}
+[2025-10-07T19:55:16.756Z] MAIN: LangChain processing error: ReferenceError: currentMessage is not defined
+ReferenceError: currentMessage is not defined
+    at processWithLangChain (H:\VSCode\Clustrix-AI-Platform\main.js:1057:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[2025-10-07T19:55:16.757Z] LANGCHAIN runStandardStreaming -> LangChain processing failed, falling back {
+  "error": "currentMessage is not defined"
+}
+[2025-10-07T19:55:16.758Z] MAIN: Proceeding with standard streaming...
+[2025-10-07T19:55:16.763Z] REQ chat:stream-start -> Request to AI using glm-4.5-flash model. {}
+[2025-10-07T19:55:16.764Z] STREAM chat:stream-start -> Added streaming-active class to current AI message {}
+[2025-10-07T19:55:16.789Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mggzbnjn-l5a0038",
+  "age": 68,
+  "accessCount": 2
+}
+[2025-10-07T19:55:16.790Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "167.50ms",
+  "wasFromCache": true,
+  "cacheSize": 3
+}
+[2025-10-07T19:55:19.807Z] THINKING ensureThinkingUI -> Created new thinking-wrap {}
+[2025-10-07T19:55:20.686Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:20.689Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 2157,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:20.691Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:21.484Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:21.486Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 2345,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:21.487Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:21.801Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:21.802Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 2376,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:21.803Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:22.134Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:22.136Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 2513,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:22.136Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:22.397Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:22.399Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 2562,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:22.400Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:23.118Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 15,
+  "reason": "forced"
+}
+[2025-10-07T19:55:23.288Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 37,
+  "reason": "forced"
+}
+[2025-10-07T19:55:23.339Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:23.340Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 2610,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:23.342Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:23.428Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 66,
+  "reason": "forced"
+}
+[2025-10-07T19:55:23.660Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 99,
+  "reason": "forced"
+}
+[2025-10-07T19:55:23.662Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:23.665Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 2672,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:23.666Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:23.682Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 125,
+  "reason": "forced"
+}
+[2025-10-07T19:55:23.799Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 146,
+  "reason": "forced"
+}
+[2025-10-07T19:55:23.849Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 155,
+  "reason": "forced"
+}
+[2025-10-07T19:55:23.909Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 173,
+  "reason": "forced"
+}
+[2025-10-07T19:55:23.959Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 180,
+  "reason": "forced"
+}
+[2025-10-07T19:55:24.026Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 191,
+  "reason": "forced"
+}
+[2025-10-07T19:55:24.097Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 207,
+  "reason": "forced"
+}
+[2025-10-07T19:55:24.098Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:24.100Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 2780,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:24.100Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:24.166Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 211,
+  "reason": "forced"
+}
+[2025-10-07T19:55:24.286Z] STREAM finalize -> Finalizing stream {
+  "streamId": "mggzbnjn-l5a0038-1-xybjinwqdlo",
+  "interrupted": false,
+  "sawEnd": false,
+  "hasContent": true
+}
+[2025-10-07T19:55:24.287Z] FINALIZE finalize -> Preparing to save final message. {
+  "hasModelInfo": true,
+  "modelInfo": {
+    "provider": "zhipu",
+    "model": "glm-4.5-flash",
+    "label": "GLM 4.5 Flash"
+  }
+}
+[2025-10-07T19:55:24.288Z] FINALIZE finalize -> Final message saved to state with modelInfo. {
+  "content": "Hello there! 👋 I'm Clustrix, your AI assistant. I...",
+  "modelInfo": {
+    "provider": "zhipu",
+    "model": "glm-4.5-flash",
+    "label": "GLM 4.5 Flash"
+  }
+}
+[2025-10-07T19:55:24.289Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 211,
+  "reason": "light-content"
+}
+[2025-10-07T19:55:24.289Z] RENDER renderAiFinalActions -> Fetching modelInfo for index 1 directly from state. {
+  "hasModelInfo": true,
+  "modelInfo": {
+    "provider": "zhipu",
+    "model": "glm-4.5-flash",
+    "label": "GLM 4.5 Flash"
+  }
+}
+[2025-10-07T19:55:24.290Z] STREAM finalize -> Removed streaming-active class from AI message {}
+[2025-10-07T19:55:24.323Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 3529,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:24.324Z] CACHE finalize -> Auto-cached session after streaming completed {}
+[2025-10-07T19:55:24.326Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:24.328Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 3573,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:24.329Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:24.781Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:24.782Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 3490,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:24.783Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:47.768Z] CACHE invalidateSessionCache -> Cache invalidated {
+  "sessionId": "mggzbnjn-l5a0038"
+}
+[2025-10-07T19:55:47.825Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:47.827Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 5065,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:47.828Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:47.843Z] STREAM createStreamHandler -> Stream handler created {
+  "streamId": "mggzbnjn-l5a0038-3-ldjn336c43f",
+  "isFirstInteraction": false
+}
+[2025-10-07T19:55:47.844Z] ROUTER chat:stream-start -> Web search nonaktif. Menjalankan chat standar. {}
+[2025-10-07T19:55:47.845Z] MAIN: Starting LangChain processing...
+[2025-10-07T19:55:47.845Z] LANGCHAIN runStandardStreaming -> Processing with LangChain enhancement {}
+[2025-10-07T19:55:47.845Z] MAIN: Vectorizing chat history (4 messages)...
+[2025-10-07T19:55:47.848Z] MAIN: Session type detected: REGULAR
+[2025-10-07T19:55:47.848Z] MAIN: REGULAR mode - checking if RE+ACT pattern needed...
+[2025-10-07T19:55:47.848Z] LANGCHAIN runStandardStreaming -> Regular session - analyzing query complexity {}
+[2025-10-07T19:55:47.849Z] MAIN: LangChain processing error: ReferenceError: currentMessage is not defined
+ReferenceError: currentMessage is not defined
+    at processWithLangChain (H:\VSCode\Clustrix-AI-Platform\main.js:1057:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[2025-10-07T19:55:47.849Z] LANGCHAIN runStandardStreaming -> LangChain processing failed, falling back {
+  "error": "currentMessage is not defined"
+}
+[2025-10-07T19:55:47.849Z] MAIN: Proceeding with standard streaming...
+[2025-10-07T19:55:47.853Z] REQ chat:stream-start -> Request to AI using glm-4.5-flash model. {}
+[2025-10-07T19:55:47.853Z] STREAM chat:stream-start -> Added streaming-active class to current AI message {}
+[2025-10-07T19:55:50.435Z] THINKING ensureThinkingUI -> Created new thinking-wrap {}
+[2025-10-07T19:55:50.742Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:50.745Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 5567,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:50.747Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:51.656Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 9,
+  "reason": "forced"
+}
+[2025-10-07T19:55:51.852Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 30,
+  "reason": "forced"
+}
+[2025-10-07T19:55:51.886Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:51.888Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 5691,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:51.889Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:52.113Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 62,
+  "reason": "forced"
+}
+[2025-10-07T19:55:52.116Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:52.118Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 5723,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:52.119Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:52.339Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 109,
+  "reason": "forced"
+}
+[2025-10-07T19:55:52.605Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 140,
+  "reason": "forced"
+}
+[2025-10-07T19:55:52.606Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:52.608Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 5801,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:52.609Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:52.786Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 181,
+  "reason": "forced"
+}
+[2025-10-07T19:55:53.022Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 204,
+  "reason": "forced"
+}
+[2025-10-07T19:55:53.024Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:53.026Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 5865,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:53.028Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:53.180Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 227,
+  "reason": "forced"
+}
+[2025-10-07T19:55:53.829Z] STREAM finalize -> Finalizing stream {
+  "streamId": "mggzbnjn-l5a0038-3-ldjn336c43f",
+  "interrupted": false,
+  "sawEnd": false,
+  "hasContent": true
+}
+[2025-10-07T19:55:53.834Z] FINALIZE finalize -> Preparing to save final message. {
+  "hasModelInfo": true,
+  "modelInfo": {
+    "provider": "zhipu",
+    "model": "glm-4.5-flash",
+    "label": "GLM 4.5 Flash"
+  }
+}
+[2025-10-07T19:55:53.838Z] FINALIZE finalize -> Final message saved to state with modelInfo. {
+  "content": "Halo bro! Sih, nggak masalah pake bahasa Indonesia...",
+  "modelInfo": {
+    "provider": "zhipu",
+    "model": "glm-4.5-flash",
+    "label": "GLM 4.5 Flash"
+  }
+}
+[2025-10-07T19:55:53.843Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 227,
+  "reason": "light-content"
+}
+[2025-10-07T19:55:53.847Z] RENDER renderAiFinalActions -> Fetching modelInfo for index 3 directly from state. {
+  "hasModelInfo": true,
+  "modelInfo": {
+    "provider": "zhipu",
+    "model": "glm-4.5-flash",
+    "label": "GLM 4.5 Flash"
+  }
+}
+[2025-10-07T19:55:53.851Z] STREAM finalize -> Removed streaming-active class from AI message {}
+[2025-10-07T19:55:53.904Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 6633,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:53.905Z] CACHE finalize -> Auto-cached session after streaming completed {}
+[2025-10-07T19:55:53.907Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:53.908Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 6677,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:53.909Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:59.552Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 6594,
+  "cacheSize": 3,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:55:59.590Z] SESSIONSTATE setCurrent -> Session set as current and saved: China's Global Business Strategies (mfflnkuu-4g1x414) {}
+[2025-10-07T19:55:59.610Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": "China's Global Business Strategies"
+}
+[2025-10-07T19:55:59.611Z] SESSION renderHistoryLazy -> Lazy loading chat history {
+  "totalMessages": 2,
+  "initialLoad": 2
+}
+[2025-10-07T19:55:59.612Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 2245,
+  "reason": "forced"
+}
+[2025-10-07T19:55:59.645Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": "China's Global Business Strategies"
+}
+[2025-10-07T19:55:59.653Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfflnkuu-4g1x414",
+  "htmlLength": 4825,
+  "cacheSize": 4,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:55:59.664Z] APP save -> Data saved successfully {}
+[2025-10-07T19:55:59.665Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfflnkuu-4g1x414",
+  "htmlLength": 4825,
+  "cacheSize": 4,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:55:59.666Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:55:59.745Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mfflnkuu-4g1x414",
+  "age": 81,
+  "accessCount": 2
+}
+[2025-10-07T19:55:59.746Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "194.10ms",
+  "wasFromCache": true,
+  "cacheSize": 4
+}
+[2025-10-07T19:56:00.241Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfflnkuu-4g1x414",
+  "htmlLength": 4852,
+  "cacheSize": 4,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:00.267Z] SESSIONSTATE setCurrent -> Session set as current and saved: Warm Welcome Back (mggzbnjn-l5a0038) {}
+[2025-10-07T19:56:00.291Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": "Warm Welcome Back"
+}
+[2025-10-07T19:56:00.293Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mggzbnjn-l5a0038",
+  "age": 737,
+  "accessCount": 2
+}
+[2025-10-07T19:56:00.294Z] CACHE renderHistory -> Restored lazy state from cache {
+  "loadedStartIndex": 0,
+  "isFullyLoaded": true,
+  "totalMessages": 0
+}
+[2025-10-07T19:56:00.296Z] CACHE renderHistory -> Ultra-fast cache restore completed {
+  "renderTime": "2.10ms",
+  "cacheAge": "740ms",
+  "scrollRestored": 0,
+  "lazyLoadEnabled": false
+}
+[2025-10-07T19:56:00.314Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": "Warm Welcome Back"
+}
+[2025-10-07T19:56:00.327Z] APP save -> Data saved successfully {}
+[2025-10-07T19:56:00.328Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 6540,
+  "cacheSize": 4,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:56:00.328Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:56:00.421Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mggzbnjn-l5a0038",
+  "age": 94,
+  "accessCount": 2
+}
+[2025-10-07T19:56:00.422Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "182.20ms",
+  "wasFromCache": true,
+  "cacheSize": 4
+}
+[2025-10-07T19:56:01.855Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 6594,
+  "cacheSize": 4,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:56:01.872Z] SESSIONSTATE setCurrent -> Session set as current and saved: China's Global Business Strategies (mfflnkuu-4g1x414) {}
+[2025-10-07T19:56:01.898Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": "China's Global Business Strategies"
+}
+[2025-10-07T19:56:01.900Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mfflnkuu-4g1x414",
+  "age": 1658,
+  "accessCount": 2
+}
+[2025-10-07T19:56:01.900Z] CACHE renderHistory -> Restored lazy state from cache {
+  "loadedStartIndex": 0,
+  "isFullyLoaded": true,
+  "totalMessages": 2
+}
+[2025-10-07T19:56:01.901Z] CACHE renderHistory -> Ultra-fast cache restore completed {
+  "renderTime": "1.30ms",
+  "cacheAge": "1660ms",
+  "scrollRestored": -475.9615478515625,
+  "lazyLoadEnabled": false
+}
+[2025-10-07T19:56:01.929Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": "China's Global Business Strategies"
+}
+[2025-10-07T19:56:01.943Z] APP save -> Data saved successfully {}
+[2025-10-07T19:56:01.944Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfflnkuu-4g1x414",
+  "htmlLength": 4825,
+  "cacheSize": 4,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:01.945Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:56:02.033Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mfflnkuu-4g1x414",
+  "age": 88,
+  "accessCount": 2
+}
+[2025-10-07T19:56:02.034Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "179.60ms",
+  "wasFromCache": true,
+  "cacheSize": 4
+}
+[2025-10-07T19:56:02.354Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfflnkuu-4g1x414",
+  "htmlLength": 4852,
+  "cacheSize": 4,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:02.380Z] SESSIONSTATE setCurrent -> Session set as current and saved: Warm Welcome Back (mggzbnjn-l5a0038) {}
+[2025-10-07T19:56:02.437Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": "Warm Welcome Back"
+}
+[2025-10-07T19:56:02.440Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mggzbnjn-l5a0038",
+  "age": 573,
+  "accessCount": 2
+}
+[2025-10-07T19:56:02.442Z] CACHE renderHistory -> Restored lazy state from cache {
+  "loadedStartIndex": 0,
+  "isFullyLoaded": true,
+  "totalMessages": 0
+}
+[2025-10-07T19:56:02.444Z] CACHE renderHistory -> Ultra-fast cache restore completed {
+  "renderTime": "2.70ms",
+  "cacheAge": "577ms",
+  "scrollRestored": 0,
+  "lazyLoadEnabled": false
+}
+[2025-10-07T19:56:02.487Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": "Warm Welcome Back"
+}
+[2025-10-07T19:56:02.523Z] APP save -> Data saved successfully {}
+[2025-10-07T19:56:02.542Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 6540,
+  "cacheSize": 4,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-10-07T19:56:02.569Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:56:02.623Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mggzbnjn-l5a0038",
+  "age": 72,
+  "accessCount": 2
+}
+[2025-10-07T19:56:02.630Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "240.40ms",
+  "wasFromCache": true,
+  "cacheSize": 4
+}
+[2025-10-07T19:56:03.288Z] UI event:refresh-btn -> Refresh button clicked {}
+[2025-10-07T19:56:03.995Z] APP initializeApp -> Initializing application. {}
+[2025-10-07T19:56:03.997Z] CACHE initializeApp -> Session cache cleared on app initialization {}
+[2025-10-07T19:56:04.000Z] SCROLL initColumnReverseScrollDetection -> Column-reverse scroll detection initialized - threshold: -200px {}
+[2025-10-07T19:56:04.002Z] SCROLL initScrollToBottomButton -> Scroll to bottom button initialized {}
+[2025-10-07T19:56:04.005Z] WORKER initMarkdownWorker -> Initializing markdown worker... {}
+[2025-10-07T19:56:04.008Z] WORKER initMarkdownWorker -> Markdown worker initialized successfully {}
+[2025-10-07T19:56:04.012Z] CACHE clearCache -> Session cache cleared on page load {}
+[2025-10-07T19:56:04.048Z] WEBSEARCH init -> WebSearch UI initialized {
+  "enabled": false,
+  "switchChecked": false
+}
+[2025-10-07T19:56:04.050Z] APP load -> Successfully loaded data. {
+  "sessionCount": 34
+}
+[2025-10-07T19:56:04.053Z] WEBSEARCH load -> WebSearch state loaded from preloaded settings {
+  "value": false
+}
+[2025-10-07T19:56:04.055Z] WEBSEARCH load -> WebSearch UI synced after preload {
+  "enabled": false
+}
+[2025-10-07T19:56:04.127Z] SESSIONSTATE setCurrent -> Session set as current and saved: Warm Welcome Back (mggzbnjn-l5a0038) {}
+[2025-10-07T19:56:04.170Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": "Warm Welcome Back"
+}
+[2025-10-07T19:56:04.172Z] SESSION renderHistoryLazy -> Lazy loading chat history {
+  "totalMessages": 2,
+  "initialLoad": 2
+}
+[2025-10-07T19:56:04.218Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": "Warm Welcome Back"
+}
+[2025-10-07T19:56:04.265Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 1590,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:04.267Z] APP save -> Data saved successfully {}
+[2025-10-07T19:56:04.269Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 1590,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:04.270Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:56:04.276Z] SCROLL initializeApp -> Initial scroll check - scrollTop: 0px, isNearBottom: true {}
+[2025-10-07T19:56:04.277Z] SCROLL initializeApp -> Scroll button HIDDEN on init (near bottom) {}
+[2025-10-07T19:56:04.279Z] APP save -> Data saved successfully {}
+[2025-10-07T19:56:04.281Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 1617,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:04.282Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:56:04.284Z] APP save -> Data saved successfully {}
+[2025-10-07T19:56:04.285Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 1617,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:04.286Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:56:04.331Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mggzbnjn-l5a0038",
+  "age": 65,
+  "accessCount": 2
+}
+[2025-10-07T19:56:04.333Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "225.40ms",
+  "wasFromCache": true,
+  "cacheSize": 1
+}
+[2025-10-07T19:56:04.336Z] UI load -> Loading overlay fade-out sequence started {}
+[2025-10-07T19:56:05.217Z] CACHE preloadFrequentSessions -> Background preloading session {
+  "sessionId": "mfflnkuu-4g1x414",
+  "messageCount": 2
+}
+[2025-10-07T19:56:05.316Z] CACHE preloadFrequentSessions -> Background preloading session {
+  "sessionId": "mfflm3l1-4hnn7w0",
+  "messageCount": 2
+}
+[2025-10-07T19:56:07.859Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 1617,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:07.875Z] SESSIONSTATE setCurrent -> Session set as current and saved: China's Global Business Strategies (mfflnkuu-4g1x414) {}
+[2025-10-07T19:56:07.897Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": "China's Global Business Strategies"
+}
+[2025-10-07T19:56:07.899Z] SESSION renderHistoryLazy -> Lazy loading chat history {
+  "totalMessages": 2,
+  "initialLoad": 2
+}
+[2025-10-07T19:56:07.900Z] MARKDOWN md -> Using sync rendering {
+  "contentSize": 2245,
+  "reason": "forced"
+}
+[2025-10-07T19:56:07.922Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": "China's Global Business Strategies"
+}
+[2025-10-07T19:56:07.933Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfflnkuu-4g1x414",
+  "htmlLength": 4825,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:07.940Z] APP save -> Data saved successfully {}
+[2025-10-07T19:56:07.943Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfflnkuu-4g1x414",
+  "htmlLength": 4825,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:07.944Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:56:08.024Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mfflnkuu-4g1x414",
+  "age": 82,
+  "accessCount": 2
+}
+[2025-10-07T19:56:08.025Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "165.80ms",
+  "wasFromCache": true,
+  "cacheSize": 2
+}
+[2025-10-07T19:56:08.459Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfflnkuu-4g1x414",
+  "htmlLength": 4852,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:08.488Z] SESSIONSTATE setCurrent -> Session set as current and saved: Warm Welcome Back (mggzbnjn-l5a0038) {}
+[2025-10-07T19:56:08.522Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": "Warm Welcome Back"
+}
+[2025-10-07T19:56:08.523Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mggzbnjn-l5a0038",
+  "age": 663,
+  "accessCount": 2
+}
+[2025-10-07T19:56:08.524Z] CACHE renderHistory -> Restored lazy state from cache {
+  "loadedStartIndex": 0,
+  "isFullyLoaded": true,
+  "totalMessages": 2
+}
+[2025-10-07T19:56:08.525Z] CACHE renderHistory -> Ultra-fast cache restore completed {
+  "renderTime": "1.80ms",
+  "cacheAge": "665ms",
+  "scrollRestored": 0,
+  "lazyLoadEnabled": false
+}
+[2025-10-07T19:56:08.543Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": "Warm Welcome Back"
+}
+[2025-10-07T19:56:08.552Z] APP save -> Data saved successfully {}
+[2025-10-07T19:56:08.553Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 1590,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:08.554Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:56:08.640Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mggzbnjn-l5a0038",
+  "age": 88,
+  "accessCount": 2
+}
+[2025-10-07T19:56:08.641Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "183.60ms",
+  "wasFromCache": true,
+  "cacheSize": 2
+}
+[2025-10-07T19:56:21.711Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 1617,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:21.733Z] SESSIONSTATE setCurrent -> Session set as current and saved: China's Global Business Strategies (mfflnkuu-4g1x414) {}
+[2025-10-07T19:56:21.766Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": "China's Global Business Strategies"
+}
+[2025-10-07T19:56:21.767Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mfflnkuu-4g1x414",
+  "age": 13306,
+  "accessCount": 2
+}
+[2025-10-07T19:56:21.769Z] CACHE renderHistory -> Restored lazy state from cache {
+  "loadedStartIndex": 0,
+  "isFullyLoaded": true,
+  "totalMessages": 2
+}
+[2025-10-07T19:56:21.770Z] CACHE renderHistory -> Ultra-fast cache restore completed {
+  "renderTime": "1.80ms",
+  "cacheAge": "13308ms",
+  "scrollRestored": -475.9615478515625,
+  "lazyLoadEnabled": false
+}
+[2025-10-07T19:56:21.793Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": "China's Global Business Strategies"
+}
+[2025-10-07T19:56:21.804Z] APP save -> Data saved successfully {}
+[2025-10-07T19:56:21.805Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfflnkuu-4g1x414",
+  "htmlLength": 4825,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:21.806Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:56:21.895Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mfflnkuu-4g1x414",
+  "age": 89,
+  "accessCount": 2
+}
+[2025-10-07T19:56:21.896Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "186.50ms",
+  "wasFromCache": true,
+  "cacheSize": 2
+}
+[2025-10-07T19:56:22.440Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mfflnkuu-4g1x414",
+  "htmlLength": 4852,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:22.466Z] SESSIONSTATE setCurrent -> Session set as current and saved: Warm Welcome Back (mggzbnjn-l5a0038) {}
+[2025-10-07T19:56:22.488Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": "Warm Welcome Back"
+}
+[2025-10-07T19:56:22.489Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mggzbnjn-l5a0038",
+  "age": 779,
+  "accessCount": 2
+}
+[2025-10-07T19:56:22.490Z] CACHE renderHistory -> Restored lazy state from cache {
+  "loadedStartIndex": 0,
+  "isFullyLoaded": true,
+  "totalMessages": 2
+}
+[2025-10-07T19:56:22.491Z] CACHE renderHistory -> Ultra-fast cache restore completed {
+  "renderTime": "1.00ms",
+  "cacheAge": "780ms",
+  "scrollRestored": 0,
+  "lazyLoadEnabled": false
+}
+[2025-10-07T19:56:22.509Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": "Warm Welcome Back"
+}
+[2025-10-07T19:56:22.516Z] APP save -> Data saved successfully {}
+[2025-10-07T19:56:22.517Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mggzbnjn-l5a0038",
+  "htmlLength": 1590,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 2
+  }
+}
+[2025-10-07T19:56:22.518Z] CACHE save -> Auto-cached current session after save {}
+[2025-10-07T19:56:22.610Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mggzbnjn-l5a0038",
+  "age": 93,
+  "accessCount": 2
+}
+[2025-10-07T19:56:22.611Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "171.80ms",
+  "wasFromCache": true,
+  "cacheSize": 2
+}

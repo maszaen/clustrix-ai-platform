@@ -1649,8 +1649,21 @@ async function appendThinking(aiNode, chunk, session, messageIndex) {
   
   // Update session data first
   session._x_think = session._x_think || {};
-  const prev = String(session._x_think[messageIndex] || "");
-  session._x_think[messageIndex] = prev + chunk;
+  const existing = session._x_think[messageIndex];
+  if (typeof existing === 'object' && existing.text) {
+    // Append to existing object
+    session._x_think[messageIndex] = {
+      ...existing,
+      text: existing.text + chunk
+    };
+  } else {
+    // Create new object or convert string to object
+    const currentText = typeof existing === 'string' ? existing : '';
+    session._x_think[messageIndex] = {
+      text: currentText + chunk,
+      duration: 0 // Will be updated later
+    };
+  }
   
   // Then update UI with the complete data
   await updateThinkingUI(aiNode, chunk, session, messageIndex);
@@ -1984,11 +1997,22 @@ function loadAllDrafts() {
   }
 }
 
+// General debounce utility
+function debounce(fn, delay) {
+  let timer = null;
+  const debounced = (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+  debounced.cancel = () => clearTimeout(timer);
+  return debounced;
+}
+
 const saveDraftDebounced = (() => {
   let timer = null;
   return Object.assign((sessionId, content) => {
     clearTimeout(timer);
-    timer = setTimeout(() => saveDraftForSession(sessionId, content), 300);
+    timer = setTimeout(() => saveDraftForSession(sessionId, content), 1000);
   }, {
     cancel: () => clearTimeout(timer)
   });
@@ -6302,15 +6326,25 @@ async function createNewProject(name, description = "") {
 
 async function saveProjectsData() {
   try {
+    log("PROJECTS", 1, "saveProjectsData", "Attempting to save projects", {
+      projectCount: projectsData.length,
+      projects: projectsData.map(p => ({ id: p.id, name: p.name, filesCount: p.files?.length || 0 }))
+    });
+    
     if (window.api && window.api.projects) {
-      await window.api.projects.save(projectsData);
+      const result = await window.api.projects.save(projectsData);
+      log("PROJECTS", result ? 2 : 4, "saveProjectsData", result ? "Save successful" : "Save failed", {
+        result
+      });
     } else {
       // Fallback to localStorage in debug mode
       localStorage.setItem("projects_data", JSON.stringify(projectsData));
+      log("PROJECTS", 2, "saveProjectsData", "Saved to localStorage (debug mode)");
     }
   } catch (error) {
     log("PROJECTS", 4, "saveProjectsData", "Error saving projects", {
       error: error.message,
+      stack: error.stack
     });
   }
 }
@@ -10250,6 +10284,9 @@ async function save() {
   }
 }
 
+// Debounced save for frequent operations (500ms delay)
+const debouncedSave = debounce(save, 500);
+
 function updateInputState() {
   const isStreaming = streamManager.isStreamingInSession(current);
   const isCurrentNull = !current;
@@ -10719,7 +10756,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     });
   }
 
-  const finalize = ({ interrupted = false, reason = null } = {}) => {
+  const finalize = async ({ interrupted = false, reason = null } = {}) => {
     log("STREAM", 2, "finalize", "Finalizing stream", {
       streamId,
       interrupted,
@@ -10774,8 +10811,20 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         modelInfo.webSearchPages = pendingPageCount;
         console.log("Applied pending web search data to finalized message:", { sessionId: session.id, pageCount: pendingPageCount });
       }
+      
+      // Include thinking data if exists
+      if (session._x_think && session._x_think[messageIndex]) {
+        modelInfo.thinkContent = session._x_think[messageIndex];
+      }
 
       session.messages[messageIndex] = ["ai", finalMessageToSave, modelInfo];
+      
+      // Track updated message for incremental save
+      if (!session._newMessages) {
+        session._newMessages = [];
+      }
+      session._newMessages.push([messageIndex, ["ai", finalMessageToSave, modelInfo]]);
+      
       log(
         "FINALIZE",
         2,
@@ -10785,11 +10834,23 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       );
     } else if (interrupted) {
       collapseSpacer();
+      
+      // Include thinking data if exists (for interrupted messages)
+      if (session._x_think && session._x_think[messageIndex]) {
+        modelInfo.thinkContent = session._x_think[messageIndex];
+      }
+      
       session.messages[messageIndex] = [
         "ai",
         formatErrorMessageForSaving(reason),
         modelInfo,
       ];
+      
+      // Track updated message for incremental save
+      if (!session._newMessages) {
+        session._newMessages = [];
+      }
+      session._newMessages.push([messageIndex, ["ai", formatErrorMessageForSaving(reason), modelInfo]]);
     }
 
     if (aiNode) {
@@ -10879,8 +10940,14 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     try {
       updateChatHeader?.();
     } catch {}
+    
+    // Cancel any pending debounced saves before immediate save
     try {
-      save?.();
+      debouncedSave?.cancel?.();
+    } catch {}
+    
+    try {
+      await save?.();
     } catch {}
     
     // Auto-cache session after streaming completes for instant restore
@@ -11551,6 +11618,13 @@ async function send() {
         .label || config.model,
   };
   current.messages.push(["ai", "", modelInfo]);
+  
+  // Track new messages for incremental save
+  if (!current._newMessages) {
+    current._newMessages = [];
+  }
+  current._newMessages.push([userIndex, ["user", originalText, { files: filesToAttach }]]);
+  current._newMessages.push([userIndex + 1, ["ai", "", modelInfo]]);
 
   addMessage("user", originalText, {
     final: true,
@@ -11758,6 +11832,13 @@ async function regenerateFromIndex(aiIndex) {
     label: modelMeta.label || config.model,
   };
   current.messages.push(["ai", "", modelInfo]);
+  
+  // Track new message for incremental save
+  if (!current._newMessages) {
+    current._newMessages = [];
+  }
+  current._newMessages.push([current.messages.length - 1, ["ai", "", modelInfo]]);
+  
   log(
     "SEND",
     1,
@@ -12816,10 +12897,22 @@ function setupEventListeners() {
         "event:keydown-CtrlR",
         "Ctrl+R pressed, triggering smooth reload",
       );
-      // Use setTimeout to ensure preventDefault takes effect first
-      setTimeout(() => {
-        window.__SMOOTH_RELOAD__();
-      }, 0);
+      
+      // Save data before reload to prevent data loss
+      (async () => {
+        try {
+          await save?.();
+          log("SAVE", 1, "keydown-CtrlR", "Data saved before Ctrl+R reload");
+        } catch (err) {
+          log("SAVE", 3, "keydown-CtrlR", "Failed to save before reload", { error: err });
+        }
+        
+        // Use setTimeout to ensure save completes first
+        setTimeout(() => {
+          window.__SMOOTH_RELOAD__();
+        }, 50);
+      })();
+      
       return false;
     }
 
@@ -13092,13 +13185,31 @@ function setupEventListeners() {
     
   })
 
-  $("#refresh-btn").addEventListener("click", () => {
+  $("#refresh-btn").addEventListener("click", async () => {
     log("UI", 0, "event:refresh-btn", "Refresh button clicked");
+    
+    // Save data before refresh to prevent data loss
+    try {
+      await save?.();
+      log("SAVE", 1, "refresh-btn", "Data saved before refresh");
+    } catch (err) {
+      log("SAVE", 3, "refresh-btn", "Failed to save before refresh", { error: err });
+    }
+    
     window.__SMOOTH_RELOAD__();
   });
 
-  $("#minimize-btn").addEventListener("click", () => {
+  $("#minimize-btn").addEventListener("click", async () => {
     log("UI", 0, "event:minimize-btn", "Minimize button clicked");
+    
+    // Save data before minimize to prevent data loss
+    try {
+      await save?.();
+      log("SAVE", 1, "minimize-btn", "Data saved before minimize");
+    } catch (err) {
+      log("SAVE", 3, "minimize-btn", "Failed to save before minimize", { error: err });
+    }
+    
     window.api?.window.minimize();
   });
 
@@ -14071,7 +14182,15 @@ function initializeApp() {
   setupTextareaCentralResize();
   setupTextareaProjectResize();
   setupResponsiveHandlers();
-  window.addEventListener("beforeunload", () => {
+  window.addEventListener("beforeunload", async (e) => {
+    // Save data before unload to prevent data loss
+    try {
+      await save?.();
+      log("SAVE", 1, "beforeunload", "Data saved before page unload");
+    } catch (err) {
+      log("SAVE", 3, "beforeunload", "Failed to save before unload", { error: err });
+    }
+    
     streamManager.shutdownGracefully();
     if (markdownWorker) {
       markdownWorker.terminate();

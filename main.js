@@ -11,11 +11,15 @@ const ClustrixLangChainService = require('./backend/langchain-service');
 const { MultiAgentOrchestrator } = require('./backend/langchain-agents');
 const { getBaseUrl, getApiKey, joinEndpoint, applyThinkingHints } = require('./backend/langchain-helpers');
 const { performWebSearch, scrapeUrls } = require('./backend/web-search');
+const DatabaseManager = require('./backend/database-manager');
+const JSONToSQLiteMigrator = require('./backend/json-to-sqlite-migrator');
 
 let langchainService = null;
 let agentOrchestrator = null;
+let db = null;
+let useSQLite = false;
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   setLogFile(path.join(app.getPath('userData'), 'app.log'));
   setDebug(process.env.CLUSTRIX_DEBUG !== 'false');
   log('[FLAGS]', app.commandLine.getSwitchValue('enable-features'));
@@ -24,6 +28,34 @@ app.whenReady().then(() => {
   log('LangChain services initialized');
   if (!process.env || Object.keys(process.env).length === 0) {
     log('Warning: No environment variables loaded. Check your .env file and dotenv setup.');
+  }
+  
+  const dbPath = path.join(app.getPath('userData'), 'clustrix.db');
+  const dbExists = fs.existsSync(dbPath);
+  
+  if (dbExists) {
+    db = new DatabaseManager(app);
+    useSQLite = true;
+    log('DATABASE', 1, 'init', 'Using SQLite database');
+  } else {
+    const jsonPath = path.join(app.getPath('userData'), 'chat_data.json');
+    if (fs.existsSync(jsonPath)) {
+      log('DATABASE', 2, 'init', 'JSON files detected, starting migration');
+      db = new DatabaseManager(app);
+      const migrator = new JSONToSQLiteMigrator(app, db);
+      const result = await migrator.migrate();
+      if (result.success) {
+        useSQLite = true;
+        log('DATABASE', 1, 'migration', 'Migration completed successfully');
+      } else {
+        log('DATABASE', 4, 'migration', 'Migration failed', { error: result.error });
+        useSQLite = false;
+      }
+    } else {
+      log('DATABASE', 2, 'init', 'No existing data, creating new SQLite database');
+      db = new DatabaseManager(app);
+      useSQLite = true;
+    }
   }
 });
 
@@ -369,9 +401,175 @@ const dataFile = path.join(app.getPath('userData'), 'chat_data.json');
 
 ipcMain.handle('sessions:load', async () => {
   try {
+    if (useSQLite && db) {
+      const sessions = db.getAllSessions();
+      const transformed = sessions.map(session => {
+        const messages = db.getMessages(session.id);
+        const metadata = JSON.parse(session.metadata || '{}');
+        
+        // Reconstruct _x_think from database
+        const _x_think = {};
+        messages.forEach((m, idx) => {
+          if (m.think_content) {
+            try {
+              _x_think[idx] = JSON.parse(m.think_content);
+            } catch (e) {
+              log('DATABASE', 4, 'sessions:load', 'Failed to parse think_content', { 
+                sessionId: session.id, 
+                messageIndex: idx 
+              });
+            }
+          }
+        });
+        
+        return {
+          id: session.id,
+          name: session.name,
+          type: session.type,
+          created_at: session.last_updated,
+          last_updated: session.last_updated,
+          projectId: session.project_id,
+          isProject: session.is_project === 1,
+          isFavorite: session.is_favorite === 1,
+          persona: {
+            name: session.persona_name || '',
+            work: session.persona_work || '',
+            prefs: session.persona_prefs || ''
+          },
+          tokens_used: session.tokens_used || 0,
+          tokens_by_message: metadata.tokens_by_message || {},
+          canvases: metadata.canvases || {},
+          _x_think: Object.keys(_x_think).length > 0 ? _x_think : undefined,
+          messages: messages.map(m => {
+            const msgMetadata = JSON.parse(m.metadata || '{}');
+            const parsedWebSearchData = m.web_search_data ? JSON.parse(m.web_search_data) : undefined;
+            return [
+              m.role,
+              m.content,
+              {
+                model: m.model_id,
+                modelLabel: m.model_label,
+                provider: m.provider,
+                baseUrl: m.base_url,
+                thinkMode: m.think_mode,
+                thinkContent: m.think_content ? JSON.parse(m.think_content) : undefined,
+                webSearchEnabled: m.web_search_enabled === 1,
+                webSearchData: parsedWebSearchData,
+                webSearchPages: parsedWebSearchData?.pages || parsedWebSearchData?.pageCount || undefined,
+                files: m.files ? JSON.parse(m.files) : undefined,
+                ...msgMetadata
+              }
+            ];
+          })
+        };
+      });
+      
+      // Auto-migrate sessions from JSON if database is empty
+      if (transformed.length === 0 && fs.existsSync(dataFile)) {
+        try {
+          log('MIGRATION', 1, 'sessions', 'Database empty, attempting JSON migration');
+          const raw = fs.readFileSync(dataFile, 'utf-8');
+          const parsed = JSON.parse(raw);
+          const jsonSessions = Array.isArray(parsed) ? parsed : (parsed?.sessions || []);
+          
+          if (jsonSessions.length > 0) {
+            log('MIGRATION', 1, 'sessions', `Migrating ${jsonSessions.length} sessions from JSON to SQLite`);
+            db.transaction(() => {
+              for (const session of jsonSessions) {
+                db.saveSession(session);
+                
+                if (session.messages && Array.isArray(session.messages)) {
+                  for (let i = 0; i < session.messages.length; i++) {
+                    const [role, content, metadata = {}] = session.messages[i];
+                    
+                    // Preserve _x_think data during migration
+                    if (session._x_think && session._x_think[i]) {
+                      metadata.thinkContent = session._x_think[i];
+                    }
+                    
+                    db.addMessage(session.id, role, content, metadata, i);
+                  }
+                }
+              }
+            });
+            
+            // Reload from database after migration
+            const migratedSessions = db.getAllSessions();
+            const migratedTransformed = migratedSessions.map(session => {
+              const messages = db.getMessages(session.id);
+              const metadata = JSON.parse(session.metadata || '{}');
+              
+              // Reconstruct _x_think from database
+              const _x_think = {};
+              messages.forEach((m, idx) => {
+                if (m.think_content) {
+                  try {
+                    _x_think[idx] = JSON.parse(m.think_content);
+                  } catch (e) {
+                    log('DATABASE', 4, 'sessions:load', 'Failed to parse think_content', { 
+                      sessionId: session.id, 
+                      messageIndex: idx 
+                    });
+                  }
+                }
+              });
+              
+              return {
+                id: session.id,
+                name: session.name,
+                type: session.type,
+                created_at: session.last_updated,
+                last_updated: session.last_updated,
+                projectId: session.project_id,
+                isProject: session.is_project === 1,
+                isFavorite: session.is_favorite === 1,
+                persona: {
+                  name: session.persona_name || '',
+                  work: session.persona_work || '',
+                  prefs: session.persona_prefs || ''
+                },
+                tokens_used: session.tokens_used || 0,
+                tokens_by_message: metadata.tokens_by_message || {},
+                canvases: metadata.canvases || {},
+                _x_think: Object.keys(_x_think).length > 0 ? _x_think : undefined,
+                messages: messages.map(m => {
+                  const msgMetadata = JSON.parse(m.metadata || '{}');
+                  const parsedWebSearchData = m.web_search_data ? JSON.parse(m.web_search_data) : undefined;
+                  return [
+                    m.role,
+                    m.content,
+                    {
+                      model: m.model_id,
+                      modelLabel: m.model_label,
+                      provider: m.provider,
+                      baseUrl: m.base_url,
+                      thinkMode: m.think_mode,
+                      thinkContent: m.think_content ? JSON.parse(m.think_content) : undefined,
+                      webSearchEnabled: m.web_search_enabled === 1,
+                      webSearchData: parsedWebSearchData,
+                      webSearchPages: parsedWebSearchData?.pages || parsedWebSearchData?.pageCount || undefined,
+                      files: m.files ? JSON.parse(m.files) : undefined,
+                      ...msgMetadata
+                    }
+                  ];
+                })
+              };
+            });
+            
+            const settings = db.getAllSettings();
+            log('MIGRATION', 2, 'sessions', `Successfully migrated ${migratedTransformed.length} sessions`);
+            return { sessions: migratedTransformed, settings };
+          }
+        } catch (e) {
+          log('MIGRATION', 4, 'sessions', 'Failed to migrate sessions from JSON', { error: e.message });
+        }
+      }
+      
+      const settings = db.getAllSettings();
+      return { sessions: transformed, settings };
+    }
     if (!fs.existsSync(dataFile)) {
-      app.quit();
-      return;
+      return { sessions: [], settings: {} };
     }
 
     const raw = fs.readFileSync(dataFile, 'utf-8');
@@ -423,20 +621,57 @@ ipcMain.handle('sessions:load', async () => {
       return parsed;
     }
     
-    app.quit();
+    return { sessions: [], settings: {} };
   } catch (e) {
-    console.error('JSON parse/load error:', e.message);
+    console.error('Load error:', e.message);
     console.error(e.stack);
     log('load error', e);
-    app.quit();
+    return { sessions: [], settings: {} };
   }
 });
 
 
 ipcMain.handle('sessions:save', async (_evt, data) => {
   try{
-    fs.writeFileSync(dataFile, JSON.stringify(data, null, 2), 'utf-8');
-    return true;
+    // Auto-initialize database if not exists
+    if (!useSQLite || !db) {
+      log('DATABASE', 1, 'sessions:save', 'Initializing SQLite database');
+      db = new DatabaseManager(app);
+      useSQLite = true;
+    }
+    
+    if (useSQLite && db) {
+      db.transaction(() => {
+        for (const session of data.sessions) {
+          db.saveSession(session);
+          
+          // Always perform full save from session.messages to ensure all messages are saved
+          if (session.messages) {
+            db.deleteMessagesForSession(session.id);
+            for (let i = 0; i < session.messages.length; i++) {
+              const [role, content, metadata = {}] = session.messages[i];
+              db.addMessage(session.id, role, content, metadata, i);
+            }
+          }
+          
+          // Clean up _newMessages flag if it exists
+          if (session._newMessages) {
+            delete session._newMessages;
+          }
+        }
+        
+        if (data.settings) {
+          for (const [key, value] of Object.entries(data.settings)) {
+            db.saveSetting(key, value);
+          }
+        }
+      });
+      
+      return true;
+    } else {
+      fs.writeFileSync(dataFile, JSON.stringify(data, null, 2), 'utf-8');
+      return true;
+    }
   }catch(e){
     log('save error', e);
     return false;
@@ -446,6 +681,56 @@ const artifactsFile = path.join(app.getPath('userData'), 'artifacts.json');
 
 ipcMain.handle('artifacts:load', async () => {
   try{
+    if (useSQLite && db) {
+      const artifacts = db.getAllArtifacts();
+      if (artifacts.length === 0) {
+        // Migrate from JSON if database is empty
+        if (fs.existsSync(artifactsFile)) {
+          try {
+            const raw = fs.readFileSync(artifactsFile, 'utf-8');
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              log('MIGRATION', 1, 'artifacts', `Migrating ${parsed.length} artifacts from JSON to SQLite`);
+              db.transaction(() => {
+                for (const artifact of parsed) {
+                  db.saveArtifact(artifact);
+                }
+              });
+              // Reload from database after migration
+              const migratedArtifacts = db.getAllArtifacts();
+              return migratedArtifacts.map(a => ({
+                id: a.id,
+                title: a.title,
+                type: a.type,
+                language: a.language,
+                code: a.content,
+                content: a.content,
+                created_at: new Date(a.created_at).toISOString(),
+                updated_at: new Date(a.updated_at).toISOString(),
+                isFavorite: a.is_favorite === 1,
+                sessionId: a.session_id,
+                messageIndex: a.message_index
+              }));
+            }
+          } catch (e) {
+            log('MIGRATION', 4, 'artifacts', 'Failed to migrate artifacts from JSON', e);
+          }
+        }
+      }
+      return artifacts.map(a => ({
+        id: a.id,
+        title: a.title,
+        type: a.type,
+        language: a.language,
+        code: a.content,
+        content: a.content,
+        created_at: new Date(a.created_at).toISOString(),
+        updated_at: new Date(a.updated_at).toISOString(),
+        isFavorite: a.is_favorite === 1,
+        sessionId: a.session_id,
+        messageIndex: a.message_index
+      }));
+    }
     if (!fs.existsSync(artifactsFile)) return [];
     const raw = fs.readFileSync(artifactsFile, 'utf-8');
     const parsed = JSON.parse(raw);
@@ -458,6 +743,21 @@ ipcMain.handle('artifacts:load', async () => {
 
 ipcMain.handle('artifacts:save', async (_evt, artifacts) => {
   try{
+    // Auto-initialize database if not exists
+    if (!useSQLite || !db) {
+      log('DATABASE', 1, 'artifacts:save', 'Initializing SQLite database');
+      db = new DatabaseManager(app);
+      useSQLite = true;
+    }
+    
+    if (useSQLite && db) {
+      db.transaction(() => {
+        for (const artifact of artifacts) {
+          db.saveArtifact(artifact);
+        }
+      });
+      return true;
+    }
     fs.writeFileSync(artifactsFile, JSON.stringify(artifacts, null, 2), 'utf-8');
     return true;
   }catch(e){
@@ -469,6 +769,70 @@ const projectsFile = path.join(app.getPath('userData'), 'projects.json');
 
 ipcMain.handle('projects:load', async () => {
   try{
+    if (useSQLite && db) {
+      const projects = db.getAllProjects();
+      if (projects.length === 0) {
+        // Migrate from JSON if database is empty
+        if (fs.existsSync(projectsFile)) {
+          try {
+            const content = fs.readFileSync(projectsFile, 'utf-8');
+            const parsed = JSON.parse(content || '[]');
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              log('MIGRATION', 1, 'projects', `Migrating ${parsed.length} projects from JSON to SQLite`);
+              db.transaction(() => {
+                for (const project of parsed) {
+                  db.saveProject(project);
+                  
+                  if (project.files && Array.isArray(project.files)) {
+                    for (const file of project.files) {
+                      db.saveProjectFile(project.id, file);
+                    }
+                  }
+                }
+              });
+              // Reload from database after migration
+              const migratedProjects = db.getAllProjects();
+              return migratedProjects.map(p => {
+                const files = db.getProjectFiles(p.id);
+                return {
+                  id: p.id,
+                  name: p.name,
+                  description: p.description,
+                  created_at: new Date(p.created_at).toISOString(),
+                  updated_at: new Date(p.updated_at).toISOString(),
+                  isFavorite: p.is_favorite === 1,
+                  files: files.map(f => ({
+                    name: f.name,
+                    type: f.type,
+                    size: f.size,
+                    content: Buffer.from(f.content).toString('base64')
+                  }))
+                };
+              });
+            }
+          } catch (e) {
+            log('MIGRATION', 4, 'projects', 'Failed to migrate projects from JSON', e);
+          }
+        }
+      }
+      return projects.map(p => {
+        const files = db.getProjectFiles(p.id);
+        return {
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          created_at: new Date(p.created_at).toISOString(),
+          updated_at: new Date(p.updated_at).toISOString(),
+          isFavorite: p.is_favorite === 1,
+          files: files.map(f => ({
+            name: f.name,
+            type: f.type,
+            size: f.size,
+            content: f.content.toString('utf-8')  // Return as plain text like JSON format
+          }))
+        };
+      });
+    }
     if (!fs.existsSync(projectsFile)) return [];
     const content = fs.readFileSync(projectsFile, 'utf-8');
     const parsed = JSON.parse(content || '[]');
@@ -481,10 +845,54 @@ ipcMain.handle('projects:load', async () => {
 
 ipcMain.handle('projects:save', async (_evt, projects) => {
   try{
+    log('PROJECTS', 1, 'projects:save', 'Attempting to save projects', { 
+      projectCount: projects.length,
+      useSQLite,
+      hasDb: !!db
+    });
+    
+    // Auto-initialize database if not exists
+    if (!useSQLite || !db) {
+      log('DATABASE', 1, 'projects:save', 'Initializing SQLite database');
+      db = new DatabaseManager(app);
+      useSQLite = true;
+    }
+    
+    if (useSQLite && db) {
+      db.transaction(() => {
+        for (const project of projects) {
+          log('PROJECTS', 1, 'projects:save', 'Saving project', { 
+            id: project.id, 
+            name: project.name,
+            filesCount: project.files?.length || 0
+          });
+          
+          db.saveProject(project);
+          
+          if (project.files && Array.isArray(project.files)) {
+            db.deleteProjectFiles(project.id);
+            for (const file of project.files) {
+              log('PROJECTS', 1, 'projects:save', 'Saving project file', { 
+                projectId: project.id,
+                fileName: file.name,
+                fileSize: file.size
+              });
+              db.saveProjectFile(project.id, file);
+            }
+          }
+        }
+      });
+      log('PROJECTS', 2, 'projects:save', 'Successfully saved all projects to SQLite');
+      return true;
+    }
     fs.writeFileSync(projectsFile, JSON.stringify(projects, null, 2), 'utf-8');
+    log('PROJECTS', 2, 'projects:save', 'Successfully saved to JSON');
     return true;
   }catch(e){
-    log('projects save error', e);
+    log('PROJECTS', 4, 'projects:save', 'Failed to save projects', { 
+      error: e.message,
+      stack: e.stack
+    });
     return false;
   }
 });

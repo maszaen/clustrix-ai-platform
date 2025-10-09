@@ -1870,13 +1870,37 @@ async function runWebSearchChat(event, payload) {
     const searchResults = await performWebSearch(decision.search_queries, payload.searchApiConfig);
     
     if (searchResults.length === 0) {
-      logHelper('WEB_CHAT', 'performWebSearch', 'Pencarian tidak menemukan hasil. Kembali ke mode standar.');
+      logHelper('WEB_CHAT', 'performWebSearch', 'Pencarian tidak menemukan hasil atau API gagal/limit.');
+      
+      // Send error notification to frontend
+      event.sender.send('search:status', { 
+        step: 'SEARCH_FAILED', 
+        data: { 
+          reason: 'No search results found. This may be due to: API key missing/invalid, API rate limit reached, no credit remaining, or no results available for the query.',
+          provider: payload.searchApiConfig?.provider || 'unknown'
+        } 
+      });
+      
+      // Wait a bit so user can see the error message
+      await new Promise(r => setTimeout(r, 2000));
+      
+      logHelper('WEB_CHAT', 'performWebSearch', 'Melanjutkan dengan mode standar tanpa web search.');
       return runStandardStreaming(event, payload);
     }
     logHelper('WEB_CHAT', 'performWebSearch', `Pencarian berhasil. Ditemukan ${searchResults.length} hasil.`, { titles: searchResults.map(r => r.title) });
     event.sender.send('search:status', { step: 'FOUND_URLS', data: searchResults });
 
     const urlsToScrape = searchResults.map(r => r.link);
+    
+    // Send scraping status before starting
+    event.sender.send('search:status', { 
+      step: 'SCRAPING', 
+      data: { 
+        count: urlsToScrape.length,
+        urls: urlsToScrape 
+      } 
+    });
+    
     logHelper('WEB_CHAT', 'scrapeUrls', 'Memulai scraping...', { urls: urlsToScrape });
     const scrapedContent = await scrapeUrls(urlsToScrape);
     const nonEmptyContent = scrapedContent.filter(c => c.trim().length > 10);

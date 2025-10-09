@@ -5067,7 +5067,6 @@ a:focus-visible {
   gap: 6px;
   margin-bottom: 0;
   padding: 0;
-  font-size: 14px;
   color: var(--fg-muted);
   z-index: 999;
   font-family: var(--font-display-italic);
@@ -5198,6 +5197,31 @@ a:focus-visible {
   opacity: 0.5;
 }
 
+/* .message.ai .thinking-update::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  z-index: 1;
+  background-image: linear-gradient(to bottom, transparent 0%, var(--fg-muted) 30px);
+  opacity: 0.4;
+}
+
+.message.ai .thinking-update::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  bottom: 0;
+  width: 5px;
+  height: 5px;
+  background-color: var(--fg-muted);
+  z-index: 1;
+  border-radius: 50%;
+  opacity: 0.5;
+} */
+
 .message.ai .message-actions {
   padding-left: 6px;
 }
@@ -5245,14 +5269,89 @@ a:focus-visible {
 /* Thinking update container (structured updates from backend) */
 .thinking-update {
   display: flex;
+  position: relative;
   flex-direction: column;
   gap: 12px;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+  line-height: 1.45;
+  padding: 0 var(--spacing-sm);
+  white-space: pre-wrap;
+  position: relative;
 }
 
-.thinking-update:empty {
+/* message.ai .thinking-text {
+    color: var(--fg-muted);
+    
+} */
+
+.custom-tooltip {
+  position: absolute;
+  display: inline-block;
+  cursor: pointer;
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+  transform: scale(0.8);
+  opacity: 0;
+  z-index: 10000;
+  pointer-events: none; /* Prevent tooltip from interfering with mouse events */
+}
+
+.custom-tooltip.show {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.custom-tooltip .tooltip-text {
+  visibility: hidden;
+  width: 120px;
+  background-color: var(--surface);
+  color: var(--fg);
+  text-align: center;
+  border-radius: var(--radius-md);
+  padding: 5px 10px;
+  position: static; /* Let parent handle positioning */
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+
+.custom-tooltip .tooltip-text::after {
+  content: "";
+  position: absolute;
+  left: 10px; /* Default for left-aligned */
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent transparent var(--surface) transparent; /* Default: arrow up for tooltip below */
+}
+
+.custom-tooltip.above .tooltip-text::after {
+  top: 100%;
+  border-color: var(--surface) transparent transparent transparent; /* Arrow down for tooltip above */
+}
+
+.custom-tooltip.below .tooltip-text::after {
+  bottom: 100%;
+  border-color: transparent transparent var(--surface) transparent; /* Arrow up for tooltip below */
+}
+
+.custom-tooltip.align-end .tooltip-text::after {
+  left: auto;
+  right: 10px; /* Arrow from right side */
+}
+
+.custom-tooltip.align-start .tooltip-text::after {
+  left: 10px; /* Arrow from left side */
+}
+
+.custom-tooltip.show .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
+  border-bottom: none;
   display: none;
 }
 
@@ -5265,23 +5364,24 @@ a:focus-visible {
 .thinking-update-item {
   display: flex;
   flex-direction: column;
+  padding: 12px 17px;
+  background: var(--bg);
+  border-radius: var(--radius-md);
   gap: 6px;
-  padding: 8px 0;
   animation: fadeIn 0.3s ease-out;
 }
 
 .thinking-update-title {
-  font-weight: 600;
-  font-size: 11px;
-  color: var(--fg-muted);
-  text-transform: uppercase;
+  font-size: 14px;
+  color: var(--fg) !important;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 5px;
+  text-transform: capitalize;
   letter-spacing: 0.8px;
-  opacity: 0.7;
-  font-family: var(--font-sans);
+  font-family: var(--font-display-italic);
 }
 
 .thinking-update-content {
-  font-size: 13px;
   line-height: 1.6;
   color: var(--fg-muted);
   font-family: var(--font-sans);
@@ -5356,10 +5456,9 @@ a:focus-visible {
 }
 
 /* When both update and text exist, add visual separation */
-.thinking-body .thinking-update + .thinking-text {
-  margin-top: 16px;
+.thinking-body .thinking-update:not(:empty) + .thinking-text {
+  margin-top: 0px;
   padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Ensure thinking-update appears before thinking-text */

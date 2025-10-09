@@ -1274,7 +1274,7 @@ async function processSearchStatusQueue() {
           
           // Save to database via appendThinkingUpdate
           await appendThinkingUpdate(aiNode, {
-            title: "PLANNING ANALYSIS",
+            title: "Planning Analysis",
             content: userFriendlyReasoning
           }, sess, messageIndex);
         } else {
@@ -1287,7 +1287,7 @@ async function processSearchStatusQueue() {
 
           // Save reasoning
           await appendThinkingUpdate(aiNode, {
-            title: "REASONING",
+            title: "Reasoning",
             content: status.data.reasoning
           }, sess, messageIndex);
           
@@ -1297,7 +1297,7 @@ async function processSearchStatusQueue() {
             .join('\n');
           
           await appendThinkingUpdate(aiNode, {
-            title: "KEYWORDS",
+            title: "Keywords",
             content: keywordsList
           }, sess, messageIndex);
         }
@@ -1311,7 +1311,7 @@ async function processSearchStatusQueue() {
         if (isProjectFiles) {
           const filesText = status.data.map((r) => r.title).join(", ");
           await appendThinkingUpdate(aiNode, {
-            title: "ANALYZING FILES",
+            title: "Analyzing Files",
             content: filesText
           }, sess, messageIndex);
         } else {
@@ -1320,9 +1320,31 @@ async function processSearchStatusQueue() {
             .join('\n');
           
           await appendThinkingUpdate(aiNode, {
-            title: "FOUND URLS",
+            title: "Found Urls",
             content: urlsList
           }, sess, messageIndex);
+        }
+        break;
+
+      case "SCRAPING":
+        // Show scraping status
+        const scrapingCount = status.data.count || 0;
+        
+        await appendThinkingUpdate(aiNode, {
+          title: "Reading Web Pages",
+          content: `Scraping ${scrapingCount} web pages to gather information...`
+        }, sess, messageIndex);
+        
+        // Update toggle to show scraping
+        const toggleScraping = thinkEl.toggle.querySelector(".thinking-toggle-content");
+        if (toggleScraping) {
+          toggleScraping.innerHTML = `
+            <div class="web-search-indicator searching" style="display: flex; align-items: center; gap: 6px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chromium-icon lucide-chromium"><path d="M10.88 21.94 15.46 14"/><path d="M21.17 8H12"/><path d="M3.95 6.06 8.54 14"/><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+              <span class="status-text">Reading ${scrapingCount} web pages...</span>
+            </div>
+            <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+          `;
         }
         break;
 
@@ -1334,19 +1356,38 @@ async function processSearchStatusQueue() {
           status.data.actionReason
         );
         
-        let actionText = description;
-        if (reason && reason.trim()) {
-          actionText += '\n\n' + reason;
-        }
-        
+        // Use description as title, reason as content (no "ACTION" prefix)
         await appendThinkingUpdate(aiNode, {
-          title: "ACTION",
-          content: actionText
+          title: description,
+          content: reason || ''
         }, sess, messageIndex);
         break;
 
       case "ACTION_RESULTS":
         // Skip - results are implicitly shown in thinking updates
+        break;
+
+      case "SEARCH_FAILED":
+        // Notify user that search API failed
+        const failureReason = status.data.reason || 'Search API failed';
+        const provider = status.data.provider || 'Search API';
+        
+        await appendThinkingUpdate(aiNode, {
+          title: "Search Failed",
+          content: `**Provider:** ${provider}\n\n**Reason:** ${failureReason}\n\n*Continuing without web search...*`
+        }, sess, messageIndex);
+        
+        // Update toggle to show failure
+        const toggleFailed = thinkEl.toggle.querySelector(".thinking-toggle-content");
+        if (toggleFailed) {
+          toggleFailed.innerHTML = `
+            <div class="web-search-indicator" style="display: flex; align-items: center; gap: 6px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span class="status-text">Search failed - continuing without web results</span>
+            </div>
+            <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+          `;
+        }
         break;
 
       case "PROCESSING":
@@ -14329,6 +14370,132 @@ function initializeApp() {
 }
 
 document.addEventListener("DOMContentLoaded", initializeApp);
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Handle custom tooltips for all elements with title attribute
+  const tooltipMap = new WeakMap(); // Use WeakMap to avoid memory leaks
+  let currentTooltip = null;
+
+  // Function to initialize tooltips for elements with title
+  const initializeTooltips = () => {
+    const elementsWithTitle = document.querySelectorAll('[title]');
+    elementsWithTitle.forEach(element => {
+      if (!tooltipMap.has(element)) {
+        const originalTitle = element.getAttribute('title');
+        tooltipMap.set(element, originalTitle);
+        element.removeAttribute('title'); // Remove native title
+
+        // Attach event listeners directly to the element
+        element.addEventListener('mouseenter', handleMouseEnter);
+        element.addEventListener('mouseleave', handleMouseLeave);
+      }
+    });
+  };
+
+  const handleMouseEnter = (event) => {
+    if (currentTooltip) return; // Prevent multiple tooltips
+
+    const target = event.target;
+    const originalTitle = tooltipMap.get(target);
+    if (!originalTitle) return;
+
+    // Create tooltip element
+    currentTooltip = document.createElement('div');
+    currentTooltip.className = 'custom-tooltip'; // Start without 'show' class
+
+    // Create tooltip text span to match CSS structure
+    const tooltipText = document.createElement('span');
+    tooltipText.className = 'tooltip-text';
+    tooltipText.textContent = originalTitle;
+    currentTooltip.appendChild(tooltipText);
+
+    document.body.appendChild(currentTooltip);
+
+    // Smart positioning after it's added to DOM
+    setTimeout(() => {
+      if (currentTooltip) {
+        const targetRect = target.getBoundingClientRect();
+        const tooltipRect = currentTooltip.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        let top = targetRect.bottom + 5; // Default: below element
+        let left = targetRect.left; // Default: align start (left)
+        let positionClass = 'below'; // Default position
+        let alignClass = 'align-start'; // Default alignment
+
+        // Check if tooltip would overflow right side
+        if (left + tooltipRect.width > viewportWidth) {
+          left = targetRect.right - tooltipRect.width; // Align end (right)
+          alignClass = 'align-end';
+        }
+
+        // Check if tooltip would overflow bottom
+        if (top + tooltipRect.height > viewportHeight) {
+          top = targetRect.top - tooltipRect.height - 5; // Move above element
+          positionClass = 'above';
+        }
+
+        // Ensure tooltip doesn't go off-screen on left
+        if (left < 0) {
+          left = 0;
+          alignClass = 'align-start';
+        }
+
+        // Ensure tooltip doesn't go off-screen on top
+        if (top < 0) {
+          top = targetRect.bottom + 5; // Fall back to below if above also overflows
+          positionClass = 'below';
+        }
+
+        currentTooltip.className = `custom-tooltip ${positionClass} ${alignClass}`;
+        currentTooltip.style.left = `${left}px`;
+        currentTooltip.style.top = `${top}px`;
+
+        // Add 'show' class after positioning to trigger animation
+        requestAnimationFrame(() => {
+          if (currentTooltip) {
+            currentTooltip.classList.add('show');
+          }
+        });
+      }
+    }, 0);
+  };  const handleMouseLeave = (event) => {
+    if (currentTooltip) {
+      currentTooltip.remove();
+      currentTooltip = null;
+    }
+  };
+
+  // Initialize tooltips on load
+  initializeTooltips();
+
+  // Also initialize periodically for dynamic content (fallback)
+  const periodicInit = setInterval(() => {
+    initializeTooltips();
+  }, 1000); // Check every second
+
+  // Stop periodic initialization after 30 seconds
+  setTimeout(() => {
+    clearInterval(periodicInit);
+  }, 30000);
+
+  // Re-initialize tooltips when DOM changes (for dynamic content)
+  const observer = new MutationObserver((mutations) => {
+    let shouldReinitialize = false;
+    mutations.forEach(mutation => {
+      mutation.addedNodes.forEach(node => {
+        if (node.nodeType === Node.ELEMENT_NODE && (node.hasAttribute('title') || node.querySelector('[title]'))) {
+          shouldReinitialize = true;
+        }
+      });
+    });
+    if (shouldReinitialize) {
+      initializeTooltips();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+});
 
 document.addEventListener("DOMContentLoaded", () => {
   setTimeout(() => {

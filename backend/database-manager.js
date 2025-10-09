@@ -17,6 +17,7 @@ class DatabaseManager {
     this.db.pragma('foreign_keys = ON');
     
     this.initSchema();
+    this.migrateThinkingUpdate();  // Run migration after schema initialization
     log('DATABASE', 1, 'constructor', 'Database initialized', { path: dbPath });
   }
   
@@ -63,6 +64,7 @@ class DatabaseManager {
         
         think_mode TEXT,
         think_content TEXT,
+        thinking_update TEXT,
         
         web_search_enabled INTEGER DEFAULT 0,
         web_search_data TEXT,
@@ -228,8 +230,8 @@ class DatabaseManager {
       INSERT INTO messages 
       (session_id, role, content, message_index, created_at, 
        model_id, model_label, provider, base_url, think_mode, 
-       think_content, web_search_enabled, web_search_data, files, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       think_content, thinking_update, web_search_enabled, web_search_data, files, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     return stmt.run(
@@ -244,6 +246,7 @@ class DatabaseManager {
       metadata.baseUrl || null,
       metadata.thinkMode || null,
       metadata.thinkContent ? JSON.stringify(metadata.thinkContent) : null,
+      metadata.thinkingUpdate ? JSON.stringify(metadata.thinkingUpdate) : null,
       metadata.webSearchEnabled ? 1 : 0,
       metadata.webSearchData ? JSON.stringify(metadata.webSearchData) : null,
       metadata.files ? JSON.stringify(metadata.files) : null,
@@ -256,8 +259,8 @@ class DatabaseManager {
       INSERT INTO messages 
       (session_id, role, content, message_index, created_at, 
        model_id, model_label, provider, base_url, think_mode, 
-       think_content, web_search_enabled, web_search_data, files, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       think_content, thinking_update, web_search_enabled, web_search_data, files, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     return stmt.run(
@@ -272,6 +275,7 @@ class DatabaseManager {
       metadata.baseUrl || null,
       metadata.thinkMode || null,
       metadata.thinkContent ? JSON.stringify(metadata.thinkContent) : null,
+      metadata.thinkingUpdate ? JSON.stringify(metadata.thinkingUpdate) : null,
       metadata.webSearchEnabled ? 1 : 0,
       metadata.webSearchData ? JSON.stringify(metadata.webSearchData) : null,
       metadata.files ? JSON.stringify(metadata.files) : null,
@@ -431,6 +435,26 @@ class DatabaseManager {
   
   backup(destPath) {
     return this.db.backup(destPath);
+  }
+  
+  // Migration: Add thinking_update column if it doesn't exist
+  migrateThinkingUpdate() {
+    try {
+      // Check if column exists
+      const tableInfo = this.db.prepare(`PRAGMA table_info(messages)`).all();
+      const hasThinkingUpdate = tableInfo.some(col => col.name === 'thinking_update');
+      
+      if (!hasThinkingUpdate) {
+        log('DATABASE', 1, 'migrateThinkingUpdate', 'Adding thinking_update column to messages table');
+        this.db.exec(`ALTER TABLE messages ADD COLUMN thinking_update TEXT`);
+        log('DATABASE', 1, 'migrateThinkingUpdate', 'Successfully added thinking_update column');
+      } else {
+        log('DATABASE', 1, 'migrateThinkingUpdate', 'thinking_update column already exists, skipping migration');
+      }
+    } catch (error) {
+      log('DATABASE', 3, 'migrateThinkingUpdate', 'Migration failed', { error: error.message });
+      throw error;
+    }
   }
   
   close() {

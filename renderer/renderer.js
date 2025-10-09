@@ -1219,6 +1219,9 @@ async function processSearchStatusQueue() {
   }
 
   const aiNode = s.aiNode;
+  const sess = s.session;
+  const messageIndex = s.messageIndex;
+  
   ensureThinkingUI(aiNode);
   const thinkEl = aiNode._thinkingEl;
 
@@ -1239,6 +1242,8 @@ async function processSearchStatusQueue() {
     span.style.fontFamily = "var(--font-display-italic)";
     return span;
   };
+  
+  let pageCount = 0; // Track page count for toggle text
 
   while (searchStatusQueue.length > 0) {
     const status = searchStatusQueue.shift();
@@ -1258,126 +1263,70 @@ async function processSearchStatusQueue() {
           // Project session analysis
           thinkEl.toggle.querySelector(".thinking-toggle-content span").textContent =
             `Planning analysis approach...`;
-          thinkEl.text.innerHTML = "";
           if (!thinkEl.body.classList.contains("expanded")) {
             thinkEl.toggle.click();
           }
 
-          const analysisTitle = createTitleSpan();
-          thinkEl.text.appendChild(analysisTitle);
-          await typewriterEffectChunked(analysisTitle, "Planning Analysis:", 100, 4);
-
-          thinkEl.text.appendChild(document.createElement("br"));
-          const analysisContent = document.createElement("span");
-          thinkEl.text.appendChild(analysisContent);
           const reasoning = status.data.reasoning || "Analyzing project structure and determining optimal analysis approach...";
           const userFriendlyReasoning = reasoning.length > 200 ? 
             reasoning.substring(0, 200) + "..." : 
             reasoning;
-          await typewriterEffectChunked(
-            analysisContent,
-            userFriendlyReasoning,
-            800,
-          );
+          
+          // Save to database via appendThinkingUpdate
+          await appendThinkingUpdate(aiNode, {
+            title: "PLANNING ANALYSIS",
+            content: userFriendlyReasoning
+          }, sess, messageIndex);
         } else {
           // Web search session
           thinkEl.toggle.querySelector(".thinking-toggle-content span").textContent =
             `Searching for "${status.data.summary_key}"...`;
-          thinkEl.text.innerHTML = "";
           if (!thinkEl.body.classList.contains("expanded")) {
             thinkEl.toggle.click();
           }
 
-          const reasoningTitle = createTitleSpan();
-          thinkEl.text.appendChild(reasoningTitle);
-          await typewriterEffectChunked(reasoningTitle, "Reasoning:", 50, 4);
-
-          thinkEl.text.appendChild(document.createElement("br"));
-          const reasoningContent = document.createElement("div");
-          reasoningContent.style.marginTop = "8px";
-          reasoningContent.style.lineHeight = "1.6";
-          thinkEl.text.appendChild(reasoningContent);
-          await typewriterEffectChunked(
-            reasoningContent,
-            status.data.reasoning,
-            200,
-          );
-
-          thinkEl.text.appendChild(document.createElement("br"));
-          thinkEl.text.appendChild(document.createElement("br"));
-          const keywordsTitle = createTitleSpan();
-          thinkEl.text.appendChild(keywordsTitle);
-          await typewriterEffectChunked(keywordsTitle, "Keywords:", 50, 3);
-
-          thinkEl.text.appendChild(document.createElement("br"));
-          const keywordsContent = document.createElement("div");
-          keywordsContent.style.marginTop = "8px";
-          keywordsContent.style.lineHeight = "1.6";
-          thinkEl.text.appendChild(keywordsContent);
+          // Save reasoning
+          await appendThinkingUpdate(aiNode, {
+            title: "REASONING",
+            content: status.data.reasoning
+          }, sess, messageIndex);
           
-          // Add each keyword with proper line breaks
-          console.log('DEBUG: Keywords count:', status.data.search_queries.length);
-          for (let i = 0; i < status.data.search_queries.length; i++) {
-            console.log(`DEBUG: Adding keyword ${i}:`, status.data.search_queries[i]);
-            const kwSpan = document.createElement("span");
-            keywordsContent.appendChild(kwSpan);
-            await typewriterEffectChunked(kwSpan, status.data.search_queries[i], 200);
-            if (i < status.data.search_queries.length - 1) {
-              const br = document.createElement("br");
-              console.log('DEBUG: Adding BR after keyword', i);
-              keywordsContent.appendChild(br);
-            }
-          }
-          console.log('DEBUG: Final keywordsContent HTML:', keywordsContent.innerHTML);
+          // Save keywords as list
+          const keywordsList = status.data.search_queries
+            .map((q, i) => `${i + 1}. ${q}`)
+            .join('\n');
+          
+          await appendThinkingUpdate(aiNode, {
+            title: "KEYWORDS",
+            content: keywordsList
+          }, sess, messageIndex);
         }
         break;
 
       case "FOUND_URLS":
-        const urlsTitle = createTitleSpan();
-        thinkEl.text.appendChild(urlsTitle);
-        
         const isProjectFiles = status.data && status.data.some && status.data.some(item => item.link && item.link.startsWith('file://'));
         
+        pageCount = status.data.length || 0; // Store page count
+        
         if (isProjectFiles) {
-          await typewriterEffectChunked(urlsTitle, "Analyzing files: ", 50, 3);
-          
-          const filesContent = document.createElement("span");
-          thinkEl.text.appendChild(filesContent);
-          await typewriterEffectChunked(
-            filesContent,
-            status.data.map((r) => `${r.title}`).join(", "),
-            200,
-          );
+          const filesText = status.data.map((r) => r.title).join(", ");
+          await appendThinkingUpdate(aiNode, {
+            title: "ANALYZING FILES",
+            content: filesText
+          }, sess, messageIndex);
         } else {
-          await typewriterEffectChunked(urlsTitle, "Found URLs:", 50, 3);
-
-          thinkEl.text.appendChild(document.createElement("br"));
-          const urlsContent = document.createElement("div");
-          urlsContent.style.marginTop = "8px";
-          urlsContent.style.lineHeight = "1.6";
-          thinkEl.text.appendChild(urlsContent);
+          const urlsList = status.data
+            .map((item, i) => `${i + 1}. ${item.link}`)
+            .join('\n');
           
-          // Add each URL with proper line breaks
-          console.log('DEBUG: URLs count:', status.data.length);
-          for (let i = 0; i < status.data.length; i++) {
-            console.log(`DEBUG: Adding URL ${i}:`, status.data[i].link);
-            const urlSpan = document.createElement("span");
-            urlsContent.appendChild(urlSpan);
-            await typewriterEffectChunked(urlSpan, status.data[i].link, 200);
-            if (i < status.data.length - 1) {
-              const br = document.createElement("br");
-              console.log('DEBUG: Adding BR after URL', i);
-              urlsContent.appendChild(br);
-            }
-          }
-          console.log('DEBUG: Final urlsContent HTML:', urlsContent.innerHTML);
+          await appendThinkingUpdate(aiNode, {
+            title: "FOUND URLS",
+            content: urlsList
+          }, sess, messageIndex);
         }
         break;
 
       case "ACTION_EXECUTING":
-        // Generate unique action ID
-        const actionId = `${status.data.actionType}_${status.data.actionIndex}`;
-        
         // Format action to human-readable
         const { description, reason } = formatResearchAction(
           status.data.actionType,
@@ -1385,48 +1334,19 @@ async function processSearchStatusQueue() {
           status.data.actionReason
         );
         
-        // Build display text
-        thinkEl.text.innerHTML += "<br><br>";
-        const actionContainer = document.createElement("div");
-        actionContainer.style.lineHeight = "1.6";
-        
-        // Action title (no dots, same font as "Analyzing files:")
-        const actionLine = document.createElement("div");
-        actionLine.textContent = description;
-        actionContainer.appendChild(actionLine);
-        
-        // AI reasoning (if available) - will be added with typewriter effect
+        let actionText = description;
         if (reason && reason.trim()) {
-          const reasonLine = document.createElement("div");
-          reasonLine.style.opacity = "0.85";
-          reasonLine.style.fontSize = "0.95em";
-          reasonLine.style.marginTop = "4px";
-          reasonLine.style.marginLeft = "24px";
-          reasonLine.style.whiteSpace = "pre-wrap"; // Preserve newlines!
-          actionContainer.appendChild(reasonLine);
-          
-          // Add to container first
-          thinkEl.text.appendChild(actionContainer);
-          
-          // Apply typewriter effect to reason with faster speed
-          await typewriterEffectChunked(reasonLine, reason, 100, 5);
-        } else {
-          thinkEl.text.appendChild(actionContainer);
+          actionText += '\n\n' + reason;
         }
+        
+        await appendThinkingUpdate(aiNode, {
+          title: "ACTION",
+          content: actionText
+        }, sess, messageIndex);
         break;
 
       case "ACTION_RESULTS":
-        // Optionally show result count
-        if (status.data.count > 0) {
-          thinkEl.text.innerHTML += "<br>";
-          const resultSummary = document.createElement("div");
-          resultSummary.style.marginLeft = "24px";
-          resultSummary.style.fontSize = "0.9em";
-          resultSummary.style.opacity = "0.7";
-          const resultCount = status.data.count || 0;
-          resultSummary.textContent = `→ Found ${resultCount} result${resultCount !== 1 ? 's' : ''}`;
-          thinkEl.text.appendChild(resultSummary);
-        }
+        // Skip - results are implicitly shown in thinking updates
         break;
 
       case "PROCESSING":
@@ -1435,9 +1355,11 @@ async function processSearchStatusQueue() {
         
         const toggleContent = thinkEl.toggle.querySelector(".thinking-toggle-content");
         if (toggleContent) {
+          // Use pageCount if available, otherwise use status.data.count
+          const count = pageCount || status.data.count || 0;
           const statusText = isProjectProcessing 
-            ? `Analyzing ${status.data.count} search results & synthesizing answer...`
-            : `Reading ${status.data.count} pages & preparing answer...`;
+            ? `Analyzing ${count} search results & synthesizing answer...`
+            : `Read ${count} web pages`;
           
           toggleContent.innerHTML = `
             <div class="web-search-indicator searching" style="display: flex; align-items: center; gap: 6px;">
@@ -1547,6 +1469,7 @@ function ensureThinkingUI(aiNode) {
     
     const toggle = existingWrap.querySelector('.thinking-toggle');
     const body = existingWrap.querySelector('.thinking-body');
+    const thinkingUpdate = existingWrap.querySelector('.thinking-update');
     const text = existingWrap.querySelector('.thinking-text');
     const toggleContent = toggle?.querySelector('.thinking-toggle-content');
     
@@ -1579,6 +1502,7 @@ function ensureThinkingUI(aiNode) {
         wrap: existingWrap, 
         toggle: newToggle, 
         body, 
+        thinkingUpdate,
         text, 
         toggleContent: newToggle.querySelector('.thinking-toggle-content'), 
         userScrolled: () => thinkingUserScrolled 
@@ -1607,8 +1531,14 @@ function ensureThinkingUI(aiNode) {
 
   const body = document.createElement("div");
   body.className = "thinking-body";
+  
+  const thinkingUpdate = document.createElement("div");
+  thinkingUpdate.className = "thinking-update";
+  
   const text = document.createElement("div");
   text.className = "thinking-text";
+  
+  body.appendChild(thinkingUpdate);
   body.appendChild(text);
 
   toggle.addEventListener("click", () => {
@@ -1636,7 +1566,7 @@ function ensureThinkingUI(aiNode) {
   content.prepend(wrap);
 
   const toggleContent = toggle.querySelector(".thinking-toggle-content");
-  aiNode._thinkingEl = { wrap, toggle, body, text, toggleContent, userScrolled: () => thinkingUserScrolled };
+  aiNode._thinkingEl = { wrap, toggle, body, thinkingUpdate, text, toggleContent, userScrolled: () => thinkingUserScrolled };
   
   log('THINKING', 1, 'ensureThinkingUI', 'Created new thinking-wrap', {});
 }
@@ -1669,6 +1599,95 @@ async function appendThinking(aiNode, chunk, session, messageIndex) {
   await updateThinkingUI(aiNode, chunk, session, messageIndex);
   
   saveThinkingDebounced();
+}
+
+// New function to handle structured thinking updates from backend
+async function appendThinkingUpdate(aiNode, updateData, session, messageIndex) {
+  if (!updateData || !aiNode || !session || messageIndex == null) return;
+  
+  ensureThinkingUI(aiNode);
+  
+  // Structure: { title, content }
+  const title = updateData.title || 'Update';
+  const content = updateData.content || '';
+  
+  // Store in session
+  session._x_think_updates = session._x_think_updates || {};
+  if (!session._x_think_updates[messageIndex]) {
+    session._x_think_updates[messageIndex] = [];
+  }
+  session._x_think_updates[messageIndex].push({ 
+    title, 
+    content, 
+    timestamp: Date.now() 
+  });
+  
+  // Update UI
+  await updateThinkingUpdateUI(aiNode, session, messageIndex);
+  
+  saveThinkingDebounced();
+}
+
+// New function to update the thinking-update UI element
+async function updateThinkingUpdateUI(aiNode, session, messageIndex) {
+  const el = aiNode._thinkingEl;
+  if (!el || !el.thinkingUpdate) return;
+  
+  if (!el.body.classList.contains('expanded')) {
+    el.body.classList.add('expanded');
+    el.toggle.setAttribute('aria-expanded', 'true');
+  }
+  
+  const updates = session._x_think_updates?.[messageIndex] || [];
+  
+  // Get existing items to avoid re-rendering
+  const existingItems = el.thinkingUpdate.querySelectorAll('.thinking-update-item');
+  const startIndex = existingItems.length;
+  
+  // Only render new updates
+  for (let i = startIndex; i < updates.length; i++) {
+    const update = updates[i];
+    
+    const updateItem = document.createElement('div');
+    updateItem.className = 'thinking-update-item';
+    
+    // Title - fade in
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'thinking-update-title';
+    titleDiv.textContent = update.title;
+    titleDiv.style.opacity = '0';
+    updateItem.appendChild(titleDiv);
+    
+    // Content - will be typed
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'thinking-update-content';
+    updateItem.appendChild(contentDiv);
+    
+    el.thinkingUpdate.appendChild(updateItem);
+    
+    // Fade in title
+    await new Promise(resolve => setTimeout(resolve, 10));
+    titleDiv.style.transition = 'opacity 0.3s ease';
+    titleDiv.style.opacity = '1';
+    
+    // Typewriter effect for content
+    const hasMarkdown = /```|`[^`]+`|\*\*|\*|__|_|\[.+\]\(.+\)|^[\s]*[-*+]\s|^[\s]*\d+\.\s/m.test(update.content);
+    
+    if (hasMarkdown) {
+      // Format markdown then fade in
+      const formattedHtml = await customMarkdownFormat(update.content);
+      contentDiv.style.opacity = '0';
+      contentDiv.innerHTML = formattedHtml;
+      await new Promise(resolve => setTimeout(resolve, 30));
+      contentDiv.style.transition = 'opacity 0.25s ease';
+      contentDiv.style.opacity = '1';
+    } else {
+      // Plain text typewriter using chunks
+      await typewriterEffectChunked(contentDiv, update.content, 500, 10);
+    }
+  }
+  
+  scrollThinkingToBottom(el);
 }
 
 function cleanLeadingWhitespace(text) {
@@ -10517,6 +10536,48 @@ function hydrateThinkingIfAny(aiNode, session, messageIndex) {
   setNodeMetadata(aiNode, messageMetadata);
 
   const thinkData = session?._x_think && session._x_think[messageIndex];
+  const thinkUpdates = session?._x_think_updates && session._x_think_updates[messageIndex];
+  
+  // Hydrate thinking updates if they exist
+  if (thinkUpdates && Array.isArray(thinkUpdates) && thinkUpdates.length > 0) {
+    ensureThinkingUI(aiNode);
+    const el = aiNode._thinkingEl;
+    if (el && el.thinkingUpdate) {
+      // Render all thinking updates without animation (for loading)
+      for (const update of thinkUpdates) {
+        const updateItem = document.createElement('div');
+        updateItem.className = 'thinking-update-item';
+        
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'thinking-update-title';
+        titleDiv.textContent = update.title;
+        updateItem.appendChild(titleDiv);
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'thinking-update-content';
+        
+        // Check if content has markdown
+        const hasMarkdown = /```|`[^`]+`|\*\*|\*|__|_|\[.+\]\(.+\)|^[\s]*[-*+]\s|^[\s]*\d+\.\s/m.test(update.content);
+        if (hasMarkdown) {
+          if (window.mdThinking) {
+            contentDiv.innerHTML = window.mdThinking(update.content);
+          } else {
+            customMarkdownFormat(update.content).then(html => {
+              contentDiv.innerHTML = html;
+            }).catch(err => {
+              contentDiv.textContent = update.content;
+            });
+          }
+        } else {
+          contentDiv.textContent = update.content;
+        }
+        
+        updateItem.appendChild(contentDiv);
+        el.thinkingUpdate.appendChild(updateItem);
+      }
+    }
+  }
+  
   if (!thinkData || thinkData.text == "") return;
 
   const thinkText =
@@ -10558,6 +10619,49 @@ async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
   setNodeMetadata(aiNode, messageMetadata);
 
   const thinkData = session?._x_think && session._x_think[messageIndex];
+  const thinkUpdates = session?._x_think_updates && session._x_think_updates[messageIndex];
+  
+  // Hydrate thinking updates if they exist
+  if (thinkUpdates && Array.isArray(thinkUpdates) && thinkUpdates.length > 0) {
+    ensureThinkingUI(aiNode);
+    const el = aiNode._thinkingEl;
+    if (el && el.thinkingUpdate) {
+      // Render all thinking updates without animation (for loading)
+      for (const update of thinkUpdates) {
+        const updateItem = document.createElement('div');
+        updateItem.className = 'thinking-update-item';
+        
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'thinking-update-title';
+        titleDiv.textContent = update.title;
+        updateItem.appendChild(titleDiv);
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'thinking-update-content';
+        
+        // Check if content has markdown
+        const hasMarkdown = /```|`[^`]+`|\*\*|\*|__|_|\[.+\]\(.+\)|^[\s]*[-*+]\s|^[\s]*\d+\.\s/m.test(update.content);
+        if (hasMarkdown) {
+          try {
+            if (window.mdThinking) {
+              contentDiv.innerHTML = window.mdThinking(update.content);
+            } else {
+              const html = await customMarkdownFormat(update.content);
+              contentDiv.innerHTML = html;
+            }
+          } catch (err) {
+            contentDiv.textContent = update.content;
+          }
+        } else {
+          contentDiv.textContent = update.content;
+        }
+        
+        updateItem.appendChild(contentDiv);
+        el.thinkingUpdate.appendChild(updateItem);
+      }
+    }
+  }
+  
   if (!thinkData || thinkData.text == "") return;
 
   const thinkText =
@@ -10816,6 +10920,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       if (session._x_think && session._x_think[messageIndex]) {
         modelInfo.thinkContent = session._x_think[messageIndex];
       }
+      
+      // Include thinking updates if exists
+      if (session._x_think_updates && session._x_think_updates[messageIndex]) {
+        modelInfo.thinkingUpdate = session._x_think_updates[messageIndex];
+      }
 
       session.messages[messageIndex] = ["ai", finalMessageToSave, modelInfo];
       
@@ -10838,6 +10947,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       // Include thinking data if exists (for interrupted messages)
       if (session._x_think && session._x_think[messageIndex]) {
         modelInfo.thinkContent = session._x_think[messageIndex];
+      }
+      
+      // Include thinking updates if exists (for interrupted messages)
+      if (session._x_think_updates && session._x_think_updates[messageIndex]) {
+        modelInfo.thinkingUpdate = session._x_think_updates[messageIndex];
       }
       
       session.messages[messageIndex] = [
@@ -14148,13 +14262,24 @@ function initializeApp() {
         scrollToBottom({ fromAI: true });
       } else if (type === "THINKING") {
         try {
+            console.log('[THINKING] Received chat-update THINKING:', { type, data, thinkData: data?.think });
             mainText.innerHTML = getThinkingMarkup();
-            const thinkContent = data?.think;
+            const thinkData = data?.think;
             const sessionId = data?.sessionId || payload.sessionId || current?.id;
             const sess = state.sessions.find(s => s.id === sessionId) || current;
 
-            if (thinkContent && sess) {
-                appendThinking(bubbleNode, thinkContent, sess, messageIndex).catch(console.error);
+            if (thinkData && sess) {
+                // Check if it's structured thinking update (has title) or plain text
+                if (typeof thinkData === 'object' && thinkData.title) {
+                    // Backend thinking update with structure {title, content}
+                    console.log('[THINKING] Routing to appendThinkingUpdate (structured):', thinkData);
+                    appendThinkingUpdate(bubbleNode, thinkData, sess, messageIndex).catch(console.error);
+                } else {
+                    // Legacy: Plain text thinking stream
+                    const thinkContent = typeof thinkData === 'string' ? thinkData : thinkData?.content || '';
+                    console.log('[THINKING] Routing to appendThinking (plain text):', thinkContent);
+                    appendThinking(bubbleNode, thinkContent, sess, messageIndex).catch(console.error);
+                }
                 scrollToBottom({ fromAI: true });
             }
         } catch (e) {

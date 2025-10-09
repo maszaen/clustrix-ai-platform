@@ -409,12 +409,23 @@ ipcMain.handle('sessions:load', async () => {
         
         // Reconstruct _x_think from database
         const _x_think = {};
+        const _x_think_updates = {};
         messages.forEach((m, idx) => {
           if (m.think_content) {
             try {
               _x_think[idx] = JSON.parse(m.think_content);
             } catch (e) {
               log('DATABASE', 4, 'sessions:load', 'Failed to parse think_content', { 
+                sessionId: session.id, 
+                messageIndex: idx 
+              });
+            }
+          }
+          if (m.thinking_update) {
+            try {
+              _x_think_updates[idx] = JSON.parse(m.thinking_update);
+            } catch (e) {
+              log('DATABASE', 4, 'sessions:load', 'Failed to parse thinking_update', { 
                 sessionId: session.id, 
                 messageIndex: idx 
               });
@@ -440,6 +451,7 @@ ipcMain.handle('sessions:load', async () => {
           tokens_by_message: metadata.tokens_by_message || {},
           canvases: metadata.canvases || {},
           _x_think: Object.keys(_x_think).length > 0 ? _x_think : undefined,
+          _x_think_updates: Object.keys(_x_think_updates).length > 0 ? _x_think_updates : undefined,
           messages: messages.map(m => {
             const msgMetadata = JSON.parse(m.metadata || '{}');
             const parsedWebSearchData = m.web_search_data ? JSON.parse(m.web_search_data) : undefined;
@@ -453,6 +465,7 @@ ipcMain.handle('sessions:load', async () => {
                 baseUrl: m.base_url,
                 thinkMode: m.think_mode,
                 thinkContent: m.think_content ? JSON.parse(m.think_content) : undefined,
+                thinkingUpdate: m.thinking_update ? JSON.parse(m.thinking_update) : undefined,
                 webSearchEnabled: m.web_search_enabled === 1,
                 webSearchData: parsedWebSearchData,
                 webSearchPages: parsedWebSearchData?.pages || parsedWebSearchData?.pageCount || undefined,
@@ -482,9 +495,12 @@ ipcMain.handle('sessions:load', async () => {
                   for (let i = 0; i < session.messages.length; i++) {
                     const [role, content, metadata = {}] = session.messages[i];
                     
-                    // Preserve _x_think data during migration
+                    // Preserve _x_think and _x_think_updates data during migration
                     if (session._x_think && session._x_think[i]) {
                       metadata.thinkContent = session._x_think[i];
+                    }
+                    if (session._x_think_updates && session._x_think_updates[i]) {
+                      metadata.thinkingUpdate = session._x_think_updates[i];
                     }
                     
                     db.addMessage(session.id, role, content, metadata, i);
@@ -499,14 +515,25 @@ ipcMain.handle('sessions:load', async () => {
               const messages = db.getMessages(session.id);
               const metadata = JSON.parse(session.metadata || '{}');
               
-              // Reconstruct _x_think from database
+              // Reconstruct _x_think and _x_think_updates from database
               const _x_think = {};
+              const _x_think_updates = {};
               messages.forEach((m, idx) => {
                 if (m.think_content) {
                   try {
                     _x_think[idx] = JSON.parse(m.think_content);
                   } catch (e) {
                     log('DATABASE', 4, 'sessions:load', 'Failed to parse think_content', { 
+                      sessionId: session.id, 
+                      messageIndex: idx 
+                    });
+                  }
+                }
+                if (m.thinking_update) {
+                  try {
+                    _x_think_updates[idx] = JSON.parse(m.thinking_update);
+                  } catch (e) {
+                    log('DATABASE', 4, 'sessions:load', 'Failed to parse thinking_update', { 
                       sessionId: session.id, 
                       messageIndex: idx 
                     });
@@ -532,6 +559,7 @@ ipcMain.handle('sessions:load', async () => {
                 tokens_by_message: metadata.tokens_by_message || {},
                 canvases: metadata.canvases || {},
                 _x_think: Object.keys(_x_think).length > 0 ? _x_think : undefined,
+                _x_think_updates: Object.keys(_x_think_updates).length > 0 ? _x_think_updates : undefined,
                 messages: messages.map(m => {
                   const msgMetadata = JSON.parse(m.metadata || '{}');
                   const parsedWebSearchData = m.web_search_data ? JSON.parse(m.web_search_data) : undefined;
@@ -545,6 +573,7 @@ ipcMain.handle('sessions:load', async () => {
                       baseUrl: m.base_url,
                       thinkMode: m.think_mode,
                       thinkContent: m.think_content ? JSON.parse(m.think_content) : undefined,
+                      thinkingUpdate: m.thinking_update ? JSON.parse(m.thinking_update) : undefined,
                       webSearchEnabled: m.web_search_enabled === 1,
                       webSearchData: parsedWebSearchData,
                       webSearchPages: parsedWebSearchData?.pages || parsedWebSearchData?.pageCount || undefined,
@@ -1044,6 +1073,20 @@ function runStandardStreaming(event, payload) {
 
           const progressCallback = (update) => {
             if (update.type === 'thinking_log') {
+              const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
+              event.sender.send('chat-update', {
+                type: 'THINKING',
+                messageIndex: aiMessageIndex,
+                data: {
+                  sessionId: session?.id || null,
+                  think: {
+                    title: update.entry?.stage || 'Thinking',
+                    content: update.entry?.text || update.content || ''
+                  }
+                }
+              });
+              
+              // Also send to search:status for backward compatibility
               event.sender.send('search:status', {
                 step: 'DECIDED',
                 data: {

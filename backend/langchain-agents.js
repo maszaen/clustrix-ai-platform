@@ -69,6 +69,18 @@ class DynamicResearchAgent {
         });
 
       const limitedQueries = plan.queries.slice(0, maxQueries);
+      
+      // Send individual web search thinking updates
+      for (const query of limitedQueries) {
+        progressCallback({
+          type: 'thinking_log',
+          entry: {
+            text: `Searching web for "${query}"`,
+            stage: 'web-search',
+          },
+        });
+      }
+      
       const searchResults = await performWebSearch(limitedQueries, searchApiConfig, logHelper);
 
       if (Array.isArray(searchResults) && searchResults.length > 0) {

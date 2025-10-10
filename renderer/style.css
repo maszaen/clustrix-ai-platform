@@ -4693,7 +4693,10 @@ a:focus-visible {
 
 .code-block-container {
   position: relative;
-  padding-bottom: 10px;
+  min-height: 0;
+  margin-bottom: 10px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
 }
 
 /* Thinking-text code blocks without action buttons */

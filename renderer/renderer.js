@@ -29,6 +29,10 @@ let currentProject = null;
 let projectsData = [];
 let previousWebSearchState = null; // Track websearch state before entering project
 
+// PERFORMANCE: Dirty session tracking for incremental saves
+const dirtySessionIds = new Set();
+let saveScheduled = false;
+
 // Smart Session Caching System
 const sessionCache = new Map();
 const MAX_CACHED_SESSIONS = 10; // Re-enabled for fast session switching
@@ -256,6 +260,33 @@ function getFileIcon(nameOrExt) {
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
+
+// PERFORMANCE: DOM Query Cache - cache frequently accessed elements
+const domCache = {
+  _cache: new Map(),
+  get(selector) {
+    if (!this._cache.has(selector)) {
+      const element = document.querySelector(selector);
+      if (element) {
+        this._cache.set(selector, element);
+      }
+      return element;
+    }
+    return this._cache.get(selector);
+  },
+  invalidate(selector) {
+    if (selector) {
+      this._cache.delete(selector);
+    } else {
+      this._cache.clear();
+    }
+  },
+  // Helper methods for common queries
+  getChatLog() { return this.get("#chat-log"); },
+  getMsg() { return this.get("#msg"); },
+  getMsgCentral() { return this.get("#msg-central"); }
+};
+
 const THINKING_TIMER = new WeakMap();
 const SESSIONS_PER_PAGE = 70;
 const DEBUG_MODE = typeof window.api === "undefined";
@@ -1144,9 +1175,9 @@ function formatResearchAction(actionType, actionParams, actionReason) {
     
     case 'searchPattern':
       if (params.pattern && params.files && params.files[0]) {
-        description = `Searching for "${params.pattern}" in ${params.files[0]}`;
+        description = `Searching for \`${params.pattern}\` in ${params.files[0]}`;
       } else if (params.pattern) {
-        description = `Searching for pattern ${params.pattern}`;
+        description = `Searching for pattern \`${params.pattern}\``;
       } else {
         description = 'Searching file content';
       }
@@ -1474,7 +1505,18 @@ async function typewriterEffectChunked(
   const maxPauses = 3;
 
   for (const chunk of chunks) {
-    element.innerHTML += chunk.replaceAll("\n", "<br>");
+    // PERFORMANCE: Use DOM manipulation instead of innerHTML += to avoid re-parsing
+    const processedChunk = chunk.replaceAll("\n", "<br>");
+    
+    // Create a temporary container to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = processedChunk;
+    
+    // Append all nodes from temp container
+    while (tempDiv.firstChild) {
+      element.appendChild(tempDiv.firstChild);
+    }
+    
     scrollToBottom({ force: true });
     await new Promise((r) => setTimeout(r, delay));
 
@@ -1593,7 +1635,7 @@ function ensureThinkingUI(aiNode) {
 
   // Add user scroll detection for thinking body
   let thinkingUserScrolled = false;
-  body.addEventListener('scroll', () => {
+  const scrollListener = () => {
     if (!body.classList.contains('expanded')) return;
     
     const isAtBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 10;
@@ -1602,12 +1644,35 @@ function ensureThinkingUI(aiNode) {
     } else if (thinkingUserScrolled) {
       thinkingUserScrolled = false;
     }
-  });
+  };
+  body.addEventListener('scroll', scrollListener);
 
   content.prepend(wrap);
 
   const toggleContent = toggle.querySelector(".thinking-toggle-content");
-  aiNode._thinkingEl = { wrap, toggle, body, thinkingUpdate, text, toggleContent, userScrolled: () => thinkingUserScrolled };
+  aiNode._thinkingEl = { 
+    wrap, 
+    toggle, 
+    body, 
+    thinkingUpdate, 
+    text, 
+    toggleContent, 
+    userScrolled: () => thinkingUserScrolled,
+    // PERFORMANCE: Store listener references for cleanup
+    _listeners: [
+      { element: body, type: 'scroll', listener: scrollListener }
+    ]
+  };
+  
+  // PERFORMANCE: Cleanup function to remove event listeners
+  aiNode.cleanupThinkingUI = () => {
+    if (aiNode._thinkingEl && aiNode._thinkingEl._listeners) {
+      aiNode._thinkingEl._listeners.forEach(({ element, type, listener }) => {
+        element.removeEventListener(type, listener);
+      });
+      aiNode._thinkingEl._listeners = [];
+    }
+  };
   
   log('THINKING', 1, 'ensureThinkingUI', 'Created new thinking-wrap', {});
 }
@@ -1788,37 +1853,64 @@ async function updateThinkingUI(aiNode, content, session, messageIndex) {
     el.toggle.setAttribute('aria-expanded', 'true');
   }
   
-  // Re-render full thinking content instead of appending
-  if (session && session._x_think && session._x_think[messageIndex]) {
-    const thinkData = session._x_think[messageIndex];
-    const thinkText = (typeof thinkData === "object" ? thinkData.text : thinkData) || "";
-    // Use custom formatter for thinking text (no action buttons)
-    if (window.mdThinking) {
-      el.text.innerHTML = window.mdThinking(thinkText);
-      // Auto-scroll after sync rendering with multiple timing attempts
-      scrollThinkingToBottom(el);
-    } else {
-      const formattedHtml = await customMarkdownFormat(thinkText);
-      el.text.innerHTML = formattedHtml;
-      // Auto-scroll after async rendering with multiple timing attempts
-      scrollThinkingToBottom(el);
-    }
-  } else {
-    // Fallback for when session data isn't available yet
-    if (window.mdThinking) {
-      el.text.innerHTML = window.mdThinking(content);
-      // Auto-scroll after sync rendering with multiple timing attempts
-      scrollThinkingToBottom(el);
-    } else {
-      const formattedHtml = await customMarkdownFormat(content);
-      el.text.innerHTML = formattedHtml;
-      // Auto-scroll after async rendering with multiple timing attempts
-      scrollThinkingToBottom(el);
-    }
+  // PERFORMANCE: Track last rendered length to enable incremental updates
+  if (!el._lastRenderedLength) {
+    el._lastRenderedLength = 0;
   }
   
-  // Debug thinking text content (remove this after fixing)
-  // debugThinkingTextContent(el.text);
+  // Get full thinking text
+  let fullThinkText = "";
+  if (session && session._x_think && session._x_think[messageIndex]) {
+    const thinkData = session._x_think[messageIndex];
+    fullThinkText = (typeof thinkData === "object" ? thinkData.text : thinkData) || "";
+  } else {
+    fullThinkText = content || "";
+  }
+  
+  // PERFORMANCE: Smart rendering strategy for thinking-text
+  // Markdown parsing needs full context, so we do smart thresholding
+  const newContent = fullThinkText.substring(el._lastRenderedLength);
+  
+  if (newContent.length > 0) {
+    const isInitialLoad = el._lastRenderedLength === 0;
+    const isMajorUpdate = fullThinkText.length < el._lastRenderedLength;
+    const isSmallIncrement = newContent.length < 100; // Small streaming chunks
+    
+    // STRATEGY: For streaming (small increments), always full re-render
+    // This prevents markdown parsing issues where each chunk creates separate <p> blocks
+    const shouldFullRender = isInitialLoad || isMajorUpdate || isSmallIncrement;
+    
+    if (shouldFullRender) {
+      // Full render - necessary for proper markdown context
+      if (window.mdThinking) {
+        el.text.innerHTML = window.mdThinking(fullThinkText);
+      } else {
+        const formattedHtml = await customMarkdownFormat(fullThinkText);
+        el.text.innerHTML = formattedHtml;
+      }
+    } else {
+      // INCREMENTAL: Only for large batch updates (e.g., lazy loading)
+      // This path rarely executes but is kept for edge cases
+      if (window.mdThinking) {
+        const formattedNewContent = window.mdThinking(newContent);
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = formattedNewContent;
+        while (tempDiv.firstChild) {
+          el.text.appendChild(tempDiv.firstChild);
+        }
+      } else {
+        const formattedNewContent = await customMarkdownFormat(newContent);
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = formattedNewContent;
+        while (tempDiv.firstChild) {
+          el.text.appendChild(tempDiv.firstChild);
+        }
+      }
+    }
+    
+    el._lastRenderedLength = fullThinkText.length;
+    scrollThinkingToBottom(el);
+  }
 }
 
 async function customMarkdownFormat(raw) {
@@ -3450,6 +3542,7 @@ function startRename(sessionId) {
       if (session) {
         session.name = input.value.trim();
         session.last_updated = new Date().toISOString();
+        markSessionDirty(session.id); // PERFORMANCE: Mark for incremental save
         save();
         renderChatsPage();
 
@@ -9084,7 +9177,8 @@ function renderHistoryLazy() {
 }
 
 function addLoadOlderIndicator(remainingCount) {
-  const logContainer = $("#chat-log");
+  // PERFORMANCE: Use cached DOM query
+  const logContainer = domCache.getChatLog();
   if (!logContainer) {
     return;
   }
@@ -9198,7 +9292,8 @@ window.loadOlderMessages = async function () {
     const oldIndicator = document.getElementById("load-older-indicator");
     if (oldIndicator) oldIndicator.remove();
 
-    const logContainer = $("#chat-log");
+    // PERFORMANCE: Use cached DOM query
+    const logContainer = domCache.getChatLog();
     if (!logContainer) {
       log("SESSION", 2, "loadOlderMessages", "No chat-log container found");
       return;
@@ -9660,7 +9755,8 @@ function addMessage(
     invalidateSessionCache(current.id);
   }
   
-  const log = $("#chat-log");
+  // PERFORMANCE: Use cached DOM query
+  const log = domCache.getChatLog();
   const node = document.createElement("div");
   const span = document.createElement("span");
   node.className = `message ${role}`;
@@ -10357,19 +10453,68 @@ async function load() {
   }, 50);
 }
 
+// PERFORMANCE: Mark session as dirty for incremental save
+function markSessionDirty(sessionId) {
+  if (sessionId) {
+    dirtySessionIds.add(sessionId);
+    log("SAVE", 0, "markSessionDirty", `Session marked dirty: ${sessionId}`, {
+      dirtyCount: dirtySessionIds.size
+    });
+  }
+}
+
+// PERFORMANCE: Clear dirty tracking after successful save
+function clearDirtyTracking() {
+  dirtySessionIds.clear();
+  saveScheduled = false;
+}
+
 async function save() {
   try {
-    const dataToSave = { sessions: state.sessions, settings: state.settings };
+    // PERFORMANCE: Incremental save - check if we have dirty sessions
+    let dataToSave;
+    const shouldUseIncremental = dirtySessionIds.size > 0 && 
+                                  dirtySessionIds.size < state.sessions.length &&
+                                  !DEBUG_MODE; // Full save in debug mode for simplicity
+    
+    if (shouldUseIncremental) {
+      // INCREMENTAL: Only save dirty sessions + settings
+      const dirtySessions = state.sessions.filter(s => dirtySessionIds.has(s.id));
+      dataToSave = { 
+        sessions: dirtySessions, 
+        settings: state.settings,
+        isIncremental: true,
+        dirtyIds: Array.from(dirtySessionIds)
+      };
+      log("SAVE", 1, "save", `Incremental save: ${dirtySessions.length}/${state.sessions.length} sessions`, {
+        dirtyIds: Array.from(dirtySessionIds)
+      });
+    } else {
+      // FULL SAVE: Save all sessions (fallback or initial save)
+      dataToSave = { sessions: state.sessions, settings: state.settings };
+      log("SAVE", 1, "save", `Full save: ${state.sessions.length} sessions`);
+    }
+    
     if (DEBUG_MODE) {
-      localStorage.setItem("clustrix-data", JSON.stringify(dataToSave));
+      // In debug mode, always do full save to localStorage
+      localStorage.setItem("clustrix-data", JSON.stringify({ 
+        sessions: state.sessions, 
+        settings: state.settings 
+      }));
     } else {
       await window.api.sessions.save(dataToSave);
     }
-    log("APP", 2, "save", "Data saved successfully");
+    
+    // Clear dirty tracking after successful save
+    clearDirtyTracking();
+    
+    log("APP", 2, "save", "Data saved successfully", {
+      wasIncremental: shouldUseIncremental
+    });
     
     // Auto-cache current session after save for consistency
     if (current && current.id) {
-      const chatLog = $("#chat-log");
+      const chatLog = domCache.getChatLog();
       if (chatLog && chatLog.innerHTML.trim()) {
         const scroller = getChatScroller();
         const scrollPos = scroller ? scroller.scrollTop : 0;
@@ -11801,6 +11946,10 @@ async function send() {
 
   current.last_updated = nowISO();
   current.messages.push(["user", originalText, { files: filesToAttach }]);
+  
+  // PERFORMANCE: Mark session dirty for incremental save
+  markSessionDirty(current.id);
+  
   const userIndex = current.messages.length - 1;
 
   const config = getActiveChatConfig();
@@ -13052,16 +13201,50 @@ function scrollToMatch(index) {
   if (highlight) {
     const chatContainer = getChatScroller();
     if (chatContainer) {
-      // Calculate the position of the highlight relative to the chat container
+      // Use the same column-reverse scroll logic as renderHistoryLazy
       const containerRect = chatContainer.getBoundingClientRect();
       const highlightRect = highlight.getBoundingClientRect();
-      const relativeTop = highlightRect.top - containerRect.top + chatContainer.scrollTop;
+      const currentScrollTop = chatContainer.scrollTop;
 
-      // Scroll to center the highlight in the chat container
-      const targetScrollTop = relativeTop - (containerRect.height / 2) + (highlightRect.height / 2);
+      // Calculate highlight position relative to container (same as renderHistoryLazy)
+      const highlightTopInContainer = highlightRect.top - containerRect.top;
+
+      // Debug logging
+      log('SEARCH', 1, 'scrollToMatch', 'Debug values', {
+        highlightTopInContainer,
+        containerHeight: containerRect.height,
+        highlightHeight: highlightRect.height,
+        currentScrollTop,
+        scrollHeight: chatContainer.scrollHeight,
+        highlightRectTop: highlightRect.top,
+        containerRectTop: containerRect.top
+      });
+
+      // In column-reverse, we need DIRECT scroll position calculation
+      // Just like renderHistoryLazy: position at top + offset
+      const targetScrollTop = currentScrollTop + highlightTopInContainer - 100; // 100px from top
+
+      log('SEARCH', 1, 'scrollToMatch', 'Target calculation', {
+        targetScrollTop,
+        calculation: `${currentScrollTop} + ${highlightTopInContainer} - 100`
+      });
+
+      // Ensure we don't scroll beyond bounds
+      // In column-reverse: scrollTop can be negative (0 = bottom, negative = scrolled up)
+      const maxScrollTop = chatContainer.scrollHeight - containerRect.height;
+      const minScrollTop = -(maxScrollTop); // Allow negative scroll in column-reverse
+      const clampedScrollTop = Math.max(minScrollTop, Math.min(0, targetScrollTop));
+
+      log('SEARCH', 1, 'scrollToMatch', 'Final values', {
+        clampedScrollTop,
+        maxScrollTop,
+        minScrollTop,
+        willScroll: clampedScrollTop !== currentScrollTop
+      });
+
       chatContainer.scrollTo({
-        top: Math.max(0, targetScrollTop),
-        behavior: 'smooth'
+        top: clampedScrollTop,
+        behavior: 'auto'  // Changed from 'smooth' to 'auto' for instant scroll
       });
     }
   }

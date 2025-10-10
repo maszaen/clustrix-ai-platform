@@ -452,7 +452,11 @@ CRITICAL INSTRUCTIONS:
 2. PLAN a comprehensive sequence of search actions - BE THOROUGH, NOT MINIMAL
 3. You MUST create AT LEAST 2-3 different search actions to gather sufficient information
 4. DO NOT create just 1 action - that's insufficient for quality research
-5. For each action specify:
+5. For document analysis (especially finding author names, titles, dates):
+   - Use SIMPLE KEYWORDS first: "nama", "penulis", "author", "title", "judul"
+   - Avoid overly specific regex patterns like "Nama\\s*:" - they miss variations
+   - Try multiple variations: "nama pengarang", "nama penulis", "author name"
+6. For each action specify:
    - Action type (e.g., "webSearch" atau "searchHTML")
    - Parameters in JSON (mis. {"query": "berita Nepal terbaru"})
    - Why this action helps progress the investigation

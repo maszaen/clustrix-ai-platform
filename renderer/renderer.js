@@ -1146,7 +1146,7 @@ function formatResearchAction(actionType, actionParams, actionReason) {
       if (params.pattern && params.files && params.files[0]) {
         description = `Searching for "${params.pattern}" in ${params.files[0]}`;
       } else if (params.pattern) {
-        description = `Searching for pattern "${params.pattern}"`;
+        description = `Searching for pattern ${params.pattern}`;
       } else {
         description = 'Searching file content';
       }
@@ -14037,7 +14037,7 @@ function setupEventListeners() {
     });
   }
 
-  $("#send").addEventListener("click", () => {
+  $("#send").addEventListener("click", async () => {
     const modal = $("#quick-model-switch-modal");
     modal.classList.add("hidden");
 
@@ -14076,7 +14076,20 @@ function setupEventListeners() {
       } catch {}
 
       const partial = (st.fullResponse || "").trim();
-      session.messages[messageIndex] = ["ai", partial];
+      
+      // Get modelInfo from existing message before updating
+      const existingMessageData = session.messages[messageIndex];
+      const modelInfo = existingMessageData && Array.isArray(existingMessageData)
+        ? existingMessageData[2]
+        : null;
+      
+      session.messages[messageIndex] = ["ai", partial, modelInfo];
+      
+      // Track updated message for incremental save
+      if (!session._newMessages) {
+        session._newMessages = [];
+      }
+      session._newMessages.push([messageIndex, ["ai", partial, modelInfo]]);
 
       const div = aiNode.querySelector(".message-text");
       if (div) {
@@ -14161,7 +14174,16 @@ function setupEventListeners() {
       break;
     }
 
-    if (interrupted) updateInputState();
+    if (interrupted) {
+      // Save immediately after interrupt to ensure partial response is persisted
+      try {
+        await save();
+        log("STREAM", 2, "interrupt:save", "Saved session after manual interrupt");
+      } catch (err) {
+        log("STREAM", 3, "interrupt:save", "Failed to save after interrupt", { error: err.message });
+      }
+      updateInputState();
+    }
   });
 
   document.addEventListener("click", (event) => {

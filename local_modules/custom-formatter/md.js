@@ -239,9 +239,12 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         html += `<${type}${startAttr}>`;
         listStack.push({ type, indent, implicit: isImplicit });
       }
-      html += `<li>${parseInlineMarkdown(content)}</li>`;
+      // Wrap text content with <p> for consistent styling
+      const parsedContent = parseInlineMarkdown(content);
+      html += `<li><p>${parsedContent}</p></li>`;
       // Track the end position of this list item for appending nested content
-      currentListItemEndPos = html.length - 5; // Position before "</li>"
+      // Position before "</p></li>" to insert nested content after the paragraph
+      currentListItemEndPos = html.length - 9; // Position before "</p></li>"
       lastLineWasCodeblock = false;
     } else if (bqMatch) {
       const bqBlockLines = [line];

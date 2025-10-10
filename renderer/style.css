@@ -106,10 +106,50 @@ select {
   font-weight: 600;
 }
 
-.message.ai li *:not(.code-block-container) {
+/* Hanya pilih elemen yang DIRECT CHILD dari li (tidak di dalam div/container lain) */
+.message.ai li > p,
+.message.ai li > h1,
+.message.ai li > h2,
+.message.ai li > h3,
+.message.ai li > h4,
+.message.ai li > h5,
+.message.ai li > h6,
+.message.ai li > a,
+.message.ai li > span,
+.message.ai li > strong,
+.message.ai li > em,
+.message.ai li > i,
+.message.ai li > b,
+.message.ai li > small,
+.message.ai li > cite,
+.message.ai li > q,
+.message.ai li > time,
+
+.message.ai li li > p,
+.message.ai li li > h1,
+.message.ai li li > h2,
+.message.ai li li > h3,
+.message.ai li li > h4,
+.message.ai li li > h5,
+.message.ai li li > h6,
+.message.ai li li > a,
+.message.ai li li > span,
+.message.ai li li > strong,
+.message.ai li li > em,
+.message.ai li li > i,
+.message.ai li li > b,
+.message.ai li li > small,
+.message.ai li li > cite,
+.message.ai li li > q,
+.message.ai li li > time {
   position: relative;
   z-index: 5;
 }
+
+/* .message.ai li::first-line:not(.code-block-container) {
+  position: relative;
+  z-index: 5;
+} */
 
 .message.ai em {
   margin-right: 3px;
@@ -5255,6 +5295,10 @@ a:focus-visible {
   overflow: hidden;
 } */
 
+.thinking-text:empty {
+  display: none;
+}
+
 @keyframes fadeInScale {
   from {
     opacity: 0;
@@ -5320,31 +5364,14 @@ a:focus-visible {
 
 
 .custom-tooltip .tooltip-text::after {
-  content: "";
-  position: absolute;
-  left: 10px; /* Default for left-aligned */
-  border-width: 5px;
-  border-style: solid;
-  border-color: transparent transparent var(--surface) transparent; /* Default: arrow up for tooltip below */
+  display: none;
 }
 
-.custom-tooltip.above .tooltip-text::after {
-  top: 100%;
-  border-color: var(--surface) transparent transparent transparent; /* Arrow down for tooltip above */
-}
-
-.custom-tooltip.below .tooltip-text::after {
-  bottom: 100%;
-  border-color: transparent transparent var(--surface) transparent; /* Arrow up for tooltip below */
-}
-
-.custom-tooltip.align-end .tooltip-text::after {
-  left: auto;
-  right: 10px; /* Arrow from right side */
-}
-
+.custom-tooltip.above .tooltip-text::after,
+.custom-tooltip.below .tooltip-text::after,
+.custom-tooltip.align-end .tooltip-text::after,
 .custom-tooltip.align-start .tooltip-text::after {
-  left: 10px; /* Arrow from left side */
+  display: none;
 }
 
 .custom-tooltip.show .tooltip-text {

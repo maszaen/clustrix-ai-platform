@@ -712,40 +712,6 @@ ipcMain.handle('artifacts:load', async () => {
   try{
     if (useSQLite && db) {
       const artifacts = db.getAllArtifacts();
-      if (artifacts.length === 0) {
-        // Migrate from JSON if database is empty
-        if (fs.existsSync(artifactsFile)) {
-          try {
-            const raw = fs.readFileSync(artifactsFile, 'utf-8');
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              log('MIGRATION', 1, 'artifacts', `Migrating ${parsed.length} artifacts from JSON to SQLite`);
-              db.transaction(() => {
-                for (const artifact of parsed) {
-                  db.saveArtifact(artifact);
-                }
-              });
-              // Reload from database after migration
-              const migratedArtifacts = db.getAllArtifacts();
-              return migratedArtifacts.map(a => ({
-                id: a.id,
-                title: a.title,
-                type: a.type,
-                language: a.language,
-                code: a.content,
-                content: a.content,
-                created_at: new Date(a.created_at).toISOString(),
-                updated_at: new Date(a.updated_at).toISOString(),
-                isFavorite: a.is_favorite === 1,
-                sessionId: a.session_id,
-                messageIndex: a.message_index
-              }));
-            }
-          } catch (e) {
-            log('MIGRATION', 4, 'artifacts', 'Failed to migrate artifacts from JSON', e);
-          }
-        }
-      }
       return artifacts.map(a => ({
         id: a.id,
         title: a.title,
@@ -760,10 +726,8 @@ ipcMain.handle('artifacts:load', async () => {
         messageIndex: a.message_index
       }));
     }
-    if (!fs.existsSync(artifactsFile)) return [];
-    const raw = fs.readFileSync(artifactsFile, 'utf-8');
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    // No fallback to JSON - SQLite only
+    return [];
   }catch(e){
     log('artifacts load error', e);
     return [];
@@ -787,8 +751,8 @@ ipcMain.handle('artifacts:save', async (_evt, artifacts) => {
       });
       return true;
     }
-    fs.writeFileSync(artifactsFile, JSON.stringify(artifacts, null, 2), 'utf-8');
-    return true;
+    // No fallback to JSON - SQLite only
+    throw new Error('SQLite database not available');
   }catch(e){
     log('artifacts save error', e);
     return false;

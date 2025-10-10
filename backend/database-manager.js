@@ -17,8 +17,6 @@ class DatabaseManager {
     this.db.pragma('foreign_keys = ON');
     
     this.initSchema();
-    this.migrateThinkingUpdate();  // Run migration after schema initialization
-    this.migrateArtifactsSessionFK();  // Remove foreign key constraint from artifacts
     log('DATABASE', 1, 'constructor', 'Database initialized', { path: dbPath });
   }
   
@@ -317,13 +315,6 @@ class DatabaseManager {
   }
   
   saveArtifact(artifact) {
-    log('DATABASE', 2, 'saveArtifact', 'Saving artifact to DB', {
-      id: artifact.id,
-      title: artifact.title,
-      sessionId: artifact.sessionId,
-      messageIndex: artifact.messageIndex,
-    });
-
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO artifacts 
       (id, title, type, language, content, created_at, updated_at, is_favorite, session_id, message_index, metadata)
@@ -343,10 +334,6 @@ class DatabaseManager {
       artifact.messageIndex || null,
       JSON.stringify({})
     );
-
-    // Verify what was saved
-    const saved = this.db.prepare('SELECT id, title, session_id, message_index FROM artifacts WHERE id = ?').get(artifact.id);
-    log('DATABASE', 2, 'saveArtifact', 'Verified artifact in DB', saved);
 
     return result;
   }
@@ -465,83 +452,6 @@ class DatabaseManager {
   }
   
   // Migration: Add thinking_update column if it doesn't exist
-  migrateThinkingUpdate() {
-    try {
-      // Check if column exists
-      const tableInfo = this.db.prepare(`PRAGMA table_info(messages)`).all();
-      const hasThinkingUpdate = tableInfo.some(col => col.name === 'thinking_update');
-      
-      if (!hasThinkingUpdate) {
-        log('DATABASE', 1, 'migrateThinkingUpdate', 'Adding thinking_update column to messages table');
-        this.db.exec(`ALTER TABLE messages ADD COLUMN thinking_update TEXT`);
-        log('DATABASE', 1, 'migrateThinkingUpdate', 'Successfully added thinking_update column');
-      } else {
-        log('DATABASE', 1, 'migrateThinkingUpdate', 'thinking_update column already exists, skipping migration');
-      }
-    } catch (error) {
-      log('DATABASE', 3, 'migrateThinkingUpdate', 'Migration failed', { error: error.message });
-      throw error;
-    }
-  }
-
-  migrateArtifactsSessionFK() {
-    try {
-      // Check if migration is needed by checking if FK exists
-      const migrationCheck = this.db.prepare(`
-        SELECT sql FROM sqlite_master 
-        WHERE type='table' AND name='artifacts'
-      `).get();
-      
-      if (migrationCheck && migrationCheck.sql.includes('FOREIGN KEY')) {
-        log('DATABASE', 1, 'migrateArtifactsSessionFK', 'Removing foreign key constraint from artifacts table');
-        
-        // SQLite doesn't support DROP CONSTRAINT, so we need to recreate the table
-        this.db.exec(`
-          PRAGMA foreign_keys=OFF;
-          BEGIN TRANSACTION;
-          
-          -- Create new table without FK
-          CREATE TABLE artifacts_new (
-            id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            type TEXT NOT NULL,
-            language TEXT,
-            content TEXT NOT NULL,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            is_favorite INTEGER DEFAULT 0,
-            session_id TEXT,
-            message_index INTEGER,
-            metadata TEXT
-          );
-          
-          -- Copy data
-          INSERT INTO artifacts_new SELECT * FROM artifacts;
-          
-          -- Drop old table
-          DROP TABLE artifacts;
-          
-          -- Rename new table
-          ALTER TABLE artifacts_new RENAME TO artifacts;
-          
-          -- Recreate indexes
-          CREATE INDEX IF NOT EXISTS idx_artifacts_created ON artifacts(created_at DESC);
-          CREATE INDEX IF NOT EXISTS idx_artifacts_type ON artifacts(type);
-          
-          COMMIT;
-          PRAGMA foreign_keys=ON;
-        `);
-        
-        log('DATABASE', 1, 'migrateArtifactsSessionFK', 'Successfully removed foreign key constraint');
-      } else {
-        log('DATABASE', 1, 'migrateArtifactsSessionFK', 'Foreign key already removed or table is new, skipping migration');
-      }
-    } catch (error) {
-      log('DATABASE', 3, 'migrateArtifactsSessionFK', 'Migration failed', { error: error.message });
-      // Don't throw - this is not critical
-    }
-  }
-  
   close() {
     this.db.close();
   }

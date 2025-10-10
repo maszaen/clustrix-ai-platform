@@ -53,9 +53,15 @@ class DesktopSearchEngine {
     const caseSensitive = Boolean(options.caseSensitive);
     const flags = caseSensitive ? 'g' : 'gi';
 
+    // Check if pattern contains regex special characters
+    const hasRegexChars = /[.*+?^${}()|[\]\\]/.test(pattern);
+
+    // If no regex special characters, treat as literal string and escape it
+    const searchPattern = hasRegexChars ? pattern : this.escapeRegex(pattern);
+
     let regex;
     try {
-      regex = new RegExp(pattern, flags);
+      regex = new RegExp(searchPattern, flags);
     } catch (error) {
       console.warn(`searchPattern: invalid regex "${pattern}":`, error.message);
       return [];
@@ -878,6 +884,10 @@ class DesktopSearchEngine {
       console.error(`Search command ${commandName} failed:`, error);
       throw error;
     }
+  }
+
+  escapeRegex(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 }
 

@@ -2115,6 +2115,15 @@ function saveCodeArtifact(
   sessionId = null,
   messageIndex = null,
 ) {
+  log("ARTIFACT", 2, "saveCodeArtifact", "Saving artifact", {
+    title,
+    language,
+    sessionId,
+    messageIndex,
+    hasCurrent: !!current,
+    currentId: current?.id,
+  });
+
   const artifact = {
     id: Date.now().toString(),
     title: title || `Untitled ${language || "Code"}`,
@@ -2228,6 +2237,11 @@ async function loadAllArtifacts() {
     // Try to load from file-based storage first
     if (window.api && window.api.artifacts) {
       const fileArtifacts = await window.api.artifacts.load();
+      log("ARTIFACTS", 2, "loadAllArtifacts", "Loaded from file", {
+        count: fileArtifacts?.length || 0,
+        hasApi: true,
+        sample: fileArtifacts?.slice(0, 2).map(a => ({ id: a.id, sessionId: a.sessionId, title: a.title })),
+      });
       if (fileArtifacts && fileArtifacts.length > 0) {
         // Ensure file artifacts have all required properties
         codeArtifacts = fileArtifacts.map((artifact) => ({
@@ -2247,8 +2261,8 @@ async function loadAllArtifacts() {
         codeArtifacts = legacyArtifacts.map((artifact) => ({
           ...artifact,
           isFavorite: artifact.isFavorite || false,
-          sessionId: null,
-          messageIndex: null,
+          sessionId: artifact.sessionId || null, // Keep existing sessionId if present
+          messageIndex: artifact.messageIndex || null,
         }));
 
         await saveArtifactsToFile();
@@ -2271,6 +2285,11 @@ async function loadAllArtifacts() {
 
 async function saveArtifactsToFile() {
   try {
+    log("ARTIFACTS", 2, "saveArtifactsToFile", "Saving artifacts", {
+      count: codeArtifacts.length,
+      hasApi: !!window.api?.artifacts,
+      sample: codeArtifacts.slice(0, 2).map(a => ({ id: a.id, sessionId: a.sessionId, title: a.title })),
+    });
     if (window.api && window.api.artifacts) {
       await window.api.artifacts.save(codeArtifacts);
     } else {
@@ -4472,6 +4491,14 @@ function filterArtifacts(searchTerm) {
 }
 
 function showArtifactModal(artifact) {
+  log("MODAL", 2, "showArtifactModal", "Opening artifact modal", {
+    artifactId: artifact.id,
+    title: artifact.title,
+    sessionId: artifact.sessionId,
+    messageIndex: artifact.messageIndex,
+    hasSessionId: !!artifact.sessionId,
+  });
+
   const highlightedCode = createHighlightedCode(
     artifact.code,
     artifact.language,
@@ -4550,6 +4577,11 @@ function showArtifactModal(artifact) {
       const messageIndex = parseInt(
         viewInChatBtn.getAttribute("data-message-index"),
       );
+
+      if (!sessionId) {
+        console.log("This artifact is not linked to a chat session.");
+        return;
+      }
 
       log("UI", 1, "viewInChatBtn", "Navigating to source chat", {
         sessionId,
@@ -7710,6 +7742,13 @@ function handleSaveButtonClick(event) {
           const messageIndex = messageNode
             ? parseInt(messageNode.getAttribute("data-message-index"))
             : null;
+
+          log("UI", 2, "handleSaveButtonClick", "Extracted context", {
+            hasMessageNode: !!messageNode,
+            sessionId,
+            messageIndex,
+            currentId: current?.id,
+          });
 
           log("UI", 2, "handleSaveButtonClick", "Saving artifact via modal", {
             title: title,
@@ -14174,6 +14213,14 @@ function setupEventListeners() {
           sessionId = current?.id;
         }
       }
+
+      log("UI", 2, "save-code-btn:click", "Extracted context", {
+        hasMessageEl: !!messageEl,
+        messageIndexAttr: messageEl?.getAttribute("data-message-index"),
+        sessionId,
+        messageIndex,
+        currentId: current?.id,
+      });
 
       const firstLine = code.split('\n')[0].trim();
       const title = firstLine.length > 50 ? `Code snippet (${language})` : firstLine || `Code snippet (${language})`;

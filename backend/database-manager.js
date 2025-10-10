@@ -18,6 +18,7 @@ class DatabaseManager {
     
     this.initSchema();
     this.migrateThinkingUpdate();  // Run migration after schema initialization
+    this.migrateArtifactsSessionFK();  // Remove foreign key constraint from artifacts
     log('DATABASE', 1, 'constructor', 'Database initialized', { path: dbPath });
   }
   
@@ -89,9 +90,10 @@ class DatabaseManager {
         is_favorite INTEGER DEFAULT 0,
         session_id TEXT,
         message_index INTEGER,
-        metadata TEXT,
+        metadata TEXT
         
-        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
+        -- FOREIGN KEY constraint removed to allow session_id without requiring session in DB
+        -- FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE SET NULL
       );
       
       CREATE INDEX IF NOT EXISTS idx_artifacts_created ON artifacts(created_at DESC);
@@ -290,10 +292,22 @@ class DatabaseManager {
   }
   
   getAllArtifacts() {
-    return this.db.prepare(`
+    const artifacts = this.db.prepare(`
       SELECT * FROM artifacts 
       ORDER BY created_at DESC
     `).all();
+    
+    log('DATABASE', 2, 'getAllArtifacts', 'Loaded artifacts from DB', {
+      count: artifacts.length,
+      sample: artifacts.slice(0, 2).map(a => ({
+        id: a.id,
+        title: a.title,
+        session_id: a.session_id,
+        message_index: a.message_index,
+      }))
+    });
+
+    return artifacts;
   }
   
   getArtifact(artifactId) {
@@ -303,13 +317,20 @@ class DatabaseManager {
   }
   
   saveArtifact(artifact) {
+    log('DATABASE', 2, 'saveArtifact', 'Saving artifact to DB', {
+      id: artifact.id,
+      title: artifact.title,
+      sessionId: artifact.sessionId,
+      messageIndex: artifact.messageIndex,
+    });
+
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO artifacts 
       (id, title, type, language, content, created_at, updated_at, is_favorite, session_id, message_index, metadata)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
-    return stmt.run(
+    const result = stmt.run(
       artifact.id,
       artifact.title,
       artifact.type || 'code',
@@ -322,6 +343,12 @@ class DatabaseManager {
       artifact.messageIndex || null,
       JSON.stringify({})
     );
+
+    // Verify what was saved
+    const saved = this.db.prepare('SELECT id, title, session_id, message_index FROM artifacts WHERE id = ?').get(artifact.id);
+    log('DATABASE', 2, 'saveArtifact', 'Verified artifact in DB', saved);
+
+    return result;
   }
   
   deleteArtifact(artifactId) {
@@ -454,6 +481,64 @@ class DatabaseManager {
     } catch (error) {
       log('DATABASE', 3, 'migrateThinkingUpdate', 'Migration failed', { error: error.message });
       throw error;
+    }
+  }
+
+  migrateArtifactsSessionFK() {
+    try {
+      // Check if migration is needed by checking if FK exists
+      const migrationCheck = this.db.prepare(`
+        SELECT sql FROM sqlite_master 
+        WHERE type='table' AND name='artifacts'
+      `).get();
+      
+      if (migrationCheck && migrationCheck.sql.includes('FOREIGN KEY')) {
+        log('DATABASE', 1, 'migrateArtifactsSessionFK', 'Removing foreign key constraint from artifacts table');
+        
+        // SQLite doesn't support DROP CONSTRAINT, so we need to recreate the table
+        this.db.exec(`
+          PRAGMA foreign_keys=OFF;
+          BEGIN TRANSACTION;
+          
+          -- Create new table without FK
+          CREATE TABLE artifacts_new (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            type TEXT NOT NULL,
+            language TEXT,
+            content TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            is_favorite INTEGER DEFAULT 0,
+            session_id TEXT,
+            message_index INTEGER,
+            metadata TEXT
+          );
+          
+          -- Copy data
+          INSERT INTO artifacts_new SELECT * FROM artifacts;
+          
+          -- Drop old table
+          DROP TABLE artifacts;
+          
+          -- Rename new table
+          ALTER TABLE artifacts_new RENAME TO artifacts;
+          
+          -- Recreate indexes
+          CREATE INDEX IF NOT EXISTS idx_artifacts_created ON artifacts(created_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_artifacts_type ON artifacts(type);
+          
+          COMMIT;
+          PRAGMA foreign_keys=ON;
+        `);
+        
+        log('DATABASE', 1, 'migrateArtifactsSessionFK', 'Successfully removed foreign key constraint');
+      } else {
+        log('DATABASE', 1, 'migrateArtifactsSessionFK', 'Foreign key already removed or table is new, skipping migration');
+      }
+    } catch (error) {
+      log('DATABASE', 3, 'migrateArtifactsSessionFK', 'Migration failed', { error: error.message });
+      // Don't throw - this is not critical
     }
   }
   

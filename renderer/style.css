@@ -306,7 +306,7 @@ body.dark-theme {
   --shadow-color: rgba(0, 0, 0, 0.3); /* done */
   --icon: #C4C7C5; /* done */
   --link: #D3E3FD;
-  --link-hover: #7bb0ff;
+  --link-hover: #f3f8ffff;
 
   --danger: #e81123;
   --danger-hover: #c22f25ff;
@@ -573,9 +573,9 @@ hr {
 }
 
 .message.ai a:not(:not([href])):not([href=""]) {
-  font-size: 12px;
+  font-size: 11px;
   background: var(--bg-secondary);
-  padding: 0px 12px;
+  padding: 0px 11px;
   white-space: nowrap;
   margin: 0 3px;
   display: inline-flex;
@@ -583,15 +583,25 @@ hr {
   min-width: 0 !important;
   overflow: hidden;
   text-overflow: ellipsis;
+  border: 1px solid var(--border-light);
   color: var(--link);
   text-decoration: none;
   border-radius: var(--radius-full);
   transition: color 0.2s;
+  transform: translateY(-1px);
 }
 
 .message.ai a:not(:not([href])):not([href=""]):hover {
   color: var(--link-hover);
   background: var(--hover-bg);
+}
+
+.message.ai a:not(:not([href])):not([href=""]) * {
+  min-width: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+  min-width: 0 !important;
 }
 
 .modal-card hr {

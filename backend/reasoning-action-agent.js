@@ -409,7 +409,7 @@ RESPONSE REQUIREMENTS:
 - DO NOT say "kemungkinan", "mungkin", "tampaknya" if you have concrete data
 - DO NOT add disclaimers about "keterbatasan" or "perlu membuka file" - you already have the data
 - If data is truly insufficient (< 10 results), then suggest specific additional searches
-- When a source includes a URL, format it as a Markdown link: [Title](URL)
+- When a source includes a URL, format it as a Markdown link: [**Summarized Title Max 4 Words**](URL)
 
 STRUCTURE YOUR RESPONSE:
 1. Direct findings from the files (be specific and detailed)

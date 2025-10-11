@@ -1,0 +1,532 @@
+diff --git a/backend/langchain-service.js b/backend/langchain-service.js
+index 4f69cfb..14d33ad 100644
+--- a/backend/langchain-service.js
++++ b/backend/langchain-service.js
+@@ -442,12 +442,12 @@ class ClustrixLangChainService {
+ 
+   // ==================== REASONING + ACTION PATTERN ====================
+   
+-  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', searchApiConfig = null, progressCallback = null, systemPrompt = null) {
++  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', searchApiConfig = null, progressCallback = null, systemPrompt = null, sessionMessages = []) {
+     const { log } = require('../utils/logger');
+     const logHelper = { sessionId };
+     
+     log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
+-      `Starting RE+ACT processing\n  Session: ${sessionId}\n  User message: "${userMessage}"\n  Model: ${model}\n  Provider: ${provider}\n  Base URL: ${baseUrl}\n  Files: ${uploadedFiles ? uploadedFiles.length : 0}\n  Search API configured: ${searchApiConfig ? 'Yes' : 'No'}`);
++      `Starting RE+ACT processing\n  Session: ${sessionId}\n  User message: "${userMessage}"\n  Model: ${model}\n  Provider: ${provider}\n  Base URL: ${baseUrl}\n  Files: ${uploadedFiles ? uploadedFiles.length : 0}\n  Session messages: ${sessionMessages ? sessionMessages.length : 0}\n  Search API configured: ${searchApiConfig ? 'Yes' : 'No'}`);
+     
+     try {
+       log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
+@@ -469,12 +469,12 @@ class ClustrixLangChainService {
+         `Session initialized with capabilities:\n${JSON.stringify(capabilities, null, 2)}`);
+ 
+       log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
+-        `Starting reasoning and action processing...`);
++        `Starting reasoning and action processing with ${sessionMessages ? sessionMessages.length : 0} previous messages...`);
+       
+       const result = await this.reasoningAgent.processWithReasoningAction(
+         userMessage,
+         sessionId,
+-        [],
++        sessionMessages || [],
+         progressCallback,
+         systemPrompt
+       );
+@@ -529,7 +529,7 @@ class ClustrixLangChainService {
+   }
+ 
+   async shouldUseResearchAgentForProject(userMessage, uploadedFiles, sessionMessages = []) {
+-    console.log(`AI-based RE+ACT analysis: ${uploadedFiles.length} files, message length: ${userMessage.length}`);
++    console.log(`AI-based RE+ACT analysis: ${uploadedFiles.length} files, message length: ${userMessage.length}, history: ${sessionMessages.length} messages`);
+ 
+     // For very short queries, skip AI check and use basic reading
+     if (userMessage.trim().length < 20) {
+@@ -538,10 +538,23 @@ class ClustrixLangChainService {
+     }
+ 
+     try {
++      // Build conversation context for better decision
++      let conversationContext = '';
++      if (sessionMessages && sessionMessages.length > 1) {
++        // Get last few exchanges for context (skip the empty last AI message)
++        const recentMessages = sessionMessages.slice(-6, -1);
++        conversationContext = '\n\nRecent conversation context:\n';
++        for (const [role, content] of recentMessages) {
++          if (content && content.trim()) {
++            conversationContext += `${role === 'user' ? 'User' : 'Assistant'}: ${content.substring(0, 150)}${content.length > 150 ? '...' : ''}\n`;
++          }
++        }
++      }
++      
+       // Create a simple prompt for AI to decide
+       const decisionPrompt = `You are an AI assistant analyzing whether a user query requires deep research and analysis of project files, or if it can be answered with basic file reading.
+-
+-Query: "${userMessage}"
++${conversationContext}
++Current Query: "${userMessage}"
+ 
+ Available files: ${uploadedFiles.map(f => f.name).join(', ')}
+ 
+@@ -549,6 +562,7 @@ Instructions:
+ - Answer ONLY with "RESEARCH" or "BASIC"
+ - Use "RESEARCH" if the query requires: code analysis, debugging, finding specific patterns, complex relationships, architecture review, or deep investigation
+ - Use "BASIC" if the query is simple like: showing content, basic questions, or straightforward information retrieval
++- Consider the conversation context - follow-up questions may need RESEARCH even if they seem simple
+ 
+ Decision:`;
+ 
+diff --git a/backend/reasoning-action-agent.js b/backend/reasoning-action-agent.js
+index 74fb2e1..46d8463 100644
+--- a/backend/reasoning-action-agent.js
++++ b/backend/reasoning-action-agent.js
+@@ -2,6 +2,7 @@
+ 
+ const DesktopSearchEngine = require('./desktop-search-engine');
+ const { log } = require('../utils/logger');
++const { optimizeMessages } = require('../utils/message-optimizer');
+ 
+ class ReasoningActionAgent {
+   constructor(langchainService) {
+@@ -57,12 +58,18 @@ class ReasoningActionAgent {
+   async processWithReasoningAction(userQuery, sessionId, existingMessages = [], progressCallback = null, systemPrompt = null) {
+     const logHelper = { sessionId };
+     log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction', 
+-      `Starting query processing\nQuery: "${userQuery}"\nSession: ${sessionId}`);
++      `Starting query processing\nQuery: "${userQuery}"\nSession: ${sessionId}\nExisting messages: ${existingMessages.length}`);
+     
+     const sessionState = this.sessionState.get(sessionId);
+     if (!sessionState) {
+       throw new Error(`Session ${sessionId} not initialized`);
+     }
++    
++    // Store conversation history in session state
++    sessionState.conversationHistory = existingMessages;
++    log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
++      `Stored ${existingMessages.length} previous messages in session state for context`);
++    
+     if (progressCallback) {
+       progressCallback({
+         type: 'searching',
+@@ -932,18 +939,61 @@ Remember: Quality answers require thorough research. Don't settle for incomplete
+     log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+       `Using AI model configuration:\n  Provider: ${provider}\n  Model: ${model}\n  Base URL: ${baseUrl}\n  API Key: ${apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT SET'}`);
+     
++    // Build messages array with conversation history
++    const messages = [];
++    
++    // Add conversation history if available (optimized with sliding window + pruning)
++    if (sessionData.conversationHistory && sessionData.conversationHistory.length > 0) {
++      log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
++        `Including ${sessionData.conversationHistory.length} previous messages for context`);
++      
++      // Optimize conversation history (sliding window 12 messages + pruning)
++      const optimizedHistory = optimizeMessages(sessionData.conversationHistory, {
++        windowSize: 12,
++        keepFirst: true, // Keep initial context for better understanding
++        prune: true,
++        minLength: 15 // More lenient for RE+ACT agent
++      });
++      
++      log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
++        `Optimized conversation history from ${sessionData.conversationHistory.length} to ${optimizedHistory.length} messages`);
++      
++      // Convert from [role, content, metadata] format to {role, content} format
++      // Skip empty AI messages (streaming) except the last one
++      for (let i = 0; i < optimizedHistory.length; i++) {
++        const [role, content, metadata] = optimizedHistory[i];
++        
++        // Skip empty AI messages unless it's the last message
++        if (role === 'ai' && content === '' && i < optimizedHistory.length - 1) {
++          continue;
++        }
++        
++        if (role === 'user') {
++          messages.push({ role: 'user', content: content || '' });
++        } else if (role === 'ai' && content) {
++          messages.push({ role: 'assistant', content: content });
++        }
++      }
++      
++      log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
++        `Built ${messages.length} messages from optimized conversation history`);
++    }
++    
++    // Add current prompt as user message
++    messages.push({ role: 'user', content: prompt });
++    
+     const https = require('https');
+ 
+     const url = new URL(`${baseUrl.replace(/\/+$/,'')}/chat/completions`);
+     const bodyObj = {
+       model,
+-      messages: [{ role: 'user', content: prompt }],
++      messages: messages,
+       stream: false
+     };
+ 
+     const body = JSON.stringify(bodyObj);
+     log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+-      `Request body:\n${JSON.stringify(bodyObj, null, 2)}`);
++      `Request body with ${messages.length} messages:\n${JSON.stringify(bodyObj, null, 2)}`);
+     
+     const headers = {
+       'Content-Type': 'application/json',
+diff --git a/local_modules/custom-formatter/md.js b/local_modules/custom-formatter/md.js
+index 9dac8eb..b4594ae 100644
+--- a/local_modules/custom-formatter/md.js
++++ b/local_modules/custom-formatter/md.js
+@@ -362,9 +362,24 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
+ function processMarkdownFormatting(text) {
+   if (!text) return "";
+   
+-  // Parse links BEFORE HTML escaping to handle parentheses in URLs
++  let processedText = text;
++  
++  // Parse citation format [Source: Title (URL)] BEFORE HTML escaping
++  // Convert directly to HTML with special marker to prevent double-escaping
++  const citationRegex = /\[([^\]]*?)\s*\((https?:\/\/[^)]+)\)\]/g;
++  processedText = processedText.replace(citationRegex, (match, linkText, url) => {
++    // Escape the link text but not the HTML tags
++    const escapedText = linkText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
++    // Use special marker that won't be HTML escaped
++    return `\x00HTMLLINK\x00<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${escapedText}</a>\x00ENDHTMLLINK\x00`;
++  });
++  
++  // Parse standard markdown links [text](url)
+   const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+-  let processedText = text.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
++  processedText = processedText.replace(linkRegex, (match, text, url) => {
++    const escapedText = text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
++    return `\x00HTMLLINK\x00<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${escapedText}</a>\x00ENDHTMLLINK\x00`;
++  });
+   
+   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
+@@ -395,12 +410,35 @@ function processMarkdownFormatting(text) {
+   const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
+   html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl) => {
+     if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`)) return match;
++    
++    // Clean up trailing punctuation that's not part of the URL
++    let cleanMatch = match;
++    let trailingPunct = '';
++    
++    // Remove trailing punctuation like )]., etc.
++    while (cleanMatch && /[)\].,;:!?]+$/.test(cleanMatch)) {
++      const lastChar = cleanMatch[cleanMatch.length - 1];
++      trailingPunct = lastChar + trailingPunct;
++      cleanMatch = cleanMatch.slice(0, -1);
++    }
++    
+     let href = protocolUrl || domainUrl;
++    // Use cleaned match for href
++    if (protocolUrl) {
++      href = cleanMatch;
++    } else if (domainUrl) {
++      // Extract clean domain from match
++      const domainMatch = cleanMatch.match(/([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s<>"]*)?)/);
++      href = domainMatch ? domainMatch[0] : cleanMatch;
++    }
++    
+     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
+-    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>`;
++    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${cleanMatch}</a>${trailingPunct}`;
+   });
+   html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
+   html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/___(.*?)___/g, "<strong><em>$1</em></strong>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>").replace(/~~(.*?)~~/g, "<del>$1</del>");
++  // Restore HTML links (remove markers)
++  html = html.replace(/\x00HTMLLINK\x00/g, '').replace(/\x00ENDHTMLLINK\x00/g, '');
+   return html;
+ }
+ 
+@@ -436,6 +474,20 @@ function parseInlineMarkdown(text) {
+   }
+   let processedText = text.replace(/<br\s*\/?>/gi, "__BR_TAG__");
+   
++  // Parse citation format [Source: Title (URL)] BEFORE HTML escaping
++  const citationRegex = /\[([^\]]*?)\s*\((https?:\/\/[^)]+)\)\]/g;
++  processedText = processedText.replace(citationRegex, (match, linkText, url) => {
++    const escapedText = linkText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
++    return `\x00HTMLLINK\x00<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${escapedText}</a>\x00ENDHTMLLINK\x00`;
++  });
++  
++  // Parse standard markdown links [text](url) BEFORE HTML escaping
++  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
++  processedText = processedText.replace(linkRegex, (match, text, url) => {
++    const escapedText = text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
++    return `\x00HTMLLINK\x00<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${escapedText}</a>\x00ENDHTMLLINK\x00`;
++  });
++  
+   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+   html = html.replace(/__BR_TAG__/g, "<br>");
+   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
+@@ -452,9 +504,6 @@ function parseInlineMarkdown(text) {
+     }
+     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
+   });
+-  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+-  
+-  html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
+   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
+   const inlineCodeBlocks = [];
+   html = html.replace(/`([^`]+?)`/g, (match, content) => {
+@@ -467,12 +516,35 @@ function parseInlineMarkdown(text) {
+   const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
+   html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl) => {
+     if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`)) return match;
++    
++    // Clean up trailing punctuation that's not part of the URL
++    let cleanMatch = match;
++    let trailingPunct = '';
++    
++    // Remove trailing punctuation like )]., etc.
++    while (cleanMatch && /[)\].,;:!?]+$/.test(cleanMatch)) {
++      const lastChar = cleanMatch[cleanMatch.length - 1];
++      trailingPunct = lastChar + trailingPunct;
++      cleanMatch = cleanMatch.slice(0, -1);
++    }
++    
+     let href = protocolUrl || domainUrl;
++    // Use cleaned match for href
++    if (protocolUrl) {
++      href = cleanMatch;
++    } else if (domainUrl) {
++      // Extract clean domain from match
++      const domainMatch = cleanMatch.match(/([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s<>"]*)?)/);
++      href = domainMatch ? domainMatch[0] : cleanMatch;
++    }
++    
+     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
+-    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>`;
++    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${cleanMatch}</a>${trailingPunct}`;
+   });
+   html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
+   html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/___(.*?)___/g, "<strong><em>$1</em></strong>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>").replace(/~~(.*?)~~/g, "<del>$1</del>");
++  // Restore HTML links (remove markers)
++  html = html.replace(/\x00HTMLLINK\x00/g, '').replace(/\x00ENDHTMLLINK\x00/g, '');
+   return html;
+ }
+ 
+diff --git a/main.js b/main.js
+index 70069a1..7755ab3 100644
+--- a/main.js
++++ b/main.js
+@@ -6,6 +6,7 @@ const https = require('https');
+ const mammoth = require('mammoth');
+ const xlsx = require('./local_modules/xlsx/xlsx');
+ const { log, logWithContext, setLogFile, setDebug } = require('./utils/logger');
++const { optimizeMessages } = require('./utils/message-optimizer');
+ 
+ const ClustrixLangChainService = require('./backend/langchain-service');
+ const { MultiAgentOrchestrator } = require('./backend/langchain-agents');
+@@ -1188,7 +1189,8 @@ function runStandardStreaming(event, payload) {
+                   baseUrl,
+                   payload.searchApiConfig || null,
+                   progressCallback,  // Pass progress callback
+-                  hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null  // Only pass insult detection if keywords detected
++                  hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null,  // Only pass insult detection if keywords detected
++                  session.messages || []  // Pass session messages for conversation context
+                 );
+ 
+                 log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
+@@ -1337,7 +1339,8 @@ function runStandardStreaming(event, payload) {
+               baseUrl,
+               payload.searchApiConfig || null,
+               null, // progressCallback
+-              hasInsultKeywords ? createInsultDetectionPrompt(currentMessage) : null  // Only pass insult detection if keywords detected
++              hasInsultKeywords ? createInsultDetectionPrompt(currentMessage) : null,  // Only pass insult detection if keywords detected
++              session.messages || []  // Pass session messages for conversation context
+             );
+             
+             log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
+@@ -1810,7 +1813,22 @@ async function runWebSearchChat(event, payload) {
+ 
+     logHelper('WEB_CHAT', 'runWebSearchChat', 'Memulai tahap Pra-Analisis (Triage).', { query: userQuery });
+     logHelper('WEB_CHAT', 'runWebSearchChat', `User menggunakan search API dari "${payload.searchApiConfig.provider}".`, { platform: payload.searchApiConfig });
+-    const triageMessages = [{ role: 'system', content: TRIAGE_SYSTEM_PROMPT }, { role: 'user', content: userQuery }];
++    
++    // Include conversation history for better triage decision (optimized with sliding window)
++    const conversationHistory = messages.slice(0, -1); // Previous messages
++    const optimizedHistory = optimizeMessages(conversationHistory, {
++      windowSize: 8,
++      keepFirst: false, // Triage doesn't need very old context
++      prune: true
++    });
++    
++    const triageMessages = [
++      { role: 'system', content: TRIAGE_SYSTEM_PROMPT },
++      ...optimizedHistory,
++      { role: 'user', content: userQuery }
++    ];
++    
++    logHelper('WEB_CHAT', 'runWebSearchChat', `Triage with ${triageMessages.length} messages (optimized from ${messages.length} total, kept ${optimizedHistory.length} history messages)`);
+     const triageResponse = await invokeLLM_nonStream(triageMessages, payload);
+     
+     let decision;
+@@ -1894,7 +1912,13 @@ async function runWebSearchChat(event, payload) {
+       ];
+       logHelper('INSULT_KEYWORD_DETECTED', 'runWebSearchChat', 'Insult keywords detected in web search, sending combined insult detection prompt');
+     } else {
+-      finalMessages = [...messages];
++      // Optimize message history for final response (sliding window + pruning)
++      finalMessages = optimizeMessages([...messages], {
++        windowSize: 10,
++        keepFirst: true, // Keep initial context
++        prune: true
++      });
++      logHelper('WEB_CHAT', 'runWebSearchChat', `Optimized finalMessages from ${messages.length} to ${finalMessages.length} messages`);
+     }
+     
+     finalMessages.splice(hasInsultKeywords ? 1 : 1, 0, { role: 'system', content: searchContext });
+diff --git a/renderer/md.worker.js b/renderer/md.worker.js
+index e170f6f..3644a79 100644
+--- a/renderer/md.worker.js
++++ b/renderer/md.worker.js
+@@ -368,8 +368,19 @@ function parseInlineMarkdown(text) {
+   }
+   let processedText = text.replace(/<br\s*\/?>/gi, "__BR_TAG__");
+ 
+-  // Parse links BEFORE HTML escaping to handle parentheses in URLs
+-  // processedText = parseMarkdownLinks(processedText);
++  // Parse citation format [Source: Title (URL)] BEFORE HTML escaping
++  const citationRegex = /\[([^\]]*?)\s*\((https?:\/\/[^)]+)\)\]/g;
++  processedText = processedText.replace(citationRegex, (match, linkText, url) => {
++    const escapedText = linkText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
++    return `\x00HTMLLINK\x00<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${escapedText}</a>\x00ENDHTMLLINK\x00`;
++  });
++  
++  // Parse standard markdown links [text](url) BEFORE HTML escaping
++  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
++  processedText = processedText.replace(linkRegex, (match, text, url) => {
++    const escapedText = text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
++    return `\x00HTMLLINK\x00<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${escapedText}</a>\x00ENDHTMLLINK\x00`;
++  });
+ 
+   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+   html = html.replace(/__BR_TAG__/g, "<br>");
+@@ -387,9 +398,6 @@ function parseInlineMarkdown(text) {
+     }
+     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
+   });
+-  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+-  
+-  html = html.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
+   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
+   const inlineCodeBlocks = [];
+   html = html.replace(/`([^`]+?)`/g, (match, content) => {
+@@ -402,21 +410,56 @@ function parseInlineMarkdown(text) {
+   const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
+   html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl) => {
+     if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`)) return match;
++    
++    // Clean up trailing punctuation that's not part of the URL
++    let cleanMatch = match;
++    let trailingPunct = '';
++    
++    // Remove trailing punctuation like )]., etc.
++    while (cleanMatch && /[)\].,;:!?]+$/.test(cleanMatch)) {
++      const lastChar = cleanMatch[cleanMatch.length - 1];
++      trailingPunct = lastChar + trailingPunct;
++      cleanMatch = cleanMatch.slice(0, -1);
++    }
++    
+     let href = protocolUrl || domainUrl;
++    // Use cleaned match for href
++    if (protocolUrl) {
++      href = cleanMatch;
++    } else if (domainUrl) {
++      // Extract clean domain from match
++      const domainMatch = cleanMatch.match(/([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s<>"]*)?)/);
++      href = domainMatch ? domainMatch[0] : cleanMatch;
++    }
++    
+     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
+-    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>`;
++    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${cleanMatch}</a>${trailingPunct}`;
+   });
+   html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
+   html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/___(.*?)___/g, "<strong><em>$1</em></strong>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>").replace(/~~(.*?)~~/g, "<del>$1</del>");
++  // Restore HTML links (remove markers)
++  html = html.replace(/\x00HTMLLINK\x00/g, '').replace(/\x00ENDHTMLLINK\x00/g, '');
+   return html;
+ }
+ 
+ function processMarkdownFormatting(text) {
+   if (!text) return "";
+ 
+-  // Parse links BEFORE HTML escaping to handle parentheses in URLs
++  let processedText = text;
++  
++  // Parse citation format [Source: Title (URL)] BEFORE HTML escaping
++  const citationRegex = /\[([^\]]*?)\s*\((https?:\/\/[^)]+)\)\]/g;
++  processedText = processedText.replace(citationRegex, (match, linkText, url) => {
++    const escapedText = linkText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
++    return `\x00HTMLLINK\x00<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${escapedText}</a>\x00ENDHTMLLINK\x00`;
++  });
++  
++  // Parse standard markdown links [text](url)
+   const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+-  let processedText = text.replace(linkRegex, '<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1</a>');
++  processedText = processedText.replace(linkRegex, (match, text, url) => {
++    const escapedText = text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
++    return `\x00HTMLLINK\x00<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${escapedText}</a>\x00ENDHTMLLINK\x00`;
++  });
+ 
+   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+   const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
+@@ -446,12 +489,35 @@ function processMarkdownFormatting(text) {
+   const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
+   html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl) => {
+     if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`)) return match;
++    
++    // Clean up trailing punctuation that's not part of the URL
++    let cleanMatch = match;
++    let trailingPunct = '';
++    
++    // Remove trailing punctuation like )]., etc.
++    while (cleanMatch && /[)\].,;:!?]+$/.test(cleanMatch)) {
++      const lastChar = cleanMatch[cleanMatch.length - 1];
++      trailingPunct = lastChar + trailingPunct;
++      cleanMatch = cleanMatch.slice(0, -1);
++    }
++    
+     let href = protocolUrl || domainUrl;
++    // Use cleaned match for href
++    if (protocolUrl) {
++      href = cleanMatch;
++    } else if (domainUrl) {
++      // Extract clean domain from match
++      const domainMatch = cleanMatch.match(/([a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/[^\s<>"]*)?)/);
++      href = domainMatch ? domainMatch[0] : cleanMatch;
++    }
++    
+     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
+-    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}</a>`;
++    return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${cleanMatch}</a>${trailingPunct}`;
+   });
+   html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
+   html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/___(.*?)___/g, "<strong><em>$1</em></strong>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>").replace(/~~(.*?)~~/g, "<del>$1</del>");
++  // Restore HTML links (remove markers)
++  html = html.replace(/\x00HTMLLINK\x00/g, '').replace(/\x00ENDHTMLLINK\x00/g, '');
+   return html;
+ }
+ 
+diff --git a/renderer/renderer.js b/renderer/renderer.js
+index 96a720b..41650de 100644
+--- a/renderer/renderer.js
++++ b/renderer/renderer.js
+@@ -8615,9 +8615,12 @@ function buildMessages() {
+   const msgs = [{ role: "system", content: personaSystem() }];
+   if (!current || !current.messages) return msgs;
+ 
+-  for (const messageData of current.messages) {
++  for (let i = 0; i < current.messages.length; i++) {
++    const messageData = current.messages[i];
+     const [role, content, metadata] = messageData;
+-    if (role === "ai" && content === "") continue;
++    
++    // Only skip empty AI message if it's the LAST message (currently streaming)
++    if (role === "ai" && content === "" && i === current.messages.length - 1) continue;
+ 
+     if (role === "user") {
+       let fullUserPrompt = content;

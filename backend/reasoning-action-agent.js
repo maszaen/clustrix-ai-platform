@@ -2,6 +2,7 @@
 
 const DesktopSearchEngine = require('./desktop-search-engine');
 const { log } = require('../utils/logger');
+const { optimizeMessages } = require('../utils/message-optimizer');
 
 class ReasoningActionAgent {
   constructor(langchainService) {
@@ -57,12 +58,18 @@ class ReasoningActionAgent {
   async processWithReasoningAction(userQuery, sessionId, existingMessages = [], progressCallback = null, systemPrompt = null) {
     const logHelper = { sessionId };
     log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction', 
-      `Starting query processing\nQuery: "${userQuery}"\nSession: ${sessionId}`);
+      `Starting query processing\nQuery: "${userQuery}"\nSession: ${sessionId}\nExisting messages: ${existingMessages.length}`);
     
     const sessionState = this.sessionState.get(sessionId);
     if (!sessionState) {
       throw new Error(`Session ${sessionId} not initialized`);
     }
+    
+    // Store conversation history in session state
+    sessionState.conversationHistory = existingMessages;
+    log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+      `Stored ${existingMessages.length} previous messages in session state for context`);
+    
     if (progressCallback) {
       progressCallback({
         type: 'searching',
@@ -401,6 +408,7 @@ RESPONSE REQUIREMENTS:
 - DO NOT say "kemungkinan", "mungkin", "tampaknya" if you have concrete data
 - DO NOT add disclaimers about "keterbatasan" or "perlu membuka file" - you already have the data
 - If data is truly insufficient (< 10 results), then suggest specific additional searches
+- When a source includes a URL, format it as a Markdown link: [Title](URL)
 
 STRUCTURE YOUR RESPONSE:
 1. Direct findings from the files (be specific and detailed)
@@ -453,7 +461,7 @@ CRITICAL INSTRUCTIONS:
 3. You MUST create AT LEAST 2-3 different search actions to gather sufficient information
 4. DO NOT create just 1 action - that's insufficient for quality research
 5. For document analysis (especially finding author names, titles, dates):
-   - Use SIMPLE KEYWORDS first: "nama", "penulis", "author", "title", "judul"
+   - Use SIMPLE KEYWORDS first,like: "nama", "penulis", "author", "title", "judul", "bab"
    - Avoid overly specific regex patterns like "Nama\\s*:" - they miss variations
    - Try multiple variations: "nama pengarang", "nama penulis", "author name"
 6. For each action specify:
@@ -480,26 +488,323 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
 
   
   detectUserLanguage(userQuery) {
-    const query = userQuery.toLowerCase();
-    if (/\b(apa|bagaimana|dimana|kapan|mengapa|siapa|yang|dan|atau|dengan|untuk|dari|pada|ke|di)\b/.test(query) ||
-        /[àâäéèêëïîôöùûüÿç]/.test(query) === false &&
-        /[ñ¿¡]/.test(query) === false &&
-        query.includes('yang') || query.includes('untuk') || query.includes('dengan')) {
+    // ===== PHASE 1: CODE ISOLATION =====
+    
+    /**
+     * Comprehensive code pattern detection
+     * Extracts code blocks to prevent false language detection
+     */
+    const codePatterns = [
+      // JavaScript/TypeScript
+      /(?:function|const|let|var|class|interface|type|enum)\s+\w+/gi,
+      /=>\s*[{(]/g,
+      /(?:import|export|from|require)\s+.*?['"][^'"]*['"]/gi,
+      /\.\w+\([^)]*\)/g,  // method calls
+      /new\s+\w+\s*\(/gi,
+      /(?:async|await|return|yield|throw)\s+/gi,
+      
+      // HTML/JSX/XML
+      /<\/?[a-z][\s\S]*?>/gi,
+      
+      // Object/Array literals
+      /\{[^{}]*:[^{}]*\}/g,
+      /\[[^\]]*\]/g,
+      
+      // Common operators and syntax
+      /===?|!==?|&&|\|\||<<|>>|[+\-*/%]=?/g,
+      /\?\.|\.{3}|\?:/g,
+      
+      // URLs
+      /https?:\/\/[^\s]+/gi,
+      
+      // File paths
+      /[./][\w/.\\-]+\.\w{2,4}/g,
+      
+      // Regex patterns in code
+      /\/[^/\n]+\/[gimuy]*/g,
+    ];
+    
+    // Extract code sections
+    let codeSections = [];
+    codePatterns.forEach(pattern => {
+      let match;
+      const regex = new RegExp(pattern.source, pattern.flags);
+      while ((match = regex.exec(userQuery)) !== null) {
+        codeSections.push({
+          start: match.index,
+          end: match.index + match[0].length
+        });
+      }
+    });
+    
+    // Merge overlapping sections
+    codeSections.sort((a, b) => a.start - b.start);
+    const mergedCodeSections = [];
+    let current = null;
+    
+    for (const section of codeSections) {
+      if (!current) {
+        current = { ...section };
+      } else if (section.start <= current.end + 5) { // 5 char tolerance
+        current.end = Math.max(current.end, section.end);
+      } else {
+        mergedCodeSections.push(current);
+        current = { ...section };
+      }
+    }
+    if (current) mergedCodeSections.push(current);
+    
+    // Extract natural language text (non-code)
+    let naturalTextSegments = [];
+    let lastEnd = 0;
+    
+    for (const section of mergedCodeSections) {
+      if (section.start > lastEnd) {
+        const segment = userQuery.substring(lastEnd, section.start).trim();
+        if (segment.length > 0) {
+          naturalTextSegments.push(segment);
+        }
+      }
+      lastEnd = section.end;
+    }
+    
+    // Remaining text after last code section
+    if (lastEnd < userQuery.length) {
+      const segment = userQuery.substring(lastEnd).trim();
+      if (segment.length > 0) {
+        naturalTextSegments.push(segment);
+      }
+    }
+    
+    // If no natural text found, use original (likely no code)
+    const naturalText = naturalTextSegments.length > 0 
+      ? naturalTextSegments.join(' ') 
+      : userQuery;
+    
+    const cleanQuery = naturalText.trim();
+    
+    // Calculate metrics
+    const totalLength = userQuery.length;
+    const naturalLength = cleanQuery.length;
+    const codeDensity = 1 - (naturalLength / totalLength);
+    
+    
+    // ===== PHASE 2: INDONESIAN DETECTION =====
+    
+    /**
+     * ABSOLUTE Indonesian indicators (particles & slang)
+     * These words NEVER appear in natural English
+     * Single occurrence = GUARANTEED Indonesian user
+     */
+    const absoluteIndonesianIndicators = [
+      // Particles (100% Indonesian, no English equivalent)
+      'dong', 'sih', 'nih', 'deh', 'kok', 'lho', 'kan',
+      
+      // Pronouns (distinctly Indonesian)
+      'gue', 'gw', 'lu', 'lo', 'ane', 'ente',
+      
+      // Slang negations
+      'gak', 'nggak', 'ngga', 'ga', 'kaga',
+      
+      // Informal intensifiers
+      'banget', 'bgt', 'pisan',
+      
+      // Polite forms
+      'mas', 'mbak', 'bang', 'kak', 'pak', 'bu',
+      
+      // Common Indonesian-only words
+      'gimana', 'kenapa', 'emang', 'udah', 'udh',
+      'bikin', 'liat', 'kasih', 'makasih', 'tolong',
+      
+      // Abbreviations
+      'yg', 'dgn', 'utk', 'krn', 'jd', 'tp', 'sm'
+    ];
+    
+    /**
+     * Strong Indonesian indicators
+     * These words are uniquely Indonesian and rarely appear in English
+     * Multiple occurrences strongly suggest Indonesian
+     */
+    const strongIndonesianIndicators = [
+      // Question words
+      'apa', 'bagaimana', 'dimana', 'kemana', 'darimana', 
+      'kapan', 'mengapa', 'siapa',
+      
+      // Pronouns & particles
+      'yang', 'dengan', 'untuk', 'dari', 'pada', 'kepada',
+      'saya', 'aku', 'kamu', 'kami', 'kita', 'mereka',
+      'nya', 'ku', 'mu',
+      
+      // Verbs & auxiliaries
+      'adalah', 'akan', 'telah', 'sudah', 'sedang', 'belum',
+      'bisa', 'dapat', 'harus', 'boleh', 'mau', 'ingin',
+      
+      // Common words
+      'ini', 'itu', 'tersebut', 'dan', 'atau', 'tetapi',
+      'juga', 'hanya', 'saja', 'bahkan', 'kalau', 'jika',
+      'memang', 'sama', 'kayak', 'kaya',
+      
+      // Polite forms
+      'mohon', 'terima kasih',
+      
+      // Action verbs
+      'coba', 'lihat', 'ambil', 'taruh', 'simpen', 
+      'hapus', 'ganti', 'buat',
+      
+      // Adjectives
+      'bagus', 'jelek', 'baik', 'buruk', 'benar', 'salah',
+      'besar', 'kecil', 'panjang', 'pendek', 'banyak', 'sedikit'
+    ];
+    
+    /**
+     * Common English words that might appear in Indonesian text
+     * but should not count as English if Indonesian words are present
+     */
+    const ambiguousWords = new Set([
+      'function', 'class', 'return', 'import', 'export',
+      'component', 'props', 'state', 'hook', 'render',
+      'data', 'user', 'api', 'error', 'success',
+      'id', 'name', 'type', 'value', 'key',
+      'is', 'in', 'on', 'at', 'to', 'for', 'of', 'with'
+    ]);
+    
+    /**
+     * Strong English indicators
+     * Common English words that are distinctly English
+     */
+    const strongEnglishIndicators = [
+      // Question words
+      'what', 'how', 'why', 'when', 'where', 'who', 'which',
+      
+      // Common verbs
+      'does', 'did', 'has', 'have', 'had', 'will', 'would',
+      'should', 'could', 'can', 'may', 'might', 'must',
+      
+      // Pronouns
+      'the', 'this', 'that', 'these', 'those',
+      'your', 'yours', 'their', 'theirs', 'our', 'ours',
+      
+      // Prepositions & conjunctions
+      'about', 'through', 'during', 'before', 'after',
+      'above', 'below', 'between', 'among', 'into',
+      'onto', 'upon', 'within', 'without',
+      
+      // Common phrases
+      'please', 'thank', 'thanks', 'sorry', 'excuse',
+      'want', 'need', 'make', 'help', 'know', 'think',
+      'understand', 'explain', 'show', 'tell', 'give',
+      
+      // Adverbs
+      'very', 'really', 'quite', 'just', 'only', 'also',
+      'always', 'never', 'sometimes', 'often', 'usually',
+      
+      // Be verb forms
+      'am', 'are', 'was', 'were', 'been', 'being'
+    ];
+    
+    
+    // ===== PHASE 3: SCORING SYSTEM =====
+    
+    const lowerQuery = cleanQuery.toLowerCase();
+    let indonesianScore = 0;
+    let englishScore = 0;
+    
+    // Check ABSOLUTE Indonesian indicators first (instant return)
+    let hasAbsoluteIndonesian = false;
+    
+    for (const word of absoluteIndonesianIndicators) {
+      const regex = new RegExp(`\\b${word}\\b`, 'gi');
+      if (regex.test(lowerQuery)) {
+        hasAbsoluteIndonesian = true;
+        break; // Found one = enough!
+      }
+    }
+    
+    // If absolute indicator found, immediately return Indonesian
+    if (hasAbsoluteIndonesian) {
       return 'id';
     }
-    if (/\b(le|la|les|du|de|des|et|à|un|une|dans|sur|avec|pour|par|mais|ou|si|nous|vous|ils|elles)\b/.test(query) ||
-        /[àâäéèêëïîôöùûüÿç]/.test(query)) {
-      return 'fr';
+    
+    // Count strong Indonesian indicators
+    let hasStrongIndonesian = false;
+    const foundIndonesianWords = [];
+    
+    for (const word of strongIndonesianIndicators) {
+      const regex = new RegExp(`\\b${word}\\b`, 'gi');
+      const matches = lowerQuery.match(regex);
+      if (matches) {
+        const count = matches.length;
+        indonesianScore += count * 3; // Strong weight
+        hasStrongIndonesian = true;
+        foundIndonesianWords.push(word);
+      }
     }
-    if (/\b(el|la|los|las|de|del|en|con|por|para|como|que|es|son|está|están|y|o|si|no|muy|más)\b/.test(query) ||
-        /[ñ¿¡]/.test(query)) {
-      return 'es';
+    
+    // Count strong English indicators (skip ambiguous words)
+    const foundEnglishWords = [];
+    
+    for (const word of strongEnglishIndicators) {
+      if (ambiguousWords.has(word)) continue;
+      
+      const regex = new RegExp(`\\b${word}\\b`, 'gi');
+      const matches = lowerQuery.match(regex);
+      if (matches) {
+        const count = matches.length;
+        englishScore += count;
+        foundEnglishWords.push(word);
+      }
     }
-    if (/\b(der|die|das|den|dem|des|und|mit|für|auf|ist|sind|war|waren|sein|haben|hatte)\b/.test(query) ||
-        /[äöüß]/.test(query)) {
-      return 'de';
+    
+    // Additional Indonesian patterns
+    
+    // Affixes detection (ber-, me-, ter-, ke-an, -kan, -nya)
+    const affixPatterns = [
+      /\b(ber|me|ter|pe)\w{3,}\b/g,    // prefix
+      /\b\w{3,}(kan|nya|an|i)\b/g       // suffix
+    ];
+    
+    affixPatterns.forEach(pattern => {
+      const matches = lowerQuery.match(pattern);
+      if (matches) {
+        indonesianScore += matches.length * 1.5;
+      }
+    });
+    
+    // Repeated letters (common in Indonesian slang: gaksss, yaaaa)
+    const repeatedPattern = /(\w)\1{2,}/g;
+    const repeats = lowerQuery.match(repeatedPattern);
+    if (repeats) {
+      indonesianScore += repeats.length * 0.5;
     }
-    return 'en';
+    
+    
+    // ===== PHASE 4: DECISION LOGIC =====
+    
+    /**
+     * Critical Rule: Strong Indonesian word = Indonesian user
+     * Indonesians often mix English technical terms with Indonesian
+     * Example: "gimana cara bikin function ini?" → Indonesian
+     */
+    if (hasStrongIndonesian) {
+      return 'id';
+    }
+    
+    /**
+     * If no strong indicators found, compare scores
+     */
+    if (indonesianScore === 0 && englishScore === 0) {
+      // No clear signals, default to English
+      return 'en';
+    }
+    
+    // Adjust for code density
+    // Heavy code might inflate English score due to keywords
+    if (codeDensity > 0.5) {
+      englishScore *= 0.7;
+    }
+    
+    // Final decision
+    return indonesianScore > englishScore ? 'id' : 'en';
   }
 
   
@@ -932,18 +1237,61 @@ Remember: Quality answers require thorough research. Don't settle for incomplete
     log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
       `Using AI model configuration:\n  Provider: ${provider}\n  Model: ${model}\n  Base URL: ${baseUrl}\n  API Key: ${apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT SET'}`);
     
+    // Build messages array with conversation history
+    const messages = [];
+    
+    // Add conversation history if available (optimized with sliding window + pruning)
+    if (sessionData.conversationHistory && sessionData.conversationHistory.length > 0) {
+      log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+        `Including ${sessionData.conversationHistory.length} previous messages for context`);
+      
+      // Optimize conversation history (sliding window 12 messages + pruning)
+      const optimizedHistory = optimizeMessages(sessionData.conversationHistory, {
+        windowSize: 12,
+        keepFirst: true, // Keep initial context for better understanding
+        prune: true,
+        minLength: 15 // More lenient for RE+ACT agent
+      });
+      
+      log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+        `Optimized conversation history from ${sessionData.conversationHistory.length} to ${optimizedHistory.length} messages`);
+      
+      // Convert from [role, content, metadata] format to {role, content} format
+      // Skip empty AI messages (streaming) except the last one
+      for (let i = 0; i < optimizedHistory.length; i++) {
+        const [role, content, metadata] = optimizedHistory[i];
+        
+        // Skip empty AI messages unless it's the last message
+        if (role === 'ai' && content === '' && i < optimizedHistory.length - 1) {
+          continue;
+        }
+        
+        if (role === 'user') {
+          messages.push({ role: 'user', content: content || '' });
+        } else if (role === 'ai' && content) {
+          messages.push({ role: 'assistant', content: content });
+        }
+      }
+      
+      log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+        `Built ${messages.length} messages from optimized conversation history`);
+    }
+    
+    // Add current prompt as user message
+    messages.push({ role: 'user', content: prompt });
+    
     const https = require('https');
 
     const url = new URL(`${baseUrl.replace(/\/+$/,'')}/chat/completions`);
     const bodyObj = {
       model,
-      messages: [{ role: 'user', content: prompt }],
+      messages: messages,
       stream: false
     };
 
     const body = JSON.stringify(bodyObj);
     log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
-      `Request body:\n${JSON.stringify(bodyObj, null, 2)}`);
+      `Request body with ${messages.length} messages:\n${JSON.stringify(bodyObj, null, 2)}`);
     
     const headers = {
       'Content-Type': 'application/json',

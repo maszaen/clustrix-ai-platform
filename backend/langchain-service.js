@@ -442,12 +442,12 @@ class ClustrixLangChainService {
 
   // ==================== REASONING + ACTION PATTERN ====================
   
-  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', searchApiConfig = null, progressCallback = null, systemPrompt = null) {
+  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', searchApiConfig = null, progressCallback = null, systemPrompt = null, sessionMessages = []) {
     const { log } = require('../utils/logger');
     const logHelper = { sessionId };
     
     log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
-      `Starting RE+ACT processing\n  Session: ${sessionId}\n  User message: "${userMessage}"\n  Model: ${model}\n  Provider: ${provider}\n  Base URL: ${baseUrl}\n  Files: ${uploadedFiles ? uploadedFiles.length : 0}\n  Search API configured: ${searchApiConfig ? 'Yes' : 'No'}`);
+      `Starting RE+ACT processing\n  Session: ${sessionId}\n  User message: "${userMessage}"\n  Model: ${model}\n  Provider: ${provider}\n  Base URL: ${baseUrl}\n  Files: ${uploadedFiles ? uploadedFiles.length : 0}\n  Session messages: ${sessionMessages ? sessionMessages.length : 0}\n  Search API configured: ${searchApiConfig ? 'Yes' : 'No'}`);
     
     try {
       log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
@@ -469,12 +469,12 @@ class ClustrixLangChainService {
         `Session initialized with capabilities:\n${JSON.stringify(capabilities, null, 2)}`);
 
       log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',
-        `Starting reasoning and action processing...`);
+        `Starting reasoning and action processing with ${sessionMessages ? sessionMessages.length : 0} previous messages...`);
       
       const result = await this.reasoningAgent.processWithReasoningAction(
         userMessage,
         sessionId,
-        [],
+        sessionMessages || [],
         progressCallback,
         systemPrompt
       );
@@ -529,7 +529,7 @@ class ClustrixLangChainService {
   }
 
   async shouldUseResearchAgentForProject(userMessage, uploadedFiles, sessionMessages = []) {
-    console.log(`AI-based RE+ACT analysis: ${uploadedFiles.length} files, message length: ${userMessage.length}`);
+    console.log(`AI-based RE+ACT analysis: ${uploadedFiles.length} files, message length: ${userMessage.length}, history: ${sessionMessages.length} messages`);
 
     // For very short queries, skip AI check and use basic reading
     if (userMessage.trim().length < 20) {
@@ -538,10 +538,23 @@ class ClustrixLangChainService {
     }
 
     try {
+      // Build conversation context for better decision
+      let conversationContext = '';
+      if (sessionMessages && sessionMessages.length > 1) {
+        // Get last few exchanges for context (skip the empty last AI message)
+        const recentMessages = sessionMessages.slice(-6, -1);
+        conversationContext = '\n\nRecent conversation context:\n';
+        for (const [role, content] of recentMessages) {
+          if (content && content.trim()) {
+            conversationContext += `${role === 'user' ? 'User' : 'Assistant'}: ${content.substring(0, 150)}${content.length > 150 ? '...' : ''}\n`;
+          }
+        }
+      }
+      
       // Create a simple prompt for AI to decide
       const decisionPrompt = `You are an AI assistant analyzing whether a user query requires deep research and analysis of project files, or if it can be answered with basic file reading.
-
-Query: "${userMessage}"
+${conversationContext}
+Current Query: "${userMessage}"
 
 Available files: ${uploadedFiles.map(f => f.name).join(', ')}
 
@@ -549,6 +562,7 @@ Instructions:
 - Answer ONLY with "RESEARCH" or "BASIC"
 - Use "RESEARCH" if the query requires: code analysis, debugging, finding specific patterns, complex relationships, architecture review, or deep investigation
 - Use "BASIC" if the query is simple like: showing content, basic questions, or straightforward information retrieval
+- Consider the conversation context - follow-up questions may need RESEARCH even if they seem simple
 
 Decision:`;
 

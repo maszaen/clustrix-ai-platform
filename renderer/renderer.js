@@ -2330,11 +2330,6 @@ async function loadAllArtifacts() {
     // Try to load from file-based storage first
     if (window.api && window.api.artifacts) {
       const fileArtifacts = await window.api.artifacts.load();
-      log("ARTIFACTS", 2, "loadAllArtifacts", "Loaded from file", {
-        count: fileArtifacts?.length || 0,
-        hasApi: true,
-        sample: fileArtifacts?.slice(0, 2).map(a => ({ id: a.id, sessionId: a.sessionId, title: a.title })),
-      });
       if (fileArtifacts && fileArtifacts.length > 0) {
         // Ensure file artifacts have all required properties
         codeArtifacts = fileArtifacts.map((artifact) => ({
@@ -8705,18 +8700,58 @@ function buildResumeMessagesFromSession(
   messageIndex,
   fullResponseSoFar,
 ) {
+  
   const N = 10;
   const all = Array.isArray(session?.messages) ? session.messages : [];
   const base = all.slice(Math.max(0, all.length - N));
 
-  return [
-    ...base,
+  log("STREAM", 1, "buildResumeMessagesFromSession", "Starting to build resume messages", {
+    sessionId: session?.id,
+    totalMessagesInSession: all.length,
+    messageIndex,
+    fullResponseSoFarLength: fullResponseSoFar?.length || 0,
+    fullResponseSoFarPreview: fullResponseSoFar ? fullResponseSoFar.substring(0, 100) + (fullResponseSoFar.length > 100 ? "..." : "") : "",
+    N,
+    baseMessagesCount: base.length,
+  });
+
+  // Convert base messages to object format
+  const convertedBase = base.map(([role, content], idx) => {
+    const convertedRole = role === "user" ? "user" : "assistant";
+    log("STREAM", 1, "buildResumeMessagesFromSession", `Converting base message ${idx}`, {
+      originalRole: role,
+      convertedRole,
+      contentLength: content?.length || 0,
+      contentPreview: content ? content.substring(0, 50) + (content.length > 50 ? "..." : "") : "",
+    });
+    return {
+      role: convertedRole,
+      content: content || ""
+    };
+  });
+
+  log("STREAM", 1, "buildResumeMessagesFromSession", "Base messages converted successfully", {
+    convertedBaseCount: convertedBase.length,
+    convertedBaseRoles: convertedBase.map(m => m.role),
+  });
+
+  const resumeMessages = [
+    ...convertedBase,
     {
       role: "system",
-      content: `[System] Continue this response from where it left off without repeating anything. Resume the assistant's last answer using the partial content below. Do NOT start over.\n\n${fullResponseSoFar || ""}\n\n---CONTINUE FROM HERE WITHOUT REPEATING ANYTHING---`,
+      content: `[System] You are an AI assistant with the ability to continue interrupted responses. The response has been interrupted, please continue where you left off. Do not respond except to continue the response from that point and don't repeat from the beginning, for example, if there is a word or paragraph cut off at the end of this response, then you continue the character until the word or paragraph or sentence is perfect enough to be continued. Last interrupted response and context for you: \n\n${fullResponseSoFar || ""}\n\n`,
     },
     { role: "assistant", content: fullResponseSoFar || "" },
   ];
+
+  log("STREAM", 1, "buildResumeMessagesFromSession", "Resume messages built successfully", {
+    totalResumeMessages: resumeMessages.length,
+    resumeMessageRoles: resumeMessages.map(m => m.role),
+    systemMessageLength: resumeMessages.find(m => m.role === "system")?.content?.length || 0,
+    assistantMessageLength: resumeMessages.find(m => m.role === "assistant")?.content?.length || 0,
+  });
+
+  return resumeMessages;
 }
 
 function findLastUserMessageElement() {
@@ -10926,6 +10961,80 @@ async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
   }
 }
 
+// Helper: Wrap only NEW text nodes using character position tracking
+function wrapNewTextNodes(element, previousLength) {
+  const nodesToAnimate = [];
+  
+  // Use TreeWalker to traverse all TEXT nodes (deepest level)
+  const walker = document.createTreeWalker(
+    element,
+    NodeFilter.SHOW_TEXT, // Only text nodes
+    null,
+    false
+  );
+  
+  let currentPos = 0; // Global character position counter
+  const nodesToWrap = [];
+  let node;
+  
+  // Walk through all text nodes and track character positions
+  while (node = walker.nextNode()) {
+    const text = node.textContent;
+    const nodeStart = currentPos;
+    const nodeEnd = currentPos + text.length;
+    
+    // Check: Does this text node contain NEW content?
+    if (nodeEnd > previousLength && text.trim()) {
+      // Calculate where NEW content starts within this node
+      const newContentStart = Math.max(0, previousLength - nodeStart);
+      
+      if (newContentStart < text.length) {
+        nodesToWrap.push({ node, start: newContentStart });
+      }
+    }
+    
+    currentPos = nodeEnd; // Advance global position
+  }
+  
+  // Now wrap the identified new content
+  nodesToWrap.forEach(({ node, start }) => {
+    const text = node.textContent;
+    
+    if (start > 0) {
+      // This node has BOTH old and new content - split it
+      const oldText = text.substring(0, start);
+      const newText = text.substring(start);
+      
+      // Create text node for old content
+      const oldTextNode = document.createTextNode(oldText);
+      
+      // Create span for NEW content with animation class
+      const newSpan = document.createElement('span');
+      newSpan.className = 'streaming-new-token';
+      newSpan.style.display = 'inline';
+      newSpan.textContent = newText;
+      
+      // Replace original node with split nodes
+      const parent = node.parentNode;
+      parent.replaceChild(oldTextNode, node);
+      parent.insertBefore(newSpan, oldTextNode.nextSibling);
+      
+      nodesToAnimate.push(newSpan);
+    } else {
+      // ALL content in this node is new
+      const span = document.createElement('span');
+      span.className = 'streaming-new-token';
+      span.style.display = 'inline';
+      span.textContent = text;
+      
+      node.parentNode.replaceChild(span, node);
+      nodesToAnimate.push(span);
+    }
+  });
+  
+  return nodesToAnimate;
+}
+
 // Stream Handling
 function createStreamHandler(streamId, text, isFirstInteraction = false) {
   log("STREAM", 2, "createStreamHandler", "Stream handler created", {
@@ -11067,7 +11176,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
       const textEl = aiNode.querySelector(".message-text");
       if (textEl) {
-        textEl.innerHTML = getThinkingMarkup();
+        // For continue, append thinking markup to existing partial content
+        textEl.innerHTML += getThinkingMarkup();
         scheduleThinkingText(aiNode);
       }
 
@@ -11444,6 +11554,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         const prevHeight = div.scrollHeight;
         const display = trimEnd(fullResponse);
         
+        // PERFORMANCE: Track last rendered length for incremental updates
+        if (!div._lastRenderedLength) {
+          div._lastRenderedLength = 0;
+        }
+        
         const userSetting = state.settings.streamThrottling || "auto";
         
         // FAST PATH for No Throttling - bypass all complex logic
@@ -11455,9 +11570,75 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
             thinkingContainer.parentNode.removeChild(thinkingContainer);
           }
           
-          // Immediate synchronous render - no delays, no conditions, no workers
-          const html = mdFallback(display);
-          div.innerHTML = html;
+          // SMART RENDERING: Use incremental append for large chunks to prevent flashing
+          const newContent = display.substring(div._lastRenderedLength);
+          const isInitialRender = div._lastRenderedLength === 0;
+          const isSmallIncrement = newContent.length < 100;
+          
+          if (isInitialRender) {
+            // Initial render - parse markdown fully
+            const html = mdFallback(display);
+            div.innerHTML = html;
+          } else if (isSmallIncrement) {
+            // Small increment - parse markdown BUT animate only NEW text using character position tracking
+            
+            // Get TOTAL character length BEFORE re-render
+            const previousLength = div.textContent.length;
+            
+            // Parse and render markdown (full re-render)
+            const html = mdFallback(display);
+            div.innerHTML = html;
+            
+            // Get TOTAL character length AFTER re-render
+            const currentLength = div.textContent.length;
+            
+            // Only wrap and animate if content actually grew
+            if (currentLength > previousLength && typeof gsap !== 'undefined') {
+              // Wrap only NEW text nodes using character position tracking
+              const nodesToAnimate = wrapNewTextNodes(div, previousLength);
+              
+              // Animate only the new tokens
+              if (nodesToAnimate.length > 0) {
+                nodesToAnimate.forEach(span => {
+                  gsap.fromTo(span, 
+                    { opacity: 0, y: -8 }, 
+                    { 
+                      opacity: 1, 
+                      y: 0,
+                      duration: 0.55, 
+                      ease: "power2.out",
+                      onComplete: () => {
+                        // Clean up after animation
+                        span.classList.remove('streaming-new-token');
+                      }
+                    }
+                  );
+                });
+              }
+            }
+          } else {
+            // Incremental append for large chunks (prevents flashing)
+            const html = mdFallback(newContent);
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            
+            // Collect nodes to animate
+            const nodesToAnimate = Array.from(tempDiv.children);
+            nodesToAnimate.forEach(node => div.appendChild(node));
+            
+            // GSAP animation for new tokens
+            if (typeof gsap !== 'undefined' && nodesToAnimate.length > 0) {
+              gsap.from(nodesToAnimate, {
+                opacity: 0,
+                y: -5,
+                duration: 0.55,
+                ease: "power2.out"
+              });
+            }
+          }
+          
+          div._lastRenderedLength = display.length;
+          
           if (div.querySelector("pre code")) highlightAllUnder(div);
           renderMathInElement(div);
           
@@ -11562,40 +11743,83 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           } else if (!isUsingWorker && shouldUseWorkerForStreaming) {
           }
           
-          // For "No Throttling", use synchronous rendering for maximum speed
-          if (userSetting === "none") {
-            // Immediate synchronous rendering - no async delay
-            const html = mdFallback(display);
-            div.innerHTML = html;
-            if (div.querySelector("pre code")) highlightAllUnder(div);
-            renderMathInElement(div);
-            scrollToBottom({ fromAI: true });
-          } else {
-            // Async rendering for other settings
-            md(display, { 
-              isStreaming: true,
-              forceWorker: shouldUseWorkerForStreaming,
-              forceSync: !shouldUseWorkerForStreaming && display.length < 1000
-            }).then(html => {
-              div.innerHTML = html;
-              if (div.querySelector("pre code")) highlightAllUnder(div);
-              renderMathInElement(div);
-              
-              // Ensure autoscroll happens after content is fully rendered
-              requestAnimationFrame(() => {
-                scrollToBottom({ fromAI: true });
+          // Note: "none" throttling is handled by fast path above, this code only runs for other settings
+          {
+            // SMART RENDERING: Determine if we should append or replace
+            const newContent = display.substring(div._lastRenderedLength || 0);
+            const isInitialRender = (div._lastRenderedLength || 0) === 0;
+            const isSmallIncrement = newContent.length < 100;
+            const shouldFullRender = isInitialRender || isSmallIncrement || gotEnd;
+            
+            if (shouldFullRender) {
+              // Full re-render (for initial, small chunks, or final render)
+              md(display, { 
+                isStreaming: true,
+                forceWorker: shouldUseWorkerForStreaming,
+                forceSync: !shouldUseWorkerForStreaming && display.length < 1000
+              }).then(html => {
+                div.innerHTML = html;
+                div._lastRenderedLength = display.length;
+                if (div.querySelector("pre code")) highlightAllUnder(div);
+                renderMathInElement(div);
+                
+                requestAnimationFrame(() => {
+                  scrollToBottom({ fromAI: true });
+                });
+              }).catch(err => {
+                console.warn('Markdown rendering error:', err);
+                div.innerHTML = mdFallback(display);
+                div._lastRenderedLength = display.length;
+                if (div.querySelector("pre code")) highlightAllUnder(div);
+                renderMathInElement(div);
+                
+                requestAnimationFrame(() => {
+                  scrollToBottom({ fromAI: true });
+                });
               });
-            }).catch(err => {
-              console.warn('Markdown rendering error:', err);
-              div.innerHTML = mdFallback(display);
-              if (div.querySelector("pre code")) highlightAllUnder(div);
-              renderMathInElement(div);
-              
-              // Ensure autoscroll happens after fallback content is rendered
-              requestAnimationFrame(() => {
-                scrollToBottom({ fromAI: true });
+            } else {
+              // Incremental append for large chunks (prevents flashing)
+              md(newContent, { 
+                isStreaming: true,
+                forceSync: true
+              }).then(html => {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+                
+                // Collect nodes to animate
+                const nodesToAnimate = Array.from(tempDiv.children);
+                nodesToAnimate.forEach(node => div.appendChild(node));
+                
+                // GSAP animation for new tokens
+                if (typeof gsap !== 'undefined' && nodesToAnimate.length > 0) {
+                  gsap.from(nodesToAnimate, {
+                    opacity: 0,
+                    y: -5,
+                    duration: 0.55,
+                    ease: "power2.out"
+                  });
+                }
+                
+                div._lastRenderedLength = display.length;
+                if (div.querySelector("pre code")) highlightAllUnder(div);
+                renderMathInElement(div);
+                
+                requestAnimationFrame(() => {
+                  scrollToBottom({ fromAI: true });
+                });
+              }).catch(err => {
+                console.warn('Markdown rendering error in append:', err);
+                // Fallback to full render on error
+                div.innerHTML = mdFallback(display);
+                div._lastRenderedLength = display.length;
+                if (div.querySelector("pre code")) highlightAllUnder(div);
+                renderMathInElement(div);
+                
+                requestAnimationFrame(() => {
+                  scrollToBottom({ fromAI: true });
+                });
               });
-            });
+            }
           }
         };
         
@@ -14341,15 +14565,15 @@ function setupEventListeners() {
         btn.disabled = true;
         footer.innerHTML = "";
 
-        const msgs = buildMessagesUpTo(messageIndex - 1);
-        msgs.push({ role: "assistant", content: partial });
-
-        const contextPrompt = `[System] Continue EXACTLY where the last assistant message stopped. Do NOT repeat previous text or acknowledge this instruction. Just provide the continuation.`;
-        msgs.push({ role: "user", content: contextPrompt });
+        const msgs = buildResumeMessagesFromSession(
+          session,
+          messageIndex,
+          partial,
+        );
 
         startStream(
           session,
-          contextPrompt,
+          "[System] Continue EXACTLY where the last assistant message stopped. Do NOT repeat previous text or acknowledge this instruction. Just provide the continuation.",
           aiNode,
           messageIndex,
           false,

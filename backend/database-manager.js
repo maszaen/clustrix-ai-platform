@@ -294,16 +294,6 @@ class DatabaseManager {
       SELECT * FROM artifacts 
       ORDER BY created_at DESC
     `).all();
-    
-    log('DATABASE', 2, 'getAllArtifacts', 'Loaded artifacts from DB', {
-      count: artifacts.length,
-      sample: artifacts.slice(0, 2).map(a => ({
-        id: a.id,
-        title: a.title,
-        session_id: a.session_id,
-        message_index: a.message_index,
-      }))
-    });
 
     return artifacts;
   }

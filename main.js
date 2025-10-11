@@ -1190,7 +1190,8 @@ function runStandardStreaming(event, payload) {
                   payload.searchApiConfig || null,
                   progressCallback,  // Pass progress callback
                   hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null,  // Only pass insult detection if keywords detected
-                  session.messages || []  // Pass session messages for conversation context
+                  session.messages || [],  // Pass session messages for conversation context
+                  payload.language || 'autodetect'  // Pass language setting
                 );
 
                 log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);

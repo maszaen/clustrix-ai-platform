@@ -820,7 +820,7 @@
       <div class="modal-body">
         <div class="form-group">
           <label for="persona-name">What should AI call you?</label>
-          <input type="text" id="persona-name" placeholder="e.g., Zaen">
+          <input type="text" id="persona-name" placeholder="e.g., John">
         </div>
         <div class="form-group">
           <label for="persona-work">What best describes your work?</label>
@@ -842,6 +842,16 @@
             <option value="minimal">Minimal (150ms)</option>
           </select>
           <p class="help-text">Controls how fast AI responses appear during streaming. Higher performance is faster token display but more CPU usage.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="language-select">Response Language</label>
+          <select id="language-select" class="select-input">
+            <option value="autodetect">Autodetect (Detect from user query)</option>
+            <option value="indonesia">Indonesia</option>
+            <option value="english">English</option>
+          </select>
+          <p class="help-text">Choose the language for AI responses. Autodetect analyzes your query to determine the appropriate language.</p>
         </div>
 
         <div class="form-group">

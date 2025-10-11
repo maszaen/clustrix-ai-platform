@@ -3429,6 +3429,7 @@ textarea::-webkit-scrollbar {
 }
 
 .modal-body {
+  position: relative;
   min-height: 0;
   padding: var(--spacing-md) var(--spacing-xl) var(--spacing-sm) var(--spacing-xl);
   max-height: calc(100vh - 250px);

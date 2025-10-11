@@ -1896,7 +1896,7 @@ async function runWebSearchChat(event, payload) {
     event.sender.send('search:status', { step: 'PROCESSING', data: { count: nonEmptyContent.length } });
     event.sender.send('chat-update', { type: 'READING_COMPLETE', messageIndex: payload.aiMessageIndex, data: { pageCount: nonEmptyContent.length } });
 
-    let searchContext = "Use the following search results to answer the user's original query. The user's original query was: \"" + decision.user_prompt + "\". Base your answer on these facts and cite sources with markdown links `[Title](URL)`.\n\n";
+    let searchContext = "Use the following search results to answer the user's original query. The user's original query was: \"" + decision.user_prompt + "\". Base your answer on these facts and cite sources with markdown links `[**Summarized Title Max 4 Words**](URL)`.\n\n";
     nonEmptyContent.forEach((content, i) => {
       const result = searchResults[i];
       searchContext += `--- Source ${i+1}: ${result.title} (${result.link}) ---\n${content}\n\n`;

@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('api', {
         apiKey: options.apiKey,
         thinkMode: options.thinkMode,
         webSearchEnabled: options.webSearchEnabled,
+        language: options.language,
         searchApiConfig: options.searchApiConfig
       });
       return { cancel: () => { cleanup(); ipcRenderer.send('chat:stream-cancel', id); } };

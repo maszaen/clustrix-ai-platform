@@ -55,7 +55,7 @@ class ReasoningActionAgent {
   }
 
   
-  async processWithReasoningAction(userQuery, sessionId, existingMessages = [], progressCallback = null, systemPrompt = null) {
+  async processWithReasoningAction(userQuery, sessionId, existingMessages = [], progressCallback = null, systemPrompt = null, language = 'autodetect') {
     const logHelper = { sessionId };
     log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction', 
       `Starting query processing\nQuery: "${userQuery}"\nSession: ${sessionId}\nExisting messages: ${existingMessages.length}`);
@@ -67,8 +67,9 @@ class ReasoningActionAgent {
     
     // Store conversation history in session state
     sessionState.conversationHistory = existingMessages;
+    sessionState.language = language;
     log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
-      `Stored ${existingMessages.length} previous messages in session state for context`);
+      `Stored ${existingMessages.length} previous messages in session state for context, language: ${language}`);
     
     if (progressCallback) {
       progressCallback({
@@ -368,7 +369,7 @@ class ReasoningActionAgent {
     const webSourcesSection = webSources.length > 0
       ? webSources.slice(0, 6).map((item, idx) => `${idx + 1}. ${item.url} -> ${item.snippet || '(ringkasan tidak tersedia)'}`).join('\n')
       : 'Tidak ada sumber web yang berhasil diambil.';
-    const userLanguage = this.detectUserLanguage(userQuery);
+    const userLanguage = this.detectUserLanguage(userQuery, sessionState);
     
     // Count total results from all actions
     const totalResults = actionHistory.reduce((sum, entry) => {
@@ -487,8 +488,13 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
   }
 
   
-  detectUserLanguage(userQuery) {
-    // ===== PHASE 1: CODE ISOLATION =====
+  detectUserLanguage(userQuery, sessionState) {
+    // Check if language is already set in session
+    if (sessionState && sessionState.language && sessionState.language !== 'autodetect') {
+      return sessionState.language === 'indonesia' ? 'id' : 'en';
+    }
+    
+    // If autodetect, proceed with language detection logic
     
     /**
      * Comprehensive code pattern detection

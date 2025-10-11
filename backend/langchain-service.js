@@ -442,7 +442,7 @@ class ClustrixLangChainService {
 
   // ==================== REASONING + ACTION PATTERN ====================
   
-  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', searchApiConfig = null, progressCallback = null, systemPrompt = null, sessionMessages = []) {
+  async processWithReasoningAction(userMessage, sessionId, uploadedFiles = [], model = 'gpt-4', provider = 'openai', apiKey = '', baseUrl = '', searchApiConfig = null, progressCallback = null, systemPrompt = null, sessionMessages = [], language = 'autodetect') {
     const { log } = require('../utils/logger');
     const logHelper = { sessionId };
     
@@ -476,7 +476,8 @@ class ClustrixLangChainService {
         sessionId,
         sessionMessages || [],
         progressCallback,
-        systemPrompt
+        systemPrompt,
+        language
       );
       
       log(logHelper, 'LANGCHAIN_SERVICE', 'processWithReasoningAction',

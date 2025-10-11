@@ -8615,9 +8615,12 @@ function buildMessages() {
   const msgs = [{ role: "system", content: personaSystem() }];
   if (!current || !current.messages) return msgs;
 
-  for (const messageData of current.messages) {
+  for (let i = 0; i < current.messages.length; i++) {
+    const messageData = current.messages[i];
     const [role, content, metadata] = messageData;
-    if (role === "ai" && content === "") continue;
+    
+    // Only skip empty AI message if it's the LAST message (currently streaming)
+    if (role === "ai" && content === "" && i === current.messages.length - 1) continue;
 
     if (role === "user") {
       let fullUserPrompt = content;

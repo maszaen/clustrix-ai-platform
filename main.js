@@ -6,6 +6,7 @@ const https = require('https');
 const mammoth = require('mammoth');
 const xlsx = require('./local_modules/xlsx/xlsx');
 const { log, logWithContext, setLogFile, setDebug } = require('./utils/logger');
+const { optimizeMessages } = require('./utils/message-optimizer');
 
 const ClustrixLangChainService = require('./backend/langchain-service');
 const { MultiAgentOrchestrator } = require('./backend/langchain-agents');
@@ -1188,7 +1189,8 @@ function runStandardStreaming(event, payload) {
                   baseUrl,
                   payload.searchApiConfig || null,
                   progressCallback,  // Pass progress callback
-                  hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null  // Only pass insult detection if keywords detected
+                  hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null,  // Only pass insult detection if keywords detected
+                  session.messages || []  // Pass session messages for conversation context
                 );
 
                 log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
@@ -1337,7 +1339,8 @@ function runStandardStreaming(event, payload) {
               baseUrl,
               payload.searchApiConfig || null,
               null, // progressCallback
-              hasInsultKeywords ? createInsultDetectionPrompt(currentMessage) : null  // Only pass insult detection if keywords detected
+              hasInsultKeywords ? createInsultDetectionPrompt(currentMessage) : null,  // Only pass insult detection if keywords detected
+              session.messages || []  // Pass session messages for conversation context
             );
             
             log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
@@ -1810,7 +1813,22 @@ async function runWebSearchChat(event, payload) {
 
     logHelper('WEB_CHAT', 'runWebSearchChat', 'Memulai tahap Pra-Analisis (Triage).', { query: userQuery });
     logHelper('WEB_CHAT', 'runWebSearchChat', `User menggunakan search API dari "${payload.searchApiConfig.provider}".`, { platform: payload.searchApiConfig });
-    const triageMessages = [{ role: 'system', content: TRIAGE_SYSTEM_PROMPT }, { role: 'user', content: userQuery }];
+    
+    // Include conversation history for better triage decision (optimized with sliding window)
+    const conversationHistory = messages.slice(0, -1); // Previous messages
+    const optimizedHistory = optimizeMessages(conversationHistory, {
+      windowSize: 8,
+      keepFirst: false, // Triage doesn't need very old context
+      prune: true
+    });
+    
+    const triageMessages = [
+      { role: 'system', content: TRIAGE_SYSTEM_PROMPT },
+      ...optimizedHistory,
+      { role: 'user', content: userQuery }
+    ];
+    
+    logHelper('WEB_CHAT', 'runWebSearchChat', `Triage with ${triageMessages.length} messages (optimized from ${messages.length} total, kept ${optimizedHistory.length} history messages)`);
     const triageResponse = await invokeLLM_nonStream(triageMessages, payload);
     
     let decision;
@@ -1877,7 +1895,7 @@ async function runWebSearchChat(event, payload) {
     event.sender.send('search:status', { step: 'PROCESSING', data: { count: nonEmptyContent.length } });
     event.sender.send('chat-update', { type: 'READING_COMPLETE', messageIndex: payload.aiMessageIndex, data: { pageCount: nonEmptyContent.length } });
 
-    let searchContext = "Use the following search results to answer the user's original query. The user's original query was: \"" + decision.user_prompt + "\". Base your answer on these facts and cite sources with markdown links `[Source: Title](URL)`.\n\n";
+    let searchContext = "Use the following search results to answer the user's original query. The user's original query was: \"" + decision.user_prompt + "\". Base your answer on these facts and cite sources with markdown links `[Title](URL)`.\n\n";
     nonEmptyContent.forEach((content, i) => {
       const result = searchResults[i];
       searchContext += `--- Source ${i+1}: ${result.title} (${result.link}) ---\n${content}\n\n`;
@@ -1894,7 +1912,13 @@ async function runWebSearchChat(event, payload) {
       ];
       logHelper('INSULT_KEYWORD_DETECTED', 'runWebSearchChat', 'Insult keywords detected in web search, sending combined insult detection prompt');
     } else {
-      finalMessages = [...messages];
+      // Optimize message history for final response (sliding window + pruning)
+      finalMessages = optimizeMessages([...messages], {
+        windowSize: 10,
+        keepFirst: true, // Keep initial context
+        prune: true
+      });
+      logHelper('WEB_CHAT', 'runWebSearchChat', `Optimized finalMessages from ${messages.length} to ${finalMessages.length} messages`);
     }
     
     finalMessages.splice(hasInsultKeywords ? 1 : 1, 0, { role: 'system', content: searchContext });

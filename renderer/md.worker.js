@@ -488,6 +488,23 @@ function restoreLatexPlaceholders(html, latex) {
   }, html);
 }
 
+function addPHasListClass(html) {
+  // Add class "p-has-li" to <p> tags that come before <ul> or <ol>
+  // This regex handles optional whitespace/newlines between </p> and <ul|ol>
+  return html.replace(/<p(\s+class="([^"]*)")?>([\s\S]*?)<\/p>(\s*)(<(?:ul|ol)(?:\s[^>]*)?>)/gi, (match, classAttr, existingClass, content, whitespace, listTag) => {
+    if (existingClass) {
+      // P tag already has classes, add p-has-li to them
+      if (!existingClass.includes('p-has-li')) {
+        return `<p class="${existingClass} p-has-li">${content}</p>${whitespace}${listTag}`;
+      }
+      return match; // Already has the class
+    } else {
+      // P tag has no class, add p-has-li
+      return `<p class="p-has-li">${content}</p>${whitespace}${listTag}`;
+    }
+  });
+}
+
 function postRenderAdjustments(html) {
   return html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>")
     .replace(/<div class="table-container">([\s\S]*?)<\/div>/g, (match, tableContent) => {
@@ -515,7 +532,8 @@ function renderMarkdown(src) {
   const { text, latex } = preprocessMarkdownSource(src);
   const rendered = renderer.render(text.trim());
   const withLatex = restoreLatexPlaceholders(rendered, latex);
-  return postRenderAdjustments(withLatex);
+  const withAdjustments = postRenderAdjustments(withLatex);
+  return addPHasListClass(withAdjustments);
 }
 
 function trimEndMarker(value) {

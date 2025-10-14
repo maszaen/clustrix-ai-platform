@@ -476,12 +476,24 @@ function parseInlineMarkdown(text) {
   return html;
 }
 
+function addPHasListClass(container) {
+  // Find all p tags and check if their next sibling is ul or ol
+  const pTags = container.querySelectorAll('p');
+  pTags.forEach(p => {
+    const nextElement = p.nextElementSibling;
+    if (nextElement && (nextElement.tagName === 'UL' || nextElement.tagName === 'OL')) {
+      p.classList.add('p-has-li');
+    }
+  });
+}
+
 function md(src, options = {}) {
   if (!src) return "";
   const cleanSrc = src.trim();
   const html = enhancedMarkdownParse(cleanSrc, options);
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = html;
+  addPHasListClass(tempDiv);
   if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
   attachCodeBlockListeners(tempDiv);
   setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
@@ -494,6 +506,7 @@ function mdThinking(src) {
   const html = enhancedMarkdownParse(cleanSrc, { isThinkingText: true });
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = html;
+  addPHasListClass(tempDiv);
   if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
   attachCodeBlockListeners(tempDiv);
   return tempDiv.innerHTML;

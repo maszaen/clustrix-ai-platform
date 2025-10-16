@@ -955,10 +955,107 @@ ipcMain.handle('files:open-dialog', async (event) => {
   return results;
 });
 const activeStreams = new Map();
+const tokenUsageTrackers = new Map();
+
+function initTokenTracker(reqId, sessionId, messageIndex) {
+  if (!reqId) return;
+  tokenUsageTrackers.set(reqId, {
+    sessionId: sessionId || null,
+    messageIndex,
+    prompt_tokens: 0,
+    completion_tokens: 0,
+    total_tokens: 0,
+    breakdown: [],
+  });
+}
+
+function normalizeUsage(rawUsage) {
+  if (!rawUsage || typeof rawUsage !== 'object') return null;
+
+  const prompt = Number(rawUsage.prompt_tokens ?? rawUsage.promptTokenCount ?? 0);
+  const completion = Number(
+    rawUsage.completion_tokens ?? rawUsage.candidatesTokenCount ?? 0,
+  );
+  let total = Number(rawUsage.total_tokens ?? rawUsage.totalTokenCount ?? 0);
+
+  const safePrompt = Number.isFinite(prompt) ? Math.max(0, Math.round(prompt)) : 0;
+  const safeCompletion = Number.isFinite(completion)
+    ? Math.max(0, Math.round(completion))
+    : 0;
+  if (!Number.isFinite(total) || total === 0) {
+    total = safePrompt + safeCompletion;
+  } else {
+    total = Math.max(0, Math.round(total));
+  }
+
+  if (safePrompt === 0 && safeCompletion === 0 && total === 0) {
+    return null;
+  }
+
+  return {
+    prompt_tokens: safePrompt,
+    completion_tokens: safeCompletion,
+    total_tokens: total,
+  };
+}
+
+function recordTokenUsage(reqId, stage, rawUsage, meta = {}) {
+  if (!reqId) return;
+  const tracker = tokenUsageTrackers.get(reqId);
+  const usage = normalizeUsage(rawUsage);
+  if (!tracker || !usage) return;
+
+  tracker.prompt_tokens += usage.prompt_tokens;
+  tracker.completion_tokens += usage.completion_tokens;
+  tracker.total_tokens += usage.total_tokens;
+  tracker.breakdown.push({
+    stage,
+    prompt_tokens: usage.prompt_tokens,
+    completion_tokens: usage.completion_tokens,
+    total_tokens: usage.total_tokens,
+    provider: meta.provider || null,
+    model: meta.model || null,
+  });
+}
+
+function finalizeTokenUsage(reqId, event) {
+  if (!reqId) return;
+  const tracker = tokenUsageTrackers.get(reqId);
+  if (!tracker) return;
+  tokenUsageTrackers.delete(reqId);
+
+  if (!event || tracker.messageIndex === undefined || tracker.messageIndex === null) {
+    return;
+  }
+
+  event.sender.send('chat-update', {
+    type: 'TOKEN_USAGE',
+    messageIndex: tracker.messageIndex,
+    sessionId: tracker.sessionId || null,
+    data: {
+      prompt_tokens: tracker.prompt_tokens,
+      completion_tokens: tracker.completion_tokens,
+      total_tokens: tracker.total_tokens,
+      breakdown: tracker.breakdown,
+    },
+  });
+}
+
+function clearTokenUsage(reqId) {
+  if (!reqId) return;
+  tokenUsageTrackers.delete(reqId);
+}
+
 ipcMain.on('chat:stream-start', async (event, payload) => {
   try {
     console.debug('MAIN: chat:stream-start invoked', { reqId: payload.reqId, webSearchEnabled: payload.webSearchEnabled, aiMessageIndex: payload.aiMessageIndex });
   } catch (e) {}
+
+  initTokenTracker(
+    payload.reqId,
+    payload.sessionId || payload.session?.id || null,
+    payload.aiMessageIndex,
+  );
 
   if (!payload.webSearchEnabled) {
     console.debug('MAIN: webSearchEnabled is falsey, using standard streaming');
@@ -1107,7 +1204,7 @@ function runStandardStreaming(event, payload) {
               const hasInsultKeywords = detectInsultKeywords(lastMessage.content);
               
               event.sender.send('chat-update', reactStartPayload);
-              agentResponse = await agentOrchestrator.processComplexRequest(
+              const agentResult = await agentOrchestrator.processComplexRequest(
                 lastMessage.content,
                 sessionId,
                 session,
@@ -1122,6 +1219,21 @@ function runStandardStreaming(event, payload) {
                   systemPrompt: hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null
                 }
               );
+              if (agentResult && typeof agentResult === 'object' && !Array.isArray(agentResult)) {
+                if (Array.isArray(agentResult.usageBreakdown)) {
+                  for (const entry of agentResult.usageBreakdown) {
+                    if (entry?.usage) {
+                      recordTokenUsage(reqId, entry.stage || 'research-agent', entry.usage, {
+                        provider: entry.provider || provider,
+                        model: entry.model || model,
+                      });
+                    }
+                  }
+                }
+                agentResponse = agentResult.text || '';
+              } else {
+                agentResponse = agentResult || '';
+              }
             } catch (error) {
               log('MAIN: Agent orchestrator failed, falling back to standard processing:', error.message);
             }
@@ -1252,6 +1364,7 @@ function runStandardStreaming(event, payload) {
                   }
 
                   log('MAIN: RE+ACT streaming completed');
+                  finalizeTokenUsage(reqId, event);
                   event.sender.send(`chat:done-${reqId}`);
                   activeStreams.delete(reqId);
                   return;
@@ -1274,6 +1387,7 @@ function runStandardStreaming(event, payload) {
                 setTimeout(sendChunk, 50); // Simulate streaming
               } else {
                 log('MAIN: Agent streaming completed');
+                finalizeTokenUsage(reqId, event);
                 event.sender.send(`chat:done-${reqId}`);
                 activeStreams.delete(reqId);
               }
@@ -1375,7 +1489,8 @@ function runStandardStreaming(event, payload) {
                 await new Promise(r => setTimeout(r, 30));
               }
             }
-            
+
+            finalizeTokenUsage(reqId, event);
             event.sender.send(`chat:done-${reqId}`);
             activeStreams.delete(reqId);
             return;
@@ -1402,10 +1517,15 @@ function runStandardStreaming(event, payload) {
     const BASE_URL = getBaseUrl(provider, payload);
     const API_KEY = getApiKey(provider, payload);
 
-    function sendDone(){ event.sender.send(`chat:done-${reqId}`); activeStreams.delete(reqId); }
-    function sendErr(msg){ 
-      event.sender.send(`chat:error-${reqId}`, msg); 
-      activeStreams.delete(reqId); 
+    function sendDone(){
+      finalizeTokenUsage(reqId, event);
+      event.sender.send(`chat:done-${reqId}`);
+      activeStreams.delete(reqId);
+    }
+    function sendErr(msg){
+      event.sender.send(`chat:error-${reqId}`, msg);
+      activeStreams.delete(reqId);
+      clearTokenUsage(reqId);
     }
 
     if (provider === 'gemini') {
@@ -1486,6 +1606,7 @@ function runStandardStreaming(event, payload) {
                   provider: 'gemini',
                   model
                 });
+                recordTokenUsage(reqId, 'final-response', usage, { provider: 'gemini', model });
               }
 
               log('PARSED_JSON', 'handleGeminiStreaming', 'Parsed JSON information', {
@@ -1612,7 +1733,7 @@ function runStandardStreaming(event, payload) {
               // Log token usage if available
               if (j?.usage) {
                 const usage = j.usage;
-                
+
                 logHelper('TOKEN_USAGE', 'handleOpenAICompatibleStreaming', 'Token usage information', {
                   prompt_tokens: usage.prompt_tokens,
                   completion_tokens: usage.completion_tokens,
@@ -1620,6 +1741,7 @@ function runStandardStreaming(event, payload) {
                   provider,
                   model
                 });
+                recordTokenUsage(reqId, 'final-response', usage, { provider, model });
               }
 
               log('PARSED_JSON', 'handleOpenAICompatibleStreaming', 'Parsed JSON information', {
@@ -1725,6 +1847,10 @@ function runStandardStreaming(event, payload) {
                 }
               }
 
+              if (j?.usage) {
+                recordTokenUsage(reqId, 'final-response', j.usage, { provider, model });
+              }
+
             } catch (e) {
               log('[SSE BAD JSON]', payload.slice(0,200));
             }
@@ -1743,6 +1869,7 @@ function runStandardStreaming(event, payload) {
 ipcMain.on('chat:stream-cancel', (event, reqId) => {
   const r = activeStreams.get(reqId);
   if (r){ try{ r.destroy(new Error('Cancelled')); }catch{} activeStreams.delete(reqId); }
+  clearTokenUsage(reqId);
 });
 ipcMain.handle('chat:title', async (_evt, payload) => {
   const text     = payload?.text  || '';
@@ -1884,7 +2011,7 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
     return text.split(/\s+/).slice(0,6).join(' ') || 'New Chat';
   }
 });
-const TRIAGE_SYSTEM_PROMPT = `You are a reasoning agent. Your first task is to analyze the user's query and decide if it requires real-time internet access. The current date is ${new Date().toISOString()}. Respond ONLY with a single JSON object. Do not add any text before or after it.
+const TRIAGE_SYSTEM_PROMPT = `You are a reasoning agent. Your first task is to analyze the user's query and decide if it requires real-time internet access. The current date is ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric' })}. Respond ONLY with a single JSON object. Do not add any text before or after it.
 JSON format: {"requires_search": boolean, "reasoning": "string", "user_prompt": "string", "search_queries": ["string", ...], "summary_key": "string"}
 Set "requires_search" to true if the query is about recent events (relative to the current date), specific facts, or explicitly asks to search. Otherwise, set it to false.
 "user_prompt" MUST be the exact original user query.
@@ -1916,7 +2043,14 @@ async function runWebSearchChat(event, payload) {
     ];
     
     logHelper('WEB_CHAT', 'runWebSearchChat', `Triage with ${triageMessages.length} messages (optimized from ${messages.length} total, kept ${optimizedHistory.length} history messages)`);
-    const triageResponse = await invokeLLM_nonStream(triageMessages, payload);
+    const triageResult = await invokeLLM_nonStream(triageMessages, payload);
+    if (triageResult?.usage) {
+      recordTokenUsage(payload.reqId, 'web-search-triage', triageResult.usage, {
+        provider: payload.provider,
+        model: payload.model,
+      });
+    }
+    const triageResponse = triageResult?.text || '';
     
     let decision;
     try {
@@ -2047,7 +2181,7 @@ function invokeLLM_nonStream(messages, options) {
             // Log token usage if available
             if (j?.usage) {
               const usage = j.usage;
-              
+
               logHelper('TOKEN_USAGE', 'invokeLLM_nonStream', 'Token usage information', {
                 prompt_tokens: usage.prompt_tokens,
                 completion_tokens: usage.completion_tokens,
@@ -2060,8 +2194,11 @@ function invokeLLM_nonStream(messages, options) {
             log('PARSED_JSON', 'invokeLLM_nonStream', 'Parsed JSON information', {
               parsedJson: j
             })
-            
-            resolve(j?.choices?.[0]?.message?.content?.trim() || '');
+
+            resolve({
+              text: j?.choices?.[0]?.message?.content?.trim() || '',
+              usage: j?.usage || null,
+            });
           } catch (e) {
             reject(new Error('Failed to parse non-stream LLM response.'));
           }

@@ -48,12 +48,22 @@ class DynamicResearchAgent {
       });
 
     const planningPrompt = this.buildPlanningPrompt(userMessage, fileContext.summaryText);
-    const planningResponse = await this.invokeLLM(planningPrompt, {
+    const planningResult = await this.invokeLLM(planningPrompt, {
       model,
       apiKey,
       provider,
       baseUrl,
     }, sessionId);
+    const planningResponse = planningResult.text;
+    const usageBreakdown = [];
+    if (planningResult.usage) {
+      usageBreakdown.push({
+        stage: 'research-planning',
+        usage: planningResult.usage,
+        provider,
+        model,
+      });
+    }
 
     const plan = this.parsePlanningResponse(planningResponse);
     this.emitPlanThinking(plan, progressCallback);
@@ -138,14 +148,25 @@ class DynamicResearchAgent {
       findings: combinedFindings,
     });
 
-    const finalResponse = await this.invokeLLM(synthesisPrompt, {
+    const finalResult = await this.invokeLLM(synthesisPrompt, {
       model,
       apiKey,
       provider,
       baseUrl,
     }, sessionId);
+    if (finalResult.usage) {
+      usageBreakdown.push({
+        stage: 'research-synthesis',
+        usage: finalResult.usage,
+        provider,
+        model,
+      });
+    }
 
-    return finalResponse;
+    return {
+      text: finalResult.text,
+      usageBreakdown,
+    };
   }
 
   buildFileContext(files, options = {}) {
@@ -253,6 +274,8 @@ class DynamicResearchAgent {
 
     return `You are Clustrix Research Planner, a research agent that plans work steps before providing answers.
 
+The current date is ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric' })}. Use this date for web queries when information requires recent or time-sensitive data.
+
 PROJECT CONTEXT (limited summary):
 ${contextSection}
 
@@ -270,7 +293,7 @@ TASK:
 6. Do not answer user question now; only plan.
 
 Follow this example format:
-• Research focus title
+- Research focus title
 FILE INSIGHTS:
 - context point
 WEB SEARCH QUERIES:
@@ -490,7 +513,10 @@ OUTPUT INSTRUCTIONS:
           try {
             const parsed = JSON.parse(data);
             const message = parsed?.choices?.[0]?.message?.content;
-            resolve(typeof message === 'string' ? message.trim() : '');
+            resolve({
+              text: typeof message === 'string' ? message.trim() : '',
+              usage: parsed?.usage || null,
+            });
           } catch (error) {
             reject(new Error(`Failed to parse LLM response: ${error.message}`));
           }

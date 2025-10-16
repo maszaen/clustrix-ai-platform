@@ -2568,7 +2568,7 @@ input:checked + .slider:before {
   position: absolute;
 }
 
-.copy-btn, .edit-btn, .regen-btn {
+.usage-info-btn, .copy-btn, .edit-btn, .regen-btn {
   background: transparent;
   border: 1px solid transparent;
   color: var(--fg) !important;
@@ -2582,6 +2582,7 @@ input:checked + .slider:before {
   justify-content: center;
   transition: var(--transition-fast);
 }
+.usage-info-btn svg,
 .copy-btn svg {
   width: 14px !important;
   height: 14px !important;
@@ -2598,7 +2599,7 @@ input:checked + .slider:before {
   fill: none !important;
 }
 
-.copy-btn:hover, .edit-btn:hover, .regen-btn:hover {
+.usage-info-btn:hover, .copy-btn:hover, .edit-btn:hover, .regen-btn:hover {
   background: var(--bg-secondary);
   color: var(--surface);
 }

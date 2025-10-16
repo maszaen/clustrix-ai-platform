@@ -10220,6 +10220,12 @@ function addMessage(
       });
       actions.appendChild(btn);
     };
+    // if (role === "ai") {
+    //   const usageButton = createUsageInfoButton(metadata?.usage);
+    //   if (usageButton) {
+    //     actions.appendChild(usageButton);
+    //   }
+    // }
     if (role === "user") {
       renderCopy();
       const editBtn = document.createElement("button");
@@ -10238,6 +10244,10 @@ function addMessage(
       // actions.appendChild(editBtn); gak dipake
     } else if (role === "ai" && final) {
       renderCopy();
+      const usageButton = createUsageInfoButton(metadata?.usage);
+      if (usageButton) {
+        actions.appendChild(usageButton);
+      }
       const regenBtn = document.createElement("button");
       regenBtn.className = "regen-btn";
       regenBtn.title = "Regenerate this response";
@@ -12099,6 +12109,7 @@ async function startStream(
     act.model || "glm-4.5-flash",
     {
       sessionId: session.id,
+      aiMessageIndex,
       session: session,
       provider: act.platform || "openrouter",
       baseUrl: act.baseUrl,
@@ -12156,6 +12167,50 @@ async function startStream(
   });
 }
 
+const usageInfoIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+
+function createUsageInfoButton(usageData) {
+  if (!usageData || typeof usageData !== "object") return null;
+
+  const prompt = Number(
+    usageData.prompt_tokens ?? usageData.promptTokenCount ?? 0,
+  );
+  const completion = Number(
+    usageData.completion_tokens ?? usageData.candidatesTokenCount ?? 0,
+  );
+  let total = Number(usageData.total_tokens ?? usageData.totalTokenCount ?? 0);
+
+  const safePrompt = Number.isFinite(prompt) ? prompt : 0;
+  const safeCompletion = Number.isFinite(completion) ? completion : 0;
+  if (!Number.isFinite(total) || total === 0) {
+    total = safePrompt + safeCompletion;
+  }
+
+  if (safePrompt === 0 && safeCompletion === 0 && total === 0) {
+    return null;
+  }
+
+  const promptDisplay = safePrompt.toLocaleString();
+  const completionDisplay = safeCompletion.toLocaleString();
+  const totalDisplay = total.toLocaleString();
+
+  const btn = document.createElement("button");
+  btn.className = "usage-info-btn";
+  btn.type = "button";
+  btn.innerHTML = usageInfoIconSVG;
+  btn.title = `Cost: ${totalDisplay} Tokens (${promptDisplay} Input + ${completionDisplay} Output)`;
+  btn.setAttribute(
+    "aria-label",
+    `Token usage. Input ${promptDisplay}, output ${completionDisplay}, total ${totalDisplay}.`,
+  );
+  btn.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  return btn;
+}
+
 function renderAiFinalActions(aiNode, content, messageIndex) {
   if (!aiNode || !document.contains(aiNode) || !current) return;
   const actions = aiNode.querySelector(".message-actions");
@@ -12199,6 +12254,11 @@ function renderAiFinalActions(aiNode, content, messageIndex) {
       );
   });
   actions.appendChild(copyBtn);
+  
+  const usageButton = createUsageInfoButton(modelInfo?.usage);
+  if (usageButton) {
+    actions.appendChild(usageButton);
+  }
 
   if (!isMarkdownTestSession(current)) {
     const regenBtn = document.createElement("button");
@@ -14858,6 +14918,87 @@ function initializeApp() {
       if (!bubbleNode) {
           console.warn(`chat-update: Could not find message node for index ${messageIndex}`);
           return;
+      }
+
+      if (type === "TOKEN_USAGE") {
+        const sessionId = payload.sessionId || current?.id;
+        const session = state.sessions.find((s) => s.id === sessionId) || current;
+        if (!session || typeof messageIndex !== "number" || messageIndex < 0) {
+          return;
+        }
+
+        ensureTokenFields(session);
+
+        const usageData = data || {};
+        const rawPrompt = Number(usageData.prompt_tokens ?? 0);
+        const rawCompletion = Number(usageData.completion_tokens ?? 0);
+        const rawTotal = Number(usageData.total_tokens ?? 0);
+
+        const promptTokens = Number.isFinite(rawPrompt)
+          ? Math.max(0, Math.round(rawPrompt))
+          : 0;
+        const completionTokens = Number.isFinite(rawCompletion)
+          ? Math.max(0, Math.round(rawCompletion))
+          : 0;
+        let totalTokens = Number.isFinite(rawTotal)
+          ? Math.max(0, Math.round(rawTotal))
+          : 0;
+        if (totalTokens === 0) {
+          totalTokens = promptTokens + completionTokens;
+        }
+        const breakdown = Array.isArray(usageData.breakdown)
+          ? usageData.breakdown
+          : [];
+
+        const messageEntry = Array.isArray(session.messages)
+          ? session.messages[messageIndex]
+          : null;
+        if (Array.isArray(messageEntry)) {
+          const meta =
+            messageEntry[2] && typeof messageEntry[2] === "object"
+              ? messageEntry[2]
+              : {};
+          meta.usage = {
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            total_tokens: totalTokens,
+            breakdown,
+          };
+          messageEntry[2] = meta;
+        }
+
+        const previousTokens = session.tokens_by_message?.[messageIndex] || 0;
+        session.tokens_by_message[messageIndex] = totalTokens;
+
+        if (typeof session.tokens_used !== "number" || Number.isNaN(session.tokens_used)) {
+          session.tokens_used = 0;
+        }
+        session.tokens_used += totalTokens - previousTokens;
+        if (session.tokens_used < 0) {
+          session.tokens_used = 0;
+        }
+
+        markSessionDirty(session.id);
+        if (!session._newMessages) {
+          session._newMessages = [];
+        }
+        session._newMessages.push([messageIndex, session.messages[messageIndex]]);
+
+        updateTokensUI(session);
+        debouncedSave();
+
+        if (current && session.id === current.id) {
+          const node = bubbleNode;
+          if (node) {
+            setNodeMetadata(node, session.messages[messageIndex]?.[2] || {});
+            renderAiFinalActions(
+              node,
+              session.messages[messageIndex]?.[1] || "",
+              messageIndex,
+            );
+          }
+        }
+        return;
       }
 
       const indicator = bubbleNode.querySelector(".thinking-toggle .web-search-indicator");

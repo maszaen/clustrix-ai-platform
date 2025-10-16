@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.send('chat:stream-start', {
         reqId: id, messages, model,
         sessionId: options.sessionId,
+        aiMessageIndex: options.aiMessageIndex,
         session: options.session,
         provider: options.provider,
         baseUrl: options.baseUrl,

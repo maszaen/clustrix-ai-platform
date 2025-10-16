@@ -6,6 +6,7 @@ function getBaseUrl(provider, payload) {
     provider === 'groq'      ? 'https://api.groq.com/openai/v1' :
     provider === 'gemini'    ? 'https://generativelanguage.googleapis.com/v1beta' :
     provider === 'zhipu'       ? 'https://api.z.ai/api/paas/v4/' :
+    provider === 'bigmodel'  ? 'https://open.bigmodel.cn/api/paas/v4' :
     provider === 'cerebras'  ? 'https://api.cerebras.ai/v1/' :
                                 (process.env.BASE_URL || 'https://api.z.ai/api/paas/v4/'));
 }
@@ -16,6 +17,7 @@ function getApiKey(provider, payload) {
     provider === 'groq'      ? (process.env.GROQ_API_KEY || '') :
     provider === 'gemini'    ? (process.env.GEMINI_API_KEY || '') :
     provider === 'zhipu'       ? (process.env.Z_API_KEY || '') :
+    provider === 'bigmodel'  ? (process.env.BIGMODEL_API_KEY || '') :
     provider === 'cerebras'  ? (process.env.CEREBRAS_API_KEY || '') :
                                 (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || ''));
 }

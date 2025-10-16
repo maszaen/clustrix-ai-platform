@@ -1307,6 +1307,9 @@ Remember: Quality answers require thorough research. Don't settle for incomplete
     if (provider === 'openrouter') {
       headers['HTTP-Referer'] = 'https://clustrix.local';
       headers['X-Title'] = 'Clustrix Desktop';
+    } else if (provider === 'bigmodel') {
+      headers['User-Agent'] = 'Clustrix/1.0';
+      headers['Accept'] = 'application/json';
     }
 
     log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',

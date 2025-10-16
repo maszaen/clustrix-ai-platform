@@ -3049,6 +3049,8 @@ function defaultBaseUrlFor(p) {
   if (p === "groq") return "https://api.groq.com/openai/v1";
   if (p === "gemini") return "https://generativelanguage.googleapis.com/v1beta";
   if (p === "zhipu") return "https://api.z.ai/api/paas/v4/";
+  if (p === "bigmodel") return "https://open.bigmodel.cn/api/paas/v4";
+  if (p === "cerebras") return "https://api.cerebras.ai/v1";
   return "https://api.z.ai/api/paas/v4/";
 }
 
@@ -3100,8 +3102,13 @@ function defaultModels() {
         apiKey: "",
         models: ["glm-4.5-flash"],
       },
+      bigmodel: {
+        baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+        apiKey: "",
+        models: ["glm-4-plus", "glm-4-0520", "glm-4", "glm-4-air", "glm-4-airx", "glm-4-flash"],
+      },
       cerebras: {
-        baseUrl: "https://api.cerebras.ai/v1/chat/completions",
+        baseUrl: "https://api.cerebras.ai/v1",
         apiKey: "",
         models: [
           "gpt-oss-120b",

@@ -1475,6 +1475,23 @@ function runStandardStreaming(event, payload) {
               }
               
               if (text) event.sender.send(`chat:chunk-${reqId}`, text);
+
+              // Log token usage if available (Gemini format)
+              if (j?.usageMetadata) {
+                const usage = j.usageMetadata;
+                logHelper('TOKEN_USAGE', 'handleGeminiStreaming', 'Token usage information', {
+                  promptTokenCount: usage.promptTokenCount,
+                  candidatesTokenCount: usage.candidatesTokenCount,
+                  totalTokenCount: usage.totalTokenCount,
+                  provider: 'gemini',
+                  model
+                });
+              }
+
+              log('PARSED_JSON', 'handleGeminiStreaming', 'Parsed JSON information', {
+                parsedJson: j
+              })
+
               sendDone();
             } catch (e) {
               sendErr('Bad JSON from Gemini');
@@ -1516,9 +1533,21 @@ function runStandardStreaming(event, payload) {
       };
 
       if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
+      
+      logHelper('HEADER_INFO', 'headers', 'Header information', {
+        provider,
+        API_KEY: API_KEY ? `${API_KEY.substring(0, 10)}...` : 'EMPTY ()',
+        BASE_URL,
+        hasAuth: !!headers.Authorization,
+        headers: Object.keys(headers)
+      });
+      
       if (provider === 'openrouter') {
         headers['HTTP-Referer'] = 'https://clustrix.local';
         headers['X-Title'] = 'Clustrix Desktop';
+      } else if (provider === 'bigmodel') {
+        headers['User-Agent'] = 'Clustrix/1.0';
+        headers['Accept'] = 'application/json';
       }
 
       const opts = {
@@ -1579,6 +1608,23 @@ function runStandardStreaming(event, payload) {
               }
               
               if (text) event.sender.send(`chat:chunk-${reqId}`, text);
+
+              // Log token usage if available
+              if (j?.usage) {
+                const usage = j.usage;
+                
+                logHelper('TOKEN_USAGE', 'handleOpenAICompatibleStreaming', 'Token usage information', {
+                  prompt_tokens: usage.prompt_tokens,
+                  completion_tokens: usage.completion_tokens,
+                  total_tokens: usage.total_tokens,
+                  provider,
+                  model
+                });
+              }
+
+              log('PARSED_JSON', 'handleOpenAICompatibleStreaming', 'Parsed JSON information', {
+                parsedJson: j
+              })
 
               sendDone();
             } catch (e) {
@@ -1707,6 +1753,8 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
     p === 'openrouter' ? 'https://openrouter.ai/api/v1' :
     p === 'groq'       ? 'https://api.groq.com/openai/v1' :
     p === 'gemini'     ? 'https://generativelanguage.googleapis.com/v1beta' :
+    p === 'bigmodel'   ? 'https://open.bigmodel.cn/api/paas/v4' :
+    p === 'cerebras'   ? 'https://api.cerebras.ai/v1' :
                           'https://api.z.ai/api/paas/v4/';
 
   const BASE_URL = (payload?.baseUrl || '').trim() || defBase(provider);
@@ -1740,6 +1788,23 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
           if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc}`));
           try {
             const j = JSON.parse(acc);
+            
+            // Log token usage if available (Gemini format)
+            if (j?.usageMetadata) {
+              const usage = j.usageMetadata;
+              logHelper('TOKEN_USAGE', 'chat:title', 'Token usage information', {
+                promptTokenCount: usage.promptTokenCount,
+                candidatesTokenCount: usage.candidatesTokenCount,
+                totalTokenCount: usage.totalTokenCount,
+                provider: 'gemini',
+                model
+              });
+            }
+
+            log('PARSED_JSON', 'chat:title', 'Parsed JSON information', {
+              parsedJson: j
+            })
+            
             const t = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
             resolve(t || text.split(/\s+/).slice(0,6).join(' '));
           } catch { resolve(text.split(/\s+/).slice(0,6).join(' ')); }
@@ -1770,6 +1835,9 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
   if (provider === 'openrouter') {
     headers['HTTP-Referer'] = headers['HTTP-Referer'] || 'https://clustrix.local';
     headers['X-Title'] = headers['X-Title'] || 'Clustrix Desktop';
+  } else if (provider === 'bigmodel') {
+    headers['User-Agent'] = headers['User-Agent'] || 'Clustrix/1.0';
+    headers['Accept'] = headers['Accept'] || 'application/json';
   }
 
   const resText = await new Promise((resolve, reject) => {
@@ -1792,6 +1860,24 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
 
   try {
     const j = JSON.parse(resText);
+    
+    // Log token usage if available
+    if (j?.usage) {
+      const usage = j.usage;
+      
+      logHelper('TOKEN_USAGE', 'chat:title', 'Token usage information', {
+        prompt_tokens: usage.prompt_tokens,
+        completion_tokens: usage.completion_tokens,
+        total_tokens: usage.total_tokens,
+        provider,
+        model
+      });
+    }
+
+    log('PARSED_JSON', 'chat:title', 'Parsed JSON information', {
+      parsedJson: j
+    })
+    
     const t = j?.choices?.[0]?.message?.content?.trim();
     return t || text.split(/\s+/).slice(0,6).join(' ') || 'New Chat';
   } catch {
@@ -1957,6 +2043,24 @@ function invokeLLM_nonStream(messages, options) {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           try {
             const j = JSON.parse(acc);
+            
+            // Log token usage if available
+            if (j?.usage) {
+              const usage = j.usage;
+              
+              logHelper('TOKEN_USAGE', 'invokeLLM_nonStream', 'Token usage information', {
+                prompt_tokens: usage.prompt_tokens,
+                completion_tokens: usage.completion_tokens,
+                total_tokens: usage.total_tokens,
+                provider,
+                model
+              });
+            }
+
+            log('PARSED_JSON', 'invokeLLM_nonStream', 'Parsed JSON information', {
+              parsedJson: j
+            })
+            
             resolve(j?.choices?.[0]?.message?.content?.trim() || '');
           } catch (e) {
             reject(new Error('Failed to parse non-stream LLM response.'));

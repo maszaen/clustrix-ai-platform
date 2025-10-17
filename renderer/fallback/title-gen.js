@@ -382,6 +382,10 @@ class SmartTitleGenerator {
   tokenize(message) { return message.split(' ').filter(w => w.length > 0); }
   
   generate(message, maxWords = 7) {
+    log("TITLE_FALLBACK", 1, "generate", "Title generated using SmartTitleGenerator", {
+      generatedTitle: title,
+      inputPrompt: userPromptRaw,
+    });
     const foundEntities = this._extractEntities(message);
     let unifiedMessage = this._unifyCompounds(message);
     const cleaned = this.cleanMessage(unifiedMessage);

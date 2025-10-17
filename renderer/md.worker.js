@@ -354,7 +354,9 @@ function enhancedMarkdownParse(src, options = {}) {
       .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&') // Unescape first
       .replace(/<brain>(.*?)<\/brain>/gis, '<div class="brain">$1</div>')
       .replace(/<prompt>(.*?)<\/prompt>/gis, '<div class="prompt">$1</div>')
-      .replace(/<bli>(.*?)<\/bli>/gi, '<span class="bli">? $1</span>')
+      .replace(/<bli-title>(.*?)<\/bli-title>/gi, '<div class="bli-title">$1</div>')
+      .replace(/<pli-title>(.*?)<\/pli-title>/gi, '<div class="pli-title">$1</div>')
+      .replace(/<bli>(.*?)<\/bli>/gi, '<span class="bli">$1</span>')
       .replace(/<pli>(.*?)<\/pli>/gi, '<span class="pli" data-text="$1">$1</span>');
     return acc.replace(`XCONTAINERX${i}XCONTAINERX`, processed);
   }, finalHtml);
@@ -368,6 +370,8 @@ function parseInlineMarkdown(text) {
   // Handle custom tags
   text = text.replace(/<bli>(.*?)<\/bli>/gi, '<span class="bli">? $1</span>');
   text = text.replace(/<pli>(.*?)<\/pli>/gi, '<span class="pli" data-text="$1">$1</span>');
+  text = text.replace(/<bli-title>(.*?)<\/bli-title>/gi, '<div class="bli-title">$1</div>');
+  text = text.replace(/<pli-title>(.*?)<\/pli-title>/gi, '<div class="pli-title">$1</div>');
   // Handle container tags
   text = text.replace(/<brain>(.*?)<\/brain>/gis, '<div class="brain">$1</div>');
   text = text.replace(/<prompt>(.*?)<\/prompt>/gis, '<div class="prompt">$1</div>');

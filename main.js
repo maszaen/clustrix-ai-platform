@@ -1307,6 +1307,24 @@ function runStandardStreaming(event, payload) {
                 );
 
                 log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
+                log(`MAIN: RE+ACT usageBreakdown: ${JSON.stringify(reactResult.usageBreakdown, null, 2)}`);
+                if (Array.isArray(reactResult.usageBreakdown)) {
+                  log(`MAIN: Processing ${reactResult.usageBreakdown.length} usage entries from RE+ACT`);
+                  for (const entry of reactResult.usageBreakdown) {
+                    log(`MAIN: Recording usage for stage ${entry.stage}: ${JSON.stringify(entry.usage)}`);
+                    if (entry?.usage) {
+                      recordTokenUsage(reqId, entry.stage || 'reasoning-action', entry.usage, {
+                        provider: entry.provider || provider,
+                        model: entry.model || model,
+                      });
+                      log(`MAIN: Successfully recorded usage for ${entry.stage}`);
+                    } else {
+                      log(`MAIN: Skipping entry ${entry.stage} - no usage data`);
+                    }
+                  }
+                } else {
+                  log(`MAIN: usageBreakdown is not an array or missing`);
+                }
                 let responseText = '';
                 if (typeof reactResult === 'string') {
                   responseText = reactResult;
@@ -1459,6 +1477,18 @@ function runStandardStreaming(event, payload) {
             );
             
             log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
+            // Process usage breakdown from RE+ACT
+            if (Array.isArray(reactResult.usageBreakdown)) {
+              log(`MAIN: Processing ${reactResult.usageBreakdown.length} usage entries from RE+ACT`);
+              for (const entry of reactResult.usageBreakdown) {
+                if (entry?.usage) {
+                  recordTokenUsage(reqId, entry.stage || 'reasoning-action', entry.usage, {
+                    provider: entry.provider || provider,
+                    model: entry.model || model,
+                  });
+                }
+              }
+            }
             event.sender.send('search:status', { step: 'PROCESSING', data: { count: reactResult.actionsExecuted || 1 } });
             event.sender.send('chat-update', { type: 'READING_COMPLETE', messageIndex: aiMessageIndex, data: { pageCount: reactResult.actionsExecuted || 1 } });
             let responseText = '';

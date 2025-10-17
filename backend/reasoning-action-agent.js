@@ -71,6 +71,8 @@ class ReasoningActionAgent {
     log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
       `Stored ${existingMessages.length} previous messages in session state for context, language: ${language}`);
     
+    const usageBreakdown = [];
+    
     if (progressCallback) {
       progressCallback({
         type: 'searching',
@@ -85,7 +87,22 @@ class ReasoningActionAgent {
     log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction', 
       `Sending reasoning prompt to AI model: ${sessionState.model?.model || 'unknown'}`);
     
-    const reasoningResponse = await this.makeAIRequest(reasoningPrompt, sessionId);
+    const reasoningResult = await this.makeAIRequest(reasoningPrompt, sessionId);
+    const reasoningResponse = reasoningResult.content;
+    if (reasoningResult.usage) {
+      const usageEntry = {
+        stage: 'reasoning-planning',
+        usage: reasoningResult.usage,
+        provider: sessionState.model.provider,
+        model: sessionState.model.model,
+      };
+      usageBreakdown.push(usageEntry);
+      log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+        `Recorded planning usage: ${JSON.stringify(usageEntry)}`);
+    } else {
+      log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+        `No usage data in reasoning result`);
+    }
     log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
       `Received AI response (${reasoningResponse.length} chars):\n---RESPONSE START---\n${reasoningResponse}\n---RESPONSE END---`);
     
@@ -270,7 +287,16 @@ class ReasoningActionAgent {
         log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
           `Sending followup prompt to AI`);
         
-        finalResponse = await this.makeAIRequest(followupPrompt, sessionId);
+        const followupResult = await this.makeAIRequest(followupPrompt, sessionId);
+        finalResponse = followupResult.content;
+        if (followupResult.usage) {
+          usageBreakdown.push({
+            stage: 'reasoning-followup',
+            usage: followupResult.usage,
+            provider: sessionState.model.provider,
+            model: sessionState.model.model,
+          });
+        }
         log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
           `Received followup response (${finalResponse.length} chars):\n---FOLLOWUP RESPONSE START---\n${finalResponse}\n---FOLLOWUP RESPONSE END---`);
         
@@ -327,7 +353,16 @@ class ReasoningActionAgent {
       log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
         `Sending synthesis prompt to AI`);
       
-      finalResponse = await this.makeAIRequest(synthesisPrompt, sessionId);
+      const synthesisResult = await this.makeAIRequest(synthesisPrompt, sessionId);
+      finalResponse = synthesisResult.content;
+      if (synthesisResult.usage) {
+        usageBreakdown.push({
+          stage: 'reasoning-synthesis',
+          usage: synthesisResult.usage,
+          provider: sessionState.model.provider,
+          model: sessionState.model.model,
+        });
+      }
       log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
         `Received synthesis response (${finalResponse.length} chars):\n---SYNTHESIS RESPONSE START---\n${finalResponse}\n---SYNTHESIS RESPONSE END---`);
     }
@@ -349,13 +384,23 @@ class ReasoningActionAgent {
       const planText = typeof plan === "string" ? plan : JSON.stringify(plan);
       const ctx = Array.isArray(sessionState.files) ? sessionState.files.map(f => `${f.name}\n${f.content}`).join("\n\n") : "";
       const finalPrompt = ["Complete the user's request based on the following plan and project context.","Plan:", String(planText || ""), "Context:", ctx, "Provide a final answer that can be used directly, not a plan."].join("\n\n");
-      const synthesized = await this.makeAIRequest(finalPrompt, sessionId);
-      finalResponse = typeof synthesized === "string" ? synthesized : (synthesized && synthesized.content) || "";
+      const synthesisResult = await this.makeAIRequest(finalPrompt, sessionId);
+      const synthesized = synthesisResult.content;
+      if (synthesisResult.usage) {
+        usageBreakdown.push({
+          stage: 'reasoning-final',
+          usage: synthesisResult.usage,
+          provider: sessionState.model.provider,
+          model: sessionState.model.model,
+        });
+      }
+      finalResponse = typeof synthesized === "string" ? synthesized : "";
     }    return {
       response: finalResponse,
       actionsExecuted: sessionState.actionHistory.length,
       searchResults: sessionState.actionHistory.map(h => h.result),
-      reasoning: plan.reasoning
+      reasoning: plan.reasoning,
+      usageBreakdown
     };
   }
 
@@ -447,6 +492,8 @@ Remember: You have ${totalResults} pieces of data. Use them confidently!`;
       : '';
 
     return `You are an autonomous research agent with access to project files and live internet tools.
+
+The current date is ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric' })}. Use this date for any time-sensitive information or web searches.
 
 USER FILES:
 ${fileList}
@@ -1407,10 +1454,22 @@ Remember: Quality answers require thorough research. Don't settle for incomplete
                         jsonResponse?.message?.content ||
                         jsonResponse?.output_text || '';
         
-        log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
-          `Extracted content (${content.length} chars):\n---AI CONTENT START---\n${content}\n---AI CONTENT END---`);
+        // Extract usage data - handle both OpenAI and Gemini formats
+        let usage = jsonResponse?.usage || jsonResponse?.usageMetadata || null;
         
-        return content;
+        // Normalize usage format if needed (convert from Gemini format to standard)
+        if (usage && usage.promptTokenCount) {
+          usage = {
+            prompt_tokens: usage.promptTokenCount,
+            completion_tokens: usage.candidatesTokenCount || 0,
+            total_tokens: usage.totalTokenCount || 0
+          };
+        }
+        
+        log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+          `Extracted content (${content.length} chars) and usage:\n---AI CONTENT START---\n${content}\n---AI CONTENT END---\nUsage: ${JSON.stringify(usage)}`);
+        
+        return { content, usage };
       } catch (error) {
         lastError = error;
         const status = extractStatusCode(error);
@@ -1441,7 +1500,7 @@ Remember: Quality answers require thorough research. Don't settle for incomplete
     log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
       `Falling back to generated response`);
     
-    return this.generateFallbackResponse(prompt);
+    return { content: this.generateFallbackResponse(prompt), usage: null };
   }
 
   

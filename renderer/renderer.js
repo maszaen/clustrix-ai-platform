@@ -7929,20 +7929,73 @@ function attachCodeBlockListeners(container) {
   // Attach listeners for custom tags
   const pliButtons = container.querySelectorAll(".pli");
   pliButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const text = btn.dataset.text;
-      if (text) {
-        // Set the input value and send
-        const input = document.getElementById("project-message-input");
-        if (input) {
-          input.value = text;
-          input.focus();
-          // Trigger send
-          handleProjectSend();
-        }
-      }
+    if (btn.dataset.pliBound === "true") return;
+    btn.dataset.pliBound = "true";
+
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const text = btn.dataset.text || btn.textContent || "";
+      handlePromptSuggestionClick(text, btn);
     });
   });
+}
+
+function handlePromptSuggestionClick(rawText, sourceElement) {
+  const text = typeof rawText === "string" ? rawText.trim() : "";
+  if (!text) return;
+
+  const composer = getActivePromptComposer(sourceElement);
+  if (!composer) return;
+
+  const { element, sendFn } = composer;
+  element.value = text;
+  element.focus();
+
+  try {
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  } catch (err) {
+    console.warn("Failed to dispatch input event for prompt suggestion", err);
+  }
+
+  sendFn();
+}
+
+function getActivePromptComposer(sourceElement) {
+  const projectInput = document.getElementById("project-message-input");
+  const chatInput = document.getElementById("msg");
+  const welcomeInput = document.getElementById("msg-central");
+
+  const prefersProjectComposer =
+    !!sourceElement?.closest?.(".project-detail-container") &&
+    isComposerUsable(projectInput);
+
+  if (prefersProjectComposer) {
+    return { element: projectInput, sendFn: () => handleProjectSend() };
+  }
+
+  if (isComposerUsable(chatInput)) {
+    return { element: chatInput, sendFn: () => send() };
+  }
+
+  if (!prefersProjectComposer && isComposerUsable(projectInput)) {
+    return { element: projectInput, sendFn: () => handleProjectSend() };
+  }
+
+  if (isComposerUsable(welcomeInput)) {
+    return { element: welcomeInput, sendFn: () => sendFromWelcome() };
+  }
+
+  return null;
+}
+
+function isComposerUsable(element) {
+  if (!element) return false;
+  const style = window.getComputedStyle(element);
+  if (style.display === "none" || style.visibility === "hidden") return false;
+  if (element.closest("[aria-hidden='true']")) return false;
+  if (element.disabled) return false;
+  return true;
 }
 
 const MARKDOWN_LATEX_PLACEHOLDER_PREFIX = "¤LATEX_";
@@ -13844,6 +13897,14 @@ function setupEventListeners() {
   const chatArea = $(".chat-area");
   if (chatArea) {
     chatArea.addEventListener("click", (event) => {
+      const promptButton = event.target.closest(".pli");
+      if (promptButton && !event.defaultPrevented) {
+        event.preventDefault();
+        const text = promptButton.dataset.text || promptButton.textContent || "";
+        handlePromptSuggestionClick(text, promptButton);
+        return;
+      }
+
       const saveButton = event.target.closest(".save-code-btn");
       if (saveButton) {
         // console.log("DEBUG: Save button click handled by persistent delegation."); // Removed console.log

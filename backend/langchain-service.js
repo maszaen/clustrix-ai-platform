@@ -492,7 +492,8 @@ class ClustrixLangChainService {
         actionsExecuted: result.actionsExecuted,
         reasoning: result.reasoning,
         searchResults: result.searchResults,
-        response: result.response
+        response: result.response,
+        usageBreakdown: result.usageBreakdown
       };
       
     } catch (error) {

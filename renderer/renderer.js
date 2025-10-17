@@ -12225,7 +12225,7 @@ function renderAiFinalActions(aiNode, content, messageIndex) {
     2,
     "renderAiFinalActions",
     `Fetching modelInfo for index ${messageIndex} directly from state.`,
-    { hasModelInfo: !!modelInfo, modelInfo },
+    { hasModelInfo: !!modelInfo, modelInfo, usage: modelInfo?.usage },
   );
 
   const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
@@ -14924,8 +14924,19 @@ function initializeApp() {
         const sessionId = payload.sessionId || current?.id;
         const session = state.sessions.find((s) => s.id === sessionId) || current;
         if (!session || typeof messageIndex !== "number" || messageIndex < 0) {
+          log("UI", 3, "chat-update:TOKEN_USAGE", "Skipping TOKEN_USAGE - missing session or invalid index", {
+            hasSession: !!session,
+            messageIndex,
+            sessionId
+          });
           return;
         }
+
+        log("UI", 2, "chat-update:TOKEN_USAGE", "Processing TOKEN_USAGE update", {
+          messageIndex,
+          sessionId: session.id,
+          data
+        });
 
         ensureTokenFields(session);
 

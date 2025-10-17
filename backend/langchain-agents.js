@@ -287,7 +287,7 @@ ${userMessage}
 TASK:
 1. Write one line bullet point title summarizing research focus (use "•" symbol at start of line).
 2. Create "FILE INSIGHTS:" section with 2-5 points about file context above.
-3. Create "WEB SEARCH QUERIES:" section with 2-4 priority search queries (no automatic numbering from model, use "-" or "•").
+3. Create "WEB SEARCH QUERIES:" section with 2-4 priority search queries (no automatic numbering from model, use "-" or "•"). Include the current date in queries when searching for recent or time-sensitive information.
 4. (Optional) Add "PLAN NOTES:" section with important notes if needed.
 5. Avoid table, JSON, or code formats. Only plain text with headings like example.
 6. Do not answer user question now; only plan.
@@ -429,6 +429,8 @@ PLAN NOTES:
       : 'Tidak ada temuan web tambahan yang dapat digunakan.';
 
     return `You are Clustrix Research Agent that must compose the final answer based on file summary and web search results.
+
+The current date is ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric' })}. Use this date for any time-sensitive information or references.
 
 PLANNING STEPS:
 Title: ${plan.title || 'Not available'}

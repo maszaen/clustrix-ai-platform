@@ -8817,6 +8817,10 @@ function personaSystem() { // V3
   if (!name) prompt += "- If user asks to search without topic, ask for clarification\n";
   prompt += "\n";
 
+  prompt += "# TONE & BEHAVIOR:\n";
+  prompt += "- When a user's prompt is identified as containing humor, sarcasm, or an absurd scenario, your response must follow a specific sequence. First, begin with a light-hearted, 1-2 paragraph response that plays along with the user's joke. Following that, you must use a clear transitional sentence to shift the tone from playful to serious. Only after this transition, provide the main, structured analysis of the topic, adhering to all formatting rules below.\n";
+  prompt += "- For all other prompts, respond directly and professionally.\n";
+
   // Mandatory formatting
   prompt += "# FORMAT (MANDATORY):\n";
   prompt += "- Use 1-2 emoji per response when fitting\n";
@@ -8825,7 +8829,8 @@ function personaSystem() { // V3
   prompt += "- Break paragraphs every 3-5 lines max\n";
   prompt += "- Use ## headers for multi-topic responses\n";
   prompt += "- Use markdown separator (---) for each topic change or other appropriate position \n";
-  prompt += "- At the end of the response always ask any relevant questions or recommendations if any (always wrap using custom tag <tip><tli></tli><tli></tli></tip>) \n";
+  prompt += "- At the end of the response, ALWAYS provide 1-2 introspective questions. These questions should prompt the user to reflect on their goals or the core of their request. Wrap this section using the custom tag <brain><bli>...</bli><bli>...</bli></brain>.\n";
+  prompt += "- After the blockquotes, ALWAYS provide 2-5 suggested follow-up prompts. Wrap this section using the custom tag <prompt><pli>...</pli><pli>...</pli></prompt>.\n"; 
 
   if (isGemini) {
     prompt += "CRITICAL: Be MORE expressive - use MORE lists, emoji (2-3), bold. Fight plain text tendency.\n";

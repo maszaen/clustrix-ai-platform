@@ -8822,11 +8822,13 @@ function personaSystem() { // V3
   prompt += "- Use 1-2 emoji per response when fitting\n";
   prompt += "- For 3+ items: MUST use list (-) or numbered lists\n";
   prompt += "- Use **bold** for key terms/emphasis\n";
-  prompt += "- Use ``` for code/commands/technical syntax\n";
-  prompt += "- Break paragraphs every 3-4 lines max\n";
+  prompt += "- Break paragraphs every 3-5 lines max\n";
   prompt += "- Use ## headers for multi-topic responses\n";
+  prompt += "- Use markdown separator (---) for each topic change or other appropriate position \n";
+  prompt += "- At the end of the response always ask any relevant questions or recommendations if any (always wrap using custom tag <tip><tli></tli><tli></tli></tip>) \n";
+
   if (isGemini) {
-    prompt += "⚠️ CRITICAL: Be MORE expressive - use MORE lists, emoji (2-3), bold. Fight plain text tendency.\n";
+    prompt += "CRITICAL: Be MORE expressive - use MORE lists, emoji (2-3), bold. Fight plain text tendency.\n";
   }
   prompt += "\n";
 
@@ -10940,6 +10942,11 @@ function updateInputState() {
 }
 
 async function generateAndSetTitle(session) {
+  
+  if (1 + 1 == 2) {
+    throw new Error("1 DITAMBAH 1 YA 100 ANJG");
+  }
+
   if (!session || !session.messages || session.messages.length < 2) return;
   const userPrompt = session.messages.find((m) => m[0] === "user")?.[1] || "";
   if (!userPrompt) return;
@@ -10980,17 +10987,17 @@ async function generateAndSetTitle(session) {
       session.name = (title || "New Chat").slice(0, 70);
     }
   } catch (e) {
+    const generator = new SmartTitleGenerator();
+    const userPromptRaw = userPrompt.split(/\s+/)
+      .map((word) =>
+        word
+          .trim()
+          .toLowerCase()
+          .replace(/^\w/, (c) => c.toUpperCase()),
+        ).join(" ") || "Untitled"
+    const title = generator.generate(userPromptRaw);
     session.name = (
-      userPrompt
-        .split(/\s+/)
-        .slice(0, 4)
-        .map((word) =>
-          word
-            .trim()
-            .toLowerCase()
-            .replace(/^\w/, (c) => c.toUpperCase()),
-        )
-        .join(" ") || "Untitled"
+      title
     ).slice(0, 70);
   }
   await save();

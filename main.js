@@ -1921,7 +1921,7 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
                     provider === 'gemini'     ? (process.env.GEMINI_API_KEY || '') :
                                                 (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || ''));
 
-  const sys = 'You are a title generator. Create a specific, 3-6 word title in Title Case for the following user query. Do not use quotes or periods. Your response must not exceed 6 words. If the query contains code, summarize the code’s purpose instead of including code.';
+  const sys = 'Generate a title. Rules: (1) 3-6 words maximum (2) Title Case format (3) NO thinking tags, NO XML tags, NO quotes, NO periods (4) ONLY the title text, nothing else (5) For code queries, summarize purpose not the code. Output ONLY the title, zero other text.';
   if (provider === 'gemini') {
     const url = new URL(`${BASE_URL.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent`);
     if (API_KEY) url.searchParams.set('key', API_KEY);
@@ -1962,7 +1962,14 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
               parsedJson: j
             })
             
-            const t = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
+            let t = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
+            if (t) {
+              // Remove thinking tags and any XML-style tags that might appear
+              t = t.replace(/<think>[\s\S]*?<\/think>/gi, '');
+              t = t.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+              t = t.replace(/<[^>]+>/g, '');
+              t = t.trim();
+            }
             resolve(t || text.split(/\s+/).slice(0,6).join(' '));
           } catch { resolve(text.split(/\s+/).slice(0,6).join(' ')); }
         });
@@ -1973,9 +1980,14 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
     return title;
   }
   const u = new URL(BASE_URL.replace(/\/+$/, '') + '/chat/completions');
+  
+  // OPTIMIZATION: Add max_tokens constraint for title generation to prevent verbose reasoning
+  // This reduces completion_tokens from ~1,600 to ~100-150 tokens (still 90% reduction)
+  // Increased from 50 to 100 to prevent incomplete output and thinking tag artifacts
   const body = JSON.stringify({
     model,
     stream: false,
+    max_tokens: 100,  // Title: max 6 words (~30 tokens), 100 gives safety margin for different tokenizers
     messages: [
       { role: 'system', content: sys },
       { role: 'user', content: text }
@@ -2035,7 +2047,14 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
       parsedJson: j
     })
     
-    const t = j?.choices?.[0]?.message?.content?.trim();
+    let t = j?.choices?.[0]?.message?.content?.trim();
+    if (t) {
+      // Remove thinking tags and any XML-style tags that might appear
+      t = t.replace(/<think>[\s\S]*?<\/think>/gi, '');
+      t = t.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+      t = t.replace(/<[^>]+>/g, '');
+      t = t.trim();
+    }
     return t || text.split(/\s+/).slice(0,6).join(' ') || 'New Chat';
   } catch {
     return text.split(/\s+/).slice(0,6).join(' ') || 'New Chat';

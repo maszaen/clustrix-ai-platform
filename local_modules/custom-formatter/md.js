@@ -18,6 +18,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   const codeBlocks = sharedCodeBlocks || [];
   const isTopLevel = !sharedCodeBlocks;
   const latexBlocks = [];
+  const containerBlocks = []; // Store brain/prompt blocks
   const latexRegex = /(\$\$[\s\S]*?\$\$|\\\(.*?\\\))/g;
   let protectedSrc = normalizedSrc.replace(latexRegex, match => {
     const placeholder = `__LATEX_${latexBlocks.length}__`;
@@ -25,10 +26,17 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     return placeholder;
   });
   
+  // Extract container tags before processing
+  let processedSrcAfterContainers = protectedSrc.replace(/<(brain|prompt)>([\s\S]*?)<\/\1>/gi, (match) => {
+    const placeholder = `XCONTAINERX${containerBlocks.length}XCONTAINERX`;
+    containerBlocks.push(match);
+    return placeholder;
+  });
+  
   // Only process codeblocks at top level, not in recursive calls
   let processedSrc = normalizedSrc;
   if (isTopLevel) {
-    processedSrc = normalizedSrc.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
+    processedSrc = processedSrcAfterContainers.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
       const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
       let codeContent = code; // Don't trim yet - we need original whitespace for dedent
       const language = lang || "text";
@@ -348,7 +356,13 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
           currentListItemEndPos += textHtml.length;
         }
       } else {
-        paragraphBuffer.push(parseInlineMarkdown(line));
+        // Check if this line is a container tag (brain or prompt) - don't wrap in <p>
+        if (trimmedLine.includes("XCONTAINERX")) {
+          flushParagraph();
+          html += parseInlineMarkdown(line) + '\n';
+        } else {
+          paragraphBuffer.push(parseInlineMarkdown(line));
+        }
       }
       lastLineWasCodeblock = false;
     }
@@ -356,6 +370,17 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   closeOpenBlocks();
   let finalHtml = codeBlocks.reduce((acc, block, i) => acc.replace(`__CODEBLOCK_${i}__`, block), html);
   finalHtml = latexBlocks.reduce((acc, block, i) => acc.replace(`__LATEX_${i}__`, block), finalHtml);
+  finalHtml = containerBlocks.reduce((acc, block, i) => {
+    // Don't call parseInlineMarkdown - it will escape the HTML
+    // Instead, just process the inner tags
+    const processed = block
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&') // Unescape first
+      .replace(/<brain>(.*?)<\/brain>/gis, '<div class="brain">$1</div>')
+      .replace(/<prompt>(.*?)<\/prompt>/gis, '<div class="prompt">$1</div>')
+      .replace(/<bli>(.*?)<\/bli>/gi, '<span class="bli">? $1</span>')
+      .replace(/<pli>(.*?)<\/pli>/gi, '<span class="pli" data-text="$1">$1</span>');
+    return acc.replace(`XCONTAINERX${i}XCONTAINERX`, processed);
+  }, finalHtml);
   return finalHtml;
 }
 
@@ -406,6 +431,14 @@ function processMarkdownFormatting(text) {
 
 function parseInlineMarkdown(text) {
   if (!text) return "";
+  // Unescape HTML entities first to handle custom tags that might be escaped
+  text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+  // Handle container tags
+  text = text.replace(/<brain>(.*?)<\/brain>/gis, '<div class="brain">$1</div>');
+  text = text.replace(/<prompt>(.*?)<\/prompt>/gis, '<div class="prompt">$1</div>');
+  // Handle custom tags
+  text = text.replace(/<bli>(.*?)<\/bli>/gi, '<span class="bli">? $1</span>');
+  text = text.replace(/<pli>(.*?)<\/pli>/gi, '<span class="pli" data-text="$1">$1</span>');
   if (text.includes('<br>') && (text.includes('<br>•') || text.includes('<br>-'))) {
     const parts = text.split(/(<br\s*\/?>)/i);
     let listItems = [];

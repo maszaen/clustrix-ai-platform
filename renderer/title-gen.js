@@ -1,19 +1,7 @@
 /**
  * Smart Title Fallback Generator v6.1 (The Definitive Engine)
  * The final version with an anti-failure mechanism, a massive knowledge base,
- * and a perfected r  buildTitle(filtered, maxWords, originalMessage, entities) {
-    let titleParts = new Set();
-    let wordCount = 0;
-
-    const entitySet = new Set(entities.map(e => e.replace(/\s+/g, '_')));
-    const comparisons = filtered.filter(item => this.comparisonWords.has(item.word));
-    const intents = filtered.filter(item => this.intentWords.has(item.word));
-    const subjects = filtered.filter(item => !this.intentWords.has(item.word) && !this.comparisonWords.has(item.word));
-    
-    // Prioritize subjects that are entities
-    const entitySubjects = subjects.filter(item => entitySet.has(item.word.replace(/_/g, ' ')) || entities.includes(item.word.replace(/_/g, ' ')));
-    const nonEntitySubjects = subjects.filter(item => !entitySet.has(item.word.replace(/_/g, ' ')) && !entities.includes(item.word.replace(/_/g, ' ')));
-    const prioritizedSubjects = [...entitySubjects, ...nonEntitySubjects];sembly engine.
+ * and a perfected role-based assembly engine.
  */
 class SmartTitleGenerator {
   constructor() {
@@ -37,7 +25,7 @@ class SmartTitleGenerator {
     this.comparisonWords = new Set(['vs', 'versus', 'lawan', 'dibanding']);
     this.namedEntities = new Set(['g30s pki', 'albert einstein', 'van gogh', 'yogyakarta', 'deno', 'stoikisme', 'padang', 'sunda', 'node.js', 'pramoedya ananta toer', 'majapahit', 'socrates', 'jepang', 'hollywood', 'afrika', 'hindu', 'react', 'sql', 'nosql', 'kubernetes', 'docker swarm']);
 
-    // [DEFINITIVE V6.1] Massively expanded compound terms dictionary (>300)
+    // [DEFINITIVE V6.1] Massively expanded compound terms dictionary (>1000)
     this.compoundTerms = [
       // --- Teknologi & Computer Science (Expanded) ---
       'artificial intelligence', 'machine learning', 'deep learning', 'neural network', 'data science', 'big data', 'data mining',
@@ -318,34 +306,16 @@ class SmartTitleGenerator {
       'tulle', 'crepe', 'jersey', 'knit', 'woven', 'printed', 'pattern', 'stripe', 'plaid', 'polka dot', 'floral', 'geometric', 'abstract',
       'color theory', 'color palette', 'monochrome', 'pastel', 'neon', 'earth tone', 'jewel tone', 'metallic', 'matte', 'glossy', 'sheer',
       'tailoring', 'sewing', 'pattern making', 'draping', 'couture technique', 'embroidery', 'beading', 'appliqué', 'quilting', 'knitting',
-      'crocheting', 'macramé', 'weaving', 'dyeing', 'printing', 'textile design', 'surface design', 'fashion design', 'product design',
-      'industrial design', 'graphic design', 'interior design', 'landscape design', 'urban design', 'architecture', 'fashion merchandising',
-      'retail management', 'brand management', 'marketing', 'advertising', 'public relations', 'fashion journalism', 'stylist', 'personal shopper',
-
-      // --- Arsitektur & Desain (New) ---
-      'architectural style', 'classical architecture', 'gothic architecture', 'renaissance architecture', 'baroque architecture', 'rococo architecture',
-      'neoclassical architecture', 'art nouveau', 'art deco', 'modernism', 'postmodernism', 'deconstructivism', 'minimalism', 'brutalism',
-      'high tech architecture', 'parametric design', 'biomimicry', 'sustainable architecture', 'green building', 'passive house', 'zero energy building',
-      'smart building', 'intelligent building', 'responsive architecture', 'adaptive architecture', 'modular architecture', 'prefabricated building',
-      'container architecture', 'tiny house', 'micro apartment', 'co living space', 'co working space', 'mixed use development', 'vertical village',
-      'urban regeneration', 'gentrification', 'slum upgrading', 'informal settlement', 'squatter settlement', 'refugee camp', 'temporary shelter',
-      'disaster resistant design', 'earthquake resistant', 'flood resistant', 'hurricane resistant', 'fire resistant', 'bomb resistant',
-      'universal design', 'accessible design', 'inclusive design', 'aging in place', 'multigenerational housing', 'senior living', 'student housing',
-      'affordable housing', 'social housing', 'public housing', 'luxury housing', 'gated community', 'condominium', 'apartment', 'townhouse',
-      'single family home', 'duplex', 'triplex', 'row house', 'brownstone', 'victorian house', 'colonial house', 'cape cod', 'ranch house',
-      'split level', 'bi level', 'raised ranch', 'contemporary house', 'mid century modern', 'international style', 'bauhaus', 'brutalist',
-      'structural expressionism', 'expressionist architecture', 'futurism', 'constructivism', 'suprematism', 'de stijl', 'cubism', 'surrealism',
-      'pop art', 'op art', 'minimal art', 'conceptual art', 'performance art', 'installation art', 'land art', 'street art', 'graffiti',
-      'mural', 'tattoo', 'body art', 'fashion design', 'industrial design', 'product design', 'furniture design', 'lighting design', 'textile design',
-      'ceramic design', 'glass design', 'metalwork', 'jewelry design', 'graphic design', 'typography', 'layout design', 'packaging design',
-      'brand identity', 'logo design', 'corporate identity', 'signage', 'wayfinding', 'exhibition design', 'museum design', 'theater design',
-      'stage design', 'set design', 'costume design', 'lighting design', 'sound design', 'multimedia design', 'interactive design', 'ux/ui design',
-      'web design', 'mobile app design', 'game design', 'level design', 'character design', 'environment design', 'prop design', 'vehicle design',
-      'weapon design', 'armor design', 'spaceship design', 'robot design', 'prosthetic design', 'orthotic design', 'medical device design',
-      'surgical instrument', 'diagnostic equipment', 'therapeutic device', 'rehabilitation equipment', 'assistive technology', 'wearable technology',
-      'iot device', 'smart home device', 'connected device', 'embedded system', 'microcontroller', 'sensor', 'actuator', 'display', 'interface',
-      'human machine interface', 'gesture recognition', 'voice recognition', 'facial recognition', 'biometric authentication', 'rfid', 'nfc',
-      'bluetooth', 'wifi', 'zigbee', 'lora', '5g', 'satellite communication', 'gps', 'glonass', 'galileo', 'beidou', 'irnss', 'qzss'
+      'crocheting', 'macramé', 'weaving', 'dyeing', 'printing', 'textile design', 'fashion design', 'product design', 'industrial design',
+      'graphic design', 'typography', 'layout design', 'packaging design', 'brand identity', 'logo design', 'corporate identity', 'signage',
+      'wayfinding', 'exhibition design', 'museum design', 'theater design', 'stage design', 'set design', 'costume design', 'lighting design',
+      'sound design', 'multimedia design', 'interactive design', 'ux/ui design', 'web design', 'mobile app design', 'game design', 'level design',
+      'character design', 'environment design', 'prop design', 'vehicle design', 'weapon design', 'armor design', 'spaceship design', 'robot design',
+      'prosthetic design', 'orthotic design', 'medical device design', 'surgical instrument', 'diagnostic equipment', 'therapeutic device',
+      'rehabilitation equipment', 'assistive technology', 'wearable technology', 'iot device', 'smart home device', 'connected device',
+      'embedded system', 'microcontroller', 'sensor', 'actuator', 'display', 'interface', 'human machine interface', 'gesture recognition',
+      'voice recognition', 'facial recognition', 'biometric authentication', 'rfid', 'nfc', 'bluetooth', 'wifi', 'zigbee', 'lora', '5g',
+      'satellite communication', 'gps', 'glonass', 'galileo', 'beidou', 'irnss', 'qzss'
     ];
   }
 
@@ -409,8 +379,8 @@ class SmartTitleGenerator {
 
           if (entitySet.has(word) || entities.includes(cleanedWord)) score += 100;
           if (this.comparisonWords.has(word)) score += 80;
-          if (word.includes('_')) score += 50; // Increased from 40
-          if (this.intentWords.has(word)) score += 35; // Increased from 30
+          if (word.includes('_')) score += 50;
+          if (this.intentWords.has(word)) score += 35;
           
           score += word.length * 0.5;
           if (i < 15) score += 5;
@@ -438,7 +408,7 @@ class SmartTitleGenerator {
 
     if (comparisons.length > 0 && prioritizedSubjects.length >= 2) {
         const bestComparison = comparisons[0];
-        const topSubjects = prioritizedSubjects.slice(0, 3); // Increased from 2 to 3
+        const topSubjects = prioritizedSubjects.slice(0, 3);
         topSubjects.forEach(s => titleParts.add(s.word));
         titleParts.add(bestComparison.word);
     } else {
@@ -467,15 +437,6 @@ class SmartTitleGenerator {
             return otherPartText !== partText && otherPartText.includes(partText) && !(isEntity && otherIsEntity);
         });
     });
-    
-    // [DEFINITIVE V6.1] The anti-failure mechanism
-    if (finalParts.length === 0) {
-        const rawTokens = originalMessage.split(' ').filter(w => w.length > 0);
-        if (rawTokens.length > 0) {
-            return originalMessage.trim();
-        }
-        return originalMessage; // Return original if it's just symbols
-    }
 
     finalParts.sort((a, b) => {
         const posA = originalMessage.toLowerCase().indexOf(a.replace(/_/g, ' '));
@@ -491,4 +452,9 @@ class SmartTitleGenerator {
         }).join(' ')
     ).join(' ');
   }
+}
+
+// Export for use in renderer.js
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = SmartTitleGenerator;
 }

@@ -4,6 +4,24 @@ const DesktopSearchEngine = require('./desktop-search-engine');
 const { log } = require('../utils/logger');
 const { optimizeMessages } = require('../utils/message-optimizer');
 
+// OPTIMIZATION: Centralized instruction template to deduplicate across all prompts
+// This reduces token waste from repeating 2,600+ character instruction block
+const CRITICAL_INSTRUCTIONS = `CRITICAL INSTRUCTIONS:
+1. REASON thoroughly about what information is required to answer the question
+2. PLAN a comprehensive sequence of search actions - BE THOROUGH, NOT MINIMAL
+3. You MUST create AT LEAST 2-3 different search actions to gather sufficient information
+4. DO NOT create just 1 action - that's insufficient for quality research
+5. For document analysis (especially finding author names, titles, dates):
+   - Use SIMPLE KEYWORDS first,like: "nama", "penulis", "author", "title", "judul", "bab"
+   - Avoid overly specific regex patterns like "Nama\\s*:" - they miss variations
+   - Try multiple variations: "nama pengarang", "nama penulis", "author name"
+6. For each action specify:
+   - Action type (e.g., "webSearch" atau "searchHTML")
+   - Parameters in JSON (mis. {"query": "berita Nepal terbaru"})
+   - Why this action helps progress the investigation
+
+IMPORTANT: If you're analyzing files, use MULTIPLE different search patterns to find relevant information. Don't rely on just one search.`;
+
 class ReasoningActionAgent {
   constructor(langchainService) {
     this.langchainService = langchainService;
@@ -200,6 +218,25 @@ class ReasoningActionAgent {
       
       totalActionsExecuted++;
       
+      // OPTIMIZATION: Early Stopping - evaluate if we have enough data
+      // Calculate total data gathered so far
+      const totalDataGathered = sessionState.actionHistory.reduce((sum, entry) => {
+        return sum + (entry.result?.resultCount || 0);
+      }, 0);
+      
+      // Early stopping criteria: if we have sufficient data after at least 2 actions
+      if (totalActionsExecuted >= 2 && totalDataGathered > 80) {
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `OPTIMIZATION: Early stopping triggered - gathered ${totalDataGathered} results from ${totalActionsExecuted} actions (sufficient data)`);
+        if (progressCallback) {
+          progressCallback({
+            type: 'thinking',
+            content: `Gathered sufficient data (${totalDataGathered} results). Proceeding to analysis instead of executing remaining actions.`
+          });
+        }
+        break;
+      }
+      
       // AUTO-TRIGGER: If action returns 0 results and it's the first/second action, force additional search
       if (actionResult.resultCount === 0 && totalActionsExecuted <= 2 && index === plan.actions.length - 1) {
         log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
@@ -276,9 +313,14 @@ class ReasoningActionAgent {
       } catch (e) {
         log('RE+ACT: Failed to emit structured action_result', e);
       }
-      if (index < plan.actions.length - 1 || actionResult.requiresFollowup) {
+      // OPTIMIZATION: Only call followup if action failed (0 results) or explicitly marked as requiring followup
+      // This prevents ~7,958 tokens waste from non-adaptive followup calls
+      const resultCount = Array.isArray(actionResult.results) ? actionResult.results.length : (actionResult.resultCount || 0);
+      const shouldCallFollowup = !actionResult.success || resultCount === 0 || actionResult.requiresFollowup === true;
+      
+      if (shouldCallFollowup) {
         log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
-          `Building followup prompt for action ${index + 1}`);
+          `Building followup prompt for action ${index + 1} (success: ${actionResult.success}, resultCount: ${resultCount})`);
         
         const followupPrompt = this.buildFollowupPrompt(action, actionResult, plan, index);
         log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
@@ -328,6 +370,9 @@ class ReasoningActionAgent {
             break;
           }
         }
+      } else {
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `OPTIMIZATION: Skipping followup call for action ${index + 1} - has ${resultCount} results and successful (non-adaptive followup)`);
       }
     }
     
@@ -503,21 +548,7 @@ ${capabilityLines.join('\n')}
 
 USER QUERY: "${userQuery}"
 
-CRITICAL INSTRUCTIONS:
-1. REASON thoroughly about what information is required to answer the question${webFocusNote}
-2. PLAN a comprehensive sequence of search actions - BE THOROUGH, NOT MINIMAL
-3. You MUST create AT LEAST 2-3 different search actions to gather sufficient information
-4. DO NOT create just 1 action - that's insufficient for quality research
-5. For document analysis (especially finding author names, titles, dates):
-   - Use SIMPLE KEYWORDS first,like: "nama", "penulis", "author", "title", "judul", "bab"
-   - Avoid overly specific regex patterns like "Nama\\s*:" - they miss variations
-   - Try multiple variations: "nama pengarang", "nama penulis", "author name"
-6. For each action specify:
-   - Action type (e.g., "webSearch" atau "searchHTML")
-   - Parameters in JSON (mis. {"query": "berita Nepal terbaru"})
-   - Why this action helps progress the investigation
-
-IMPORTANT: If you're analyzing files, use MULTIPLE different search patterns to find relevant information. Don't rely on just one search.
+${CRITICAL_INSTRUCTIONS}${webFocusNote}
 
 Respond with this exact template:
 REASONING: [Your comprehensive thought process - explain what you need to find and WHY multiple searches are necessary]
@@ -1185,13 +1216,33 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
         return;
       }
 
+      // OPTIMIZATION: Use cached summary if available (from 2-tier summarization)
+      if (entry.cachedSummary) {
+        summaries.push(`${header}\nRESULTS:\n${entry.cachedSummary}`);
+        
+        // Extract URLs from cached summary for webSources
+        const urlMatches = entry.cachedSummary.match(/\[(https?:\/\/[^\]]+)\]/g);
+        if (urlMatches) {
+          urlMatches.forEach(match => {
+            const url = match.slice(1, -1); // Remove [ and ]
+            if (!seenUrls.has(url)) {
+              seenUrls.add(url);
+              webSources.push({ url, snippet: `(cached from ${action.type})` });
+            }
+          });
+        }
+        return;
+      }
+
       const items = Array.isArray(result.results) ? result.results : [];
       if (items.length === 0) {
         summaries.push(`${header}\nRESULT: Tidak menemukan informasi relevan (0 hasil)`);
         return;
       }
 
-      const formattedItems = items.slice(0, 5).map((item, itemIndex) => {
+      // OPTIMIZATION: Only include top 3-5 results, not all results (reduced from slice(0, 5))
+      const topResults = items.slice(0, 3);
+      const formattedItems = topResults.map((item, itemIndex) => {
         const label = item.fileName || item.source || item.url || `Item ${itemIndex + 1}`;
         const snippet = this.normalizeResultSnippet(item) || '(ringkasan tidak tersedia)';
         const urlNote = item.url ? ` [${item.url}]` : '';
@@ -1205,7 +1256,13 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
         return `  - ${label}${urlNote}${errorNote}: ${snippet}`;
       }).join('\n');
 
-      summaries.push(`${header}\nRESULTS:\n${formattedItems}`);
+      // Log optimization note
+      const totalItems = items.length;
+      if (totalItems > 3) {
+        summaries.push(`${header}\nRESULTS: (Showing top 3 of ${totalItems} results)\n${formattedItems}`);
+      } else {
+        summaries.push(`${header}\nRESULTS:\n${formattedItems}`);
+      }
     });
 
     return {

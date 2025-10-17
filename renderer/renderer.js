@@ -9217,6 +9217,19 @@ function hydrateInteractiveElements() {
         });
       }
     }
+
+    // Re-hydrate usage info button (only for AI messages)
+    if (isAIMessage) {
+      const usageBtn = actions.querySelector('.usage-info-btn');
+      if (usageBtn) {
+        const newUsageBtn = usageBtn.cloneNode(true);
+        usageBtn.parentNode.replaceChild(newUsageBtn, usageBtn);
+        newUsageBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        });
+      }
+    }
   });
 
   // Re-hydrate code block copy buttons
@@ -9237,6 +9250,14 @@ function hydrateInteractiveElements() {
   
   // Re-setup any other interactive elements as needed
   renderMathInElement(document.getElementById('chat-log'));
+  
+  // TEMPORARILY DISABLED FOR PRODUCTION RELEASE - Custom tooltips are beta
+  /*
+  // Re-initialize tooltips for all hydrated buttons
+  if (window._reinitializeTooltips) {
+    window._reinitializeTooltips();
+  }
+  */
 }
 
 /**
@@ -10323,7 +10344,7 @@ function setupUserMessageExpandCollapse(messageNode) {
     textContent.style.setProperty("--collapsed-height", `${maxHeight}px`);
     textContent.style.setProperty(
       "--expanded-height",
-      `${actualHeight + 300}px`,
+      `${actualHeight + 10/100}px`,
     );
 
     expandBtn.addEventListener("click", (e) => {
@@ -10497,6 +10518,8 @@ function setCurrent(s) {
         hydrateThinkingIfAnyAsync(newNode, current, stream.messageIndex);
         const contentDiv = newNode.querySelector(".message-text");
         if (contentDiv) {
+          // If stream has accumulated content but wasn't rendered (due to switch before synthesis)
+          // Trigger rendering now that element is available
           if (stream.fullResponse && stream.fullResponse.trim() !== "") {
             md(stream.fullResponse, { 
               isStreaming: true,
@@ -10513,7 +10536,8 @@ function setCurrent(s) {
                 highlightAllUnder(contentDiv);
               renderMathInElement(contentDiv);
             });
-          } else {
+          } else if (!stream.fullResponse || stream.fullResponse.trim() === "") {
+            // No full response yet (still in planning/synthesis phase), show thinking
             contentDiv.innerHTML = getThinkingMarkup();
             scheduleThinkingText(newNode);
           }
@@ -15121,6 +15145,8 @@ function initializeApp() {
 document.addEventListener("DOMContentLoaded", initializeApp);
 
 document.addEventListener('DOMContentLoaded', () => {
+  // TEMPORARILY DISABLED FOR PRODUCTION RELEASE - Custom tooltips are beta and have bugs
+  /*
   // Handle custom tooltips for all elements with title attribute
   const tooltipMap = new WeakMap(); // Use WeakMap to avoid memory leaks
   let currentTooltip = null;
@@ -15132,7 +15158,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!tooltipMap.has(element)) {
         const originalTitle = element.getAttribute('title');
         tooltipMap.set(element, originalTitle);
-        element.removeAttribute('title'); // Remove native title
+        // DON'T remove title attribute - we need it for cloning!
+        // Instead, we'll suppress native tooltip via mouseenter handler
 
         // Attach event listeners directly to the element
         element.addEventListener('mouseenter', handleMouseEnter);
@@ -15147,6 +15174,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const target = event.target;
     const originalTitle = tooltipMap.get(target);
     if (!originalTitle) return;
+
+    // Temporarily remove title to suppress native tooltip
+    const titleAttr = target.getAttribute('title');
+    if (titleAttr) {
+      target.removeAttribute('title');
+      // Restore after a brief delay (after native tooltip would have shown)
+      setTimeout(() => {
+        if (target && document.contains(target)) {
+          target.setAttribute('title', titleAttr);
+        }
+      }, 50);
+    }
 
     // Create tooltip element
     currentTooltip = document.createElement('div');
@@ -15219,6 +15258,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize tooltips on load
   initializeTooltips();
 
+  // Expose to window for explicit re-initialization after DOM updates
+  window._reinitializeTooltips = initializeTooltips;
+
   // Also initialize periodically for dynamic content (fallback)
   const periodicInit = setInterval(() => {
     initializeTooltips();
@@ -15244,6 +15286,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   observer.observe(document.body, { childList: true, subtree: true });
+  */
 });
 
 document.addEventListener("DOMContentLoaded", () => {

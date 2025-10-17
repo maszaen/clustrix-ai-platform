@@ -7925,6 +7925,24 @@ function attachCodeBlockListeners(container) {
       }
     });
   });
+
+  // Attach listeners for custom tags
+  const pliButtons = container.querySelectorAll(".pli");
+  pliButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const text = btn.dataset.text;
+      if (text) {
+        // Set the input value and send
+        const input = document.getElementById("project-message-input");
+        if (input) {
+          input.value = text;
+          input.focus();
+          // Trigger send
+          handleProjectSend();
+        }
+      }
+    });
+  });
 }
 
 const MARKDOWN_LATEX_PLACEHOLDER_PREFIX = "¤LATEX_";

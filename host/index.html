@@ -44,13 +44,43 @@
 
     <!-- HERO SECTION -->
     <section class="hero">
+        <div class="hero-bg-gradient"></div>
         <div class="hero-content">
-            <h1>Advanced AI Desktop Platform</h1>
-            <p>Clustrix adalah platform AI desktop yang menggabungkan kemampuan AI mutakhir dengan pengalaman chat yang intuitif. Dirancang untuk power-user yang membutuhkan kontrol penuh atas model AI dan reasoning yang mendalam.</p>
+            <div class="hero-badge">🚀 Open Source AI Platform</div>
+            <h1 class="hero-title">Advanced AI Desktop <span class="gradient-text">Platform</span></h1>
+            <p class="hero-description">Clustrix adalah platform AI desktop yang menggabungkan kemampuan AI mutakhir dengan pengalaman chat yang intuitif. Dirancang untuk power-user yang membutuhkan kontrol penuh atas model AI dan reasoning yang mendalam.</p>
             
             <div class="hero-buttons">
-                <button class="btn btn-primary" onclick="downloadApp()">Download</button>
-                <a href="https://github.com/maszaen/clustrix-ai-platform" class="btn btn-secondary" target="_blank">View on GitHub</a>
+                <button class="btn btn-primary" onclick="downloadApp()">
+                    <span>Download Now</span>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M8 12L3 7L4.4 5.6L7 8.2V0H9V8.2L11.6 5.6L13 7L8 12Z" fill="currentColor"/>
+                        <path d="M0 14H16V16H0V14Z" fill="currentColor"/>
+                    </svg>
+                </button>
+                <a href="https://github.com/maszaen/clustrix-ai-platform" class="btn btn-secondary" target="_blank">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                    </svg>
+                    <span>View on GitHub</span>
+                </a>
+            </div>
+
+            <div class="hero-stats">
+                <div class="stat-item">
+                    <div class="stat-number">12+</div>
+                    <div class="stat-label">AI Models</div>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <div class="stat-number">100%</div>
+                    <div class="stat-label">Open Source</div>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <div class="stat-number">0ms</div>
+                    <div class="stat-label">Latency Local</div>
+                </div>
             </div>
         </div>
     </section>
@@ -180,7 +210,7 @@
     <section id="cta" class="cta">
         <h2>Siap Meningkatkan AI Experience?</h2>
         <p>Clustrix memberikan kontrol penuh, kecepatan optimal, dan fitur untuk power-user modern.</p>
-        <button class="btn btn-primary" onclick="downloadApp()">Download Sekarang</button>
+        <button class="btn btn-primary" onclick="downloadApp()">Download Now</button>
     </section>
 
     <!-- FOOTER -->
@@ -202,8 +232,7 @@
         }
 
         function downloadApp() {
-            // Update this with your actual download link
-            alert('Download links akan segera tersedia!\n\nWindows | macOS | Linux');
+            window.open('https://drive.google.com/file/d/1DIsK0DyXss8gvZ6s_RwRbKRQZImd-hlq/view?usp=sharing');
         }
     </script>
 </body>

@@ -15,26 +15,58 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   const boldListFixRegex = /^(\s*)\*\*(\d+\.|[*-])\s+(.*?)\*\*/gm;
   sanitizedSrc = sanitizedSrc.replace(boldListFixRegex, "$1$2 **$3**");
   const normalizedSrc = sanitizedSrc.replace(/\u00A0/g, " ").replace(/\r\n/g, "\n");
+
+  const trimUnclosedContainers = (text) => {
+    const tags = ["brain", "prompt"];
+    let result = text;
+
+    tags.forEach(tag => {
+      const openTag = `<${tag}>`;
+      const closeTag = `</${tag}>`;
+      const lowerOpenTag = openTag.toLowerCase();
+      const lowerCloseTag = closeTag.toLowerCase();
+      let lowerResult = result.toLowerCase();
+      let searchStart = 0;
+
+      while (true) {
+        const openIndex = lowerResult.indexOf(lowerOpenTag, searchStart);
+        if (openIndex === -1) break;
+
+        const closeIndex = lowerResult.indexOf(lowerCloseTag, openIndex + lowerOpenTag.length);
+        if (closeIndex === -1) {
+          result = result.substring(0, openIndex);
+          lowerResult = result.toLowerCase();
+          break;
+        }
+
+        searchStart = closeIndex + lowerCloseTag.length;
+      }
+    });
+
+    return result;
+  };
+
+  const truncatedSrc = trimUnclosedContainers(normalizedSrc);
   const codeBlocks = sharedCodeBlocks || [];
   const isTopLevel = !sharedCodeBlocks;
   const latexBlocks = [];
   const containerBlocks = []; // Store brain/prompt blocks
   const latexRegex = /(\$\$[\s\S]*?\$\$|\\\(.*?\\\))/g;
-  let protectedSrc = normalizedSrc.replace(latexRegex, match => {
+  let protectedSrc = truncatedSrc.replace(latexRegex, match => {
     const placeholder = `__LATEX_${latexBlocks.length}__`;
     latexBlocks.push(match);
     return placeholder;
   });
-  
+
   // Extract container tags before processing
   let processedSrcAfterContainers = protectedSrc.replace(/<(brain|prompt)>([\s\S]*?)<\/\1>/gi, (match) => {
     const placeholder = `XCONTAINERX${containerBlocks.length}XCONTAINERX`;
     containerBlocks.push(match);
     return placeholder;
   });
-  
+
   // Only process codeblocks at top level, not in recursive calls
-  let processedSrc = normalizedSrc;
+  let processedSrc = truncatedSrc;
   if (isTopLevel) {
     processedSrc = processedSrcAfterContainers.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
       const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;

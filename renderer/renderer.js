@@ -8684,8 +8684,9 @@ function personaSystem() { // V3
   prompt += "- Break paragraphs every 3-5 lines max\n";
   prompt += "- Use ## headers for multi-topic responses\n";
   prompt += "- Use markdown separator (---) for each topic change or other appropriate position \n";
-  prompt += "- OPTIONAL: If the user's request is ambiguous, complex, or warrants deep reflection, provide 1-2 introspective or clarifying questions. Wrap this section using the custom tag <brain>. The first element inside <brain> MUST be a <bli-title> tag which is a short, creative title relevant to the list of <bli> tags. This is followed by one or more <bli> tags for the actual questions. (e.g. <brain><bli-title></bli-title><bli>...</bli><bli>...</bli></brain>)\n";
-  prompt += "- MANDATORY: As the final element of every response, ALWAYS provide 2-5 suggested follow-up prompts. Wrap this section using the custom tag <prompt>. The first element inside <prompt> MUST be a <pli-title> tag that acts as a short creative header relevant to the list of <pli> tags for the suggestions. This is followed by the <pli> tags for the suggestions. (e.g. <prompt><pli-title>...</pli-title><pli>...</pli><pli>...</pli></prompt>)\n";
+  prompt += "- OPTIONAL: For ambiguous/complex requests, add reflection questions anywhere using <brain><bli-title>Short title</bli-title><bli>Question 1</bli><bli>Question 2</bli></brain>\n";
+  prompt += "- MANDATORY: Always end response with 2-5 suggested next relevant prompts. These MUST be actionable commands or topic suggestions (e.g., 'Explain X', 'Compare X and Y'). They must NOT be questions or interrogative sentences. Use the exact structure: <prompt><pli-title>Short title</pli-title><pli>Suggestion 1</pli><pli>Suggestion 2</pli></prompt>\n";
+  prompt += "- MANDATORY: Under NO circumstances use standard HTML <li> tags. You MUST ONLY use <bli> tags inside <brain> and <pli> tags inside <prompt>, never use the <li> tag.\n";
 
   if (isGemini) {
     prompt += "CRITICAL: Be MORE expressive - use MORE lists, emoji (2-3), bold. Fight plain text tendency.\n";

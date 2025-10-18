@@ -1921,7 +1921,7 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
                     provider === 'gemini'     ? (process.env.GEMINI_API_KEY || '') :
                                                 (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || ''));
 
-  const sys = 'Generate a title. Rules: (1) 3-6 words maximum (2) Title Case format (3) NO thinking tags, NO XML tags, NO quotes, NO periods (4) ONLY the title text, nothing else (5) For code queries, summarize purpose not the code. Output ONLY the title, zero other text.';
+  const sys = 'You are a title generator. Your job is to summarize the user query into a 3-6 word title. The title must be Title Case and have no punctuation. If the query is code, summarize its purpose. (Your response only the 3-6 title)';
   if (provider === 'gemini') {
     const url = new URL(`${BASE_URL.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent`);
     if (API_KEY) url.searchParams.set('key', API_KEY);
@@ -1981,13 +1981,10 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
   }
   const u = new URL(BASE_URL.replace(/\/+$/, '') + '/chat/completions');
   
-  // OPTIMIZATION: Add max_tokens constraint for title generation to prevent verbose reasoning
-  // This reduces completion_tokens from ~1,600 to ~100-150 tokens (still 90% reduction)
-  // Increased from 50 to 100 to prevent incomplete output and thinking tag artifacts
   const body = JSON.stringify({
     model,
     stream: false,
-    max_tokens: 100,  // Title: max 6 words (~30 tokens), 100 gives safety margin for different tokenizers
+    max_tokens: 700,
     messages: [
       { role: 'system', content: sys },
       { role: 'user', content: text }

@@ -3364,6 +3364,58 @@ textarea::-webkit-scrollbar {
   }
 }
 
+/* Account Modal Styles */
+.account-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.user-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
+
+.user-profile-card img {
+  flex-shrink: 0;
+}
+
+.button-group {
+  display: flex;
+  gap: 8px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  padding: 4px;
+}
+
+.mini-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: calc(var(--radius-lg) - 2px);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mini-btn:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.mini-btn.active {
+  background: var(--primary);
+  color: white;
+}
+
 @keyframes slideInPage {
   from {
     opacity: 0;

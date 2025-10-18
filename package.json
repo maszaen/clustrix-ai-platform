@@ -54,9 +54,13 @@
     "@langchain/textsplitters": "^0.1.0",
     "better-sqlite3": "^12.4.1",
     "cheerio": "^1.1.2",
+    "dotenv": "^17.2.3",
+    "google-auth-library": "^10.4.1",
+    "googleapis": "^164.0.0",
     "langchain": "^0.3.35",
     "mammoth": "^1.10.0",
     "mathjax": "^4.0.0",
+    "open": "^10.2.0",
     "serpapi": "^2.2.1",
     "uuid": "^10.0.0"
   }

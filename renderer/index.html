@@ -226,13 +226,21 @@
       <div class="sidebar-footer">
         <div id="settings-container">
           <button id="open-settings" class="settings-btn symbols">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings2-icon lucide-settings-2">
-              <path d="M14 17H5" />
-              <path d="M19 7h-9" />
-              <circle cx="17" cy="17" r="3" />
-              <circle cx="7" cy="7" r="3" />
-            </svg>
-            <span>Personalization</span>
+            <!-- Default icon for not logged in -->
+            <div id="default-settings-icon" style="display: flex; align-items: center; gap: 8px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings2-icon lucide-settings-2">
+                <path d="M14 17H5" />
+                <path d="M19 7h-9" />
+                <circle cx="17" cy="17" r="3" />
+                <circle cx="7" cy="7" r="3" />
+              </svg>
+              <span>Personalization</span>
+            </div>
+            <!-- Profile for logged in -->
+            <div id="user-profile-container" style="display: none; align-items: center; gap: 8px;">
+              <img id="user-profile-pic" src="" alt="Profile" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
+              <span id="user-display-name">User</span>
+            </div>
           </button>
           <div id="settings-menu" class="hidden">
             <button id="open-persona-settings" class="menu-item">
@@ -266,6 +274,13 @@
                 <path d="m21 21-4.3-4.3" />
               </svg>
               <span>Search API</span>
+            </button>
+            <button id="open-account-settings" class="menu-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              <span>Account</span>
             </button>
             <div class="theme-switcher">
               <div class="theme-info">
@@ -880,6 +895,170 @@
         <div class="action-group">
           <button id="close-settings" class="primary-btn">Cancel</button>
           <button id="save-settings" class="primary-btn">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Code Modal (OOB OAuth Flow) -->
+  <div id="auth-code-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>Enter Authorization Code</h2>
+        <button id="close-auth-code-modal" class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+      </div>
+      <hr />
+      <div class="modal-body">
+        <p style="color: var(--fg-muted); margin-bottom: 16px; line-height: 1.5;">
+          Google opened in your browser. Click "Allow" and then copy the authorization code that appears. Paste it below:
+        </p>
+        <div class="form-group">
+          <input 
+            id="auth-code-input" 
+            type="text" 
+            placeholder="Paste your authorization code here..." 
+            style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-panel); color: var(--fg-primary); font-family: monospace; font-size: 13px;"
+          />
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button id="auth-code-submit-btn" class="primary-btn" style="flex: 1;">Verify Code</button>
+          <button id="auth-code-cancel-btn" class="secondary-btn" style="flex: 1;">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account Settings Modal -->
+  <div id="account-settings-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Account Settings</h2>
+        <button id="close-account-modal" class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+      </div>
+      <hr />
+      <div class="modal-body">
+        <!-- NOT LOGGED IN STATE -->
+        <div id="account-not-logged-in" class="account-section">
+          <p style="text-align: center; color: var(--fg-muted); margin-bottom: 20px;">
+            Sign in dengan Google untuk enable cloud sync, backup, dan access data di multiple devices.
+          </p>
+          <button id="google-login-btn" class="primary-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+            </svg>
+            Sign in with Google
+          </button>
+        </div>
+
+        <!-- LOGGED IN STATE -->
+        <div id="account-logged-in" class="account-section hidden">
+          <!-- User Profile Card -->
+          <div class="user-profile-card">
+            <img id="account-profile-pic" src="" alt="Profile" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover;">
+            <div>
+              <div id="account-name" style="font-weight: 600;">User Name</div>
+              <div id="account-email" style="font-size: 13px; color: var(--fg-muted);">user@gmail.com</div>
+            </div>
+          </div>
+
+          <!-- Data Source Toggle -->
+          <div class="form-group">
+            <label>Data Source</label>
+            <div class="button-group">
+              <button id="data-source-internal" class="mini-btn active">Internal</button>
+              <button id="data-source-cloud" class="mini-btn">Cloud (Google Drive)</button>
+            </div>
+            <p class="help-text" id="data-source-info" style="font-size: 12px; color: var(--fg-muted); margin-top: 8px;">Data dimuat dari internal storage device kamu.</p>
+          </div>
+
+          <!-- Sync Controls -->
+          <div id="sync-controls" class="form-group hidden">
+            <label>Cloud Sync</label>
+            <div style="display: flex; gap: 8px;">
+              <button id="sync-now-btn" class="mini-btn" style="flex: 1;">Sync Now</button>
+              <button id="backup-now-btn" class="mini-btn" style="flex: 1;">Backup Now</button>
+            </div>
+          </div>
+
+          <!-- Logout -->
+          <button id="account-logout-btn" class="danger-btn" style="width: 100%; margin-top: 20px;">Logout</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account Settings Modal -->
+  <div id="account-settings-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Account Settings</h2>
+        <button id="close-account-modal" class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+      </div>
+      <hr />
+      <div class="modal-body">
+        <!-- NOT LOGGED IN STATE -->
+        <div id="account-not-logged-in" class="account-section">
+          <p style="text-align: center; color: var(--fg-muted); margin-bottom: 20px;">
+            Sign in dengan Google untuk enable cloud sync, backup, dan access data di multiple devices.
+          </p>
+          <button id="google-login-btn" class="primary-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+            </svg>
+            Sign in with Google
+          </button>
+        </div>
+
+        <!-- LOGGED IN STATE -->
+        <div id="account-logged-in" class="account-section hidden">
+          <!-- User Profile Card -->
+          <div class="user-profile-card">
+            <img id="account-profile-pic" src="" alt="Profile" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover;">
+            <div>
+              <div id="account-name" style="font-weight: 600;">User Name</div>
+              <div id="account-email" style="font-size: 13px; color: var(--fg-muted);">user@gmail.com</div>
+            </div>
+          </div>
+
+          <!-- Data Source Toggle -->
+          <div class="form-group">
+            <label>Data Source</label>
+            <div class="button-group">
+              <button id="data-source-internal" class="mini-btn active">Internal</button>
+              <button id="data-source-cloud" class="mini-btn">Cloud (Google Drive)</button>
+            </div>
+            <p class="help-text" id="data-source-info" style="font-size: 12px; color: var(--fg-muted); margin-top: 8px;">Data dimuat dari internal storage device kamu.</p>
+          </div>
+
+          <!-- Sync Controls -->
+          <div id="sync-controls" class="form-group hidden">
+            <label>Cloud Sync</label>
+            <div style="display: flex; gap: 8px;">
+              <button id="sync-now-btn" class="mini-btn" style="flex: 1;">Sync Now</button>
+              <button id="backup-now-btn" class="mini-btn" style="flex: 1;">Backup Now</button>
+            </div>
+          </div>
+
+          <!-- Logout -->
+          <button id="account-logout-btn" class="danger-btn" style="width: 100%; margin-top: 20px;">Logout</button>
         </div>
       </div>
     </div>

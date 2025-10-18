@@ -9254,25 +9254,34 @@ function renderHistoryLazy() {
     const messageData = initialMessages[i];
     if (!Array.isArray(messageData)) continue;
 
-    const [role, content, metadata] = messageData;
-    const isPlaceholder =
-      role === "ai" && content === "" && actualIndex === totalMessages - 1;
+    const [originalRole, content, metadata] = messageData;
+    let role = originalRole;
+    
+    // Detect incomplete AI responses (empty content for last AI message)
+    const isIncompleteResponse = 
+      originalRole === "ai" && 
+      (content === "" || content === null || content === undefined) && 
+      actualIndex === totalMessages - 1;
+    
+    if (isIncompleteResponse) {
+      role = "ai_incomplete";
+    }
 
     const node = addMessage(role, content, {
-      final: !isPlaceholder,
+      final: true, // Always final for incomplete responses
       index: actualIndex,
       metadata: metadata || {},
     });
     if (node) {
       node.dataset.index = String(actualIndex);
       node.dataset.lazyLoaded = "true";
-      createdNodes.push({ node, role, actualIndex, isPlaceholder });
+      createdNodes.push({ node, role, actualIndex, isIncompleteResponse });
     }
   }
 
   // Process all AI messages with thinking-text in parallel
-  for (const { node, role, actualIndex, isPlaceholder } of createdNodes) {
-    if (role === "ai" && !isPlaceholder) {
+  for (const { node, role, actualIndex, isIncompleteResponse } of createdNodes) {
+    if (role === "ai" && !isIncompleteResponse) {
       // Add async hydration to batch processing
       processingPromises.push(hydrateThinkingIfAnyAsync(node, current, actualIndex));
       renderMathInElement(node);
@@ -9999,6 +10008,10 @@ function addMessage(
   } else if (role === "ai_cancelled") {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
     node.innerHTML = `<div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${content}</span><button class="primary-btn regenerate-cancelled" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate?</button></div></div></div></div>`;
+  } else if (role === "ai_incomplete") {
+    const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
+    const placeholderText = "It looks like the system cannot find the AI response data here.";
+    node.innerHTML = `<div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${placeholderText}</span><button class="primary-btn regenerate-incomplete" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate</button></div></div></div></div>`;
   } else {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
     const thinking = `<div class="thinking-container"><div class="typing-indicator"><span></span></div><span class="thinking-text-indicator"></span></div>`;
@@ -12551,6 +12564,48 @@ async function regenerateFromCancelled(targetButton) {
   startStream(current, promptContent, newNode, messageIndex, false, msgs);
 }
 
+async function regenerateFromIncomplete(targetButton) {
+  if (!current || streamManager.isStreamingInSession(current)) return;
+
+  const messageNode = targetButton.closest(".message.ai_incomplete");
+  if (!messageNode) return;
+
+  const messageIndex = parseInt(targetButton.dataset.messageIndex, 10);
+  if (isNaN(messageIndex)) return;
+
+  const modelInfo = current.messages[messageIndex]?.[2] || null;
+  log(
+    "STREAM",
+    2,
+    "regenerateFromIncomplete",
+    "Regenerating from incomplete response.",
+    { modelInfo },
+  );
+
+  const msgs = buildMessagesUpTo(messageIndex - 1);
+
+  const userMessages = current.messages
+    .slice(0, messageIndex)
+    .filter((m) => m[0] === "user");
+  const lastUserMessage = userMessages.pop();
+  if (!lastUserMessage) return;
+  const promptContent = lastUserMessage[1];
+
+  msgs.push({ role: "user", content: promptContent });
+
+  current.messages[messageIndex] = ["ai", "", modelInfo];
+  await save();
+
+  const newNode = addMessage("ai", "", { final: false, index: messageIndex });
+  newNode.dataset.index = String(messageIndex);
+
+  messageNode.parentNode.replaceChild(newNode, messageNode);
+
+  scheduleThinkingText(newNode);
+
+  startStream(current, promptContent, newNode, messageIndex, false, msgs);
+}
+
 // Session Management
 function deleteSession(sessionToDelete) {
   if (!sessionToDelete) return;
@@ -14783,6 +14838,22 @@ function setupEventListeners() {
         { messageIndex },
       );
       regenerateFromCancelled(regenCancelledTarget);
+    }
+
+    const regenIncompleteTarget = event.target.closest(".regenerate-incomplete");
+    if (regenIncompleteTarget) {
+      const messageIndex = parseInt(
+        regenIncompleteTarget.dataset.messageIndex,
+        10,
+      );
+      log(
+        "UI",
+        0,
+        "event:regenerate-incomplete-click",
+        "Regenerate-incomplete button clicked",
+        { messageIndex },
+      );
+      regenerateFromIncomplete(regenIncompleteTarget);
     }
   });
 }

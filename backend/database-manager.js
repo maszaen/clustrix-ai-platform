@@ -7,9 +7,19 @@ function log(context, level, func, message, details = {}) {
 }
 
 class DatabaseManager {
-  constructor(app) {
-    const userDataPath = app.getPath('userData');
-    const dbPath = userDataPath === ':memory:' ? ':memory:' : path.join(userDataPath, 'clustrix.db');
+  constructor(app, customDbDir = null) {
+    let dbPath;
+    
+    if (customDbDir) {
+      // Use custom directory path (for cloud databases)
+      // customDbDir should be full path to database directory
+      dbPath = path.join(customDbDir, 'clustrix.db');
+    } else {
+      // Default: internal database
+      const userDataPath = app.getPath('userData');
+      dbPath = userDataPath === ':memory:' ? ':memory:' : path.join(userDataPath, 'database', 'internal', 'clustrix.db');
+    }
+    
     this.db = new Database(dbPath);
     
     this.db.pragma('journal_mode = WAL');
@@ -17,7 +27,10 @@ class DatabaseManager {
     this.db.pragma('foreign_keys = ON');
     
     this.initSchema();
-    log('DATABASE', 1, 'constructor', 'Database initialized', { path: dbPath });
+    log('DATABASE', 1, 'constructor', 'Database initialized', { 
+      path: dbPath,
+      isCloudDatabase: !!customDbDir 
+    });
   }
   
   initSchema() {

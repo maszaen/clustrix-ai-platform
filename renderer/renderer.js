@@ -14422,6 +14422,101 @@ function setupEventListeners() {
   $("#open-persona-settings").removeEventListener("click", handlePersonaSettingsClick);
   $("#open-persona-settings").addEventListener("click", handlePersonaSettingsClick);
 
+  // ===== ACCOUNT EVENT HANDLERS =====
+  const openAccountBtn = document.getElementById('open-account-settings');
+  const closeAccountBtn = document.getElementById('close-account-modal');
+  const accountModal = document.getElementById('account-settings-modal');
+  const googleLoginBtn = document.getElementById('google-login-btn');
+  const logoutBtn = document.getElementById('account-logout-btn');
+  const internalBtn = document.getElementById('data-source-internal');
+  const cloudBtn = document.getElementById('data-source-cloud');
+  const syncNowBtn = document.getElementById('sync-now-btn');
+  const backupNowBtn = document.getElementById('backup-now-btn');
+
+  if (openAccountBtn) {
+    openAccountBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      $("#account-settings-modal").classList.remove("hidden");
+      $("#settings-menu").classList.add("hidden");
+      await updateAccountModalUI();
+      log("UI", 0, "event:open-account-settings", "Account modal opened");
+    });
+  }
+
+  if (closeAccountBtn) {
+    closeAccountBtn.addEventListener('click', () => {
+      $("#account-settings-modal").classList.add("hidden");
+      log("UI", 0, "event:close-account-modal", "Account modal closed");
+    });
+  }
+
+  if (accountModal) {
+    accountModal.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-overlay')) {
+        $("#account-settings-modal").classList.add("hidden");
+      }
+    });
+  }
+
+  if (googleLoginBtn) {
+    googleLoginBtn.addEventListener('click', () => handleGoogleLogin());
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => handleLogout());
+  }
+
+  if (internalBtn) {
+    internalBtn.addEventListener('click', () => handleDataSourceSwitch('internal'));
+  }
+
+  if (cloudBtn) {
+    cloudBtn.addEventListener('click', () => handleDataSourceSwitch('cloud'));
+  }
+
+  if (syncNowBtn) {
+    syncNowBtn.addEventListener('click', () => module.exports.handleSyncNow());
+  }
+
+  if (backupNowBtn) {
+    backupNowBtn.addEventListener('click', () => module.exports.handleBackupNow());
+  }
+
+  // ===== AUTH CODE MODAL EVENT HANDLERS =====
+  const authCodeModal = document.getElementById('auth-code-modal');
+  const authCodeInput = document.getElementById('auth-code-input');
+  const authCodeSubmitBtn = document.getElementById('auth-code-submit-btn');
+  const authCodeCancelBtn = document.getElementById('auth-code-cancel-btn');
+  const closeAuthCodeModalBtn = document.getElementById('close-auth-code-modal');
+
+  if (authCodeModal) {
+    authCodeModal.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-overlay')) {
+        hideAuthCodeModal();
+      }
+    });
+  }
+
+  if (authCodeSubmitBtn) {
+    authCodeSubmitBtn.addEventListener('click', () => handleAuthCodeSubmit());
+  }
+
+  if (authCodeCancelBtn) {
+    authCodeCancelBtn.addEventListener('click', () => hideAuthCodeModal());
+  }
+
+  if (closeAuthCodeModalBtn) {
+    closeAuthCodeModalBtn.addEventListener('click', () => hideAuthCodeModal());
+  }
+
+  if (authCodeInput) {
+    authCodeInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        handleAuthCodeSubmit();
+      }
+    });
+  }
+
   // Immediate save for sidebar display toggles
   $("#show-projects-toggle").addEventListener("change", async (e) => {
     const showProjects = e.target.checked;
@@ -15095,7 +15190,278 @@ function initializeApp() {
 
 document.addEventListener("DOMContentLoaded", initializeApp);
 
-document.addEventListener('DOMContentLoaded', () => {
+// ===== TOAST NOTIFICATION (In-app, no native dialogs) =====
+
+function showToast(message, type = 'info') {
+  // Remove existing toast
+  const existing = document.querySelector('.toast-notification');
+  if (existing) existing.remove();
+  
+  const toast = document.createElement('div');
+  toast.className = `toast-notification toast-${type}`;
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 16px;
+    background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#22c55e' : '#3b82f6'};
+    color: white;
+    border-radius: 6px;
+    font-size: 14px;
+    z-index: 10000;
+    max-width: 300px;
+    word-wrap: break-word;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    animation: slideIn 0.3s ease-out;
+  `;
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// Add CSS animation if not exists
+if (!document.querySelector('style[data-toast-animations]')) {
+  const style = document.createElement('style');
+  style.setAttribute('data-toast-animations', 'true');
+  style.textContent = `
+    @keyframes slideIn {
+      from { transform: translateX(400px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOut {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(400px); opacity: 0; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// ===== ACCOUNT HANDLER FUNCTIONS (Top-level) =====
+
+async function updateSidebarAccountButton() {
+  try {
+    const syncConfig = await window.api.sync.getConfig();
+    const cloudUser = syncConfig.currentCloudUser;
+    
+    const defaultIcon = document.getElementById('default-settings-icon');
+    const userProfile = document.getElementById('user-profile-container');
+    
+    if (cloudUser) {
+      defaultIcon.style.display = 'none';
+      userProfile.style.display = 'flex';
+      
+      const userName = cloudUser.split('@')[0];
+      document.getElementById('user-display-name').textContent = userName;
+      
+      log('UI', 1, 'updateSidebarAccountButton', 'Sidebar updated with user profile', { user: cloudUser });
+    } else {
+      defaultIcon.style.display = 'flex';
+      userProfile.style.display = 'none';
+      
+      log('UI', 1, 'updateSidebarAccountButton', 'Sidebar reset to default icon');
+    }
+  } catch (e) {
+    log('UI', 4, 'updateSidebarAccountButton', 'Failed to update sidebar', { error: e.message });
+  }
+}
+
+async function updateAccountModalUI() {
+  try {
+    const syncConfig = await window.api.sync.getConfig();
+    const cloudUser = syncConfig.currentCloudUser;
+    
+    const notLoggedIn = document.getElementById('account-not-logged-in');
+    const loggedIn = document.getElementById('account-logged-in');
+    
+    if (cloudUser) {
+      notLoggedIn.classList.add('hidden');
+      loggedIn.classList.remove('hidden');
+      
+      document.getElementById('account-email').textContent = cloudUser;
+      document.getElementById('account-name').textContent = cloudUser.split('@')[0];
+      
+      // Update data source buttons
+      const isCloudMode = syncConfig.currentMode === 'cloud';
+      const internalBtn = document.getElementById('data-source-internal');
+      const cloudBtn = document.getElementById('data-source-cloud');
+      
+      if (isCloudMode) {
+        internalBtn.classList.remove('active');
+        cloudBtn.classList.add('active');
+        document.getElementById('data-source-info').textContent = 'Data dimuat dari Google Drive (cloud).';
+        document.getElementById('sync-controls').classList.remove('hidden');
+      } else {
+        internalBtn.classList.add('active');
+        cloudBtn.classList.remove('active');
+        document.getElementById('data-source-info').textContent = 'Data dimuat dari internal storage device kamu.';
+        document.getElementById('sync-controls').classList.add('hidden');
+      }
+      
+      log('UI', 1, 'updateAccountModalUI', 'Account modal updated', { user: cloudUser, mode: syncConfig.currentMode });
+    } else {
+      notLoggedIn.classList.remove('hidden');
+      loggedIn.classList.add('hidden');
+      
+      log('UI', 1, 'updateAccountModalUI', 'Account modal reset to login state');
+    }
+  } catch (e) {
+    log('UI', 4, 'updateAccountModalUI', 'Failed to update account modal', { error: e.message });
+  }
+}
+
+async function handleGoogleLogin() {
+  try {
+    log('AUTH', 1, 'handleGoogleLogin', 'Starting Google OAuth flow');
+    
+    const result = await window.api.sync.startOAuth?.() || { success: false, error: 'OAuth not available' };
+    
+    if (result.success) {
+      log('AUTH', 1, 'handleGoogleLogin', 'OAuth successful', { email: result.email });
+      await updateAccountModalUI();
+      await updateSidebarAccountButton();
+      showToast(`Logged in as ${result.email}`, 'success');
+    } else if (result.error === 'OOB_AUTH_REQUIRED') {
+      // Out-of-Band OAuth flow: show auth code input
+      log('AUTH', 1, 'handleGoogleLogin', 'OOB flow initiated - waiting for auth code');
+      showToast('Browser opened - check for authorization code', 'info');
+      showAuthCodeModal();
+    } else {
+      log('AUTH', 4, 'handleGoogleLogin', 'OAuth failed', { error: result.error });
+      const errorMsg = result.configured === false 
+        ? `Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables. Get credentials from console.cloud.google.com`
+        : `Login failed: ${result.error || 'Unknown error'}`;
+      showToast(errorMsg, 'error');
+    }
+  } catch (e) {
+    log('AUTH', 4, 'handleGoogleLogin', 'OAuth error', { error: e.message });
+    showToast('An error occurred during login: ' + e.message, 'error');
+  }
+}
+
+function showAuthCodeModal() {
+  const modal = document.getElementById('auth-code-modal');
+  if (!modal) {
+    log('AUTH', 3, 'showAuthCodeModal', 'Auth code modal not found in DOM');
+    return;
+  }
+  modal.classList.remove('hidden');
+  const input = document.getElementById('auth-code-input');
+  if (input) input.focus();
+}
+
+function hideAuthCodeModal() {
+  const modal = document.getElementById('auth-code-modal');
+  if (modal) modal.classList.add('hidden');
+  const input = document.getElementById('auth-code-input');
+  if (input) input.value = '';
+}
+
+async function handleAuthCodeSubmit() {
+  try {
+    const input = document.getElementById('auth-code-input');
+    const authCode = input?.value?.trim();
+
+    if (!authCode) {
+      showToast('Please paste the authorization code', 'warn');
+      return;
+    }
+
+    log('AUTH', 1, 'handleAuthCodeSubmit', 'Submitting auth code');
+    showToast('Verifying code...', 'info');
+
+    const result = await window.api.sync.exchangeAuthCode(authCode);
+
+    if (result.success) {
+      log('AUTH', 1, 'handleAuthCodeSubmit', 'Code exchange successful', { email: result.email });
+      hideAuthCodeModal();
+      await updateAccountModalUI();
+      await updateSidebarAccountButton();
+      showToast(`Logged in as ${result.email}`, 'success');
+    } else {
+      log('AUTH', 4, 'handleAuthCodeSubmit', 'Code exchange failed', { error: result.error });
+      showToast(`Code invalid: ${result.error}`, 'error');
+      input.value = '';
+      input.focus();
+    }
+  } catch (e) {
+    log('AUTH', 4, 'handleAuthCodeSubmit', 'Code exchange error', { error: e.message });
+    showToast('Error verifying code: ' + e.message, 'error');
+  }
+}
+
+async function handleLogout() {
+  try {
+    log('AUTH', 1, 'handleLogout', 'Logging out');
+    
+    const result = await window.api.sync.logout({ deleteCloudData: false });
+    
+    if (result.success) {
+      log('AUTH', 1, 'handleLogout', 'Logout successful');
+      await updateAccountModalUI();
+      await updateSidebarAccountButton();
+      showToast('Logged out. Switched to internal mode.', 'success');
+    } else {
+      log('AUTH', 4, 'handleLogout', 'Logout failed', { error: result.error });
+      showToast(`Logout failed: ${result.error}`, 'error');
+    }
+  } catch (e) {
+    log('AUTH', 4, 'handleLogout', 'Logout error', { error: e.message });
+    showToast('Logout error: ' + e.message, 'error');
+  }
+}
+
+async function handleDataSourceSwitch(mode) {
+  try {
+    log('SYNC', 1, 'handleDataSourceSwitch', 'Switching data source', { newMode: mode });
+    
+    const syncConfig = await window.api.sync.getConfig();
+    
+    if (mode === 'cloud' && !syncConfig.currentCloudUser) {
+      showToast('Please sign in with Google first.', 'error');
+      return;
+    }
+    
+    const result = await window.api.sync.switchMode({ mode, cloudUser: syncConfig.currentCloudUser });
+    
+    if (result.success) {
+      log('SYNC', 1, 'handleDataSourceSwitch', 'Mode switched, restarting app', { newMode: mode });
+      showToast(`Switching to ${mode} mode. App will restart...`, 'info');
+      
+      setTimeout(() => {
+        window.api.app.restart();
+      }, 1500);
+    } else {
+      log('SYNC', 4, 'handleDataSourceSwitch', 'Failed to switch mode', { error: result.error });
+      showToast(`Failed: ${result.error}`, 'error');
+    }
+  } catch (e) {
+    log('SYNC', 4, 'handleDataSourceSwitch', 'Switch error', { error: e.message });
+    showToast('Switch error: ' + e.message, 'error');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  // Load sync config and setup account UI on init
+  try {
+    const syncConfig = await window.api.sync.getConfig();
+    log('INIT', 1, 'DOMContentLoaded', 'Sync config loaded', {
+      mode: syncConfig.currentMode,
+      cloudUser: syncConfig.currentCloudUser
+    });
+    
+    // Update sidebar
+    if (window.__clustrixModule) {
+      await window.__clustrixModule.updateSidebarAccountButton();
+    }
+  } catch (e) {
+    log('INIT', 3, 'DOMContentLoaded', 'Failed to load sync config', { error: e.message });
+  }
+
   // TEMPORARILY DISABLED FOR PRODUCTION RELEASE - Custom tooltips are beta and have bugs
   /*
   // Handle custom tooltips for all elements with title attribute
@@ -15318,7 +15684,7 @@ window.DEBUG = {
   md,
   addMessage,
   clearLog,
-  
+
   getActiveHovers: () => Array.from(activeHoverElements).map(el => ({
     language: el.querySelector('.language-name')?.textContent,
     codeSnippet: el.querySelector('pre code')?.textContent?.substring(0, 30),

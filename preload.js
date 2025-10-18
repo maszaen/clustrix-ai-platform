@@ -8,6 +8,10 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on(channel, (event, ...args) => callback(...args));
     }
   },
+  // OAuth helper
+  sendEmail: (email) => {
+    ipcRenderer.send('oauth:submit-email', email);
+  },
   sessions: {
     load: () => ipcRenderer.invoke('sessions:load'),
     save: (data) => ipcRenderer.invoke('sessions:save', data),
@@ -75,5 +79,19 @@ contextBridge.exposeInMainWorld('api', {
   },
   shell: {
     openExternal: (url) => shell.openExternal(url),
+  },
+  sync: {
+    getConfig: () => ipcRenderer.invoke('sync:getConfig'),
+    saveConfig: (config) => ipcRenderer.invoke('sync:saveConfig', config),
+    switchMode: (params) => ipcRenderer.invoke('sync:switchMode', params),
+    listCloudUsers: () => ipcRenderer.invoke('sync:listCloudUsers'),
+    logout: (params) => ipcRenderer.invoke('sync:logout', params),
+    syncNow: () => ipcRenderer.invoke('sync:syncNow'),
+    backupNow: () => ipcRenderer.invoke('sync:backupNow'),
+    startOAuth: () => ipcRenderer.invoke('sync:startOAuth'),
+    exchangeAuthCode: (code) => ipcRenderer.invoke('sync:exchangeAuthCode', code),
+  },
+  app: {
+    restart: () => ipcRenderer.invoke('app:restart'),
   }
 });

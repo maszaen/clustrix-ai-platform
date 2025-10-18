@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const { app, BrowserWindow, ipcMain, dialog, session, protocol, net, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -5,6 +7,9 @@ const fsp = require('fs').promises;
 const https = require('https');
 const mammoth = require('mammoth');
 const xlsx = require('./local_modules/xlsx/xlsx');
+const { google } = require('googleapis');
+const { OAuth2Client } = require('google-auth-library');
+const open = require('open');
 const { log, logWithContext, setLogFile, setDebug } = require('./utils/logger');
 const { optimizeMessages } = require('./utils/message-optimizer');
 
@@ -14,16 +19,33 @@ const { getBaseUrl, getApiKey, joinEndpoint, applyThinkingHints } = require('./b
 const { performWebSearch, scrapeUrls } = require('./backend/web-search');
 const DatabaseManager = require('./backend/database-manager');
 const JSONToSQLiteMigrator = require('./backend/json-to-sqlite-migrator');
+const SyncManager = require('./backend/sync-manager');
+const DirectoryMigrator = require('./backend/directory-migrator');
+const OAuthHelper = require('./backend/oauth-helper');
 
 let langchainService = null;
 let agentOrchestrator = null;
 let db = null;
 let useSQLite = false;
+let syncManager = null;
+let directoryMigrator = null;
 
 app.whenReady().then(async () => {
   setLogFile(path.join(app.getPath('userData'), 'app.log'));
   setDebug(process.env.CLUSTRIX_DEBUG !== 'false');
   log('[FLAGS]', app.commandLine.getSwitchValue('enable-features'));
+  
+  // Initialize SyncManager and run directory migration
+  syncManager = new SyncManager(app);
+  syncManager.ensureDirectories();
+  
+  directoryMigrator = new DirectoryMigrator(app, syncManager);
+  const migrationResult = await directoryMigrator.runMigration();
+  
+  if (migrationResult.migrated) {
+    log('MIGRATION', 1, 'init', 'Directory migration completed', migrationResult);
+  }
+  
   langchainService = new ClustrixLangChainService(app);
   agentOrchestrator = new MultiAgentOrchestrator(langchainService);
   log('LangChain services initialized');
@@ -31,31 +53,53 @@ app.whenReady().then(async () => {
     log('Warning: No environment variables loaded. Check your .env file and dotenv setup.');
   }
   
-  const dbPath = path.join(app.getPath('userData'), 'clustrix.db');
-  const dbExists = fs.existsSync(dbPath);
+  // Determine database path based on sync config
+  const syncConfig = syncManager.loadSyncConfig();
+  let dbSourcePath;
   
-  if (dbExists) {
-    db = new DatabaseManager(app);
+  if (syncConfig.currentMode === 'cloud' && syncConfig.currentCloudUser) {
+    const cloudPath = syncManager.getCloudDataPath(syncConfig.currentCloudUser);
+    dbSourcePath = cloudPath;
+    log('DATABASE', 1, 'init', 'Using cloud database', { user: '***' });
+  } else {
+    dbSourcePath = syncManager.getInternalDataPath();
+    log('DATABASE', 1, 'init', 'Using internal database');
+  }
+  
+  // Initialize database
+  const newDbPath = path.join(dbSourcePath, 'clustrix.db');
+  const newDbExists = fs.existsSync(newDbPath);
+  
+  if (newDbExists) {
+    db = new DatabaseManager(app, dbSourcePath === syncManager.getInternalDataPath() ? null : dbSourcePath);
     useSQLite = true;
     log('DATABASE', 1, 'init', 'Using SQLite database');
   } else {
-    const jsonPath = path.join(app.getPath('userData'), 'chat_data.json');
-    if (fs.existsSync(jsonPath)) {
-      log('DATABASE', 2, 'init', 'JSON files detected, starting migration');
-      db = new DatabaseManager(app);
-      const migrator = new JSONToSQLiteMigrator(app, db);
-      const result = await migrator.migrate();
-      if (result.success) {
-        useSQLite = true;
-        log('DATABASE', 1, 'migration', 'Migration completed successfully');
-      } else {
-        log('DATABASE', 4, 'migration', 'Migration failed', { error: result.error });
-        useSQLite = false;
-      }
-    } else {
-      log('DATABASE', 2, 'init', 'No existing data, creating new SQLite database');
+    // Check old location for backward compatibility
+    const oldDbPath = path.join(app.getPath('userData'), 'clustrix.db');
+    if (fs.existsSync(oldDbPath)) {
+      log('DATABASE', 2, 'init', 'Found old database format, initializing with old path');
       db = new DatabaseManager(app);
       useSQLite = true;
+    } else {
+      const jsonPath = path.join(app.getPath('userData'), 'chat_data.json');
+      if (fs.existsSync(jsonPath)) {
+        log('DATABASE', 2, 'init', 'JSON files detected, starting migration');
+        db = new DatabaseManager(app, dbSourcePath === syncManager.getInternalDataPath() ? null : dbSourcePath);
+        const migrator = new JSONToSQLiteMigrator(app, db);
+        const result = await migrator.migrate();
+        if (result.success) {
+          useSQLite = true;
+          log('DATABASE', 1, 'migration', 'Migration completed successfully');
+        } else {
+          log('DATABASE', 4, 'migration', 'Migration failed', { error: result.error });
+          useSQLite = false;
+        }
+      } else {
+        log('DATABASE', 2, 'init', 'No existing data, creating new SQLite database');
+        db = new DatabaseManager(app, dbSourcePath === syncManager.getInternalDataPath() ? null : dbSourcePath);
+        useSQLite = true;
+      }
     }
   }
 });
@@ -129,6 +173,21 @@ Analyze the above message for insults. If you detect insults against AI/platform
 
 const modelsConfFile = path.join(app.getPath('userData'), 'ai-model.conf.json');
 
+function getModelConfigPath() {
+  if (!syncManager) {
+    return modelsConfFile;
+  }
+  
+  const syncConfig = syncManager.loadSyncConfig();
+  
+  if (syncConfig.currentMode === 'cloud' && syncConfig.currentCloudUser) {
+    const cloudPath = syncManager.getCloudDataPath(syncConfig.currentCloudUser);
+    return path.join(cloudPath, 'ai-model.conf.json');
+  } else {
+    return path.join(syncManager.internalDbDir, 'ai-model.conf.json');
+  }
+}
+
 function defaultModelsConf() {
   return {
     active: {
@@ -187,8 +246,9 @@ function defaultModelsConf() {
 
 ipcMain.handle('models:load', async () => {
   try {
-    if (!fs.existsSync(modelsConfFile)) return defaultModelsConf();
-    const raw = fs.readFileSync(modelsConfFile, 'utf-8');
+    const configPath = getModelConfigPath();
+    if (!fs.existsSync(configPath)) return defaultModelsConf();
+    const raw = fs.readFileSync(configPath, 'utf-8');
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? parsed : defaultModelsConf();
   } catch (e) {
@@ -199,11 +259,413 @@ ipcMain.handle('models:load', async () => {
 
 ipcMain.handle('models:save', async (_evt, conf) => {
   try {
-    fs.writeFileSync(modelsConfFile, JSON.stringify(conf, null, 2), 'utf-8');
+    const configPath = getModelConfigPath();
+    fs.writeFileSync(configPath, JSON.stringify(conf, null, 2), 'utf-8');
     return true;
   } catch (e) {
     log('models:save error', e);
     return false;
+  }
+});
+
+// ============================================================================
+// SYNC HANDLERS
+// ============================================================================
+
+/**
+ * sync:getConfig
+ * Get current sync configuration
+ */
+ipcMain.handle('sync:getConfig', async () => {
+  try {
+    if (!syncManager) {
+      return syncManager.getDefaultSyncConfig();
+    }
+    const config = syncManager.loadSyncConfig();
+    return {
+      currentMode: config.currentMode,
+      currentCloudUser: config.currentCloudUser ? config.currentCloudUser.split('@')[0] : null, // Don't expose full email
+      cloudToken: config.cloudToken ? '***' : null, // Don't expose token
+      lastSyncTime: config.lastSyncTime,
+      createdAt: config.createdAt
+    };
+  } catch (e) {
+    log('sync:getConfig error', e);
+    return {
+      currentMode: 'internal',
+      currentCloudUser: null,
+      error: e.message
+    };
+  }
+});
+
+/**
+ * sync:saveConfig
+ * Save sync configuration
+ */
+ipcMain.handle('sync:saveConfig', async (_evt, config) => {
+  try {
+    if (!syncManager) {
+      throw new Error('SyncManager not initialized');
+    }
+    syncManager.saveSyncConfig(config);
+    return { success: true };
+  } catch (e) {
+    log('sync:saveConfig error', e);
+    return { success: false, error: e.message };
+  }
+});
+
+/**
+ * sync:switchMode
+ * Switch between internal and cloud mode
+ * Params: { mode: 'internal' | 'cloud', cloudUser?: 'user@gmail.com' }
+ */
+ipcMain.handle('sync:switchMode', async (_evt, params) => {
+  try {
+    if (!syncManager) {
+      throw new Error('SyncManager not initialized');
+    }
+
+    const { mode, cloudUser } = params;
+
+    if (mode !== 'internal' && mode !== 'cloud') {
+      throw new Error('Invalid mode: must be "internal" or "cloud"');
+    }
+
+    const config = syncManager.loadSyncConfig();
+
+    // If switching to cloud, ensure cloud user is provided
+    if (mode === 'cloud' && !cloudUser) {
+      throw new Error('Cloud user must be provided when switching to cloud mode');
+    }
+
+    // If switching FROM cloud to internal, optionally clear cloud user
+    if (mode === 'internal') {
+      config.currentMode = 'internal';
+      config.currentCloudUser = null;
+    } else {
+      // Switching TO cloud mode
+      config.currentMode = 'cloud';
+      config.currentCloudUser = cloudUser;
+
+      // Create cloud user folder if doesn't exist
+      try {
+        syncManager.createCloudUserFolder(cloudUser);
+      } catch (e) {
+        log('sync:switchMode warning', e);
+        // Don't fail if folder creation fails, just log
+      }
+    }
+
+    config.lastSyncTime = Date.now();
+    syncManager.saveSyncConfig(config);
+
+    log('sync:switchMode', 1, 'handleSync', `Switched to ${mode} mode`, {
+      mode: mode,
+      user: mode === 'cloud' ? cloudUser : null
+    });
+
+    return {
+      success: true,
+      newMode: mode,
+      message: `Switched to ${mode} mode. App will restart to apply changes.`
+    };
+  } catch (e) {
+    log('sync:switchMode error', e);
+    return {
+      success: false,
+      error: e.message
+    };
+  }
+});
+
+/**
+ * sync:listCloudUsers
+ * List all local cloud user folders
+ */
+ipcMain.handle('sync:listCloudUsers', async () => {
+  try {
+    if (!syncManager) {
+      return [];
+    }
+    const users = syncManager.listCloudUsers();
+    return users;
+  } catch (e) {
+    log('sync:listCloudUsers error', e);
+    return [];
+  }
+});
+
+/**
+ * sync:logout
+ * Logout from cloud account and optionally delete cloud data
+ * Params: { deleteCloudData?: boolean }
+ */
+ipcMain.handle('sync:logout', async (_evt, params = {}) => {
+  try {
+    if (!syncManager) {
+      throw new Error('SyncManager not initialized');
+    }
+
+    const { deleteCloudData } = params;
+    const config = syncManager.loadSyncConfig();
+    const currentUser = config.currentCloudUser;
+
+    if (!currentUser) {
+      return { success: false, error: 'Not logged in' };
+    }
+
+    // Delete cloud user folder if requested
+    if (deleteCloudData) {
+      try {
+        syncManager.deleteCloudUserFolder(currentUser);
+        log('sync:logout', 1, 'handleSync', `Deleted cloud data for ${currentUser}`);
+      } catch (e) {
+        log('sync:logout warning', e);
+        // Don't fail if folder deletion fails
+      }
+    }
+
+    // Reset config to internal mode
+    config.currentMode = 'internal';
+    config.currentCloudUser = null;
+    config.cloudToken = null;
+    config.cloudTokenExpiry = null;
+
+    syncManager.saveSyncConfig(config);
+
+    log('sync:logout', 1, 'handleSync', 'Logged out from cloud account');
+
+    return {
+      success: true,
+      message: 'Logged out successfully. App will restart to apply changes.'
+    };
+  } catch (e) {
+    log('sync:logout error', e);
+    return {
+      success: false,
+      error: e.message
+    };
+  }
+});
+
+/**
+ * sync:startOAuth
+ * Start Google OAuth flow for account login
+ */
+ipcMain.handle('sync:startOAuth', async (evt) => {
+  try {
+    log('sync:startOAuth', 1, 'handleSync', 'Starting Google OAuth flow');
+
+    let oauthHelper;
+    try {
+      oauthHelper = new OAuthHelper();
+    } catch (initError) {
+      log('sync:startOAuth', 3, 'handleSync', 'OAuth not configured', { error: initError.message });
+      return {
+        success: false,
+        error: initError.message,
+        configured: false
+      };
+    }
+
+    try {
+      await oauthHelper.startAuthFlow();
+    } catch (authError) {
+      if (authError.message === 'OOB_AUTH_REQUIRED') {
+        log('sync:startOAuth', 1, 'handleSync', 'OOB flow - browser opened, waiting for auth code');
+        // Store oauthHelper for later code exchange
+        global.pendingOAuthHelper = oauthHelper;
+        return {
+          success: false,
+          error: 'OOB_AUTH_REQUIRED',
+          message: 'Check your browser for the authorization code'
+        };
+      }
+      throw authError;
+    }
+
+    // This won't be reached in OOB flow (throws error)
+    // But kept for non-OOB implementations if needed
+    return {
+      success: false,
+      error: 'OAuth initialization failed'
+    };
+  } catch (e) {
+    log('sync:startOAuth error', e);
+    return {
+      success: false,
+      error: e.message || 'OAuth flow failed',
+      configured: false
+    };
+  }
+});
+
+/**
+ * sync:syncNow
+ * Manually trigger a sync operation
+ * (Implementation deferred - placeholder for Phase 2)
+ */
+/**
+ * sync:exchangeAuthCode
+ * Exchange authorization code for tokens (OOB OAuth flow)
+ */
+ipcMain.handle('sync:exchangeAuthCode', async (evt, authCode) => {
+  try {
+    log('sync:exchangeAuthCode', 1, 'handleSync', 'Exchanging auth code for tokens');
+
+    if (!authCode || typeof authCode !== 'string') {
+      return {
+        success: false,
+        error: 'Invalid auth code provided'
+      };
+    }
+
+    if (!global.pendingOAuthHelper) {
+      return {
+        success: false,
+        error: 'No pending OAuth session - restart login'
+      };
+    }
+
+    const oauthHelper = global.pendingOAuthHelper;
+    const result = await oauthHelper.exchangeCodeForToken(authCode);
+
+    if (!result || !result.email) {
+      return {
+        success: false,
+        error: 'OAuth failed - no email received'
+      };
+    }
+
+    // Update sync config with OAuth user
+    const config = syncManager.loadSyncConfig();
+    config.currentMode = 'cloud';
+    config.currentCloudUser = result.email;
+    config.cloudToken = result.accessToken;
+    config.cloudTokenExpiry = new Date(result.expiresIn).toISOString();
+    config.lastSyncTime = new Date().toISOString();
+
+    syncManager.saveSyncConfig(config);
+    
+    // Create cloud user folder
+    syncManager.createCloudUserFolder(result.email);
+
+    // Clear pending session
+    global.pendingOAuthHelper = null;
+
+    log('sync:exchangeAuthCode', 1, 'handleSync', 'OAuth successful', { 
+      email: result.email,
+      hasRefreshToken: !!result.refreshToken 
+    });
+
+    return {
+      success: true,
+      email: result.email,
+      message: 'Logged in successfully!'
+    };
+  } catch (e) {
+    log('sync:exchangeAuthCode error', e);
+    global.pendingOAuthHelper = null;
+    return {
+      success: false,
+      error: e.message || 'Code exchange failed'
+    };
+  }
+});
+
+ipcMain.handle('sync:syncNow', async () => {
+  try {
+    log('sync:syncNow', 1, 'handleSync', 'Sync triggered manually (not yet implemented)');
+    return {
+      success: true,
+      message: 'Sync queued (implementation in Phase 2)'
+    };
+  } catch (e) {
+    log('sync:syncNow error', e);
+    return {
+      success: false,
+      error: e.message
+    };
+  }
+});
+
+/**
+ * sync:backupNow
+ * Manually trigger a backup operation
+ * Creates ZIP backup of current database + data
+ */
+ipcMain.handle('sync:backupNow', async () => {
+  try {
+    log('sync:backupNow', 1, 'handleSync', 'Backup triggered');
+
+    if (!syncManager || !db) {
+      return {
+        success: false,
+        error: 'Database not initialized'
+      };
+    }
+
+    // Create backup filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const backupDir = path.join(app.getPath('userData'), 'backups');
+    
+    // Ensure backup directory exists
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+
+    // Get current database path
+    const syncConfig = syncManager.loadSyncConfig();
+    let dbPath;
+    if (syncConfig.currentMode === 'cloud' && syncConfig.currentCloudUser) {
+      dbPath = path.join(syncManager.getCloudDataPath(syncConfig.currentCloudUser), 'clustrix.db');
+    } else {
+      dbPath = path.join(syncManager.getInternalDataPath(), 'clustrix.db');
+    }
+
+    // Create backup copy
+    const backupFile = path.join(backupDir, `clustrix-backup-${timestamp}.db`);
+    if (fs.existsSync(dbPath)) {
+      fs.copyFileSync(dbPath, backupFile);
+      log('sync:backupNow', 1, 'handleSync', 'Backup created', { backupFile, size: fs.statSync(backupFile).size });
+      
+      return {
+        success: true,
+        message: `Backup created: ${timestamp}`,
+        backupFile: backupFile,
+        location: backupDir
+      };
+    } else {
+      return {
+        success: false,
+        error: 'Database file not found'
+      };
+    }
+  } catch (e) {
+    log('sync:backupNow error', e);
+    return {
+      success: false,
+      error: e.message
+    };
+  }
+});
+
+/**
+ * app:restart
+ * Restart the Electron app
+ * Used after switching modes or logging out
+ */
+ipcMain.handle('app:restart', async () => {
+  try {
+    log('app:restart', 1, 'handleRestart', 'App restart requested');
+    app.relaunch();
+    app.quit();
+    return { success: true };
+  } catch (e) {
+    log('app:restart error', e);
+    return { success: false, error: e.message };
   }
 });
 

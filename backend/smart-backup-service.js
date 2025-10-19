@@ -13,6 +13,8 @@
 const Database = require('better-sqlite3');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const { app } = require('electron');
 const { logWithContext } = require('../utils/logger');
 const {
   getDeviceId,
@@ -21,6 +23,7 @@ const {
   getCurrentTimestamp,
   generateSessionHash
 } = require('./sync-helpers');
+const ConflictResolver = require('./conflict-resolver');
 
 const log = (level, method, message, data = {}) => {
   logWithContext('SMART-BACKUP', level, method, message, data);
@@ -31,6 +34,8 @@ class SmartBackupService {
     this.localDbPath = localDbPath;
     this.githubStorage = githubStorageService;
     this.tempDir = path.join(path.dirname(localDbPath), 'temp');
+    this.lockFilePath = path.join(app.getPath('userData'), 'backup.lock');
+    this.conflictResolver = new ConflictResolver();
     
     // Ensure temp directory exists
     if (!fs.existsSync(this.tempDir)) {
@@ -39,26 +44,124 @@ class SmartBackupService {
     
     log(1, 'constructor', 'SmartBackupService initialized', {
       localDb: this.localDbPath,
-      tempDir: this.tempDir
+      tempDir: this.tempDir,
+      lockFile: this.lockFilePath
     });
+  }
+  
+  /**
+   * Acquire backup lock to prevent concurrent backups
+   * 
+   * Waits up to 30 seconds for existing lock to be released.
+   * Throws error if timeout exceeded.
+   */
+  async acquireLock() {
+    const lockTimeout = 30000; // 30 seconds
+    const startTime = Date.now();
+    
+    while (fs.existsSync(this.lockFilePath)) {
+      if (Date.now() - startTime > lockTimeout) {
+        // Check if lock is stale (older than 5 minutes)
+        try {
+          const lockData = JSON.parse(fs.readFileSync(this.lockFilePath, 'utf8'));
+          if (Date.now() - lockData.startedAt > 300000) {
+            log(2, 'acquireLock', 'Removing stale lock file', {
+              age: Date.now() - lockData.startedAt,
+              pid: lockData.pid
+            });
+            fs.unlinkSync(this.lockFilePath);
+            break;
+          }
+        } catch (err) {
+          // Invalid lock file, remove it
+          fs.unlinkSync(this.lockFilePath);
+          break;
+        }
+        
+        throw new Error('Backup lock timeout - another backup in progress');
+      }
+      
+      // Wait 1 second before checking again
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    // Create lock file
+    const db = new Database(this.localDbPath, { readonly: true });
+    const deviceId = getDeviceId(db);
+    db.close();
+    
+    fs.writeFileSync(this.lockFilePath, JSON.stringify({
+      pid: process.pid,
+      deviceId: deviceId,
+      startedAt: Date.now(),
+      dbPath: this.localDbPath
+    }, null, 2));
+    
+    log(1, 'acquireLock', 'Backup lock acquired', {
+      pid: process.pid,
+      deviceId: deviceId
+    });
+  }
+  
+  /**
+   * Release backup lock
+   * 
+   * Safe to call even if lock doesn't exist.
+   */
+  releaseLock() {
+    if (fs.existsSync(this.lockFilePath)) {
+      try {
+        fs.unlinkSync(this.lockFilePath);
+        log(1, 'releaseLock', 'Backup lock released');
+      } catch (err) {
+        log(3, 'releaseLock', 'Failed to remove lock file', {
+          error: err.message
+        });
+      }
+    }
+  }
+  
+  /**
+   * Calculate SHA256 checksum of a file
+   * 
+   * @param {string} filePath - Path to file
+   * @returns {string} SHA256 hash (hex)
+   */
+  calculateChecksum(filePath) {
+    const fileBuffer = fs.readFileSync(filePath);
+    const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    
+    log(2, 'calculateChecksum', 'Checksum calculated', {
+      file: path.basename(filePath),
+      checksum: hash.substring(0, 16) + '...',
+      size: fileBuffer.length
+    });
+    
+    return hash;
   }
   
   /**
    * Perform smart backup (delta upload)
    * 
    * Steps:
+   * 0. Acquire backup lock
    * 1. Query local changes since last backup
    * 2. Download cloud database
    * 3. Apply delta to cloud database
    * 4. Upload modified cloud database
    * 5. Update last_backup_time
+   * 6. Release lock
    * 
    * @returns {Object} Backup result { success, stats, conflicts }
    */
   async performSmartBackup() {
     const startTime = Date.now();
+    let cloudDbPath = null;
     
     try {
+      // Step 0: Acquire lock to prevent concurrent backups
+      await this.acquireLock();
+      
       log(1, 'performSmartBackup', 'Starting smart backup');
       
       // Step 1: Query local changes
@@ -83,6 +186,23 @@ class SmartBackupService {
       // Step 2: Download cloud database
       const cloudDbPath = await this.downloadCloudDatabase();
       
+      // Step 2.5: Detect conflicts between local and cloud
+      const conflicts = await this.detectConflicts(cloudDbPath, changes);
+      
+      if (conflicts.length > 0) {
+        log(2, 'performSmartBackup', 'Conflicts detected, will need resolution', {
+          conflictCount: conflicts.length
+        });
+        
+        // Return conflicts for main process to handle via IPC
+        return {
+          success: false,
+          needsConflictResolution: true,
+          conflicts: conflicts,
+          message: `${conflicts.length} conflict(s) detected. User resolution required.`
+        };
+      }
+      
       // Step 3: Apply delta changes to cloud database
       const applyResult = this.applyDeltaToCloud(cloudDbPath, changes);
       
@@ -98,11 +218,6 @@ class SmartBackupService {
       // Mark all synced records with synced_at
       this.markRecordsAsSynced(localDb, changes);
       localDb.close();
-      
-      // Cleanup temp file
-      if (fs.existsSync(cloudDbPath)) {
-        fs.unlinkSync(cloudDbPath);
-      }
       
       const duration = Date.now() - startTime;
       
@@ -127,6 +242,24 @@ class SmartBackupService {
         success: false,
         error: error.message
       };
+      
+    } finally {
+      // Step 6: Always release lock and cleanup temp files
+      this.releaseLock();
+      
+      if (cloudDbPath && fs.existsSync(cloudDbPath)) {
+        try {
+          fs.unlinkSync(cloudDbPath);
+          log(2, 'performSmartBackup', 'Cleaned up temp cloud DB', {
+            path: cloudDbPath
+          });
+        } catch (cleanupErr) {
+          log(3, 'performSmartBackup', 'Failed to cleanup temp file', {
+            path: cloudDbPath,
+            error: cleanupErr.message
+          });
+        }
+      }
     }
   }
   
@@ -186,6 +319,67 @@ class SmartBackupService {
     });
     
     return { sessions, messages, deletedSessions, deletedMessages };
+  }
+  
+  /**
+   * Detect conflicts between local changes and cloud database
+   * 
+   * A conflict occurs when:
+   * - Same record ID exists in both local and cloud
+   * - Timestamps are within 1 second (concurrent edit)
+   * - Content hash differs (different changes)
+   * 
+   * @param {string} cloudDbPath - Path to downloaded cloud database
+   * @param {Object} localChanges - Local changes from queryLocalChanges()
+   * @returns {Array} Array of conflicts { id, local, cloud, type }
+   */
+  async detectConflicts(cloudDbPath, localChanges) {
+    log(2, 'detectConflicts', 'Checking for conflicts');
+    
+    const cloudDb = new Database(cloudDbPath, { readonly: true });
+    
+    try {
+      // Get cloud sessions that might conflict
+      const cloudSessions = cloudDb.prepare(`
+        SELECT * FROM sessions WHERE deleted = 0
+      `).all();
+      
+      // Get cloud messages that might conflict
+      const cloudMessages = cloudDb.prepare(`
+        SELECT * FROM messages WHERE deleted = 0
+      `).all();
+      
+      // Detect session conflicts
+      const sessionConflicts = this.conflictResolver.detectConflicts(
+        localChanges.sessions,
+        cloudSessions,
+        'session'
+      );
+      
+      // Detect message conflicts
+      const messageConflicts = this.conflictResolver.detectConflicts(
+        localChanges.messages,
+        cloudMessages,
+        'message'
+      );
+      
+      const allConflicts = [...sessionConflicts, ...messageConflicts];
+      
+      if (allConflicts.length > 0) {
+        this.conflictResolver.queueConflicts(allConflicts);
+      }
+      
+      log(2, 'detectConflicts', 'Conflict detection complete', {
+        sessionConflicts: sessionConflicts.length,
+        messageConflicts: messageConflicts.length,
+        totalConflicts: allConflicts.length
+      });
+      
+      return allConflicts;
+      
+    } finally {
+      cloudDb.close();
+    }
   }
   
   /**
@@ -351,47 +545,124 @@ class SmartBackupService {
       }
       
       // Apply message changes
+      const selectMessageById = db.prepare(`
+        SELECT id, session_id, content, role, updated_at, sequence, device_id
+        FROM messages
+        WHERE id = ?
+      `);
+      const selectMessageBySequence = db.prepare(`
+        SELECT id, session_id, content, role, updated_at, sequence, device_id
+        FROM messages
+        WHERE session_id = ? AND sequence = ?
+        ORDER BY updated_at DESC
+        LIMIT 1
+      `);
+      const updateMessageStmt = db.prepare(`
+        UPDATE messages SET
+          session_id = ?, role = ?, content = ?, message_index = ?, created_at = ?,
+          model_id = ?, model_label = ?, provider = ?, base_url = ?,
+          think_mode = ?, think_content = ?, thinking_update = ?,
+          web_search_enabled = ?, web_search_data = ?, files = ?, metadata = ?,
+          deleted = ?, device_id = ?, synced_at = ?, sequence = ?, updated_at = ?
+        WHERE id = ?
+      `);
+      const insertMessageWithIdStmt = db.prepare(`
+        INSERT INTO messages (
+          id, session_id, role, content, message_index, created_at,
+          model_id, model_label, provider, base_url,
+          think_mode, think_content, thinking_update,
+          web_search_enabled, web_search_data, files, metadata,
+          deleted, device_id, synced_at, sequence, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const insertMessageStmt = db.prepare(`
+        INSERT INTO messages (
+          session_id, role, content, message_index, created_at,
+          model_id, model_label, provider, base_url,
+          think_mode, think_content, thinking_update,
+          web_search_enabled, web_search_data, files, metadata,
+          deleted, device_id, synced_at, sequence, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const maxSequenceStmt = db.prepare('SELECT MAX(sequence) as maxSeq FROM messages WHERE session_id = ?');
+
+      const getSequenceValue = (msg) => {
+        if (msg.sequence !== undefined && msg.sequence !== null) return msg.sequence;
+        if (msg.message_index !== undefined && msg.message_index !== null) return msg.message_index;
+        if (msg.messageIndex !== undefined && msg.messageIndex !== null) return msg.messageIndex;
+        return 0;
+      };
+
+      const toMessageParams = (msg, sequenceValue) => [
+        msg.session_id,
+        msg.role,
+        msg.content,
+        sequenceValue,
+        msg.created_at,
+        msg.model_id,
+        msg.model_label,
+        msg.provider,
+        msg.base_url,
+        msg.think_mode,
+        msg.think_content,
+        msg.thinking_update,
+        msg.web_search_enabled,
+        msg.web_search_data,
+        msg.files,
+        msg.metadata,
+        msg.deleted,
+        msg.device_id,
+        msg.synced_at,
+        sequenceValue,
+        msg.updated_at
+      ];
+
       for (const message of changes.messages) {
-        const existing = db.prepare('SELECT id FROM messages WHERE id = ?').get(message.id);
-        
-        if (existing) {
-          // UPDATE existing message
-          db.prepare(`
-            UPDATE messages SET
-              session_id = ?, role = ?, content = ?, message_index = ?, created_at = ?,
-              model_id = ?, model_label = ?, provider = ?, base_url = ?,
-              think_mode = ?, think_content = ?, thinking_update = ?,
-              web_search_enabled = ?, web_search_data = ?, files = ?, metadata = ?,
-              deleted = ?, device_id = ?, synced_at = ?, sequence = ?, updated_at = ?
-            WHERE id = ?
-          `).run(
-            message.session_id, message.role, message.content, message.message_index, message.created_at,
-            message.model_id, message.model_label, message.provider, message.base_url,
-            message.think_mode, message.think_content, message.thinking_update,
-            message.web_search_enabled, message.web_search_data, message.files, message.metadata,
-            message.deleted, message.device_id, message.synced_at, message.sequence, message.updated_at,
-            message.id
-          );
-          stats.messagesUpdated++;
-        } else {
-          // INSERT new message
-          db.prepare(`
-            INSERT INTO messages (
-              id, session_id, role, content, message_index, created_at,
-              model_id, model_label, provider, base_url,
-              think_mode, think_content, thinking_update,
-              web_search_enabled, web_search_data, files, metadata,
-              deleted, device_id, synced_at, sequence, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            message.id, message.session_id, message.role, message.content, message.message_index, message.created_at,
-            message.model_id, message.model_label, message.provider, message.base_url,
-            message.think_mode, message.think_content, message.thinking_update,
-            message.web_search_enabled, message.web_search_data, message.files, message.metadata,
-            message.deleted, message.device_id, message.synced_at, message.sequence, message.updated_at
-          );
-          stats.messagesInserted++;
+        const incomingSequence = getSequenceValue(message);
+        const incomingUpdatedAt = message.updated_at || message.created_at || 0;
+        const byId = message.id ? selectMessageById.get(message.id) : null;
+        const bySequence = selectMessageBySequence.get(message.session_id, incomingSequence);
+
+        if (byId && byId.session_id === message.session_id) {
+          const existingUpdatedAt = byId.updated_at || 0;
+          if (!existingUpdatedAt || !incomingUpdatedAt || incomingUpdatedAt >= existingUpdatedAt) {
+            updateMessageStmt.run(...toMessageParams(message, incomingSequence), byId.id);
+            stats.messagesUpdated++;
+          }
+          continue;
         }
+
+        if (bySequence) {
+          const existingUpdatedAt = bySequence.updated_at || 0;
+          const sameDevice = !message.device_id || !bySequence.device_id || message.device_id === bySequence.device_id;
+          const contentChanged = (bySequence.content || '') !== (message.content || '');
+
+          if (contentChanged && !sameDevice) {
+            const maxSeq = maxSequenceStmt.get(message.session_id);
+            const nextSequence = (maxSeq && typeof maxSeq.maxSeq === 'number' ? maxSeq.maxSeq : incomingSequence) + 1;
+            insertMessageStmt.run(...toMessageParams(message, nextSequence));
+            stats.messagesInserted++;
+            continue;
+          }
+
+          if (!existingUpdatedAt || !incomingUpdatedAt || incomingUpdatedAt >= existingUpdatedAt) {
+            updateMessageStmt.run(...toMessageParams(message, incomingSequence), bySequence.id);
+            stats.messagesUpdated++;
+          }
+          continue;
+        }
+
+        const useProvidedId = !!message.id && !byId;
+        const sequenceForInsert = incomingSequence;
+
+        if (useProvidedId) {
+          insertMessageWithIdStmt.run(message.id, ...toMessageParams(message, sequenceForInsert));
+        } else {
+          const maxSeq = maxSequenceStmt.get(message.session_id);
+          const nextSequence = (maxSeq && typeof maxSeq.maxSeq === 'number' ? maxSeq.maxSeq : sequenceForInsert - 1) + 1;
+          insertMessageStmt.run(...toMessageParams(message, nextSequence));
+        }
+        stats.messagesInserted++;
       }
       
       // Apply deleted messages (tombstones)
@@ -442,6 +713,82 @@ class SmartBackupService {
     }
     
     return stats;
+  }
+  
+  /**
+   * Apply user's conflict resolutions to local changes
+   * 
+   * Modifies the localChanges object based on user's choices:
+   * - 'local': Keep local version (already in changes)
+   * - 'cloud': Replace local with cloud version
+   * - 'merge': Merge both versions (keep both)
+   * 
+   * @param {Object} localChanges - Local changes from queryLocalChanges()
+   * @param {Array} resolutions - Array of { conflictId, resolution: 'local'|'cloud'|'merge' }
+   * @param {string} cloudDbPath - Path to cloud database
+   * @returns {Object} Modified changes
+   */
+  applyConflictResolutions(localChanges, resolutions, cloudDbPath) {
+    log(2, 'applyConflictResolutions', 'Applying user conflict resolutions', {
+      resolutionCount: resolutions.length
+    });
+    
+    const cloudDb = new Database(cloudDbPath, { readonly: true });
+    
+    try {
+      for (const { conflictId, resolution, type } of resolutions) {
+        log(3, 'applyConflictResolutions', 'Applying resolution', {
+          conflictId,
+          resolution,
+          type
+        });
+        
+        if (resolution === 'local') {
+          // Keep local version - no action needed
+          continue;
+        }
+        
+        if (resolution === 'cloud') {
+          // Replace local with cloud version
+          if (type === 'session') {
+            const cloudSession = cloudDb.prepare('SELECT * FROM sessions WHERE id = ?').get(conflictId);
+            if (cloudSession) {
+              // Remove local version
+              localChanges.sessions = localChanges.sessions.filter(s => s.id !== conflictId);
+              // Add cloud version
+              localChanges.sessions.push(cloudSession);
+            }
+          } else if (type === 'message') {
+            const cloudMessage = cloudDb.prepare('SELECT * FROM messages WHERE id = ?').get(conflictId);
+            if (cloudMessage) {
+              localChanges.messages = localChanges.messages.filter(m => m.id !== conflictId);
+              localChanges.messages.push(cloudMessage);
+            }
+          }
+        }
+        
+        if (resolution === 'merge') {
+          // Keep both versions
+          // For sessions: keep local, but note we want cloud messages too
+          // For messages: this is handled by sequence number logic in applyDelta
+          log(3, 'applyConflictResolutions', 'Merge resolution - both versions will be kept', {
+            conflictId,
+            type
+          });
+          // No action needed - applyDeltaToCloud will handle merging
+        }
+      }
+      
+      log(2, 'applyConflictResolutions', 'Conflict resolutions applied', {
+        sessionsCount: localChanges.sessions.length,
+        messagesCount: localChanges.messages.length
+      });
+      
+      return localChanges;
+      
+    } finally {
+      cloudDb.close();
+    }
   }
   
   /**

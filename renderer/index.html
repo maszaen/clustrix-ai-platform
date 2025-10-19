@@ -947,6 +947,16 @@
       <div class="modal-body">
         <!-- NOT LOGGED IN STATE -->
         <div id="account-not-logged-in" class="account-section">
+          <div class="github-section">
+            <div class="github-logo">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+                </svg>
+            </div>
+            <div class="github-bubble">
+                <p>"One step forward!"</p>
+            </div>
+        </div>
           <p style="text-align: center; color: var(--fg-muted); margin-bottom: 20px;">
             Sign in with GitHub to enable cloud sync, backup, and access data across multiple devices.
           </p>
@@ -963,12 +973,45 @@
 
         <!-- LOGGED IN STATE -->
         <div id="account-logged-in" class="account-section hidden">
-          <!-- User Profile Card -->
-          <div class="user-profile-card">
-            <img id="account-profile-pic" src="" alt="Profile" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover;">
-            <div>
-              <div id="account-name" style="font-weight: 600;">User Name</div>
-              <div id="account-email" style="font-size: 13px; color: var(--fg-muted);">user@github.com</div>
+          <!-- User Profile Card with Dropdown -->
+          <div class="user-profile-card-container">
+            <div class="user-profile-card">
+              <img id="account-profile-pic" src="" alt="Profile" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover;">
+              <div>
+                <div id="account-name" style="font-weight: 600;">User Name</div>
+                <div id="account-email" style="font-size: 13px; color: var(--fg-muted);">user@github.com</div>
+              </div>
+            </div>
+            <div class="account-menu-container">
+              <button id="account-menu-btn" class="account-menu-btn" title="Account options">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="5" cy="12" r="2"/>
+                  <circle cx="12" cy="12" r="2"/>
+                  <circle cx="19" cy="12" r="2"/>
+                </svg>
+              </button>
+              <div class="account-menu-dropdown" id="account-menu-dropdown">
+                <div class="account-menu-item" data-action="sync-now">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                  </svg>
+                  <span>Sync Now</span>
+                </div>
+                <div class="account-menu-item" data-action="backup-now">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                    <polyline points="17 21 17 13 7 13 7 21"/>
+                    <polyline points="7 3 7 8 15 8"/>
+                  </svg>
+                  <span>Backup Now</span>
+                </div>
+                <div class="account-menu-item account-menu-item-danger" data-action="logout">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                  </svg>
+                  <span>Logout</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -982,17 +1025,21 @@
             <p class="help-text" id="data-source-info" style="font-size: 12px; color: var(--fg-muted); margin-top: 8px;">Data dimuat dari internal storage device kamu.</p>
           </div>
 
-          <!-- Sync Controls -->
-          <div id="sync-controls" class="form-group hidden">
-            <label>GitHub Sync</label>
-            <div style="display: flex; gap: 8px;">
-              <button id="sync-now-btn" class="mini-btn" style="flex: 1;">Sync Now</button>
-              <button id="backup-now-btn" class="mini-btn" style="flex: 1;">Backup Now</button>
+          <!-- Action History -->
+          <div class="form-group">
+            <label>Action History</label>
+            <div id="action-history-container" class="action-history-list">
+              <!-- History items will be populated here -->
             </div>
+            <p class="help-text" id="action-history-empty" style="font-size: 12px; color: var(--fg-muted); margin-top: 8px; text-align: center;">No sync or backup history yet</p>
           </div>
 
-          <!-- Logout -->
-          <button id="account-logout-btn" class="danger-btn" style="width: 100%; margin-top: 20px;">Logout</button>
+          <!-- Close Modal Button -->
+          <div style="text-align: center; color: var(--fg-muted);">
+            <button id="account-close-modal-btn" class="primary-btn" style="width: 100%; display: none;">
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1138,7 +1185,12 @@
     <div class="modal-overlay"></div>
     <div class="modal-card" style="max-width: 900px; width: 90%;">
       <div class="modal-header">
-        <h3>🔄 Sync Conflict Detected</h3>
+        <div>
+          <h3>🔄 Sync Conflict Detected</h3>
+          <div id="conflict-counter" style="font-size: 13px; color: var(--fg-muted); margin-top: 4px;">
+            <!-- Conflict counter will be inserted here -->
+          </div>
+        </div>
         <button id="conflict-close" aria-label="Close">×</button>
       </div>
       <div class="modal-body" style="padding: 24px;">

@@ -3403,17 +3403,33 @@ textarea::-webkit-scrollbar {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.4s ease, color 0.4s ease, opacity 0.4s ease;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
 }
 
-.mini-btn:hover {
+.mini-btn:hover:not(:disabled) {
   color: var(--fg);
   background: var(--bg-hover);
+  opacity: 1;
 }
 
 .mini-btn.active {
-  background: var(--primary);
-  color: white;
+  background: var(--primary-light);
+  color: var(--fg) !important;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.mini-btn:disabled {
+  cursor: default;
+}
+
+.mini-btn.loading {
+  pointer-events: none;
 }
 
 @keyframes slideInPage {
@@ -3503,6 +3519,10 @@ textarea::-webkit-scrollbar {
 
 .modal-body:has(.no-padding) {
   padding: 0 !important;
+}
+
+.modal-body:has(.quick-model-item) {
+  max-height: none !important;
 }
 
 .modal-body p {
@@ -6023,6 +6043,30 @@ figure:nth-child(3) {
   to {
     transform: rotate(360deg);
   }
+}
+
+.btn-spinner {
+  display: none;
+  animation: spin 1s linear infinite;
+  transform-origin: center center;
+}
+
+/* Fix inline spinner in buttons */
+svg.btn-spinner,
+svg[class*="spinner"] {
+  transform-origin: center center;
+}
+
+button:disabled .btn-spinner {
+  display: inline-block;
+}
+
+button:disabled .btn-text {
+  display: none;
+}
+
+button:disabled .btn-icon {
+  display: none;
 }
 
 .footnote-ref {

@@ -21,6 +21,8 @@ class DatabaseManager {
     }
     
     this.db = new Database(dbPath);
+    this.dbPath = dbPath;
+    this.isCloudDatabase = !!customDbDir; // CRITICAL: Store cloud database flag
     
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL');
@@ -29,7 +31,7 @@ class DatabaseManager {
     this.initSchema();
     log('DATABASE', 1, 'constructor', 'Database initialized', { 
       path: dbPath,
-      isCloudDatabase: !!customDbDir 
+      isCloudDatabase: this.isCloudDatabase
     });
   }
   

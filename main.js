@@ -5,11 +5,10 @@ const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
 const https = require('https');
+const http = require('http');
+const url = require('url');
 const mammoth = require('mammoth');
 const xlsx = require('./local_modules/xlsx/xlsx');
-const { google } = require('googleapis');
-const { OAuth2Client } = require('google-auth-library');
-const open = require('open');
 const { log, logWithContext, setLogFile, setDebug } = require('./utils/logger');
 const { optimizeMessages } = require('./utils/message-optimizer');
 
@@ -21,7 +20,8 @@ const DatabaseManager = require('./backend/database-manager');
 const JSONToSQLiteMigrator = require('./backend/json-to-sqlite-migrator');
 const SyncManager = require('./backend/sync-manager');
 const DirectoryMigrator = require('./backend/directory-migrator');
-const OAuthHelper = require('./backend/oauth-helper');
+const GitHubOAuthHelper = require('./backend/github-oauth-helper');
+const GitHubStorageService = require('./backend/github-storage-service');
 
 let langchainService = null;
 let agentOrchestrator = null;
@@ -29,11 +29,101 @@ let db = null;
 let useSQLite = false;
 let syncManager = null;
 let directoryMigrator = null;
+let callbackServer = null;
 
 app.whenReady().then(async () => {
   setLogFile(path.join(app.getPath('userData'), 'app.log'));
   setDebug(process.env.CLUSTRIX_DEBUG !== 'false');
   log('[FLAGS]', app.commandLine.getSwitchValue('enable-features'));
+  
+  // Create HTTP server for OAuth callback on port 2920
+  callbackServer = http.createServer((req, res) => {
+    const parsedUrl = url.parse(req.url, true);
+    
+    // Enable CORS for localhost
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    // Handle OPTIONS preflight
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    
+    // Serve callback HTML for OAuth redirect
+    if (parsedUrl.pathname === '/oauth/callback' && req.method === 'GET') {
+      // Extract OAuth params
+      const code = parsedUrl.query.code;
+      const error = parsedUrl.query.error;
+      const errorDescription = parsedUrl.query.error_description;
+      
+      log('CALLBACK', 1, 'server', 'OAuth callback received', {
+        hasCode: !!code,
+        hasError: !!error,
+        code: code ? code.substring(0, 10) + '...' : null
+      });
+      
+      // Pass callback to GitHub OAuth Helper if available
+      if (global.githubOAuthHelper) {
+        try {
+          log('CALLBACK', 1, 'server', 'Passing callback to GitHub OAuth Helper');
+          global.githubOAuthHelper.handleCallback(code, error, errorDescription);
+          log('CALLBACK', 1, 'server', 'Callback passed successfully');
+        } catch (callbackErr) {
+          log('CALLBACK', 3, 'server', 'Error passing callback to helper', { error: callbackErr.message });
+        }
+      } else {
+        log('CALLBACK', 2, 'server', 'No GitHub OAuth Helper registered - OAuth might have timed out or completed');
+      }
+      
+      // Serve success/error page
+      const callbackHtmlPath = path.join(__dirname, 'callback', 'index.html');
+      fs.readFile(callbackHtmlPath, 'utf8', (err, data) => {
+        if (err) {
+          log('CALLBACK', 3, 'server', 'Failed to read callback HTML', { error: err.message });
+          res.writeHead(500, { 'Content-Type': 'text/plain' });
+          res.end('Internal Server Error');
+          return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(data);
+        log('CALLBACK', 1, 'server', 'Served callback HTML');
+      });
+      return;
+    }
+    
+    // Serve font file for callback page
+    if (parsedUrl.pathname === '/callback/OpenAISansVariableVF.woff' && req.method === 'GET') {
+      const fontPath = path.join(__dirname, 'callback', 'OpenAISansVariableVF.woff');
+      fs.readFile(fontPath, (err, data) => {
+        if (err) {
+          log('CALLBACK', 3, 'server', 'Failed to read font file', { error: err.message });
+          res.writeHead(404, { 'Content-Type': 'text/plain' });
+          res.end('Not Found');
+          return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'font/woff' });
+        res.end(data);
+      });
+      return;
+    }
+    
+    // 404 for other routes
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
+  });
+  
+  callbackServer.listen(2920, () => {
+    log('CALLBACK', 1, 'server', 'OAuth callback server listening on port 2920');
+  });
+  
+  callbackServer.on('error', (err) => {
+    log('CALLBACK', 3, 'server', 'Callback server error', { error: err.message });
+  });
   
   // Initialize SyncManager and run directory migration
   syncManager = new SyncManager(app);
@@ -44,6 +134,21 @@ app.whenReady().then(async () => {
   
   if (migrationResult.migrated) {
     log('MIGRATION', 1, 'init', 'Directory migration completed', migrationResult);
+  }
+  
+  // MIGRATE: Move ai-model.conf.json from root to internal folder
+  const oldConfigPath = path.join(app.getPath('userData'), 'ai-model.conf.json');
+  const newConfigPath = path.join(syncManager.internalDbDir, 'ai-model.conf.json');
+  
+  if (fs.existsSync(oldConfigPath) && !fs.existsSync(newConfigPath)) {
+    try {
+      log('MIGRATION', 1, 'init', 'Migrating ai-model.conf.json from root to internal folder');
+      fs.copyFileSync(oldConfigPath, newConfigPath);
+      fs.unlinkSync(oldConfigPath); // Delete old file
+      log('MIGRATION', 1, 'init', 'Model config migrated successfully');
+    } catch (migrateErr) {
+      log('MIGRATION', 2, 'init', 'Failed to migrate model config', { error: migrateErr.message });
+    }
   }
   
   langchainService = new ClustrixLangChainService(app);
@@ -57,13 +162,22 @@ app.whenReady().then(async () => {
   const syncConfig = syncManager.loadSyncConfig();
   let dbSourcePath;
   
+  log('DATABASE', 1, 'init', 'Loaded sync config', {
+    currentMode: syncConfig.currentMode,
+    hasCloudUser: !!syncConfig.currentCloudUser,
+    cloudUser: syncConfig.currentCloudUser ? syncConfig.currentCloudUser.substring(0, 20) + '...' : 'none'
+  });
+  
   if (syncConfig.currentMode === 'cloud' && syncConfig.currentCloudUser) {
     const cloudPath = syncManager.getCloudDataPath(syncConfig.currentCloudUser);
     dbSourcePath = cloudPath;
-    log('DATABASE', 1, 'init', 'Using cloud database', { user: '***' });
+    log('DATABASE', 1, 'init', 'Using CLOUD database', { 
+      path: cloudPath,
+      user: syncConfig.currentCloudUser.substring(0, 20) + '...'
+    });
   } else {
     dbSourcePath = syncManager.getInternalDataPath();
-    log('DATABASE', 1, 'init', 'Using internal database');
+    log('DATABASE', 1, 'init', 'Using INTERNAL database', { path: dbSourcePath });
   }
   
   // Initialize database
@@ -170,12 +284,136 @@ Analyze the above message for insults. If you detect insults against AI/platform
   return systemPrompt;
 }
 
+/**
+ * Get default AI model configuration with comprehensive model list
+ * This is used for new cloud users and when config is missing
+ */
+function getDefaultModelConfig() {
+  return {
+    active: {
+      platform: 'openrouter',
+      model: 'anthropic/claude-3.5-sonnet'
+    },
+    providers: {
+      openrouter: {
+        baseUrl: 'https://openrouter.ai/api/v1',
+        apiKey: '',
+        models: [
+          // Anthropic Models
+          { id: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet', note: '', think: 'off' },
+          { id: 'anthropic/claude-3.5-sonnet:beta', label: 'Claude 3.5 Sonnet (Beta)', note: '', think: 'off' },
+          { id: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku', note: '', think: 'off' },
+          { id: 'anthropic/claude-3-opus', label: 'Claude 3 Opus', note: '', think: 'off' },
+          { id: 'anthropic/claude-3-sonnet', label: 'Claude 3 Sonnet', note: '', think: 'off' },
+          { id: 'anthropic/claude-3-haiku', label: 'Claude 3 Haiku', note: '', think: 'off' },
+          
+          // Google Models
+          { id: 'google/gemini-2.0-flash-exp:free', label: 'Gemini 2.0 Flash (Free)', note: '', think: 'off' },
+          { id: 'google/gemini-2.0-flash-thinking-exp:free', label: 'Gemini 2.0 Flash Thinking (Free)', note: '', think: 'medium' },
+          { id: 'google/gemini-exp-1206:free', label: 'Gemini Exp 1206 (Free)', note: '', think: 'off' },
+          { id: 'google/gemini-pro-1.5', label: 'Gemini Pro 1.5', note: '', think: 'off' },
+          { id: 'google/gemini-pro-1.5-exp', label: 'Gemini Pro 1.5 Exp', note: '', think: 'off' },
+          { id: 'google/gemini-flash-1.5', label: 'Gemini Flash 1.5', note: '', think: 'off' },
+          { id: 'google/gemini-flash-1.5-exp', label: 'Gemini Flash 1.5 Exp', note: '', think: 'off' },
+          
+          // Meta LLaMA Models
+          { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B Instruct', note: '', think: 'off' },
+          { id: 'meta-llama/llama-3.2-90b-vision-instruct', label: 'Llama 3.2 90B Vision', note: '', think: 'off' },
+          { id: 'meta-llama/llama-3.2-11b-vision-instruct:free', label: 'Llama 3.2 11B Vision (Free)', note: '', think: 'off' },
+          { id: 'meta-llama/llama-3.2-3b-instruct:free', label: 'Llama 3.2 3B (Free)', note: '', think: 'off' },
+          { id: 'meta-llama/llama-3.1-405b-instruct', label: 'Llama 3.1 405B Instruct', note: '', think: 'off' },
+          { id: 'meta-llama/llama-3.1-70b-instruct', label: 'Llama 3.1 70B Instruct', note: '', think: 'off' },
+          { id: 'meta-llama/llama-3.1-8b-instruct:free', label: 'Llama 3.1 8B (Free)', note: '', think: 'off' },
+          
+          // OpenAI Models
+          { id: 'openai/gpt-4o', label: 'GPT-4o', note: '', think: 'off' },
+          { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini', note: '', think: 'off' },
+          { id: 'openai/gpt-4-turbo', label: 'GPT-4 Turbo', note: '', think: 'off' },
+          { id: 'openai/gpt-4', label: 'GPT-4', note: '', think: 'off' },
+          { id: 'openai/gpt-3.5-turbo', label: 'GPT-3.5 Turbo', note: '', think: 'off' },
+          { id: 'openai/o1-preview', label: 'O1 Preview', note: '', think: 'medium' },
+          { id: 'openai/o1-mini', label: 'O1 Mini', note: '', think: 'medium' },
+          
+          // Mistral Models
+          { id: 'mistralai/mistral-large', label: 'Mistral Large', note: '', think: 'off' },
+          { id: 'mistralai/mistral-medium', label: 'Mistral Medium', note: '', think: 'off' },
+          { id: 'mistralai/mistral-small', label: 'Mistral Small', note: '', think: 'off' },
+          { id: 'mistralai/mistral-7b-instruct:free', label: 'Mistral 7B (Free)', note: '', think: 'off' },
+          { id: 'mistralai/mixtral-8x7b-instruct', label: 'Mixtral 8x7B', note: '', think: 'off' },
+          { id: 'mistralai/mixtral-8x22b-instruct', label: 'Mixtral 8x22B', note: '', think: 'off' },
+          
+          // Qwen Models
+          { id: 'qwen/qwen-2.5-72b-instruct', label: 'Qwen 2.5 72B', note: '', think: 'off' },
+          { id: 'qwen/qwen-2.5-7b-instruct:free', label: 'Qwen 2.5 7B (Free)', note: '', think: 'off' },
+          { id: 'qwen/qwen-2-7b-instruct:free', label: 'Qwen 2 7B (Free)', note: '', think: 'off' },
+          
+          // DeepSeek Models
+          { id: 'deepseek/deepseek-chat', label: 'DeepSeek Chat', note: '', think: 'off' },
+          { id: 'deepseek/deepseek-coder', label: 'DeepSeek Coder', note: '', think: 'off' },
+          
+          // Others
+          { id: 'perplexity/llama-3.1-sonar-large-128k-online', label: 'Perplexity Sonar Large (Online)', note: '', think: 'off' },
+          { id: 'perplexity/llama-3.1-sonar-small-128k-online', label: 'Perplexity Sonar Small (Online)', note: '', think: 'off' },
+          { id: 'x-ai/grok-beta', label: 'Grok Beta', note: '', think: 'off' },
+          { id: 'cohere/command-r-plus', label: 'Command R+', note: '', think: 'off' },
+          { id: 'cohere/command-r', label: 'Command R', note: '', think: 'off' }
+        ]
+      },
+      groq: {
+        baseUrl: 'https://api.groq.com/openai/v1',
+        apiKey: '',
+        models: [
+          { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B Versatile', note: '', think: 'off' },
+          { id: 'llama-3.3-70b-specdec', label: 'Llama 3.3 70B SpecDec', note: '', think: 'off' },
+          { id: 'llama-3.1-70b-versatile', label: 'Llama 3.1 70B Versatile', note: '', think: 'off' },
+          { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant', note: '', think: 'off' },
+          { id: 'llama3-70b-8192', label: 'Llama 3 70B', note: '', think: 'off' },
+          { id: 'llama3-8b-8192', label: 'Llama 3 8B', note: '', think: 'off' },
+          { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B', note: '', think: 'off' },
+          { id: 'gemma2-9b-it', label: 'Gemma 2 9B', note: '', think: 'off' },
+          { id: 'gemma-7b-it', label: 'Gemma 7B', note: '', think: 'off' }
+        ]
+      },
+      openai: {
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: '',
+        models: [
+          { id: 'gpt-4o', label: 'GPT-4o', note: '', think: 'off' },
+          { id: 'gpt-4o-mini', label: 'GPT-4o Mini', note: '', think: 'off' },
+          { id: 'gpt-4-turbo', label: 'GPT-4 Turbo', note: '', think: 'off' },
+          { id: 'gpt-4', label: 'GPT-4', note: '', think: 'off' },
+          { id: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', note: '', think: 'off' },
+          { id: 'o1-preview', label: 'O1 Preview', note: '', think: 'medium' },
+          { id: 'o1-mini', label: 'O1 Mini', note: '', think: 'medium' }
+        ]
+      },
+      anthropic: {
+        baseUrl: 'https://api.anthropic.com/v1',
+        apiKey: '',
+        models: [
+          { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (Latest)', note: '', think: 'off' },
+          { id: 'claude-3-5-sonnet-20240620', label: 'Claude 3.5 Sonnet (June)', note: '', think: 'off' },
+          { id: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', note: '', think: 'off' },
+          { id: 'claude-3-opus-20240229', label: 'Claude 3 Opus', note: '', think: 'off' },
+          { id: 'claude-3-sonnet-20240229', label: 'Claude 3 Sonnet', note: '', think: 'off' },
+          { id: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku', note: '', think: 'off' }
+        ]
+      }
+    }
+  };
+}
 
-const modelsConfFile = path.join(app.getPath('userData'), 'ai-model.conf.json');
 
+/**
+ * Get the path to ai-model.conf.json based on current mode
+ * - Internal mode: userData/database/internal/ai-model.conf.json
+ * - Cloud mode: userData/database/sync/<email>/ai-model.conf.json
+ */
 function getModelConfigPath() {
   if (!syncManager) {
-    return modelsConfFile;
+    // Fallback to internal if syncManager not initialized yet
+    const internalPath = path.join(app.getPath('userData'), 'database', 'internal');
+    return path.join(internalPath, 'ai-model.conf.json');
   }
   
   const syncConfig = syncManager.loadSyncConfig();
@@ -188,60 +426,12 @@ function getModelConfigPath() {
   }
 }
 
+/**
+ * Legacy wrapper for getDefaultModelConfig()
+ * @deprecated Use getDefaultModelConfig() directly
+ */
 function defaultModelsConf() {
-  return {
-    active: {
-      platform: 'openrouter',
-      model: 'deepseek/deepseek-chat-v3.1:free',
-      baseUrl: 'https://openrouter.ai/api/v1',
-      apiKey: ''
-    },
-    providers: {
-      openrouter: {
-        baseUrl: 'https://openrouter.ai/api/v1',
-        apiKey: '',
-        models: [
-          'deepseek/deepseek-chat-v3.1:free',
-          'meta-llama/llama-3.1-8b-instruct',
-          'mistralai/mistral-7b-instruct',
-          'openai/gpt-oss-120b:free',
-          'openai/gpt-oss-20b:free',
-          'meta-llama/llama-4-maverick:free',
-          'microsoft/mai-ds-r1:free',
-          'google/gemini-2.0-flash-exp:free',
-          'qwen/qwen3-coder:free',
-          'qwen/qwen3-14b:free',
-          'qwen/qwen-2.5-coder-32b-instruct:free',
-          'openrouter/sonoma-sky-alpha',
-        ]
-      },
-      groq: {
-        baseUrl: 'https://api.groq.com/openai/v1',
-        apiKey: '',
-        models: ['llama3-8b-8192','mixtral-8x7b-32768','gemma2-9b-it', 'openai/gpt-oss-120b']
-      },
-      gemini: {
-        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-        apiKey: '',
-        models: ['gemini-1.5-flash','gemini-1.5-flash-8b']
-      },
-      zhipu: {
-        baseUrl: 'https://api.z.ai/api/paas/v4/',
-        apiKey: '',
-        models: ['glm-4.5-flash']
-      },
-      cerebras: {
-        baseUrl: 'https://api.cerebras.ai/v1/chat/completions',
-        apiKey: '',
-        models: [
-          'gpt-oss-120b',
-          'qwen-3-coder-480b',
-          'qwen-3-235b-a22b-thinking-2507',
-          'llama-3.3-70b',
-        ]
-      }
-    }
-  };
+  return getDefaultModelConfig();
 }
 
 ipcMain.handle('models:load', async () => {
@@ -282,10 +472,21 @@ ipcMain.handle('sync:getConfig', async () => {
       return syncManager.getDefaultSyncConfig();
     }
     const config = syncManager.loadSyncConfig();
+    
+    log('sync:getConfig', 1, 'handleGetConfig', 'Returning sync config', {
+      currentMode: config.currentMode,
+      currentCloudUser: config.currentCloudUser,
+      currentCloudUsername: config.currentCloudUsername,
+      profileUrl: config.profileUrl,
+      hasToken: !!config.cloudToken
+    });
+    
     return {
       currentMode: config.currentMode,
-      currentCloudUser: config.currentCloudUser ? config.currentCloudUser.split('@')[0] : null, // Don't expose full email
-      cloudToken: config.cloudToken ? '***' : null, // Don't expose token
+      currentCloudUser: config.currentCloudUser,
+      currentCloudUsername: config.currentCloudUsername, // ✅ Add this!
+      profileUrl: config.profileUrl, // ✅ Add this!
+      cloudToken: config.cloudToken ? '***' : null, // Don't expose actual token
       lastSyncTime: config.lastSyncTime,
       createdAt: config.createdAt
     };
@@ -294,6 +495,8 @@ ipcMain.handle('sync:getConfig', async () => {
     return {
       currentMode: 'internal',
       currentCloudUser: null,
+      currentCloudUsername: null,
+      profileUrl: null,
       error: e.message
     };
   }
@@ -319,7 +522,8 @@ ipcMain.handle('sync:saveConfig', async (_evt, config) => {
 /**
  * sync:switchMode
  * Switch between internal and cloud mode
- * Params: { mode: 'internal' | 'cloud', cloudUser?: 'user@gmail.com' }
+ * When switching to cloud: auto-download DB from GitHub if exists
+ * Params: { mode: 'internal' | 'cloud' }
  */
 ipcMain.handle('sync:switchMode', async (_evt, params) => {
   try {
@@ -327,7 +531,7 @@ ipcMain.handle('sync:switchMode', async (_evt, params) => {
       throw new Error('SyncManager not initialized');
     }
 
-    const { mode, cloudUser } = params;
+    const { mode } = params;
 
     if (mode !== 'internal' && mode !== 'cloud') {
       throw new Error('Invalid mode: must be "internal" or "cloud"');
@@ -335,42 +539,113 @@ ipcMain.handle('sync:switchMode', async (_evt, params) => {
 
     const config = syncManager.loadSyncConfig();
 
-    // If switching to cloud, ensure cloud user is provided
-    if (mode === 'cloud' && !cloudUser) {
-      throw new Error('Cloud user must be provided when switching to cloud mode');
-    }
-
-    // If switching FROM cloud to internal, optionally clear cloud user
+    // If switching FROM cloud to internal
     if (mode === 'internal') {
       config.currentMode = 'internal';
-      config.currentCloudUser = null;
-    } else {
-      // Switching TO cloud mode
-      config.currentMode = 'cloud';
-      config.currentCloudUser = cloudUser;
+      // Keep currentCloudUser in config for potential re-login
+      config.lastSyncTime = Date.now();
+      syncManager.saveSyncConfig(config);
+
+      log('sync:switchMode', 1, 'handleSync', 'Switched to internal mode');
+
+      return {
+        success: true,
+        newMode: mode,
+        message: 'Switched to internal mode. App will restart to apply changes.'
+      };
+    } 
+    
+    // Switching TO cloud mode
+    if (mode === 'cloud') {
+      const cloudUser = config.currentCloudUser;
+      const cloudToken = config.cloudToken;
+
+      // Check if user is logged in
+      if (!cloudUser || !cloudToken) {
+        throw new Error('Not logged in. Please login first before switching to cloud mode.');
+      }
 
       // Create cloud user folder if doesn't exist
       try {
         syncManager.createCloudUserFolder(cloudUser);
       } catch (e) {
         log('sync:switchMode warning', e);
-        // Don't fail if folder creation fails, just log
       }
+
+      // Try to download from GitHub
+      const cloudDataPath = syncManager.getCloudDataPath(cloudUser);
+      const cloudDbPath = path.join(cloudDataPath, 'clustrix.db');
+      
+      // CRITICAL FIX: Delete local cloud database before download to ensure fresh sync
+      if (fs.existsSync(cloudDbPath)) {
+        try {
+          fs.unlinkSync(cloudDbPath);
+          log('sync:switchMode', 1, 'handleSync', 'Deleted existing local cloud database for fresh sync');
+        } catch (delErr) {
+          log('sync:switchMode', 2, 'handleSync', 'Failed to delete local cloud database', { error: delErr.message });
+        }
+      }
+
+      try {
+        const githubStorage = new GitHubStorageService(cloudToken, config.currentCloudUsername);
+        
+        // Check if repo exists and has database
+        try {
+          await githubStorage.downloadDatabase(cloudDbPath);
+          log('sync:switchMode', 1, 'handleSync', 'Downloaded database from GitHub on cloud mode switch');
+        } catch (downloadErr) {
+          // Database doesn't exist on GitHub yet, that's OK
+          log('sync:switchMode', 1, 'handleSync', 'No database found on GitHub (new cloud account)', { 
+            error: downloadErr.message 
+          });
+        }
+        
+        // Also download profile picture if available
+        if (config.profileUrl) {
+          try {
+            log('sync:switchMode', 1, 'handleSync', 'Downloading profile picture...', { url: config.profileUrl });
+            const https = require('https');
+            const profilePicPath = path.join(app.getPath('userData'), 'current-profile-photo.jpg');
+            
+            await new Promise((resolve, reject) => {
+              https.get(config.profileUrl, (response) => {
+                if (response.statusCode === 200) {
+                  const fileStream = fs.createWriteStream(profilePicPath);
+                  response.pipe(fileStream);
+                  fileStream.on('finish', () => {
+                    fileStream.close();
+                    log('sync:switchMode', 1, 'handleSync', 'Profile picture downloaded', { path: profilePicPath });
+                    resolve();
+                  });
+                } else {
+                  reject(new Error(`Failed to download image: ${response.statusCode}`));
+                }
+              }).on('error', reject);
+            });
+          } catch (photoErr) {
+            log('sync:switchMode', 2, 'handleSync', 'Failed to download profile picture', { error: photoErr.message });
+          }
+        }
+      } catch (err) {
+        log('sync:switchMode warning', err.message);
+        // Don't fail mode switch if GitHub operations fail
+      }
+
+      config.currentMode = 'cloud';
+      config.lastSyncTime = Date.now();
+      syncManager.saveSyncConfig(config);
+
+      log('sync:switchMode', 1, 'handleSync', 'Switched to cloud mode', {
+        user: cloudUser
+      });
+
+      return {
+        success: true,
+        newMode: mode,
+        message: 'Switched to cloud mode. App will restart to apply changes.'
+      };
     }
 
-    config.lastSyncTime = Date.now();
-    syncManager.saveSyncConfig(config);
-
-    log('sync:switchMode', 1, 'handleSync', `Switched to ${mode} mode`, {
-      mode: mode,
-      user: mode === 'cloud' ? cloudUser : null
-    });
-
-    return {
-      success: true,
-      newMode: mode,
-      message: `Switched to ${mode} mode. App will restart to apply changes.`
-    };
   } catch (e) {
     log('sync:switchMode error', e);
     return {
@@ -430,16 +705,37 @@ ipcMain.handle('sync:logout', async (_evt, params = {}) => {
     // Reset config to internal mode
     config.currentMode = 'internal';
     config.currentCloudUser = null;
+    config.currentCloudUsername = null;
     config.cloudToken = null;
     config.cloudTokenExpiry = null;
+    config.profileUrl = null;
 
     syncManager.saveSyncConfig(config);
+    
+    // Delete profile photo
+    try {
+      const photoPath = path.join(app.getPath('userData'), 'current-profile-photo.jpg');
+      if (fs.existsSync(photoPath)) {
+        fs.unlinkSync(photoPath);
+        log('sync:logout', 1, 'handleSync', 'Deleted profile photo');
+      }
+    } catch (photoErr) {
+      log('sync:logout', 2, 'handleSync', 'Failed to delete profile photo', { error: photoErr.message });
+    }
 
     log('sync:logout', 1, 'handleSync', 'Logged out from cloud account');
 
+    // CRITICAL FIX: Restart app after logout to switch to internal database
+    setTimeout(() => {
+      log('sync:logout', 1, 'handleSync', 'Restarting app after logout...');
+      app.relaunch();
+      app.exit(0);
+    }, 1500); // Give time for UI to show logout message
+
     return {
       success: true,
-      message: 'Logged out successfully. App will restart to apply changes.'
+      message: 'Logged out successfully. App will restart now...',
+      willRestart: true
     };
   } catch (e) {
     log('sync:logout error', e);
@@ -452,17 +748,37 @@ ipcMain.handle('sync:logout', async (_evt, params = {}) => {
 
 /**
  * sync:startOAuth
- * Start Google OAuth flow for account login
+ * Start GitHub OAuth flow for account login
+ * REVISED: Auto-create repo, auto-sync database, auto-restart to cloud mode
  */
 ipcMain.handle('sync:startOAuth', async (evt) => {
   try {
-    log('sync:startOAuth', 1, 'handleSync', 'Starting Google OAuth flow');
+    log('sync:startOAuth', 1, 'handleSync', 'Starting GitHub OAuth flow');
+
+    // Get credentials from process.env (loaded via dotenv at startup)
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+    const callbackUrl = process.env.GITHUB_CALLBACK_URL || 'http://localhost:2920/oauth/callback';
+
+    if (!clientId || !clientSecret) {
+      log('sync:startOAuth', 3, 'handleSync', 'OAuth not configured', { 
+        hasClientId: !!clientId,
+        hasClientSecret: !!clientSecret
+      });
+      return {
+        success: false,
+        error: 'GitHub OAuth credentials not found in environment',
+        configured: false
+      };
+    }
 
     let oauthHelper;
     try {
-      oauthHelper = new OAuthHelper();
+      oauthHelper = new GitHubOAuthHelper(clientId, clientSecret, callbackUrl);
+      // Register to global for callback server
+      global.githubOAuthHelper = oauthHelper;
     } catch (initError) {
-      log('sync:startOAuth', 3, 'handleSync', 'OAuth not configured', { error: initError.message });
+      log('sync:startOAuth', 3, 'handleSync', 'OAuth helper init failed', { error: initError.message });
       return {
         success: false,
         error: initError.message,
@@ -470,27 +786,199 @@ ipcMain.handle('sync:startOAuth', async (evt) => {
       };
     }
 
-    try {
-      await oauthHelper.startAuthFlow();
-    } catch (authError) {
-      if (authError.message === 'OOB_AUTH_REQUIRED') {
-        log('sync:startOAuth', 1, 'handleSync', 'OOB flow - browser opened, waiting for auth code');
-        // Store oauthHelper for later code exchange
-        global.pendingOAuthHelper = oauthHelper;
-        return {
-          success: false,
-          error: 'OOB_AUTH_REQUIRED',
-          message: 'Check your browser for the authorization code'
-        };
-      }
-      throw authError;
+    const result = await oauthHelper.startAuthFlow();
+    
+    // Cleanup global reference
+    global.githubOAuthHelper = null;
+
+    if (!result || !result.email || !result.username) {
+      return {
+        success: false,
+        error: 'OAuth failed - no email or username received'
+      };
     }
 
-    // This won't be reached in OOB flow (throws error)
-    // But kept for non-OOB implementations if needed
+    // MANDATORY: Initialize GitHub Storage Service and create private repo
+    const githubStorage = new GitHubStorageService(result.accessToken, result.username);
+    try {
+      await githubStorage.ensureRepoExists();
+      log('sync:startOAuth', 1, 'handleSync', 'GitHub repo created/verified', { repo: githubStorage.repoName });
+    } catch (repoErr) {
+      log('sync:startOAuth', 4, 'handleSync', 'FATAL: Failed to create/verify repo', { error: repoErr.message });
+      return {
+        success: false,
+        error: `Failed to create GitHub repository: ${repoErr.message}`,
+        configured: true
+      };
+    }
+
+    // Update sync config FIRST (before any database operations)
+    log('sync:startOAuth', 1, 'handleSync', 'OAuth result received', {
+      email: result.email,
+      username: result.username,
+      name: result.name,
+      profileUrl: result.profileUrl,
+      hasAccessToken: !!result.accessToken
+    });
+    
+    // Download profile picture and save to userData
+    if (result.profileUrl) {
+      try {
+        log('sync:startOAuth', 1, 'handleSync', 'Downloading profile picture...', { url: result.profileUrl });
+        const https = require('https');
+        const profilePicPath = path.join(app.getPath('userData'), 'current-profile-photo.jpg');
+        
+        await new Promise((resolve, reject) => {
+          https.get(result.profileUrl, (response) => {
+            if (response.statusCode === 200) {
+              const fileStream = fs.createWriteStream(profilePicPath);
+              response.pipe(fileStream);
+              fileStream.on('finish', () => {
+                fileStream.close();
+                log('sync:startOAuth', 1, 'handleSync', 'Profile picture downloaded', { path: profilePicPath });
+                resolve();
+              });
+            } else {
+              reject(new Error(`Failed to download image: ${response.statusCode}`));
+            }
+          }).on('error', reject);
+        });
+      } catch (photoErr) {
+        log('sync:startOAuth', 2, 'handleSync', 'Failed to download profile picture', { error: photoErr.message });
+      }
+    }
+    
+    const config = syncManager.loadSyncConfig();
+    config.currentMode = 'cloud';
+    config.currentCloudUser = result.email;
+    config.currentCloudUsername = result.username;
+    config.cloudToken = result.accessToken;
+    config.cloudTokenExpiry = new Date(Date.now() + 3600000).toISOString(); // 1 hour
+    config.profileUrl = result.profileUrl;
+    config.lastSyncTime = new Date().toISOString();
+
+    log('sync:startOAuth', 1, 'handleSync', 'Saving sync config', {
+      currentMode: config.currentMode,
+      currentCloudUser: config.currentCloudUser,
+      currentCloudUsername: config.currentCloudUsername,
+      profileUrl: config.profileUrl,
+      cloudToken: config.cloudToken ? config.cloudToken.substring(0, 10) + '...' : 'none'
+    });
+
+    syncManager.saveSyncConfig(config);
+    
+    log('sync:startOAuth', 1, 'handleSync', 'Sync config saved successfully');
+    
+    // Create cloud user folder locally
+    syncManager.createCloudUserFolder(result.email);
+
+    // AUTO-SYNC: Try to download database AND model config from GitHub (if exists)
+    const cloudDbPath = path.join(syncManager.getCloudDataPath(result.email), 'clustrix.db');
+    const cloudConfigPath = path.join(syncManager.getCloudDataPath(result.email), 'ai-model.conf.json');
+    let syncSuccess = false;
+    
+    // CRITICAL FIX: Delete local cloud database before download to ensure fresh sync
+    // This prevents using stale local data when logging in again
+    if (fs.existsSync(cloudDbPath)) {
+      try {
+        fs.unlinkSync(cloudDbPath);
+        log('sync:startOAuth', 1, 'handleSync', 'Deleted existing local cloud database for fresh sync');
+      } catch (delErr) {
+        log('sync:startOAuth', 2, 'handleSync', 'Failed to delete local cloud database', { error: delErr.message });
+      }
+    }
+    
+    try {
+      log('sync:startOAuth', 1, 'handleSync', 'Attempting to download database from GitHub...');
+      await githubStorage.downloadDatabase(cloudDbPath);
+      
+      // Also download model config
+      try {
+        log('sync:startOAuth', 1, 'handleSync', 'Attempting to download model config from GitHub...');
+        await githubStorage.downloadModelConfig(cloudConfigPath);
+        log('sync:startOAuth', 1, 'handleSync', 'Model config synced from GitHub successfully');
+      } catch (configErr) {
+        log('sync:startOAuth', 2, 'handleSync', 'Model config not found on GitHub (will use default)', { 
+          error: configErr.message 
+        });
+      }
+      
+      syncSuccess = true;
+      log('sync:startOAuth', 1, 'handleSync', 'Database synced from GitHub successfully');
+    } catch (downloadErr) {
+      // Database doesn't exist on GitHub yet (new user)
+      log('sync:startOAuth', 2, 'handleSync', 'No database found on GitHub (new user)', { 
+        error: downloadErr.message 
+      });
+      
+      // CORRECT FIX: Create FRESH empty database for cloud user
+      // DO NOT copy from internal - cloud should start fresh
+      log('sync:startOAuth', 1, 'handleSync', 'Creating fresh empty database for cloud user');
+      
+      // Create fresh database with DatabaseManager
+      const tempDb = new DatabaseManager(app, syncManager.getCloudDataPath(result.email));
+      
+      // Initialize default AI model configuration using getDefaultModelConfig()
+      const defaultModelConfig = getDefaultModelConfig();
+      
+      // Save default model config to CLOUD database folder (not root!)
+      try {
+        const modelConfigPath = path.join(syncManager.getCloudDataPath(result.email), 'ai-model.conf.json');
+        fs.writeFileSync(modelConfigPath, JSON.stringify(defaultModelConfig, null, 2), 'utf-8');
+        log('sync:startOAuth', 1, 'handleSync', 'Default AI model config initialized', { path: modelConfigPath });
+      } catch (configErr) {
+        log('sync:startOAuth', 2, 'handleSync', 'Warning: Failed to write default model config', { 
+          error: configErr.message 
+        });
+      }
+      
+      // Upload initial database AND model config to GitHub repo
+      if (fs.existsSync(cloudDbPath)) {
+        try {
+          log('sync:startOAuth', 1, 'handleSync', 'Uploading fresh database to GitHub...');
+          await githubStorage.uploadDatabase(cloudDbPath);
+          
+          // Upload model config
+          const modelConfigPath = path.join(syncManager.getCloudDataPath(result.email), 'ai-model.conf.json');
+          log('sync:startOAuth', 1, 'handleSync', 'Uploading model config to GitHub...');
+          await githubStorage.uploadModelConfig(modelConfigPath);
+          
+          // Upload metadata
+          const metadata = {
+            backupTime: new Date().toISOString(),
+            dbVersion: '1.0',
+            appVersion: app.getVersion ? app.getVersion() : '1.0',
+            initialUpload: true,
+            freshDatabase: true
+          };
+          await githubStorage.uploadMetadata(metadata);
+          
+          log('sync:startOAuth', 1, 'handleSync', 'Fresh database and config uploaded to GitHub successfully');
+        } catch (uploadErr) {
+          log('sync:startOAuth', 2, 'handleSync', 'Warning: Failed to upload initial database', { 
+            error: uploadErr.message 
+          });
+        }
+      }
+    }
+
+    log('sync:startOAuth', 1, 'handleSync', 'OAuth successful, will restart app to cloud mode', { 
+      email: result.email,
+      username: result.username,
+      synced: syncSuccess
+    });
+
+    // Return success with needsRestart flag
+    // Renderer will restart app after showing success message
     return {
-      success: false,
-      error: 'OAuth initialization failed'
+      success: true,
+      email: result.email,
+      username: result.username,
+      profileUrl: result.profileUrl,
+      name: result.name,
+      synced: syncSuccess,
+      needsRestart: true,
+      message: 'Logged in successfully! App will restart to load cloud data.'
     };
   } catch (e) {
     log('sync:startOAuth error', e);
@@ -505,88 +993,75 @@ ipcMain.handle('sync:startOAuth', async (evt) => {
 /**
  * sync:syncNow
  * Manually trigger a sync operation
- * (Implementation deferred - placeholder for Phase 2)
+ * Downloads latest backup from GitHub and updates local database
  */
-/**
- * sync:exchangeAuthCode
- * Exchange authorization code for tokens (OOB OAuth flow)
- */
-ipcMain.handle('sync:exchangeAuthCode', async (evt, authCode) => {
-  try {
-    log('sync:exchangeAuthCode', 1, 'handleSync', 'Exchanging auth code for tokens');
-
-    if (!authCode || typeof authCode !== 'string') {
-      return {
-        success: false,
-        error: 'Invalid auth code provided'
-      };
-    }
-
-    if (!global.pendingOAuthHelper) {
-      return {
-        success: false,
-        error: 'No pending OAuth session - restart login'
-      };
-    }
-
-    const oauthHelper = global.pendingOAuthHelper;
-    const result = await oauthHelper.exchangeCodeForToken(authCode);
-
-    if (!result || !result.email) {
-      return {
-        success: false,
-        error: 'OAuth failed - no email received'
-      };
-    }
-
-    // Update sync config with OAuth user
-    const config = syncManager.loadSyncConfig();
-    config.currentMode = 'cloud';
-    config.currentCloudUser = result.email;
-    config.cloudToken = result.accessToken;
-    config.cloudTokenExpiry = new Date(result.expiresIn).toISOString();
-    config.lastSyncTime = new Date().toISOString();
-
-    syncManager.saveSyncConfig(config);
-    
-    // Create cloud user folder
-    syncManager.createCloudUserFolder(result.email);
-
-    // Clear pending session
-    global.pendingOAuthHelper = null;
-
-    log('sync:exchangeAuthCode', 1, 'handleSync', 'OAuth successful', { 
-      email: result.email,
-      hasRefreshToken: !!result.refreshToken 
-    });
-
-    return {
-      success: true,
-      email: result.email,
-      message: 'Logged in successfully!'
-    };
-  } catch (e) {
-    log('sync:exchangeAuthCode error', e);
-    global.pendingOAuthHelper = null;
-    return {
-      success: false,
-      error: e.message || 'Code exchange failed'
-    };
-  }
-});
-
 ipcMain.handle('sync:syncNow', async () => {
   try {
-    log('sync:syncNow', 1, 'handleSync', 'Sync triggered manually (not yet implemented)');
-    return {
-      success: true,
-      message: 'Sync queued (implementation in Phase 2)'
-    };
+    log('sync:syncNow', 1, 'handleSync', 'Sync triggered manually');
+
+    const syncConfig = syncManager.loadSyncConfig();
+
+    // Check if user is logged in
+    if (!syncConfig.currentCloudUser || !syncConfig.cloudToken) {
+      return {
+        success: false,
+        error: 'User not logged in. Cannot sync with GitHub.'
+      };
+    }
+
+    // Get current database path
+    let dbPath, configPath;
+    if (syncConfig.currentMode === 'cloud' && syncConfig.currentCloudUser) {
+      const cloudDataPath = syncManager.getCloudDataPath(syncConfig.currentCloudUser);
+      dbPath = path.join(cloudDataPath, 'clustrix.db');
+      configPath = path.join(cloudDataPath, 'ai-model.conf.json');
+    } else {
+      const internalDataPath = syncManager.getInternalDataPath();
+      dbPath = path.join(internalDataPath, 'clustrix.db');
+      configPath = path.join(internalDataPath, 'ai-model.conf.json');
+    }
+
+    // Ensure directory exists
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+
+    // Download from GitHub
+    const githubStorage = new GitHubStorageService(syncConfig.cloudToken, syncConfig.currentCloudUsername);
+    
+    try {
+      await githubStorage.downloadDatabase(dbPath);
+      
+      // Also download model config
+      try {
+        await githubStorage.downloadModelConfig(configPath);
+        log('sync:syncNow', 1, 'handleSync', 'Model config synced from GitHub');
+      } catch (configErr) {
+        log('sync:syncNow', 2, 'handleSync', 'Model config download failed (may not exist yet)', { 
+          error: configErr.message 
+        });
+      }
+
+      log('sync:syncNow', 1, 'handleSync', 'Sync from GitHub completed', { 
+        repo: githubStorage.repoName 
+      });
+
+      return {
+        success: true,
+        message: `Synced with GitHub: ${githubStorage.repoName}`,
+        repository: githubStorage.repoName,
+        timestamp: new Date().toISOString()
+      };
+    } catch (err) {
+      log('sync:syncNow', 2, 'handleSync', 'GitHub sync failed', { error: err.message });
+      throw err;
+    }
   } catch (e) {
     log('sync:syncNow error', e);
     return {
       success: false,
-      error: e.message
+      error: e.message || 'Sync with GitHub failed'
     };
   }
 });
@@ -594,61 +1069,108 @@ ipcMain.handle('sync:syncNow', async () => {
 /**
  * sync:backupNow
  * Manually trigger a backup operation
- * Creates ZIP backup of current database + data
+ * Uploads database to GitHub private repo
  */
 ipcMain.handle('sync:backupNow', async () => {
   try {
     log('sync:backupNow', 1, 'handleSync', 'Backup triggered');
 
-    if (!syncManager || !db) {
+    const syncConfig = syncManager.loadSyncConfig();
+
+    // Check if user is logged in
+    if (!syncConfig.currentCloudUser || !syncConfig.cloudToken) {
       return {
         success: false,
-        error: 'Database not initialized'
+        error: 'User not logged in. Cannot backup to GitHub.'
       };
     }
 
-    // Create backup filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    const backupDir = path.join(app.getPath('userData'), 'backups');
-    
-    // Ensure backup directory exists
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
-    }
-
-    // Get current database path
-    const syncConfig = syncManager.loadSyncConfig();
-    let dbPath;
+    // Get current database path and config path
+    let dbPath, configPath;
     if (syncConfig.currentMode === 'cloud' && syncConfig.currentCloudUser) {
-      dbPath = path.join(syncManager.getCloudDataPath(syncConfig.currentCloudUser), 'clustrix.db');
+      const cloudDataPath = syncManager.getCloudDataPath(syncConfig.currentCloudUser);
+      dbPath = path.join(cloudDataPath, 'clustrix.db');
+      configPath = path.join(cloudDataPath, 'ai-model.conf.json');
     } else {
-      dbPath = path.join(syncManager.getInternalDataPath(), 'clustrix.db');
+      const internalDataPath = syncManager.getInternalDataPath();
+      dbPath = path.join(internalDataPath, 'clustrix.db');
+      configPath = path.join(internalDataPath, 'ai-model.conf.json');
     }
 
-    // Create backup copy
-    const backupFile = path.join(backupDir, `clustrix-backup-${timestamp}.db`);
-    if (fs.existsSync(dbPath)) {
-      fs.copyFileSync(dbPath, backupFile);
-      log('sync:backupNow', 1, 'handleSync', 'Backup created', { backupFile, size: fs.statSync(backupFile).size });
-      
-      return {
-        success: true,
-        message: `Backup created: ${timestamp}`,
-        backupFile: backupFile,
-        location: backupDir
-      };
-    } else {
+    if (!fs.existsSync(dbPath)) {
       return {
         success: false,
         error: 'Database file not found'
       };
     }
+
+    // Upload to GitHub
+    const githubStorage = new GitHubStorageService(syncConfig.cloudToken, syncConfig.currentCloudUsername);
+    
+    try {
+      await githubStorage.uploadDatabase(dbPath);
+      
+      // Also upload model config
+      try {
+        await githubStorage.uploadModelConfig(configPath);
+        log('sync:backupNow', 1, 'handleSync', 'Model config backed up to GitHub');
+      } catch (configErr) {
+        log('sync:backupNow', 2, 'handleSync', 'Model config backup failed (may not exist yet)', { 
+          error: configErr.message 
+        });
+      }
+
+      // Upload metadata
+      const metadata = {
+        backupTime: new Date().toISOString(),
+        dbVersion: '1.0',
+        appVersion: app.getVersion ? app.getVersion() : '1.0'
+      };
+      await githubStorage.uploadMetadata(metadata);
+
+      log('sync:backupNow', 1, 'handleSync', 'Backup to GitHub completed', { 
+        repo: githubStorage.repoName 
+      });
+
+      return {
+        success: true,
+        message: `Backup uploaded to GitHub: ${githubStorage.repoName}`,
+        repository: githubStorage.repoName,
+        timestamp: new Date().toISOString()
+      };
+    } catch (err) {
+      log('sync:backupNow', 2, 'handleSync', 'GitHub backup failed', { error: err.message });
+      throw err;
+    }
   } catch (e) {
     log('sync:backupNow error', e);
     return {
       success: false,
-      error: e.message
+      error: e.message || 'Backup to GitHub failed'
     };
+  }
+});
+
+/**
+ * app:getProfilePhoto
+ * Get profile photo as base64 data URL
+ */
+ipcMain.handle('app:getProfilePhoto', async () => {
+  try {
+    const photoPath = path.join(app.getPath('userData'), 'current-profile-photo.jpg');
+    
+    if (!fs.existsSync(photoPath)) {
+      return { success: false, error: 'No profile photo found' };
+    }
+    
+    const photoData = fs.readFileSync(photoPath);
+    const base64 = photoData.toString('base64');
+    const dataUrl = `data:image/jpeg;base64,${base64}`;
+    
+    return { success: true, dataUrl };
+  } catch (e) {
+    log('app:getProfilePhoto error', e);
+    return { success: false, error: e.message };
   }
 });
 
@@ -859,7 +1381,16 @@ app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('window-all-closed', () => { 
+  // Close callback server before quitting
+  if (callbackServer) {
+    callbackServer.close(() => {
+      log('CALLBACK', 1, 'server', 'Callback server closed');
+    });
+  }
+  
+  if (process.platform !== 'darwin') app.quit(); 
+});
 const dataFile = path.join(app.getPath('userData'), 'chat_data.json');
 
 ipcMain.handle('sessions:load', async () => {
@@ -941,9 +1472,21 @@ ipcMain.handle('sessions:load', async () => {
       });
       
       // Auto-migrate sessions from JSON if database is empty
-      if (transformed.length === 0 && fs.existsSync(dataFile)) {
+      // ONLY migrate for internal database (backward compatibility)
+      // DO NOT migrate for cloud database (should start fresh)
+      // CRITICAL FIX: Use db.isCloudDatabase property instead of path check
+      const isCloudDatabase = db && db.isCloudDatabase;
+      
+      log('MIGRATION', 1, 'sessions', 'Checking migration eligibility', {
+        dbPath: db?.dbPath,
+        isCloudDatabase,
+        isEmpty: transformed.length === 0,
+        jsonFileExists: fs.existsSync(dataFile)
+      });
+      
+      if (transformed.length === 0 && fs.existsSync(dataFile) && !isCloudDatabase) {
         try {
-          log('MIGRATION', 1, 'sessions', 'Database empty, attempting JSON migration');
+          log('MIGRATION', 1, 'sessions', 'Database empty, attempting JSON migration (INTERNAL DATABASE ONLY)');
           const raw = fs.readFileSync(dataFile, 'utf-8');
           const parsed = JSON.parse(raw);
           const jsonSessions = Array.isArray(parsed) ? parsed : (parsed?.sessions || []);
@@ -1227,14 +1770,27 @@ ipcMain.handle('projects:load', async () => {
   try{
     if (useSQLite && db) {
       const projects = db.getAllProjects();
-      if (projects.length === 0) {
+      
+      // ONLY migrate for internal database (backward compatibility)
+      // DO NOT migrate for cloud database (should start fresh)
+      // CRITICAL FIX: Use db.isCloudDatabase property instead of path check
+      const isCloudDatabase = db && db.isCloudDatabase;
+      
+      log('MIGRATION', 1, 'projects', 'Checking migration eligibility', {
+        dbPath: db?.dbPath,
+        isCloudDatabase,
+        isEmpty: projects.length === 0,
+        jsonFileExists: fs.existsSync(projectsFile)
+      });
+      
+      if (projects.length === 0 && !isCloudDatabase) {
         // Migrate from JSON if database is empty
         if (fs.existsSync(projectsFile)) {
           try {
             const content = fs.readFileSync(projectsFile, 'utf-8');
             const parsed = JSON.parse(content || '[]');
             if (Array.isArray(parsed) && parsed.length > 0) {
-              log('MIGRATION', 1, 'projects', `Migrating ${parsed.length} projects from JSON to SQLite`);
+              log('MIGRATION', 1, 'projects', `Migrating ${parsed.length} projects from JSON to SQLite (internal database only)`);
               db.transaction(() => {
                 for (const project of parsed) {
                   db.saveProject(project);
@@ -2446,7 +3002,7 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
   const body = JSON.stringify({
     model,
     stream: false,
-    max_tokens: 700,
+    max_tokens: 1000,
     messages: [
       { role: 'system', content: sys },
       { role: 'user', content: text }

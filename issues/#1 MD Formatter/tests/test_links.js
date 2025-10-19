@@ -1,7 +1,7 @@
 // Test the link formatter fix for issue #6
 // Clear module cache to ensure we get the latest version
 delete require.cache[require.resolve('./local_modules/custom-formatter/md.js')];
-const { parseInlineMarkdown } = require('./local_modules/custom-formatter/md.js');
+const { parseInlineMarkdown } = require('../../../local_modules/custom-formatter/md.js');
 
 const testCases = [
   {

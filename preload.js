@@ -89,9 +89,9 @@ contextBridge.exposeInMainWorld('api', {
     syncNow: () => ipcRenderer.invoke('sync:syncNow'),
     backupNow: () => ipcRenderer.invoke('sync:backupNow'),
     startOAuth: () => ipcRenderer.invoke('sync:startOAuth'),
-    exchangeAuthCode: (code) => ipcRenderer.invoke('sync:exchangeAuthCode', code),
   },
   app: {
     restart: () => ipcRenderer.invoke('app:restart'),
+    getProfilePhoto: () => ipcRenderer.invoke('app:getProfilePhoto'),
   }
 });

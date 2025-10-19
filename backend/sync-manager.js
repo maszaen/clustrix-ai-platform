@@ -182,7 +182,27 @@ class SyncManager {
         error: e.message,
         stack: e.stack
       });
-      return this.getDefaultSyncConfig();
+      
+      // CRITICAL FIX: If config is corrupt, delete it and create fresh default
+      if (fs.existsSync(this.syncConfigPath)) {
+        try {
+          fs.unlinkSync(this.syncConfigPath);
+          log('SYNC', 2, 'loadSyncConfig', 'Deleted corrupt sync-config.json');
+        } catch (delErr) {
+          log('SYNC', 4, 'loadSyncConfig', 'Failed to delete corrupt config', { error: delErr.message });
+        }
+      }
+      
+      // Save default config to file
+      const defaultConfig = this.getDefaultSyncConfig();
+      try {
+        this.saveSyncConfig(defaultConfig);
+        log('SYNC', 1, 'loadSyncConfig', 'Created fresh default sync-config.json');
+      } catch (saveErr) {
+        log('SYNC', 4, 'loadSyncConfig', 'Failed to save default config', { error: saveErr.message });
+      }
+      
+      return defaultConfig;
     }
   }
 
@@ -224,9 +244,11 @@ class SyncManager {
   getDefaultSyncConfig() {
     return {
       currentMode: 'internal',           // 'internal' | 'cloud'
-      currentCloudUser: null,            // 'user@gmail.com' | null
-      cloudToken: null,                  // encrypted access token for OAuth
+      currentCloudUser: null,            // GitHub email | null
+      currentCloudUsername: null,        // GitHub username | null
+      cloudToken: null,                  // GitHub access token
       cloudTokenExpiry: null,            // timestamp when token expires
+      profileUrl: null,                  // GitHub profile picture URL
       lastSyncTime: null,                // timestamp of last sync operation
       createdAt: Date.now(),
       version: '1.0'

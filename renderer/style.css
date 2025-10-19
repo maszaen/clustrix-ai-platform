@@ -1418,6 +1418,7 @@ input:checked + .slider:before {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+  margin-top: 10px;
 }
 
 .toggle-item {
@@ -7905,7 +7906,7 @@ button:disabled .btn-icon {
 .pli:hover {
   background: var(--hover-bg);
   color: var(--fg);
-  transform: translatey(-2px);
+  transform: scale(1.01);
   border-color: var(--border);
 }
 

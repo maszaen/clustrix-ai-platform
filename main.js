@@ -1175,6 +1175,30 @@ ipcMain.handle('app:getProfilePhoto', async () => {
 });
 
 /**
+ * app:getDefaultProfilePhoto
+ * Get default profile photo (shown when not logged in)
+ * File: userData/default-user-profile.jpg
+ */
+ipcMain.handle('app:getDefaultProfilePhoto', async () => {
+  try {
+    const photoPath = path.join(app.getPath('userData'), 'default-user-profile.jpg');
+    
+    if (!fs.existsSync(photoPath)) {
+      return { success: false, error: 'Default profile photo not found' };
+    }
+    
+    const photoData = fs.readFileSync(photoPath);
+    const base64 = photoData.toString('base64');
+    const dataUrl = `data:image/jpeg;base64,${base64}`;
+    
+    return { success: true, dataUrl };
+  } catch (e) {
+    log('app:getDefaultProfilePhoto error', e);
+    return { success: false, error: e.message };
+  }
+});
+
+/**
  * app:restart
  * Restart the Electron app
  * Used after switching modes or logging out

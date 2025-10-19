@@ -1,6 +1,6 @@
 {
   "name": "clustrix",
-  "version": "28.6.0",
+  "version": "29.9.9",
   "private": true,
   "description": "Clustrix - A smart AI chat assistant.",
   "author": "Maszaen Corporation",
@@ -44,7 +44,7 @@
     "@electron/rebuild": "^4.0.1",
     "@types/jest": "^30.0.0",
     "cross-env": "^7.0.3",
-    "electron": "^38.1.0",
+    "electron": "^38.3.0",
     "electron-builder": "^24.13.3",
     "jest": "^30.2.0"
   },
@@ -54,7 +54,6 @@
     "@langchain/textsplitters": "^0.1.0",
     "better-sqlite3": "^12.4.1",
     "cheerio": "^1.1.2",
-    "dotenv": "^17.2.3",
     "google-auth-library": "^10.4.1",
     "googleapis": "^164.0.0",
     "langchain": "^0.3.35",

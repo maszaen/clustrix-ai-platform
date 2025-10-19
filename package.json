@@ -11,9 +11,10 @@
     "dev": "electron .",
     "test": "jest",
     "test:watch": "jest --watch",
-    "make": "electron-builder",
-    "package": "electron-builder --dir",
-    "publish": "electron-builder --publish=always",
+    "make": "npm run copy-env && electron-builder",
+    "package": "npm run copy-env && electron-builder --dir",
+    "publish": "npm run copy-env && electron-builder --publish=always",
+    "copy-env": "node -e \"const fs = require('fs'); const path = require('path'); const src = path.join(__dirname, '.env'); const dest = path.join(__dirname, 'out', '.env'); if (fs.existsSync(src)) { const data = fs.readFileSync(src); fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.writeFileSync(dest, data); console.log('✓ Copied .env to out/'); } else { console.log('⚠ .env file not found (optional)'); }\"",
     "node": "cross-env BASE_URL=https://api.z.ai/api/paas/v4/ Z_API_KEY=b7f88f50fbeb465b8318ae2270473c80.rWD9EyijW0zniHA1 npm run start"
   },
   "build": {
@@ -27,7 +28,8 @@
       "**/*",
       "node_modules/**/*",
       "!\\.git/**",
-      "!README.md"
+      "!README.md",
+      ".env"
     ],
     "win": {
       "target": "nsis",

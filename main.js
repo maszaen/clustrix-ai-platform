@@ -22,6 +22,76 @@ const SyncManager = require('./backend/sync-manager');
 const DirectoryMigrator = require('./backend/directory-migrator');
 const GitHubOAuthHelper = require('./backend/github-oauth-helper');
 const GitHubStorageService = require('./backend/github-storage-service');
+const SmartBackupService = require('./backend/smart-backup-service');
+
+function createTimestampedBackup(filePath, reason = '') {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+
+    const dir = path.dirname(filePath);
+    const ext = path.extname(filePath);
+    const baseName = path.basename(filePath, ext);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const reasonSuffix = reason ? `-${reason}` : '';
+    const backupPath = path.join(dir, `${baseName}${reasonSuffix}.${timestamp}.bak${ext}`);
+
+    fs.copyFileSync(filePath, backupPath);
+    log('SYNC', 1, 'createTimestampedBackup', 'Created backup before overwriting file', {
+      source: filePath,
+      backup: backupPath
+    });
+
+    return backupPath;
+  } catch (backupErr) {
+    log('SYNC', 3, 'createTimestampedBackup', 'Failed to create file backup', {
+      filePath,
+      error: backupErr.message
+    });
+    return null;
+  }
+}
+
+function replaceFileWithDownloadedTemp(tempPath, destinationPath) {
+  if (!fs.existsSync(tempPath)) {
+    throw new Error(`Temporary download not found: ${tempPath}`);
+  }
+
+  const destinationDir = path.dirname(destinationPath);
+  if (!fs.existsSync(destinationDir)) {
+    fs.mkdirSync(destinationDir, { recursive: true });
+  }
+
+  if (fs.existsSync(destinationPath)) {
+    fs.unlinkSync(destinationPath);
+  }
+
+  fs.renameSync(tempPath, destinationPath);
+  log('SYNC', 1, 'replaceFileWithDownloadedTemp', 'Replaced file with downloaded content', {
+    destination: destinationPath
+  });
+}
+
+function cleanupTempFile(tempPath) {
+  try {
+    if (tempPath && fs.existsSync(tempPath)) {
+      fs.unlinkSync(tempPath);
+    }
+  } catch (cleanupErr) {
+    log('SYNC', 2, 'cleanupTempFile', 'Failed to cleanup temp file', {
+      tempPath,
+      error: cleanupErr.message
+    });
+  }
+}
+
+function isNotFoundError(error) {
+  if (!error || !error.message) {
+    return false;
+  }
+  return error.message.includes('404') || error.message.toLowerCase().includes('not found');
+}
 
 let langchainService = null;
 let agentOrchestrator = null;
@@ -575,60 +645,84 @@ ipcMain.handle('sync:switchMode', async (_evt, params) => {
       // Try to download from GitHub
       const cloudDataPath = syncManager.getCloudDataPath(cloudUser);
       const cloudDbPath = path.join(cloudDataPath, 'clustrix.db');
-      
-      // CRITICAL FIX: Delete local cloud database before download to ensure fresh sync
-      if (fs.existsSync(cloudDbPath)) {
-        try {
-          fs.unlinkSync(cloudDbPath);
-          log('sync:switchMode', 1, 'handleSync', 'Deleted existing local cloud database for fresh sync');
-        } catch (delErr) {
-          log('sync:switchMode', 2, 'handleSync', 'Failed to delete local cloud database', { error: delErr.message });
-        }
-      }
+
+      let tempDbPath = null;
+      let downloadSucceeded = false;
+      let remoteMissing = false;
+
+      const backupPath = createTimestampedBackup(cloudDbPath, 'cloud-switch');
 
       try {
         const githubStorage = new GitHubStorageService(cloudToken, config.currentCloudUsername);
-        
-        // Check if repo exists and has database
-        try {
-          await githubStorage.downloadDatabase(cloudDbPath);
-          log('sync:switchMode', 1, 'handleSync', 'Downloaded database from GitHub on cloud mode switch');
-        } catch (downloadErr) {
-          // Database doesn't exist on GitHub yet, that's OK
-          log('sync:switchMode', 1, 'handleSync', 'No database found on GitHub (new cloud account)', { 
-            error: downloadErr.message 
+        tempDbPath = `${cloudDbPath}.download-${Date.now()}`;
+        await githubStorage.downloadDatabase(tempDbPath);
+        replaceFileWithDownloadedTemp(tempDbPath, cloudDbPath);
+        downloadSucceeded = true;
+        log('sync:switchMode', 1, 'handleSync', 'Downloaded database from GitHub on cloud mode switch');
+      } catch (downloadErr) {
+        cleanupTempFile(tempDbPath);
+
+        if (isNotFoundError(downloadErr)) {
+          remoteMissing = true;
+          log('sync:switchMode', 1, 'handleSync', 'No database found on GitHub (new cloud account)', {
+            error: downloadErr.message
           });
-        }
-        
-        // Also download profile picture if available
-        if (config.profileUrl) {
-          try {
-            log('sync:switchMode', 1, 'handleSync', 'Downloading profile picture...', { url: config.profileUrl });
-            const https = require('https');
-            const profilePicPath = path.join(app.getPath('userData'), 'current-profile-photo.jpg');
-            
-            await new Promise((resolve, reject) => {
-              https.get(config.profileUrl, (response) => {
-                if (response.statusCode === 200) {
-                  const fileStream = fs.createWriteStream(profilePicPath);
-                  response.pipe(fileStream);
-                  fileStream.on('finish', () => {
-                    fileStream.close();
-                    log('sync:switchMode', 1, 'handleSync', 'Profile picture downloaded', { path: profilePicPath });
-                    resolve();
-                  });
-                } else {
-                  reject(new Error(`Failed to download image: ${response.statusCode}`));
-                }
-              }).on('error', reject);
-            });
-          } catch (photoErr) {
-            log('sync:switchMode', 2, 'handleSync', 'Failed to download profile picture', { error: photoErr.message });
+        } else {
+          if (backupPath && !fs.existsSync(cloudDbPath) && fs.existsSync(backupPath)) {
+            try {
+              fs.copyFileSync(backupPath, cloudDbPath);
+              log('sync:switchMode', 2, 'handleSync', 'Restored cloud database from backup after failed download', {
+                backupPath
+              });
+            } catch (restoreErr) {
+              log('sync:switchMode', 3, 'handleSync', 'Failed to restore cloud database from backup', {
+                error: restoreErr.message
+              });
+            }
           }
+
+          log('sync:switchMode warning', downloadErr.message);
+          return {
+            success: false,
+            error: `Unable to download the latest cloud backup: ${downloadErr.message}`
+          };
         }
-      } catch (err) {
-        log('sync:switchMode warning', err.message);
-        // Don't fail mode switch if GitHub operations fail
+      } finally {
+        cleanupTempFile(tempDbPath);
+      }
+
+      if (!downloadSucceeded && remoteMissing) {
+        if (!fs.existsSync(cloudDbPath)) {
+          const tempManager = new DatabaseManager(app, cloudDataPath);
+          tempManager.close();
+        }
+      }
+
+      // Also download profile picture if available
+      if (config.profileUrl) {
+        try {
+          log('sync:switchMode', 1, 'handleSync', 'Downloading profile picture...', { url: config.profileUrl });
+          const https = require('https');
+          const profilePicPath = path.join(app.getPath('userData'), 'current-profile-photo.jpg');
+
+          await new Promise((resolve, reject) => {
+            https.get(config.profileUrl, (response) => {
+              if (response.statusCode === 200) {
+                const fileStream = fs.createWriteStream(profilePicPath);
+                response.pipe(fileStream);
+                fileStream.on('finish', () => {
+                  fileStream.close();
+                  log('sync:switchMode', 1, 'handleSync', 'Profile picture downloaded', { path: profilePicPath });
+                  resolve();
+                });
+              } else {
+                reject(new Error(`Failed to download image: ${response.statusCode}`));
+              }
+            }).on('error', reject);
+          });
+        } catch (photoErr) {
+          log('sync:switchMode', 2, 'handleSync', 'Failed to download profile picture', { error: photoErr.message });
+        }
       }
 
       config.currentMode = 'cloud';
@@ -636,7 +730,10 @@ ipcMain.handle('sync:switchMode', async (_evt, params) => {
       syncManager.saveSyncConfig(config);
 
       log('sync:switchMode', 1, 'handleSync', 'Switched to cloud mode', {
-        user: cloudUser
+        user: cloudUser,
+        downloadSucceeded,
+        remoteMissing,
+        backupPath
       });
 
       return {
@@ -993,11 +1090,21 @@ ipcMain.handle('sync:startOAuth', async (evt) => {
 /**
  * sync:syncNow
  * Manually trigger a sync operation
- * Downloads latest backup from GitHub and updates local database
+ * Downloads latest backup from GitHub and MERGES changes into local database
+ * 
+ * PHASE 1 IMPROVEMENT: Delta merge instead of full replacement
+ * - Preserves local changes that haven't been backed up yet
+ * - Merges cloud changes using timestamp-based resolution
+ * - Propagates deletions (tombstones) from cloud to local
  */
 ipcMain.handle('sync:syncNow', async () => {
+  const Database = require('better-sqlite3');
+  let localDb = null;
+  let cloudDb = null;
+  let tempCloudPath = null;
+  
   try {
-    log('sync:syncNow', 1, 'handleSync', 'Sync triggered manually');
+    log('sync:syncNow', 1, 'handleSync', 'Sync triggered manually (delta merge mode)');
 
     const syncConfig = syncManager.loadSyncConfig();
 
@@ -1027,35 +1134,289 @@ ipcMain.handle('sync:syncNow', async () => {
       fs.mkdirSync(dbDir, { recursive: true });
     }
 
-    // Download from GitHub
+    // Create backup of current local DB
+    const dbBackupPath = createTimestampedBackup(dbPath, 'sync-now');
+    
+    // Download cloud database to temp location
+    tempCloudPath = `${dbPath}.cloud-${Date.now()}`;
     const githubStorage = new GitHubStorageService(syncConfig.cloudToken, syncConfig.currentCloudUsername);
     
     try {
-      await githubStorage.downloadDatabase(dbPath);
+      await githubStorage.downloadDatabase(tempCloudPath);
+      log('sync:syncNow', 1, 'handleSync', 'Cloud database downloaded');
       
-      // Also download model config
+      // Open both databases
+      localDb = new Database(dbPath);
+      cloudDb = new Database(tempCloudPath, { readonly: true });
+      
+      // Get local max timestamps
+      const localMaxSession = localDb.prepare('SELECT COALESCE(MAX(updated_at), 0) as max FROM sessions').get();
+      const localMaxMessage = localDb.prepare('SELECT COALESCE(MAX(updated_at), 0) as max FROM messages').get();
+      
+      // Query cloud changes (records newer than local)
+      const cloudSessions = cloudDb.prepare(`
+        SELECT * FROM sessions 
+        WHERE updated_at > ? OR deleted = 1
+      `).all(localMaxSession.max);
+      
+      const cloudMessages = cloudDb.prepare(`
+        SELECT * FROM messages 
+        WHERE updated_at > ? OR deleted = 1
+      `).all(localMaxMessage.max);
+      
+      cloudDb.close();
+      cloudDb = null;
+      
+      log('sync:syncNow', 1, 'handleSync', 'Cloud changes queried', {
+        sessions: cloudSessions.length,
+        messages: cloudMessages.length
+      });
+      
+      // Apply cloud changes to local DB
+      localDb.prepare('BEGIN TRANSACTION').run();
+      
       try {
-        await githubStorage.downloadModelConfig(configPath);
-        log('sync:syncNow', 1, 'handleSync', 'Model config synced from GitHub');
+        let stats = {
+          sessionsAdded: 0,
+          sessionsUpdated: 0,
+          sessionsDeleted: 0,
+          messagesAdded: 0,
+          messagesUpdated: 0,
+          messagesDeleted: 0
+        };
+        
+        // Apply session changes
+        for (const session of cloudSessions) {
+          const existing = localDb.prepare('SELECT updated_at, deleted FROM sessions WHERE id = ?').get(session.id);
+          
+          if (session.deleted === 1) {
+            // Cloud has deletion tombstone
+            if (existing) {
+              localDb.prepare('UPDATE sessions SET deleted = 1, updated_at = ? WHERE id = ?')
+                .run(session.updated_at, session.id);
+              stats.sessionsDeleted++;
+            } else {
+              // Insert tombstone
+              localDb.prepare(`
+                INSERT INTO sessions (id, name, created_at, updated_at, type, persona_name, 
+                  persona_profile, tokens_used, metadata, device_id, synced_at, deleted, hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `).run(
+                session.id, session.name, session.created_at, session.updated_at, session.type,
+                session.persona_name, session.persona_profile, session.tokens_used, session.metadata,
+                session.device_id, session.synced_at, session.deleted, session.hash
+              );
+              stats.sessionsDeleted++;
+            }
+            continue;
+          }
+          
+          if (!existing) {
+            // New session from cloud
+            localDb.prepare(`
+              INSERT INTO sessions (id, name, created_at, updated_at, type, persona_name, 
+                persona_profile, tokens_used, metadata, device_id, synced_at, deleted, hash)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              session.id, session.name, session.created_at, session.updated_at, session.type,
+              session.persona_name, session.persona_profile, session.tokens_used, session.metadata,
+              session.device_id, session.synced_at, session.deleted, session.hash
+            );
+            stats.sessionsAdded++;
+          } else if (session.updated_at > existing.updated_at) {
+            // Cloud version is newer - update local
+            localDb.prepare(`
+              UPDATE sessions SET name = ?, updated_at = ?, type = ?, persona_name = ?,
+                persona_profile = ?, tokens_used = ?, metadata = ?, device_id = ?, 
+                synced_at = ?, deleted = ?, hash = ?
+              WHERE id = ?
+            `).run(
+              session.name, session.updated_at, session.type, session.persona_name,
+              session.persona_profile, session.tokens_used, session.metadata, session.device_id,
+              session.synced_at, session.deleted, session.hash, session.id
+            );
+            stats.sessionsUpdated++;
+          }
+          // Else: Local version is newer or equal, keep it (preserve local changes)
+        }
+        
+        // Apply message changes
+        for (const message of cloudMessages) {
+          const existing = localDb.prepare('SELECT updated_at, deleted FROM messages WHERE id = ?').get(message.id);
+          
+          if (message.deleted === 1) {
+            // Cloud has deletion tombstone
+            if (existing) {
+              localDb.prepare('UPDATE messages SET deleted = 1, updated_at = ? WHERE id = ?')
+                .run(message.updated_at, message.id);
+              stats.messagesDeleted++;
+            } else {
+              // Insert tombstone
+              localDb.prepare(`
+                INSERT INTO messages (
+                  id, session_id, role, content, message_index, created_at,
+                  model_id, model_label, provider, base_url,
+                  think_mode, think_content, thinking_update,
+                  web_search_enabled, web_search_data, files, metadata,
+                  deleted, device_id, synced_at, sequence, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              `).run(
+                message.id, message.session_id, message.role, message.content, message.message_index,
+                message.created_at, message.model_id, message.model_label, message.provider,
+                message.base_url, message.think_mode, message.think_content, message.thinking_update,
+                message.web_search_enabled, message.web_search_data, message.files, message.metadata,
+                message.deleted, message.device_id, message.synced_at, message.sequence, message.updated_at
+              );
+              stats.messagesDeleted++;
+            }
+            continue;
+          }
+          
+          if (!existing) {
+            // New message from cloud
+            localDb.prepare(`
+              INSERT INTO messages (
+                id, session_id, role, content, message_index, created_at,
+                model_id, model_label, provider, base_url,
+                think_mode, think_content, thinking_update,
+                web_search_enabled, web_search_data, files, metadata,
+                deleted, device_id, synced_at, sequence, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              message.id, message.session_id, message.role, message.content, message.message_index,
+              message.created_at, message.model_id, message.model_label, message.provider,
+              message.base_url, message.think_mode, message.think_content, message.thinking_update,
+              message.web_search_enabled, message.web_search_data, message.files, message.metadata,
+              message.deleted, message.device_id, message.synced_at, message.sequence, message.updated_at
+            );
+            stats.messagesAdded++;
+          } else if (message.updated_at > existing.updated_at) {
+            // Cloud version is newer - update local
+            localDb.prepare(`
+              UPDATE messages SET 
+                role = ?, content = ?, message_index = ?, 
+                model_id = ?, model_label = ?, provider = ?, base_url = ?,
+                think_mode = ?, think_content = ?, thinking_update = ?,
+                web_search_enabled = ?, web_search_data = ?, files = ?, metadata = ?,
+                deleted = ?, device_id = ?, synced_at = ?, sequence = ?, updated_at = ?
+              WHERE id = ?
+            `).run(
+              message.role, message.content, message.message_index,
+              message.model_id, message.model_label, message.provider, message.base_url,
+              message.think_mode, message.think_content, message.thinking_update,
+              message.web_search_enabled, message.web_search_data, message.files, message.metadata,
+              message.deleted, message.device_id, message.synced_at, message.sequence, message.updated_at,
+              message.id
+            );
+            stats.messagesUpdated++;
+          }
+          // Else: Local version is newer or equal, keep it (preserve local changes)
+        }
+        
+        localDb.prepare('COMMIT').run();
+        
+        log('sync:syncNow', 1, 'handleSync', 'Cloud changes merged into local DB', stats);
+        
+      } catch (err) {
+        localDb.prepare('ROLLBACK').run();
+        log('sync:syncNow', 3, 'handleSync', 'Transaction rollback - merge failed', {
+          error: err.message
+        });
+        throw err;
+      } finally {
+        if (localDb) {
+          localDb.close();
+          localDb = null;
+        }
+      }
+      
+      // Sync model config (existing logic)
+      try {
+        const configBackupPath = createTimestampedBackup(configPath, 'sync-now');
+        const tempConfigPath = `${configPath}.download-${Date.now()}`;
+
+        try {
+          await githubStorage.downloadModelConfig(tempConfigPath);
+          replaceFileWithDownloadedTemp(tempConfigPath, configPath);
+          log('sync:syncNow', 1, 'handleSync', 'Model config synced from GitHub');
+        } catch (configErr) {
+          cleanupTempFile(tempConfigPath);
+
+          if (configBackupPath && !fs.existsSync(configPath) && fs.existsSync(configBackupPath)) {
+            fs.copyFileSync(configBackupPath, configPath);
+            log('sync:syncNow', 2, 'handleSync', 'Restored model config from backup after failed download');
+          }
+
+          throw configErr;
+        } finally {
+          cleanupTempFile(tempConfigPath);
+        }
       } catch (configErr) {
-        log('sync:syncNow', 2, 'handleSync', 'Model config download failed (may not exist yet)', { 
-          error: configErr.message 
+        log('sync:syncNow', 2, 'handleSync', 'Model config download failed (may not exist yet)', {
+          error: configErr.message
         });
       }
 
-      log('sync:syncNow', 1, 'handleSync', 'Sync from GitHub completed', { 
-        repo: githubStorage.repoName 
+      log('sync:syncNow', 1, 'handleSync', 'Sync from GitHub completed (delta merge)', {
+        repo: githubStorage.repoName
       });
 
       return {
         success: true,
-        message: `Synced with GitHub: ${githubStorage.repoName}`,
+        message: `Synced with GitHub (merged cloud changes): ${githubStorage.repoName}`,
         repository: githubStorage.repoName,
         timestamp: new Date().toISOString()
       };
+      
     } catch (err) {
       log('sync:syncNow', 2, 'handleSync', 'GitHub sync failed', { error: err.message });
+      
+      // Restore from backup on error
+      if (dbBackupPath && fs.existsSync(dbBackupPath) && fs.existsSync(dbPath)) {
+        try {
+          fs.copyFileSync(dbBackupPath, dbPath);
+          log('sync:syncNow', 2, 'handleSync', 'Restored from backup after error');
+        } catch (restoreErr) {
+          log('sync:syncNow', 3, 'handleSync', 'Failed to restore backup', {
+            error: restoreErr.message
+          });
+        }
+      }
+      
       throw err;
+    } finally {
+      // Cleanup temp files
+      if (tempCloudPath && fs.existsSync(tempCloudPath)) {
+        try {
+          fs.unlinkSync(tempCloudPath);
+          log('sync:syncNow', 2, 'handleSync', 'Cleaned up temp cloud DB');
+        } catch (cleanupErr) {
+          log('sync:syncNow', 3, 'handleSync', 'Failed to cleanup temp file', {
+            error: cleanupErr.message
+          });
+        }
+      }
+      
+      // Ensure databases are closed
+      if (localDb) {
+        try {
+          localDb.close();
+        } catch (closeErr) {
+          log('sync:syncNow', 3, 'handleSync', 'Failed to close local DB', {
+            error: closeErr.message
+          });
+        }
+      }
+      
+      if (cloudDb) {
+        try {
+          cloudDb.close();
+        } catch (closeErr) {
+          log('sync:syncNow', 3, 'handleSync', 'Failed to close cloud DB', {
+            error: closeErr.message
+          });
+        }
+      }
     }
   } catch (e) {
     log('sync:syncNow error', e);
@@ -1108,15 +1469,43 @@ ipcMain.handle('sync:backupNow', async () => {
     const githubStorage = new GitHubStorageService(syncConfig.cloudToken, syncConfig.currentCloudUsername);
     
     try {
-      await githubStorage.uploadDatabase(dbPath);
-      
+      let smartBackupResult = null;
+      try {
+        const smartBackup = new SmartBackupService(dbPath, githubStorage);
+        smartBackupResult = await smartBackup.performSmartBackup();
+        
+        // Check if conflicts detected
+        if (smartBackupResult.needsConflictResolution) {
+          log('sync:backupNow', 2, 'handleSync', 'Conflicts detected, returning to user', {
+            conflictCount: smartBackupResult.conflicts.length
+          });
+          
+          // Store smart backup instance for later continuation
+          global.pendingSmartBackup = smartBackup;
+          
+          return {
+            success: false,
+            needsConflictResolution: true,
+            conflicts: smartBackupResult.conflicts,
+            message: smartBackupResult.message
+          };
+        }
+        
+        log('sync:backupNow', 1, 'handleSync', 'Smart backup completed', smartBackupResult);
+      } catch (smartErr) {
+        log('sync:backupNow', 2, 'handleSync', 'Smart backup failed, falling back to full backup', {
+          error: smartErr.message
+        });
+        await githubStorage.uploadDatabase(dbPath);
+      }
+
       // Also upload model config
       try {
         await githubStorage.uploadModelConfig(configPath);
         log('sync:backupNow', 1, 'handleSync', 'Model config backed up to GitHub');
       } catch (configErr) {
-        log('sync:backupNow', 2, 'handleSync', 'Model config backup failed (may not exist yet)', { 
-          error: configErr.message 
+        log('sync:backupNow', 2, 'handleSync', 'Model config backup failed (may not exist yet)', {
+          error: configErr.message
         });
       }
 
@@ -1124,19 +1513,22 @@ ipcMain.handle('sync:backupNow', async () => {
       const metadata = {
         backupTime: new Date().toISOString(),
         dbVersion: '1.0',
-        appVersion: app.getVersion ? app.getVersion() : '1.0'
+        appVersion: app.getVersion ? app.getVersion() : '1.0',
+        strategy: smartBackupResult ? 'smart-delta' : 'full'
       };
       await githubStorage.uploadMetadata(metadata);
 
-      log('sync:backupNow', 1, 'handleSync', 'Backup to GitHub completed', { 
-        repo: githubStorage.repoName 
+      log('sync:backupNow', 1, 'handleSync', 'Backup to GitHub completed', {
+        repo: githubStorage.repoName,
+        strategy: metadata.strategy
       });
 
       return {
         success: true,
         message: `Backup uploaded to GitHub: ${githubStorage.repoName}`,
         repository: githubStorage.repoName,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        strategy: metadata.strategy
       };
     } catch (err) {
       log('sync:backupNow', 2, 'handleSync', 'GitHub backup failed', { error: err.message });
@@ -1147,6 +1539,212 @@ ipcMain.handle('sync:backupNow', async () => {
     return {
       success: false,
       error: e.message || 'Backup to GitHub failed'
+    };
+  }
+});
+
+/**
+ * sync:recordActionHistory
+ * Record sync/backup action to history (per-account file)
+ */
+ipcMain.handle('sync:recordActionHistory', async (_evt, { type, status }) => {
+  try {
+    const config = syncManager.loadSyncConfig();
+    const cloudUser = config.currentCloudUser;
+    
+    if (!cloudUser) {
+      log('sync:recordActionHistory', 2, 'recordAction', 'No cloud user logged in');
+      return { success: false, error: 'No cloud user logged in' };
+    }
+    
+    // Get cloud data path for this user
+    const cloudDataPath = syncManager.getCloudDataPath(cloudUser);
+    const historyFilePath = path.join(cloudDataPath, 'action-history.json');
+    
+    // Ensure cloud data directory exists
+    if (!fs.existsSync(cloudDataPath)) {
+      fs.mkdirSync(cloudDataPath, { recursive: true });
+    }
+    
+    // Load existing history or create new
+    let history = [];
+    if (fs.existsSync(historyFilePath)) {
+      try {
+        const historyData = fs.readFileSync(historyFilePath, 'utf8');
+        history = JSON.parse(historyData);
+      } catch (parseErr) {
+        log('sync:recordActionHistory', 2, 'recordAction', 'Failed to parse history, starting fresh', { error: parseErr.message });
+        history = [];
+      }
+    }
+    
+    // Add new action record
+    history.push({
+      type: type, // 'sync' or 'backup'
+      status: status, // 'success' or 'failed'
+      timestamp: new Date().toISOString()
+    });
+    
+    // Keep only last 100 records
+    if (history.length > 100) {
+      history = history.slice(-100);
+    }
+    
+    // Save to file
+    fs.writeFileSync(historyFilePath, JSON.stringify(history, null, 2), 'utf8');
+    
+    log('sync:recordActionHistory', 1, 'recordAction', 'Action recorded to user file', { 
+      type, 
+      status, 
+      user: '***',
+      path: historyFilePath 
+    });
+    
+    return { success: true };
+  } catch (e) {
+    log('sync:recordActionHistory error', e);
+    return {
+      success: false,
+      error: e.message || 'Failed to record action'
+    };
+  }
+});
+
+/**
+ * sync:getActionHistory
+ * Get action history from per-account file
+ */
+ipcMain.handle('sync:getActionHistory', async () => {
+  try {
+    const config = syncManager.loadSyncConfig();
+    const cloudUser = config.currentCloudUser;
+    
+    if (!cloudUser) {
+      return { success: true, history: [] };
+    }
+    
+    const cloudDataPath = syncManager.getCloudDataPath(cloudUser);
+    const historyFilePath = path.join(cloudDataPath, 'action-history.json');
+    
+    if (!fs.existsSync(historyFilePath)) {
+      return { success: true, history: [] };
+    }
+    
+    try {
+      const historyData = fs.readFileSync(historyFilePath, 'utf8');
+      const history = JSON.parse(historyData);
+      
+      log('sync:getActionHistory', 1, 'getHistory', 'History loaded', { 
+        count: history.length,
+        user: '***'
+      });
+      
+      return { success: true, history };
+    } catch (parseErr) {
+      log('sync:getActionHistory', 2, 'getHistory', 'Failed to parse history', { error: parseErr.message });
+      return { success: true, history: [] };
+    }
+  } catch (e) {
+    log('sync:getActionHistory error', e);
+    return {
+      success: false,
+      error: e.message || 'Failed to load action history'
+    };
+  }
+});
+
+/**
+ * sync:resolveConflicts
+ * Apply user's conflict resolutions and continue backup
+ */
+ipcMain.handle('sync:resolveConflicts', async (_evt, resolutions) => {
+  try {
+    log('sync:resolveConflicts', 1, 'resolveConflicts', 'Applying conflict resolutions', {
+      resolutionCount: resolutions.length
+    });
+    
+    // Get pending smart backup instance
+    const smartBackup = global.pendingSmartBackup;
+    if (!smartBackup) {
+      return {
+        success: false,
+        error: 'No pending backup found. Please try backup again.'
+      };
+    }
+    
+    // Get sync config to reconstruct backup context
+    const syncConfig = syncManager.loadSyncConfig();
+    let dbPath, configPath;
+    if (syncConfig.currentMode === 'cloud' && syncConfig.currentCloudUser) {
+      const cloudDataPath = syncManager.getCloudDataPath(syncConfig.currentCloudUser);
+      dbPath = path.join(cloudDataPath, 'clustrix.db');
+      configPath = path.join(cloudDataPath, 'ai-model.conf.json');
+    } else {
+      const internalDataPath = syncManager.getInternalDataPath();
+      dbPath = path.join(internalDataPath, 'clustrix.db');
+      configPath = path.join(internalDataPath, 'ai-model.conf.json');
+    }
+    
+    // Re-query local changes
+    const localDb = new (require('better-sqlite3'))(dbPath);
+    const changes = smartBackup.queryLocalChanges();
+    localDb.close();
+    
+    // Download cloud DB again (might have changed)
+    const cloudDbPath = await smartBackup.downloadCloudDatabase();
+    
+    // Apply user's conflict resolutions
+    const modifiedChanges = smartBackup.applyConflictResolutions(changes, resolutions, cloudDbPath);
+    
+    // Apply delta to cloud
+    const applyResult = smartBackup.applyDeltaToCloud(cloudDbPath, modifiedChanges);
+    
+    // Upload modified cloud database
+    await smartBackup.uploadCloudDatabase(cloudDbPath);
+    
+    // Mark as synced
+    const finalDb = new (require('better-sqlite3'))(dbPath);
+    const { updateLastBackupTime } = require('./backend/sync-helpers');
+    updateLastBackupTime(finalDb);
+    smartBackup.markRecordsAsSynced(finalDb, modifiedChanges);
+    finalDb.close();
+    
+    // Cleanup temp file
+    if (fs.existsSync(cloudDbPath)) {
+      fs.unlinkSync(cloudDbPath);
+    }
+    
+    // Clear pending backup
+    delete global.pendingSmartBackup;
+    
+    // Record action with conflict resolution count
+    const githubStorage = new GitHubStorageService(syncConfig.cloudToken, syncConfig.currentCloudUsername);
+    const metadata = {
+      backupTime: new Date().toISOString(),
+      dbVersion: '1.0',
+      appVersion: app.getVersion ? app.getVersion() : '1.0',
+      strategy: 'smart-delta',
+      conflictsResolved: resolutions.length
+    };
+    await githubStorage.uploadMetadata(metadata);
+    
+    log('sync:resolveConflicts', 1, 'resolveConflicts', 'Backup completed after conflict resolution', {
+      conflictsResolved: resolutions.length,
+      stats: applyResult
+    });
+    
+    return {
+      success: true,
+      message: `Backup completed (${resolutions.length} conflict(s) resolved)`,
+      stats: applyResult,
+      conflictsResolved: resolutions.length
+    };
+    
+  } catch (e) {
+    log('sync:resolveConflicts error', e);
+    return {
+      success: false,
+      error: e.message || 'Failed to resolve conflicts'
     };
   }
 });

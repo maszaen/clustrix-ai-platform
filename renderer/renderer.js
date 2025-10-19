@@ -4553,6 +4553,18 @@ function setupArtifactsPageListeners() {
 
   // Close artifact menus when clicking outside
   document.addEventListener("click", (e) => {
+    // Close account menu dropdown when clicking outside
+    if (!e.target.closest(".account-menu-container")) {
+      document
+        .querySelectorAll(".account-menu-dropdown.persistent-open")
+        .forEach((menu) => {
+          menu.classList.remove("persistent-open");
+          const menuButton =
+            menu.parentElement.querySelector(".account-menu-btn");
+          if (menuButton) menuButton.classList.remove("persistent-active");
+        });
+    }
+
     if (!e.target.closest(".artifact-menu-container")) {
       document
         .querySelectorAll(".artifact-menu-dropdown.persistent-open")
@@ -14455,11 +14467,8 @@ function setupEventListeners() {
   const closeAccountBtn = document.getElementById('close-account-modal');
   const accountModal = document.getElementById('account-settings-modal');
   const googleLoginBtn = document.getElementById('google-login-btn');
-  const logoutBtn = document.getElementById('account-logout-btn');
   const internalBtn = document.getElementById('data-source-internal');
   const cloudBtn = document.getElementById('data-source-cloud');
-  const syncNowBtn = document.getElementById('sync-now-btn');
-  const backupNowBtn = document.getElementById('backup-now-btn');
 
   if (openAccountBtn) {
     openAccountBtn.addEventListener('click', async (e) => {
@@ -14490,8 +14499,67 @@ function setupEventListeners() {
     googleLoginBtn.addEventListener('click', () => handleGoogleLogin());
   }
 
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => handleLogout());
+  const closeModalBtn = document.getElementById('account-close-modal-btn');
+  if (closeModalBtn) {
+    closeModalBtn.addEventListener('click', () => {
+      $("#account-settings-modal").classList.add("hidden");
+      log("UI", 0, "event:account-close-modal-btn", "Account modal closed via button");
+    });
+  }
+
+  // ===== ACCOUNT MENU DROPDOWN HANDLERS =====
+  const accountMenuBtn = document.getElementById('account-menu-btn');
+  const accountMenuDropdown = document.getElementById('account-menu-dropdown');
+
+  if (accountMenuBtn) {
+    accountMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      
+      // Close all other persistent-open menus
+      document
+        .querySelectorAll(".account-menu-dropdown.persistent-open")
+        .forEach((menu) => {
+          if (menu !== accountMenuDropdown) {
+            menu.classList.remove("persistent-open");
+            const otherBtn = menu.parentElement.querySelector(".account-menu-btn");
+            if (otherBtn) otherBtn.classList.remove("persistent-active");
+          }
+        });
+
+      // Toggle current menu's persistent state
+      const isPersistentOpen = accountMenuDropdown.classList.contains("persistent-open");
+
+      if (isPersistentOpen) {
+        accountMenuDropdown.classList.remove("persistent-open");
+        accountMenuBtn.classList.remove("persistent-active");
+      } else {
+        accountMenuDropdown.classList.add("persistent-open");
+        accountMenuBtn.classList.add("persistent-active");
+      }
+    });
+  }
+
+  if (accountMenuDropdown) {
+    accountMenuDropdown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const menuItem = e.target.closest(".account-menu-item");
+      if (!menuItem) return;
+
+      const action = menuItem.dataset.action;
+
+      // Close menu
+      accountMenuDropdown.classList.remove("persistent-open");
+      if (accountMenuBtn) accountMenuBtn.classList.remove("persistent-active");
+
+      // Handle actions
+      if (action === "sync-now") {
+        handleSyncNow();
+      } else if (action === "backup-now") {
+        handleBackupNow();
+      } else if (action === "logout") {
+        handleLogout();
+      }
+    });
   }
 
   if (internalBtn) {
@@ -14500,14 +14568,6 @@ function setupEventListeners() {
 
   if (cloudBtn) {
     cloudBtn.addEventListener('click', () => handleDataSourceSwitch('cloud'));
-  }
-
-  if (syncNowBtn) {
-    syncNowBtn.addEventListener('click', () => handleSyncNow());
-  }
-
-  if (backupNowBtn) {
-    backupNowBtn.addEventListener('click', () => handleBackupNow());
   }
 
   // Immediate save for sidebar display toggles
@@ -15198,7 +15258,7 @@ function showToast(message, type = 'info') {
     bottom: 20px;
     right: 20px;
     padding: 12px 16px;
-    background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#22c55e' : '#3b82f6'};
+    background: ${type === 'error' ? '#ef444485' : type === 'success' ? '#0fdc576e' : '#3b83f685'};
     color: white;
     border-radius: 6px;
     font-size: 14px;
@@ -15355,6 +15415,12 @@ async function updateAccountModalUI() {
       notLoggedIn.classList.add('hidden');
       loggedIn.classList.remove('hidden');
       
+      // Show close modal button only when logged in
+      const closeModalBtn = document.getElementById('account-close-modal-btn');
+      if (closeModalBtn) {
+        closeModalBtn.style.display = 'inline-flex';
+      }
+      
       // Display GitHub username ONLY (clean, no numbers) - CAPITALIZE
       const displayName = syncConfig.currentCloudUsername || cloudUser.split('@')[0];
       const capitalized = displayName.charAt(0).toUpperCase() + displayName.slice(1).toLowerCase();
@@ -15418,7 +15484,6 @@ async function updateAccountModalUI() {
         cloudBtn.classList.add('active');
         cloudBtn.disabled = true; // Disable active button
         document.getElementById('data-source-info').textContent = 'Data loaded from GitHub private repository.';
-        document.getElementById('sync-controls').classList.remove('hidden');
       } else {
         // Internal mode active
         internalBtn.classList.add('active');
@@ -15426,13 +15491,21 @@ async function updateAccountModalUI() {
         cloudBtn.classList.remove('active');
         cloudBtn.disabled = false;
         document.getElementById('data-source-info').textContent = 'Data is loaded from your device\'s internal storage.';
-        document.getElementById('sync-controls').classList.add('hidden');
       }
+      
+      // Load and display action history
+      await loadAndDisplayActionHistory();
       
       log('UI', 1, 'updateAccountModalUI', 'Account modal updated', { user: cloudUser, username: displayName, mode: syncConfig.currentMode });
     } else {
       notLoggedIn.classList.remove('hidden');
       loggedIn.classList.add('hidden');
+      
+      // Hide close modal button when not logged in
+      const closeModalBtn = document.getElementById('account-close-modal-btn');
+      if (closeModalBtn) {
+        closeModalBtn.style.display = 'none';
+      }
       
       // Show "Not logged in" profile image in the modal
       const profilePic = document.getElementById('account-profile-pic');
@@ -15554,9 +15627,37 @@ async function handleLogout() {
   try {
     log('AUTH', 1, 'handleLogout', 'Logging out');
     
+    // Close dropdown menu
+    const accountMenuDropdown = document.getElementById('account-menu-dropdown');
+    const accountMenuBtn = document.getElementById('account-menu-btn');
+    if (accountMenuDropdown) {
+      accountMenuDropdown.classList.remove('persistent-open');
+    }
+    if (accountMenuBtn) {
+      accountMenuBtn.classList.remove('persistent-active');
+    }
+    
+    // Get account name element and save original text
+    const accountName = document.getElementById('account-name');
+    const originalName = accountName ? accountName.textContent : 'User Name';
+    const accountCard = document.querySelector('.user-profile-card');
+    
     // Get logout button and show loading state
     const logoutBtn = document.getElementById('account-logout-btn');
     const originalText = logoutBtn ? logoutBtn.textContent : 'Logout';
+    
+    // Update account name to "Logging out..." with disabled styling
+    if (accountName) {
+      accountName.textContent = 'Logging out...';
+      accountName.style.opacity = '0.6';
+      accountName.style.cursor = 'not-allowed';
+    }
+    
+    // Disable profile card interaction
+    if (accountCard) {
+      accountCard.style.opacity = '0.6';
+      accountCard.style.pointerEvents = 'none';
+    }
     
     if (logoutBtn) {
       logoutBtn.disabled = true;
@@ -15595,6 +15696,19 @@ async function handleLogout() {
     } else {
       log('AUTH', 4, 'handleLogout', 'Logout failed', { error: result.error });
       
+      // Restore account name
+      if (accountName) {
+        accountName.textContent = originalName;
+        accountName.style.opacity = '';
+        accountName.style.cursor = '';
+      }
+      
+      // Restore profile card
+      if (accountCard) {
+        accountCard.style.opacity = '';
+        accountCard.style.pointerEvents = '';
+      }
+      
       // Restore button state
       if (logoutBtn) {
         logoutBtn.disabled = false;
@@ -15608,6 +15722,21 @@ async function handleLogout() {
   } catch (e) {
     log('AUTH', 4, 'handleLogout', 'Logout error', { error: e.message });
     
+    // Restore account name
+    const accountName = document.getElementById('account-name');
+    if (accountName) {
+      accountName.textContent = 'User Name';
+      accountName.style.opacity = '';
+      accountName.style.cursor = '';
+    }
+    
+    // Restore profile card
+    const accountCard = document.querySelector('.user-profile-card');
+    if (accountCard) {
+      accountCard.style.opacity = '';
+      accountCard.style.pointerEvents = '';
+    }
+    
     // Restore button state
     const logoutBtn = document.getElementById('account-logout-btn');
     if (logoutBtn) {
@@ -15618,6 +15747,58 @@ async function handleLogout() {
     }
     
     showToast('Logout error: ' + e.message, 'error');
+  }
+}
+
+async function loadAndDisplayActionHistory() {
+  try {
+    // Load action history from per-account file
+    const result = await window.api.sync.getActionHistory();
+    const historyList = result.success ? (result.history || []) : [];
+    const container = document.getElementById('action-history-container');
+    const emptyMsg = document.getElementById('action-history-empty');
+    
+    if (!container) return;
+    
+    // Clear container
+    container.innerHTML = '';
+    
+    if (!historyList || historyList.length === 0) {
+      if (emptyMsg) emptyMsg.style.display = 'block';
+      container.style.display = 'none';
+      return;
+    }
+    
+    // Show last 10 items (most recent first)
+    const recentHistory = historyList.slice(-10).reverse();
+    
+    recentHistory.forEach(item => {
+      const itemEl = document.createElement('div');
+      const itemClass = `action-history-item action-history-item-${item.type}${item.status === 'failed' ? ' action-history-item-failed' : ''}`;
+      itemEl.className = itemClass;
+      
+      const icon = item.type === 'sync' ? '↓' : item.type === 'backup' ? '↑' : '?';
+      const label = item.type === 'sync' ? 'Sync' : item.type === 'backup' ? 'Backup' : 'Action';
+      const status = item.status === 'failed' ? ' (failed)' : '';
+      const timestamp = formatRelativeTime(item.timestamp);
+      
+      itemEl.innerHTML = `
+        <div class="action-history-item-icon">${icon}</div>
+        <div class="action-history-item-content">
+          <div class="action-history-item-label">${label}${status}</div>
+          <div class="action-history-item-timestamp">${timestamp}</div>
+        </div>
+      `;
+      
+      container.appendChild(itemEl);
+    });
+    
+    if (emptyMsg) emptyMsg.style.display = 'none';
+    container.style.display = 'flex';
+    
+    log('UI', 1, 'loadAndDisplayActionHistory', 'Action history loaded from user file', { count: recentHistory.length });
+  } catch (e) {
+    log('UI', 4, 'loadAndDisplayActionHistory', 'Failed to load action history', { error: e.message });
   }
 }
 
@@ -15639,6 +15820,9 @@ async function handleSyncNow() {
       log('SYNC', 1, 'handleSyncNow', 'Sync completed successfully', { repo: result.repository });
       showToast(`✓ Synced! Downloaded from: ${result.repository}`, 'success');
       
+      // Record action in history
+      await window.api.sync.recordActionHistory('sync', 'success');
+      
       // Reload page to show new data
       setTimeout(() => {
         window.location.reload();
@@ -15649,6 +15833,10 @@ async function handleSyncNow() {
         fullResult: result
       });
       showToast(`❌ Sync failed: ${result.error}`, 'error');
+      
+      // Record action in history as failed
+      await window.api.sync.recordActionHistory('sync', 'failed');
+      await loadAndDisplayActionHistory();
     }
   } catch (e) {
     log('SYNC', 4, 'handleSyncNow', 'Sync error exception', { 
@@ -15656,6 +15844,10 @@ async function handleSyncNow() {
       stack: e.stack
     });
     showToast('❌ Sync error: ' + e.message, 'error');
+    
+    // Record action in history as failed
+    await window.api.sync.recordActionHistory('sync', 'failed');
+    await loadAndDisplayActionHistory();
   }
 }
 
@@ -15669,19 +15861,39 @@ async function handleBackupNow() {
     
     log('SYNC', 1, 'handleBackupNow', 'Backup result received', { 
       success: result.success, 
+      needsConflictResolution: result.needsConflictResolution,
       error: result.error,
       repository: result.repository
     });
     
+    // Check if conflicts detected
+    if (result.needsConflictResolution && result.conflicts) {
+      log('SYNC', 2, 'handleBackupNow', 'Conflicts detected, showing resolution modal', {
+        conflictCount: result.conflicts.length
+      });
+      
+      showToast(`⚠️ ${result.conflicts.length} conflict(s) detected`, 'warning');
+      await showConflictResolutionModal(result.conflicts);
+      return;
+    }
+    
     if (result.success) {
       log('SYNC', 1, 'handleBackupNow', 'Backup completed successfully', { repo: result.repository });
       showToast(`✓ Backed up! Uploaded to: ${result.repository}`, 'success');
+      
+      // Record action in history
+      await window.api.sync.recordActionHistory('backup', 'success');
+      await loadAndDisplayActionHistory();
     } else {
       log('SYNC', 4, 'handleBackupNow', 'Backup operation failed', { 
         error: result.error,
         fullResult: result
       });
       showToast(`❌ Backup failed: ${result.error}`, 'error');
+      
+      // Record action in history as failed
+      await window.api.sync.recordActionHistory('backup', 'failed');
+      await loadAndDisplayActionHistory();
     }
   } catch (e) {
     log('SYNC', 4, 'handleBackupNow', 'Backup error exception', { 
@@ -15689,7 +15901,173 @@ async function handleBackupNow() {
       stack: e.stack
     });
     showToast('❌ Backup error: ' + e.message, 'error');
+    
+    // Record action in history as failed
+    await window.api.sync.recordActionHistory('backup', 'failed');
+    await loadAndDisplayActionHistory();
   }
+}
+
+/**
+ * Show conflict resolution modal
+ * 
+ * @param {Array} conflicts - Array of conflict objects
+ */
+async function showConflictResolutionModal(conflicts) {
+  log('SYNC', 1, 'showConflictResolutionModal', 'Displaying conflict modal', {
+    conflictCount: conflicts.length
+  });
+  
+  const modal = document.getElementById('sync-conflict-modal');
+  if (!modal) {
+    log('SYNC', 4, 'showConflictResolutionModal', 'Conflict modal not found in DOM');
+    showToast('❌ Conflict modal not available', 'error');
+    return;
+  }
+  
+  const resolutions = [];
+  let currentConflictIndex = 0;
+  
+  async function showNextConflict() {
+    if (currentConflictIndex >= conflicts.length) {
+      // All conflicts resolved, apply and continue backup
+      modal.classList.add('hidden');
+      
+      showToast('Applying resolutions...', 'info');
+      
+      try {
+        const result = await window.api.sync.resolveConflicts(resolutions);
+        
+        if (result.success) {
+          log('SYNC', 1, 'showConflictResolutionModal', 'Conflicts resolved and backup completed', {
+            conflictsResolved: result.conflictsResolved
+          });
+          showToast(`✓ Backup completed! ${result.conflictsResolved} conflict(s) resolved`, 'success');
+          
+          // Record success
+          await window.api.sync.recordActionHistory('backup', 'success');
+          await loadAndDisplayActionHistory();
+        } else {
+          log('SYNC', 4, 'showConflictResolutionModal', 'Failed to apply resolutions', {
+            error: result.error
+          });
+          showToast(`❌ Failed to apply resolutions: ${result.error}`, 'error');
+          
+          // Record failure
+          await window.api.sync.recordActionHistory('backup', 'failed');
+          await loadAndDisplayActionHistory();
+        }
+      } catch (err) {
+        log('SYNC', 4, 'showConflictResolutionModal', 'Error applying resolutions', {
+          error: err.message
+        });
+        showToast(`❌ Error: ${err.message}`, 'error');
+        
+        await window.api.sync.recordActionHistory('backup', 'failed');
+        await loadAndDisplayActionHistory();
+      }
+      
+      return;
+    }
+    
+    const conflict = conflicts[currentConflictIndex];
+    
+    // Update modal UI
+    const sessionNameEl = document.getElementById('conflict-session-name');
+    const counterEl = document.getElementById('conflict-counter');
+    const localInfoEl = document.getElementById('conflict-local-info');
+    const cloudInfoEl = document.getElementById('conflict-cloud-info');
+    const localPreviewEl = document.getElementById('conflict-local-preview');
+    const cloudPreviewEl = document.getElementById('conflict-cloud-preview');
+    
+    if (sessionNameEl) {
+      sessionNameEl.textContent = conflict.local.name || 'Unnamed Session';
+    }
+    
+    if (counterEl) {
+      counterEl.textContent = `Conflict ${currentConflictIndex + 1} of ${conflicts.length}`;
+    }
+    
+    if (localInfoEl) {
+      localInfoEl.innerHTML = `
+        <div><strong>Device:</strong> ${conflict.local.device_id?.substring(0, 8) || 'Unknown'}</div>
+        <div><strong>Last Modified:</strong> ${new Date(conflict.local.updated_at).toLocaleString()}</div>
+        <div><strong>Type:</strong> ${conflict.type}</div>
+      `;
+    }
+    
+    if (cloudInfoEl) {
+      cloudInfoEl.innerHTML = `
+        <div><strong>Device:</strong> ${conflict.cloud.device_id?.substring(0, 8) || 'Unknown'}</div>
+        <div><strong>Last Modified:</strong> ${new Date(conflict.cloud.updated_at).toLocaleString()}</div>
+        <div><strong>Type:</strong> ${conflict.type}</div>
+      `;
+    }
+    
+    if (localPreviewEl) {
+      if (conflict.type === 'session') {
+        localPreviewEl.textContent = `Session: ${conflict.local.name || 'Unnamed'}\nHash: ${conflict.local.hash?.substring(0, 16)}...`;
+      } else {
+        localPreviewEl.textContent = `Message: ${conflict.local.content?.substring(0, 100) || 'No content'}...`;
+      }
+    }
+    
+    if (cloudPreviewEl) {
+      if (conflict.type === 'session') {
+        cloudPreviewEl.textContent = `Session: ${conflict.cloud.name || 'Unnamed'}\nHash: ${conflict.cloud.hash?.substring(0, 16)}...`;
+      } else {
+        cloudPreviewEl.textContent = `Message: ${conflict.cloud.content?.substring(0, 100) || 'No content'}...`;
+      }
+    }
+    
+    // Show modal
+    modal.classList.remove('hidden');
+  }
+  
+  // Set up button handlers
+  const keepLocalBtn = document.getElementById('conflict-keep-local');
+  const keepCloudBtn = document.getElementById('conflict-keep-cloud');
+  const mergeBothBtn = document.getElementById('conflict-merge-both');
+  const closeBtn = document.getElementById('conflict-close');
+  
+  const handleResolution = (resolution) => {
+    const conflict = conflicts[currentConflictIndex];
+    resolutions.push({
+      conflictId: conflict.id,
+      resolution: resolution,
+      type: conflict.type
+    });
+    
+    log('SYNC', 2, 'showConflictResolutionModal', 'User chose resolution', {
+      conflictId: conflict.id,
+      resolution: resolution,
+      type: conflict.type
+    });
+    
+    currentConflictIndex++;
+    showNextConflict();
+  };
+  
+  keepLocalBtn.onclick = () => handleResolution('local');
+  keepCloudBtn.onclick = () => handleResolution('cloud');
+  mergeBothBtn.onclick = () => handleResolution('merge');
+  closeBtn.onclick = () => {
+    // Close without resolving - default to local
+    log('SYNC', 2, 'showConflictResolutionModal', 'User closed modal, defaulting to local');
+    while (currentConflictIndex < conflicts.length) {
+      const conflict = conflicts[currentConflictIndex];
+      resolutions.push({
+        conflictId: conflict.id,
+        resolution: 'local',
+        type: conflict.type
+      });
+      currentConflictIndex++;
+    }
+    modal.classList.add('hidden');
+  };
+  
+  // Show first conflict
+  showNextConflict();
 }
 
 async function handleDataSourceSwitch(mode) {

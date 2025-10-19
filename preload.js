@@ -89,6 +89,9 @@ contextBridge.exposeInMainWorld('api', {
     syncNow: () => ipcRenderer.invoke('sync:syncNow'),
     backupNow: () => ipcRenderer.invoke('sync:backupNow'),
     startOAuth: () => ipcRenderer.invoke('sync:startOAuth'),
+    recordActionHistory: (type, status) => ipcRenderer.invoke('sync:recordActionHistory', { type, status }),
+    getActionHistory: () => ipcRenderer.invoke('sync:getActionHistory'),
+    resolveConflicts: (resolutions) => ipcRenderer.invoke('sync:resolveConflicts', resolutions),
   },
   app: {
     restart: () => ipcRenderer.invoke('app:restart'),

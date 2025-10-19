@@ -1,6 +1,7 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 class GitHubStorageService {
   constructor(accessToken, username) {
@@ -8,6 +9,25 @@ class GitHubStorageService {
     this.username = username;
     this.repoName = `clustrix-sync-${username}`;
     this.owner = username;
+  }
+  
+  /**
+   * Calculate SHA256 checksum of a file
+   * 
+   * @param {string} filePath - Path to file
+   * @returns {string} SHA256 hash (hex)
+   */
+  calculateChecksum(filePath) {
+    const fileBuffer = fs.readFileSync(filePath);
+    const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    
+    console.log('[GitHub Storage] Checksum calculated:', {
+      file: path.basename(filePath),
+      checksum: hash.substring(0, 16) + '...',
+      size: fileBuffer.length
+    });
+    
+    return hash;
   }
 
   /**
@@ -138,6 +158,9 @@ class GitHubStorageService {
     console.log('[GitHub Storage] Uploading database:', dbPath);
 
     try {
+      // Calculate checksum before upload
+      const checksumBefore = this.calculateChecksum(dbPath);
+      
       const fileContent = fs.readFileSync(dbPath);
       const base64Content = fileContent.toString('base64');
 
@@ -158,7 +181,7 @@ class GitHubStorageService {
         sha: fileSha || undefined,
       });
 
-      return new Promise((resolve, reject) => {
+      const uploadResult = await new Promise((resolve, reject) => {
         const options = {
           hostname: 'api.github.com',
           path: `/repos/${this.owner}/${this.repoName}/contents/clustrix.db`,
@@ -204,6 +227,23 @@ class GitHubStorageService {
         req.write(uploadData);
         req.end();
       });
+      
+      // Store checksum in metadata
+      try {
+        const metadata = {
+          lastBackup: new Date().toISOString(),
+          checksum: checksumBefore,
+          size: fileContent.length
+        };
+        await this.uploadMetadata(metadata);
+        console.log('[GitHub Storage] Checksum stored in metadata:', checksumBefore.substring(0, 16) + '...');
+      } catch (metadataErr) {
+        console.log('[GitHub Storage] Warning: Failed to store metadata:', metadataErr.message);
+        // Non-critical error, continue
+      }
+      
+      return uploadResult;
+      
     } catch (err) {
       console.log('[GitHub Storage] Upload failed:', err.message);
       throw err;
@@ -235,6 +275,33 @@ class GitHubStorageService {
       // Write file
       fs.writeFileSync(outputPath, buffer);
       console.log('[GitHub Storage] Database downloaded successfully');
+      
+      // Verify checksum
+      const checksumAfter = this.calculateChecksum(outputPath);
+      
+      try {
+        const metadata = await this.getFileInfo('metadata.json');
+        if (metadata.content) {
+          const metadataObj = JSON.parse(Buffer.from(metadata.content, 'base64').toString('utf8'));
+          
+          if (metadataObj.checksum && metadataObj.checksum !== checksumAfter) {
+            // Checksum mismatch - delete corrupted file
+            fs.unlinkSync(outputPath);
+            throw new Error('Checksum mismatch - download corrupted. Expected: ' + 
+              metadataObj.checksum.substring(0, 16) + '..., Got: ' + 
+              checksumAfter.substring(0, 16) + '...');
+          }
+          
+          console.log('[GitHub Storage] Checksum verified:', checksumAfter.substring(0, 16) + '...');
+        }
+      } catch (metadataErr) {
+        if (!metadataErr.message.includes('Checksum mismatch')) {
+          console.log('[GitHub Storage] Warning: Could not verify checksum (metadata not available):', metadataErr.message);
+          // Non-critical if metadata doesn't exist yet
+        } else {
+          throw metadataErr; // Re-throw checksum errors
+        }
+      }
 
       return { success: true, path: outputPath };
     } catch (err) {

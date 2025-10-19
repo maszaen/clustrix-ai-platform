@@ -1,4 +1,4 @@
-const { enhancedMarkdownParse } = require('./local_modules/custom-formatter/md.js');
+const { enhancedMarkdownParse } = require('../../../local_modules/custom-formatter/md.js');
 
 const testInput = `Sebuah analisis.
 

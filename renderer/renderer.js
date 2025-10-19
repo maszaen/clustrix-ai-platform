@@ -10010,7 +10010,7 @@ function addMessage(
     node.innerHTML = `<div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${content}</span><button class="primary-btn regenerate-cancelled" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate?</button></div></div></div></div>`;
   } else if (role === "ai_incomplete") {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
-    const placeholderText = "It looks like the system cannot find the AI response data here.";
+    const placeholderText = "Response data not found, due to connection loss or app closed during processing";
     node.innerHTML = `<div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${placeholderText}</span><button class="primary-btn regenerate-incomplete" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate</button></div></div></div></div>`;
   } else {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
@@ -14475,46 +14475,11 @@ function setupEventListeners() {
   }
 
   if (syncNowBtn) {
-    syncNowBtn.addEventListener('click', () => module.exports.handleSyncNow());
+    syncNowBtn.addEventListener('click', () => handleSyncNow());
   }
 
   if (backupNowBtn) {
-    backupNowBtn.addEventListener('click', () => module.exports.handleBackupNow());
-  }
-
-  // ===== AUTH CODE MODAL EVENT HANDLERS =====
-  const authCodeModal = document.getElementById('auth-code-modal');
-  const authCodeInput = document.getElementById('auth-code-input');
-  const authCodeSubmitBtn = document.getElementById('auth-code-submit-btn');
-  const authCodeCancelBtn = document.getElementById('auth-code-cancel-btn');
-  const closeAuthCodeModalBtn = document.getElementById('close-auth-code-modal');
-
-  if (authCodeModal) {
-    authCodeModal.addEventListener('click', (e) => {
-      if (e.target.classList.contains('modal-overlay')) {
-        hideAuthCodeModal();
-      }
-    });
-  }
-
-  if (authCodeSubmitBtn) {
-    authCodeSubmitBtn.addEventListener('click', () => handleAuthCodeSubmit());
-  }
-
-  if (authCodeCancelBtn) {
-    authCodeCancelBtn.addEventListener('click', () => hideAuthCodeModal());
-  }
-
-  if (closeAuthCodeModalBtn) {
-    closeAuthCodeModalBtn.addEventListener('click', () => hideAuthCodeModal());
-  }
-
-  if (authCodeInput) {
-    authCodeInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        handleAuthCodeSubmit();
-      }
-    });
+    backupNowBtn.addEventListener('click', () => handleBackupNow());
   }
 
   // Immediate save for sidebar display toggles
@@ -15248,6 +15213,12 @@ async function updateSidebarAccountButton() {
     const syncConfig = await window.api.sync.getConfig();
     const cloudUser = syncConfig.currentCloudUser;
     
+    log('UI', 1, 'updateSidebarAccountButton', 'Sync config received', {
+      cloudUser,
+      currentCloudUsername: syncConfig.currentCloudUsername,
+      profileUrl: syncConfig.profileUrl
+    });
+    
     const defaultIcon = document.getElementById('default-settings-icon');
     const userProfile = document.getElementById('user-profile-container');
     
@@ -15255,10 +15226,52 @@ async function updateSidebarAccountButton() {
       defaultIcon.style.display = 'none';
       userProfile.style.display = 'flex';
       
-      const userName = cloudUser.split('@')[0];
-      document.getElementById('user-display-name').textContent = userName;
+      // Display GitHub username ONLY (clean, no numbers)
+      const displayName = syncConfig.currentCloudUsername || cloudUser.split('@')[0];
+      const capitalized = displayName.charAt(0).toUpperCase() + displayName.slice(1).toLowerCase();
       
-      log('UI', 1, 'updateSidebarAccountButton', 'Sidebar updated with user profile', { user: cloudUser });
+      log('UI', 1, 'updateSidebarAccountButton', 'Display name resolved', {
+        displayName,
+        capitalized,
+        usedUsername: !!syncConfig.currentCloudUsername,
+        usedEmailFallback: !syncConfig.currentCloudUsername
+      });
+      
+      const displayNameEl = document.getElementById('user-display-name');
+      if (displayNameEl) {
+        displayNameEl.textContent = capitalized || 'User';
+        log('UI', 1, 'updateSidebarAccountButton', 'Display name set', { text: displayNameEl.textContent });
+      }
+      
+      // Set profile picture from local file (downloaded during login)
+      const profilePic = document.getElementById('user-profile-pic');
+      if (profilePic) {
+        if (syncConfig.profileUrl) {
+          // Load profile photo from local file
+          window.api.app.getProfilePhoto().then(result => {
+            if (result.success && result.dataUrl) {
+              profilePic.src = result.dataUrl;
+              profilePic.style.display = 'block';
+              log('UI', 1, 'updateSidebarAccountButton', 'Profile picture loaded from local file');
+            } else {
+              profilePic.style.display = 'none';
+              log('UI', 2, 'updateSidebarAccountButton', 'No local profile picture found', { error: result.error });
+            }
+          }).catch(err => {
+            profilePic.style.display = 'none';
+            log('UI', 2, 'updateSidebarAccountButton', 'Failed to load profile picture', { error: err.message });
+          });
+        } else {
+          profilePic.style.display = 'none';
+          log('UI', 2, 'updateSidebarAccountButton', 'No profile picture URL in config');
+        }
+      }
+      
+      log('UI', 1, 'updateSidebarAccountButton', 'Sidebar updated with user profile', { 
+        user: cloudUser, 
+        username: displayName,
+        hasProfilePic: !!syncConfig.profileUrl
+      });
     } else {
       defaultIcon.style.display = 'flex';
       userProfile.style.display = 'none';
@@ -15266,7 +15279,7 @@ async function updateSidebarAccountButton() {
       log('UI', 1, 'updateSidebarAccountButton', 'Sidebar reset to default icon');
     }
   } catch (e) {
-    log('UI', 4, 'updateSidebarAccountButton', 'Failed to update sidebar', { error: e.message });
+    log('UI', 4, 'updateSidebarAccountButton', 'Failed to update sidebar', { error: e.message, stack: e.stack });
   }
 }
 
@@ -15275,6 +15288,13 @@ async function updateAccountModalUI() {
     const syncConfig = await window.api.sync.getConfig();
     const cloudUser = syncConfig.currentCloudUser;
     
+    log('UI', 1, 'updateAccountModalUI', 'Sync config received', {
+      cloudUser,
+      currentCloudUsername: syncConfig.currentCloudUsername,
+      profileUrl: syncConfig.profileUrl,
+      currentMode: syncConfig.currentMode
+    });
+    
     const notLoggedIn = document.getElementById('account-not-logged-in');
     const loggedIn = document.getElementById('account-logged-in');
     
@@ -15282,8 +15302,56 @@ async function updateAccountModalUI() {
       notLoggedIn.classList.add('hidden');
       loggedIn.classList.remove('hidden');
       
-      document.getElementById('account-email').textContent = cloudUser;
-      document.getElementById('account-name').textContent = cloudUser.split('@')[0];
+      // Display GitHub username ONLY (clean, no numbers) - CAPITALIZE
+      const displayName = syncConfig.currentCloudUsername || cloudUser.split('@')[0];
+      const capitalized = displayName.charAt(0).toUpperCase() + displayName.slice(1).toLowerCase();
+      
+      log('UI', 1, 'updateAccountModalUI', 'Display name resolved', {
+        displayName,
+        usedUsername: !!syncConfig.currentCloudUsername,
+        usedEmailFallback: !syncConfig.currentCloudUsername
+      });
+      
+      const emailEl = document.getElementById('account-email');
+      const nameEl = document.getElementById('account-name');
+      
+      // Show last synced time instead of email
+      if (emailEl) {
+        const lastSynced = syncConfig.lastSyncTime 
+          ? new Date(syncConfig.lastSyncTime).toLocaleString() 
+          : 'Never synced';
+        emailEl.textContent = `Last synced: ${lastSynced}`;
+      }
+      if (nameEl) nameEl.textContent = capitalized || 'USER';
+      
+      log('UI', 1, 'updateAccountModalUI', 'DOM updated', {
+        emailSet: emailEl?.textContent,
+        nameSet: nameEl?.textContent
+      });
+      
+      // Display profile picture from local file
+      const profilePic = document.getElementById('account-profile-pic');
+      if (profilePic) {
+        if (syncConfig.profileUrl) {
+          // Load profile photo from local file
+          window.api.app.getProfilePhoto().then(result => {
+            if (result.success && result.dataUrl) {
+              profilePic.src = result.dataUrl;
+              profilePic.style.display = 'block';
+              log('UI', 1, 'updateAccountModalUI', 'Profile picture loaded from local file');
+            } else {
+              profilePic.style.display = 'none';
+              log('UI', 2, 'updateAccountModalUI', 'No local profile picture found', { error: result.error });
+            }
+          }).catch(err => {
+            profilePic.style.display = 'none';
+            log('UI', 2, 'updateAccountModalUI', 'Failed to load profile picture', { error: err.message });
+          });
+        } else {
+          profilePic.style.display = 'none';
+          log('UI', 2, 'updateAccountModalUI', 'No profile picture URL in config');
+        }
+      }
       
       // Update data source buttons
       const isCloudMode = syncConfig.currentMode === 'cloud';
@@ -15291,18 +15359,24 @@ async function updateAccountModalUI() {
       const cloudBtn = document.getElementById('data-source-cloud');
       
       if (isCloudMode) {
+        // Cloud mode active
         internalBtn.classList.remove('active');
+        internalBtn.disabled = false;
         cloudBtn.classList.add('active');
-        document.getElementById('data-source-info').textContent = 'Data dimuat dari Google Drive (cloud).';
+        cloudBtn.disabled = true; // Disable active button
+        document.getElementById('data-source-info').textContent = 'Data loaded from GitHub private repository.';
         document.getElementById('sync-controls').classList.remove('hidden');
       } else {
+        // Internal mode active
         internalBtn.classList.add('active');
+        internalBtn.disabled = true; // Disable active button
         cloudBtn.classList.remove('active');
-        document.getElementById('data-source-info').textContent = 'Data dimuat dari internal storage device kamu.';
+        cloudBtn.disabled = false;
+        document.getElementById('data-source-info').textContent = 'Data is loaded from your device\'s internal storage.';
         document.getElementById('sync-controls').classList.add('hidden');
       }
       
-      log('UI', 1, 'updateAccountModalUI', 'Account modal updated', { user: cloudUser, mode: syncConfig.currentMode });
+      log('UI', 1, 'updateAccountModalUI', 'Account modal updated', { user: cloudUser, username: displayName, mode: syncConfig.currentMode });
     } else {
       notLoggedIn.classList.remove('hidden');
       loggedIn.classList.add('hidden');
@@ -15310,87 +15384,98 @@ async function updateAccountModalUI() {
       log('UI', 1, 'updateAccountModalUI', 'Account modal reset to login state');
     }
   } catch (e) {
-    log('UI', 4, 'updateAccountModalUI', 'Failed to update account modal', { error: e.message });
+    log('UI', 4, 'updateAccountModalUI', 'Failed to update account modal', { error: e.message, stack: e.stack });
   }
 }
 
 async function handleGoogleLogin() {
+  const loginBtn = document.getElementById('google-login-btn');
+  const btnText = loginBtn?.querySelector('.btn-text');
+  const btnSpinner = loginBtn?.querySelector('.btn-spinner');
+  const btnIcon = loginBtn?.querySelector('.btn-icon');
+  
   try {
-    log('AUTH', 1, 'handleGoogleLogin', 'Starting Google OAuth flow');
+    log('AUTH', 1, 'handleGitHubLogin', 'Starting GitHub OAuth flow');
+    
+    // Show loading state - force inline styles to ensure visibility
+    if (loginBtn) {
+      loginBtn.disabled = true;
+      loginBtn.style.cursor = 'not-allowed';
+      loginBtn.style.opacity = '0.7';
+    }
+    if (btnText) {
+      btnText.style.display = 'none';
+    }
+    if (btnIcon) {
+      btnIcon.style.display = 'none';
+    }
+    if (btnSpinner) {
+      btnSpinner.style.display = 'inline-block';
+    }
+    
+    log('AUTH', 1, 'handleGitHubLogin', 'Loading state applied', {
+      btnExists: !!loginBtn,
+      textExists: !!btnText,
+      spinnerExists: !!btnSpinner,
+      spinnerDisplay: btnSpinner?.style.display
+    });
     
     const result = await window.api.sync.startOAuth?.() || { success: false, error: 'OAuth not available' };
     
     if (result.success) {
-      log('AUTH', 1, 'handleGoogleLogin', 'OAuth successful', { email: result.email });
-      await updateAccountModalUI();
-      await updateSidebarAccountButton();
-      showToast(`Logged in as ${result.email}`, 'success');
-    } else if (result.error === 'OOB_AUTH_REQUIRED') {
-      // Out-of-Band OAuth flow: show auth code input
-      log('AUTH', 1, 'handleGoogleLogin', 'OOB flow initiated - waiting for auth code');
-      showToast('Browser opened - check for authorization code', 'info');
-      showAuthCodeModal();
+      log('AUTH', 1, 'handleGitHubLogin', 'OAuth successful', { email: result.email, username: result.username });
+      
+      // Check if we need to restart app
+      if (result.needsRestart) {
+        showToast(`Logged in as ${result.username}. Restarting app...`, 'success');
+        setTimeout(() => {
+          window.api.app.restart();
+        }, 1500);
+      } else {
+        await updateAccountModalUI();
+        await updateSidebarAccountButton();
+        showToast(`Logged in as ${result.username}`, 'success');
+        
+        // Reset button state
+        if (loginBtn) {
+          loginBtn.disabled = false;
+          loginBtn.style.cursor = '';
+          loginBtn.style.opacity = '';
+        }
+        if (btnText) btnText.style.display = 'inline';
+        if (btnIcon) btnIcon.style.display = 'inline';
+        if (btnSpinner) btnSpinner.style.display = 'none';
+      }
     } else {
-      log('AUTH', 4, 'handleGoogleLogin', 'OAuth failed', { error: result.error });
+      log('AUTH', 4, 'handleGitHubLogin', 'OAuth failed', { error: result.error });
       const errorMsg = result.configured === false 
-        ? `Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables. Get credentials from console.cloud.google.com`
+        ? `GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env. Get credentials from github.com/settings/developers`
         : `Login failed: ${result.error || 'Unknown error'}`;
       showToast(errorMsg, 'error');
+      
+      // Reset button state
+      if (loginBtn) {
+        loginBtn.disabled = false;
+        loginBtn.style.cursor = '';
+        loginBtn.style.opacity = '';
+      }
+      if (btnText) btnText.style.display = 'inline';
+      if (btnIcon) btnIcon.style.display = 'inline';
+      if (btnSpinner) btnSpinner.style.display = 'none';
     }
   } catch (e) {
-    log('AUTH', 4, 'handleGoogleLogin', 'OAuth error', { error: e.message });
+    log('AUTH', 4, 'handleGitHubLogin', 'OAuth error', { error: e.message });
     showToast('An error occurred during login: ' + e.message, 'error');
-  }
-}
-
-function showAuthCodeModal() {
-  const modal = document.getElementById('auth-code-modal');
-  if (!modal) {
-    log('AUTH', 3, 'showAuthCodeModal', 'Auth code modal not found in DOM');
-    return;
-  }
-  modal.classList.remove('hidden');
-  const input = document.getElementById('auth-code-input');
-  if (input) input.focus();
-}
-
-function hideAuthCodeModal() {
-  const modal = document.getElementById('auth-code-modal');
-  if (modal) modal.classList.add('hidden');
-  const input = document.getElementById('auth-code-input');
-  if (input) input.value = '';
-}
-
-async function handleAuthCodeSubmit() {
-  try {
-    const input = document.getElementById('auth-code-input');
-    const authCode = input?.value?.trim();
-
-    if (!authCode) {
-      showToast('Please paste the authorization code', 'warn');
-      return;
+    
+    // Reset button state
+    if (loginBtn) {
+      loginBtn.disabled = false;
+      loginBtn.style.cursor = '';
+      loginBtn.style.opacity = '';
     }
-
-    log('AUTH', 1, 'handleAuthCodeSubmit', 'Submitting auth code');
-    showToast('Verifying code...', 'info');
-
-    const result = await window.api.sync.exchangeAuthCode(authCode);
-
-    if (result.success) {
-      log('AUTH', 1, 'handleAuthCodeSubmit', 'Code exchange successful', { email: result.email });
-      hideAuthCodeModal();
-      await updateAccountModalUI();
-      await updateSidebarAccountButton();
-      showToast(`Logged in as ${result.email}`, 'success');
-    } else {
-      log('AUTH', 4, 'handleAuthCodeSubmit', 'Code exchange failed', { error: result.error });
-      showToast(`Code invalid: ${result.error}`, 'error');
-      input.value = '';
-      input.focus();
-    }
-  } catch (e) {
-    log('AUTH', 4, 'handleAuthCodeSubmit', 'Code exchange error', { error: e.message });
-    showToast('Error verifying code: ' + e.message, 'error');
+    if (btnText) btnText.style.display = 'inline';
+    if (btnIcon) btnIcon.style.display = 'inline';
+    if (btnSpinner) btnSpinner.style.display = 'none';
   }
 }
 
@@ -15398,20 +15483,141 @@ async function handleLogout() {
   try {
     log('AUTH', 1, 'handleLogout', 'Logging out');
     
+    // Get logout button and show loading state
+    const logoutBtn = document.getElementById('account-logout-btn');
+    const originalText = logoutBtn ? logoutBtn.textContent : 'Logout';
+    
+    if (logoutBtn) {
+      logoutBtn.disabled = true;
+      logoutBtn.textContent = 'Logging out...';
+      logoutBtn.style.cursor = 'not-allowed';
+      logoutBtn.style.opacity = '0.6';
+    }
+    
+    log('AUTH', 1, 'handleLogout', 'Calling logout API');
     const result = await window.api.sync.logout({ deleteCloudData: false });
     
     if (result.success) {
-      log('AUTH', 1, 'handleLogout', 'Logout successful');
-      await updateAccountModalUI();
-      await updateSidebarAccountButton();
-      showToast('Logged out. Switched to internal mode.', 'success');
+      log('AUTH', 1, 'handleLogout', 'Logout successful, preparing to restart');
+      
+      // Show full loading overlay (will cover modal)
+      const loadingOverlay = document.getElementById('loading-overlay');
+      const loadingText = document.getElementById('loading-text');
+      
+      if (loadingOverlay && loadingText) {
+        loadingText.textContent = 'Logging out...';
+        loadingOverlay.classList.remove('hidden');
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.style.opacity = '1';
+      }
+      
+      // Update loading text to show restart message after short delay
+      setTimeout(() => {
+        if (loadingText) {
+          loadingText.textContent = 'Restarting app...';
+        }
+      }, 500);
+      
+      // Keep loading overlay visible - app will restart automatically
+      // Don't close modal - overlay will cover everything
+      
     } else {
       log('AUTH', 4, 'handleLogout', 'Logout failed', { error: result.error });
+      
+      // Restore button state
+      if (logoutBtn) {
+        logoutBtn.disabled = false;
+        logoutBtn.textContent = originalText;
+        logoutBtn.style.cursor = '';
+        logoutBtn.style.opacity = '';
+      }
+      
       showToast(`Logout failed: ${result.error}`, 'error');
     }
   } catch (e) {
     log('AUTH', 4, 'handleLogout', 'Logout error', { error: e.message });
+    
+    // Restore button state
+    const logoutBtn = document.getElementById('account-logout-btn');
+    if (logoutBtn) {
+      logoutBtn.disabled = false;
+      logoutBtn.textContent = 'Logout';
+      logoutBtn.style.cursor = '';
+      logoutBtn.style.opacity = '';
+    }
+    
     showToast('Logout error: ' + e.message, 'error');
+  }
+}
+
+async function handleSyncNow() {
+  try {
+    log('SYNC', 1, 'handleSyncNow', 'Sync triggered by user');
+    
+    showToast('Syncing with GitHub...', 'info');
+    
+    const result = await window.api.sync.syncNow();
+    
+    log('SYNC', 1, 'handleSyncNow', 'Sync result received', { 
+      success: result.success, 
+      error: result.error,
+      repository: result.repository
+    });
+    
+    if (result.success) {
+      log('SYNC', 1, 'handleSyncNow', 'Sync completed successfully', { repo: result.repository });
+      showToast(`✓ Synced! Downloaded from: ${result.repository}`, 'success');
+      
+      // Reload page to show new data
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } else {
+      log('SYNC', 4, 'handleSyncNow', 'Sync operation failed', { 
+        error: result.error,
+        fullResult: result
+      });
+      showToast(`❌ Sync failed: ${result.error}`, 'error');
+    }
+  } catch (e) {
+    log('SYNC', 4, 'handleSyncNow', 'Sync error exception', { 
+      error: e.message,
+      stack: e.stack
+    });
+    showToast('❌ Sync error: ' + e.message, 'error');
+  }
+}
+
+async function handleBackupNow() {
+  try {
+    log('SYNC', 1, 'handleBackupNow', 'Backup triggered by user');
+    
+    showToast('Backing up to GitHub...', 'info');
+    
+    const result = await window.api.sync.backupNow();
+    
+    log('SYNC', 1, 'handleBackupNow', 'Backup result received', { 
+      success: result.success, 
+      error: result.error,
+      repository: result.repository
+    });
+    
+    if (result.success) {
+      log('SYNC', 1, 'handleBackupNow', 'Backup completed successfully', { repo: result.repository });
+      showToast(`✓ Backed up! Uploaded to: ${result.repository}`, 'success');
+    } else {
+      log('SYNC', 4, 'handleBackupNow', 'Backup operation failed', { 
+        error: result.error,
+        fullResult: result
+      });
+      showToast(`❌ Backup failed: ${result.error}`, 'error');
+    }
+  } catch (e) {
+    log('SYNC', 4, 'handleBackupNow', 'Backup error exception', { 
+      error: e.message,
+      stack: e.stack
+    });
+    showToast('❌ Backup error: ' + e.message, 'error');
   }
 }
 
@@ -15421,27 +15627,119 @@ async function handleDataSourceSwitch(mode) {
     
     const syncConfig = await window.api.sync.getConfig();
     
-    if (mode === 'cloud' && !syncConfig.currentCloudUser) {
-      showToast('Please sign in with Google first.', 'error');
+    // Prevent switching to current mode
+    if (syncConfig.currentMode === mode) {
+      log('SYNC', 2, 'handleDataSourceSwitch', 'Already in this mode', { currentMode: syncConfig.currentMode });
       return;
     }
     
-    const result = await window.api.sync.switchMode({ mode, cloudUser: syncConfig.currentCloudUser });
+    // Check if cloud mode requires login
+    if (mode === 'cloud' && !syncConfig.currentCloudUser) {
+      showToast('Please sign in with GitHub first.', 'error');
+      return;
+    }
+    
+    // Get button elements
+    const internalBtn = document.getElementById('data-source-internal');
+    const cloudBtn = document.getElementById('data-source-cloud');
+    if (!internalBtn || !cloudBtn) return;
+    
+    const targetBtn = mode === 'internal' ? internalBtn : cloudBtn;
+    const otherBtn = mode === 'internal' ? cloudBtn : internalBtn;
+    
+    // FADE ANIMATION: Toggle active classes FIRST (fade in target, fade out other)
+    otherBtn.classList.remove('active');
+    targetBtn.classList.add('active');
+    
+    // Small delay to let fade animation start
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
+    // Disable both buttons to prevent spam
+    internalBtn.disabled = true;
+    cloudBtn.disabled = true;
+    
+    // Add loading state to target button
+    const originalHTML = targetBtn.innerHTML;
+    targetBtn.classList.add('loading');
+    targetBtn.innerHTML = `
+      <svg style="animation: spin 1s linear infinite; margin-right: 6px; transform-origin: center;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+      </svg>
+      Switching...
+    `;
+    
+    // Call API to switch mode
+    const result = await window.api.sync.switchMode({ mode });
     
     if (result.success) {
       log('SYNC', 1, 'handleDataSourceSwitch', 'Mode switched, restarting app', { newMode: mode });
-      showToast(`Switching to ${mode} mode. App will restart...`, 'info');
       
+      // Show success state
+      targetBtn.innerHTML = `
+        <svg style="margin-right: 6px;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        Success!
+      `;
+      
+      // Show full loading overlay
+      const loadingOverlay = document.getElementById('loading-overlay');
+      const loadingText = document.getElementById('loading-text');
+      
+      if (loadingOverlay && loadingText) {
+        loadingText.textContent = `Switching to ${mode} mode...`;
+        loadingOverlay.classList.remove('hidden');
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.style.opacity = '1';
+      }
+      
+      // Restart after delay
       setTimeout(() => {
-        window.api.app.restart();
-      }, 1500);
+        if (loadingText) {
+          loadingText.textContent = 'Restarting app...';
+        }
+        
+        setTimeout(() => {
+          window.api.app.restart();
+        }, 500);
+      }, 800);
+      
     } else {
       log('SYNC', 4, 'handleDataSourceSwitch', 'Failed to switch mode', { error: result.error });
+      
+      // Restore button state
+      targetBtn.classList.remove('loading');
+      targetBtn.innerHTML = originalHTML;
+      
+      // Re-enable buttons based on current mode
+      if (syncConfig.currentMode === 'internal') {
+        if (internalBtn) {
+          internalBtn.disabled = true;
+          internalBtn.classList.add('active');
+        }
+        if (cloudBtn) {
+          cloudBtn.disabled = false;
+          cloudBtn.classList.remove('active');
+        }
+      } else {
+        if (internalBtn) {
+          internalBtn.disabled = false;
+          internalBtn.classList.remove('active');
+        }
+        if (cloudBtn) {
+          cloudBtn.disabled = true;
+          cloudBtn.classList.add('active');
+        }
+      }
+      
       showToast(`Failed: ${result.error}`, 'error');
     }
   } catch (e) {
     log('SYNC', 4, 'handleDataSourceSwitch', 'Switch error', { error: e.message });
     showToast('Switch error: ' + e.message, 'error');
+    
+    // Restore buttons on error
+    await updateAccountModalUI();
   }
 }
 
@@ -15454,10 +15752,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       cloudUser: syncConfig.currentCloudUser
     });
     
-    // Update sidebar
-    if (window.__clustrixModule) {
-      await window.__clustrixModule.updateSidebarAccountButton();
-    }
+    // Update sidebar and modal on app start
+    await updateSidebarAccountButton();
+    await updateAccountModalUI();
   } catch (e) {
     log('INIT', 3, 'DOMContentLoaded', 'Failed to load sync config', { error: e.message });
   }

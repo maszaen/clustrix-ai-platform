@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authorization Success - Clustrix</title>
+    <style>
+      @font-face {
+          font-family: 'Default';
+          src: url('./OpenAISansVariableVF.woff') format('woff');
+          font-weight: normal;
+          font-style: normal;
+        }
+
+        * {
+            margin: 0;
+            font-family: 'Default', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1b1c1d;
+            color: #FCFCFC;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: #282A2C;
+            border-radius: 16px;
+            padding: 48px 40px 32px;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+            position: relative;
+        }
+
+        .github-section {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 32px;
+            animation: fadeIn 0.5s ease-out 0.1s both;
+        }
+
+        .github-logo {
+            width: 64px;
+            height: 64px;
+            flex-shrink: 0;
+        }
+
+        .github-logo svg {
+            width: 100%;
+            height: 100%;
+            fill: #BDC1C6;
+        }
+
+        .github-bubble {
+            background: #1f1f1f;
+            padding: 10px 16px;
+            border-radius: 12px;
+            position: relative;
+            margin-top: 8px;
+            animation: bubbleIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) 0.3s both;
+        }
+
+        .github-bubble::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 12px;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 6px 6px 6px 0;
+            border-color: transparent #1f1f1f transparent transparent;
+        }
+
+        .github-bubble p {
+            font-size: 14px;
+            color: #BDC1C6;
+            margin: 0;
+            font-style: italic;
+        }
+
+        @keyframes bubbleIn {
+            0% {
+                transform: scale(0.8) translateY(-10px);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(1) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .success-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            animation: fadeInUp 0.5s ease-out 0.4s both;
+        }
+
+        .separator {
+            width: 100%;
+            max-width: 420px;
+            height: 1px;
+            background: #4a5050;
+            margin: 0 auto 24px;
+            animation: fadeInUp 0.5s ease-out 0.45s both;
+        }
+
+        .check-icon {
+            width: 28px;
+            height: 28px;
+            background: #1f3760;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .check-icon svg {
+            width: 16px;
+            height: 16px;
+            stroke: #D3E3FD;
+            stroke-width: 2.5;
+            fill: none;
+            animation: checkDraw 0.6s ease-in-out 0.5s forwards;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+        }
+
+        @keyframes checkDraw {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #FCFCFC;
+            margin: 0;
+        }
+
+        p {
+            font-size: 16px;
+            color: #BDC1C6;
+            line-height: 1.6;
+            margin-bottom: 32px;
+            animation: fadeInUp 0.5s ease-out 0.5s both;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        .button {
+            background: #1f3760;
+            color: #D3E3FD;
+            border: none;
+            padding: 14px 32px;
+            font-size: 16px;
+            font-weight: 500;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            animation: fadeInUp 0.5s ease-out 0.6s both;
+        }
+
+        .button:hover {
+            background: #28489f;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button svg {
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 40px 24px;
+            }
+
+            .github-section {
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .github-bubble {
+                margin-top: 0;
+            }
+
+            .github-bubble::before {
+                left: 50%;
+                top: -6px;
+                transform: translateX(-50%) rotate(90deg);
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            p {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="github-section">
+            <div class="github-logo">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+                </svg>
+            </div>
+            <div class="github-bubble">
+                <p>"You're all set!"</p>
+            </div>
+        </div>
+
+        <div class="success-header">
+            <div class="check-icon">
+                <svg viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </div>
+            <h1>Authorization Success!</h1>
+        </div>
+
+        <div class="separator"></div>
+
+        <p id="status-message">Your GitHub account has been successfully connected to Clustrix. You can close this tab now and return to the app.</p>
+    </div>
+
+    <script>
+        // Try to close tab (might not work for security reasons)
+        setTimeout(() => {
+            window.close();
+        }, 1000);
+    </script>
+</body>
+</html>

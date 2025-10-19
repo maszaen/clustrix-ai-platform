@@ -14002,6 +14002,34 @@ function setupEventListeners() {
     closeSearchApiModal();
   });
 
+  // Accessibility Modal
+  $("#open-accessibility-settings").addEventListener("click", () => {
+    log("UI", 2, "event:open-accessibility-settings", "Opening Accessibility modal.");
+    
+    // Load current settings
+    $("#theme-slider").checked = localStorage.getItem('clustrix-theme') === 'dark';
+    $("#show-projects-toggle").checked = state.settings.showProjectSessions !== false;
+    $("#show-starred-toggle").checked = state.settings.showStarredSessions !== false;
+    
+    $("#accessibility-modal").classList.remove("hidden");
+    $("#settings-menu").classList.add("hidden");
+
+    // Close mobile sidebar when opening accessibility settings
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+  });
+
+  const closeAccessibilityModal = () =>
+    $("#accessibility-modal").classList.add("hidden");
+  
+  $("#close-accessibility-modal").addEventListener("click", closeAccessibilityModal);
+  $("#close-accessibility").addEventListener("click", closeAccessibilityModal);
+  $("#accessibility-modal .modal-overlay").addEventListener(
+    "click",
+    closeAccessibilityModal,
+  );
+
   (function wireWelcomeInputs() {
     const msgCentral = $("#msg-central");
     if (msgCentral) {
@@ -15273,10 +15301,35 @@ async function updateSidebarAccountButton() {
         hasProfilePic: !!syncConfig.profileUrl
       });
     } else {
-      defaultIcon.style.display = 'flex';
-      userProfile.style.display = 'none';
+      defaultIcon.style.display = 'none';
+      userProfile.style.display = 'flex';
       
-      log('UI', 1, 'updateSidebarAccountButton', 'Sidebar reset to default icon');
+      // Show "Not logged in" with default profile image
+      const displayNameEl = document.getElementById('user-display-name');
+      if (displayNameEl) {
+        displayNameEl.textContent = 'Not logged in';
+        log('UI', 1, 'updateSidebarAccountButton', 'Display name set to "Not logged in"');
+      }
+      
+      // Load default profile image from userData
+      const profilePic = document.getElementById('user-profile-pic');
+      if (profilePic) {
+        window.api.app.getDefaultProfilePhoto().then(result => {
+          if (result.success && result.dataUrl) {
+            profilePic.src = result.dataUrl;
+            profilePic.style.display = 'block';
+            log('UI', 1, 'updateSidebarAccountButton', 'Default profile picture loaded');
+          } else {
+            profilePic.style.display = 'none';
+            log('UI', 2, 'updateSidebarAccountButton', 'Default profile picture not found', { error: result.error });
+          }
+        }).catch(err => {
+          profilePic.style.display = 'none';
+          log('UI', 2, 'updateSidebarAccountButton', 'Failed to load default profile picture', { error: err.message });
+        });
+      }
+      
+      log('UI', 1, 'updateSidebarAccountButton', 'Sidebar reset to "Not logged in" state');
     }
   } catch (e) {
     log('UI', 4, 'updateSidebarAccountButton', 'Failed to update sidebar', { error: e.message, stack: e.stack });
@@ -15381,7 +15434,25 @@ async function updateAccountModalUI() {
       notLoggedIn.classList.remove('hidden');
       loggedIn.classList.add('hidden');
       
-      log('UI', 1, 'updateAccountModalUI', 'Account modal reset to login state');
+      // Show "Not logged in" profile image in the modal
+      const profilePic = document.getElementById('account-profile-pic');
+      if (profilePic) {
+        window.api.app.getDefaultProfilePhoto().then(result => {
+          if (result.success && result.dataUrl) {
+            profilePic.src = result.dataUrl;
+            profilePic.style.display = 'block';
+            log('UI', 1, 'updateAccountModalUI', 'Default profile picture loaded in modal');
+          } else {
+            profilePic.style.display = 'none';
+            log('UI', 2, 'updateAccountModalUI', 'Default profile picture not found', { error: result.error });
+          }
+        }).catch(err => {
+          profilePic.style.display = 'none';
+          log('UI', 2, 'updateAccountModalUI', 'Failed to load default profile picture', { error: err.message });
+        });
+      }
+      
+      log('UI', 1, 'updateAccountModalUI', 'Account modal reset to "Not logged in" state');
     }
   } catch (e) {
     log('UI', 4, 'updateAccountModalUI', 'Failed to update account modal', { error: e.message, stack: e.stack });

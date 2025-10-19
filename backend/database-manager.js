@@ -1,6 +1,12 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const { logWithContext } = require('../utils/logger');
+const SchemaMigrationV2 = require('./schema-migration-v2');
+const { 
+  getDeviceId, 
+  generateSessionHash, 
+  getCurrentTimestamp 
+} = require('./sync-helpers');
 
 function log(context, level, func, message, details = {}) {
   logWithContext(context, func, message, details);
@@ -29,10 +35,32 @@ class DatabaseManager {
     this.db.pragma('foreign_keys = ON');
     
     this.initSchema();
+    
+    // Run schema migration V2 (for sync/backup support)
+    this.runSchemaMigration();
+    
     log('DATABASE', 1, 'constructor', 'Database initialized', { 
       path: dbPath,
       isCloudDatabase: this.isCloudDatabase
     });
+  }
+  
+  runSchemaMigration() {
+    try {
+      const migration = new SchemaMigrationV2(this.db, this.dbPath, this.isCloudDatabase);
+      const result = migration.migrate();
+      
+      if (result.success) {
+        log('DATABASE', 1, 'runSchemaMigration', 'Schema migration completed', result);
+      } else {
+        log('DATABASE', 4, 'runSchemaMigration', 'Schema migration failed', result);
+      }
+    } catch (error) {
+      log('DATABASE', 4, 'runSchemaMigration', 'Schema migration error', {
+        error: error.message,
+        stack: error.stack
+      });
+    }
   }
   
   initSchema() {
@@ -175,6 +203,7 @@ class DatabaseManager {
   getAllSessions() {
     return this.db.prepare(`
       SELECT * FROM sessions 
+      WHERE deleted = 0
       ORDER BY updated_at DESC
     `).all();
   }
@@ -186,16 +215,24 @@ class DatabaseManager {
   }
   
   saveSession(session) {
+    // Get device ID for this machine
+    const deviceId = getDeviceId(this.db);
+    
+    // Generate hash for conflict detection (will be updated with messages later)
+    // For now, use a simple hash of session metadata
+    const messages = this.getMessages(session.id);
+    const hash = generateSessionHash(session, messages);
+    
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO sessions 
       (id, name, type, created_at, updated_at, last_updated, project_id, 
        is_project, is_favorite, persona_name, persona_work, persona_prefs, 
-       tokens_used, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       tokens_used, metadata, deleted, device_id, synced_at, hash)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     const createdAt = session.created_at ? Date.parse(session.created_at) : Date.now();
-    const updatedAt = session.last_updated ? Date.parse(session.last_updated) : Date.now();
+    const updatedAt = getCurrentTimestamp();
     
     return stmt.run(
       session.id,
@@ -214,7 +251,11 @@ class DatabaseManager {
       JSON.stringify({
         canvases: session.canvases || {},
         tokens_by_message: session.tokens_by_message || {}
-      })
+      }),
+      0,           // deleted (not deleted)
+      deviceId,    // device_id
+      null,        // synced_at (null until synced)
+      hash         // hash for conflict detection
     );
   }
   
@@ -227,13 +268,17 @@ class DatabaseManager {
   getMessages(sessionId) {
     return this.db.prepare(`
       SELECT * FROM messages 
-      WHERE session_id = ? 
+      WHERE session_id = ? AND deleted = 0
       ORDER BY message_index ASC
     `).all(sessionId);
   }
   
   // UPSERT message (UPDATE if exists, INSERT if not)
   upsertMessage(sessionId, role, content, metadata, messageIndex) {
+    // Get device ID for this machine
+    const deviceId = getDeviceId(this.db);
+    const now = getCurrentTimestamp();
+    
     // First, try to delete existing message at this index
     this.db.prepare(`
       DELETE FROM messages 
@@ -245,8 +290,9 @@ class DatabaseManager {
       INSERT INTO messages 
       (session_id, role, content, message_index, created_at, 
        model_id, model_label, provider, base_url, think_mode, 
-       think_content, thinking_update, web_search_enabled, web_search_data, files, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       think_content, thinking_update, web_search_enabled, web_search_data, files, metadata,
+       deleted, device_id, synced_at, sequence, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     return stmt.run(
@@ -254,7 +300,7 @@ class DatabaseManager {
       role,
       content,
       messageIndex,
-      Date.now(),
+      now,
       metadata.model || null,
       metadata.modelLabel || null,
       metadata.provider || null,
@@ -265,17 +311,27 @@ class DatabaseManager {
       metadata.webSearchEnabled ? 1 : 0,
       metadata.webSearchData ? JSON.stringify(metadata.webSearchData) : null,
       metadata.files ? JSON.stringify(metadata.files) : null,
-      JSON.stringify(metadata)
+      JSON.stringify(metadata),
+      0,            // deleted (not deleted)
+      deviceId,     // device_id
+      null,         // synced_at (null until synced)
+      messageIndex, // sequence (same as message_index initially)
+      now           // updated_at
     );
   }
   
   addMessage(sessionId, role, content, metadata, messageIndex) {
+    // Get device ID for this machine
+    const deviceId = getDeviceId(this.db);
+    const now = getCurrentTimestamp();
+    
     const stmt = this.db.prepare(`
       INSERT INTO messages 
       (session_id, role, content, message_index, created_at, 
        model_id, model_label, provider, base_url, think_mode, 
-       think_content, thinking_update, web_search_enabled, web_search_data, files, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       think_content, thinking_update, web_search_enabled, web_search_data, files, metadata,
+       deleted, device_id, synced_at, sequence, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     return stmt.run(
@@ -283,7 +339,7 @@ class DatabaseManager {
       role,
       content,
       messageIndex,
-      Date.now(),
+      now,
       metadata.model || null,
       metadata.modelLabel || null,
       metadata.provider || null,
@@ -294,7 +350,12 @@ class DatabaseManager {
       metadata.webSearchEnabled ? 1 : 0,
       metadata.webSearchData ? JSON.stringify(metadata.webSearchData) : null,
       metadata.files ? JSON.stringify(metadata.files) : null,
-      JSON.stringify(metadata)
+      JSON.stringify(metadata),
+      0,            // deleted (not deleted)
+      deviceId,     // device_id
+      null,         // synced_at (null until synced)
+      messageIndex, // sequence (same as message_index initially)
+      now           // updated_at
     );
   }
   

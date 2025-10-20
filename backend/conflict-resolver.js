@@ -13,6 +13,41 @@ const log = (level, method, message, data = {}) => {
   logWithContext('CONFLICT', level, method, message, data);
 };
 
+function getRecordFingerprint(record, type) {
+  if (record?.hash) {
+    return record.hash;
+  }
+
+  if (type === 'session') {
+    const metadata = typeof record.metadata === 'string'
+      ? record.metadata
+      : JSON.stringify(record.metadata || {});
+    return [
+      record.id || '',
+      record.name || '',
+      record.type || '',
+      metadata,
+      record.updated_at || ''
+    ].join('|');
+  }
+
+  if (type === 'message') {
+    const metadata = typeof record.metadata === 'string'
+      ? record.metadata
+      : JSON.stringify(record.metadata || {});
+    return [
+      record.id || '',
+      record.session_id || '',
+      record.role || '',
+      record.content || '',
+      metadata,
+      record.updated_at || ''
+    ].join('|');
+  }
+
+  return JSON.stringify(record || {});
+}
+
 class ConflictResolver {
   constructor() {
     this.pendingConflicts = [];
@@ -41,27 +76,33 @@ class ConflictResolver {
       
       if (!cloud) continue; // Not a conflict, just new local record
       
-      // Check if timestamps match (within 1 second tolerance)
-      if (timestampsMatch(local.updated_at, cloud.updated_at, 1000)) {
-        // Same timestamp, check if content differs
-        if (local.hash !== cloud.hash) {
-          conflicts.push({
-            id: local.id,
-            local,
-            cloud,
-            type,
-            detectedAt: Date.now()
-          });
-          
-          log(3, 'detectConflicts', 'Conflict detected', {
-            id: local.id,
-            type,
-            localHash: local.hash?.substring(0, 8),
-            cloudHash: cloud.hash?.substring(0, 8),
-            localTime: formatTimestamp(local.updated_at),
-            cloudTime: formatTimestamp(cloud.updated_at)
-          });
-        }
+      const localUpdatedAt = Number(local.updated_at) || 0;
+      const cloudUpdatedAt = Number(cloud.updated_at) || 0;
+      const timestampsClose = timestampsMatch(localUpdatedAt, cloudUpdatedAt, 1000);
+      const localIsNewer = localUpdatedAt > cloudUpdatedAt;
+
+      const localFingerprint = getRecordFingerprint(local, type);
+      const cloudFingerprint = getRecordFingerprint(cloud, type);
+      const contentDiffers = localFingerprint !== cloudFingerprint;
+
+      if (contentDiffers && (!localIsNewer || timestampsClose)) {
+        conflicts.push({
+          id: local.id,
+          local,
+          cloud,
+          type,
+          detectedAt: Date.now()
+        });
+
+        log(3, 'detectConflicts', 'Conflict detected', {
+          id: local.id,
+          type,
+          localHash: local.hash?.substring(0, 8) || localFingerprint.substring(0, 8),
+          cloudHash: cloud.hash?.substring(0, 8) || cloudFingerprint.substring(0, 8),
+          localTime: formatTimestamp(localUpdatedAt),
+          cloudTime: formatTimestamp(cloudUpdatedAt),
+          reason: timestampsClose ? 'timestamps-close' : 'cloud-newer'
+        });
       }
     }
     

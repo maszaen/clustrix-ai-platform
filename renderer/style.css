@@ -1,4 +1,11 @@
 @font-face {
+  font-family: 'Emoji';
+  src: url('../public/fonts/NotoColorEmoji-Regular.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 100 1000;
+}
+
+@font-face {
   font-family: 'Default';
   src: url('../public/fonts/Capricorn-USR-Text.woff2') format('woff');
   font-style: normal;
@@ -50,13 +57,13 @@
 }
 
 :root {
-  --font-sans: 'Default', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-ai: 'AI_Text', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-ai-bold: 'AI_Text_Bold', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-classic: 'Classic', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'Mono', 'SF Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-  --font-display: 'Display', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-display-italic: 'Display_Italic', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: 'Default', 'Emoji', 'Apple Color Emoji', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-ai: 'AI_Text', 'Emoji', 'Apple Color Emoji', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-ai-bold: 'AI_Text_Bold', 'Emoji', 'Apple Color Emoji', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-classic: 'Classic', 'Emoji', 'Apple Color Emoji', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'Mono', 'Emoji', 'Apple Color Emoji', 'SF Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  --font-display: 'Display', 'Emoji', 'Apple Color Emoji', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-display-italic: 'Display_Italic', 'Emoji', 'Apple Color Emoji', 'SF Pro Display', Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 
   /* Animation Variables */
   --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -3394,6 +3401,8 @@ textarea::-webkit-scrollbar {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 5px;
   position: relative;
 }
 
@@ -3478,13 +3487,12 @@ textarea::-webkit-scrollbar {
 .action-history-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   max-height: 240px;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-secondary);
-  padding: 8px;
+  padding: 3px 8px;
 }
 
 .action-history-item {
@@ -3492,31 +3500,32 @@ textarea::-webkit-scrollbar {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  background: var(--bg);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
 }
 
+.action-history-item:last-child {
+  border-bottom: none;
+}
 .action-history-item-icon {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   font-size: 12px;
 }
 
 .action-history-item-sync .action-history-item-icon {
-  background: var(--accent-light);
-  color: var(--accent);
+  background: var(--primary-light);
+  color: var(--primary);
 }
 
 .action-history-item-backup .action-history-item-icon {
-  background: rgba(52, 168, 224, 0.15);
-  color: #34a8e0;
+  background: var(--primary-light);
+  color: var(--primary);
 }
 
 .action-history-item-failed .action-history-item-icon {
@@ -3527,7 +3536,7 @@ textarea::-webkit-scrollbar {
 .action-history-item-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0px;
   flex: 1;
   min-width: 0;
 }
@@ -6372,7 +6381,7 @@ button:disabled .btn-icon {
 .quick-model-item {
   display: block;
   width: 100%;
-  padding: var(--spacing-xs) var(--spacing-lg);
+  padding: 5px var(--spacing-lg);
   border: none; 
   background: transparent;
   color: var(--fg);
@@ -6386,11 +6395,13 @@ button:disabled .btn-icon {
 .quick-model-item:first-child {
   border-top-left-radius: var(--radius-sm);
   border-top-right-radius: var(--radius-sm);
+  padding-top: 6px !important;
 }
 
 .quick-model-item:last-child {
   border-bottom-left-radius: var(--radius-sm);
   border-bottom-right-radius: var(--radius-sm);
+  padding-bottom: 7px !important;
 }
 
 .quick-model-item:only-child {

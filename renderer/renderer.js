@@ -3793,31 +3793,17 @@ function createSessionListItem(s) {
     }
   });
 
-  // Add hover management for clicked-open menus - SIDEBAR VERSION (keep click-only behavior)
-  const menuContainer = li.querySelector(".chat-menu-container");
-  if (menuContainer) {
-    menuContainer.addEventListener("mouseenter", () => {
-      const dropdown = menuContainer.querySelector(
-        ".chat-menu-dropdown.clicked-open",
-      );
-      const menuButton = menuContainer.querySelector(".chat-menu-btn");
-      if (dropdown && menuButton) {
-        menuButton.classList.add("clicked-active");
-      }
-    });
-
-    menuContainer.addEventListener("mouseleave", () => {
-      const dropdown = menuContainer.querySelector(
-        ".chat-menu-dropdown.clicked-open",
-      );
-      const menuButton = menuContainer.querySelector(".chat-menu-btn");
-      if (dropdown && menuButton) {
-        // SIDEBAR: Remove both clicked states when leaving (original working behavior)
-        dropdown.classList.remove("clicked-open");
-        menuButton.classList.remove("clicked-active");
-      }
-    });
-  }
+  // Add hover management for clicked-open menus - SIDEBAR VERSION
+  // Close dropdown when mouse leaves the entire session item (li)
+  li.addEventListener("mouseleave", (e) => {
+    const dropdown = li.querySelector(".chat-menu-dropdown.clicked-open");
+    const menuButton = li.querySelector(".chat-menu-btn.clicked-active");
+    
+    if (dropdown && menuButton) {
+      dropdown.classList.remove("clicked-open");
+      menuButton.classList.remove("clicked-active");
+    }
+  });
 
   return li;
 }
@@ -15777,7 +15763,14 @@ async function loadAndDisplayActionHistory() {
       const itemClass = `action-history-item action-history-item-${item.type}${item.status === 'failed' ? ' action-history-item-failed' : ''}`;
       itemEl.className = itemClass;
       
-      const icon = item.type === 'sync' ? '↓' : item.type === 'backup' ? '↑' : '?';
+      // Use same icons as in account dropdown menu
+      let icon = '?';
+      if (item.type === 'sync') {
+        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>';
+      } else if (item.type === 'backup') {
+        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+      }
+      
       const label = item.type === 'sync' ? 'Sync' : item.type === 'backup' ? 'Backup' : 'Action';
       const status = item.status === 'failed' ? ' (failed)' : '';
       const timestamp = formatRelativeTime(item.timestamp);
@@ -15818,15 +15811,32 @@ async function handleSyncNow() {
     
     if (result.success) {
       log('SYNC', 1, 'handleSyncNow', 'Sync completed successfully', { repo: result.repository });
-      showToast(`✓ Synced! Downloaded from: ${result.repository}`, 'success');
+      showToast(`✓ Synced from: ${result.repository}`, 'success');
       
       // Record action in history
       await window.api.sync.recordActionHistory('sync', 'success');
       
-      // Reload page to show new data
+      // Show full loading overlay and restart (same as data source switch)
+      const loadingOverlay = document.getElementById('loading-overlay');
+      const loadingText = document.getElementById('loading-text');
+      
+      if (loadingOverlay && loadingText) {
+        loadingText.textContent = 'Loading synced data...';
+        loadingOverlay.classList.remove('hidden');
+        loadingOverlay.style.display = 'flex';
+        loadingOverlay.style.opacity = '1';
+      }
+      
+      // Restart app to reload synced data
       setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+        if (loadingText) {
+          loadingText.textContent = 'Restarting app...';
+        }
+        
+        setTimeout(() => {
+          window.api.app.restart();
+        }, 500);
+      }, 800);
     } else {
       log('SYNC', 4, 'handleSyncNow', 'Sync operation failed', { 
         error: result.error,

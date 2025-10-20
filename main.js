@@ -9,7 +9,7 @@ const http = require('http');
 const url = require('url');
 const mammoth = require('mammoth');
 const xlsx = require('./local_modules/xlsx/xlsx');
-const { log, logWithContext, setLogFile, setDebug } = require('./utils/logger');
+const { log, logWithContext, setLogFile, setDebug, rotateLogWithCheckpoint } = require('./utils/logger');
 const { optimizeMessages } = require('./utils/message-optimizer');
 
 const ClustrixLangChainService = require('./backend/langchain-service');
@@ -104,6 +104,15 @@ let callbackServer = null;
 app.whenReady().then(async () => {
   setLogFile(path.join(app.getPath('userData'), 'app.log'));
   setDebug(process.env.CLUSTRIX_DEBUG !== 'false');
+  
+  // Rotate log dengan checkpoint (max 3 sessions)
+  const rotationInfo = rotateLogWithCheckpoint(app.getPath('userData'));
+  log('APP', 'startup', 'Session started', {
+    timestamp: rotationInfo.timestamp,
+    rotated: rotationInfo.rotated,
+    previousSessionCount: rotationInfo.previousSessionCount
+  });
+  
   log('[FLAGS]', app.commandLine.getSwitchValue('enable-features'));
   
   // Create HTTP server for OAuth callback on port 2920

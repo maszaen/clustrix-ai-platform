@@ -20,6 +20,9 @@ const log = (level, method, message, data = {}) => {
 // DEVICE ID GENERATION
 // ============================================================
 
+// Cache device ID to avoid repeated database queries
+let cachedDeviceId = null;
+
 /**
  * Generate a unique device ID based on machine characteristics
  * 
@@ -61,17 +64,26 @@ function generateDeviceId() {
  * a new one if it doesn't exist. This ensures each machine has a persistent
  * unique identifier.
  * 
+ * OPTIMIZATION: Caches the device ID after first retrieval to avoid
+ * repeated database queries (since device ID never changes).
+ * 
  * @param {Database} db - Better-sqlite3 database instance
  * @returns {string} Device ID for this machine
  */
 function getDeviceId(db) {
+  // Return cached value if available
+  if (cachedDeviceId) {
+    return cachedDeviceId;
+  }
+  
   try {
     // Try to get existing device ID
     const row = db.prepare('SELECT value FROM sync_metadata WHERE key = ?').get('device_id');
     
     if (row) {
       log(1, 'getDeviceId', 'Using existing device ID', { deviceId: row.value });
-      return row.value;
+      cachedDeviceId = row.value;
+      return cachedDeviceId;
     }
     
     // Generate new device ID
@@ -85,7 +97,8 @@ function getDeviceId(db) {
     `).run('device_id', deviceId, now);
     
     log(1, 'getDeviceId', 'Created new device ID', { deviceId });
-    return deviceId;
+    cachedDeviceId = deviceId;
+    return cachedDeviceId;
   } catch (error) {
     log(4, 'getDeviceId', 'Error getting device ID', {
       error: error.message,
@@ -93,7 +106,9 @@ function getDeviceId(db) {
     });
     
     // Fallback to generating a device ID (won't persist, but better than crashing)
-    return generateDeviceId();
+    const fallbackId = generateDeviceId();
+    cachedDeviceId = fallbackId; // Cache even fallback to avoid regenerating
+    return fallbackId;
   }
 }
 
@@ -130,11 +145,9 @@ function generateSessionHash(session, messages = []) {
   const inputString = JSON.stringify(hashInput);
   const hash = crypto.createHash('sha256').update(inputString).digest('hex');
   
-  log(2, 'generateSessionHash', 'Session hash generated', {
-    sessionId: session.id,
-    messageCount: messages.length,
-    hash: hash.substring(0, 16) + '...' // Log truncated hash
-  });
+  // Only log in debug mode or for first few sessions to avoid log spam
+  // (This function is called for EVERY session on every save)
+  // Removed verbose logging - hash generation is a normal, frequent operation
   
   return hash;
 }

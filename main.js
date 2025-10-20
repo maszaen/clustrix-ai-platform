@@ -3589,139 +3589,206 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
                                                 (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || ''));
 
   const sys = 'You are a title generator. Your job is to summarize the user query into a 3-6 word title. The title must be Title Case and have no punctuation. If the query is code, summarize its purpose. (Your response only the 3-6 title)';
-  if (provider === 'gemini') {
-    const url = new URL(`${BASE_URL.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent`);
-    if (API_KEY) url.searchParams.set('key', API_KEY);
-    const body = JSON.stringify({
-      contents: [
-        { role: 'user', parts: [{ text: `${sys}\n\n${text}` }] }
-      ]
-    });
-
-    const title = await new Promise((resolve, reject) => {
-      const req = https.request({
-        method: 'POST',
-        hostname: url.hostname,
-        path: url.pathname + url.search,
-        protocol: url.protocol,
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Content-Length': Buffer.byteLength(body) }
-      }, (res) => {
-        let acc=''; res.setEncoding('utf8');
-        res.on('data', d => acc += d);
-        res.on('end', () => {
-          if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc}`));
-          try {
-            const j = JSON.parse(acc);
-            
-            // Log token usage if available (Gemini format)
-            if (j?.usageMetadata) {
-              const usage = j.usageMetadata;
-              logHelper('TOKEN_USAGE', 'chat:title', 'Token usage information', {
-                promptTokenCount: usage.promptTokenCount,
-                candidatesTokenCount: usage.candidatesTokenCount,
-                totalTokenCount: usage.totalTokenCount,
-                provider: 'gemini',
-                model
-              });
-            }
-
-            log('PARSED_JSON', 'chat:title', 'Parsed JSON information', {
-              parsedJson: j
-            })
-            
-            let t = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
-            if (t) {
-              // Remove thinking tags and any XML-style tags that might appear
-              t = t.replace(/<think>[\s\S]*?<\/think>/gi, '');
-              t = t.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
-              t = t.replace(/<[^>]+>/g, '');
-              t = t.trim();
-            }
-            resolve(t || text.split(/\s+/).slice(0,6).join(' '));
-          } catch { resolve(text.split(/\s+/).slice(0,6).join(' ')); }
-        });
-      });
-      req.on('error', reject); req.write(body); req.end();
-    });
-
-    return title;
-  }
-  const u = new URL(BASE_URL.replace(/\/+$/, '') + '/chat/completions');
   
-  const body = JSON.stringify({
-    model,
-    stream: false,
-    max_tokens: 1000,
-    messages: [
-      { role: 'system', content: sys },
-      { role: 'user', content: text }
-    ]
-  });
+  const MAX_RETRIES = 3;
+  let lastError = null;
+  
+  if (provider === 'gemini') {
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        log('TITLE_GEN', 'chat:title', `Gemini title generation attempt ${attempt}/${MAX_RETRIES}`, { model, textPreview: text.substring(0, 50) });
+        
+        const url = new URL(`${BASE_URL.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent`);
+        if (API_KEY) url.searchParams.set('key', API_KEY);
+        const body = JSON.stringify({
+          contents: [
+            { role: 'user', parts: [{ text: `${sys}\n\n${text}` }] }
+          ]
+        });
 
-  const headers = {
-    'Authorization': API_KEY ? `Bearer ${API_KEY}` : '',
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    'Content-Length': Buffer.byteLength(body),
-    ...extraHdr
-  };
-  if (provider === 'openrouter') {
-    headers['HTTP-Referer'] = headers['HTTP-Referer'] || 'https://clustrix.local';
-    headers['X-Title'] = headers['X-Title'] || 'Clustrix Desktop';
-  } else if (provider === 'bigmodel') {
-    headers['User-Agent'] = headers['User-Agent'] || 'Clustrix/1.0';
-    headers['Accept'] = headers['Accept'] || 'application/json';
+        const title = await new Promise((resolve, reject) => {
+          const req = https.request({
+            method: 'POST',
+            hostname: url.hostname,
+            path: url.pathname + url.search,
+            protocol: url.protocol,
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+          }, (res) => {
+            let acc=''; res.setEncoding('utf8');
+            res.on('data', d => acc += d);
+            res.on('end', () => {
+              if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc}`));
+              try {
+                const j = JSON.parse(acc);
+                
+                // Log token usage if available (Gemini format)
+                if (j?.usageMetadata) {
+                  const usage = j.usageMetadata;
+                  logHelper('TOKEN_USAGE', 'chat:title', 'Token usage information', {
+                    promptTokenCount: usage.promptTokenCount,
+                    candidatesTokenCount: usage.candidatesTokenCount,
+                    totalTokenCount: usage.totalTokenCount,
+                    provider: 'gemini',
+                    model
+                  });
+                }
+
+                log('PARSED_JSON', 'chat:title', 'Parsed JSON information', {
+                  parsedJson: j
+                })
+                
+                let t = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
+                if (t) {
+                  // Remove thinking tags and any XML-style tags that might appear
+                  t = t.replace(/<think>[\s\S]*?<\/think>/gi, '');
+                  t = t.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+                  t = t.replace(/<[^>]+>/g, '');
+                  t = t.trim();
+                }
+                // If response is empty after cleaning, reject to trigger retry
+                if (!t) {
+                  reject(new Error('Model returned empty response after cleaning thinking tags'));
+                }
+                resolve(t);
+              } catch (err) { 
+                log('TITLE_PARSE_ERROR', 'chat:title', 'Failed to parse Gemini response', { error: err.message });
+                reject(err); 
+              }
+            });
+          });
+          req.on('error', reject); req.write(body); req.end();
+        });
+
+        // Success! Return the title
+        log('TITLE_SUCCESS', 'chat:title', `Successfully generated title on attempt ${attempt}`, { title });
+        return title;
+        
+      } catch (err) {
+        lastError = err;
+        log('TITLE_RETRY', 'chat:title', `Gemini attempt ${attempt}/${MAX_RETRIES} failed`, { 
+          error: err.message,
+          willRetry: attempt < MAX_RETRIES 
+        });
+        
+        // If this was the last attempt, throw to trigger renderer fallback
+        if (attempt === MAX_RETRIES) {
+          log('TITLE_FALLBACK', 'chat:title', 'All Gemini attempts failed, throwing to renderer for SmartTitleGenerator', { 
+            error: lastError.message 
+          });
+          throw lastError;
+        }
+        
+        // Wait a bit before retry (exponential backoff: 100ms, 200ms, 400ms)
+        await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt - 1)));
+      }
+    }
   }
-
-  const resText = await new Promise((resolve, reject) => {
-    const req = https.request({
-      method: 'POST',
-      hostname: u.hostname,
-      path: u.pathname + u.search,
-      protocol: u.protocol,
-      headers
-    }, (res) => {
-      let acc=''; res.setEncoding('utf8');
-      res.on('data', d => acc += d);
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) return resolve(acc);
-        reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc}`));
-      });
-    });
-    req.on('error', reject); req.write(body); req.end();
-  });
-
-  try {
-    const j = JSON.parse(resText);
-    
-    // Log token usage if available
-    if (j?.usage) {
-      const usage = j.usage;
+  
+  // OpenAI-compatible endpoints (OpenRouter, Groq, BigModel, Cerebras, etc.)
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      log('TITLE_GEN', 'chat:title', `${provider} title generation attempt ${attempt}/${MAX_RETRIES}`, { model, textPreview: text.substring(0, 50) });
       
-      logHelper('TOKEN_USAGE', 'chat:title', 'Token usage information', {
-        prompt_tokens: usage.prompt_tokens,
-        completion_tokens: usage.completion_tokens,
-        total_tokens: usage.total_tokens,
-        provider,
-        model
+      const u = new URL(BASE_URL.replace(/\/+$/, '') + '/chat/completions');
+      
+      const body = JSON.stringify({
+        model,
+        stream: false,
+        max_tokens: 1000,
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: text }
+        ]
       });
-    }
 
-    log('PARSED_JSON', 'chat:title', 'Parsed JSON information', {
-      parsedJson: j
-    })
-    
-    let t = j?.choices?.[0]?.message?.content?.trim();
-    if (t) {
-      // Remove thinking tags and any XML-style tags that might appear
-      t = t.replace(/<think>[\s\S]*?<\/think>/gi, '');
-      t = t.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
-      t = t.replace(/<[^>]+>/g, '');
-      t = t.trim();
+      const headers = {
+        'Authorization': API_KEY ? `Bearer ${API_KEY}` : '',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        ...extraHdr
+      };
+      if (provider === 'openrouter') {
+        headers['HTTP-Referer'] = headers['HTTP-Referer'] || 'https://clustrix.local';
+        headers['X-Title'] = headers['X-Title'] || 'Clustrix Desktop';
+      } else if (provider === 'bigmodel') {
+        headers['User-Agent'] = headers['User-Agent'] || 'Clustrix/1.0';
+        headers['Accept'] = headers['Accept'] || 'application/json';
+      }
+
+      const resText = await new Promise((resolve, reject) => {
+        const req = https.request({
+          method: 'POST',
+          hostname: u.hostname,
+          path: u.pathname + u.search,
+          protocol: u.protocol,
+          headers
+        }, (res) => {
+          let acc=''; res.setEncoding('utf8');
+          res.on('data', d => acc += d);
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) return resolve(acc);
+            reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc}`));
+          });
+        });
+        req.on('error', reject); req.write(body); req.end();
+      });
+
+      const j = JSON.parse(resText);
+      
+      // Log token usage if available
+      if (j?.usage) {
+        const usage = j.usage;
+        
+        logHelper('TOKEN_USAGE', 'chat:title', 'Token usage information', {
+          prompt_tokens: usage.prompt_tokens,
+          completion_tokens: usage.completion_tokens,
+          total_tokens: usage.total_tokens,
+          provider,
+          model
+        });
+      }
+
+      log('PARSED_JSON', 'chat:title', 'Parsed JSON information', {
+        parsedJson: j
+      })
+      
+      let t = j?.choices?.[0]?.message?.content?.trim();
+      if (t) {
+        // Remove thinking tags and any XML-style tags that might appear
+        t = t.replace(/<think>[\s\S]*?<\/think>/gi, '');
+        t = t.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+        t = t.replace(/<[^>]+>/g, '');
+        t = t.trim();
+      }
+      
+      // If response is empty after cleaning, throw to trigger retry
+      if (!t) {
+        throw new Error('Model returned empty response after cleaning thinking tags');
+      }
+      
+      // Success! Return the title
+      log('TITLE_SUCCESS', 'chat:title', `Successfully generated title on attempt ${attempt}`, { title: t });
+      return t;
+      
+    } catch (err) {
+      lastError = err;
+      log('TITLE_RETRY', 'chat:title', `${provider} attempt ${attempt}/${MAX_RETRIES} failed`, { 
+        error: err.message,
+        willRetry: attempt < MAX_RETRIES 
+      });
+      
+      // If this was the last attempt, throw to trigger renderer fallback
+      if (attempt === MAX_RETRIES) {
+        log('TITLE_FALLBACK', 'chat:title', `All ${provider} attempts failed, throwing to renderer for SmartTitleGenerator`, { 
+          error: lastError.message 
+        });
+        throw lastError;
+      }
+      
+      // Wait a bit before retry (exponential backoff: 100ms, 200ms, 400ms)
+      await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempt - 1)));
     }
-    return t || text.split(/\s+/).slice(0,6).join(' ') || 'New Chat';
-  } catch {
-    return text.split(/\s+/).slice(0,6).join(' ') || 'New Chat';
   }
 });
 const TRIAGE_SYSTEM_PROMPT = `You are a reasoning agent. Your first task is to analyze the user's query and decide if it requires real-time internet access. The current date is ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric' })}. Respond ONLY with a single JSON object. Do not add any text before or after it.

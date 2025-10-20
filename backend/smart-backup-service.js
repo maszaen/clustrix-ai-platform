@@ -57,50 +57,85 @@ class SmartBackupService {
    */
   async acquireLock() {
     const lockTimeout = 30000; // 30 seconds
+    const staleLockThreshold = 300000; // 5 minutes
     const startTime = Date.now();
-    
-    while (fs.existsSync(this.lockFilePath)) {
-      if (Date.now() - startTime > lockTimeout) {
-        // Check if lock is stale (older than 5 minutes)
-        try {
-          const lockData = JSON.parse(fs.readFileSync(this.lockFilePath, 'utf8'));
-          if (Date.now() - lockData.startedAt > 300000) {
-            log(2, 'acquireLock', 'Removing stale lock file', {
-              age: Date.now() - lockData.startedAt,
-              pid: lockData.pid
-            });
-            fs.unlinkSync(this.lockFilePath);
-            break;
-          }
-        } catch (err) {
-          // Invalid lock file, remove it
-          fs.unlinkSync(this.lockFilePath);
-          break;
-        }
-        
-        throw new Error('Backup lock timeout - another backup in progress');
-      }
-      
-      // Wait 1 second before checking again
-      await new Promise(resolve => setTimeout(resolve, 1000));
+
+    let deviceId = 'unknown';
+    try {
+      const db = new Database(this.localDbPath, { readonly: true });
+      deviceId = getDeviceId(db);
+      db.close();
+    } catch (err) {
+      log(3, 'acquireLock', 'Failed to read device ID before locking', {
+        error: err.message
+      });
     }
-    
-    // Create lock file
-    const db = new Database(this.localDbPath, { readonly: true });
-    const deviceId = getDeviceId(db);
-    db.close();
-    
-    fs.writeFileSync(this.lockFilePath, JSON.stringify({
-      pid: process.pid,
-      deviceId: deviceId,
-      startedAt: Date.now(),
-      dbPath: this.localDbPath
-    }, null, 2));
-    
-    log(1, 'acquireLock', 'Backup lock acquired', {
-      pid: process.pid,
-      deviceId: deviceId
-    });
+
+    while (true) {
+      try {
+        const lockData = {
+          pid: process.pid,
+          deviceId,
+          startedAt: Date.now(),
+          dbPath: this.localDbPath
+        };
+
+        fs.writeFileSync(this.lockFilePath, JSON.stringify(lockData, null, 2), {
+          flag: 'wx'
+        });
+
+        log(1, 'acquireLock', 'Backup lock acquired', {
+          pid: process.pid,
+          deviceId
+        });
+
+        return;
+      } catch (err) {
+        if (err.code !== 'EEXIST') {
+          throw err;
+        }
+
+        const elapsed = Date.now() - startTime;
+        let staleLock = false;
+
+        try {
+          const raw = fs.readFileSync(this.lockFilePath, 'utf8');
+          const existingLock = JSON.parse(raw);
+          const age = Date.now() - (existingLock.startedAt || 0);
+
+          if (age > staleLockThreshold) {
+            staleLock = true;
+            fs.unlinkSync(this.lockFilePath);
+            log(2, 'acquireLock', 'Removed stale lock file', {
+              age,
+              pid: existingLock.pid
+            });
+            continue;
+          }
+        } catch (readErr) {
+          // Corrupted lock file - remove and retry
+          staleLock = true;
+          try {
+            fs.unlinkSync(this.lockFilePath);
+            log(2, 'acquireLock', 'Removed corrupt lock file', {
+              error: readErr.message
+            });
+            continue;
+          } catch (unlinkErr) {
+            log(3, 'acquireLock', 'Failed to remove corrupt lock file', {
+              error: unlinkErr.message
+            });
+          }
+        }
+
+        if (elapsed > lockTimeout && !staleLock) {
+          throw new Error('Backup lock timeout - another backup in progress');
+        }
+
+        // Wait 1 second before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
   }
   
   /**
@@ -184,8 +219,8 @@ class SmartBackupService {
       });
       
       // Step 2: Download cloud database
-      const cloudDbPath = await this.downloadCloudDatabase();
-      
+      cloudDbPath = await this.downloadCloudDatabase();
+
       // Step 2.5: Detect conflicts between local and cloud
       const conflicts = await this.detectConflicts(cloudDbPath, changes);
       
@@ -702,14 +737,27 @@ class SmartBackupService {
       log(2, 'applyDeltaToCloud', 'Delta changes applied successfully', stats);
       
     } catch (error) {
-      db.prepare('ROLLBACK').run();
+      try {
+        db.prepare('ROLLBACK').run();
+      } catch (rollbackErr) {
+        log(3, 'applyDeltaToCloud', 'Rollback failed', {
+          error: rollbackErr.message
+        });
+      }
+
       log(4, 'applyDeltaToCloud', 'Failed to apply delta', {
         error: error.message,
         stack: error.stack
       });
       throw error;
     } finally {
-      db.close();
+      try {
+        db.close();
+      } catch (closeErr) {
+        log(3, 'applyDeltaToCloud', 'Failed to close database after delta apply', {
+          error: closeErr.message
+        });
+      }
     }
     
     return stats;

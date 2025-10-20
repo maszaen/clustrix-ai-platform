@@ -1685,38 +1685,56 @@ ipcMain.handle('sync:resolveConflicts', async (_evt, resolutions) => {
       configPath = path.join(internalDataPath, 'ai-model.conf.json');
     }
     
-    // Re-query local changes
-    const localDb = new (require('better-sqlite3'))(dbPath);
-    const changes = smartBackup.queryLocalChanges();
-    localDb.close();
-    
-    // Download cloud DB again (might have changed)
-    const cloudDbPath = await smartBackup.downloadCloudDatabase();
-    
-    // Apply user's conflict resolutions
-    const modifiedChanges = smartBackup.applyConflictResolutions(changes, resolutions, cloudDbPath);
-    
-    // Apply delta to cloud
-    const applyResult = smartBackup.applyDeltaToCloud(cloudDbPath, modifiedChanges);
-    
-    // Upload modified cloud database
-    await smartBackup.uploadCloudDatabase(cloudDbPath);
-    
-    // Mark as synced
-    const finalDb = new (require('better-sqlite3'))(dbPath);
-    const { updateLastBackupTime } = require('./backend/sync-helpers');
-    updateLastBackupTime(finalDb);
-    smartBackup.markRecordsAsSynced(finalDb, modifiedChanges);
-    finalDb.close();
-    
-    // Cleanup temp file
-    if (fs.existsSync(cloudDbPath)) {
-      fs.unlinkSync(cloudDbPath);
+    let cloudDbPath = null;
+    let modifiedChanges = null;
+    let applyResult = null;
+
+    await smartBackup.acquireLock();
+
+    try {
+      // Re-query local changes while lock held
+      const changes = smartBackup.queryLocalChanges();
+
+      // Download cloud DB again (might have changed)
+      cloudDbPath = await smartBackup.downloadCloudDatabase();
+
+      // Apply user's conflict resolutions
+      modifiedChanges = smartBackup.applyConflictResolutions(changes, resolutions, cloudDbPath);
+
+      // Apply delta to cloud
+      applyResult = smartBackup.applyDeltaToCloud(cloudDbPath, modifiedChanges);
+
+      // Upload modified cloud database
+      await smartBackup.uploadCloudDatabase(cloudDbPath);
+
+      // Mark as synced
+      const finalDb = new (require('better-sqlite3'))(dbPath);
+      const { updateLastBackupTime } = require('./backend/sync-helpers');
+      updateLastBackupTime(finalDb);
+      smartBackup.markRecordsAsSynced(finalDb, modifiedChanges);
+      finalDb.close();
+
+    } finally {
+      smartBackup.releaseLock();
+
+      if (cloudDbPath && fs.existsSync(cloudDbPath)) {
+        try {
+          fs.unlinkSync(cloudDbPath);
+          log('sync:resolveConflicts', 2, 'resolveConflicts', 'Cleaned up temp cloud DB', {
+            path: cloudDbPath
+          });
+        } catch (cleanupErr) {
+          log('sync:resolveConflicts', 3, 'resolveConflicts', 'Failed to cleanup temp cloud DB', {
+            path: cloudDbPath,
+            error: cleanupErr.message
+          });
+        }
+      }
     }
-    
+
     // Clear pending backup
     delete global.pendingSmartBackup;
-    
+
     // Record action with conflict resolution count
     const githubStorage = new GitHubStorageService(syncConfig.cloudToken, syncConfig.currentCloudUsername);
     const metadata = {

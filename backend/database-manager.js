@@ -3,7 +3,7 @@ const path = require('path');
 const { logWithContext } = require('../utils/logger');
 const SchemaMigrationV2 = require('./schema-migration-v2');
 const { 
-  getDeviceId, 
+  getDeviceId, // Only called once in constructor, then cached
   generateSessionHash, 
   getCurrentTimestamp 
 } = require('./sync-helpers');
@@ -39,9 +39,14 @@ class DatabaseManager {
     // Run schema migration V2 (for sync/backup support)
     this.runSchemaMigration();
     
+    // Cache device ID once per DatabaseManager instance
+    // This prevents thousands of repeated calls to getDeviceId()
+    this._cachedDeviceId = getDeviceId(this.db);
+    
     log('DATABASE', 1, 'constructor', 'Database initialized', { 
       path: dbPath,
-      isCloudDatabase: this.isCloudDatabase
+      isCloudDatabase: this.isCloudDatabase,
+      deviceId: this._cachedDeviceId
     });
   }
   
@@ -215,8 +220,8 @@ class DatabaseManager {
   }
   
   saveSession(session) {
-    // Get device ID for this machine
-    const deviceId = getDeviceId(this.db);
+    // Use cached device ID (set once in constructor)
+    const deviceId = this._cachedDeviceId;
     
     // Generate hash for conflict detection (will be updated with messages later)
     // For now, use a simple hash of session metadata
@@ -275,8 +280,8 @@ class DatabaseManager {
   
   // UPSERT message (UPDATE if exists, INSERT if not)
   upsertMessage(sessionId, role, content, metadata, messageIndex) {
-    // Get device ID for this machine
-    const deviceId = getDeviceId(this.db);
+    // Use cached device ID (set once in constructor)
+    const deviceId = this._cachedDeviceId;
     const now = getCurrentTimestamp();
     
     // First, try to delete existing message at this index
@@ -321,8 +326,8 @@ class DatabaseManager {
   }
   
   addMessage(sessionId, role, content, metadata, messageIndex) {
-    // Get device ID for this machine
-    const deviceId = getDeviceId(this.db);
+    // Use cached device ID (set once in constructor)
+    const deviceId = this._cachedDeviceId;
     const now = getCurrentTimestamp();
     
     const stmt = this.db.prepare(`

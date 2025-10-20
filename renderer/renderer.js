@@ -8682,9 +8682,9 @@ function personaSystem() { // V3
   prompt += "- Break paragraphs every 3-5 lines max\n";
   prompt += "- Use ## headers for multi-topic responses\n";
   prompt += "- Use markdown separator (---) for each topic change or other appropriate position \n";
-  prompt += "- OPTIONAL: For ambiguous/complex requests, add reflection questions anywhere using <brain><bli-title>Short title</bli-title><bli>Question 1</bli><bli>Question 2</bli></brain>\n";
-  prompt += "- MANDATORY: Always end response with 2-5 suggested next relevant prompts. These MUST be actionable commands or topic suggestions (e.g., 'Explain X', 'Compare X and Y'). They must NOT be questions or interrogative sentences. Use the exact structure: <prompt><pli-title>Short title</pli-title><pli>Suggestion 1</pli><pli>Suggestion 2</pli></prompt>\n";
-  prompt += "- MANDATORY: Under NO circumstances use standard HTML <li> tags. You MUST ONLY use <bli> tags inside <brain> and <pli> tags inside <prompt>, never use the <li> tag.\n";
+  prompt += "- OPTIONAL: For ambiguous/complex requests, add reflection questions anywhere using <clarify><clarify-title>Creative relevant title</clarify-title><li>Question 1</li><li>Question 2</li></clarify>\n";
+  prompt += "- MANDATORY: Always end response with 2-5 suggested next relevant prompts. These MUST be actionable commands or topic suggestions (e.g., 'Explain X', 'Compare X and Y', and other relevant suggestions). They must NOT be questions or interrogative sentences. Use the exact structure: <try><try-title>Creative relevant title</try-title><li>Suggestion 1</li><li>Suggestion 2</li></try>\n";
+  prompt += "- MANDATORY: Use standard <li> tags for list items inside <clarify> and <try> containers.\n";
 
   if (isGemini) {
     prompt += "CRITICAL: Be MORE expressive - use MORE lists, emoji (2-3), bold. Fight plain text tendency.\n";

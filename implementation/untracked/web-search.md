@@ -1,0 +1,1 @@
+Pada thiking update websearch mode, tidak ada yang perlu dirubah, perubahan hanya ada pada formatter, jangan ada penghapusan new line, layaknya implementasi yang akan kita lakukan pada research agent.

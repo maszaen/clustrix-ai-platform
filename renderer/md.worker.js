@@ -65,6 +65,23 @@ function enhancedMarkdownParse(src, options = {}) {
         const openIndex = lowerResult.indexOf(lowerOpenTag, searchStart);
         if (openIndex === -1) break;
 
+        // Check if this tag is inside a codeblock - if so, skip it
+        const codeblockPattern = /```[\s\S]*?(?:```|$)/g;
+        let isInsideCodeblock = false;
+        let codeblockMatch;
+        while ((codeblockMatch = codeblockPattern.exec(result)) !== null) {
+          if (openIndex >= codeblockMatch.index && openIndex < codeblockMatch.index + codeblockMatch[0].length) {
+            isInsideCodeblock = true;
+            break;
+          }
+        }
+
+        if (isInsideCodeblock) {
+          // Skip this tag - it's inside a codeblock, don't trim
+          searchStart = openIndex + lowerOpenTag.length;
+          continue;
+        }
+
         const closeIndex = lowerResult.indexOf(lowerCloseTag, openIndex + lowerOpenTag.length);
         if (closeIndex === -1) {
           result = result.substring(0, openIndex);
@@ -90,12 +107,28 @@ function enhancedMarkdownParse(src, options = {}) {
     return placeholder;
   });
 
-  // Extract container tags before processing
-  let processedSrcAfterContainers = protectedSrc.replace(/<(clarify|try)>([\s\S]*?)<\/\1>/gi, (match) => {
+  // Extract container tags ONLY outside codeblocks
+  let processedSrcAfterContainers = protectedSrc;
+
+  // First, temporarily protect codeblocks to avoid extracting containers from inside them
+  const tempCodeBlocks = [];
+  const tempProtectedSrc = protectedSrc.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match) => {
+    const placeholder = `__TEMP_CODEBLOCK_${tempCodeBlocks.length}__`;
+    tempCodeBlocks.push(match);
+    return placeholder;
+  });
+
+  // Now extract container tags from the protected source (codeblocks are placeholders)
+  processedSrcAfterContainers = tempProtectedSrc.replace(/<(clarify|try)>([\s\S]*?)<\/\1>/gi, (match) => {
     const placeholder = `XCONTAINERX${containerBlocks.length}XCONTAINERX`;
     containerBlocks.push(match);
     return placeholder;
   });
+
+  // Restore the codeblocks
+  processedSrcAfterContainers = tempCodeBlocks.reduce((acc, block, i) =>
+    acc.replace(`__TEMP_CODEBLOCK_${i}__`, block), processedSrcAfterContainers);
+
   let processedSrc = processedSrcAfterContainers.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
     const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
     let codeContent = code; // Don't trim yet - we need original whitespace for dedent

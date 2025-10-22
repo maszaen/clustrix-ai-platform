@@ -1170,7 +1170,7 @@ function formatResearchAction(actionType, actionParams, actionReason) {
   switch (actionType) {
     case 'analyzeFileStructure':
       description = params.fileName 
-        ? `Analyzing file structure of "${params.fileName}"`
+        ? `Analyzing file structure of \`${params.fileName}\``
         : 'Analyzing file structure';
       break;
     
@@ -1186,31 +1186,31 @@ function formatResearchAction(actionType, actionParams, actionReason) {
     
     case 'searchFunctions':
       description = params.functionName
-        ? `Searching for function "${params.functionName}"`
+        ? `Searching for function \`${params.functionName}\``
         : 'Searching for function definitions';
       break;
     
     case 'searchCSS':
       description = params.selector
-        ? `Searching for CSS selector "${params.selector}"`
+        ? `Searching for CSS selector \`${params.selector}\``
         : 'Searching for CSS styles';
       break;
     
     case 'searchHTML':
       description = params.element
-        ? `Searching for HTML element "<${params.element}>"`
+        ? `Searching for HTML element \`<${params.element}>\``
         : 'Searching for HTML elements';
       break;
     
     case 'searchImports':
       description = params.moduleName
-        ? `Searching for imports of "${params.moduleName}"`
+        ? `Searching for imports of \`${params.moduleName}\``
         : 'Searching for import statements';
       break;
     
     case 'webSearch':
       description = params.query
-        ? `Searching web for "${params.query}"`
+        ? `Searching web for \`${params.query}\``
         : 'Searching web information';
       break;
     
@@ -1222,8 +1222,8 @@ function formatResearchAction(actionType, actionParams, actionReason) {
     
     default:
       // Generic fallback: convert camelCase to readable
-      description = actionType.replace(/([A-Z])/g, ' $1').trim();
-      description = description.charAt(0).toUpperCase() + description.slice(1);
+    description = actionType.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
+    description = description.charAt(0).toUpperCase() + description.slice(1);
   }
   
   return { description, reason: actionReason || '' };
@@ -1268,12 +1268,6 @@ async function processSearchStatusQueue() {
     isProcessingQueue = false;
     return;
   }
-
-  const createTitleSpan = () => {
-    const span = document.createElement("span");
-    span.style.fontFamily = "var(--font-display-italic)";
-    return span;
-  };
   
   let pageCount = 0; // Track page count for toggle text
 
@@ -1343,7 +1337,7 @@ async function processSearchStatusQueue() {
         if (isProjectFiles) {
           const filesText = status.data.map((r) => r.title).join(", ");
           await appendThinkingUpdate(aiNode, {
-            title: "Analyzing Files",
+            title: "Analyzing files",
             content: filesText
           }, sess, messageIndex);
         } else {
@@ -1352,7 +1346,7 @@ async function processSearchStatusQueue() {
             .join('\n');
           
           await appendThinkingUpdate(aiNode, {
-            title: "Found Urls",
+            title: "Found urls",
             content: urlsList
           }, sess, messageIndex);
         }
@@ -1363,7 +1357,7 @@ async function processSearchStatusQueue() {
         const scrapingCount = status.data.count || 0;
         
         await appendThinkingUpdate(aiNode, {
-          title: "Reading Web Pages",
+          title: "Reading web pages",
           content: `Scraping ${scrapingCount} web pages to gather information...`
         }, sess, messageIndex);
         
@@ -1391,7 +1385,7 @@ async function processSearchStatusQueue() {
         // Use description as title, reason as content (no "ACTION" prefix)
         await appendThinkingUpdate(aiNode, {
           title: description,
-          content: reason || ''
+          content: reason || 'To search deeper and more focused'
         }, sess, messageIndex);
         break;
 
@@ -1405,8 +1399,8 @@ async function processSearchStatusQueue() {
         const provider = status.data.provider || 'Search API';
         
         await appendThinkingUpdate(aiNode, {
-          title: "Search Failed",
-          content: `**Provider:** ${provider}\n\n**Reason:** ${failureReason}\n\n*Continuing without web search...*`
+          title: "Search failed",
+          content: `**Provider:** ${provider}\n\n**Reason:** ${failureReason}\n\n*Continue without web search...*`
         }, sess, messageIndex);
         
         // Update toggle to show failure
@@ -15286,17 +15280,29 @@ async function updateSidebarAccountButton() {
   try {
     const syncConfig = await window.api.sync.getConfig();
     const cloudUser = syncConfig.currentCloudUser;
+    const isCloudMode = syncConfig.currentMode === 'cloud';
     
     log('UI', 1, 'updateSidebarAccountButton', 'Sync config received', {
       cloudUser,
       currentCloudUsername: syncConfig.currentCloudUsername,
-      profileUrl: syncConfig.profileUrl
+      profileUrl: syncConfig.profileUrl,
+      currentMode: syncConfig.currentMode,
+      isCloudMode
     });
     
     const defaultIcon = document.getElementById('default-settings-icon');
     const userProfile = document.getElementById('user-profile-container');
+    const displayNameEl = document.getElementById('user-display-name');
+    const profileTypeEl = document.getElementById('user-profile-type');
+    const profilePic = document.getElementById('user-profile-pic');
+
+    // Set profile type (Cloud or Internal) - based on currentMode setting
+    if (profileTypeEl) {
+      profileTypeEl.textContent = isCloudMode ? 'Cloud' : 'Internal';
+    }
     
     if (cloudUser) {
+      // User is logged in to Cloud
       defaultIcon.style.display = 'none';
       userProfile.style.display = 'flex';
       
@@ -15311,14 +15317,12 @@ async function updateSidebarAccountButton() {
         usedEmailFallback: !syncConfig.currentCloudUsername
       });
       
-      const displayNameEl = document.getElementById('user-display-name');
       if (displayNameEl) {
         displayNameEl.textContent = capitalized || 'User';
         log('UI', 1, 'updateSidebarAccountButton', 'Display name set', { text: displayNameEl.textContent });
       }
       
       // Set profile picture from local file (downloaded during login)
-      const profilePic = document.getElementById('user-profile-pic');
       if (profilePic) {
         if (syncConfig.profileUrl) {
           // Load profile photo from local file
@@ -15341,24 +15345,23 @@ async function updateSidebarAccountButton() {
         }
       }
       
-      log('UI', 1, 'updateSidebarAccountButton', 'Sidebar updated with user profile', { 
+      log('UI', 1, 'updateSidebarAccountButton', 'Sidebar updated with logged-in user profile', { 
         user: cloudUser, 
         username: displayName,
+        mode: syncConfig.currentMode,
         hasProfilePic: !!syncConfig.profileUrl
       });
     } else {
+      // User is not logged in (Internal/Local mode)
       defaultIcon.style.display = 'none';
       userProfile.style.display = 'flex';
       
-      // Show "Not logged in" with default profile image
-      const displayNameEl = document.getElementById('user-display-name');
       if (displayNameEl) {
         displayNameEl.textContent = 'Not logged in';
         log('UI', 1, 'updateSidebarAccountButton', 'Display name set to "Not logged in"');
       }
       
       // Load default profile image from userData
-      const profilePic = document.getElementById('user-profile-pic');
       if (profilePic) {
         window.api.app.getDefaultProfilePhoto().then(result => {
           if (result.success && result.dataUrl) {
@@ -15375,7 +15378,7 @@ async function updateSidebarAccountButton() {
         });
       }
       
-      log('UI', 1, 'updateSidebarAccountButton', 'Sidebar reset to "Not logged in" state');
+      log('UI', 1, 'updateSidebarAccountButton', 'Sidebar updated with unauthenticated state');
     }
   } catch (e) {
     log('UI', 4, 'updateSidebarAccountButton', 'Failed to update sidebar', { error: e.message, stack: e.stack });

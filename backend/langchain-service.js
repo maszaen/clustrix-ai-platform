@@ -41,12 +41,35 @@ class ClustrixLangChainService {
     this.initialize();
   }
 
+  // Helper method to get correct config path based on sync mode
+  getModelConfigPath() {
+    const syncConfigPath = path.join(this.app.getPath('userData'), 'sync-config.json');
+    let currentMode = 'internal';
+    let currentCloudUser = null;
+    
+    if (fs.existsSync(syncConfigPath)) {
+      try {
+        const syncConfig = JSON.parse(fs.readFileSync(syncConfigPath, 'utf8'));
+        currentMode = syncConfig.currentMode || 'internal';
+        currentCloudUser = syncConfig.currentCloudUser;
+      } catch (error) {
+        console.error('Error reading sync-config.json:', error);
+      }
+    }
+    
+    if (currentMode === 'cloud' && currentCloudUser) {
+      return path.join(this.app.getPath('userData'), 'database', 'sync', currentCloudUser, 'ai-model.conf.json');
+    } else {
+      return path.join(this.app.getPath('userData'), 'database', 'internal', 'ai-model.conf.json');
+    }
+  }
+
   async initialize() {
     try {
       console.log('Initializing LangChain service...');
       
       // Check if we have any API key available
-      const configPath = path.join(this.app.getPath('userData'), 'ai-model.conf.json');
+      const configPath = this.getModelConfigPath();
       let hasApiKey = false;
       let availableProvider = null;
       
@@ -534,26 +557,43 @@ class ClustrixLangChainService {
     console.log(`AI-based RE+ACT analysis: ${uploadedFiles.length} files, message length: ${userMessage.length}, history: ${sessionMessages.length} messages`);
 
     // For very short queries, skip AI check and use basic reading
-    if (userMessage.trim().length < 20) {
+    if (userMessage.trim().length < 6) {
       console.log(`RE+ACT decision: SKIP (very short query)`);
       return false;
     }
 
     try {
-      // Build conversation context for better decision
+      // Build compact conversation context (max 2 user + 2 AI messages)
       let conversationContext = '';
       if (sessionMessages && sessionMessages.length > 1) {
-        // Get last few exchanges for context (skip the empty last AI message)
-        const recentMessages = sessionMessages.slice(-6, -1);
-        conversationContext = '\n\nRecent conversation context:\n';
-        for (const [role, content] of recentMessages) {
-          if (content && content.trim()) {
+        // Get last 4 messages: 2 from user, 2 from AI
+        const recentMessages = sessionMessages.slice(-5, -1); // Skip empty last AI message
+        let userCount = 0;
+        let aiCount = 0;
+        const selectedMessages = [];
+        
+        // Work backwards to get most recent 2 user and 2 AI messages
+        for (let i = recentMessages.length - 1; i >= 0; i--) {
+          const [role, content] = recentMessages[i];
+          if (role === 'user' && userCount < 2 && content && content.trim()) {
+            selectedMessages.unshift(recentMessages[i]);
+            userCount++;
+          } else if (role === 'ai' && aiCount < 2 && content && content.trim()) {
+            selectedMessages.unshift(recentMessages[i]);
+            aiCount++;
+          }
+          if (userCount === 2 && aiCount === 2) break;
+        }
+        
+        if (selectedMessages.length > 0) {
+          conversationContext = '\n\nRecent conversation:\n';
+          for (const [role, content] of selectedMessages) {
             conversationContext += `${role === 'user' ? 'User' : 'Assistant'}: ${content.substring(0, 150)}${content.length > 150 ? '...' : ''}\n`;
           }
         }
       }
       
-      // Create a simple prompt for AI to decide
+      // Create AI decision prompt
       const decisionPrompt = `You are an AI classifier. Your sole task is to determine if a query requires accessing new external information (files or web), or if it can be answered from conversation history alone.
 Answer ONLY with "RESEARCH" or "BASIC".
 ${conversationContext}
@@ -567,80 +607,71 @@ RULES:
 
 Decision:`;
 
-      // Use a lightweight model for decision (we can use any available provider)
-      const decision = await this.makeQuickAIDecision(decisionPrompt);
+      console.log(`Sending decision request to current AI provider...`);
+      
+      // Get current active config to use SAME provider user is chatting with
+      const configPath = this.getModelConfigPath();
+      if (!fs.existsSync(configPath)) {
+        console.log(`Config file not found at ${configPath}, skipping RE+ACT`);
+        return false;
+      }
+      
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const activeProvider = config.active?.platform;
+      const activeModel = config.active?.model;
+      
+      if (!activeProvider || !activeModel) {
+        console.log(`No active provider/model configured, skipping RE+ACT`);
+        return false;
+      }
+      
+      const providerConfig = config.providers?.[activeProvider];
+      if (!providerConfig?.apiKey) {
+        console.log(`No API key for active provider ${activeProvider}, skipping RE+ACT`);
+        return false;
+      }
+      
+      console.log(`Using active provider: ${activeProvider} with model: ${activeModel}`);
+      
+      // Make decision call using CURRENT active provider
+      const decision = await this.makeAIDecisionWithCurrentProvider(
+        decisionPrompt,
+        activeProvider,
+        activeModel,
+        providerConfig
+      );
 
       const needsResearch = decision.toUpperCase().includes('RESEARCH');
-      console.log(`AI Decision: ${decision} -> ${needsResearch ? 'USE' : 'SKIP'} RE+ACT`);
+      console.log(`AI Decision: "${decision}" -> ${needsResearch ? 'USE' : 'SKIP'} RE+ACT`);
 
       return needsResearch;
 
     } catch (error) {
-      console.error('AI decision failed, falling back to basic logic:', error.message);
-      // Fallback to simple heuristics if AI decision fails
-      return userMessage.length > 150 || userMessage.toLowerCase().includes('analisis') || userMessage.toLowerCase().includes('analysis');
+      console.error('AI decision failed, skipping RE+ACT:', error.message);
+      return false;
     }
   }
-
-  async makeQuickAIDecision(prompt) {
-    // Use the active provider from config for decision making
-    const activeProvider = this.getAvailableProvider();
-    if (activeProvider) {
-      try {
-        console.log(`Using active provider ${activeProvider.name} for AI decision`);
-        const response = await this.callAIForDecision(activeProvider.name, prompt);
-        if (response) {
-          return response.trim();
-        }
-      } catch (error) {
-        console.log(`Active provider ${activeProvider.name} failed for decision:`, error.message);
-      }
-    }
-
-    // Fallback: try other available providers
-    const fallbackProviders = ['openai', 'cerebras', 'gemini', 'groq'];
-    for (const provider of fallbackProviders) {
-      if (activeProvider && provider === activeProvider.name) continue; // Skip if already tried
-      
-      try {
-        console.log(`Trying fallback provider ${provider} for AI decision`);
-        const response = await this.callAIForDecision(provider, prompt);
-        if (response) {
-          return response.trim();
-        }
-      } catch (error) {
-        console.log(`Fallback provider ${provider} failed for decision:`, error.message);
-        continue;
-      }
-    }
-
-    // If all providers fail, default to BASIC
-    console.log('All providers failed for AI decision, using fallback');
-    return 'BASIC';
-  }
-
-  async callAIForDecision(provider, prompt) {
+  
+  async makeAIDecisionWithCurrentProvider(prompt, provider, model, providerConfig) {
     try {
-      // Get API configuration from main process
-      const apiConfig = this.getApiConfigForProvider(provider);
-      if (!apiConfig) {
-        console.log(`No API config for ${provider}, using fallback`);
-        return this.fallbackDecision(prompt);
-      }
-
-      const { apiKey, baseUrl } = apiConfig;
+      const { apiKey, baseUrl } = providerConfig;
       const https = require('https');
+      const http = require('http');
+      
+      // Use lightweight model for decision if available, otherwise use current model
+      const decisionModel = this.getLightweightModelForProvider(provider) || model;
+      console.log(`Decision model: ${decisionModel}`);
 
       const url = new URL(`${baseUrl.replace(/\/+$/,'')}/chat/completions`);
       const bodyObj = {
-        model: this.getDecisionModelForProvider(provider),
+        model: decisionModel,
         messages: [{ role: 'user', content: prompt }],
         stream: false,
-        max_tokens: 10, // Very short response needed
-        temperature: 0.1 // Low temperature for consistent decisions
+        temperature: 0
       };
 
       const body = JSON.stringify(bodyObj);
+      console.log(`Making decision request to ${url.href}`);
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`
@@ -651,132 +682,71 @@ Decision:`;
         headers['X-Title'] = 'Clustrix Desktop';
       }
 
-      const response = await this.makeHttpRequest(url, headers, body);
-      const data = JSON.parse(response);
-
-      if (data.choices && data.choices[0] && data.choices[0].message) {
-        const decision = data.choices[0].message.content.trim();
-        console.log(`AI Decision from ${provider}: "${decision}"`);
-        return decision;
-      }
-
-    } catch (error) {
-      console.error(`AI decision call failed for ${provider}:`, error.message);
-    }
-
-    // Fallback to simple logic
-    return this.fallbackDecision(prompt);
-  }
-
-  getApiConfigForProvider(provider) {
-    try {
-      const configPath = path.join(this.app.getPath('userData'), 'ai-model.conf.json');
-      
-      if (!fs.existsSync(configPath)) {
-        console.log('AI model config not found');
-        return null;
-      }
-      
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      const providers = config.providers || {};
-      
-      if (providers[provider]) {
-        const providerConfig = providers[provider];
-        if (providerConfig.apiKey && providerConfig.apiKey.trim() !== '') {
-          return {
-            apiKey: providerConfig.apiKey,
-            baseUrl: providerConfig.baseUrl || this.getDefaultBaseUrl(provider)
-          };
-        }
-      }
-      
-      console.log(`No valid API config found for provider: ${provider}`);
-      return null;
-    } catch (error) {
-      console.error('Error loading API config:', error);
-      return null;
-    }
-  }
-
-  getDefaultBaseUrl(provider) {
-    switch (provider) {
-      case 'openai': return 'https://api.openai.com/v1';
-      case 'groq': return 'https://api.groq.com/openai/v1';
-      case 'gemini': return 'https://generativelanguage.googleapis.com/v1beta';
-      case 'cerebras': return 'https://api.cerebras.ai/v1';
-      default: return 'https://api.openai.com/v1';
-    }
-  }
-
-  getDecisionModelForProvider(provider) {
-    try {
-      // Try to get the active model from config first
-      const configPath = path.join(this.app.getPath('userData'), 'ai-model.conf.json');
-      if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        if (config.active && config.active.platform === provider) {
-          return config.active.model;
-        }
-      }
-    } catch (error) {
-      console.log('Error reading config for decision model:', error.message);
-    }
-
-    // Fallback to lightweight models for each provider
-    switch (provider) {
-      case 'openai': return 'gpt-3.5-turbo';
-      case 'groq': return 'llama3-8b-8192';
-      case 'gemini': return 'gemini-1.5-flash';
-      case 'cerebras': return 'llama3.1-8b';
-      case 'openrouter': return 'meta-llama/llama-3.1-8b-instruct:free';
-      default: return 'gpt-3.5-turbo';
-    }
-  }
-
-  async makeHttpRequest(url, headers, body) {
-    return new Promise((resolve, reject) => {
-      const opts = {
-        method: 'POST',
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname + url.search,
-        protocol: url.protocol,
-        headers
-      };
-
-      const req = require('https').request(opts, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            const error = new Error(`HTTP ${res.statusCode}: ${data}`);
-            error.statusCode = res.statusCode;
-            error.responseBody = data;
-            reject(error);
-            return;
+      // Make HTTP request manually
+      const response = await new Promise((resolve, reject) => {
+        const protocol = url.protocol === 'https:' ? https : http;
+        const options = {
+          hostname: url.hostname,
+          port: url.port,
+          path: url.pathname + url.search,
+          method: 'POST',
+          headers: {
+            ...headers,
+            'Content-Length': Buffer.byteLength(body)
           }
-          resolve(data);
+        };
+
+        const req = protocol.request(options, (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve(data);
+            } else {
+              reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+            }
+          });
         });
+
+        req.on('error', reject);
+        req.write(body);
+        req.end();
       });
 
-      req.on('error', reject);
-      req.write(body);
-      req.end();
-    });
-  }
+      const data = JSON.parse(response);
+      console.log(`Decision API response:`, JSON.stringify(data, null, 2));
 
-  fallbackDecision(prompt) {
-    const message = prompt.toLowerCase();
+      if (data.choices && data.choices[0] && data.choices[0].message) {
+        const msg = data.choices[0].message;
+        // CRITICAL FIX: Use content (main response) first, then reasoning_content (for GLM models)
+        // reasoning_content contains internal thinking, content contains the actual decision
+        const decision = (msg.content || msg.reasoning_content || '').trim();
+        console.log(`Extracted decision: "${decision}"`);
+        
+        // Extract just "RESEARCH" or "BASIC" if it's in a longer response
+        if (decision.toUpperCase().includes('RESEARCH')) return 'RESEARCH';
+        if (decision.toUpperCase().includes('BASIC')) return 'BASIC';
+        
+        return decision || 'BASIC';
+      }
+      
+      console.log(`No valid decision in response, using default BASIC`);
+      return 'BASIC'; // Safe default
 
-    // Simple fallback logic
-    if (message.includes('analisis') || message.includes('analysis') ||
-        message.includes('debug') || message.includes('find') ||
-        message.includes('search') || message.includes('review') ||
-        message.includes('architecture') || message.includes('structure')) {
-      return 'RESEARCH';
+    } catch (error) {
+      console.error(`AI decision call failed:`, error.message);
+      return 'BASIC'; // Safe default on error
     }
-
-    return 'BASIC';
+  }
+  
+  getLightweightModelForProvider(provider) {
+    // Return lightweight model if available, null otherwise
+    switch (provider) {
+      case 'zhipu': return 'glm-4.5-flash';
+      case 'bigmodel': return 'glm-4.6';
+      case 'openrouter': return 'google/gemini-2.5-flash-preview-09-2025';
+      default: return null;
+    }
   }
 
   shouldUseResearchAgentForRegular(userMessage, uploadedFiles = []) {
@@ -1675,8 +1645,11 @@ Respond with ONLY a JSON object in this format:
   
   getAvailableProvider() {
     try {
-      const configPath = path.join(this.app.getPath('userData'), 'ai-model.conf.json');
-      if (!fs.existsSync(configPath)) return null;
+      const configPath = this.getModelConfigPath();
+      if (!fs.existsSync(configPath)) {
+        console.log(`Config file not found at ${configPath}`);
+        return null;
+      }
       
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       const providers = config.providers || {};

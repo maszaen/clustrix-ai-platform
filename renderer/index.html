@@ -245,9 +245,12 @@
               <span>Settings</span>
             </div>
             <!-- Profile for logged in -->
-            <div id="user-profile-container" style="display: none; align-items: center; gap: 8px;">
-              <img id="user-profile-pic" src="" alt="Profile" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
-              <span id="user-display-name">User</span>
+            <div id="user-profile-container">
+              <img id="user-profile-pic" src="" alt="Profile">
+              <div class="user-profile-content">
+                <span id="user-display-name">Username</span>
+                <span id="user-profile-type" style="font-size: 11px; opacity: 0.7; font-weight: 500; text-align: start;">Internal</span>
+              </div>
             </div>
           </button>
           <div id="settings-menu" class="hidden">

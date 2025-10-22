@@ -18,10 +18,49 @@ class DesktopSearchEngine {
     this.projectFiles.clear();
 
     files.forEach(file => {
+      console.log(`Processing file: ${file.name}, type: ${file.type}, content length: ${file.content ? file.content.length : 'null'}`);
+      let processedContent = file.content;
+      
+      // Check if content appears to be base64 encoded (especially for DOCX files)
+      if (file.type === 'docx' && processedContent) {
+        console.log(`Checking base64 for DOCX file: ${file.name}`);
+        const cleanContent = processedContent.replace(/\s/g, '');
+        const isLikelyBase64 = /^[A-Za-z0-9+/=]{100,}$/.test(cleanContent) && 
+                              cleanContent.length > 100 && 
+                              (cleanContent.includes('=') || cleanContent.length % 4 === 0);
+        
+        console.log(`Base64 check for ${file.name}: cleanLength=${cleanContent.length}, isLikelyBase64=${isLikelyBase64}, hasEqual=${cleanContent.includes('=')}, mod4=${cleanContent.length % 4}`);
+        
+        if (isLikelyBase64) {
+          console.log(`Attempting base64 decode for ${file.name}...`);
+          try {
+            const decodedContent = Buffer.from(cleanContent, 'base64').toString('utf-8');
+            
+            // Verify the decoded content looks like valid text
+            const decodedHasBinary = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/.test(decodedContent);
+            const decodedWordCount = decodedContent.split(/\s+/).filter(word => word.length > 0).length;
+            const hasIndonesianChars = /[a-zA-Z]/.test(decodedContent) && decodedContent.length > decodedContent.replace(/[^a-zA-Z\s]/g, '').length * 0.8;
+            
+            if (!decodedHasBinary && decodedWordCount > 5 && hasIndonesianChars && decodedContent.length > cleanContent.length * 0.6) {
+              processedContent = decodedContent;
+              console.log(`✅ Base64 decoded ${file.name}: ${cleanContent.length} → ${decodedContent.length} chars, ${decodedWordCount} words`);
+            } else {
+              console.log(`❌ Base64 decode validation failed for ${file.name}: binary=${decodedHasBinary}, words=${decodedWordCount}, ratio=${(decodedContent.length / cleanContent.length).toFixed(2)}`);
+            }
+          } catch (decodeError) {
+            console.log(`❌ Base64 decode failed for ${file.name}: ${decodeError.message}`);
+          }
+        } else {
+          console.log(`Not base64 for ${file.name}, skipping decode`);
+        }
+      } else {
+        console.log(`Skipping base64 check for ${file.name}: type=${file.type}, hasContent=${!!processedContent}`);
+      }
+      
       this.projectFiles.set(file.name, {
-        content: file.content,
+        content: processedContent,
         type: file.type,
-        lines: file.content.split('\n')
+        lines: processedContent.split('\n')
       });
     });
 

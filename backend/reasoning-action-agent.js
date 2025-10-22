@@ -89,6 +89,10 @@ class ReasoningActionAgent {
       throw new Error(`Session ${sessionId} not initialized`);
     }
     
+    // Reset per-request state so previous runs don't leak into the next query
+    sessionState.actionHistory = [];
+    sessionState.currentPlan = null;
+
     // Store conversation history in session state
     sessionState.conversationHistory = existingMessages;
     sessionState.language = language;
@@ -1334,7 +1338,8 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
       /function\s+\w+|const\s+\w+\s*=\s*\(|class\s+\w+/.test(results[0].context);
     
     // Increase budget for function searches
-    const effectiveMaxLines = isFunctionSearch ? 300 : maxLines;
+    const bypassLineBudget = isFunctionSearch && results.length <= 10;
+    const effectiveMaxLines = isFunctionSearch ? Math.max(maxLines, 800) : maxLines;
     
     for (const result of results) {
       const snippetSource = result.context || result.snippet || result.preview || result.text || result.content || '';
@@ -1342,7 +1347,7 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
         ? snippetSource.split('\n').length
         : 1;
 
-      if (totalLines + resultLines <= effectiveMaxLines) {
+      if (bypassLineBudget || totalLines + resultLines <= effectiveMaxLines) {
         limitedResults.push(result);
         totalLines += resultLines;
       } else {

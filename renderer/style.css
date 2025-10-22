@@ -663,6 +663,35 @@ hr {
   margin: 0 !important;
 }
 
+#user-profile-container {
+  position: relative;
+  display: none; align-items: center; gap: 11px; justify-content: start;
+  padding: 10px 15px;
+  border-radius: var(--radius-md);
+  transition: var(--transition-fast);
+  width: 100%;
+}
+
+#user-profile-container:hover {
+  background: var(--hover-bg);
+}
+
+#user-profile-pic {
+  width: 27px; height: 27px; border-radius: 50%; object-fit: cover;
+}
+
+.user-profile-content {
+  display: flex; flex-direction: column; gap: 2px;
+}
+
+#app.sidebar-collapsed .user-profile-content {
+  display: none;
+}
+
+#app.sidebar-collapsed #user-profile-container {
+  padding: 0px;
+}
+
 /* App Layout */
 #app {
   display: flex;
@@ -1266,7 +1295,7 @@ h3.date-separator {
   gap: var(--spacing-sm);
   background: transparent;
   border: none;
-  padding: var(--spacing-lg) 2px var(--spacing-lg) 24px;
+  padding: var(--spacing-md);
   cursor: pointer;
   color: var(--fg-muted);
   transition: var(--transition-fast);
@@ -1295,16 +1324,16 @@ opacity: 0;
 }
 
 .settings-btn:hover {
-  background: var(--hover-bg);
   color: var(--fg);
 }
 
 /* Settings Menu */
 #settings-menu {
   position: absolute;
-  bottom: calc(100% + var(--spacing-sm));
-  left: var(--spacing-lg);
-  right: var(--spacing-lg);
+  z-index: 60;
+  bottom: calc(100% + var(--spacing-xs));
+  left: var(--spacing-sm);
+  right: var(--spacing-sm);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -5721,15 +5750,22 @@ a:focus-visible {
   color: var(--fg) !important;
   border-bottom: 1px solid var(--border);
   padding-bottom: 5px;
-  text-transform: capitalize;
   letter-spacing: 0.8px;
   font-family: var(--font-display-italic);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .thinking-update-content {
   line-height: 1.6;
   color: var(--fg-muted);
   font-family: var(--font-sans);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .thinking-update-content p {

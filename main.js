@@ -2602,7 +2602,140 @@ ipcMain.handle('files:open-dialog', async (event) => {
       fileInfo.size = stats.size;
       
       if (extension === '.docx') {
-        fileInfo.content = (await mammoth.extractRawText({ path: filePath })).value;
+        // First, validate that this is actually a valid DOCX file
+        try {
+          const buffer = await fsp.readFile(filePath);
+          
+          // Check DOCX file signature (ZIP header + Office document structure)
+          const isValidDocx = buffer.length > 4 && 
+            buffer[0] === 0x50 && buffer[1] === 0x4B && buffer[2] === 0x03 && buffer[3] === 0x04; // PK..
+          
+          if (!isValidDocx) {
+            fileInfo.error = 'File does not appear to be a valid DOCX document.';
+            logHelper('FILE_READER', 'docx-validation', `Invalid DOCX signature for ${fileInfo.name}`, {
+              fileSize: fileInfo.size,
+              header: buffer.subarray(0, 4).toString('hex')
+            });
+          } else {
+            const result = await mammoth.extractRawText({ path: filePath });
+            fileInfo.content = result.value;
+            
+            // Log detailed information for debugging DOCX extraction
+            logHelper('FILE_READER', 'docx-extraction', `Extracted content from ${fileInfo.name}`, {
+              contentLength: fileInfo.content.length,
+              hasMessages: result.messages && result.messages.length > 0,
+              messageCount: result.messages ? result.messages.length : 0,
+              messages: result.messages,
+              contentPreview: fileInfo.content.substring(0, 200) + (fileInfo.content.length > 200 ? '...' : '')
+            });
+            
+            // Check if content appears to be valid text (not base64 or binary)
+            if (!fileInfo.content || fileInfo.content.trim().length === 0) {
+              fileInfo.error = 'DOCX file appears to be empty or contains no extractable text content.';
+              logHelper('FILE_READER', 'docx-warning', `DOCX extraction resulted in empty content for ${fileInfo.name}`, {
+                fileSize: fileInfo.size,
+                messages: result.messages
+              });
+            } else {
+              // Check if extracted content looks like base64 or binary data
+              const cleanContent = fileInfo.content.replace(/\s/g, '');
+              const isLikelyBase64 = /^[A-Za-z0-9+/=]{100,}$/.test(cleanContent) && 
+                                    cleanContent.length > 100 && 
+                                    (cleanContent.includes('=') || cleanContent.length % 4 === 0);
+              const hasBinaryChars = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/.test(fileInfo.content);
+              
+              if (isLikelyBase64) {
+                // Try to decode as base64 - this might be the actual content
+                try {
+                  const decodedContent = Buffer.from(cleanContent, 'base64').toString('utf-8');
+                  
+                  // Verify the decoded content looks like valid text
+                  const decodedHasBinary = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/.test(decodedContent);
+                  const decodedWordCount = decodedContent.split(/\s+/).filter(word => word.length > 0).length;
+                  const hasIndonesianChars = /[a-zA-Z]/.test(decodedContent) && decodedContent.length > decodedContent.replace(/[^a-zA-Z\s]/g, '').length * 0.8;
+                  
+                  if (!decodedHasBinary && decodedWordCount > 5 && hasIndonesianChars && decodedContent.length > cleanContent.length * 0.6) {
+                    fileInfo.content = decodedContent;
+                    logHelper('FILE_READER', 'docx-base64-decoded', `Successfully decoded base64 content for ${fileInfo.name}`, {
+                      originalLength: cleanContent.length,
+                      decodedLength: decodedContent.length,
+                      wordCount: decodedWordCount,
+                      preview: decodedContent.substring(0, 100)
+                    });
+                  } else {
+                    fileInfo.error = 'DOCX file contains encoded content that could not be decoded as readable text.';
+                    logHelper('FILE_READER', 'docx-base64-invalid', `Base64 content could not be decoded properly for ${fileInfo.name}`, {
+                      decodedHasBinary,
+                      decodedWordCount,
+                      hasIndonesianChars,
+                      lengthRatio: decodedContent.length / cleanContent.length
+                    });
+                  }
+                } catch (decodeError) {
+                  fileInfo.error = 'DOCX file contains encoded content that cannot be decoded.';
+                  logHelper('FILE_READER', 'docx-decode-failed', `Base64 decode failed for ${fileInfo.name}`, {
+                    error: decodeError.message,
+                    contentPreview: cleanContent.substring(0, 50)
+                  });
+                }
+              } else if (hasBinaryChars) {
+                fileInfo.error = 'DOCX file contains binary data that cannot be extracted as readable text.';
+                logHelper('FILE_READER', 'docx-binary', `DOCX contains binary characters for ${fileInfo.name}`, {
+                  contentLength: fileInfo.content.length,
+                  binaryChars: fileInfo.content.match(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g)?.length || 0
+                });
+              } else {
+                // Try HTML extraction as fallback for complex documents
+                try {
+                  const htmlResult = await mammoth.convertToHtml({ path: filePath });
+                  if (htmlResult.value && htmlResult.value !== '<p></p>') {
+                    // Extract text from HTML as fallback
+                    const cheerio = require('cheerio');
+                    const $ = cheerio.load(htmlResult.value);
+                    const textFromHtml = $.text().trim();
+                    
+                    if (textFromHtml && textFromHtml.length > fileInfo.content.length) {
+                      fileInfo.content = textFromHtml;
+                      logHelper('FILE_READER', 'docx-fallback', `Used HTML extraction fallback for ${fileInfo.name}`, {
+                        originalLength: fileInfo.content.length,
+                        htmlLength: textFromHtml.length
+                      });
+                    }
+                  }
+                } catch (htmlError) {
+                  logHelper('FILE_READER', 'docx-fallback-failed', `HTML extraction fallback failed for ${fileInfo.name}`, {
+                    error: htmlError.message
+                  });
+                }
+                
+                // Check for warnings even after fallback
+                if (result.messages && result.messages.length > 0) {
+                  const seriousWarnings = result.messages.filter(msg => 
+                    msg.type === 'warning' && (
+                      msg.message.includes('encrypted') || 
+                      msg.message.includes('password') ||
+                      msg.message.includes('corrupt') ||
+                      msg.message.includes('invalid')
+                    )
+                  );
+                  
+                  if (seriousWarnings.length > 0) {
+                    fileInfo.error = 'DOCX file may be password-protected, corrupted, or in an unsupported format.';
+                    logHelper('FILE_READER', 'docx-error', `Serious warnings detected for ${fileInfo.name}`, {
+                      warnings: seriousWarnings
+                    });
+                  }
+                }
+              }
+            }
+          }
+        } catch (docxError) {
+          fileInfo.error = 'Failed to process DOCX file. It may be corrupted or password-protected.';
+          logHelper('FILE_READER', 'docx-error', `DOCX processing failed for ${fileInfo.name}`, {
+            error: docxError.message,
+            stack: docxError.stack
+          });
+        }
       } else if (['.xlsx', '.xls'].includes(extension)) {
         const workbook = xlsx.readFile(filePath);
         let fullText = '';

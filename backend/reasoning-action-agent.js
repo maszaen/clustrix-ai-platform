@@ -191,7 +191,7 @@ class ReasoningActionAgent {
       });
     }
     let finalResponse = reasoningResponse;
-    const MAX_ACTIONS = 10;
+    const MAX_ACTIONS = 20;
     let totalActionsExecuted = 0;
     
     for (const [index, action] of plan.actions.entries()) {
@@ -523,12 +523,17 @@ class ReasoningActionAgent {
     // Determine confidence level based on results
     const hasGoodData = totalResults > 50;
     const confidenceInstruction = hasGoodData
-      ? 'IMPORTANT: You have extensive data from the files. Be CONFIDENT and COMPREHENSIVE in your analysis. Provide detailed insights based on the data you found. Do NOT use disclaimers like "keterbatasan" or "perlu verifikasi" - you have direct access to the content.'
-      : 'You have some data from the files. Provide analysis based on what you found, and suggest specific additional searches if more information is needed.';
+      ? 'IMPORTANT: You have extensive data from the files. Be CONFIDENT and COMPREHENSIVE in your final answer. Provide detailed insights based on the data you found. Do NOT use disclaimers like "keterbatasan" or "perlu verifikasi" - you have direct access to the content.'
+      : 'You have gathered data from the files. Provide your final analysis based on what was found during the search phase.';
 
-    return `You are an expert research assistant with FULL ACCESS to project files and comprehensive search results.
+    return `You are an expert research assistant providing the FINAL ANSWER based on completed search results.
 
-ACTION LOG:
+=== THIS IS THE FINAL SYNTHESIS PHASE ===
+All search actions have been completed. Your task is to provide a comprehensive final answer based ONLY on the data gathered below.
+
+DO NOT REQUEST ADDITIONAL SEARCHES. This is the conclusion phase.
+
+ACTION LOG (Search Results):
 ${summaryText || 'Tidak ada aksi yang dieksekusi.'}
 
 PRIMARY WEB SOURCES:
@@ -537,68 +542,34 @@ ${webSourcesSection}
 PROJECT FILE CONTEXT:
 ${fileList}
 
-TOTAL DATA GATHERED: ${totalResults} results from ${actionHistory.length} search actions
+TOTAL DATA GATHERED: ${totalResults} results from ${actionHistory.length} completed search actions
 
 USER QUESTION:
 """${userQuery}"""
 
 ${confidenceInstruction}
 
-RESPONSE REQUIREMENTS:
+FINAL ANSWER REQUIREMENTS:
 - Jawab dalam bahasa pengguna (detected: ${userLanguage})
 - Sertakan <thinking>...</thinking> untuk proses analisis internal
-- BE COMPREHENSIVE: Extract and present ALL relevant information you found
+- BE COMPREHENSIVE: Extract and synthesize ALL relevant information from the search results above
 - BE CONFIDENT: You have direct access to file content - present findings authoritatively
-- Cite specific details: line numbers, section names, actual content from files
-- DO NOT say "kemungkinan", "mungkin", "tampaknya" if you have concrete data
-- DO NOT add disclaimers about "keterbatasan" or "perlu membuka file" - you already have the data
-- If data is truly insufficient (< 10 results), then suggest specific additional searches
+- Cite specific details: line numbers, function names, actual code snippets from the results
+- DO NOT say "kemungkinan", "mungkin", "tampaknya" if you have concrete data in the results
+- DO NOT add disclaimers about "keterbatasan" or "perlu membuka file" - the data is already provided above
 - When a source includes a URL, format it as a Markdown link: [**Summarized Title Max 4 Words**](URL)
 
-CONTEXT COMPLETENESS FLAGS:
-- ✓ [Context: COMPLETE] = Contains full definition with balanced braces, sufficient lines. DO NOT request additional searches.
-- ⚠ [Context: PARTIAL - Multiple fragments] = Results are from DIFFERENT LOCATIONS in same file (e.g., line 100-110, then 500-510). This means you're seeing scattered references, NOT complete definition. Consider requesting broader contextLines.
-- ⚠ [Context: PARTIAL - Incomplete snippets] = Results are truncated or lack complete structure. Consider specific follow-up search.
-- ✗ [Context: INSUFFICIENT] = Very limited data, definitely need more searches.
+CRITICAL INSTRUCTION:
+DO NOT REQUEST MORE SEARCHES - This is the final answer phase, All searches are completed
+DO NOT suggest "additional searches needed" - Work with the ${totalResults} results provided
 
-AVAILABLE SEARCH CAPABILITIES:
-If you need more information, you can ONLY use these exact capabilities (DO NOT invent new ones):
-1. searchPattern(pattern, options) - Search for text pattern with optional contextLines
-   Example: searchPattern with {"pattern": "functionName", "options": {"contextLines": 30, "file": "renderer.js"}}
-2. searchFunctions(functionName) - Find function definitions
-3. searchCSS(selector) - Find CSS selectors
-4. searchHTML(element) - Find HTML elements
-5. searchImports(moduleName) - Find import statements
-6. analyzeFileStructure(fileName) - Get file structure summary
-7. listAvailableFiles() - List all uploaded files
-${sessionState.capabilities?.supportsWebSearch ? '8. webSearch(query, options) - Search the internet\n9. fetchWebPage(url) - Download webpage content' : ''}
+MANDATORY STRUCTURE YOUR FINAL ANSWER:
+1. <thinking>Brief analysis of the search results</thinking>
+2. Direct findings from the search results (specific, with line numbers and code excerpts)
+3. Comprehensive analysis and insights
+4. Clear conclusion that answers the user's question
 
-CRITICAL: ONLY use capabilities listed above. DO NOT create new capabilities like "searchWithLines", "getFileContent", etc.
-For more context, use searchPattern with higher contextLines (20-80).
-
-SEARCH STRATEGY:
-- If result shows "Multiple fragments from same file", it means snippets are NOT consecutive (separated by many lines)
-- For function definitions: Request higher contextLines (20-80) to get complete function body
-- For scattered references: This is normal for pattern searches, analyze what you have
-- Only request NEW searches for truly different information, not re-searching same topic
-
-HOW TO REQUEST ADDITIONAL SEARCHES:
-If you need more data, use this EXACT format in your response:
-<search>
-capabilityName with {parameters}
-</search>
-
-Example for getting more context:
-<search>
-searchPattern with {"pattern": "functionName", "options": {"contextLines": 50, "file": "renderer.js"}}
-</search>
-
-STRUCTURE YOUR RESPONSE:
-1. Direct findings from the files (be specific and detailed)
-2. Analysis and insights (comprehensive, not speculative)
-3. Only if truly needed: Use <search>...</search> tags with EXACT capability names listed above
-
-Remember: You have ${totalResults} pieces of data. Use them confidently!`;
+Remember: Provide a FINAL, CONCLUSIVE answer. No follow-up searches. You have ${totalResults} pieces of data - use them to give a complete response.`;
   }
 
   
@@ -607,25 +578,6 @@ Remember: You have ${totalResults} pieces of data. Use them confidently!`;
     const fileList = hasFiles
       ? sessionState.files.map(f => `- ${f.name} (${f.type})`).join('\n')
       : '- (Tidak ada file proyek yang tersedia, gunakan riset web sebagai sumber utama)';
-
-    const capabilityLines = [
-      '- listAvailableFiles(): List all uploaded files with metadata (name, type, size, line count)',
-      '- searchPattern(pattern, options): Cari pola teks di seluruh file (mirip grep)',
-      '  * Use options.file or options.fileName to search in specific file only',
-      '  * Example: searchPattern with {"pattern": "async", "options": {"file": "renderer.js"}}',
-      '- searchFunctions(functionName): Temukan definisi fungsi',
-      '- searchCSS(selector): Temukan selector, class, atau ID CSS',
-      '- searchHTML(element): Temukan elemen dan tag HTML',
-      '- searchImports(moduleName): Temukan pernyataan import/require',
-      '- analyzeFileStructure(fileName): Ringkas struktur file secara detail (functions, classes, imports, line count)'
-    ];
-
-    if (sessionState.capabilities?.supportsWebSearch) {
-      capabilityLines.push(
-        '- webSearch(query, options): Lakukan pencarian internet real-time dan ambil hasil terbaru',
-        '- fetchWebPage(url, options): Unduh konten halaman web untuk dianalisis'
-      );
-    }
 
     const webFocusNote = !hasFiles
       ? '\nFOKUS: Tidak ada file lokal, jadi rencanakan minimal satu tindakan research menggunakan webSearch/fetchWebPage untuk mendapatkan informasi yang relevan.'
@@ -638,26 +590,125 @@ The current date is ${new Date().toLocaleDateString('en-US', {year: 'numeric', m
 USER FILES:
 ${fileList}
 
-AVAILABLE CAPABILITIES:
-${capabilityLines.join('\n')}
+AVAILABLE SEARCH CAPABILITIES (Use these to create your action plan):
+These are the ONLY capabilities you can use. DO NOT invent new ones like "searchWithLines", "getFileContent", etc.
+
+1. searchPattern(pattern, options) - Search for text pattern across all files
+   Parameters:
+   - pattern: The text or regex pattern to search for
+   - options: {
+       file: "fileName.js" (optional - search specific file only),
+       fileName: "fileName.js" (alias for file),
+       contextLines: 10-80 (default: 3 - number of surrounding lines to include),
+       maxResults: number (optional - limit results)
+     }
+   Examples:
+   - searchPattern with {"pattern": "async function", "options": {"contextLines": 30}}
+   - searchPattern with {"pattern": "buildSynthesisPrompt", "options": {"file": "reasoning-action-agent.js", "contextLines": 50}}
+   - searchPattern with {"pattern": "IPC.*handler", "options": {"contextLines": 20, "maxResults": 10}}
+   
+   CRITICAL contextLines guidance:
+   - For function definitions: Use 30-80 lines to get complete function body
+   - For small snippets: Use 10-20 lines for local context
+   - For class definitions: Use 50-100 lines to get full class structure
+   - If results show "Multiple fragments", increase contextLines to get continuous block
+
+2. searchFunctions(functionName) - Find function definitions and declarations
+   Parameters:
+   - functionName: The exact or partial function name to search
+   Examples:
+   - searchFunctions with {"functionName": "buildSynthesisPrompt"}
+   - searchFunctions with {"functionName": "executeAction"}
+   Note: Results may show function signature + some body. For COMPLETE function, use searchPattern with high contextLines.
+
+3. searchCSS(selector) - Find CSS selectors, classes, or IDs
+   Parameters:
+   - selector: The CSS selector to search (e.g., ".class-name", "#id", "element")
+   Examples:
+   - searchCSS with {"selector": ".chat-message"}
+   - searchCSS with {"selector": "#main-container"}
+
+4. searchHTML(element) - Find HTML elements and tags
+   Parameters:
+   - element: The HTML element or tag to search
+   Examples:
+   - searchHTML with {"element": "button"}
+   - searchHTML with {"element": "div class=\"container\""}
+
+5. searchImports(moduleName) - Find import/require statements
+   Parameters:
+   - moduleName: The module name to search for in imports
+   Examples:
+   - searchImports with {"moduleName": "electron"}
+   - searchImports with {"moduleName": "langchain"}
+
+6. analyzeFileStructure(fileName) - Get comprehensive file structure summary
+   Parameters:
+   - fileName: The exact file name to analyze
+   Returns: Functions, classes, imports, exports, line count, file type
+   Examples:
+   - analyzeFileStructure with {"fileName": "reasoning-action-agent.js"}
+   - analyzeFileStructure with {"fileName": "renderer.js"}
+   Note: Use this FIRST to understand file organization, then use searchPattern for details.
+
+7. listAvailableFiles() - List all uploaded files with metadata
+   Parameters: None (no parameters required)
+   Returns: File names, types, sizes, line counts
+   Example:
+   - listAvailableFiles with {}
+   Note: Use this to discover what files are available before searching.
+
+${sessionState.capabilities?.supportsWebSearch ? `8. webSearch(query, options) - Search the internet for real-time information
+   Parameters:
+   - query: The search query string
+   - options: { maxResults: number (optional) }
+   Examples:
+   - webSearch with {"query": "LangChain agent implementation", "options": {"maxResults": 5}}
+   
+9. fetchWebPage(url, options) - Download and extract content from a webpage
+   Parameters:
+   - url: The full URL to fetch
+   - options: { timeout: number (optional) }
+   Examples:
+   - fetchWebPage with {"url": "https://example.com/docs"}` : ''}
+
+SEARCH STRATEGY GUIDELINES:
+- START BROAD: Use analyzeFileStructure or listAvailableFiles to understand project structure
+- BE SPECIFIC: Use searchPattern with file parameter to narrow down searches
+- GET COMPLETE CONTEXT: Use contextLines 30-80 for function definitions (not just 3-5 lines)
+- HANDLE FRAGMENTS: If results show "Multiple fragments from same file", it means snippets are separated by many lines
+  → Increase contextLines or search for specific function name to get continuous block
+- VERIFY COMPLETENESS: Check if code has balanced braces {}. If not, request higher contextLines
+- AVOID REDUNDANCY: Don't search for the same information multiple times
+- PLAN 2-3+ ACTIONS: Create comprehensive plan, not just one action
+
+CONTEXT COMPLETENESS INDICATORS (Use these to plan contextLines):
+- [Context: COMPLETE] = Full definition with balanced braces, sufficient lines
+- [Context: PARTIAL - Multiple fragments] = Scattered references from different locations in same file
+  → Need broader contextLines or different search approach
+- [Context: PARTIAL - Incomplete snippets] = Truncated results, missing structure
+  → Increase contextLines (try 50-80 for functions)
+- [Context: INSUFFICIENT] = Very limited data
+  → Try different search terms or broader pattern
 
 USER QUERY: "${userQuery}"
 
 ${CRITICAL_INSTRUCTIONS}${webFocusNote}
 
-Respond with this exact template:
-REASONING: [Your comprehensive thought process - explain what you need to find and WHY multiple searches are necessary]
+
+[MANDATORY] Respond with this exact template:
+REASONING: [Your comprehensive thought process - explain what you need to find and WHY multiple searches are necessary. Consider what contextLines values you'll need for each search.]
 
 PLAN:
-1. ACTION: <toolName> with {...}
-   WHY: <reason>
-2. ACTION: <toolName> with {...}
-   WHY: <reason>
-3. ACTION: <toolName> with {...}
-   WHY: <reason>
-[Add more actions as needed - minimum 2-3 actions required]
+1. ACTION: <toolName> with {complete parameters including contextLines if applicable}
+   WHY: <specific reason - what info you expect to get and why contextLines value chosen>
+2. ACTION: <toolName> with {complete parameters including contextLines if applicable}
+   WHY: <specific reason>
+3. ACTION: <toolName> with {complete parameters including contextLines if applicable}
+   WHY: <specific reason>
+[Add more actions as needed - minimum 2-3 actions required for thorough research]
 
-CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu menjawab pertanyaan pengguna secara lengkap]`;
+CURRENT THINKING: [What you expect to learn from these actions and how they will comprehensively answer the user's question]`;
   }
 
   

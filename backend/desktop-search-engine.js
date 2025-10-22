@@ -142,9 +142,9 @@ class DesktopSearchEngine {
       // Detect if match line contains function definition
       const matchLine = lines[matchIndex] || '';
       const isFunctionDefinition = /^\s*(async\s+)?(function\s+\w+|const\s+\w+\s*=\s*(?:async\s+)?\(|class\s+\w+)/.test(matchLine);
-      
+
       let start, end;
-      
+
       if (isFunctionDefinition && contextLines >= 10) {
         // For functions with large context: prioritize body (more AFTER, less BEFORE)
         // 20% before, 80% after
@@ -157,12 +157,56 @@ class DesktopSearchEngine {
         start = Math.max(0, matchIndex - contextLines);
         end = Math.min(lines.length, matchIndex + contextLines + 1);
       }
-      
+
       const snippet = [];
+      let functionDepth = 0;
+      let seenOpeningBrace = false;
 
       for (let i = start; i < end; i++) {
+        const lineText = lines[i] ?? '';
         const prefix = i === matchIndex ? '>' : ' ';
-        snippet.push(`${prefix}${i + 1}: ${lines[i]}`);
+        snippet.push(`${prefix}${i + 1}: ${lineText}`);
+
+        if (isFunctionDefinition && i >= matchIndex) {
+          const openMatches = (lineText.match(/{/g) || []).length;
+          const closeMatches = (lineText.match(/}/g) || []).length;
+
+          if (openMatches > 0) {
+            seenOpeningBrace = true;
+          }
+
+          if (seenOpeningBrace) {
+            functionDepth += openMatches;
+            functionDepth -= closeMatches;
+            if (functionDepth < 0) functionDepth = 0;
+          }
+        }
+      }
+
+      // If the captured snippet doesn't include the full function body yet, extend until braces balance
+      if (isFunctionDefinition && seenOpeningBrace && functionDepth > 0) {
+        let extraIndex = end;
+        const maxExtraIndex = Math.min(lines.length, end + 400);
+
+        while (extraIndex < maxExtraIndex && functionDepth > 0) {
+          const lineText = lines[extraIndex] ?? '';
+          snippet.push(` ${extraIndex + 1}: ${lineText}`);
+
+          const openMatches = (lineText.match(/{/g) || []).length;
+          const closeMatches = (lineText.match(/}/g) || []).length;
+
+          if (openMatches > 0) {
+            seenOpeningBrace = true;
+          }
+
+          if (seenOpeningBrace) {
+            functionDepth += openMatches;
+            functionDepth -= closeMatches;
+            if (functionDepth < 0) functionDepth = 0;
+          }
+
+          extraIndex++;
+        }
       }
 
       return snippet.join('\n');

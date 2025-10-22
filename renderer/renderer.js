@@ -14550,6 +14550,80 @@ function setupEventListeners() {
     cloudBtn.addEventListener('click', () => handleDataSourceSwitch('cloud'));
   }
 
+  // ===== LEARN MORE MODAL HANDLERS =====
+  const openLearnMoreBtn = document.getElementById('open-learn-more');
+  const closeLearnMoreBtn = document.getElementById('close-learn-more-modal');
+  const learnMoreModal = document.getElementById('learn-more-modal');
+  const learnMoreTabBtns = document.querySelectorAll('.learn-more-tab-btn');
+
+  if (openLearnMoreBtn) {
+    openLearnMoreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      learnMoreModal.classList.remove('hidden');
+      $("#settings-menu").classList.add("hidden");
+      log("UI", 0, "event:open-learn-more", "Learn More modal opened");
+    });
+  }
+
+  if (closeLearnMoreBtn) {
+    closeLearnMoreBtn.addEventListener('click', () => {
+      learnMoreModal.classList.add('hidden');
+      log("UI", 0, "event:close-learn-more-modal", "Learn More modal closed");
+    });
+  }
+
+  if (learnMoreModal) {
+    learnMoreModal.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-overlay')) {
+        learnMoreModal.classList.add('hidden');
+      }
+    });
+  }
+
+  // Tab switching functionality
+  learnMoreTabBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const tabName = btn.dataset.tab;
+      
+      // Remove active class from all tabs and contents
+      learnMoreTabBtns.forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.learn-more-tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      
+      // Add active class to clicked tab and corresponding content
+      btn.classList.add('active');
+      const tabContent = document.getElementById(tabName);
+      if (tabContent) {
+        tabContent.classList.add('active');
+        log("UI", 0, "event:learn-more-tab-switch", "Switched to tab", { tab: tabName });
+      }
+    });
+  });
+
+  // ===== AUTH BUTTON HANDLER (Login/Logout) =====
+  const authBtn = document.getElementById('auth-btn');
+  if (authBtn) {
+    authBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      
+      // Check if we're in login or logout state
+      const loginState = document.getElementById('login-state');
+      const logoutState = document.getElementById('logout-state');
+      
+      if (loginState && !loginState.classList.contains('hidden')) {
+        // Login state is visible, so handle login
+        handleGoogleLogin();
+      } else if (logoutState && !logoutState.classList.contains('hidden')) {
+        // Logout state is visible, so handle logout
+        handleLogout();
+      }
+      
+      $("#settings-menu").classList.add("hidden");
+    });
+  }
+
   // Immediate save for sidebar display toggles
   $("#show-projects-toggle").addEventListener("change", async (e) => {
     const showProjects = e.target.checked;
@@ -15404,6 +15478,12 @@ async function updateAccountModalUI() {
       notLoggedIn.classList.add('hidden');
       loggedIn.classList.remove('hidden');
       
+      // Show logout state, hide login state
+      const loginState = document.getElementById('login-state');
+      const logoutState = document.getElementById('logout-state');
+      if (loginState) loginState.classList.add('hidden');
+      if (logoutState) logoutState.classList.remove('hidden');
+      
       // Show close modal button only when logged in
       const closeModalBtn = document.getElementById('account-close-modal-btn');
       if (closeModalBtn) {
@@ -15489,6 +15569,12 @@ async function updateAccountModalUI() {
     } else {
       notLoggedIn.classList.remove('hidden');
       loggedIn.classList.add('hidden');
+      
+      // Show login state, hide logout state
+      const loginState = document.getElementById('login-state');
+      const logoutState = document.getElementById('logout-state');
+      if (loginState) loginState.classList.remove('hidden');
+      if (logoutState) logoutState.classList.add('hidden');
       
       // Hide close modal button when not logged in
       const closeModalBtn = document.getElementById('account-close-modal-btn');

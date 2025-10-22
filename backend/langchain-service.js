@@ -554,17 +554,16 @@ class ClustrixLangChainService {
       }
       
       // Create a simple prompt for AI to decide
-      const decisionPrompt = `You are an AI assistant analyzing whether a user query requires deep research and analysis of project files, or if it can be answered with basic file reading.
+      const decisionPrompt = `You are an AI classifier. Your sole task is to determine if a query requires accessing new external information (files or web), or if it can be answered from conversation history alone.
+Answer ONLY with "RESEARCH" or "BASIC".
 ${conversationContext}
 Current Query: "${userMessage}"
 
 Available files: ${uploadedFiles.map(f => f.name).join(', ')}
 
-Instructions:
-- Answer ONLY with "RESEARCH" or "BASIC"
-- Use "RESEARCH" if the query requires: code analysis, debugging, finding specific patterns, complex relationships, architecture review, or deep investigation
-- Use "BASIC" if the query is simple like: showing content, basic questions, or straightforward information retrieval
-- Consider the conversation context - follow-up questions may need RESEARCH even if they seem simple
+RULES:
+1. USE "RESEARCH" if the query requires *new* information to be retrieved, searched, or analyzed from the available files OR requires a web search.
+2. USE "BASIC" if the query is purely conversational (e.g., "thanks", "ok", "terima kasih") OR if the answer can be *fully derived* from the existing conversation context without accessing new data.
 
 Decision:`;
 

@@ -6,13 +6,6 @@
   <title>Clustrix</title>
   <link rel="icon" type="image/x-icon" href="../public/images/favicon.ico" />
   
-  <!-- Preload critical fonts -->
-  <link rel="preload" href="../public/fonts/Capricorn-USR-Text.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="../public/fonts/Capricorn-AI-Text-Bold-2.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="../public/fonts/AnthropicSerif-AI-Text-Bold.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="../public/fonts/Capricorn-Display.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="../public/fonts/NotoColorEmoji-Regular.ttf" as="font" type="font/ttf" crossorigin />
-  
   <link rel="stylesheet" href="./style.css" />
   <script>
     (function() {
@@ -254,30 +247,13 @@
             </div>
           </button>
           <div id="settings-menu" class="hidden">
-            <button id="open-persona-settings" class="menu-item">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings2-icon lucide-settings-2">
-                <path d="M14 17H5" />
-                <path d="M19 7h-9" />
-                <circle cx="17" cy="17" r="3" />
-                <circle cx="7" cy="7" r="3" />
-              </svg>
-              <span>Personalization</span>
-            </button>
             <button id="open-model-mgmt" class="menu-item">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevrons-left-right-ellipsis-icon lucide-chevrons-left-right-ellipsis">
-                <path d="M12 12h.01" />
-                <path d="M16 12h.01" />
-                <path d="m17 7 5 5-5 5" />
-                <path d="m7 7-5 5 5 5" />
-                <path d="M8 12h.01" />
-              </svg>
-              <span>Model Lists</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-text-align-justify-icon lucide-text-align-justify"><path d="M3 5h18"/><path d="M3 12h18"/><path d="M3 19h18"/></svg>
+              <span>Model lists</span>
             </button>
             <button id="open-model-switcher" class="menu-item">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M4 7h16M4 12h16M4 17h16" />
-              </svg>
-              <span>Switch Model</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-repeat-icon lucide-repeat"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
+              <span>Switch model</span>
             </button>
             <button id="open-search-api-settings" class="menu-item">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -288,17 +264,51 @@
               </svg>
               <span>Search API</span>
             </button>
+            <hr class="hr-custom-no-mar">
+            <button id="open-persona-settings" class="menu-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings2-icon lucide-settings-2">
+                <path d="M14 17H5" />
+                <path d="M19 7h-9" />
+                <circle cx="17" cy="17" r="3" />
+                <circle cx="7" cy="7" r="3" />
+              </svg>
+              <span>Personalization</span>
+            </button>
             <button id="open-accessibility-settings" class="menu-item">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings-icon lucide-settings"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>
-              <span>Settings</span>
+              <span>Accessibility settings</span>
             </button>
             <button id="open-account-settings" class="menu-item">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                 <circle cx="12" cy="7" r="4"></circle>
               </svg>
-              <span>Account</span>
+              <span>Account settings</span>
             </button>
+            <hr class="hr-custom-no-mar">
+
+            <button id="open-learn-more" class="menu-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-life-buoy-icon lucide-life-buoy"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></svg>
+              <span>Learn more</span>
+            </button>
+            <button id="auth-btn" class="menu-item auth-btn-class">
+              <!-- Logout state (shown when logged in) -->
+              <div id="logout-state" class="auth-btn-state">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                </svg>
+                <span>Log out</span>
+              </div>
+              <!-- Login state (shown when logged out) -->
+              <div id="login-state" class="auth-btn-state hidden">
+                <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" fill="currentColor"/>
+                </svg>
+                <span>Log in with GitHub</span>
+              </div>
+            </button>
+
+            
           </div>
         </div>
       </div>
@@ -1050,6 +1060,229 @@
             <button id="account-close-modal-btn" class="primary-btn" style="width: 100%; display: none;">
               Close
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Learn More Modal -->
+  <div id="learn-more-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Learn More</h2>
+        <button id="close-learn-more-modal" class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+      </div>
+      <hr />
+      
+      <!-- Tab Navigation -->
+      <div class="learn-more-tabs">
+        <button class="learn-more-tab-btn active" data-tab="how-to-use">
+          <span>How to use?</span>
+        </button>
+        <button class="learn-more-tab-btn" data-tab="privacy-policy">
+          <span>Privacy and Policy</span>
+        </button>
+        <button class="learn-more-tab-btn" data-tab="license">
+          <span>License</span>
+        </button>
+        <button class="learn-more-tab-btn" data-tab="about">
+          <span>About</span>
+        </button>
+      </div>
+      
+      <div class="modal-body learn-more-content">
+        <!-- How to Use Tab -->
+        <div id="how-to-use" class="learn-more-tab-content active">
+          <h3>How to Use Clustrix AI</h3>
+          <div class="learn-more-section">
+            <h4>Welcome to Clustrix AI!</h4>
+            <p>Clustrix AI is a powerful, local-first desktop assistant designed for privacy and performance. This guide will help you get the most out of its features.</p>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Core Concept: Bring Your Own Key (BYOK)</h4>
+            <p>Clustrix AI operates on a <strong>Bring Your Own Key (BYOK)</strong> model. This means you connect your own API keys from various AI service providers. Your data is sent directly from your computer to the service you choose. We do not see, store, or process your conversations.</p>
+            <ul>
+              <li><strong>Privacy:</strong> Your conversations remain private between you and the AI provider.</li>
+              <li><strong>Flexibility:</strong> You can use any model from any supported provider, including open-source models.</li>
+              <li><strong>Cost Control:</strong> You only pay for what you use directly to the provider. No subscriptions with us.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Setting Up Your API Keys</h4>
+            <p>To start using Clustrix AI, you need to add an API key.</p>
+            <ol style="padding-left: 20px;">
+              <li>Go to <strong>Settings > Model lists</strong>.</li>
+              <li>Select a platform from the dropdown (e.g., OpenRouter, OpenAI, Anthropic).</li>
+              <li>Enter your API key in the <strong>"API Key" field</strong>. You can get a key from the provider's website like
+                <a href="https://openrouter.ai/keys" target="_blank" class="link">OpenRouter</a>
+                <a href="https://platform.openai.com/api-keys" target="_blank" class="link">OpenAI</a>
+                <a href="https://console.anthropic.com/settings/keys" target="_blank" class="link">Anthropic (Claude)</a>
+              </li>
+              <li><strong>Model/provider management:</strong> You can also manually add custom providers or models directly from this screen. Simply type a new name in the "Platform" field to create a new provider, then add the Base URL, API Key, and specify the model ID. This is useful for connecting to custom endpoints or models not listed by default.</li>
+              <li>Click <strong>Save settings</strong>. The application will validate your key and load the available models.</li>
+            </ol>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Key Features</h4>
+            <ul>
+              <li><strong>Model Switching:</strong> Go to <strong>Settings > Switch model</strong> to change the AI model for the current session.</li>
+              <li><strong>Web Search:</strong> Enable real-time web search by going to <strong>Settings > Search API</strong> and adding a Google Search API key.</li>
+              <li><strong>File Uploads:</strong> Drag and drop files (Docx, XLSX, PDF, etc.) into the chat to have the AI analyze them.</li>
+              <li><strong>Projects:</strong> Organize your chats and files into projects for better context management.</li>
+              <li><strong>Cloud Sync (Optional):</strong> Log in with GitHub in <strong>Settings > Account settings</strong> to sync your data across multiple devices. This is fully optional and can be disabled at any time.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Privacy and Policy Tab -->
+        <div id="privacy-policy" class="learn-more-tab-content">
+          <h3>Privacy and Policy</h3>
+          <div class="learn-more-section">
+            <h4>Our Commitment to Privacy</h4>
+            <p>Clustrix AI is built on a "local-first" and "privacy-first" philosophy. We are committed to ensuring that your data remains yours. This policy outlines how we handle your information.</p>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Data Storage</h4>
+            <ul>
+              <li><strong>Local-First:</strong> By default, all your data—including chat sessions, API keys, and settings—is stored exclusively on your local machine in the application's user data directory. We do not have access to this data.</li>
+              <li><strong>Bring Your Own Key (BYOK):</strong> We do not provide AI models. You use your own API keys from third-party providers (e.g., OpenAI, OpenRouter). Your prompts and conversations are sent directly from your device to the provider's API. We do not act as a proxy.</li>
+              <li><strong>API Keys:</strong> Your API keys are stored encrypted on your local device. They are never sent to our servers.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Optional Cloud Sync</h4>
+            <ul>
+              <li><strong>User-Controlled Sync:</strong> We offer an optional cloud sync feature using your own GitHub account. If you choose to log in, we create a private repository in your GitHub account to store your data.</li>
+              <li><strong>Data in Your Control:</strong> The synced data remains under your control within your GitHub account. We only facilitate the synchronization process. You can revoke access or delete the repository at any time.</li>
+              <li><strong>No Data Collection:</strong> We do not collect, aggregate, or sell any user data, whether stored locally or synced to your GitHub.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Third-Party Services</h4>
+            <ul>
+              <li>When you use an API key, you are subject to the privacy policy of that third-party provider. We encourage you to review their policies.</li>
+              <li>Clustrix AI is not responsible for the data practices of third-party AI services.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Updates and Contact</h4>
+            <p>This privacy policy may be updated from time to time. For any questions, please open an issue on our <a href="https://github.com/maszaen/clustrix-ai-platform" target="_blank" class="link">GitHub repository</a>.</p>
+          </div>
+        </div>
+
+        <!-- License Tab -->
+        <div id="license" class="learn-more-tab-content">
+          <h3>License Information</h3>
+          <div class="learn-more-section">
+            <h4>Clustrix AI License</h4>
+            <p>Clustrix AI is provided as-is for personal use only. Please review the key terms below:</p>
+            <ul>
+              <li><strong>Personal Use Only:</strong> You are permitted to use Clustrix AI for personal, non-commercial purposes only.</li>
+              <li><strong>No Distribution:</strong> You may not distribute, share, or redistribute this software in any form, whether modified or unmodified.</li>
+              <li><strong>No Commercial Use:</strong> Commercial use of any kind is strictly prohibited. This includes using Clustrix AI for business purposes, offering it as a service, or generating revenue from it.</li>
+              <li><strong>No Modification for Distribution:</strong> You may modify the software for your own personal use, but you may not distribute or share any modified versions.</li>
+              <li><strong>Warranty:</strong> This software is provided "as is" without warranty of any kind. We are not responsible for any damages or issues arising from its use.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Third-Party Libraries</h4>
+            <p>Clustrix AI uses several open-source libraries including:</p>
+            <ul>
+              <li>Electron - Application framework</li>
+              <li>LangChain - Language model orchestration</li>
+              <li>MathJax - Mathematical typesetting</li>
+              <li>Markdown-It - Markdown parser</li>
+              <li>Many other open-source components</li>
+            </ul>
+            <p>Third-party libraries are licensed under their respective licenses. Please refer to the individual licenses for terms and conditions.</p>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Full License Text</h4>
+            <p>For the complete license text and information about third-party licenses, please visit:</p>
+            <p><a href="https://github.com/maszaen/clustrix-ai-platform" target="_blank" class="link">https://github.com/maszaen/clustrix-ai-platform</a></p>
+          </div>
+        </div>
+
+        <!-- About Tab -->
+        <div id="about" class="learn-more-tab-content">
+          <h3>About Clustrix AI</h3>
+          <div class="learn-more-section">
+            <h4>Meet the Creator</h4>
+            <p>Clustrix AI Platform is built with passion by a developer who believes in the power of open-source tools and the importance of user privacy. I'm committed to creating applications that respect your data and give you full control over your information.</p>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>What is Clustrix AI Platform?</h4>
+            <p>Clustrix AI Platform is a <strong>platform bridge</strong> between you and the world of AI. Think of it this way: you can buy an API key from OpenAI, Anthropic, or any other provider, but without a platform to use it, the key becomes useless. That's where Clustrix AI comes in.</p>
+            <p>We provide the interface, tools, and ecosystem to make your API keys actually useful. Clustrix AI is a desktop application that brings the power of modern AI models to your fingertips while maintaining your privacy. Unlike cloud-based solutions that store your data on external servers, Clustrix AI keeps everything local by default.</p>
+            <p>The application uses a "Bring Your Own Key" (BYOK) model, meaning you use your own API keys from AI providers like OpenAI, Anthropic, or OpenRouter. Your conversations and data never pass through our servers, they go directly from your computer to your chosen AI provider.</p>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Why Clustrix?</h4>
+            <p>Clustrix AI Platform is designed to be more than just a chat interface. We provide powerful features that simplify your AI workflow:</p>
+            <ul>
+              <li><strong>Internal Reasoning Engine:</strong> Advanced reasoning capabilities that help AI models think deeper and provide better answers to complex problems.</li>
+              <li><strong>Massive Model Support:</strong> Connect to hundreds of AI models from multiple providers. Switch between them instantly without leaving the app.</li>
+              <li><strong>Web Search Integration:</strong> Get real-time information from the web and combine it with AI reasoning for better answers.</li>
+              <li><strong>File Processing:</strong> Upload documents, spreadsheets, and other files for AI analysis and processing.</li>
+              <li><strong>Project Management:</strong> Organize your chats and files into projects for better context management.</li>
+              <li><strong>Local-First Privacy:</strong> Your data stays on your machine. Optional cloud sync with full control over what gets synced.</li>
+              <li><strong>Multi-Session Chat:</strong> Maintain multiple conversations simultaneously and switch between them seamlessly.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Our Mission</h4>
+            <p>Our mission is simple but powerful: <strong>Make AI accessible, private, and easy to use for everyone.</strong></p>
+            <ul>
+              <li><strong>Simplify the Bridge:</strong> We handle the complexity of connecting to multiple AI providers, managing models, and orchestrating sophisticated workflows. You just focus on what you want to achieve.</li>
+              <li><strong>Privacy First:</strong> Your data belongs to you. We've designed Clustrix AI to store everything locally by default and only sync to the cloud if you choose to. We never collect, sell, or analyze your conversations.</li>
+              <li><strong>User Control:</strong> You decide which AI models to use, where your data is stored, and how to configure your experience. No forced cloud storage. No tracking. No surprises.</li>
+              <li><strong>Open and Transparent:</strong> We believe in open-source development and transparent practices. You can review our code, understand how we work, and contribute to making Clustrix AI better.</li>
+              <li><strong>Accessibility:</strong> We want AI to be accessible to everyone. By supporting multiple providers and models, you're not locked into one ecosystem.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Community and Support</h4>
+            <p>Clustrix AI is actively developed and maintained. If you have questions, find bugs, or want to contribute, please visit the <a href="https://github.com/maszaen/clustrix-ai-platform" target="_blank" class="link">GitHub repository</a>.</p>
+            <p>Whether you're a casual user, developer, or enthusiast, your feedback helps make Clustrix AI better for everyone.</p>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Thank You</h4>
+            <p>Thank you for using Clustrix AI. Your trust means everything to us. Together, we're building a better, more private future for AI.</p>
           </div>
         </div>
       </div>

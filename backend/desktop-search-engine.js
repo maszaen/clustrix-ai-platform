@@ -28,6 +28,37 @@ class DesktopSearchEngine {
     console.log(`Loaded ${this.projectFiles.size} files for searching`);
   }
 
+  listAvailableFiles(rawParams = {}) {
+    // Return list of all available files with metadata
+    const files = [];
+    
+    for (const [fileName, fileData] of this.projectFiles.entries()) {
+      const lines = Array.isArray(fileData.lines) 
+        ? fileData.lines 
+        : String(fileData.content || '').split(/\r?\n/);
+      
+      const sizeInBytes = fileData.content ? Buffer.byteLength(fileData.content, 'utf-8') : 0;
+      const sizeFormatted = sizeInBytes > 1024 * 1024 
+        ? `${(sizeInBytes / (1024 * 1024)).toFixed(2)} MB`
+        : sizeInBytes > 1024
+        ? `${(sizeInBytes / 1024).toFixed(2)} KB`
+        : `${sizeInBytes} bytes`;
+      
+      files.push({
+        fileName,
+        type: fileData.type || 'unknown',
+        lineCount: lines.length,
+        size: sizeInBytes,
+        sizeFormatted
+      });
+    }
+    
+    // Sort by size descending (largest files first - usually most important)
+    files.sort((a, b) => b.size - a.size);
+    
+    return files;
+  }
+
   setSearchConfig(config) {
     if (config && typeof config === 'object') {
       this.searchApiConfig = { ...config };
@@ -67,9 +98,32 @@ class DesktopSearchEngine {
       return [];
     }
 
-    const files = Array.isArray(options.files) && options.files.length > 0
-      ? options.files
-      : Array.from(this.projectFiles.keys());
+    // Support multiple ways to specify files to search:
+    // 1. options.files array (existing)
+    // 2. options.file or options.fileName for single file
+    // 3. options.includePattern for glob pattern (future enhancement)
+    let filesToSearch;
+    
+    if (Array.isArray(options.files) && options.files.length > 0) {
+      filesToSearch = options.files;
+    } else if (options.file || options.fileName) {
+      // Single file filter
+      const targetFile = options.file || options.fileName;
+      filesToSearch = Array.from(this.projectFiles.keys()).filter(fileName => 
+        fileName === targetFile || fileName.endsWith('/' + targetFile)
+      );
+      
+      // If no exact match found, try case-insensitive search
+      if (filesToSearch.length === 0) {
+        const targetLower = targetFile.toLowerCase();
+        filesToSearch = Array.from(this.projectFiles.keys()).filter(fileName => 
+          fileName.toLowerCase() === targetLower || fileName.toLowerCase().endsWith('/' + targetLower)
+        );
+      }
+    } else {
+      // No file filter - search all files
+      filesToSearch = Array.from(this.projectFiles.keys());
+    }
 
     const numericContext = Number(options.contextLines);
     const contextLines = Number.isFinite(numericContext) && numericContext >= 0
@@ -84,8 +138,26 @@ class DesktopSearchEngine {
     const results = [];
 
     const buildContext = (lines, matchIndex) => {
-      const start = Math.max(0, matchIndex - contextLines);
-      const end = Math.min(lines.length, matchIndex + contextLines + 1);
+      // SMART CONTEXT: For function definitions, prioritize AFTER lines (function body)
+      // Detect if match line contains function definition
+      const matchLine = lines[matchIndex] || '';
+      const isFunctionDefinition = /^\s*(async\s+)?(function\s+\w+|const\s+\w+\s*=\s*(?:async\s+)?\(|class\s+\w+)/.test(matchLine);
+      
+      let start, end;
+      
+      if (isFunctionDefinition && contextLines >= 10) {
+        // For functions with large context: prioritize body (more AFTER, less BEFORE)
+        // 20% before, 80% after
+        const beforeLines = Math.floor(contextLines * 0.2);
+        const afterLines = Math.ceil(contextLines * 0.8);
+        start = Math.max(0, matchIndex - beforeLines);
+        end = Math.min(lines.length, matchIndex + afterLines + 1);
+      } else {
+        // Normal symmetric context for small contexts or non-function searches
+        start = Math.max(0, matchIndex - contextLines);
+        end = Math.min(lines.length, matchIndex + contextLines + 1);
+      }
+      
       const snippet = [];
 
       for (let i = start; i < end; i++) {
@@ -96,7 +168,7 @@ class DesktopSearchEngine {
       return snippet.join('\n');
     };
 
-    outer: for (const fileName of files) {
+    outer: for (const fileName of filesToSearch) {
       const fileData = this.projectFiles.get(fileName);
       if (!fileData || !fileData.content) {
         continue;
@@ -138,7 +210,9 @@ class DesktopSearchEngine {
       ? { ...params.options }
       : {};
 
-    const defaultContext = 3;
+    // CRITICAL FIX: Increase default context for function searches
+    // Functions can be long (50-100 lines), need enough context to see full body
+    const defaultContext = 50;  // Increased from 3 to 50
     const defaultMaxResults = 50;
 
     const contextCandidate = Number(options.contextLines ?? defaultContext);
@@ -756,6 +830,7 @@ class DesktopSearchEngine {
       totalFiles: this.projectFiles.size,
       fileTypes: Array.from(new Set(Array.from(this.projectFiles.values()).map(f => f.type))),
       searchCommands: [
+        'listAvailableFiles()',
         'searchPattern(pattern, options)',
         'searchFunctions(functionName)',
         'searchCSS(selector)',
@@ -822,6 +897,9 @@ class DesktopSearchEngine {
 
     const normalizedName = commandName.replace(/[`*]/g, '').trim().toLowerCase();
     const nameMap = {
+      listavailablefiles: 'listAvailableFiles',
+      listfiles: 'listAvailableFiles',
+      getfiles: 'listAvailableFiles',
       searchpattern: 'searchPattern',
       searchfunctions: 'searchFunctions',
       searchcss: 'searchCSS',
@@ -841,6 +919,8 @@ class DesktopSearchEngine {
 
     const execute = () => {
       switch (methodName) {
+        case 'listAvailableFiles':
+          return this.listAvailableFiles(params);
         case 'searchPattern':
           return this.searchPattern(params);
         case 'searchFunctions':

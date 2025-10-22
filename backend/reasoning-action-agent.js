@@ -11,11 +11,17 @@ const CRITICAL_INSTRUCTIONS = `CRITICAL INSTRUCTIONS:
 2. PLAN a comprehensive sequence of search actions - BE THOROUGH, NOT MINIMAL
 3. You MUST create AT LEAST 2-3 different search actions to gather sufficient information
 4. DO NOT create just 1 action - that's insufficient for quality research
-5. For document analysis (especially finding author names, titles, dates):
+5. SMART FILE SELECTION (when files are available):
+   - If you don't know what files are available, START with listAvailableFiles() as your FIRST action
+   - When user mentions specific file (e.g., "check renderer.js"), you MUST list files first to confirm it exists
+   - After listing files, choose relevant files based on query, then plan targeted searches
+   - Use options.file or options.fileName in searchPattern to search specific file only
+   - Example: searchPattern with {"pattern": "async", "options": {"file": "renderer.js"}}
+6. For document analysis (especially finding author names, titles, dates):
    - Use SIMPLE KEYWORDS first,like: "nama", "penulis", "author", "title", "judul", "bab"
    - Avoid overly specific regex patterns like "Nama\\s*:" - they miss variations
    - Try multiple variations: "nama pengarang", "nama penulis", "author name"
-6. For each action specify:
+7. For each action specify:
    - Action type (e.g., "webSearch" atau "searchHTML")
    - Parameters in JSON (mis. {"query": "berita Nepal terbaru"})
    - Why this action helps progress the investigation
@@ -106,7 +112,16 @@ class ReasoningActionAgent {
       `Sending reasoning prompt to AI model: ${sessionState.model?.model || 'unknown'}`);
     
     const reasoningResult = await this.makeAIRequest(reasoningPrompt, sessionId);
-    const reasoningResponse = reasoningResult.content;
+    let reasoningResponse = reasoningResult.content;
+    
+    // CRITICAL FIX: Use content (main response) for parsing, NOT reasoning_content
+    // reasoning_content contains internal thinking with dirty format
+    // content contains clean PLAN/ACTION format that parser expects
+    if (reasoningResult.reasoning_content) {
+      log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+        `Planning included reasoning_content (${reasoningResult.reasoning_content.length} chars) - logged for debugging only`);
+    }
+    
     if (reasoningResult.usage) {
       const usageEntry = {
         stage: 'reasoning-planning',
@@ -331,6 +346,17 @@ class ReasoningActionAgent {
         
         const followupResult = await this.makeAIRequest(followupPrompt, sessionId);
         finalResponse = followupResult.content;
+        
+        // CRITICAL FIX: Parse actions from content (main response), NOT reasoning_content
+        // reasoning_content contains internal thinking with dirty tags like </think>, "SEARCH ACTION COMPLETED", etc
+        // content contains clean ACTION format that parser expects
+        let sourceForParsing = followupResult.content;
+        
+        if (followupResult.reasoning_content) {
+          log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+            `Followup included reasoning_content (${followupResult.reasoning_content.length} chars) - will be used for logging only`);
+        }
+        
         if (followupResult.usage) {
           usageBreakdown.push({
             stage: 'reasoning-followup',
@@ -340,9 +366,9 @@ class ReasoningActionAgent {
           });
         }
         log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
-          `Received followup response (${finalResponse.length} chars):\n---FOLLOWUP RESPONSE START---\n${finalResponse}\n---FOLLOWUP RESPONSE END---`);
+          `Received followup response (${sourceForParsing.length} chars):\n---FOLLOWUP RESPONSE START---\n${sourceForParsing}\n---FOLLOWUP RESPONSE END---`);
         
-        const additionalPlan = this.parseReasoningResponse(finalResponse);
+        const additionalPlan = this.parseReasoningResponse(sourceForParsing);
         log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
           `Parsed additional plan: ${additionalPlan.actions.length} actions`);
         
@@ -427,8 +453,32 @@ class ReasoningActionAgent {
 
     if (!hasText || looksLikePlanOnly) {
       const planText = typeof plan === "string" ? plan : JSON.stringify(plan);
-      const ctx = Array.isArray(sessionState.files) ? sessionState.files.map(f => `${f.name}\n${f.content}`).join("\n\n") : "";
-      const finalPrompt = ["Complete the user's request based on the following plan and project context.","Plan:", String(planText || ""), "Context:", ctx, "Provide a final answer that can be used directly, not a plan."].join("\n\n");
+      
+      // CRITICAL FIX: DO NOT include full file content - it causes 137K token prompts!
+      // Instead, provide file metadata and summary only
+      const fileList = Array.isArray(sessionState.files) 
+        ? sessionState.files.map(f => `- ${f.name} (${f.type}, ${f.size || 'unknown size'})`).join("\n")
+        : "(No files available)";
+      
+      const actionSummary = sessionState.actionHistory.length > 0
+        ? this.prepareActionSummary(sessionState.actionHistory).summaryText
+        : "(No search actions executed)";
+      
+      const finalPrompt = [
+        "Complete the user's request based on the following plan and search results.",
+        "",
+        "PLAN:",
+        String(planText || ""),
+        "",
+        "AVAILABLE FILES:",
+        fileList,
+        "",
+        "SEARCH RESULTS:",
+        actionSummary,
+        "",
+        "Provide a comprehensive final answer based on the plan and search results above. Do NOT request additional searches."
+      ].join("\n");
+      
       const synthesisResult = await this.makeAIRequest(finalPrompt, sessionId);
       const synthesized = synthesisResult.content;
       if (synthesisResult.usage) {
@@ -501,10 +551,48 @@ RESPONSE REQUIREMENTS:
 - If data is truly insufficient (< 10 results), then suggest specific additional searches
 - When a source includes a URL, format it as a Markdown link: [**Summarized Title Max 4 Words**](URL)
 
+CONTEXT COMPLETENESS FLAGS:
+- ✓ [Context: COMPLETE] = Contains full definition with balanced braces, sufficient lines. DO NOT request additional searches.
+- ⚠ [Context: PARTIAL - Multiple fragments] = Results are from DIFFERENT LOCATIONS in same file (e.g., line 100-110, then 500-510). This means you're seeing scattered references, NOT complete definition. Consider requesting broader contextLines.
+- ⚠ [Context: PARTIAL - Incomplete snippets] = Results are truncated or lack complete structure. Consider specific follow-up search.
+- ✗ [Context: INSUFFICIENT] = Very limited data, definitely need more searches.
+
+AVAILABLE SEARCH CAPABILITIES:
+If you need more information, you can ONLY use these exact capabilities (DO NOT invent new ones):
+1. searchPattern(pattern, options) - Search for text pattern with optional contextLines
+   Example: searchPattern with {"pattern": "functionName", "options": {"contextLines": 30, "file": "renderer.js"}}
+2. searchFunctions(functionName) - Find function definitions
+3. searchCSS(selector) - Find CSS selectors
+4. searchHTML(element) - Find HTML elements
+5. searchImports(moduleName) - Find import statements
+6. analyzeFileStructure(fileName) - Get file structure summary
+7. listAvailableFiles() - List all uploaded files
+${sessionState.capabilities?.supportsWebSearch ? '8. webSearch(query, options) - Search the internet\n9. fetchWebPage(url) - Download webpage content' : ''}
+
+CRITICAL: ONLY use capabilities listed above. DO NOT create new capabilities like "searchWithLines", "getFileContent", etc.
+For more context, use searchPattern with higher contextLines (20-80).
+
+SEARCH STRATEGY:
+- If result shows "Multiple fragments from same file", it means snippets are NOT consecutive (separated by many lines)
+- For function definitions: Request higher contextLines (20-80) to get complete function body
+- For scattered references: This is normal for pattern searches, analyze what you have
+- Only request NEW searches for truly different information, not re-searching same topic
+
+HOW TO REQUEST ADDITIONAL SEARCHES:
+If you need more data, use this EXACT format in your response:
+<search>
+capabilityName with {parameters}
+</search>
+
+Example for getting more context:
+<search>
+searchPattern with {"pattern": "functionName", "options": {"contextLines": 50, "file": "renderer.js"}}
+</search>
+
 STRUCTURE YOUR RESPONSE:
 1. Direct findings from the files (be specific and detailed)
 2. Analysis and insights (comprehensive, not speculative)
-3. Only if truly needed: actionable next steps (but prefer giving complete answer now)
+3. Only if truly needed: Use <search>...</search> tags with EXACT capability names listed above
 
 Remember: You have ${totalResults} pieces of data. Use them confidently!`;
   }
@@ -517,12 +605,15 @@ Remember: You have ${totalResults} pieces of data. Use them confidently!`;
       : '- (Tidak ada file proyek yang tersedia, gunakan riset web sebagai sumber utama)';
 
     const capabilityLines = [
+      '- listAvailableFiles(): List all uploaded files with metadata (name, type, size, line count)',
       '- searchPattern(pattern, options): Cari pola teks di seluruh file (mirip grep)',
+      '  * Use options.file or options.fileName to search in specific file only',
+      '  * Example: searchPattern with {"pattern": "async", "options": {"file": "renderer.js"}}',
       '- searchFunctions(functionName): Temukan definisi fungsi',
       '- searchCSS(selector): Temukan selector, class, atau ID CSS',
       '- searchHTML(element): Temukan elemen dan tag HTML',
       '- searchImports(moduleName): Temukan pernyataan import/require',
-      '- analyzeFileStructure(fileName): Ringkas struktur file secara detail'
+      '- analyzeFileStructure(fileName): Ringkas struktur file secara detail (functions, classes, imports, line count)'
     ];
 
     if (sessionState.capabilities?.supportsWebSearch) {
@@ -1056,7 +1147,36 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
 
       const reasonMatch = text.match(/WHY:\s*([\s\S]*)/i);
       if (reasonMatch) {
-        return reasonMatch[1].trim();
+        let reason = reasonMatch[1].trim();
+        
+        // CRITICAL FIX: Stop reason at next action or invalid content
+        const stopPatterns = [
+          /\n\d+\.\s*ACTION:/i,                    // Next numbered action: "2. ACTION:"
+          /\n\s*ACTION:/i,                          // Next plain action: "ACTION:"
+          /\n\s*SEARCH ACTION COMPLETED:/i,        // AI premature synthesis
+          /\n\s*FINAL ANSWER:/i,                   // AI skipping to conclusion
+          /\n\s*Based on these search results/i,   // AI continuing synthesis narrative
+          /\nsekarang\s+kamu/i,                     // User query leaked into reason (Indonesian)
+          /\nnow\s+you/i,                           // User query leaked into reason (English)
+          /\n\n/                                     // Double newline = paragraph break = new section
+        ];
+        
+        for (const pattern of stopPatterns) {
+          const idx = reason.search(pattern);
+          if (idx !== -1) {
+            reason = reason.slice(0, idx).trim();
+            break;
+          }
+        }
+        
+        // Clean up AI thinking tags and user query remnants
+        reason = reason
+          .replace(/<\/?think>/gi, '')           // Remove thinking tags
+          .replace(/\nsekarang kamu.*/gi, '')    // Remove leaked Indonesian user queries
+          .replace(/\nnow you.*/gi, '')          // Remove leaked English user queries
+          .trim();
+        
+        return reason;
       }
 
       return text.trim();
@@ -1065,12 +1185,14 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
     const planSection = extractPlanSection();
 
     if (planSection) {
-      const actionPattern = /(\d+)\.\s*ACTION:\s*[`*]?([A-Za-z0-9_]+)[`*]?\s*with\s*/gi;
+      // Updated regex to handle function names with optional parentheses: listAvailableFiles()
+      const actionPattern = /(\d+)\.\s*ACTION:\s*[`*]?([A-Za-z0-9_]+(?:\(\))?)[`*]?\s*with\s*/gi;
       const matches = Array.from(planSection.matchAll(actionPattern));
 
       for (let i = 0; i < matches.length; i++) {
         const match = matches[i];
-        const actionType = match[2].trim();
+        // Remove parentheses from action type if present (normalize to function name only)
+        const actionType = match[2].trim().replace(/\(\)$/, '');
         const blockStart = match.index ?? 0;
         const blockEnd = i + 1 < matches.length ? matches[i + 1].index : planSection.length;
         const block = planSection.slice(blockStart, blockEnd);
@@ -1113,6 +1235,42 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
       } catch (e) {
       }
     }
+    
+    // CRITICAL FIX: Parse plain ACTION format (without numbering or PLAN header)
+    // Handles followup responses like: "ACTION: searchPattern with {...}\nWHY: ..."
+    if (plan.actions.length === 0) {
+      try {
+        // Match ACTION without numbering: "ACTION: searchPattern with {...}"
+        const plainActionPattern = /ACTION:\s*[`*]?([A-Za-z0-9_]+(?:\(\))?)[`*]?\s*with\s*/gi;
+        const matches = Array.from(response.matchAll(plainActionPattern));
+        
+        for (let i = 0; i < matches.length; i++) {
+          const match = matches[i];
+          const actionType = match[1].trim().replace(/\(\)$/, '');
+          const blockStart = match.index ?? 0;
+          const blockEnd = i + 1 < matches.length ? matches[i + 1].index : response.length;
+          const block = response.slice(blockStart, blockEnd);
+          
+          const afterWith = block.slice(match[0].length).trim();
+          const { paramsSource, remainder } = extractParameters(afterWith);
+          const params = parseActionParams(paramsSource);
+          const reason = extractReason(remainder);
+          
+          // Only add if params are valid
+          if (params && Object.keys(params).length > 0) {
+            plan.actions.push({
+              type: actionType,
+              params,
+              reason,
+              executed: false
+            });
+          }
+        }
+      } catch (e) {
+        // Silent fail - fallback didn't work
+      }
+    }
+    
     const thinkingMatch = response.match(/CURRENT THINKING:\s*(.*?)$/s);
     if (thinkingMatch) {
       plan.thinking = thinkingMatch[1].trim();
@@ -1166,8 +1324,17 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
   limitSearchResults(results, maxLines = 100) {
     if (!Array.isArray(results)) return results;
 
+    // CRITICAL FIX: Increase maxLines for function searches
+    // Functions can be 50-100 lines, need enough budget to show full context
     let totalLines = 0;
     const limitedResults = [];
+    
+    // Check if this is a function search result (has function keyword in first result)
+    const isFunctionSearch = results.length > 0 && results[0].context && 
+      /function\s+\w+|const\s+\w+\s*=\s*\(|class\s+\w+/.test(results[0].context);
+    
+    // Increase budget for function searches
+    const effectiveMaxLines = isFunctionSearch ? 300 : maxLines;
     
     for (const result of results) {
       const snippetSource = result.context || result.snippet || result.preview || result.text || result.content || '';
@@ -1175,15 +1342,21 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
         ? snippetSource.split('\n').length
         : 1;
 
-      if (totalLines + resultLines <= maxLines) {
+      if (totalLines + resultLines <= effectiveMaxLines) {
         limitedResults.push(result);
         totalLines += resultLines;
       } else {
-        limitedResults.push({
-          ...result,
-          context: `[TRUNCATED - Found ${results.length - limitedResults.length} more matches]`,
-          truncated: true
-        });
+        // Only truncate if we already have at least 1 complete result
+        if (limitedResults.length > 0) {
+          limitedResults.push({
+            ...result,
+            context: `[TRUNCATED - Found ${results.length - limitedResults.length} more matches]`,
+            truncated: true
+          });
+        } else {
+          // If first result exceeds limit, still include it (don't lose data)
+          limitedResults.push(result);
+        }
         break;
       }
     }
@@ -1197,7 +1370,135 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
     if (typeof raw !== 'string') {
       return '';
     }
-    return raw.replace(/\s+/g, ' ').trim().slice(0, 280);
+    
+    // IMPROVED FORMATTING: Preserve line breaks and indentation for code readability
+    // DON'T collapse whitespace - preserve code structure!
+    const lines = raw.split('\n');
+    const normalized = lines
+      .filter(line => line.trim().length > 0)  // Remove empty lines
+      .join('\n');
+    
+    // SMART LENGTH: For function definitions, allow MUCH longer snippets
+    // Functions can be 50-100+ lines, need to show complete body
+    const isFunctionSnippet = /^[\s>]*\d+:\s*(async\s+)?(function\s+\w+|const\s+\w+\s*=\s*(?:async\s+)?\(|class\s+\w+)/m.test(normalized);
+    const maxLength = isFunctionSnippet ? 4000 : 1500; // 4000 chars for functions (100 lines), 1500 for others
+    
+    // DON'T truncate if close to limit - better to show complete function
+    if (normalized.length <= maxLength * 1.1) {
+      return normalized;
+    }
+    
+    return normalized.slice(0, maxLength) + '\n... [truncated]';
+  }
+
+  /**
+   * Analyze if search results contain complete/sufficient context
+   * Returns 'COMPLETE', 'PARTIAL', or 'INSUFFICIENT'
+   * 
+   * FIXED: Now checks individual snippets AND their continuity
+   * - Don't naively join all snippets (they might be from different locations!)
+   * - Check if snippets are consecutive (adjacent line numbers)
+   * - For function definitions, require ONE snippet with complete function
+   */
+  analyzeContextCompleteness(items = []) {
+    if (items.length === 0) return 'INSUFFICIENT';
+    
+    // Extract line numbers from snippets to detect continuity
+    const extractLineNumbers = (snippet) => {
+      if (!snippet || typeof snippet !== 'string') return [];
+      const lines = snippet.split('\n');
+      const lineNumbers = [];
+      
+      for (const line of lines) {
+        // Match patterns like "8642:" or ">8642:" at start of line
+        const match = line.match(/^[\s>]*(\d+):/);
+        if (match) {
+          lineNumbers.push(parseInt(match[1], 10));
+        }
+      }
+      return lineNumbers;
+    };
+    
+    // Check each snippet individually for completeness
+    let hasCompleteSnippet = false;
+    let bestSnippetScore = 0;
+    
+    for (const item of items) {
+      const raw = item.snippet || item.context || item.preview || item.text || item.content || '';
+      if (typeof raw !== 'string' || raw.length < 30) continue;
+      
+      const lineNumbers = extractLineNumbers(raw);
+      const lineCount = raw.split('\n').filter(l => l.trim().length > 0).length;
+      
+      // Check for function completeness in THIS snippet
+      const hasFunctionKeyword = /function\s+\w+\s*\(/.test(raw);
+      const hasArrowFunction = /\w+\s*=\s*\([^)]*\)\s*=>/.test(raw);
+      const openBraceCount = (raw.match(/{/g) || []).length;
+      const closeBraceCount = (raw.match(/}/g) || []).length;
+      const hasBalancedBraces = openBraceCount > 0 && openBraceCount === closeBraceCount;
+      
+      // Check if snippet is truncated (ends mid-statement)
+      const lastLine = raw.trim().split('\n').pop() || '';
+      const endsWithIncompleteStatement = 
+        lastLine.endsWith(',') || 
+        lastLine.endsWith('{') ||
+        lastLine.endsWith('(') ||
+        /[a-zA-Z0-9_]$/.test(lastLine) && !lastLine.includes(';') && !lastLine.includes('}');
+      
+      // Score this snippet
+      let score = 0;
+      if (hasFunctionKeyword || hasArrowFunction) score += 3;
+      if (hasBalancedBraces) score += 5;
+      if (lineCount >= 10) score += 2;
+      if (!endsWithIncompleteStatement) score += 2;
+      if (lineNumbers.length >= 10) score += 1; // Has many consecutive lines
+      
+      // High score = complete snippet
+      if (score >= 8) {
+        hasCompleteSnippet = true;
+      }
+      
+      bestSnippetScore = Math.max(bestSnippetScore, score);
+    }
+    
+    // Check if snippets are consecutive (indicates they're from same block)
+    const allLineNumbers = [];
+    for (const item of items) {
+      const raw = item.snippet || item.context || item.preview || item.text || item.content || '';
+      if (typeof raw === 'string') {
+        allLineNumbers.push(...extractLineNumbers(raw));
+      }
+    }
+    
+    allLineNumbers.sort((a, b) => a - b);
+    let hasConsecutiveSnippets = false;
+    if (allLineNumbers.length >= 2) {
+      // Check if most line numbers are consecutive
+      let consecutiveCount = 0;
+      for (let i = 1; i < allLineNumbers.length; i++) {
+        if (allLineNumbers[i] - allLineNumbers[i-1] <= 2) {
+          consecutiveCount++;
+        }
+      }
+      hasConsecutiveSnippets = consecutiveCount / (allLineNumbers.length - 1) > 0.7;
+    }
+    
+    // COMPLETE: One snippet has complete function definition
+    if (hasCompleteSnippet) {
+      return 'COMPLETE';
+    }
+    
+    // PARTIAL: Multiple snippets that might be consecutive
+    if (hasConsecutiveSnippets && bestSnippetScore >= 5) {
+      return 'PARTIAL';
+    }
+    
+    // PARTIAL: Has some meaningful content
+    if (bestSnippetScore >= 3) {
+      return 'PARTIAL';
+    }
+    
+    return 'INSUFFICIENT';
   }
 
   prepareActionSummary(actionHistory = []) {
@@ -1234,6 +1535,43 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
         return;
       }
 
+      // SPECIAL HANDLING: listAvailableFiles returns array of file objects
+      if (action.type === 'listAvailableFiles' && result.results && Array.isArray(result.results)) {
+        const fileList = result.results.map(f => 
+          `  - ${f.fileName} (${f.type}, ${f.lineCount.toLocaleString()} lines, ${f.sizeFormatted})`
+        ).join('\n');
+        
+        summaries.push(`${header}\nRESULTS: Found ${result.results.length} files:\n${fileList}`);
+        return;
+      }
+
+      // SPECIAL HANDLING: analyzeFileStructure returns object, not array
+      if (action.type === 'analyzeFileStructure' && result.results && typeof result.results === 'object' && !Array.isArray(result.results)) {
+        const structResult = result.results;
+        const funcCount = structResult.structure?.functions?.length || 0;
+        const classCount = structResult.structure?.classes?.length || 0;
+        const importCount = structResult.structure?.imports?.length || 0;
+        const lineCount = structResult.lineCount || 0;
+        
+        const summary = [
+          `File: ${structResult.fileName}`,
+          `Type: ${structResult.type}`,
+          `Lines: ${lineCount.toLocaleString()}`,
+          funcCount > 0 ? `Functions: ${funcCount}` : null,
+          classCount > 0 ? `Classes: ${classCount}` : null,
+          importCount > 0 ? `Imports: ${importCount}` : null,
+        ].filter(Boolean).join(', ');
+        
+        // Include top 5 functions as examples
+        const topFunctions = structResult.structure?.functions?.slice(0, 5) || [];
+        const funcList = topFunctions.length > 0 
+          ? '\n  Top functions:\n' + topFunctions.map(f => `    - Line ${f.line}: ${f.content}`).join('\n')
+          : '';
+        
+        summaries.push(`${header}\nRESULTS: ${summary}${funcList}${funcCount > 5 ? `\n  ...and ${funcCount - 5} more functions` : ''}`);
+        return;
+      }
+
       const items = Array.isArray(result.results) ? result.results : [];
       if (items.length === 0) {
         summaries.push(`${header}\nRESULT: Tidak menemukan informasi relevan (0 hasil)`);
@@ -1253,15 +1591,42 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
           webSources.push({ url: item.url, snippet });
         }
 
-        return `  - ${label}${urlNote}${errorNote}: ${snippet}`;
-      }).join('\n');
+        // IMPROVED: Multi-line snippets get indentation for better readability
+        const snippetLines = snippet.split('\n');
+        if (snippetLines.length > 1) {
+          const indentedSnippet = snippetLines.map((line, i) => 
+            i === 0 ? line : `    ${line}`
+          ).join('\n');
+          return `  - ${label}${urlNote}${errorNote}:\n    ${indentedSnippet}`;
+        } else {
+          return `  - ${label}${urlNote}${errorNote}: ${snippet}`;
+        }
+      }).join('\n\n'); // Added extra newline between results
+
+      // SMART CONTEXT DETECTION: Analyze if results provide complete context
+      const completeness = this.analyzeContextCompleteness(items);
+      let completenessNote = '';
+      
+      if (completeness === 'COMPLETE') {
+        completenessNote = ' [✓ Context: COMPLETE - Contains full definition, no additional search needed]';
+      } else if (completeness === 'PARTIAL') {
+        // Check if snippets are from different locations
+        const fileNames = new Set(items.map(item => item.fileName).filter(Boolean));
+        if (fileNames.size === 1 && items.length > 1) {
+          completenessNote = ' [⚠ Context: PARTIAL - Multiple fragments from same file, may need broader search]';
+        } else {
+          completenessNote = ' [⚠ Context: PARTIAL - Incomplete snippets, consider requesting more context]';
+        }
+      } else {
+        completenessNote = ' [✗ Context: INSUFFICIENT - Very limited data]';
+      }
 
       // Log optimization note
       const totalItems = items.length;
       if (totalItems > 3) {
-        summaries.push(`${header}\nRESULTS: (Showing top 3 of ${totalItems} results)\n${formattedItems}`);
+        summaries.push(`${header}\nRESULTS: (Showing top 3 of ${totalItems} results)${completenessNote}\n${formattedItems}`);
       } else {
-        summaries.push(`${header}\nRESULTS:\n${formattedItems}`);
+        summaries.push(`${header}\nRESULTS:${completenessNote}\n${formattedItems}`);
       }
     });
 
@@ -1273,9 +1638,23 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
 
   
   shouldRequireFollowup(action, result) {
+    // Always require followup if no results
     if (Array.isArray(result) && result.length === 0) {
       return true;
     }
+    
+    // CRITICAL FIX: Check completeness for search actions that return snippets
+    // If context is PARTIAL or INSUFFICIENT, AI should request more data
+    if (Array.isArray(result) && result.length > 0) {
+      const completeness = this.analyzeContextCompleteness(result);
+      
+      // If PARTIAL or INSUFFICIENT, require followup so AI can request broader search
+      if (completeness === 'PARTIAL' || completeness === 'INSUFFICIENT') {
+        return true;
+      }
+    }
+    
+    // Too many results also needs followup for refinement
     if (Array.isArray(result) && result.length > 50) {
       return true;
     }
@@ -1292,9 +1671,18 @@ CURRENT THINKING: [Apa yang Anda harapkan dari langkah di atas dan bagaimana itu
     let resultsText = '';
     if (actionResult.success && actionResult.results) {
       if (Array.isArray(actionResult.results)) {
-        resultsText = actionResult.results.map(r => 
-          `FILE: ${r.fileName}:${r.lineNumber}\n${r.context}`
-        ).join('\n---\n');
+        // Handle different result types properly
+        if (action.type === 'listAvailableFiles') {
+          // File listing results have fileName, size, extension, lines
+          resultsText = actionResult.results.map(r => 
+            `FILE: ${r.fileName} (${r.size || 'unknown'} bytes, ${r.lines || '?'} lines)`
+          ).join('\n');
+        } else {
+          // Search results have fileName, lineNumber, context
+          resultsText = actionResult.results.map(r => 
+            `FILE: ${r.fileName}:${r.lineNumber}\n${r.context}`
+          ).join('\n---\n');
+        }
       } else {
         resultsText = JSON.stringify(actionResult.results, null, 2);
       }
@@ -1310,6 +1698,30 @@ ${resultsText}
 REMAINING ACTIONS: ${originalPlan.actions.length - actionIndex - 1}
 
 Based on these search results, continue your analysis. 
+
+AVAILABLE CAPABILITIES for additional searches:
+1. searchPattern(pattern, options) - Search for text/regex patterns across files
+   Example: searchPattern with {"pattern": "functionName", "options": {"file": "specific.js", "contextLines": 5}}
+   
+2. searchFunctions(functionName) - Find function definitions
+   Example: searchFunctions with {"functionName": "myFunction"}
+   
+3. searchCSS(selector) - Find CSS selectors
+   Example: searchCSS with {"selector": ".my-class"}
+   
+4. searchHTML(element) - Find HTML elements
+   Example: searchHTML with {"element": "div.container"}
+   
+5. searchImports(moduleName) - Find import/require statements
+   Example: searchImports with {"moduleName": "express"}
+   
+6. analyzeFileStructure(fileName) - Get file outline/structure
+   Example: analyzeFileStructure with {"fileName": "app.js"}
+   
+7. listAvailableFiles() - List all project files with metadata
+   Example: listAvailableFiles with {}
+
+DO NOT invent new capabilities like "searchInFile", "searchWithLines", "getFileContent" - use ONLY the capabilities listed above!
 
 CRITICAL INSTRUCTIONS:
 1. If the previous action returned 0 or very few results, you MUST try different search strategies
@@ -1511,6 +1923,10 @@ Remember: Quality answers require thorough research. Don't settle for incomplete
                         jsonResponse?.message?.content ||
                         jsonResponse?.output_text || '';
         
+        // CRITICAL FIX: Extract reasoning_content from GLM-4.6 thinking mode responses
+        // Some AI models (like GLM-4.6) put ACTION requests in reasoning_content field
+        const reasoningContent = jsonResponse?.choices?.[0]?.message?.reasoning_content || '';
+        
         // Extract usage data - handle both OpenAI and Gemini formats
         let usage = jsonResponse?.usage || jsonResponse?.usageMetadata || null;
         
@@ -1526,7 +1942,12 @@ Remember: Quality answers require thorough research. Don't settle for incomplete
         log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
           `Extracted content (${content.length} chars) and usage:\n---AI CONTENT START---\n${content}\n---AI CONTENT END---\nUsage: ${JSON.stringify(usage)}`);
         
-        return { content, usage };
+        if (reasoningContent) {
+          log(logHelper, 'REASONING_ACTION_AGENT', 'makeAIRequest',
+            `Found reasoning_content (${reasoningContent.length} chars):\n---REASONING CONTENT START---\n${reasoningContent}\n---REASONING CONTENT END---`);
+        }
+        
+        return { content, reasoning_content: reasoningContent, usage };
       } catch (error) {
         lastError = error;
         const status = extractStatusCode(error);

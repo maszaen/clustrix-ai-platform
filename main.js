@@ -2415,67 +2415,58 @@ ipcMain.handle('artifacts:save', async (_evt, artifacts) => {
 });
 const projectsFile = path.join(app.getPath('userData'), 'projects.json');
 
-ipcMain.handle('projects:load', async () => {
-  try{
+// HELPER: Centralized project loading logic with SQLite-first approach
+async function loadProjectsFromStorage() {
+  try {
+    // Try SQLite first
     if (useSQLite && db) {
       const projects = db.getAllProjects();
       
       // ONLY migrate for internal database (backward compatibility)
-      // DO NOT migrate for cloud database (should start fresh)
-      // CRITICAL FIX: Use db.isCloudDatabase property instead of path check
       const isCloudDatabase = db && db.isCloudDatabase;
       
-      log('MIGRATION', 1, 'projects', 'Checking migration eligibility', {
-        dbPath: db?.dbPath,
-        isCloudDatabase,
-        isEmpty: projects.length === 0,
-        jsonFileExists: fs.existsSync(projectsFile)
-      });
-      
-      if (projects.length === 0 && !isCloudDatabase) {
-        // Migrate from JSON if database is empty
-        if (fs.existsSync(projectsFile)) {
-          try {
-            const content = fs.readFileSync(projectsFile, 'utf-8');
-            const parsed = JSON.parse(content || '[]');
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              log('MIGRATION', 1, 'projects', `Migrating ${parsed.length} projects from JSON to SQLite (internal database only)`);
-              db.transaction(() => {
-                for (const project of parsed) {
-                  db.saveProject(project);
-                  
-                  if (project.files && Array.isArray(project.files)) {
-                    for (const file of project.files) {
-                      db.saveProjectFile(project.id, file);
-                    }
+      if (projects.length === 0 && !isCloudDatabase && fs.existsSync(projectsFile)) {
+        // Migrate from JSON if database is empty (internal DB only)
+        try {
+          const content = fs.readFileSync(projectsFile, 'utf-8');
+          const parsed = JSON.parse(content || '[]');
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            log('MIGRATION', 1, 'loadProjectsFromStorage', `Migrating ${parsed.length} projects from JSON to SQLite`);
+            db.transaction(() => {
+              for (const project of parsed) {
+                db.saveProject(project);
+                if (project.files && Array.isArray(project.files)) {
+                  for (const file of project.files) {
+                    db.saveProjectFile(project.id, file);
                   }
                 }
-              });
-              // Reload from database after migration
-              const migratedProjects = db.getAllProjects();
-              return migratedProjects.map(p => {
-                const files = db.getProjectFiles(p.id);
-                return {
-                  id: p.id,
-                  name: p.name,
-                  description: p.description,
-                  created_at: new Date(p.created_at).toISOString(),
-                  updated_at: new Date(p.updated_at).toISOString(),
-                  isFavorite: p.is_favorite === 1,
-                  files: files.map(f => ({
-                    name: f.name,
-                    type: f.type,
-                    size: f.size,
-                    content: Buffer.from(f.content).toString('base64')
-                  }))
-                };
-              });
-            }
-          } catch (e) {
-            log('MIGRATION', 4, 'projects', 'Failed to migrate projects from JSON', e);
+              }
+            });
+            // Reload from database after migration
+            return db.getAllProjects().map(p => {
+              const files = db.getProjectFiles(p.id);
+              return {
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                created_at: new Date(p.created_at).toISOString(),
+                updated_at: new Date(p.updated_at).toISOString(),
+                isFavorite: p.is_favorite === 1,
+                files: files.map(f => ({
+                  name: f.name,
+                  type: f.type,
+                  size: f.size,
+                  content: Buffer.from(f.content).toString('base64')
+                }))
+              };
+            });
           }
+        } catch (e) {
+          log('MIGRATION', 4, 'loadProjectsFromStorage', 'Failed to migrate projects from JSON', e);
         }
       }
+      
+      // Return projects from SQLite
       return projects.map(p => {
         const files = db.getProjectFiles(p.id);
         return {
@@ -2489,17 +2480,28 @@ ipcMain.handle('projects:load', async () => {
             name: f.name,
             type: f.type,
             size: f.size,
-            content: f.content.toString('utf-8')  // Return as plain text like JSON format
+            content: f.content.toString('utf-8')
           }))
         };
       });
     }
+    
+    // Fallback to JSON if SQLite not available
     if (!fs.existsSync(projectsFile)) return [];
     const content = fs.readFileSync(projectsFile, 'utf-8');
     const parsed = JSON.parse(content || '[]');
     return Array.isArray(parsed) ? parsed : [];
-  }catch(e){
-    log('projects load error', e);
+  } catch (e) {
+    log('PROJECT_LOAD', 4, 'loadProjectsFromStorage', 'Failed to load projects', e);
+    return [];
+  }
+}
+
+ipcMain.handle('projects:load', async () => {
+  try {
+    return await loadProjectsFromStorage();
+  } catch (e) {
+    log('PROJECT_LOAD', 4, 'projects:load', 'Failed', e);
     return [];
   }
 });
@@ -2773,7 +2775,7 @@ function runStandardStreaming(event, payload) {
           let projectFiles = [];
           if (session.projectId) {
             try {
-              const projects = JSON.parse(fs.readFileSync(projectsFile, 'utf-8'));
+              const projects = await loadProjectsFromStorage();
               const project = projects.find(p => p.id === session.projectId);
               if (project && project.files) {
                 projectFiles = project.files;
@@ -2911,7 +2913,7 @@ function runStandardStreaming(event, payload) {
             
             if (session.type === 'project' && session.projectId) {
               try {
-                const projects = JSON.parse(fs.readFileSync(projectsFile, 'utf-8'));
+                const projects = await loadProjectsFromStorage();
                 const project = projects.find(p => p.id === session.projectId);
                 if (project && project.files) {
                   availableFiles = project.files;
@@ -3089,7 +3091,7 @@ function runStandardStreaming(event, payload) {
         let filesForAI = session.uploadedFiles || [];
         if (session.type === 'project' && session.projectId) {
           try {
-            const projects = JSON.parse(fs.readFileSync(projectsFile, 'utf-8'));
+            const projects = await loadProjectsFromStorage();
             const project = projects.find(p => p.id === session.projectId);
             if (project && project.files) {
               filesForAI = project.files;

@@ -18,6 +18,7 @@
     <script src="https://resource.trickle.so/vendor_lib/unpkg/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://resource.trickle.so/vendor_lib/unpkg/lucide-static@0.516.0/font/lucide.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 
     <style type="text/tailwindcss">
     @layer theme {
@@ -30,14 +31,14 @@
             --text-primary: #ffffff;
             --text-secondary: #94a3b8;
             --gradient-start: #0e4bae;
-            --gradient-end: #2c6dd6;
+            --gradient-end: #3880f4ff;
             --blur-dark-blue: #1e3a8a;
         }
     }
 
     @layer base {
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-family: 'Default', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background-color: var(--bg-dark);
             color: var(--text-primary);
         }
@@ -48,6 +49,10 @@
     }
 
     @layer utilities {
+        strong, b, .font-bold, .font-semibold {
+            font-family: 'AI_Text_Bold', 'Default', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        
         @keyframes float {
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-20px); }
@@ -63,10 +68,10 @@
             50% { background-position: 100% 50%; }
         }
         
-        @keyframes slide-up {
+        @keyframes fadeinslideup {
             from {
                 opacity: 0;
-                transform: translateY(30px);
+                transform: translateY(40px);
             }
             to {
                 opacity: 1;
@@ -87,8 +92,13 @@
             animation: gradient-shift 8s ease infinite;
         }
         
-        .animate-slide-up {
-            animation: slide-up 0.6s ease-out forwards;
+        .fade-in-up {
+            opacity: 0;
+            transform: translateY(40px);
+        }
+        
+        .fade-in-up.visible {
+            animation: fadeinslideup 0.8s ease-out forwards;
         }
         
         .blur-light {
@@ -102,7 +112,7 @@
 
     @layer components {
         .gradient-text {
-            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            background: linear-gradient(135deg, var(--gradient-start) 10%, #1d5cc2 30%, var(--gradient-end) 70%);
             background-size: 200% 200%;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -159,14 +169,15 @@
         }
         
         .feature-card {
-            backdrop-filter: blur(20px);
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
+            background: var(--bg-dark)/80;
+            backdrop-filter: blur(16px);
             border-radius: 1.5rem;
             padding: 2rem;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.1);
             position: relative;
             overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         }
         
         .feature-card::before {
@@ -188,8 +199,8 @@
         .feature-card:hover {
             transform: translateY(-8px) scale(1.02);
             box-shadow: 0 25px 50px rgba(14, 75, 174, 0.3);
-            border-color: rgba(255, 255, 255, 0.3);
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.08));
+            border-color: rgba(255, 255, 255, 0.2);
+            background: var(--bg-dark)/90;
         }
         
         .tech-badge {
@@ -213,8 +224,46 @@
 </head>
 <body>
     <div id="root"></div>
+    
+    <script>
+      // Intersection Observer for scroll animations
+      document.addEventListener('DOMContentLoaded', () => {
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        }, {
+          threshold: 0.1,
+          rootMargin: '0px'
+        });
+
+        // Observe all elements with fade-in-up class
+        const animatedElements = document.querySelectorAll('.fade-in-up');
+        animatedElements.forEach(el => observer.observe(el));
+        
+        // Re-observe on dynamic content
+        const mutationObserver = new MutationObserver(() => {
+          document.querySelectorAll('.fade-in-up:not(.visible)').forEach(el => {
+            if (!el.dataset.observed) {
+              observer.observe(el);
+              el.dataset.observed = 'true';
+            }
+          });
+        });
+        
+        mutationObserver.observe(document.body, {
+          childList: true,
+          subtree: true
+        });
+      });
+    </script>
+    
     <script type="text/babel" src="components/Navigation.js"></script>
     <script type="text/babel" src="components/Hero.js"></script>
+    <script type="text/babel" src="components/PreviewSection.js"></script>
     <script type="text/babel" src="components/Features.js"></script>
     <script type="text/babel" src="components/TechStack.js"></script>
     <script type="text/babel" src="components/CallToAction.js"></script>

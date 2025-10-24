@@ -17,6 +17,7 @@
     <script src="https://resource.trickle.so/vendor_lib/unpkg/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://resource.trickle.so/vendor_lib/unpkg/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
     <link href="https://resource.trickle.so/vendor_lib/unpkg/lucide-static@0.516.0/font/lucide.css" rel="stylesheet">
 
     <style type="text/tailwindcss">
@@ -230,110 +231,110 @@
                 <div className="min-h-screen">
                     <main className="pt-0">
                         <div className="max-w-4xl mx-auto px-6 py-20">
-                            <div className="mb-16">
+                            <div className="mb-1 ml-5">
                                 <a href="index.html" className="text-white hover:text-gray-300 mb-8 inline-block text-lg">← Back to Home</a>
                             </div>
 
                             <div className="space-y-0">
                                 <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">Pendahuluan</h2>
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">Introduction</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed">
-                                        Kami di Clustrix AI Platform ("kami", "tim kami", atau "layanan") berkomitmen untuk melindungi privasi Anda. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, melindungi, dan membagikan informasi Anda ketika Anda menggunakan aplikasi desktop kami.
+                                        At Clustrix AI Platform ("we", "our team", or "the service"), we are committed to protecting your privacy. This Privacy Policy explains how we collect, use, protect, and share your information when you use our desktop application.
                                     </p>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mt-4">
-                                        Aplikasi Clustrix adalah software open-source yang didistribusikan di bawah lisensi MIT. Kami percaya pada transparansi dan kontrol pengguna atas data mereka.
+                                        Clustrix is an open-source software distributed under the MIT license. We believe in transparency and user control over their data.
                                     </p>
                                 </div>
 
                                 <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">1. Pengumpulan Data</h2>
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">1. Data Collection</h2>
 
-                                    <h3 className="text-xl font-semibold mb-3 text-white">A. Data yang Disimpan Lokal</h3>
+                                    <h3 className="text-xl font-semibold mb-3 text-white">A. Locally Stored Data</h3>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
-                                        Sebagian besar data Anda disimpan <strong className="text-white">secara lokal di perangkat Anda</strong> dan tidak pernah dikirim ke server kami:
+                                        Most of your data is stored <strong className="text-white">locally on your device</strong> and is never sent to our servers:
                                     </p>
                                     <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
-                                        <li><strong className="text-white">Chat History:</strong> Riwayat percakapan disimpan di database lokal (SQLite)</li>
-                                        <li><strong className="text-white">File Uploads:</strong> File yang Anda upload diproses secara lokal</li>
-                                        <li><strong className="text-white">Settings & Configuration:</strong> Preferensi model, API keys, dan konfigurasi lainnya tersimpan lokal</li>
-                                        <li><strong className="text-white">Vector Store:</strong> Embeddings untuk memory disimpan lokal tanpa API calls</li>
-                                        <li><strong className="text-white">Project Data:</strong> Proyek dan session data tersimpan lokal</li>
+                                        <li><strong className="text-white">Chat History:</strong> Conversation history stored in local database (SQLite)</li>
+                                        <li><strong className="text-white">File Uploads:</strong> Files you upload are processed locally</li>
+                                        <li><strong className="text-white">Settings & Configuration:</strong> Model preferences, API keys, and other configurations stored locally</li>
+                                        <li><strong className="text-white">Vector Store:</strong> Embeddings for memory stored locally without API calls</li>
+                                        <li><strong className="text-white">Project Data:</strong> Projects and session data stored locally</li>
                                     </ul>
 
-                                    <h3 className="text-xl font-semibold mb-3 mt-6 text-white">B. Data yang Dikirim ke Pihak Ketiga (Opsional)</h3>
+                                    <h3 className="text-xl font-semibold mb-3 mt-6 text-white">B. Data Sent to Third Parties (Optional)</h3>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
-                                        Ketika Anda mengonfigurasi API keys atau mengaktifkan fitur tertentu, data berikut mungkin dikirim ke pihak ketiga:
+                                        When you configure API keys or enable certain features, the following data may be sent to third parties:
                                     </p>
                                     <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
-                                        <li><strong className="text-white">AI Provider APIs:</strong> Prompt dan respons dikirim ke OpenRouter, Groq, Gemini, Z AI, atau provider custom yang Anda pilih</li>
-                                        <li><strong className="text-white">Web Search:</strong> Query pencarian dikirim ke SerpAPI atau Google Search API (jika diaktifkan)</li>
-                                        <li><strong className="text-white">File Processing:</strong> Konten file dikirim ke AI providers untuk analisis (hanya jika Anda memilih untuk menggunakan fitur tersebut)</li>
-                                    </ul>
-                                </div>
-
-                                <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">2. Penggunaan Data</h2>
-                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
-                                        Data Anda digunakan secara eksklusif untuk menyediakan fungsionalitas aplikasi:
-                                    </p>
-                                    <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
-                                        <li>Menyediakan layanan AI chat dan reasoning</li>
-                                        <li>Menyimpan riwayat percakapan untuk konteks</li>
-                                        <li>Memproses file yang Anda upload untuk analisis</li>
-                                        <li>Mempertahankan pengaturan dan preferensi Anda</li>
-                                        <li>Meningkatkan performa aplikasi melalui cache lokal</li>
+                                        <li><strong className="text-white">AI Provider APIs:</strong> Prompts and responses sent to OpenRouter, Groq, Gemini, Z AI, or your chosen custom provider</li>
+                                        <li><strong className="text-white">Web Search:</strong> Search queries sent to SerpAPI or Google Search API (if enabled)</li>
+                                        <li><strong className="text-white">File Processing:</strong> File content sent to AI providers for analysis (only if you choose to use these features)</li>
                                     </ul>
                                 </div>
 
                                 <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">3. Keamanan Data</h2>
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">2. Data Usage</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
-                                        Kami mengimplementasikan langkah-langkah keamanan berikut:
+                                        Your data is used exclusively to provide application functionality:
                                     </p>
                                     <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
-                                        <li><strong className="text-white">Enkripsi Lokal:</strong> Semua data sensitif dienkripsi menggunakan AES-256</li>
-                                        <li><strong className="text-white">Tidak Ada Server:</strong> Tidak ada data yang dikirim ke server kami</li>
-                                        <li><strong className="text-white">Kontrol Pengguna:</strong> Anda memiliki kontrol penuh atas data Anda</li>
-                                        <li><strong className="text-white">Open Source:</strong> Kode dapat diaudit oleh komunitas</li>
+                                        <li>Providing AI chat and reasoning services</li>
+                                        <li>Storing conversation history for context</li>
+                                        <li>Processing files you upload for analysis</li>
+                                        <li>Maintaining your settings and preferences</li>
+                                        <li>Improving application performance through local caching</li>
                                     </ul>
                                 </div>
 
                                 <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">4. Hak Anda</h2>
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">3. Data Security</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
-                                        Sebagai pengguna, Anda memiliki hak berikut:
+                                        We implement the following security measures:
                                     </p>
                                     <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
-                                        <li><strong className="text-white">Akses:</strong> Melihat semua data yang disimpan secara lokal</li>
-                                        <li><strong className="text-white">Penghapusan:</strong> Menghapus data kapan saja melalui aplikasi</li>
-                                        <li><strong className="text-white">Ekspor:</strong> Mengekspor data Anda dalam format yang dapat dibaca</li>
-                                        <li><strong className="text-white">Kontrol:</strong> Mengelola API keys dan pengaturan privasi</li>
+                                        <li><strong className="text-white">Local Encryption:</strong> All sensitive data is encrypted using AES-256</li>
+                                        <li><strong className="text-white">No Servers:</strong> No data is sent to our servers</li>
+                                        <li><strong className="text-white">User Control:</strong> You have full control over your data</li>
+                                        <li><strong className="text-white">Open Source:</strong> Code can be audited by the community</li>
                                     </ul>
                                 </div>
 
                                 <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">5. Cookies dan Tracking</h2>
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">4. Your Rights</h2>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
+                                        As a user, you have the following rights:
+                                    </p>
+                                    <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
+                                        <li><strong className="text-white">Access:</strong> View all data stored locally</li>
+                                        <li><strong className="text-white">Deletion:</strong> Delete data anytime through the application</li>
+                                        <li><strong className="text-white">Export:</strong> Export your data in readable format</li>
+                                        <li><strong className="text-white">Control:</strong> Manage API keys and privacy settings</li>
+                                    </ul>
+                                </div>
+
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">5. Cookies and Tracking</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed">
-                                        Aplikasi desktop ini tidak menggunakan cookies atau tracking online. Semua fungsionalitas berjalan secara offline dan lokal di perangkat Anda.
+                                        This desktop application does not use cookies or online tracking. All functionality runs offline and locally on your device.
                                     </p>
                                 </div>
 
                                 <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">6. Perubahan Kebijakan</h2>
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">6. Policy Changes</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed">
-                                        Kami akan memberitahu Anda tentang perubahan signifikan pada kebijakan privasi ini melalui pembaruan aplikasi atau dokumentasi.
+                                        We will notify you of significant changes to this privacy policy through application updates or documentation.
                                     </p>
                                 </div>
 
                                 <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">7. Hubungi Kami</h2>
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">7. Contact Us</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
-                                        Jika Anda memiliki pertanyaan tentang kebijakan privasi ini:
+                                        If you have questions about this privacy policy:
                                     </p>
                                     <div className="bg-[var(--bg-card)] rounded-lg p-6 border border-white/10">
                                         <p className="text-[var(--text-secondary)] mb-2"><strong className="text-white">Email:</strong> exqeon@gmail.com</p>
-                                        <p className="text-[var(--text-secondary)] mb-2"><strong className="text-white">GitHub:</strong> Repository open source untuk audit kode</p>
-                                        <p className="text-[var(--text-secondary)]"><strong className="text-white">Discord:</strong> Komunitas untuk diskusi dan dukungan</p>
+                                        <p className="text-[var(--text-secondary)] mb-2"><strong className="text-white">GitHub:</strong> Open source repository for code audit</p>
+                                        <p className="text-[var(--text-secondary)]"><strong className="text-white">Discord:</strong> Community for discussions and support</p>
                                     </div>
                                 </div>
                             </div>

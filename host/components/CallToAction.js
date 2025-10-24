@@ -2,13 +2,12 @@ function CallToAction() {
   try {
     return (
       <section 
-        className="py-20 px-6 relative"
+        className="py-20 px-6 relative border-t border-white/10 "
         data-name="cta" 
         data-file="components/CallToAction.js"
       >
-        <div className="blur-light bg-[var(--blur-dark-blue)] w-96 h-96 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse-glow"></div>
         
-        <div className="max-w-4xl mx-auto text-center relative z-10">
+        <div className="max-w-4xl mx-auto text-center relative z-10 fade-in-up">
           <h2 className="text-4xl md:text-5xl font-bold mb-6 text-white">
             Ready to Get Started?
           </h2>

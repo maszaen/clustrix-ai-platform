@@ -1,5 +1,6 @@
 function Features() {
   try {
+    const colors = ['#45aa99', '#5bad80', '#6fad70', '#80ad60', '#90ad50', '#a0ad40', '#b0ad30', '#c0ad20', '#d0ad10', '#e0ad00', '#f0ad00', '#ffad00'];
     const features = [
       { icon: 'M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.18l7.5 3.75v7.54L12 19.82l-7.5-3.75V7.93L12 4.18z', title: 'Multi-Agent Orchestration', description: 'Coordinate multiple AI agents for complex tasks' },
       { icon: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z', title: 'RE+ACT Reasoning', description: 'Advanced reasoning with reflection and action capabilities' },
@@ -25,7 +26,7 @@ function Features() {
         <div className="blur-light bg-[var(--blur-dark-blue)] w-96 h-96 top-1/4 right-0 animate-pulse-glow"></div>
         
         <div className="max-w-7xl mx-auto relative z-10">
-          <div className="text-center mb-16">
+          <div className="text-center mb-16 fade-in-up">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white">Key Features</h2>
             <p className="text-xl text-[var(--text-secondary)]">
               Everything you need in one powerful platform
@@ -36,15 +37,10 @@ function Features() {
             {features.map((feature, index) => (
               <div 
                 key={index} 
-                className="feature-card"
-                style={{
-                  animation: 'slide-up 0.6s ease-out forwards',
-                  animationDelay: `${index * 0.1}s`,
-                  opacity: 0
-                }}
+                className="feature-card fade-in-up"
               >
                 <div className="mb-4">
-                  <svg className="w-12 h-12 text-[var(--accent-blue)]" viewBox="0 0 24 24" fill="currentColor">
+                  <svg className="w-12 h-12" style={{ color: colors[index] }} viewBox="0 0 24 24" fill="currentColor">
                     <path d={feature.icon}/>
                   </svg>
                 </div>

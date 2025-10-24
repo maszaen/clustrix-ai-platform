@@ -3,7 +3,7 @@ class ErrorBoundary extends React.Component {
     super(props);
     this.state = { hasError: false, error: null };
   }
-
+  
   static getDerivedStateFromError(error) {
     return { hasError: true, error };
   }
@@ -40,6 +40,7 @@ function App() {
       <div className="min-h-screen" data-name="app" data-file="app.js">
         <Navigation />
         <Hero />
+        <PreviewSection />
         <Features />
         <TechStack />
         <CallToAction />

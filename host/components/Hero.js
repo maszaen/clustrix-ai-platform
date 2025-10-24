@@ -17,7 +17,7 @@ function Hero() {
         <div className="absolute inset-0 bg-gradient-to-b from-blue-900/10 via-transparent to-transparent"></div>
         
         <div className="max-w-5xl mx-auto text-center relative z-10">
-          <div className="inline-flex items-center gap-2 backdrop-blur-xl bg-white/10 px-4 py-2 rounded-full border border-white/20 mb-8 animate-slide-up">
+          <div className="inline-flex items-center gap-2 backdrop-blur-xl bg-white/10 px-4 py-2 rounded-full border border-white/20 mb-8">
             <svg className="w-6 h-6 text-[var(--accent-blue)]" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2L4 7v10l8 5 8-5V7l-8-5zm0 2.18l5.5 3.44v6.76L12 17.82l-5.5-3.44V7.62L12 4.18z"/>
               <path d="M12 8.5l-4 2.5v5l4 2.5 4-2.5v-5l-4-2.5z"/>
@@ -25,18 +25,18 @@ function Hero() {
             <span className="text-sm font-semibold">Open Source AI Platform</span>
           </div>
           
-          <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight animate-slide-up" style={{animationDelay: '0.1s'}}>
+          <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
             <span className="gradient-text">Advanced AI</span>
             <br />
             Desktop Platform
           </h1>
           
-          <p className="text-xl text-[var(--text-secondary)] mb-10 max-w-3xl mx-auto animate-slide-up" style={{animationDelay: '0.2s'}}>
+          <p className="text-xl text-[var(--text-secondary)] mb-10 max-w-3xl mx-auto">
             Harness the power of multiple AI models with advanced reasoning, web search, 
             file processing, and secure local execution. Built for developers and power users.
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16 animate-slide-up" style={{animationDelay: '0.3s'}}>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
             <a 
               href="https://drive.google.com/file/d/your-file-id/view" 
               target="_blank"
@@ -56,18 +56,20 @@ function Hero() {
             </button>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <div className="text-center backdrop-blur-lg bg-white/10 rounded-2xl p-6 border border-white/20 animate-slide-up" style={{animationDelay: '0.4s'}}>
-              <div className="text-4xl font-bold gradient-text mb-2">12+</div>
-              <div className="text-[var(--text-secondary)]">AI Models</div>
-            </div>
-            <div className="text-center backdrop-blur-lg bg-white/10 rounded-2xl p-6 border border-white/20 animate-slide-up" style={{animationDelay: '0.5s'}}>
-              <div className="text-4xl font-bold gradient-text mb-2">100%</div>
-              <div className="text-[var(--text-secondary)]">Open Source</div>
-            </div>
-            <div className="text-center backdrop-blur-lg bg-white/10 rounded-2xl p-6 border border-white/20 animate-slide-up" style={{animationDelay: '0.6s'}}>
-              <div className="text-4xl font-bold gradient-text mb-2">0ms</div>
-              <div className="text-[var(--text-secondary)]">Local Latency</div>
+          <div className="max-w-4xl mx-auto">
+            <div className="backdrop-blur-lg bg-white/10 rounded-2xl p-6 border border-white/20 grid grid-cols-1 md:grid-cols-3">
+              <div className="text-center md:border-r md:border-white/20 md:last:border-r-0 py-4 md:py-0">
+                <div className="text-4xl font-bold text-white mb-2">12+</div>
+                <div className="text-[var(--text-secondary)]">AI Models</div>
+              </div>
+              <div className="text-center md:border-r md:border-white/20 md:last:border-r-0 py-4 md:py-0">
+                <div className="text-4xl font-bold text-white mb-2">100%</div>
+                <div className="text-[var(--text-secondary)]">Open Source</div>
+              </div>
+              <div className="text-center py-4 md:py-0">
+                <div className="text-4xl font-bold text-white mb-2">0ms</div>
+                <div className="text-[var(--text-secondary)]">Local Latency</div>
+              </div>
             </div>
           </div>
         </div>

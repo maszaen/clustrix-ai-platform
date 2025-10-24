@@ -16,17 +16,17 @@ function Navigation() {
 
     return (
       <nav 
-        className={`fixed top-0 w-full z-50 transition-all duration-500 ${
+        className={`fixed top-0 w-full z-50 transition-all duration-500 border-b border-white/0 ${
           isScrolled ? 'bg-[var(--bg-dark)]/80 backdrop-blur-2xl shadow-2xl border-b border-white/10' : ''
         }`}
         data-name="navigation" 
         data-file="components/Navigation.js"
       >
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-10 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-24 h-8 flex items-center justify-center">
-                <svg width="96" height="26" viewBox="0 0 336.59 72.59" fill="currentColor" xmlns="http://www.w3.org/2000/svg" className="text-white">
+              <div className="w-27 h-8 flex items-center justify-center">
+                <svg width="100" height="26" viewBox="0 0 336.59 72.59" fill="currentColor" xmlns="http://www.w3.org/2000/svg" className="text-white">
                   <path d="M64.15,49.65h-2.72s-.01,0-.02.01c-1.82,4.18-3.76,7.52-5.75,9.93-1.85,2.24-4.16,3.95-6.86,5.08-2.73,1.14-6.26,1.73-10.5,1.73-5.9,0-11.12-1.46-15.5-4.34-4.4-2.89-7.78-6.69-10.06-11.29-2.29-4.62-3.45-9.51-3.45-14.54,0-5.71,1.07-10.72,3.19-14.88,2.09-4.12,5.21-7.34,9.26-9.58,4.08-2.25,9.1-3.4,14.91-3.4,5.45,0,10.02,1.11,13.57,3.29,3.66,2.25,6.48,6.11,8.36,11.47,0,0,.01.01.02.01h2.6c.27,0,.53-.11.72-.31.19-.2.29-.46.28-.73l-.63-14.63c-6.44-3.81-14.74-5.74-24.66-5.74-6.84,0-13.14,1.51-18.73,4.5-5.61,2.99-10.09,7.33-13.32,12.88C1.64,24.63,0,31.12,0,38.36c0,6.16,1.47,11.89,4.38,17.03,2.91,5.15,7.25,9.33,12.88,12.41,5.62,3.07,12.4,4.63,20.17,4.63,9.33,0,17.96-1.78,25.65-5.3l2.07-16.36c.04-.28-.05-.57-.24-.79-.19-.22-.46-.34-.75-.34Z"/>
                   <path d="M92.38,67.2c-2.87-.34-4.94-.81-6.15-1.39-.52-.25-1.21-.8-1.21-2.62V8.45s.43-7.39.43-7.39c.02-.28-.08-.54-.27-.75-.19-.2-.45-.31-.73-.31h-3.06s0,0,0,0l-11.89,4.97s0,0,0,.01v3.1s0,0,0,0l6.93,1.37v53.72c0,1.82-.69,2.37-1.21,2.62-1.21.58-3.28,1.05-6.15,1.39,0,0-.01,0-.01,0,0,.13,0,4.23,0,4.37,0,0,0,0,.01,0h23.32s.01,0,.01-.01v-4.35s0-.01-.01-.01Z"/>
                   <path d="M149.03,64.89l-3.29-.47c-1.62-.22-2.76-.43-3.41-.61-.32-.09-.73-.26-.92-.54-.08-.12-.26-.5-.26-1.55v-27.78s.43-9.1.43-9.1c.01-.27-.09-.54-.28-.74-.19-.2-.45-.31-.72-.31h-1.97s-14.11.92-14.11.92c0,0-.01,0-.01.01v4.7s0,0,0,0l2.53.13c2.99.34,4.23.75,4.74,1.04.52.29.79,1.03.79,2.18v25.92c-2.7,2.39-5.29,4.24-7.67,5.5-1.18.62-2.46,1.01-3.79,1.15-3.75.39-6.48-.29-8.41-2.11-1.55-1.46-2.33-3.75-2.33-6.83v-22.46s.43-9.1.43-9.1c.01-.27-.09-.54-.28-.74-.19-.2-.45-.31-.72-.31h-1.97s-14.02.92-14.02.92c0,0-.01,0-.01.01v4.7s0,.01,0,.01l2.44.13c2.99.34,4.23.75,4.74,1.04.52.29.79,1.03.79,2.18v24.31c0,5.26,1.43,9.18,4.24,11.66,2.78,2.44,6.5,3.68,11.07,3.68,3.64,0,6.85-.84,9.55-2.51,1.96-1.21,3.91-2.75,5.8-4.58l-.3,6.04c-.01.27.08.54.27.74s.45.31.72.31h.69c.07,0,.14,0,.21-.02l15.01-3.26s0,0,0-.01v-4.23s0,0,0-.01Z"/>
@@ -47,17 +47,6 @@ function Navigation() {
               <button onClick={handleGitHubClick} className="text-[var(--text-secondary)] hover:text-white transition-colors">GitHub</button>
             </div>
             
-            <a 
-              href="https://drive.google.com/file/d/your-file-id/view" 
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-primary inline-flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-              </svg>
-              Download Now
-            </a>
           </div>
         </div>
       </nav>

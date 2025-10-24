@@ -6,7 +6,7 @@ Clustrix is a desktop chat assistant built with Electron. The main process (`mai
 ## Main Process Responsibilities
 - Initializes structured logging to `${userData}/app.log` and respects the `CLUSTrix_DEBUG` flag (`utils/logger.js`).
 - Instantiates `ClustrixLangChainService` and `MultiAgentOrchestrator` to provide embeddings, file summarization, reasoning agents, and web search orchestration (`backend/langchain-service.js`, `backend/langchain-agents.js`).
-- Serves persistent data through IPC (`sessions:*`, `artifacts:*`, `projects:*`, `models:*`) and manages model configuration in `${userData}/ai-model.conf.json`.
+- Serves persistent data through IPC (`sessions:*`, `artifacts:*`, `projects:*`, `models:*`) and manages model configuration in `${userData}/database/internal or cloud/ai-model.conf.json`.
 - Streams chat completions via `chat:stream-start`, relaying chunk/done/error events back to the renderer, and handles auxiliary features like insult detection prompts, continue placeholders, and thinking-mode updates.
 - Supports file ingestion (Docx via Mammoth, spreadsheets via a bundled XLSX module) and exposes OS dialogs.
 

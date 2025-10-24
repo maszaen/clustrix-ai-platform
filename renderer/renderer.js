@@ -3766,6 +3766,7 @@ function createSessionListItem(s) {
           () => {
             deleteSession(s);
             renderSessions(); // Refresh sidebar
+            renderChatsPage();
           },
         );
       } else if (action === "favorite") {
@@ -3911,6 +3912,7 @@ function setupChatsPageListeners() {
             () => {
               deleteSession(session);
               renderChatsPage();
+              renderSessions();
             },
           );
         }
@@ -3937,6 +3939,7 @@ function setupChatsPageListeners() {
           isChatsSelectMode = false;
           selectedChatIds.clear();
           renderChatsPage();
+          renderSessions();
         },
       );
       return;
@@ -13722,6 +13725,7 @@ function setupEventListeners() {
         "#model-mgmt-modal",
         "#mini-modal",
         "#confirm-modal",
+        "#confirmation-modal",
         "#search-api-modal",
         "#models-modal",
         "#settings-modal",
@@ -13761,6 +13765,7 @@ function setupEventListeners() {
 
       const modalActions = {
         "#confirm-modal": "#confirm-ok",
+        "#confirmation-modal": "#confirmation-confirm-btn",
         "#mini-modal": "#mini-save",
         "#search-api-modal": "#save-search-api",
         "#settings-modal": "#save-settings",
@@ -16782,25 +16787,55 @@ function initConfirmationModal() {
   }
 }
 
-function showConfirmationModal(options = {}) {
+function showConfirmationModal(options = {}, legacyMessage, legacyOnConfirm) {
+  let normalizedOptions = options;
+
+  // Support legacy signature: showConfirmationModal(title, message, onConfirm)
+  if (
+    typeof options !== "object" ||
+    options === null ||
+    Array.isArray(options)
+  ) {
+    let legacyTitle = options != null ? String(options) : "Confirm";
+    let legacyConfirm = legacyOnConfirm;
+    let legacyMsg = legacyMessage;
+
+    // Allow omission of message (title, onConfirm)
+    if (typeof legacyMessage === "function" && legacyOnConfirm === undefined) {
+      legacyConfirm = legacyMessage;
+      legacyMsg = undefined;
+    }
+
+    normalizedOptions = {
+      title: legacyTitle,
+      message:
+        legacyMsg !== undefined && legacyMsg !== null
+          ? String(legacyMsg)
+          : "Are you sure?",
+      onConfirm: typeof legacyConfirm === "function" ? legacyConfirm : null,
+      __isLegacy: true,
+    };
+  }
+
   if (!confirmationModal) {
     initConfirmationModal();
     if (!confirmationModal) return;
   }
 
+  const { __isLegacy: isLegacyCall = false, ...modalOptions } = normalizedOptions || {};
   const {
-    title = 'Confirm',
-    message = 'Are you sure?',
-    confirmText = 'Confirm',
-    cancelText = 'Cancel',
-    confirmLoadingText = 'Processing...',
-    confirmVariant = 'danger',
+    title = "Confirm",
+    message = "Are you sure?",
+    confirmText = "Confirm",
+    cancelText = "Cancel",
+    confirmLoadingText = "Processing...",
+    confirmVariant = "danger",
     closeOnSuccess = true,
     lockWhileProcessing = false,
     onConfirm = null,
     onError = null,
     showErrorToast = true,
-  } = options;
+  } = modalOptions;
 
   confirmationModalOptions = {
     closeOnSuccess,
@@ -16820,7 +16855,11 @@ function showConfirmationModal(options = {}) {
   }
 
   if (confirmationMessageEl) {
-    confirmationMessageEl.innerHTML = message;
+    if (isLegacyCall) {
+      confirmationMessageEl.textContent = message;
+    } else {
+      confirmationMessageEl.innerHTML = message;
+    }
   }
 
   if (confirmationCancelBtn) {

@@ -1071,7 +1071,7 @@
     <div class="modal-overlay"></div>
     <div class="modal-card confirm-modal">
       <div class="modal-header">
-        <h2 id="confirmation-title">Konfirmasi</h2>
+        <h2 id="confirmation-title">Confirm</h2>
         <button id="confirmation-close-btn" class="close-btn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M18 6 6 18" />
@@ -1182,16 +1182,38 @@
           <h3>Privacy and Policy</h3>
           <div class="learn-more-section">
             <h4>Our Commitment to Privacy</h4>
-            <p>Clustrix AI is built on a "local-first" and "privacy-first" philosophy. We are committed to ensuring that your data remains yours. This policy outlines how we handle your information.</p>
+            <p>Clustrix AI is a <strong>fully open-source and free</strong> desktop platform developed by a solo developer over the past year. We are committed to transparency and protecting your privacy while improving the platform through anonymous usage data collection.</p>
+            <p style="padding: 12px; background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3b82f6; border-radius: 4px; margin-top: 12px;">
+              <strong>Important:</strong> To continue improving this free platform, we collect <strong>anonymous usage data</strong> for development purposes. No personal information, location data, device identifiers, or chat content is collected. Only usage patterns, error logs, and interaction data are gathered to help improve the application.
+            </p>
           </div>
           <hr>
 
           <div class="learn-more-section">
-            <h4>Data Storage</h4>
+            <h4>What Data We Collect (Anonymous)</h4>
+            <p><strong>For Platform Development & Improvement:</strong></p>
             <ul>
-              <li><strong>Local-First:</strong> By default, all your data—including chat sessions, API keys, and settings—is stored exclusively on your local machine in the application's user data directory. We do not have access to this data.</li>
-              <li><strong>Bring Your Own Key (BYOK):</strong> We do not provide AI models. You use your own API keys from third-party providers (e.g., OpenAI, OpenRouter). Your prompts and conversations are sent directly from your device to the provider's API. We do not act as a proxy.</li>
-              <li><strong>API Keys:</strong> Your API keys are stored encrypted on your local device. They are never sent to our servers.</li>
+              <li><strong>Click Events:</strong> Button clicks, feature usage patterns, and UI interactions to improve UX</li>
+              <li><strong>Application Logs:</strong> Error logs, performance metrics, and crash reports to identify and fix bugs</li>
+              <li><strong>Feature Usage:</strong> Which features are used most, session duration, and workflow patterns</li>
+              <li><strong>Database Statistics:</strong> Anonymous database size, query performance to optimize the system</li>
+            </ul>
+            <p style="padding: 12px; background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10b981; border-radius: 4px; margin-top: 12px;">
+              <strong>What We DON'T Collect:</strong><br>
+              ❌ No location data • ❌ No device identifiers • ❌ No personal information<br>
+              ❌ No chat content • ❌ No API keys • ❌ No file contents
+            </p>
+            <p><strong>Why we need this:</strong> As a solo developer with no team for user research, this data helps identify bugs, improve the internal reasoning model, optimize LangChain integration, enhance performance, and understand which features to prioritize. All data is anonymized and used solely for platform development.</p>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Data Storage (Your Personal Data)</h4>
+            <ul>
+              <li><strong>Local-First:</strong> All your personal data—including chat sessions, API keys, and settings—is stored exclusively on your local machine. We do not have access to this data.</li>
+              <li><strong>Bring Your Own Key (BYOK):</strong> We do not provide AI models. You use your own API keys from third-party providers (e.g., OpenAI, OpenRouter). Your prompts and conversations are sent directly from your device to the provider's API.</li>
+              <li><strong>API Keys:</strong> Your API keys are stored encrypted on your local device. They are never sent to our servers or included in telemetry data.</li>
+              <li><strong>Chat History:</strong> All conversation history remains on your device and is never transmitted to our servers.</li>
             </ul>
           </div>
           <hr>
@@ -1201,7 +1223,7 @@
             <ul>
               <li><strong>User-Controlled Sync:</strong> We offer an optional cloud sync feature using your own GitHub account. If you choose to log in, we create a private repository in your GitHub account to store your data.</li>
               <li><strong>Data in Your Control:</strong> The synced data remains under your control within your GitHub account. We only facilitate the synchronization process. You can revoke access or delete the repository at any time.</li>
-              <li><strong>No Data Collection:</strong> We do not collect, aggregate, or sell any user data, whether stored locally or synced to your GitHub.</li>
+              <li><strong>Your Data Stays Yours:</strong> We do not collect, aggregate, or sell any user data, whether stored locally or synced to your GitHub.</li>
             </ul>
           </div>
           <hr>
@@ -1209,15 +1231,37 @@
           <div class="learn-more-section">
             <h4>Third-Party Services</h4>
             <ul>
-              <li>When you use an API key, you are subject to the privacy policy of that third-party provider. We encourage you to review their policies.</li>
-              <li>Clustrix AI is not responsible for the data practices of third-party AI services.</li>
+              <li><strong>AI Providers:</strong> When you use an API key (OpenRouter, Groq, Gemini, etc.), you are subject to their privacy policy. We encourage you to review their policies.</li>
+              <li><strong>Search APIs:</strong> If you enable web search features, queries are sent to SerpAPI or Google Search API according to their terms.</li>
+              <li><strong>GitHub Sync:</strong> If you enable cloud sync, your data is stored in your own private GitHub repository according to GitHub's privacy policy.</li>
+              <li>Clustrix AI is not responsible for the data practices of third-party services.</li>
             </ul>
           </div>
           <hr>
 
           <div class="learn-more-section">
-            <h4>Updates and Contact</h4>
-            <p>This privacy policy may be updated from time to time. For any questions, please open an issue on our <a href="https://github.com/maszaen/clustrix-ai-platform" target="_blank" class="link">GitHub repository</a>.</p>
+            <h4>Your Rights & Control</h4>
+            <ul>
+              <li><strong>Opt-Out:</strong> You can disable anonymous usage data collection in settings or contact us to opt-out</li>
+              <li><strong>Access & Delete:</strong> All personal data is on your device - you can access or delete it anytime</li>
+              <li><strong>Export:</strong> Export your data in readable formats (JSON, CSV)</li>
+              <li><strong>Open Source Audit:</strong> Review our source code on GitHub to verify data collection practices</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Transparency & Contact</h4>
+            <p><strong>Last Updated:</strong> October 24, 2025</p>
+            <p>This privacy policy may be updated as the application evolves. For questions, concerns, or to request data deletion:</p>
+            <ul>
+              <li><strong>Email:</strong> exqeon@gmail.com</li>
+              <li><strong>GitHub:</strong> <a href="https://github.com/maszaen/clustrix-ai-platform" target="_blank" class="link">github.com/maszaen/clustrix-ai-platform</a></li>
+              <li><strong>Full Privacy Policy:</strong> View detailed privacy policy on our website</li>
+            </ul>
+            <p style="padding: 12px; background: rgba(139, 92, 246, 0.1); border-left: 3px solid #8b5cf6; border-radius: 4px; margin-top: 12px; font-style: italic;">
+              <strong>Developer's Note:</strong> This platform has been my passion project for the past year, built entirely solo and shared freely with the community. The anonymous usage data helps me understand how people use Clustrix and where to focus improvements. I'm committed to transparency—that's why the entire source code is open for review. Thank you for supporting open-source software!
+            </p>
           </div>
         </div>
 

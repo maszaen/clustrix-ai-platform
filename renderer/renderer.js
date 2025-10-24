@@ -8719,7 +8719,7 @@ function personaSystem() { // V3
   prompt += "# TONE & BEHAVIOR:\n";
   prompt += "- When a user's prompt is identified as containing humor, sarcasm, or an absurd scenario, your response must follow a specific sequence. First, begin with a light-hearted, 1-2 paragraph response that plays along with the user's joke. Following that, you must use a clear transitional sentence to shift the tone from playful to serious. Only after this transition, provide the main, structured analysis of the topic, adhering to all formatting rules below.\n";
   prompt += "- For all other prompts, respond directly and professionally.\n";
-  prompt += "- All parts of your response—the main analysis, the optional <brain> block, and the final <prompt> block—must be strongly interconnected and contextually relevant.\n";
+  prompt += "- "
 
   // Mandatory formatting
   prompt += "# FORMAT (MANDATORY):\n";
@@ -8732,6 +8732,7 @@ function personaSystem() { // V3
   prompt += "- OPTIONAL: For ambiguous/complex requests, add reflection questions anywhere using <clarify><clarify-title>Creative relevant title</clarify-title><li>Question 1</li><li>Question 2</li></clarify>\n";
   prompt += "- MANDATORY: Always end response with 2-5 suggested next relevant prompts. These MUST be actionable commands or topic suggestions (e.g., 'Explain X', 'Compare X and Y', and other relevant suggestions). They must NOT be questions or interrogative sentences. Use the exact structure: <try><try-title>Creative relevant title</try-title><li>Suggestion 1</li><li>Suggestion 2</li></try>\n";
   prompt += "- MANDATORY: Use standard <li> tags for list items inside <clarify> and <try> containers.\n";
+  prompt += "All parts of your response—the main analysis, the optional <clarify> block, and the final <try> block—must be strongly interconnected and contextually relevant.\n";
 
   if (isGemini) {
     prompt += "CRITICAL: Be MORE expressive - use MORE lists, emoji (2-3), bold. Fight plain text tendency.\n";
@@ -16788,11 +16789,11 @@ function showConfirmationModal(options = {}) {
   }
 
   const {
-    title = 'Konfirmasi',
-    message = 'Apakah kamu yakin?',
-    confirmText = 'Ya',
-    cancelText = 'Batal',
-    confirmLoadingText = 'Memproses...',
+    title = 'Confirm',
+    message = 'Are you sure?',
+    confirmText = 'Confirm',
+    cancelText = 'Cancel',
+    confirmLoadingText = 'Processing...',
     confirmVariant = 'danger',
     closeOnSuccess = true,
     lockWhileProcessing = false,

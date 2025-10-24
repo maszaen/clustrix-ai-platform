@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy - Clustrix AI</title>
+    <meta name="description" content="Privacy Policy for Clustrix AI Platform - Open source AI desktop platform with local privacy and data control">
+    <meta name="keywords" content="privacy policy, AI platform, data protection, open source, local processing">
+
+    <meta property="og:title" content="Privacy Policy - Clustrix AI">
+    <meta property="og:description" content="Privacy Policy for Clustrix AI Platform - Open source AI desktop platform with local privacy and data control">
+
+    <meta name="twitter:title" content="Privacy Policy - Clustrix AI">
+    <meta name="twitter:description" content="Privacy Policy for Clustrix AI Platform - Open source AI desktop platform with local privacy and data control">
+
+    <script src="https://resource.trickle.so/vendor_lib/unpkg/react@18/umd/react.production.min.js"></script>
+    <script src="https://resource.trickle.so/vendor_lib/unpkg/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://resource.trickle.so/vendor_lib/unpkg/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://resource.trickle.so/vendor_lib/unpkg/lucide-static@0.516.0/font/lucide.css" rel="stylesheet">
+
+    <style type="text/tailwindcss">
+    @layer theme {
+        :root {
+            --primary-color: #2c6dd6;
+            --secondary-color: #0e4bae;
+            --accent-blue: #1e90ff;
+            --bg-dark: #0a0a0f;
+            --bg-card: #1a1a24;
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --gradient-start: #0e4bae;
+            --gradient-end: #2c6dd6;
+            --blur-dark-blue: #1e3a8a;
+        }
+    }
+
+    @layer base {
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+    }
+
+    @layer utilities {
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.5; filter: blur(60px); }
+            50% { opacity: 0.8; filter: blur(80px); }
+        }
+
+        @keyframes gradient-shift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        @keyframes slide-up {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-float {
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .animate-pulse-glow {
+            animation: pulse-glow 4s ease-in-out infinite;
+        }
+
+        .animate-gradient {
+            background-size: 200% 200%;
+            animation: gradient-shift 8s ease infinite;
+        }
+
+        .animate-slide-up {
+            animation: slide-up 0.6s ease-out forwards;
+        }
+
+        .blur-light {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.3;
+            pointer-events: none;
+        }
+    }
+
+    @layer components {
+        .gradient-text {
+            background: linear-gradient(135deg, #ffffff, #ffffff);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-shift 8s ease infinite;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            padding: 0.875rem 2.5rem;
+            border-radius: 1rem;
+            font-weight: 600;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 20px rgba(14, 75, 174, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 12px 35px rgba(14, 75, 174, 0.5);
+        }
+
+        .btn-secondary {
+            backdrop-filter: blur(10px);
+            background: rgba(14, 75, 174, 0.1);
+            border: 2px solid var(--primary-color);
+            padding: 0.875rem 2.5rem;
+            border-radius: 1rem;
+            font-weight: 600;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(14, 75, 174, 0.2);
+            border-color: var(--accent-blue);
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(14, 75, 174, 0.3);
+        }
+
+        .feature-card {
+            backdrop-filter: blur(20px);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
+            border-radius: 1.5rem;
+            padding: 2rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(44, 109, 214, 0.1) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .feature-card:hover::before {
+            opacity: 0;
+        }
+
+        .feature-card:hover {
+            transform: none;
+            box-shadow: none;
+            border-color: rgba(255, 255, 255, 0.15);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
+        }
+
+        .privacy-section {
+            backdrop-filter: blur(20px);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
+            border-left: 1px solid rgba(255, 255, 255, 0.15);
+            border-right: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 2rem;
+            margin-bottom: 0;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .privacy-section:first-child {
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            border-top-left-radius: 1rem;
+            border-top-right-radius: 1rem;
+        }
+
+        .privacy-section:last-child {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+            border-bottom-left-radius: 1rem;
+            border-bottom-right-radius: 1rem;
+        }
+
+        .privacy-section:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
+        }
+    }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel" src="components/Footer.js"></script>
+    <script type="text/babel">
+        function PrivacyPage() {
+            return (
+                <div className="min-h-screen">
+                    <main className="pt-0">
+                        <div className="max-w-4xl mx-auto px-6 py-20">
+                            <div className="mb-16">
+                                <a href="index.html" className="text-white hover:text-gray-300 mb-8 inline-block text-lg">← Back to Home</a>
+                            </div>
+
+                            <div className="space-y-0">
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">Pendahuluan</h2>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                        Kami di Clustrix AI Platform ("kami", "tim kami", atau "layanan") berkomitmen untuk melindungi privasi Anda. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, melindungi, dan membagikan informasi Anda ketika Anda menggunakan aplikasi desktop kami.
+                                    </p>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mt-4">
+                                        Aplikasi Clustrix adalah software open-source yang didistribusikan di bawah lisensi MIT. Kami percaya pada transparansi dan kontrol pengguna atas data mereka.
+                                    </p>
+                                </div>
+
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">1. Pengumpulan Data</h2>
+
+                                    <h3 className="text-xl font-semibold mb-3 text-white">A. Data yang Disimpan Lokal</h3>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
+                                        Sebagian besar data Anda disimpan <strong className="text-white">secara lokal di perangkat Anda</strong> dan tidak pernah dikirim ke server kami:
+                                    </p>
+                                    <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
+                                        <li><strong className="text-white">Chat History:</strong> Riwayat percakapan disimpan di database lokal (SQLite)</li>
+                                        <li><strong className="text-white">File Uploads:</strong> File yang Anda upload diproses secara lokal</li>
+                                        <li><strong className="text-white">Settings & Configuration:</strong> Preferensi model, API keys, dan konfigurasi lainnya tersimpan lokal</li>
+                                        <li><strong className="text-white">Vector Store:</strong> Embeddings untuk memory disimpan lokal tanpa API calls</li>
+                                        <li><strong className="text-white">Project Data:</strong> Proyek dan session data tersimpan lokal</li>
+                                    </ul>
+
+                                    <h3 className="text-xl font-semibold mb-3 mt-6 text-white">B. Data yang Dikirim ke Pihak Ketiga (Opsional)</h3>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
+                                        Ketika Anda mengonfigurasi API keys atau mengaktifkan fitur tertentu, data berikut mungkin dikirim ke pihak ketiga:
+                                    </p>
+                                    <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
+                                        <li><strong className="text-white">AI Provider APIs:</strong> Prompt dan respons dikirim ke OpenRouter, Groq, Gemini, Z AI, atau provider custom yang Anda pilih</li>
+                                        <li><strong className="text-white">Web Search:</strong> Query pencarian dikirim ke SerpAPI atau Google Search API (jika diaktifkan)</li>
+                                        <li><strong className="text-white">File Processing:</strong> Konten file dikirim ke AI providers untuk analisis (hanya jika Anda memilih untuk menggunakan fitur tersebut)</li>
+                                    </ul>
+                                </div>
+
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">2. Penggunaan Data</h2>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
+                                        Data Anda digunakan secara eksklusif untuk menyediakan fungsionalitas aplikasi:
+                                    </p>
+                                    <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
+                                        <li>Menyediakan layanan AI chat dan reasoning</li>
+                                        <li>Menyimpan riwayat percakapan untuk konteks</li>
+                                        <li>Memproses file yang Anda upload untuk analisis</li>
+                                        <li>Mempertahankan pengaturan dan preferensi Anda</li>
+                                        <li>Meningkatkan performa aplikasi melalui cache lokal</li>
+                                    </ul>
+                                </div>
+
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">3. Keamanan Data</h2>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
+                                        Kami mengimplementasikan langkah-langkah keamanan berikut:
+                                    </p>
+                                    <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
+                                        <li><strong className="text-white">Enkripsi Lokal:</strong> Semua data sensitif dienkripsi menggunakan AES-256</li>
+                                        <li><strong className="text-white">Tidak Ada Server:</strong> Tidak ada data yang dikirim ke server kami</li>
+                                        <li><strong className="text-white">Kontrol Pengguna:</strong> Anda memiliki kontrol penuh atas data Anda</li>
+                                        <li><strong className="text-white">Open Source:</strong> Kode dapat diaudit oleh komunitas</li>
+                                    </ul>
+                                </div>
+
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">4. Hak Anda</h2>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
+                                        Sebagai pengguna, Anda memiliki hak berikut:
+                                    </p>
+                                    <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
+                                        <li><strong className="text-white">Akses:</strong> Melihat semua data yang disimpan secara lokal</li>
+                                        <li><strong className="text-white">Penghapusan:</strong> Menghapus data kapan saja melalui aplikasi</li>
+                                        <li><strong className="text-white">Ekspor:</strong> Mengekspor data Anda dalam format yang dapat dibaca</li>
+                                        <li><strong className="text-white">Kontrol:</strong> Mengelola API keys dan pengaturan privasi</li>
+                                    </ul>
+                                </div>
+
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">5. Cookies dan Tracking</h2>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                        Aplikasi desktop ini tidak menggunakan cookies atau tracking online. Semua fungsionalitas berjalan secara offline dan lokal di perangkat Anda.
+                                    </p>
+                                </div>
+
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">6. Perubahan Kebijakan</h2>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                        Kami akan memberitahu Anda tentang perubahan signifikan pada kebijakan privasi ini melalui pembaruan aplikasi atau dokumentasi.
+                                    </p>
+                                </div>
+
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">7. Hubungi Kami</h2>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
+                                        Jika Anda memiliki pertanyaan tentang kebijakan privasi ini:
+                                    </p>
+                                    <div className="bg-[var(--bg-card)] rounded-lg p-6 border border-white/10">
+                                        <p className="text-[var(--text-secondary)] mb-2"><strong className="text-white">Email:</strong> exqeon@gmail.com</p>
+                                        <p className="text-[var(--text-secondary)] mb-2"><strong className="text-white">GitHub:</strong> Repository open source untuk audit kode</p>
+                                        <p className="text-[var(--text-secondary)]"><strong className="text-white">Discord:</strong> Komunitas untuk diskusi dan dukungan</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                    <Footer />
+                </div>
+            );
+        }
+
+        ReactDOM.render(<PrivacyPage />, document.getElementById('root'));
+    </script>
+</body>
+</html>

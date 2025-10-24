@@ -2445,6 +2445,18 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
     
     if (useSQLite && db) {
       db.transaction(() => {
+        // Get current session IDs in database
+        const existingSessionIds = new Set(db.getAllSessions().map(s => s.id));
+        const incomingSessionIds = new Set(data.sessions.map(s => s.id));
+        
+        // Delete sessions that are in database but not in incoming data
+        for (const sessionId of existingSessionIds) {
+          if (!incomingSessionIds.has(sessionId)) {
+            db.deleteSession(sessionId);
+            log('DATABASE', 2, 'sessions:save', 'Deleted session not present in save data', { sessionId });
+          }
+        }
+        
         for (const session of data.sessions) {
           db.saveSession(session);
           

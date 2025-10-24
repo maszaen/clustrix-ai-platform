@@ -239,19 +239,51 @@
                                 <div className="privacy-section">
                                     <h2 className="text-2xl font-bold mb-4 gradient-text">Introduction</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed">
-                                        At Clustrix AI Platform ("we", "our team", or "the service"), we are committed to protecting your privacy. This Privacy Policy explains how we collect, use, protect, and share your information when you use our desktop application.
+                                        At Clustrix AI Platform ("we", "our", or "the service"), we are committed to protecting your privacy while improving the platform. This Privacy Policy explains how we collect, use, protect, and share your information when you use our desktop application.
                                     </p>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mt-4">
-                                        Clustrix is an open-source software distributed under the MIT license. We believe in transparency and user control over their data.
+                                        Clustrix is a <strong className="text-white">fully open-source and free</strong> software developed and maintained by a solo developer over the past year. We believe in transparency and user control over their data.
                                     </p>
+                                    <div className="mt-6 bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+                                        <p className="text-blue-200 leading-relaxed">
+                                            <strong className="text-blue-100">Important Note:</strong> To continue improving this free platform, we collect anonymous usage data for development purposes. No personal information, location data, or device identifiers are collected. Only usage patterns, error logs, and interaction data are gathered to help improve the application.
+                                        </p>
+                                    </div>
                                 </div>
 
                                 <div className="privacy-section">
                                     <h2 className="text-2xl font-bold mb-4 gradient-text">1. Data Collection</h2>
 
-                                    <h3 className="text-xl font-semibold mb-3 text-white">A. Locally Stored Data</h3>
+                                    <h3 className="text-xl font-semibold mb-3 text-white">A. Development Data (Collected Anonymously)</h3>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
-                                        Most of your data is stored <strong className="text-white">locally on your device</strong> and is never sent to our servers:
+                                        To improve this free, open-source platform, we collect <strong className="text-white">anonymous usage data</strong> for development purposes:
+                                    </p>
+                                    <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
+                                        <li><strong className="text-white">Click Events:</strong> Button clicks, feature usage patterns, and UI interactions</li>
+                                        <li><strong className="text-white">Application Logs:</strong> Error logs, performance metrics, and crash reports</li>
+                                        <li><strong className="text-white">Feature Usage:</strong> Which features are used most, session duration, and workflow patterns</li>
+                                        <li><strong className="text-white">Database Statistics:</strong> Anonymous database size, query performance, and data structure usage</li>
+                                    </ul>
+                                    <div className="mt-4 bg-green-900/20 border border-green-500/30 rounded-lg p-4">
+                                        <p className="text-green-200 leading-relaxed">
+                                            <strong className="text-green-100">What We DON'T Collect:</strong>
+                                        </p>
+                                        <ul className="text-green-200 space-y-1 ml-6 mt-2">
+                                            <li>❌ No location data</li>
+                                            <li>❌ No device identifiers (MAC address, IMEI, etc.)</li>
+                                            <li>❌ No personal information (name, email, etc.)</li>
+                                            <li>❌ No chat content or conversation history</li>
+                                            <li>❌ No API keys or sensitive credentials</li>
+                                            <li>❌ No file contents or uploaded documents</li>
+                                        </ul>
+                                    </div>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mt-4">
+                                        <strong className="text-white">Why we need this:</strong> As a solo developer with no team or resources for user research, this data helps identify bugs, improve performance, and understand which features to prioritize. All data is anonymized and used solely for platform development.
+                                    </p>
+
+                                    <h3 className="text-xl font-semibold mb-3 mt-6 text-white">B. Locally Stored Data</h3>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
+                                        Your personal data is stored <strong className="text-white">locally on your device</strong> and is never sent to our servers:
                                     </p>
                                     <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
                                         <li><strong className="text-white">Chat History:</strong> Conversation history stored in local database (SQLite)</li>
@@ -261,22 +293,32 @@
                                         <li><strong className="text-white">Project Data:</strong> Projects and session data stored locally</li>
                                     </ul>
 
-                                    <h3 className="text-xl font-semibold mb-3 mt-6 text-white">B. Data Sent to Third Parties (Optional)</h3>
+                                    <h3 className="text-xl font-semibold mb-3 mt-6 text-white">C. Data Sent to Third Parties (Optional)</h3>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
                                         When you configure API keys or enable certain features, the following data may be sent to third parties:
                                     </p>
                                     <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
                                         <li><strong className="text-white">AI Provider APIs:</strong> Prompts and responses sent to OpenRouter, Groq, Gemini, Z AI, or your chosen custom provider</li>
                                         <li><strong className="text-white">Web Search:</strong> Search queries sent to SerpAPI or Google Search API (if enabled)</li>
-                                        <li><strong className="text-white">File Processing:</strong> File content sent to AI providers for analysis (only if you choose to use these features)</li>
+                                        <li><strong className="text-white">GitHub Sync:</strong> Database backups and sync data (only if you enable cloud sync feature)</li>
                                     </ul>
                                 </div>
 
                                 <div className="privacy-section">
                                     <h2 className="text-2xl font-bold mb-4 gradient-text">2. Data Usage</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
-                                        Your data is used exclusively to provide application functionality:
+                                        Your data is used for the following purposes:
                                     </p>
+                                    
+                                    <h3 className="text-xl font-semibold mb-3 text-white">Development & Improvement</h3>
+                                    <ul className="text-[var(--text-secondary)] space-y-2 ml-6 mb-4">
+                                        <li><strong className="text-white">Bug Identification:</strong> Error logs help identify and fix crashes and issues</li>
+                                        <li><strong className="text-white">Feature Prioritization:</strong> Usage patterns show which features need improvement</li>
+                                        <li><strong className="text-white">Performance Optimization:</strong> Performance metrics guide optimization efforts</li>
+                                        <li><strong className="text-white">UX Enhancement:</strong> Click patterns help improve user interface and workflows</li>
+                                    </ul>
+
+                                    <h3 className="text-xl font-semibold mb-3 text-white">Application Functionality</h3>
                                     <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
                                         <li>Providing AI chat and reasoning services</li>
                                         <li>Storing conversation history for context</li>
@@ -284,57 +326,110 @@
                                         <li>Maintaining your settings and preferences</li>
                                         <li>Improving application performance through local caching</li>
                                     </ul>
+
+                                    <div className="mt-4 bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4">
+                                        <p className="text-yellow-200 leading-relaxed">
+                                            <strong className="text-yellow-100">Transparency Promise:</strong> As a solo-developed open-source project, all data collection code is publicly available on GitHub. You can audit exactly what data is collected and how it's used. If you prefer not to share usage data, you can modify the source code or contact us for opt-out options.
+                                        </p>
+                                    </div>
                                 </div>
 
                                 <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">3. Data Security</h2>
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">3. Data Security & Storage</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
                                         We implement the following security measures:
                                     </p>
                                     <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
-                                        <li><strong className="text-white">Local Encryption:</strong> All sensitive data is encrypted using AES-256</li>
-                                        <li><strong className="text-white">No Servers:</strong> No data is sent to our servers</li>
-                                        <li><strong className="text-white">User Control:</strong> You have full control over your data</li>
-                                        <li><strong className="text-white">Open Source:</strong> Code can be audited by the community</li>
+                                        <li><strong className="text-white">Local Encryption:</strong> All sensitive personal data is encrypted using AES-256</li>
+                                        <li><strong className="text-white">Anonymous Collection:</strong> Usage data is collected without any personally identifiable information</li>
+                                        <li><strong className="text-white">Secure Transmission:</strong> All data transmissions use HTTPS/TLS encryption</li>
+                                        <li><strong className="text-white">User Control:</strong> You have full control over your personal data stored locally</li>
+                                        <li><strong className="text-white">Open Source:</strong> Code can be audited by the community for security verification</li>
                                     </ul>
+                                    
+                                    <h3 className="text-xl font-semibold mb-3 mt-6 text-white">Data Retention</h3>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-2">
+                                        <strong className="text-white">Development Data:</strong> Anonymous usage data is retained for up to 2 years for analysis and improvement purposes.
+                                    </p>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                        <strong className="text-white">Personal Data:</strong> All personal data (chat history, files, settings) remains on your device and is never sent to our servers. You can delete it anytime.
+                                    </p>
                                 </div>
 
                                 <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">4. Your Rights</h2>
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">4. Your Rights & Control</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
                                         As a user, you have the following rights:
                                     </p>
                                     <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
-                                        <li><strong className="text-white">Access:</strong> View all data stored locally</li>
-                                        <li><strong className="text-white">Deletion:</strong> Delete data anytime through the application</li>
-                                        <li><strong className="text-white">Export:</strong> Export your data in readable format</li>
-                                        <li><strong className="text-white">Control:</strong> Manage API keys and privacy settings</li>
+                                        <li><strong className="text-white">Access:</strong> View all personal data stored locally on your device</li>
+                                        <li><strong className="text-white">Deletion:</strong> Delete your personal data anytime through the application</li>
+                                        <li><strong className="text-white">Export:</strong> Export your data in readable format (JSON, CSV)</li>
+                                        <li><strong className="text-white">Control:</strong> Manage API keys, sync settings, and privacy preferences</li>
+                                        <li><strong className="text-white">Opt-Out:</strong> Contact us to opt-out of anonymous usage data collection</li>
+                                        <li><strong className="text-white">Audit:</strong> Review the open-source code to verify data collection practices</li>
                                     </ul>
+                                    
+                                    <div className="mt-4 bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
+                                        <p className="text-purple-200 leading-relaxed">
+                                            <strong className="text-purple-100">Open Source Advantage:</strong> Unlike closed-source applications, you can verify our claims by inspecting the source code. If you have concerns about data collection, you can modify the code or build your own version without telemetry.
+                                        </p>
+                                    </div>
                                 </div>
 
                                 <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">5. Cookies and Tracking</h2>
-                                    <p className="text-[var(--text-secondary)] leading-relaxed">
-                                        This desktop application does not use cookies or online tracking. All functionality runs offline and locally on your device.
-                                    </p>
-                                </div>
-
-                                <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">6. Policy Changes</h2>
-                                    <p className="text-[var(--text-secondary)] leading-relaxed">
-                                        We will notify you of significant changes to this privacy policy through application updates or documentation.
-                                    </p>
-                                </div>
-
-                                <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">7. Contact Us</h2>
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">5. Third-Party Services</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
-                                        If you have questions about this privacy policy:
+                                        When you enable certain features, data may be sent to third-party services. Each has its own privacy policy:
+                                    </p>
+                                    <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
+                                        <li><strong className="text-white">AI Providers:</strong> OpenRouter, Groq, Google Gemini, Z AI - subject to their respective privacy policies</li>
+                                        <li><strong className="text-white">Search APIs:</strong> SerpAPI, Google Search API - subject to their terms of service</li>
+                                        <li><strong className="text-white">GitHub:</strong> Cloud sync feature uses GitHub's infrastructure - subject to GitHub's privacy policy</li>
+                                    </ul>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mt-4">
+                                        <strong className="text-white">Note:</strong> We have no control over these third-party services. Please review their privacy policies before using features that interact with them.
+                                    </p>
+                                </div>
+
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">6. Children's Privacy</h2>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                        Clustrix AI is not intended for use by children under 13 years of age. We do not knowingly collect data from children. If you are a parent or guardian and believe your child has used this application, please contact us.
+                                    </p>
+                                </div>
+
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">7. Policy Changes</h2>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
+                                        We may update this privacy policy as the application evolves. Changes will be communicated through:
+                                    </p>
+                                    <ul className="text-[var(--text-secondary)] space-y-2 ml-6">
+                                        <li>Application update notifications</li>
+                                        <li>GitHub repository announcements</li>
+                                        <li>Updated documentation and changelog</li>
+                                    </ul>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mt-4">
+                                        <strong className="text-white">Last Updated:</strong> October 24, 2025
+                                    </p>
+                                </div>
+
+                                <div className="privacy-section">
+                                    <h2 className="text-2xl font-bold mb-4 gradient-text">8. Contact & Support</h2>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
+                                        If you have questions, concerns, or requests regarding this privacy policy or data collection:
                                     </p>
                                     <div className="bg-[var(--bg-card)] rounded-lg p-6 border border-white/10">
-                                        <p className="text-[var(--text-secondary)] mb-2"><strong className="text-white">Email:</strong> exqeon@gmail.com</p>
-                                        <p className="text-[var(--text-secondary)] mb-2"><strong className="text-white">GitHub:</strong> Open source repository for code audit</p>
-                                        <p className="text-[var(--text-secondary)]"><strong className="text-white">Discord:</strong> Community for discussions and support</p>
+                                        <p className="text-[var(--text-secondary)] mb-3"><strong className="text-white">Developer Email:</strong> exqeon@gmail.com</p>
+                                        <p className="text-[var(--text-secondary)] mb-3"><strong className="text-white">GitHub Repository:</strong> <a href="https://github.com/maszaen/clustrix-ai-platform" className="text-blue-400 hover:text-blue-300 underline">github.com/maszaen/clustrix-ai-platform</a></p>
+                                        <p className="text-[var(--text-secondary)] mb-3"><strong className="text-white">Issues & Feature Requests:</strong> Open an issue on GitHub</p>
+                                        <p className="text-[var(--text-secondary)]"><strong className="text-white">Community Support:</strong> Join our Discord community for discussions</p>
+                                    </div>
+                                    
+                                    <div className="mt-6 bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+                                        <p className="text-blue-200 leading-relaxed">
+                                            <strong className="text-blue-100">Developer's Note:</strong> This platform has been my passion project for the past year, built entirely solo and shared freely with the community. The anonymous usage data helps me understand how people use Clustrix and where to focus improvements. I'm committed to transparency and user privacy - that's why the entire source code is open for anyone to review. Thank you for supporting open-source software!
+                                        </p>
                                     </div>
                                 </div>
                             </div>

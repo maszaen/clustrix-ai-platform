@@ -1013,7 +1013,7 @@ function openQuickModelSwitch(event, screen) {
       const p = modelBtn.querySelector("p");
       if (p) p.textContent = model.label || model.id;
       await persistModels(conf);
-      modal.classList.add("hidden");
+      closeModalWithAnimation(modal);
     });
     body.appendChild(btn);
   });
@@ -1032,9 +1032,9 @@ function openQuickModelSwitch(event, screen) {
   card.style.right = `${window.innerWidth - rect.right}px`;
   card.style.left = "auto";
 
-  const close = () => modal.classList.add("hidden");
+  const close = () => closeModalWithAnimation(modal);
   modal.querySelector(".modal-overlay").onclick = close;
-  modal.classList.remove("hidden");
+  openModalWithAnimation(modal);
 }
 
 function renderWelcomeScreenFiles() {
@@ -2677,12 +2677,12 @@ async function persistModels(conf) {
 
 function openModelMgmt() {
   renderMgmtProviders();
-  $("#model-mgmt-modal").classList.remove("hidden");
+  openModalWithAnimation($("#model-mgmt-modal"));
   $("#mgmt-back").style.visibility = "hidden";
 }
 
 function closeModelMgmt() {
-  $("#model-mgmt-modal").classList.add("hidden");
+  closeModalWithAnimation($("#model-mgmt-modal"));
 }
 
 $("#mgmt-close").addEventListener("click", closeModelMgmt);
@@ -3001,7 +3001,7 @@ function openMiniModal({ title, fields, onSave }) {
     .join("");
   $("#mini-body").innerHTML = form;
 
-  const close = () => $("#mini-modal").classList.add("hidden");
+  const close = () => closeModalWithAnimation($("#mini-modal"));
   $("#mini-close").onclick = close;
   $("#mini-cancel").onclick = close;
   $("#mini-modal .modal-overlay").onclick = close;
@@ -3012,7 +3012,7 @@ function openMiniModal({ title, fields, onSave }) {
     close();
   };
 
-  $("#mini-modal").classList.remove("hidden");
+  openModalWithAnimation($("#mini-modal"));
 }
 
 function getModelMeta(conf, platform, modelId) {
@@ -3224,6 +3224,11 @@ function showWelcomeScreen() {
 
   // Save page state
   savePageState("welcome");
+  
+  // Push to page history for back/forward navigation
+  if (typeof pushPageHistory === 'function') {
+    pushPageHistory({ page: 'welcome', sessionId: null });
+  }
 
   $("#chat-title").textContent = "New Chat";
   $("#chat-title").title = "New Chat, ask anything";
@@ -3267,6 +3272,8 @@ function showWelcomeScreen() {
         shell._scrollbarInstance.updateLayout();
       }
     }
+    // Auto focus textarea
+    msgCentral.focus();
   }
 
   renderSessions();
@@ -3291,6 +3298,11 @@ function showChatsPage() {
 
   // Save page state
   savePageState("chats");
+  
+  // Push to page history for back/forward navigation
+  if (typeof pushPageHistory === 'function') {
+    pushPageHistory({ page: 'chats-list' });
+  }
 
   $("#chat-title").textContent = "Your Chat History";
   $("#chat-title").title = "Browse all your conversations";
@@ -3313,6 +3325,10 @@ function showChatsPage() {
   setupChatsPageListeners();
   renderSessions();
   updateInputState();
+  
+  // Auto focus search bar
+  const searchInput = document.getElementById('chats-search');
+  if (searchInput) searchInput.focus();
 }
 
 function renderChatsPage() {
@@ -4169,6 +4185,11 @@ function showArtifactsPage() {
   document.getElementById("projects-btn")?.classList.remove("active");
 
   savePageState("artifacts");
+  
+  // Push to page history for back/forward navigation
+  if (typeof pushPageHistory === 'function') {
+    pushPageHistory({ page: 'artifacts-list' });
+  }
 
   $("#chat-title").textContent = "Code Artifacts";
   $("#chat-title").title = "Your saved code snippets";
@@ -4197,6 +4218,11 @@ function showArtifactsPage() {
 
   renderSessions();
   updateInputState();
+  
+  // Auto focus search bar
+  const searchInput = document.getElementById('artifacts-search');
+  if (searchInput) searchInput.focus();
+  
   log("UI", 2, "showArtifactsPage", "Switched to Artifacts Page");
 }
 
@@ -5104,6 +5130,11 @@ function showProjectsPage() {
   document.getElementById("artifact-btn")?.classList.remove("active");
 
   savePageState("projects");
+  
+  // Push to page history for back/forward navigation
+  if (typeof pushPageHistory === 'function') {
+    pushPageHistory({ page: 'projects-list' });
+  }
 
   $("#chat-title").textContent = "Your Projects";
   $("#chat-title").title = "Manage your project workspaces";
@@ -5130,6 +5161,11 @@ function showProjectsPage() {
 
   renderSessions();
   updateInputState();
+  
+  // Auto focus search bar
+  const searchInput = document.getElementById('projects-search');
+  if (searchInput) searchInput.focus();
+  
   log("UI", 2, "showProjectsPage", "Switched to Projects Page");
 }
 
@@ -5204,6 +5240,11 @@ function showProjectDetailView(project) {
   const isDifferentProject = !currentProject || currentProject.id !== project.id;
   currentProject = project;
 
+  // Push to page history for back/forward navigation
+  if (isDifferentProject && typeof pushPageHistory === 'function') {
+    pushPageHistory({ page: 'project-detail', projectId: project.id });
+  }
+
   if (isDifferentProject) {
     projectMessageStagedFiles = [];
     renderProjectMessageFiles();
@@ -5230,6 +5271,10 @@ function showProjectDetailView(project) {
   renderProjectSessions(project);
   renderProjectInstructions(project);
   renderProjectFiles(project);
+  
+  // Auto focus project message input
+  const projectInput = document.getElementById('project-message-input');
+  if (projectInput) projectInput.focus();
 }
 
 function renderProjectsPage() {
@@ -8881,7 +8926,7 @@ function findLastUserMessageElement() {
 
 // Session Rendering
 function renderHistory() {
-  $("#quick-model-switch-modal").classList.add("hidden");
+  closeModalWithAnimation($("#quick-model-switch-modal"));
   log("SESSION", 1, "renderHistory", `Rendering chat history`, {
     sessionName: current?.name,
   });
@@ -10313,6 +10358,12 @@ function setCurrent(s) {
 
   if (current && current.id) {
     savePageState("chat", current.id);
+    
+    // Push to page history for back/forward navigation
+    if (typeof pushPageHistory === 'function') {
+      pushPageHistory({ page: 'chat', sessionId: current.id });
+    }
+    
     log(
       "SessionState",
       0,
@@ -10419,6 +10470,12 @@ function setCurrent(s) {
   renderSessions();
   updateChatHeader({ animate: false });
   updateInputState();
+  
+  // Auto focus message input with delay to prevent UI error
+  setTimeout(() => {
+    const msgInput = document.getElementById('msg');
+    if (msgInput) msgInput.focus();
+  }, 500);
   
   // Clear session switching flag after rendering is complete
   setTimeout(() => {
@@ -12650,11 +12707,11 @@ function showConfirmationModal(title, message, onConfirm) {
   const modal = $("#confirm-modal");
   $("#confirm-title").textContent = title;
   $("#confirm-message").textContent = message;
-  modal.classList.remove("hidden");
+  openModalWithAnimation(modal);
   const okBtn = $("#confirm-ok");
   const newOkBtn = okBtn.cloneNode(true);
   okBtn.parentNode.replaceChild(newOkBtn, okBtn);
-  const close = () => modal.classList.add("hidden");
+  const close = () => closeModalWithAnimation(modal);
   newOkBtn.addEventListener("click", () => {
     onConfirm();
     close();
@@ -13665,7 +13722,7 @@ function setupEventListeners() {
       modalsToClose.forEach((selector) => {
         const modal = $(selector);
         if (modal && !modal.classList.contains("hidden")) {
-          modal.classList.add("hidden");
+          closeModalWithAnimation(modal);
           aModalWasClosed = true;
         }
       });
@@ -13954,8 +14011,8 @@ function setupEventListeners() {
     $("#search-api-provider").value =
       state.settings.searchApiProvider || "serpapi";
     toggleGoogleCseInput();
-    $("#search-api-modal").classList.remove("hidden");
-    $("#settings-menu").classList.add("hidden");
+    openModalWithAnimation($("#search-api-modal"));
+    closeDropdownWithAnimation($("#settings-menu"));
 
     // Close mobile sidebar when opening search API settings
     if (window.innerWidth <= 768) {
@@ -13966,7 +14023,7 @@ function setupEventListeners() {
   $("#search-api-provider").addEventListener("change", toggleGoogleCseInput);
 
   const closeSearchApiModal = () =>
-    $("#search-api-modal").classList.add("hidden");
+    closeModalWithAnimation($("#search-api-modal"));
   $("#close-search-api").addEventListener("click", closeSearchApiModal);
   $("#cancel-search-api").addEventListener("click", closeSearchApiModal);
   $("#search-api-modal .modal-overlay").addEventListener(
@@ -14003,8 +14060,8 @@ function setupEventListeners() {
     $("#show-projects-toggle").checked = state.settings.showProjectSessions !== false;
     $("#show-starred-toggle").checked = state.settings.showStarredSessions !== false;
     
-    $("#accessibility-modal").classList.remove("hidden");
-    $("#settings-menu").classList.add("hidden");
+    openModalWithAnimation($("#accessibility-modal"));
+    closeDropdownWithAnimation($("#settings-menu"));
 
     // Close mobile sidebar when opening accessibility settings
     if (window.innerWidth <= 768) {
@@ -14013,7 +14070,7 @@ function setupEventListeners() {
   });
 
   const closeAccessibilityModal = () =>
-    $("#accessibility-modal").classList.add("hidden");
+    closeModalWithAnimation($("#accessibility-modal"));
   
   $("#close-accessibility-modal").addEventListener("click", closeAccessibilityModal);
   $("#close-accessibility").addEventListener("click", closeAccessibilityModal);
@@ -14083,8 +14140,8 @@ function setupEventListeners() {
 
   $("#open-model-mgmt").addEventListener("click", () => {
     openModelMgmt();
-    $("#settings-menu").classList.add("hidden");
-    $("#quick-model-switch-modal").classList.add("hidden");
+    closeDropdownWithAnimation($("#settings-menu"));
+    closeModalWithAnimation($("#quick-model-switch-modal"));
 
     // Close mobile sidebar when opening model management
     if (window.innerWidth <= 768) {
@@ -14224,9 +14281,9 @@ function setupEventListeners() {
 
     // $("#model-note").addEventListener("input", (e) => applyNotePreview(e.target.value)); // form dimatikan
 
-    $("#models-modal").classList.remove("hidden");
-    $("#settings-menu").classList.add("hidden");
-    $("#quick-model-switch-modal").classList.add("hidden");
+    openModalWithAnimation($("#models-modal"));
+    closeDropdownWithAnimation($("#settings-menu"));
+    closeModalWithAnimation($("#quick-model-switch-modal"));
 
     // Hide any previous error messages
     $("#switch-error").style.display = "none";
@@ -14299,17 +14356,17 @@ function setupEventListeners() {
     });
 
     updateModelHeader();
-    $("#models-modal").classList.add("hidden");
+    closeModalWithAnimation($("#models-modal"));
   });
 
   $("#close-models").addEventListener("click", () =>
-    $("#models-modal").classList.add("hidden"),
+    closeModalWithAnimation($("#models-modal")),
   );
   $("#cancel-models").addEventListener("click", () =>
-    $("#models-modal").classList.add("hidden"),
+    closeModalWithAnimation($("#models-modal")),
   );
   $("#models-modal .modal-overlay").addEventListener("click", () =>
-    $("#models-modal").classList.add("hidden"),
+    closeModalWithAnimation($("#models-modal")),
   );
 
   $("#reset-models").addEventListener("click", () => {
@@ -14323,14 +14380,14 @@ function setupEventListeners() {
           JSON.stringify(state.settings.models),
         );
         updateModelHeader();
-        $("#models-modal").classList.add("hidden");
+        closeModalWithAnimation($("#models-modal"));
       },
     );
   });
 
   $("#new-chat").addEventListener("click", () => {
     log("UI", 0, "event:new-chat-click", "New chat button clicked");
-    $("#quick-model-switch-modal").classList.add("hidden");
+    closeModalWithAnimation($("#quick-model-switch-modal"));
 
     // Close mobile sidebar when creating new chat
     if (window.innerWidth <= 768) {
@@ -14385,12 +14442,19 @@ function setupEventListeners() {
 
   function handleSettingsClick(e) {
     e.stopPropagation();
-    const willShow = $("#settings-menu").classList.contains("hidden");
+    const settingsMenu = $("#settings-menu");
+    const willShow = settingsMenu.classList.contains("hidden");
     log("UI", 0, "event:open-settings-click", "Settings menu toggled", {
       willShow,
     });
-    $("#settings-menu").classList.toggle("hidden");
-    $("#quick-model-switch-modal").classList.add("hidden");
+    
+    if (willShow) {
+      openDropdownWithAnimation(settingsMenu);
+    } else {
+      closeDropdownWithAnimation(settingsMenu);
+    }
+    
+    closeModalWithAnimation($("#quick-model-switch-modal"));
 
     // Close mobile sidebar when opening customize/settings menu
   }
@@ -14415,9 +14479,9 @@ function setupEventListeners() {
     $("#show-starred-toggle").checked = showStarred;
     $("#stream-throttling").value = streamThrottling;
     $("#language-select").value = language;
-    $("#settings-modal").classList.remove("hidden");
-    $("#settings-menu").classList.add("hidden");
-    $("#quick-model-switch-modal").classList.add("hidden");
+    openModalWithAnimation($("#settings-modal"));
+    closeDropdownWithAnimation($("#settings-menu"));
+    closeModalWithAnimation($("#quick-model-switch-modal"));
 
     // Close mobile sidebar when opening persona settings
     if (window.innerWidth <= 768) {
@@ -14453,8 +14517,8 @@ function setupEventListeners() {
   if (openAccountBtn) {
     openAccountBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      $("#account-settings-modal").classList.remove("hidden");
-      $("#settings-menu").classList.add("hidden");
+      openModalWithAnimation($("#account-settings-modal"));
+      closeDropdownWithAnimation($("#settings-menu"));
       await updateAccountModalUI();
       log("UI", 0, "event:open-account-settings", "Account modal opened");
     });
@@ -14462,7 +14526,7 @@ function setupEventListeners() {
 
   if (closeAccountBtn) {
     closeAccountBtn.addEventListener('click', () => {
-      $("#account-settings-modal").classList.add("hidden");
+      closeModalWithAnimation($("#account-settings-modal"));
       log("UI", 0, "event:close-account-modal", "Account modal closed");
     });
   }
@@ -14470,7 +14534,7 @@ function setupEventListeners() {
   if (accountModal) {
     accountModal.addEventListener('click', (e) => {
       if (e.target.classList.contains('modal-overlay')) {
-        $("#account-settings-modal").classList.add("hidden");
+        closeModalWithAnimation($("#account-settings-modal"));
       }
     });
   }
@@ -14482,7 +14546,7 @@ function setupEventListeners() {
   const closeModalBtn = document.getElementById('account-close-modal-btn');
   if (closeModalBtn) {
     closeModalBtn.addEventListener('click', () => {
-      $("#account-settings-modal").classList.add("hidden");
+      closeModalWithAnimation($("#account-settings-modal"));
       log("UI", 0, "event:account-close-modal-btn", "Account modal closed via button");
     });
   }
@@ -14559,15 +14623,15 @@ function setupEventListeners() {
   if (openLearnMoreBtn) {
     openLearnMoreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      learnMoreModal.classList.remove('hidden');
-      $("#settings-menu").classList.add("hidden");
+      openModalWithAnimation(learnMoreModal);
+      closeDropdownWithAnimation($("#settings-menu"));
       log("UI", 0, "event:open-learn-more", "Learn More modal opened");
     });
   }
 
   if (closeLearnMoreBtn) {
     closeLearnMoreBtn.addEventListener('click', () => {
-      learnMoreModal.classList.add('hidden');
+      closeModalWithAnimation(learnMoreModal);
       log("UI", 0, "event:close-learn-more-modal", "Learn More modal closed");
     });
   }
@@ -14575,7 +14639,7 @@ function setupEventListeners() {
   if (learnMoreModal) {
     learnMoreModal.addEventListener('click', (e) => {
       if (e.target.classList.contains('modal-overlay')) {
-        learnMoreModal.classList.add('hidden');
+        closeModalWithAnimation(learnMoreModal);
       }
     });
   }
@@ -14620,7 +14684,7 @@ function setupEventListeners() {
         handleLogout();
       }
       
-      $("#settings-menu").classList.add("hidden");
+      closeDropdownWithAnimation($("#settings-menu"));
     });
   }
 
@@ -14646,11 +14710,11 @@ function setupEventListeners() {
   });
 
   $("#close-modal").addEventListener("click", () => {
-    $("#settings-modal").classList.add("hidden");
+    closeModalWithAnimation($("#settings-modal"));
   });
 
   $("#close-settings").addEventListener("click", () => {
-    $("#settings-modal").classList.add("hidden");
+    closeModalWithAnimation($("#settings-modal"));
   });
 
   $("#save-settings").addEventListener("click", async () => {
@@ -14672,7 +14736,7 @@ function setupEventListeners() {
     state.settings.streamThrottling = streamThrottling;
     state.settings.language = language;
     await save();
-    $("#settings-modal").classList.add("hidden");
+    closeModalWithAnimation($("#settings-modal"));
   });
 
   $("#delete-all").addEventListener("click", () => {
@@ -14693,8 +14757,8 @@ function setupEventListeners() {
       state.sessions = [];
       current = null;
       await save();
-      $("#settings-modal").classList.add("hidden");
-      $("#quick-model-switch-modal").classList.add("hidden");
+      closeModalWithAnimation($("#settings-modal"));
+      closeModalWithAnimation($("#quick-model-switch-modal"));
       showWelcomeScreen();
       log(
         "SETTINGS",
@@ -14745,7 +14809,7 @@ function setupEventListeners() {
       "event:modal-overlay-click",
       "Settings modal hidden via overlay click",
     );
-    $("#settings-modal").classList.add("hidden");
+    closeModalWithAnimation($("#settings-modal"));
   });
 
   $("#msg").addEventListener("keydown", (e) => {
@@ -14786,7 +14850,7 @@ function setupEventListeners() {
 
   $("#send").addEventListener("click", async () => {
     const modal = $("#quick-model-switch-modal");
-    modal.classList.add("hidden");
+    closeModalWithAnimation(modal);
 
     if (DEBUG_MARKDOWN && current && isMarkdownTestSession(current)) {
       if (!streamManager.isStreamingInSession(current)) {
@@ -15023,7 +15087,7 @@ function setupEventListeners() {
     }
 
     if (!$("#settings-container").contains(event.target)) {
-      $("#settings-menu").classList.add("hidden");
+      closeDropdownWithAnimation($("#settings-menu"));
     }
 
     const regenCancelledTarget = event.target.closest(".regenerate-cancelled");
@@ -16030,7 +16094,7 @@ async function showConflictResolutionModal(conflicts) {
   async function showNextConflict() {
     if (currentConflictIndex >= conflicts.length) {
       // All conflicts resolved, apply and continue backup
-      modal.classList.add('hidden');
+      closeModalWithAnimation(modal);
       
       showToast('Applying resolutions...', 'info');
       
@@ -16120,7 +16184,7 @@ async function showConflictResolutionModal(conflicts) {
     }
     
     // Show modal
-    modal.classList.remove('hidden');
+    openModalWithAnimation(modal);
   }
   
   // Set up button handlers
@@ -16469,6 +16533,355 @@ window.addEventListener("error", (event) => {
     overlay.style.display = "none";
   }
 });
+
+// ==================== MODAL HELPER FUNCTIONS ====================
+
+/**
+ * Close modal with animation
+ * @param {HTMLElement|string} modal - Modal element or selector
+ * @param {number} duration - Animation duration in ms (default 200)
+ */
+function closeModalWithAnimation(modal, duration = 200) {
+  const modalElement = typeof modal === 'string' ? document.querySelector(modal) : modal;
+  if (!modalElement) return;
+  
+  // Add closing class to trigger animation
+  modalElement.classList.add('closing');
+  
+  // After animation completes, add hidden class and remove closing
+  setTimeout(() => {
+    modalElement.classList.add('hidden');
+    modalElement.classList.remove('closing');
+  }, duration);
+}
+
+/**
+ * Open modal with animation
+ * @param {HTMLElement|string} modal - Modal element or selector
+ */
+function openModalWithAnimation(modal) {
+  const modalElement = typeof modal === 'string' ? document.querySelector(modal) : modal;
+  if (!modalElement) return;
+  
+  // Remove hidden and closing classes
+  modalElement.classList.remove('hidden', 'closing');
+}
+
+/**
+ * Close dropdown/card with animation (for non-modal elements like settings-menu)
+ * @param {HTMLElement|string} element - Element or selector
+ * @param {number} duration - Animation duration in ms (default 200)
+ */
+function closeDropdownWithAnimation(element, duration = 200) {
+  const el = typeof element === 'string' ? document.querySelector(element) : element;
+  if (!el || el.classList.contains('hidden')) return;
+  
+  // Add closing class to trigger animation
+  el.classList.add('closing');
+  
+  // After animation completes, add hidden class and remove closing
+  setTimeout(() => {
+    el.classList.add('hidden');
+    el.classList.remove('closing');
+  }, duration);
+}
+
+/**
+ * Open dropdown/card with animation
+ * @param {HTMLElement|string} element - Element or selector
+ */
+function openDropdownWithAnimation(element) {
+  const el = typeof element === 'string' ? document.querySelector(element) : element;
+  if (!el) return;
+  
+  // Remove hidden and closing classes
+  el.classList.remove('hidden', 'closing');
+}
+
+// ==================== NEW KEYBOARD SHORTCUTS ====================
+function initKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // Ctrl + N - New Session
+    if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+      e.preventDefault();
+      const newChatBtn = document.getElementById('new-chat');
+      if (newChatBtn) newChatBtn.click();
+      return;
+    }
+
+    // Ctrl + Tab - Next Session (only in chat session)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      
+      // Only work if currently in a chat session
+      if (!current || !current.id) return;
+      
+      const sessions = state.sessions;
+      if (sessions.length === 0) return;
+      
+      const currentIndex = sessions.findIndex(s => s.id === current.id);
+      const nextIndex = currentIndex + 1;
+      
+      // Don't cycle - stop at the last session
+      if (nextIndex < sessions.length) {
+        setCurrent(sessions[nextIndex]);
+      }
+      return;
+    }
+
+    // Ctrl + Shift + Tab - Previous Session (only in chat session)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault();
+      
+      // Only work if currently in a chat session
+      if (!current || !current.id) return;
+      
+      const sessions = state.sessions;
+      if (sessions.length === 0) return;
+      
+      const currentIndex = sessions.findIndex(s => s.id === current.id);
+      const prevIndex = currentIndex - 1;
+      
+      // Don't cycle - stop at the first session
+      if (prevIndex >= 0) {
+        setCurrent(sessions[prevIndex]);
+      }
+      return;
+    }
+
+    // / (Slash) - Focus form or search bar
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+      // Check if already focused on input/textarea
+      const activeElement = document.activeElement;
+      if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+        // Already focused, don't do anything
+        return;
+      }
+
+      e.preventDefault();
+
+      // Determine current page state
+      const chatArea = document.querySelector('.chat-area');
+      
+      if (chatArea && chatArea.classList.contains('chats-active')) {
+        // Chats page - focus search bar
+        const searchInput = document.getElementById('chats-search');
+        if (searchInput) searchInput.focus();
+        
+      } else if (chatArea && chatArea.classList.contains('artifacts-active')) {
+        // Artifacts page - focus search bar
+        const searchInput = document.getElementById('artifacts-search');
+        if (searchInput) searchInput.focus();
+        
+      } else if (chatArea && chatArea.classList.contains('projects-active')) {
+        const projectDetailView = document.getElementById('project-detail-view');
+        
+        if (projectDetailView && projectDetailView.classList.contains('active') && currentProject) {
+          // Project detail page - focus message input
+          const projectInput = document.getElementById('project-message-input');
+          if (projectInput) projectInput.focus();
+        } else {
+          // Projects list page - focus search bar
+          const searchInput = document.getElementById('projects-search');
+          if (searchInput) searchInput.focus();
+        }
+        
+      } else if (current && current.id) {
+        // Regular chat session - focus message input
+        const msgInput = document.getElementById('msg');
+        if (msgInput) msgInput.focus();
+      }
+      
+      return;
+    }
+  });
+}
+
+// Initialize keyboard shortcuts on page load
+document.addEventListener('DOMContentLoaded', initKeyboardShortcuts);
+
+// ==================== MOUSE BUTTONS NAVIGATION ====================
+// Initialize page history localStorage
+const PAGE_HISTORY_KEY = 'clustrix_page_history';
+let isNavigatingHistory = false; // Flag to prevent recursive pushes
+
+function initPageHistory() {
+  // Clear history on page refresh/reload
+  localStorage.removeItem(PAGE_HISTORY_KEY);
+  
+  // Create new history with current page state
+  localStorage.setItem(PAGE_HISTORY_KEY, JSON.stringify({
+    stack: [getCurrentPageState()],
+    index: 0
+  }));
+}
+
+function getCurrentPageState() {
+  // Determine current page based on chat-area classes
+  const chatArea = document.querySelector('.chat-area');
+  
+  if (!chatArea) {
+    return { page: 'welcome', sessionId: null };
+  }
+  
+  // Check for list pages (chats, artifacts, projects list)
+  if (chatArea.classList.contains('chats-active')) {
+    return { page: 'chats-list' };
+  } else if (chatArea.classList.contains('artifacts-active')) {
+    return { page: 'artifacts-list' };
+  } else if (chatArea.classList.contains('projects-active')) {
+    // Check if it's project detail or project list
+    const projectDetailView = document.getElementById('project-detail-view');
+    if (projectDetailView && projectDetailView.classList.contains('active') && currentProject) {
+      return { page: 'project-detail', projectId: currentProject.id };
+    } else {
+      return { page: 'projects-list' };
+    }
+  } else if (chatArea.classList.contains('welcome-active')) {
+    return { page: 'welcome' };
+  } else if (current && current.id) {
+    // Regular chat session
+    return { page: 'chat', sessionId: current.id };
+  }
+  
+  return { page: 'welcome' };
+}
+
+function pushPageHistory(pageState) {
+  if (isNavigatingHistory) return; // Don't push while navigating history
+  
+  let history = JSON.parse(localStorage.getItem(PAGE_HISTORY_KEY) || '{"stack":[],"index":0}');
+  
+  // Remove any forward history if we're not at the end
+  history.stack = history.stack.slice(0, history.index + 1);
+  
+  // Add new state if it's different from current
+  const currentState = history.stack[history.index];
+  if (JSON.stringify(currentState) !== JSON.stringify(pageState)) {
+    history.stack.push(pageState);
+    history.index++;
+    
+    // Limit history size to 50 items
+    if (history.stack.length > 50) {
+      history.stack.shift();
+      history.index--;
+    }
+    
+    localStorage.setItem(PAGE_HISTORY_KEY, JSON.stringify(history));
+  }
+}
+
+function goBackHistory() {
+  // Check if modal is open - close modal instead of navigating
+  const openModal = document.querySelector('.modal:not(.hidden)');
+  if (openModal) {
+    closeModalWithAnimation(openModal);
+    return;
+  }
+  
+  let history = JSON.parse(localStorage.getItem(PAGE_HISTORY_KEY) || '{"stack":[],"index":0}');
+  if (history.index > 0) {
+    history.index--;
+    localStorage.setItem(PAGE_HISTORY_KEY, JSON.stringify(history));
+    isNavigatingHistory = true;
+    navigateToState(history.stack[history.index]);
+    setTimeout(() => { isNavigatingHistory = false; }, 100);
+  }
+}
+
+function goForwardHistory() {
+  // Don't do anything if modal is open
+  const openModal = document.querySelector('.modal:not(.hidden)');
+  if (openModal) {
+    return;
+  }
+  
+  let history = JSON.parse(localStorage.getItem(PAGE_HISTORY_KEY) || '{"stack":[],"index":0}');
+  if (history.index < history.stack.length - 1) {
+    history.index++;
+    localStorage.setItem(PAGE_HISTORY_KEY, JSON.stringify(history));
+    isNavigatingHistory = true;
+    navigateToState(history.stack[history.index]);
+    setTimeout(() => { isNavigatingHistory = false; }, 100);
+  }
+}
+
+function navigateToState(pageState) {
+  const { page, sessionId, projectId } = pageState;
+  
+  switch (page) {
+    case 'welcome':
+      // Navigate to welcome screen
+      if (typeof showWelcomeScreen === 'function') {
+        showWelcomeScreen();
+      }
+      break;
+      
+    case 'chats-list':
+      // Navigate to chats list page
+      if (typeof showChatsPage === 'function') {
+        showChatsPage();
+      }
+      break;
+      
+    case 'artifacts-list':
+      // Navigate to artifacts list page
+      if (typeof showArtifactsPage === 'function') {
+        showArtifactsPage();
+      }
+      break;
+      
+    case 'projects-list':
+      // Navigate to projects list page
+      const detailView = document.getElementById('project-detail-view');
+      if (detailView && detailView.classList.contains('active')) {
+        // If coming from project detail, use animated transition
+        if (typeof showProjectsListView === 'function') {
+          showProjectsListView();
+        }
+      } else {
+        // Otherwise just show projects page
+        if (typeof showProjectsPage === 'function') {
+          showProjectsPage();
+        }
+      }
+      break;
+      
+    case 'chat':
+      // Navigate to chat session
+      if (sessionId) {
+        const session = state.sessions.find(s => s.id === sessionId);
+        if (session) {
+          setCurrent(session);
+        }
+      }
+      break;
+      
+    case 'project-detail':
+      // Navigate to project detail
+      if (projectId) {
+        const project = projectsData.find(p => p.id === projectId);
+        if (project && typeof showProjectDetailView === 'function') {
+          showProjectDetailView(project);
+        }
+      }
+      break;
+  }
+}
+
+// Mouse buttons navigation
+document.addEventListener('mousedown', (e) => {
+  if (e.button === 3) { // Back button
+    e.preventDefault();
+    goBackHistory();
+  } else if (e.button === 4) { // Forward button
+    e.preventDefault();
+    goForwardHistory();
+  }
+});
+
+// Initialize page history on load
+document.addEventListener('DOMContentLoaded', initPageHistory);
 
 window.DEBUG = {
   getCacheStats,

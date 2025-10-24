@@ -1369,6 +1369,10 @@ opacity: 0;
   color: var(--fg);
 }
 
+#settings-menu .menu-item svg {
+  flex-shrink: 0;
+}
+
 /* Settings Menu */
 #settings-menu {
   position: absolute;
@@ -1390,6 +1394,10 @@ opacity: 0;
   display: none;
 }
 
+#settings-menu.closing {
+  animation: slideDown 0.2s ease-out forwards;
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;
@@ -1398,6 +1406,17 @@ opacity: 0;
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
   }
 }
 
@@ -3437,6 +3456,10 @@ textarea::-webkit-scrollbar {
   display: none;
 }
 
+.modal.closing {
+  animation: fadeOut 0.2s ease-out forwards;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -3462,7 +3485,7 @@ textarea::-webkit-scrollbar {
 }
 
 .modal-card {
-  width: min(500px, 90vw);
+  width: min(600px, 90vw);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -3470,6 +3493,10 @@ textarea::-webkit-scrollbar {
   color: var(--fg);
   position: relative;
   animation: slideInModal 0.3s var(--bounce);
+}
+
+.modal.closing .modal-card {
+  animation: slideOutModal 0.2s ease-out forwards;
 }
 
 @keyframes slideInModal {
@@ -3480,6 +3507,17 @@ textarea::-webkit-scrollbar {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideOutModal {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
   }
 }
 
@@ -4160,16 +4198,20 @@ blockquote blockquote blockquote blockquote::before {
 #app.sidebar-collapsed .primary-btn-reversed span,
 #app.sidebar-collapsed .icon-btn2 span,
 #app.sidebar-collapsed .settings-btn span,
-#app.sidebar-collapsed .menu-item span,
 #app.sidebar-collapsed .theme-info span,
 #app.sidebar-collapsed #theme-label,
 #app.sidebar-collapsed .search-container,
 #app.sidebar-collapsed .sessions-container,
 #app.sidebar-collapsed .theme-switcher,
 #app.sidebar-collapsed #session-list li .tokens,
-#app.sidebar-collapsed #session-list li .menu,
-#app.sidebar-collapsed #settings-menu {
+#app.sidebar-collapsed #session-list li .menu {
   display: none;
+}
+
+#app.sidebar-collapsed #settings-menu {
+  width: 240px;
+  display: flex;
+  flex-direction: column;
 }
 
 #app.sidebar-collapsed .icon-btn2,
@@ -5691,6 +5733,17 @@ a:focus-visible {
   }
 }
 
+@keyframes fadeOutScale {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+
 /* Thinking update container (structured updates from backend) */
 .thinking-update {
   display: flex;
@@ -6472,7 +6525,7 @@ button:disabled .btn-icon {
   width: min(500px, 90vw);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   max-height: 250px;
   overflow: auto;
   box-shadow: var(--shadow-xl);
@@ -6486,6 +6539,10 @@ button:disabled .btn-icon {
 #quick-model-switch-card {
   padding: 0;
   animation: fadeInScale 0.2s var(--bounce);
+}
+
+#quick-model-switch-modal.closing #quick-model-switch-card {
+  animation: fadeOutScale 0.2s ease-out forwards;
 }
 
 .quick-model-item {
@@ -8300,7 +8357,6 @@ button:disabled .btn-icon {
     width: calc(100% - 40px);
     margin: 0px 20px;
     padding: 12px 0px 0;
-    border-bottom: 1px solid var(--border);
     overflow-x: auto;
     /* background: var(--bg-secondary); */
 }
@@ -8309,7 +8365,7 @@ button:disabled .btn-icon {
   padding: 8px 16px;
   background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-bottom: 1px solid transparent;
   color: var(--fg-muted);
   cursor: pointer;
   font-size: 14px;
@@ -8324,8 +8380,13 @@ button:disabled .btn-icon {
   background: var(--hover-bg);
 }
 
+.learn-more-tab-btn {
+  border-bottom-color: var(--border);
+}
+
 .learn-more-tab-btn.active {
   color: var(--primary);
+  border-bottom: 2px solid transparent;
   border-bottom-color: var(--primary);
 }
 
@@ -8362,6 +8423,45 @@ button:disabled .btn-icon {
   font-size: 14px;
   font-weight: 600;
   color: var(--fg);
+}
+
+/* Keyboard Shortcuts Table Styling */
+.learn-more-section table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.learn-more-section table tr {
+  border-bottom: 1px solid var(--border);
+}
+
+.learn-more-section table tr:last-child {
+  border-bottom: none;
+}
+
+.learn-more-section table td {
+  padding: 10px 8px;
+  text-align: left;
+}
+
+.learn-more-section table tr:first-child td {
+  font-weight: 600;
+  color: var(--fg);
+  background-color: var(--bg-hover, rgba(0, 0, 0, 0.02));
+}
+
+.learn-more-section table td:first-child {
+  font-family: 'Mono', monospace;
+  color: var(--primary);
+  white-space: nowrap;
+  padding-right: 16px;
+  font-weight: 500;
+}
+
+.learn-more-section table td:last-child {
+  color: var(--fg-muted, rgba(255, 255, 255, 0.7));
 }
 
 .learn-more-section p {

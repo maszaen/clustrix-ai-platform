@@ -1047,7 +1047,7 @@
           </div>
 
           <!-- Action History -->
-          <div class="form-group">
+          <div class="form-group" id="action-history-section">
             <label>Action History</label>
             <div id="action-history-container" class="action-history-list">
               <!-- History items will be populated here -->
@@ -1062,6 +1062,30 @@
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirmation-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card confirm-modal">
+      <div class="modal-header">
+        <h2 id="confirmation-title">Konfirmasi</h2>
+        <button id="confirmation-close-btn" class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+      </div>
+      <hr />
+      <div class="modal-body">
+        <p id="confirmation-message" style="margin-bottom: 0;">Are you sure?</p>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="confirmation-cancel-btn" class="primary-btn">Cancel</button>
+        <button id="confirmation-confirm-btn" class="danger-btn">Confirm</button>
       </div>
     </div>
   </div>

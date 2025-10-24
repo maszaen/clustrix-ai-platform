@@ -29,6 +29,14 @@ let justSentMessage = false;
 let currentProject = null;
 let projectsData = [];
 let previousWebSearchState = null; // Track websearch state before entering project
+let confirmationModal = null;
+let confirmationTitleEl = null;
+let confirmationMessageEl = null;
+let confirmationConfirmBtn = null;
+let confirmationCancelBtn = null;
+let confirmationCloseBtn = null;
+let confirmationModalOptions = null;
+let isConfirmationProcessing = false;
 
 // PERFORMANCE: Dirty session tracking for incremental saves
 const dirtySessionIds = new Set();
@@ -14669,7 +14677,7 @@ function setupEventListeners() {
   // ===== AUTH BUTTON HANDLER (Login/Logout) =====
   const authBtn = document.getElementById('auth-btn');
   if (authBtn) {
-    authBtn.addEventListener('click', (e) => {
+    authBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       
       // Check if we're in login or logout state
@@ -14678,13 +14686,13 @@ function setupEventListeners() {
       
       if (loginState && !loginState.classList.contains('hidden')) {
         // Login state is visible, so handle login
-        handleGoogleLogin();
+        // Don't close dropdown - show loading state instead
+        await handleSidebarLogin();
       } else if (logoutState && !logoutState.classList.contains('hidden')) {
         // Logout state is visible, so handle logout
         handleLogout();
+        closeDropdownWithAnimation($("#settings-menu"));
       }
-      
-      closeDropdownWithAnimation($("#settings-menu"));
     });
   }
 
@@ -15551,7 +15559,7 @@ async function updateAccountModalUI() {
       // Show close modal button only when logged in
       const closeModalBtn = document.getElementById('account-close-modal-btn');
       if (closeModalBtn) {
-        closeModalBtn.style.display = 'inline-flex';
+        closeModalBtn.style.display = 'none';
       }
       
       // Display GitHub username ONLY (clean, no numbers) - CAPITALIZE
@@ -15671,6 +15679,101 @@ async function updateAccountModalUI() {
   }
 }
 
+async function handleSidebarLogin() {
+  const loginState = document.getElementById('login-state');
+  const loginIcon = loginState?.querySelector('svg');
+  const loginText = loginState?.querySelector('span');
+  
+  try {
+    log('AUTH', 1, 'handleSidebarLogin', 'Starting GitHub OAuth flow from sidebar');
+    
+    // Save original content
+    const originalIconHTML = loginIcon?.outerHTML || '';
+    const originalText = loginText?.textContent || 'Log in with GitHub';
+    
+    // Show loading state in sidebar button
+    if (loginIcon) {
+      loginIcon.outerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" style="animation: spin 1s linear infinite;">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" fill="none" stroke="currentColor"/>
+        </svg>
+      `;
+    }
+    if (loginText) {
+      loginText.textContent = 'Redirecting, please wait...';
+    }
+    
+    const result = await window.api.sync.startOAuth?.() || { success: false, error: 'OAuth not available' };
+    
+    if (result.success) {
+      log('AUTH', 1, 'handleSidebarLogin', 'OAuth successful', { email: result.email, username: result.username });
+      
+      // Check if we need to restart app
+      if (result.needsRestart) {
+        showToast(`Logged in as ${result.username}. Restarting app...`, 'success');
+        
+        // Show success icon briefly before restart
+        const newLoginIcon = loginState?.querySelector('svg');
+        if (newLoginIcon) {
+          newLoginIcon.outerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor"/>
+            </svg>
+          `;
+        }
+        if (loginText) {
+          loginText.textContent = 'Success!';
+        }
+        
+        setTimeout(() => {
+          window.api.app.restart();
+        }, 1500);
+      } else {
+        await updateAccountModalUI();
+        await updateSidebarAccountButton();
+        showToast(`Logged in as ${result.username}`, 'success');
+        
+        // Close dropdown after successful login
+        closeDropdownWithAnimation($("#settings-menu"));
+      }
+    } else {
+      log('AUTH', 4, 'handleSidebarLogin', 'OAuth failed', { error: result.error });
+      const errorMsg = result.configured === false 
+        ? `GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env`
+        : `Login failed: ${result.error || 'Unknown error'}`;
+      showToast(errorMsg, 'error');
+      
+      // Restore original state
+      const newLoginIcon = loginState?.querySelector('svg');
+      if (newLoginIcon && loginIcon) {
+        newLoginIcon.outerHTML = originalIconHTML;
+      }
+      if (loginText) {
+        loginText.textContent = originalText;
+      }
+    }
+  } catch (e) {
+    log('AUTH', 4, 'handleSidebarLogin', 'OAuth error', { error: e.message });
+    showToast('An error occurred during login: ' + e.message, 'error');
+    
+    // Restore original state
+    const loginStateRestore = document.getElementById('login-state');
+    const newLoginIcon = loginStateRestore?.querySelector('svg');
+    const newLoginText = loginStateRestore?.querySelector('span');
+    
+    if (newLoginIcon && loginIcon) {
+      newLoginIcon.outerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" fill="currentColor"/>
+        </svg>
+      `;
+    }
+    if (newLoginText) {
+      newLoginText.textContent = 'Log in with GitHub';
+    }
+  }
+}
+
 async function handleGoogleLogin() {
   const loginBtn = document.getElementById('google-login-btn');
   const btnText = loginBtn?.querySelector('.btn-text');
@@ -15762,10 +15865,37 @@ async function handleGoogleLogin() {
   }
 }
 
-async function handleLogout() {
+function handleLogout() {
+  const message = `
+  <p>Signing out will:</p>
+  <ul style="margin: 8px 0 0 18px; line-height: 1.4;">
+  <li>Make an automatic backup to GitHub before signing out.</li>
+  <li>Delete local cloud data for this account.</li>
+  <li>Restart the app to return to internal mode.</li>
+  </ul>
+  <p style="margin-top: 12px;">Continue?</p>
+  `;
+
+  showConfirmationModal({
+    title: 'Logout from account?',
+    message,
+    confirmText: 'Logout & Restart',
+    cancelText: 'Cancel',
+    confirmLoadingText: 'Logging out...',
+    confirmVariant: 'danger',
+    closeOnSuccess: false,
+    lockWhileProcessing: true,
+    showErrorToast: false,
+    onConfirm: async () => {
+      await performLogout();
+    }
+  });
+}
+
+async function performLogout() {
   try {
     log('AUTH', 1, 'handleLogout', 'Logging out');
-    
+
     // Close dropdown menu
     const accountMenuDropdown = document.getElementById('account-menu-dropdown');
     const accountMenuBtn = document.getElementById('account-menu-btn');
@@ -15804,10 +15934,62 @@ async function handleLogout() {
       logoutBtn.style.cursor = 'not-allowed';
       logoutBtn.style.opacity = '0.6';
     }
-    
+
+    // Automatic backup before logout
+    log('AUTH', 1, 'handleLogout', 'Starting automatic backup before logout');
+    try {
+      const backupResult = await window.api.sync.backupNow();
+      if (backupResult?.needsConflictResolution) {
+        log('AUTH', 2, 'handleLogout', 'Automatic backup requires conflict resolution', {
+          conflictCount: backupResult.conflicts?.length || 0,
+        });
+        showToast('Backup requires conflict resolution. Please resolve conflicts before logout.', 'error');
+        const conflictError = new Error('Backup requires conflict resolution.');
+        conflictError.handled = true;
+        throw conflictError;
+      }
+
+      if (backupResult?.success) {
+        log('AUTH', 1, 'handleLogout', 'Automatic backup completed successfully', {
+          repository: backupResult.repository,
+          strategy: backupResult.strategy,
+        });
+        showToast('Automatic backup completed. Continuing with logout...', 'success');
+        try {
+          await window.api.sync.recordActionHistory('backup', 'success');
+          // Skip loadAndDisplayActionHistory during logout - app will restart anyway
+        } catch (historyErr) {
+          log('AUTH', 2, 'handleLogout', 'Failed to record automatic backup success', { error: historyErr.message });
+        }
+      } else {
+        const backupError = backupResult?.error || 'Backup failed (unknown reason)';
+        log('AUTH', 2, 'handleLogout', 'Automatic backup failed', { error: backupError });
+        showToast(`Automatic backup failed: ${backupError}. Continuing with logout...`, 'warning');
+        try {
+          await window.api.sync.recordActionHistory('backup', 'failed');
+          // Skip loadAndDisplayActionHistory during logout - app will restart anyway
+        } catch (historyErr) {
+          log('AUTH', 2, 'handleLogout', 'Failed to record automatic backup failure', { error: historyErr.message });
+        }
+      }
+    } catch (backupErr) {
+      if (backupErr?.message === 'Backup requires conflict resolution.') {
+        backupErr.handled = true;
+        throw backupErr;
+      }
+      log('AUTH', 3, 'handleLogout', 'Automatic backup threw an error', { error: backupErr?.message || backupErr });
+      showToast(`Automatic backup error: ${backupErr?.message || backupErr}. Continuing with logout...`, 'warning');
+      try {
+        await window.api.sync.recordActionHistory('backup', 'failed');
+        // Skip loadAndDisplayActionHistory during logout - app will restart anyway
+      } catch (historyErr) {
+        log('AUTH', 2, 'handleLogout', 'Failed to record automatic backup error', { error: historyErr.message });
+      }
+    }
+
     log('AUTH', 1, 'handleLogout', 'Calling logout API');
-    const result = await window.api.sync.logout({ deleteCloudData: false });
-    
+    const result = await window.api.sync.logout({ deleteCloudData: true });
+
     if (result.success) {
       log('AUTH', 1, 'handleLogout', 'Logout successful, preparing to restart');
       
@@ -15855,12 +16037,15 @@ async function handleLogout() {
         logoutBtn.style.cursor = '';
         logoutBtn.style.opacity = '';
       }
-      
+
       showToast(`Logout failed: ${result.error}`, 'error');
+      const logoutError = new Error(result.error || 'Logout failed');
+      logoutError.handled = true;
+      throw logoutError;
     }
   } catch (e) {
     log('AUTH', 4, 'handleLogout', 'Logout error', { error: e.message });
-    
+
     // Restore account name
     const accountName = document.getElementById('account-name');
     if (accountName) {
@@ -15884,8 +16069,11 @@ async function handleLogout() {
       logoutBtn.style.cursor = '';
       logoutBtn.style.opacity = '';
     }
-    
-    showToast('Logout error: ' + e.message, 'error');
+
+    if (!e?.handled) {
+      showToast('Logout error: ' + e.message, 'error');
+    }
+    throw e;
   }
 }
 
@@ -15894,6 +16082,7 @@ async function loadAndDisplayActionHistory() {
     // Load action history from per-account file
     const result = await window.api.sync.getActionHistory();
     const historyList = result.success ? (result.history || []) : [];
+    const section = document.getElementById('action-history-section');
     const container = document.getElementById('action-history-container');
     const emptyMsg = document.getElementById('action-history-empty');
     
@@ -15902,11 +16091,16 @@ async function loadAndDisplayActionHistory() {
     // Clear container
     container.innerHTML = '';
     
+    // If no history, hide the entire section
     if (!historyList || historyList.length === 0) {
-      if (emptyMsg) emptyMsg.style.display = 'block';
+      if (section) section.style.display = 'none';
+      if (emptyMsg) emptyMsg.style.display = 'none';
       container.style.display = 'none';
       return;
     }
+    
+    // Show the section if there's history
+    if (section) section.style.display = 'block';
     
     // Show last 10 items (most recent first)
     const recentHistory = historyList.slice(-10).reverse();
@@ -15964,7 +16158,7 @@ async function handleSyncNow() {
     
     if (result.success) {
       log('SYNC', 1, 'handleSyncNow', 'Sync completed successfully', { repo: result.repository });
-      showToast(`✓ Synced from: ${result.repository}`, 'success');
+      showToast(`Synced from: ${result.repository}`, 'success');
       
       // Record action in history
       await window.api.sync.recordActionHistory('sync', 'success');
@@ -15995,7 +16189,7 @@ async function handleSyncNow() {
         error: result.error,
         fullResult: result
       });
-      showToast(`❌ Sync failed: ${result.error}`, 'error');
+      showToast(`Sync failed: ${result.error}`, 'error');
       
       // Record action in history as failed
       await window.api.sync.recordActionHistory('sync', 'failed');
@@ -16006,7 +16200,7 @@ async function handleSyncNow() {
       error: e.message,
       stack: e.stack
     });
-    showToast('❌ Sync error: ' + e.message, 'error');
+    showToast('Sync error: ' + e.message, 'error');
     
     // Record action in history as failed
     await window.api.sync.recordActionHistory('sync', 'failed');
@@ -16035,14 +16229,14 @@ async function handleBackupNow() {
         conflictCount: result.conflicts.length
       });
       
-      showToast(`⚠️ ${result.conflicts.length} conflict(s) detected`, 'warning');
+      showToast(`${result.conflicts.length} conflict(s) detected`, 'warning');
       await showConflictResolutionModal(result.conflicts);
       return;
     }
     
     if (result.success) {
       log('SYNC', 1, 'handleBackupNow', 'Backup completed successfully', { repo: result.repository });
-      showToast(`✓ Backed up! Uploaded to: ${result.repository}`, 'success');
+      showToast(`Backed up to: ${result.repository}`, 'success');
       
       // Record action in history
       await window.api.sync.recordActionHistory('backup', 'success');
@@ -16052,7 +16246,7 @@ async function handleBackupNow() {
         error: result.error,
         fullResult: result
       });
-      showToast(`❌ Backup failed: ${result.error}`, 'error');
+      showToast(`Backup failed: ${result.error}`, 'error');
       
       // Record action in history as failed
       await window.api.sync.recordActionHistory('backup', 'failed');
@@ -16063,7 +16257,7 @@ async function handleBackupNow() {
       error: e.message,
       stack: e.stack
     });
-    showToast('❌ Backup error: ' + e.message, 'error');
+    showToast('Backup error: ' + e.message, 'error');
     
     // Record action in history as failed
     await window.api.sync.recordActionHistory('backup', 'failed');
@@ -16084,7 +16278,7 @@ async function showConflictResolutionModal(conflicts) {
   const modal = document.getElementById('sync-conflict-modal');
   if (!modal) {
     log('SYNC', 4, 'showConflictResolutionModal', 'Conflict modal not found in DOM');
-    showToast('❌ Conflict modal not available', 'error');
+    showToast('Conflict modal not available', 'error');
     return;
   }
   
@@ -16105,7 +16299,7 @@ async function showConflictResolutionModal(conflicts) {
           log('SYNC', 1, 'showConflictResolutionModal', 'Conflicts resolved and backup completed', {
             conflictsResolved: result.conflictsResolved
           });
-          showToast(`✓ Backup completed! ${result.conflictsResolved} conflict(s) resolved`, 'success');
+          showToast(`Backup completed. ${result.conflictsResolved} conflict(s) resolved`, 'success');
           
           // Record success
           await window.api.sync.recordActionHistory('backup', 'success');
@@ -16114,7 +16308,7 @@ async function showConflictResolutionModal(conflicts) {
           log('SYNC', 4, 'showConflictResolutionModal', 'Failed to apply resolutions', {
             error: result.error
           });
-          showToast(`❌ Failed to apply resolutions: ${result.error}`, 'error');
+          showToast(`Failed to apply resolutions: ${result.error}`, 'error');
           
           // Record failure
           await window.api.sync.recordActionHistory('backup', 'failed');
@@ -16124,7 +16318,7 @@ async function showConflictResolutionModal(conflicts) {
         log('SYNC', 4, 'showConflictResolutionModal', 'Error applying resolutions', {
           error: err.message
         });
-        showToast(`❌ Error: ${err.message}`, 'error');
+        showToast(`Error: ${err.message}`, 'error');
         
         await window.api.sync.recordActionHistory('backup', 'failed');
         await loadAndDisplayActionHistory();
@@ -16235,6 +16429,55 @@ async function showConflictResolutionModal(conflicts) {
 
 async function handleDataSourceSwitch(mode) {
   try {
+    const syncConfig = await window.api.sync.getConfig();
+
+    if (syncConfig.currentMode === mode) {
+      log('SYNC', 2, 'handleDataSourceSwitch', 'Requested mode is already active', { mode });
+      return;
+    }
+
+    if (mode === 'cloud' && !syncConfig.currentCloudUser) {
+      showToast('Please sign in with GitHub first.', 'error');
+      return;
+    }
+
+    const modeLabel = mode === 'cloud' ? 'Cloud (GitHub)' : 'Internal';
+    const message = mode === 'cloud'
+      ? `
+      <p>Data will be redirected to <strong>${modeLabel}</strong>.</p>
+      <p style="margin-top: 8px;">This process requires an application restart and will synchronize your cloud database.</p>
+      `
+      : `
+      <p>Switching to <strong>${modeLabel}</strong> will:</p>
+      <ul style="margin: 8px 0 0 18px; line-height: 1.4;">
+      <li>Make an automatic backup to GitHub before switching.</li>
+      <li>Restart the app to load data from internal storage.</li>
+      </ul>
+      <p style="margin-top: 12px;">Continue?</p>
+      `;
+
+    showConfirmationModal({
+      title: `Switch to ${modeLabel}?`,
+      message,
+      confirmText: `Switch to ${modeLabel}`,
+      cancelText: 'Cancel',
+      confirmLoadingText: 'Switching...',
+      confirmVariant: 'primary',
+      closeOnSuccess: false,
+      lockWhileProcessing: true,
+      showErrorToast: false,
+      onConfirm: async () => {
+        await executeDataSourceSwitch(mode);
+      }
+    });
+  } catch (e) {
+    log('SYNC', 4, 'handleDataSourceSwitch', 'Failed to open confirmation modal', { error: e.message });
+    showToast('Switch error: ' + e.message, 'error');
+  }
+}
+
+async function executeDataSourceSwitch(mode) {
+  try {
     log('SYNC', 1, 'handleDataSourceSwitch', 'Switching data source', { newMode: mode });
     
     const syncConfig = await window.api.sync.getConfig();
@@ -16273,6 +16516,68 @@ async function handleDataSourceSwitch(mode) {
     // Add loading state to target button
     const originalHTML = targetBtn.innerHTML;
     targetBtn.classList.add('loading');
+    
+    // Automatic backup before switching from cloud to internal
+    if (syncConfig.currentMode === 'cloud' && mode === 'internal' && syncConfig.currentCloudUser) {
+      log('SYNC', 1, 'executeDataSourceSwitch', 'Starting automatic backup before switching to internal mode');
+      targetBtn.innerHTML = `
+        <svg style="animation: spin 1s linear infinite; margin-right: 6px; transform-origin: center;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+        </svg>
+        Backing up...
+      `;
+      
+      try {
+        const backupResult = await window.api.sync.backupNow();
+        if (backupResult?.needsConflictResolution) {
+          log('SYNC', 2, 'executeDataSourceSwitch', 'Automatic backup requires conflict resolution', {
+            conflictCount: backupResult.conflicts?.length || 0,
+          });
+          showToast('Backup requires conflict resolution. Please resolve conflicts before switching.', 'error');
+          const conflictError = new Error('Backup requires conflict resolution.');
+          conflictError.handled = true;
+          throw conflictError;
+        }
+
+        if (backupResult?.success) {
+          log('SYNC', 1, 'executeDataSourceSwitch', 'Automatic backup completed successfully', {
+            repository: backupResult.repository,
+            strategy: backupResult.strategy,
+          });
+          showToast('Automatic backup completed. Continuing with switch...', 'success');
+          try {
+            await window.api.sync.recordActionHistory('backup', 'success');
+            // Skip loadAndDisplayActionHistory during switch - app will restart anyway
+          } catch (historyErr) {
+            log('SYNC', 2, 'executeDataSourceSwitch', 'Failed to record automatic backup success', { error: historyErr.message });
+          }
+        } else {
+          const backupError = backupResult?.error || 'Backup failed (unknown reason)';
+          log('SYNC', 2, 'executeDataSourceSwitch', 'Automatic backup failed', { error: backupError });
+          showToast(`Automatic backup failed: ${backupError}. Continuing with switch...`, 'warning');
+          try {
+            await window.api.sync.recordActionHistory('backup', 'failed');
+            // Skip loadAndDisplayActionHistory during switch - app will restart anyway
+          } catch (historyErr) {
+            log('SYNC', 2, 'executeDataSourceSwitch', 'Failed to record automatic backup failure', { error: historyErr.message });
+          }
+        }
+      } catch (backupErr) {
+        if (backupErr?.message === 'Backup requires conflict resolution.') {
+          backupErr.handled = true;
+          throw backupErr;
+        }
+        log('SYNC', 3, 'executeDataSourceSwitch', 'Automatic backup threw an error', { error: backupErr?.message || backupErr });
+        showToast(`Automatic backup error: ${backupErr?.message || backupErr}. Continuing with switch...`, 'warning');
+        try {
+          await window.api.sync.recordActionHistory('backup', 'failed');
+          // Skip loadAndDisplayActionHistory during switch - app will restart anyway
+        } catch (historyErr) {
+          log('SYNC', 2, 'executeDataSourceSwitch', 'Failed to record automatic backup error', { error: historyErr.message });
+        }
+      }
+    }
+    
     targetBtn.innerHTML = `
       <svg style="animation: spin 1s linear infinite; margin-right: 6px; transform-origin: center;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
@@ -16343,19 +16648,27 @@ async function handleDataSourceSwitch(mode) {
           cloudBtn.classList.add('active');
         }
       }
-      
+
       showToast(`Failed: ${result.error}`, 'error');
+      const switchError = new Error(result.error || 'Failed to switch data source');
+      switchError.handled = true;
+      throw switchError;
     }
   } catch (e) {
     log('SYNC', 4, 'handleDataSourceSwitch', 'Switch error', { error: e.message });
-    showToast('Switch error: ' + e.message, 'error');
-    
+    if (!e?.handled) {
+      showToast('Switch error: ' + e.message, 'error');
+    }
+
     // Restore buttons on error
     await updateAccountModalUI();
+    throw e;
   }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  initConfirmationModal();
+
   // Load sync config and setup account UI on init
   try {
     const syncConfig = await window.api.sync.getConfig();
@@ -16536,6 +16849,152 @@ window.addEventListener("error", (event) => {
 
 // ==================== MODAL HELPER FUNCTIONS ====================
 
+function initConfirmationModal() {
+  confirmationModal = document.getElementById('confirmation-modal');
+  if (!confirmationModal) {
+    log('UI', 3, 'initConfirmationModal', 'Confirmation modal not found in DOM');
+    return;
+  }
+
+  confirmationTitleEl = document.getElementById('confirmation-title');
+  confirmationMessageEl = document.getElementById('confirmation-message');
+  confirmationConfirmBtn = document.getElementById('confirmation-confirm-btn');
+  confirmationCancelBtn = document.getElementById('confirmation-cancel-btn');
+  confirmationCloseBtn = document.getElementById('confirmation-close-btn');
+
+  const overlay = confirmationModal.querySelector('.modal-overlay');
+
+  const handleDismiss = () => {
+    if (isConfirmationProcessing && confirmationModalOptions?.lockWhileProcessing) {
+      return;
+    }
+    confirmationModal.classList.remove('processing');
+    closeModalWithAnimation(confirmationModal);
+  };
+
+  if (overlay) {
+    overlay.addEventListener('click', handleDismiss);
+  }
+
+  if (confirmationCancelBtn) {
+    confirmationCancelBtn.addEventListener('click', handleDismiss);
+  }
+
+  if (confirmationCloseBtn) {
+    confirmationCloseBtn.addEventListener('click', handleDismiss);
+  }
+}
+
+function showConfirmationModal(options = {}) {
+  if (!confirmationModal) {
+    initConfirmationModal();
+    if (!confirmationModal) return;
+  }
+
+  const {
+    title = 'Konfirmasi',
+    message = 'Apakah kamu yakin?',
+    confirmText = 'Ya',
+    cancelText = 'Batal',
+    confirmLoadingText = 'Memproses...',
+    confirmVariant = 'danger',
+    closeOnSuccess = true,
+    lockWhileProcessing = false,
+    onConfirm = null,
+    onError = null,
+    showErrorToast = true,
+  } = options;
+
+  confirmationModalOptions = {
+    closeOnSuccess,
+    lockWhileProcessing,
+    confirmText,
+    confirmLoadingText,
+    onConfirm,
+    onError,
+    showErrorToast,
+  };
+
+  isConfirmationProcessing = false;
+  confirmationModal.classList.remove('processing');
+
+  if (confirmationTitleEl) {
+    confirmationTitleEl.textContent = title;
+  }
+
+  if (confirmationMessageEl) {
+    confirmationMessageEl.innerHTML = message;
+  }
+
+  if (confirmationCancelBtn) {
+    confirmationCancelBtn.textContent = cancelText;
+    confirmationCancelBtn.disabled = false;
+  }
+
+  if (confirmationCloseBtn) {
+    confirmationCloseBtn.disabled = false;
+  }
+
+  if (confirmationConfirmBtn) {
+    confirmationConfirmBtn.disabled = false;
+    confirmationConfirmBtn.className = confirmVariant === 'danger' ? 'danger-btn' : 'primary-btn';
+    confirmationConfirmBtn.innerHTML = confirmText;
+
+    confirmationConfirmBtn.onclick = async () => {
+      if (isConfirmationProcessing) return;
+
+      isConfirmationProcessing = true;
+      const spinner = `
+        <svg class="btn-spinner" style="animation: spin 1s linear infinite;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+        </svg>
+      `;
+      confirmationConfirmBtn.innerHTML = `${spinner}<span>${confirmLoadingText}</span>`;
+      confirmationConfirmBtn.disabled = true;
+
+      if (lockWhileProcessing) {
+        if (confirmationCancelBtn) confirmationCancelBtn.disabled = true;
+        if (confirmationCloseBtn) confirmationCloseBtn.disabled = true;
+        confirmationModal.classList.add('processing');
+      }
+
+      try {
+        if (typeof onConfirm === 'function') {
+          await onConfirm();
+        }
+
+        if (closeOnSuccess) {
+          closeModalWithAnimation(confirmationModal);
+        }
+      } catch (err) {
+        log('UI', 3, 'showConfirmationModal', 'Confirmation action failed', { error: err?.message || err });
+        isConfirmationProcessing = false;
+
+        if (lockWhileProcessing) {
+          if (confirmationCancelBtn) confirmationCancelBtn.disabled = false;
+          if (confirmationCloseBtn) confirmationCloseBtn.disabled = false;
+          confirmationModal.classList.remove('processing');
+        }
+
+        if (confirmationConfirmBtn) {
+          confirmationConfirmBtn.disabled = false;
+          confirmationConfirmBtn.innerHTML = confirmText;
+        }
+
+        if (typeof onError === 'function') {
+          onError(err);
+        } else if (showErrorToast && err?.message) {
+          showToast(err.message, 'error');
+        }
+
+        return;
+      }
+    };
+  }
+
+  openModalWithAnimation(confirmationModal);
+}
+
 /**
  * Close modal with animation
  * @param {HTMLElement|string} modal - Modal element or selector
@@ -16544,10 +17003,10 @@ window.addEventListener("error", (event) => {
 function closeModalWithAnimation(modal, duration = 200) {
   const modalElement = typeof modal === 'string' ? document.querySelector(modal) : modal;
   if (!modalElement) return;
-  
+
   // Add closing class to trigger animation
   modalElement.classList.add('closing');
-  
+
   // After animation completes, add hidden class and remove closing
   setTimeout(() => {
     modalElement.classList.add('hidden');
@@ -16562,7 +17021,7 @@ function closeModalWithAnimation(modal, duration = 200) {
 function openModalWithAnimation(modal) {
   const modalElement = typeof modal === 'string' ? document.querySelector(modal) : modal;
   if (!modalElement) return;
-  
+
   // Remove hidden and closing classes
   modalElement.classList.remove('hidden', 'closing');
 }

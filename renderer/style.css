@@ -254,7 +254,7 @@ body.light-theme {
   --link-hover: #1e3a8a;
 
   --danger: #e81123;
-  --danger-hover: #c22f25ff;
+  --danger-hover: #c230253f;
   --danger-light: #fce8e6;
   --success: #25bd4dff;
   --warning: #fbbc04;
@@ -326,7 +326,7 @@ body.dark-theme {
   --link-hover: #f3f8ffff;
 
   --danger: #e81123;
-  --danger-hover: #c22f25ff;
+  --danger-hover: #c230253e;
   --danger-light: #3d1a00;
   --success: #57e112ff;
   --warning: #f8e44aff;
@@ -688,6 +688,10 @@ hr {
   text-overflow: ellipsis;
   max-width: 300px;
   min-width: 0 !important;
+}
+
+.modal-footer {
+  padding: var(--spacing-md) var(--spacing-lg);
 }
 
 .modal-card hr {
@@ -3621,6 +3625,24 @@ textarea::-webkit-scrollbar {
   color: var(--fg);
 }
 
+.account-menu-item:first-child {
+  border-top-right-radius: var(--radius-lg);
+  border-top-left-radius: var(--radius-lg);
+}
+
+.account-menu-item:last-child {
+  border-bottom-right-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--radius-lg);
+}
+
+.account-menu-item-danger {
+  color: var(--danger);
+}
+
+.account-menu-item-danger:hover {
+  background: var(--danger-hover) !important; 
+}
+
 .account-menu-item:hover {
   background: var(--hover-bg);
 }
@@ -4050,7 +4072,7 @@ textarea::-webkit-scrollbar {
 }
 
 .confirm-modal {
-  max-width: 400px;
+  max-width: 500px;
   z-index: 50000 !important;
 }
 

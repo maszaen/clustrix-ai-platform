@@ -620,12 +620,29 @@ ipcMain.handle('sync:switchMode', async (_evt, params) => {
 
     // If switching FROM cloud to internal
     if (mode === 'internal') {
+      const currentUser = config.currentCloudUser;
+      const currentUsername = config.currentCloudUsername;
+      const cloudToken = config.cloudToken;
+      
+      // Schedule backup and cleanup after restart (same as logout)
+      if (currentUser && cloudToken) {
+        log('sync:switchMode', 1, 'handleSync', 'Scheduling backup and cleanup after restart', { user: currentUser });
+        
+        config.pendingBackupAndCleanup = {
+          user: currentUser,
+          username: currentUsername,
+          token: cloudToken,
+          scheduledAt: new Date().toISOString(),
+          reason: 'switch-to-internal'
+        };
+      }
+      
       config.currentMode = 'internal';
       // Keep currentCloudUser in config for potential re-login
       config.lastSyncTime = Date.now();
       syncManager.saveSyncConfig(config);
 
-      log('sync:switchMode', 1, 'handleSync', 'Switched to internal mode');
+      log('sync:switchMode', 1, 'handleSync', 'Switched to internal mode, backup scheduled after restart');
 
       return {
         success: true,
@@ -780,7 +797,7 @@ ipcMain.handle('sync:listCloudUsers', async () => {
 
 /**
  * sync:logout
- * Logout from cloud account and optionally delete cloud data
+ * Logout from cloud account and schedule backup + cleanup after restart
  * Params: { deleteCloudData?: boolean }
  */
 ipcMain.handle('sync:logout', async (_evt, params = {}) => {
@@ -792,23 +809,28 @@ ipcMain.handle('sync:logout', async (_evt, params = {}) => {
     const deleteCloudData = params.deleteCloudData !== false;
     const config = syncManager.loadSyncConfig();
     const currentUser = config.currentCloudUser;
+    const currentUsername = config.currentCloudUsername;
+    const cloudToken = config.cloudToken;
 
     if (!currentUser) {
       return { success: false, error: 'Not logged in' };
     }
 
-    // Delete cloud user folder if requested
+    // IMPORTANT: Don't delete cloud data now, schedule it after restart + backup
     if (deleteCloudData) {
-      try {
-        syncManager.deleteCloudUserFolder(currentUser);
-        log('sync:logout', 1, 'handleSync', `Deleted cloud data for ${currentUser}`);
-      } catch (e) {
-        log('sync:logout warning', e);
-        // Don't fail if folder deletion fails
-      }
+      log('sync:logout', 1, 'handleSync', 'Scheduling backup and cleanup after restart', { user: currentUser });
+      
+      // Set pending backup and cleanup flag
+      config.pendingBackupAndCleanup = {
+        user: currentUser,
+        username: currentUsername,
+        token: cloudToken,
+        scheduledAt: new Date().toISOString(),
+        reason: 'logout'
+      };
     }
 
-    // Reset config to internal mode
+    // Reset config to internal mode (but keep pending task)
     config.currentMode = 'internal';
     config.currentCloudUser = null;
     config.currentCloudUsername = null;
@@ -829,14 +851,14 @@ ipcMain.handle('sync:logout', async (_evt, params = {}) => {
       log('sync:logout', 2, 'handleSync', 'Failed to delete profile photo', { error: photoErr.message });
     }
 
-    log('sync:logout', 1, 'handleSync', 'Logged out from cloud account');
+    log('sync:logout', 1, 'handleSync', 'Logged out from cloud account, restart scheduled');
 
     // CRITICAL FIX: Restart app after logout to switch to internal database
     setTimeout(() => {
       log('sync:logout', 1, 'handleSync', 'Restarting app after logout...');
       app.relaunch();
       app.exit(0);
-    }, 1500); // Give time for UI to show logout message
+    }, 1000); // Faster restart since no backup needed
 
     return {
       success: true,
@@ -1892,6 +1914,100 @@ function createWindow(){
   });
 
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  
+  // Check and process pending backup and cleanup after restart
+  win.webContents.once('did-finish-load', async () => {
+    try {
+      const config = syncManager.loadSyncConfig();
+      
+      if (config.pendingBackupAndCleanup) {
+        const pending = config.pendingBackupAndCleanup;
+        log('STARTUP', 1, 'pendingBackup', 'Processing pending backup and cleanup', {
+          user: pending.user,
+          reason: pending.reason,
+          scheduledAt: pending.scheduledAt
+        });
+        
+        // Backup to GitHub first
+        if (pending.token && pending.username) {
+          try {
+            const cloudDataPath = syncManager.getCloudDataPath(pending.user);
+            const dbPath = path.join(cloudDataPath, 'clustrix.db');
+            const configPath = path.join(cloudDataPath, 'ai-model.conf.json');
+            
+            if (fs.existsSync(dbPath)) {
+              log('STARTUP', 1, 'pendingBackup', 'Starting backup to GitHub');
+              
+              const githubStorage = new GitHubStorageService(pending.token, pending.username);
+              
+              // Try smart backup first
+              try {
+                const smartBackup = new SmartBackupService(dbPath, githubStorage);
+                const smartBackupResult = await smartBackup.performSmartBackup();
+                
+                if (smartBackupResult.success) {
+                  log('STARTUP', 1, 'pendingBackup', 'Smart backup completed successfully');
+                } else {
+                  throw new Error('Smart backup failed, falling back to full backup');
+                }
+              } catch (smartErr) {
+                log('STARTUP', 2, 'pendingBackup', 'Smart backup failed, using full backup', { error: smartErr.message });
+                await githubStorage.uploadDatabase(dbPath);
+                log('STARTUP', 1, 'pendingBackup', 'Full backup completed successfully');
+              }
+              
+              // Also upload model config
+              if (fs.existsSync(configPath)) {
+                try {
+                  await githubStorage.uploadModelConfig(configPath);
+                  log('STARTUP', 1, 'pendingBackup', 'Model config backed up');
+                } catch (configErr) {
+                  log('STARTUP', 2, 'pendingBackup', 'Model config backup failed', { error: configErr.message });
+                }
+              }
+              
+              // Upload metadata
+              const metadata = {
+                backupTime: new Date().toISOString(),
+                dbVersion: '1.0',
+                appVersion: app.getVersion ? app.getVersion() : '1.0',
+                strategy: 'pending-cleanup',
+                reason: pending.reason
+              };
+              await githubStorage.uploadMetadata(metadata);
+              
+              log('STARTUP', 1, 'pendingBackup', 'Backup completed, now cleaning up local data');
+            } else {
+              log('STARTUP', 2, 'pendingBackup', 'Database not found, skipping backup', { dbPath });
+            }
+          } catch (backupErr) {
+            log('STARTUP', 3, 'pendingBackup', 'Backup failed, but will continue with cleanup', {
+              error: backupErr.message
+            });
+          }
+        }
+        
+        // Delete cloud user folder
+        try {
+          syncManager.deleteCloudUserFolder(pending.user);
+          log('STARTUP', 1, 'pendingBackup', 'Cloud data deleted successfully', { user: pending.user });
+        } catch (deleteErr) {
+          log('STARTUP', 3, 'pendingBackup', 'Failed to delete cloud data', {
+            error: deleteErr.message,
+            user: pending.user
+          });
+        }
+        
+        // Clear pending flag
+        delete config.pendingBackupAndCleanup;
+        syncManager.saveSyncConfig(config);
+        
+        log('STARTUP', 1, 'pendingBackup', 'Pending backup and cleanup completed');
+      }
+    } catch (err) {
+      log('STARTUP', 4, 'pendingBackup', 'Error processing pending backup', { error: err.message });
+    }
+  });
 }
 protocol.registerSchemesAsPrivileged([{
   scheme: 'mjx',

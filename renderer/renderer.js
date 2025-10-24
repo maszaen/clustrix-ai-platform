@@ -15869,9 +15869,9 @@ function handleLogout() {
   const message = `
   <p>Signing out will:</p>
   <ul style="margin: 8px 0 0 18px; line-height: 1.4;">
-  <li>Make an automatic backup to GitHub before signing out.</li>
-  <li>Delete local cloud data for this account.</li>
-  <li>Restart the app to return to internal mode.</li>
+  <li>Restart the app immediately and return to internal mode.</li>
+  <li>Create an automatic backup to GitHub after restart.</li>
+  <li>Delete local cloud data after backup completes.</li>
   </ul>
   <p style="margin-top: 12px;">Continue?</p>
   `;
@@ -15935,57 +15935,9 @@ async function performLogout() {
       logoutBtn.style.opacity = '0.6';
     }
 
-    // Automatic backup before logout
-    log('AUTH', 1, 'handleLogout', 'Starting automatic backup before logout');
-    try {
-      const backupResult = await window.api.sync.backupNow();
-      if (backupResult?.needsConflictResolution) {
-        log('AUTH', 2, 'handleLogout', 'Automatic backup requires conflict resolution', {
-          conflictCount: backupResult.conflicts?.length || 0,
-        });
-        showToast('Backup requires conflict resolution. Please resolve conflicts before logout.', 'error');
-        const conflictError = new Error('Backup requires conflict resolution.');
-        conflictError.handled = true;
-        throw conflictError;
-      }
-
-      if (backupResult?.success) {
-        log('AUTH', 1, 'handleLogout', 'Automatic backup completed successfully', {
-          repository: backupResult.repository,
-          strategy: backupResult.strategy,
-        });
-        showToast('Automatic backup completed. Continuing with logout...', 'success');
-        try {
-          await window.api.sync.recordActionHistory('backup', 'success');
-          // Skip loadAndDisplayActionHistory during logout - app will restart anyway
-        } catch (historyErr) {
-          log('AUTH', 2, 'handleLogout', 'Failed to record automatic backup success', { error: historyErr.message });
-        }
-      } else {
-        const backupError = backupResult?.error || 'Backup failed (unknown reason)';
-        log('AUTH', 2, 'handleLogout', 'Automatic backup failed', { error: backupError });
-        showToast(`Automatic backup failed: ${backupError}. Continuing with logout...`, 'warning');
-        try {
-          await window.api.sync.recordActionHistory('backup', 'failed');
-          // Skip loadAndDisplayActionHistory during logout - app will restart anyway
-        } catch (historyErr) {
-          log('AUTH', 2, 'handleLogout', 'Failed to record automatic backup failure', { error: historyErr.message });
-        }
-      }
-    } catch (backupErr) {
-      if (backupErr?.message === 'Backup requires conflict resolution.') {
-        backupErr.handled = true;
-        throw backupErr;
-      }
-      log('AUTH', 3, 'handleLogout', 'Automatic backup threw an error', { error: backupErr?.message || backupErr });
-      showToast(`Automatic backup error: ${backupErr?.message || backupErr}. Continuing with logout...`, 'warning');
-      try {
-        await window.api.sync.recordActionHistory('backup', 'failed');
-        // Skip loadAndDisplayActionHistory during logout - app will restart anyway
-      } catch (historyErr) {
-        log('AUTH', 2, 'handleLogout', 'Failed to record automatic backup error', { error: historyErr.message });
-      }
-    }
+    // NOTE: Automatic backup will be done AFTER restart (faster logout UX)
+    // Cloud data will also be deleted after backup completes
+    log('AUTH', 1, 'handleLogout', 'Backup and cleanup scheduled for after restart');
 
     log('AUTH', 1, 'handleLogout', 'Calling logout API');
     const result = await window.api.sync.logout({ deleteCloudData: true });
@@ -16450,8 +16402,8 @@ async function handleDataSourceSwitch(mode) {
       : `
       <p>Switching to <strong>${modeLabel}</strong> will:</p>
       <ul style="margin: 8px 0 0 18px; line-height: 1.4;">
-      <li>Make an automatic backup to GitHub before switching.</li>
-      <li>Restart the app to load data from internal storage.</li>
+      <li>Restart the app immediately to load data from internal storage.</li>
+      <li>Create an automatic backup to GitHub after restart.</li>
       </ul>
       <p style="margin-top: 12px;">Continue?</p>
       `;
@@ -16517,65 +16469,9 @@ async function executeDataSourceSwitch(mode) {
     const originalHTML = targetBtn.innerHTML;
     targetBtn.classList.add('loading');
     
-    // Automatic backup before switching from cloud to internal
+    // NOTE: Automatic backup will be done AFTER restart when switching from cloud to internal (faster UX)
     if (syncConfig.currentMode === 'cloud' && mode === 'internal' && syncConfig.currentCloudUser) {
-      log('SYNC', 1, 'executeDataSourceSwitch', 'Starting automatic backup before switching to internal mode');
-      targetBtn.innerHTML = `
-        <svg style="animation: spin 1s linear infinite; margin-right: 6px; transform-origin: center;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-        </svg>
-        Backing up...
-      `;
-      
-      try {
-        const backupResult = await window.api.sync.backupNow();
-        if (backupResult?.needsConflictResolution) {
-          log('SYNC', 2, 'executeDataSourceSwitch', 'Automatic backup requires conflict resolution', {
-            conflictCount: backupResult.conflicts?.length || 0,
-          });
-          showToast('Backup requires conflict resolution. Please resolve conflicts before switching.', 'error');
-          const conflictError = new Error('Backup requires conflict resolution.');
-          conflictError.handled = true;
-          throw conflictError;
-        }
-
-        if (backupResult?.success) {
-          log('SYNC', 1, 'executeDataSourceSwitch', 'Automatic backup completed successfully', {
-            repository: backupResult.repository,
-            strategy: backupResult.strategy,
-          });
-          showToast('Automatic backup completed. Continuing with switch...', 'success');
-          try {
-            await window.api.sync.recordActionHistory('backup', 'success');
-            // Skip loadAndDisplayActionHistory during switch - app will restart anyway
-          } catch (historyErr) {
-            log('SYNC', 2, 'executeDataSourceSwitch', 'Failed to record automatic backup success', { error: historyErr.message });
-          }
-        } else {
-          const backupError = backupResult?.error || 'Backup failed (unknown reason)';
-          log('SYNC', 2, 'executeDataSourceSwitch', 'Automatic backup failed', { error: backupError });
-          showToast(`Automatic backup failed: ${backupError}. Continuing with switch...`, 'warning');
-          try {
-            await window.api.sync.recordActionHistory('backup', 'failed');
-            // Skip loadAndDisplayActionHistory during switch - app will restart anyway
-          } catch (historyErr) {
-            log('SYNC', 2, 'executeDataSourceSwitch', 'Failed to record automatic backup failure', { error: historyErr.message });
-          }
-        }
-      } catch (backupErr) {
-        if (backupErr?.message === 'Backup requires conflict resolution.') {
-          backupErr.handled = true;
-          throw backupErr;
-        }
-        log('SYNC', 3, 'executeDataSourceSwitch', 'Automatic backup threw an error', { error: backupErr?.message || backupErr });
-        showToast(`Automatic backup error: ${backupErr?.message || backupErr}. Continuing with switch...`, 'warning');
-        try {
-          await window.api.sync.recordActionHistory('backup', 'failed');
-          // Skip loadAndDisplayActionHistory during switch - app will restart anyway
-        } catch (historyErr) {
-          log('SYNC', 2, 'executeDataSourceSwitch', 'Failed to record automatic backup error', { error: historyErr.message });
-        }
-      }
+      log('SYNC', 1, 'executeDataSourceSwitch', 'Backup scheduled for after restart (cloud -> internal switch)');
     }
     
     targetBtn.innerHTML = `

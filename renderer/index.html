@@ -831,7 +831,7 @@
   </div>
   <div id="quick-model-switch-modal" class="hidden">
     <div class="modal-overlay"></div>
-    <div id="quick-model-switch-card" class="mini-modal-card" style="position: fixed; max-width: 400px; min-width: 200px; width: auto;">
+    <div id="quick-model-switch-card" class="mini-modal-card" style="position: fixed; max-width: 400px; min-width: 250px; width: auto;">
       <div class="modal-body" id="quick-model-switch-body" style="padding: 0; overflow-y: auto;"></div>
     </div>
   </div>
@@ -1095,6 +1095,12 @@
         <button class="learn-more-tab-btn" data-tab="about">
           <span>About</span>
         </button>
+        <button class="learn-more-tab-btn" data-tab="troubleshooting">
+          <span>Troubleshooting</span>
+        </button>
+        <button class="learn-more-tab-btn" data-tab="keyboard-shortcuts">
+          <span>Keyboard Shortcuts</span>
+        </button>
       </div>
       
       <div class="modal-body learn-more-content">
@@ -1283,6 +1289,168 @@
           <div class="learn-more-section">
             <h4>Thank You</h4>
             <p>Thank you for using Clustrix AI. Your trust means everything to us. Together, we're building a better, more private future for AI.</p>
+          </div>
+        </div>
+
+        <!-- Troubleshooting Tab -->
+        <div id="troubleshooting" class="learn-more-tab-content">
+          <h3>Troubleshooting</h3>
+          <div class="learn-more-section">
+            <h4>API Key Issues</h4>
+            <ul>
+              <li><strong>Invalid API Key:</strong> If you receive an "Invalid API Key" error, verify that your key is correct by checking the provider's website (e.g., OpenAI, Anthropic). Make sure there are no extra spaces or characters.</li>
+              <li><strong>Key Not Recognized:</strong> Some providers require specific formatting or have different key types. If using OpenAI, ensure you're using a "secret key" and not an organization key.</li>
+              <li><strong>Rate Limited:</strong> If you're getting rate limit errors, check your API usage on the provider's dashboard. You may have exceeded your quota or rate limits.</li>
+              <li><strong>Cannot Save Settings:</strong> Restart Clustrix AI and try again. If the problem persists, check that your application data directory has write permissions.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Chat and Connection Issues</h4>
+            <ul>
+              <li><strong>No Response from AI:</strong> Ensure your internet connection is active. Check that your API key is valid and has remaining credits. Try switching to a different model or provider.</li>
+              <li><strong>Connection Timeout:</strong> If the AI takes too long to respond, it may be experiencing high load. Try again after a few moments, or switch to a faster model.</li>
+              <li><strong>Incomplete Responses:</strong> If responses are cut off or incomplete, try asking the question again or breaking it into smaller parts.</li>
+              <li><strong>Web Search Not Working:</strong> Verify that you've added a valid Google Search API key in Settings > Search API. Ensure your search API has quota remaining.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>File Upload Issues</h4>
+            <ul>
+              <li><strong>File Not Uploading:</strong> Check that the file size is reasonable (usually under 50MB). Supported formats include Docx, XLSX, PDF, and text files. Some formats may require conversion.</li>
+              <li><strong>File Upload Fails:</strong> Try uploading a smaller file first to test. If it still fails, restart Clustrix AI and try again.</li>
+              <li><strong>File Content Not Recognized:</strong> Ensure your file is not corrupted and is in a supported format. Some encrypted or password-protected files cannot be processed.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Performance Issues</h4>
+            <ul>
+              <li><strong>App Runs Slowly:</strong> Close other memory-intensive applications. Clear your chat history or archive old sessions to free up space.</li>
+              <li><strong>High Memory Usage:</strong> Large files or long conversations can use significant memory. Try breaking work into smaller sessions or reducing the number of simultaneous projects.</li>
+              <li><strong>UI Freezes:</strong> If the UI becomes unresponsive, wait a few seconds as the app may be processing. If it persists, restart Clustrix AI.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Sync and Data Issues</h4>
+            <ul>
+              <li><strong>Cloud Sync Not Working:</strong> Ensure you're logged in with GitHub (Settings > Account settings). Check your internet connection and GitHub authentication status.</li>
+              <li><strong>Data Not Syncing:</strong> Manual sync can be triggered from Account settings. If auto-sync fails, try clicking "Sync Now" manually.</li>
+              <li><strong>Lost Data:</strong> Local backups are created automatically. To restore, you can manually recover from previous backups stored in the application data directory.</li>
+              <li><strong>Conflict Resolution:</strong> If sync conflicts occur, Clustrix AI will attempt to merge changes automatically. In case of unresolvable conflicts, the most recent version is kept.</li>
+            </ul>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Still Need Help?</h4>
+            <p>If you encounter an issue not covered here, please visit our <a href="https://github.com/maszaen/clustrix-ai-platform" target="_blank" class="link">GitHub repository</a> and open an issue. Include details about:</p>
+            <ul>
+              <li>What you were trying to do</li>
+              <li>The exact error message (if any)</li>
+              <li>Your operating system and Clustrix AI version</li>
+              <li>Any relevant screenshots or logs</li>
+            </ul>
+            <p>The community and maintainers are here to help!</p>
+          </div>
+        </div>
+
+        <!-- Keyboard Shortcuts Tab -->
+        <div id="keyboard-shortcuts" class="learn-more-tab-content">
+          <h3>Keyboard Shortcuts</h3>
+          <div class="learn-more-section">
+            <h4>General Shortcuts</h4>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; font-weight: 600; color: var(--fg);">Shortcut</td>
+                <td style="padding: 8px; font-weight: 600; color: var(--fg);">Action</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; color: var(--primary); font-family: monospace;">Ctrl + N</td>
+                <td style="padding: 8px;">Create a new session</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; color: var(--primary); font-family: monospace;">Ctrl + Tab</td>
+                <td style="padding: 8px;">Switch to next session</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; color: var(--primary); font-family: monospace;">Ctrl + Shift + Tab</td>
+                <td style="padding: 8px;">Switch to previous session</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; color: var(--primary); font-family: monospace;">Ctrl + R</td>
+                <td style="padding: 8px;">Reload the application</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; color: var(--primary); font-family: monospace;">Esc</td>
+                <td style="padding: 8px;">Close any open modal or dialog</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; color: var(--primary); font-family: monospace;">/</td>
+                <td style="padding: 8px;">Focus input field or search bar (context-aware)</td>
+              </tr>
+            </table>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Message Input Shortcuts</h4>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; font-weight: 600; color: var(--fg);">Shortcut</td>
+                <td style="padding: 8px; font-weight: 600; color: var(--fg);">Action</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; color: var(--primary); font-family: monospace;">Enter</td>
+                <td style="padding: 8px;">Send message (in regular chat sessions)</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; color: var(--primary); font-family: monospace;">Shift + Enter</td>
+                <td style="padding: 8px;">Create a new line in the message input</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; color: var(--primary); font-family: monospace;">Ctrl + Enter</td>
+                <td style="padding: 8px;">Send message (in project sessions)</td>
+              </tr>
+            </table>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Mouse Button Navigation</h4>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 8px;">
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; font-weight: 600; color: var(--fg);">Mouse Button</td>
+                <td style="padding: 8px; font-weight: 600; color: var(--fg);">Action</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; color: var(--primary); font-family: monospace;">Back Button (Browser)</td>
+                <td style="padding: 8px;">Navigate to previous page in history</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 8px; color: var(--primary); font-family: monospace;">Forward Button (Browser)</td>
+                <td style="padding: 8px;">Navigate to next page in history</td>
+              </tr>
+            </table>
+          </div>
+          <hr>
+
+          <div class="learn-more-section">
+            <h4>Tips</h4>
+            <ul>
+              <li><strong>Power User Mode:</strong> Use keyboard shortcuts to navigate between sessions quickly without touching your mouse. Ctrl+N, Ctrl+Tab, and Enter create a seamless workflow.</li>
+              <li><strong>Browser Back/Forward:</strong> Use your mouse's back and forward buttons (or trackpad gestures) to navigate through your browsing history within Clustrix AI.</li>
+              <li><strong>Multi-line Messages:</strong> In chat, use Shift+Enter to write multi-line messages. The Enter key alone will send your message.</li>
+              <li><strong>Project Sessions:</strong> In project sessions, use Ctrl+Enter to send messages, allowing you to write multi-line messages more easily.</li>
+              <li><strong>Quick Focus:</strong> Press <code>/</code> (slash) to quickly focus the message input in chat sessions or the search bar in list pages (Chats, Projects, Artifacts). Saves time without reaching for the mouse!</li>
+              <li><strong>Session Navigation:</strong> Ctrl+Tab and Ctrl+Shift+Tab only work when you're in a chat session, preventing accidental navigation when browsing lists.</li>
+            </ul>
           </div>
         </div>
       </div>

@@ -789,7 +789,7 @@ ipcMain.handle('sync:logout', async (_evt, params = {}) => {
       throw new Error('SyncManager not initialized');
     }
 
-    const { deleteCloudData } = params;
+    const deleteCloudData = params.deleteCloudData !== false;
     const config = syncManager.loadSyncConfig();
     const currentUser = config.currentCloudUser;
 
@@ -1456,8 +1456,11 @@ ipcMain.handle('sync:backupNow', async () => {
     }
 
     // Get current database path and config path
+    // IMPORTANT: Always backup cloud local database if user is logged in,
+    // regardless of current mode (internal/cloud). This ensures logout 
+    // and data source switches backup the correct user data.
     let dbPath, configPath;
-    if (syncConfig.currentMode === 'cloud' && syncConfig.currentCloudUser) {
+    if (syncConfig.currentCloudUser) {
       const cloudDataPath = syncManager.getCloudDataPath(syncConfig.currentCloudUser);
       dbPath = path.join(cloudDataPath, 'clustrix.db');
       configPath = path.join(cloudDataPath, 'ai-model.conf.json');

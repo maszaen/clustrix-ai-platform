@@ -13,9 +13,6 @@ let markdownRendererInstance = null;
 // Browser icon SVG untuk external links
 const BROWSER_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>';
 
-// Email icon SVG untuk mailto links
-const EMAIL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mail-icon"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>';
-
 // Import highlight.js for syntax highlighting
 if (typeof self.importScripts === "function") {
   try {
@@ -45,7 +42,7 @@ function normalizeLanguage(lang) {
   return lang.toLowerCase().replace(/[^\w+-]+/g, "");
 }
 
-function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
+function enhancedMarkdownParse(src, options = {}) {
   const isThinkingText = options.isThinkingText || false;
   let sanitizedSrc = src.trimStart();
   const boldListFixRegex = /^(\s*)\*\*(\d+\.|[*-])\s+(.*?)\*\*/gm;
@@ -100,8 +97,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   };
 
   const truncatedSrc = trimUnclosedContainers(normalizedSrc);
-  const codeBlocks = sharedCodeBlocks || [];
-  const isTopLevel = !sharedCodeBlocks;
+  const codeBlocks = [];
   const latexBlocks = [];
   const containerBlocks = [];
   const latexRegex = /(\$\$[\s\S]*?\$\$|\\\(.*?\\\))/g;
@@ -133,10 +129,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   processedSrcAfterContainers = tempCodeBlocks.reduce((acc, block, i) =>
     acc.replace(`__TEMP_CODEBLOCK_${i}__`, block), processedSrcAfterContainers);
 
-  // Only process codeblocks at top level, not in recursive calls
-  let processedSrc = truncatedSrc;
-  if (isTopLevel) {
-    processedSrc = processedSrcAfterContainers.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
+  let processedSrc = processedSrcAfterContainers.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
     const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
     let codeContent = code; // Don't trim yet - we need original whitespace for dedent
     const language = lang || "text";
@@ -198,8 +191,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       </div>`;
     codeBlocks.push(newStructure);
     return placeholder;
-    });
-  }
+  });
   const lines = processedSrc.split("\n");
   let html = "";
   const listStack = [];
@@ -263,8 +255,8 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
           // Continue list if next non-empty line is codeblock, blockquote, or table at proper indent
           else if (lookAheadTrimmed.startsWith("__CODEBLOCK_") || lookAheadTrimmed.startsWith(">") || 
                    (lookAheadTrimmed.includes("|") && !lookAheadTrimmed.match(/^(\s*)[*-]\s+/) && !lookAheadTrimmed.match(/^(\s*)\d+\.\s+/))) {
-            // For nested content, allow same indent as list item (more flexible than strict +2)
-            if (lookAheadIndent >= currentListIndent) {
+            // For nested content, check if it's indented properly (at least current list indent + 2)
+            if (lookAheadIndent >= currentListIndent + 2) {
               shouldContinueList = true;
               break;
             }
@@ -353,66 +345,22 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       lastLineWasCodeblock = false;
     } else if (bqMatch) {
       const bqBlockLines = [line];
-      // Collect all consecutive blockquote lines (including empty lines within blockquotes)
-      while (i + 1 < lines.length) {
+      while (i + 1 < lines.length && lines[i + 1].trim() !== "") {
         const nextLine = lines[i + 1];
         const nextTrimmed = nextLine.trim();
-        
-        // Stop if we hit a truly empty line (no > marker)
-        if (nextTrimmed === "" && !nextLine.match(/^\s*>/)) break;
-        
-        // Stop if we hit a non-blockquote block-level element at root level
         const isNewBlock = /^(#|---|```|[*-] |\d+\.\s)/.test(nextTrimmed) && (nextLine.length - nextTrimmed.length === 0);
         if (isNewBlock) break;
-        
-        // Special case: Allow table rows without > prefix if previous line was a table row
-        const prevLine = bqBlockLines[bqBlockLines.length - 1];
-        const prevTrimmed = prevLine.replace(/^\s*>\s?/, '').trim();
-        const isTableRow = nextTrimmed.startsWith('|') && nextTrimmed.includes('|');
-        const prevWasTableRow = prevTrimmed.includes('|');
-        
-        if (isTableRow && prevWasTableRow) {
-          // Continue collecting table row even without > prefix
-          i++;
-          bqBlockLines.push(nextLine);
-          continue;
-        }
-        
-        // Stop if line doesn't start with > and isn't empty
-        if (!nextLine.match(/^\s*>/) && nextTrimmed !== "") break;
-        
         i++;
         bqBlockLines.push(nextLine);
       }
-      
-      // Count the minimum number of > markers to determine the depth
-      let minDepth = Infinity;
-      const depthMap = bqBlockLines.map(l => {
-        const match = l.match(/^(\s*>)+/);
-        if (match) {
-          const depth = (match[0].match(/>/g) || []).length;
-          minDepth = Math.min(minDepth, depth);
-          return { line: l, depth };
-        }
-        return { line: l, depth: 0 };
-      });
-      
-      // Remove only the minimum depth level (one blockquote level)
-      const nestedContent = depthMap.map(({ line, depth }) => {
-        if (depth > 0) {
-          // Remove exactly one > marker (the first one)
-          return line.replace(/^\s*>\s?/, "");
-        }
-        return line;
-      }).join("\n");
-      
+      const nestedContent = bqBlockLines.map(l => l.replace(/^\s*>\s?/, "")).join("\n");
       // Replace any codeblock placeholders in nested content with special tokens
       const processedNestedContent = nestedContent.replace(/__CODEBLOCK_(\d+)__/g, (match, index) => {
         return `CODEBLOCKEMBED${index}PLACEHOLDER`;
       });
       
-      // Process the content with full markdown parsing, passing shared codeBlocks array
-      const parsedContent = enhancedMarkdownParse(processedNestedContent, options, codeBlocks);
+      // Process the content with full markdown parsing
+      const parsedContent = enhancedMarkdownParse(processedNestedContent);
       
       // Replace embedded codeblock tokens with actual HTML
       const blockquoteContent = parsedContent.replace(/CODEBLOCKEMBED(\d+)PLACEHOLDER/g, (match, index) => {
@@ -531,34 +479,13 @@ function parseInlineMarkdown(text) {
   }
   let processedText = text.replace(/<br\s*\/?>/gi, "__BR_TAG__");
 
-  // Parse images BEFORE HTML escaping to preserve alt text
-  const imageBlocks = [];
-  processedText = processedText.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
-    const placeholder = `__IMAGE_${imageBlocks.length}__`;
-    imageBlocks.push(`<img class="md-image" src="${src}" alt="${alt || 'Image'}" loading="lazy">`);
-    return placeholder;
-  });
-
-  // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
-  const linkBlocks = [];
-  processedText = processedText.replace(/\[([^\]]*)\]\(([^)]+)\)/g, (match, text, url) => {
-    const placeholder = `__LINK_${linkBlocks.length}__`;
-    if (url.startsWith('mailto:')) {
-      // Email link
-      linkBlocks.push(`<a href="${url}" class="link email-link">${text}${EMAIL_ICON}</a>`);
-    } else {
-      // Regular link
-      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${text}${BROWSER_ICON}</a>`);
-    }
-    return placeholder;
-  });
+  // Parse links BEFORE HTML escaping to handle parentheses in URLs
+  // processedText = parseMarkdownLinks(processedText);
 
   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   html = html.replace(/__BR_TAG__/g, "<br>");
-  
-  // Restore images
-  html = imageBlocks.reduce((acc, block, i) => acc.replace(`__IMAGE_${i}__`, block), html);
-  
+  const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
+  html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
   html = html.replace(footnoteGroupRegex, match => {
     const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
@@ -571,10 +498,9 @@ function parseInlineMarkdown(text) {
     }
     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
   });
+  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
   
-  // Restore links
-  html = linkBlocks.reduce((acc, block, i) => acc.replace(`__LINK_${i}__`, block), html);
-  
+  html = html.replace(linkRegex, `<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1${BROWSER_ICON}</a>`);
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
   const inlineCodeBlocks = [];
   html = html.replace(/`([^`]+?)`/g, (match, content) => {
@@ -599,33 +525,13 @@ function parseInlineMarkdown(text) {
 function processMarkdownFormatting(text) {
   if (!text) return "";
 
-  // Parse images BEFORE HTML escaping to preserve alt text
-  const imageBlocks = [];
-  let processedText = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
-    const placeholder = `__IMAGE_${imageBlocks.length}__`;
-    imageBlocks.push(`<img class="md-image" src="${src}" alt="${alt || 'Image'}" loading="lazy">`);
-    return placeholder;
-  });
-
-  // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
-  const linkBlocks = [];
-  processedText = processedText.replace(/\[([^\]]*)\]\(([^)]+)\)/g, (match, text, url) => {
-    const placeholder = `__LINK_${linkBlocks.length}__`;
-    if (url.startsWith('mailto:')) {
-      // Email link
-      linkBlocks.push(`<a href="${url}" class="link email-link">${text}${EMAIL_ICON}</a>`);
-    } else {
-      // Regular link
-      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${text}${BROWSER_ICON}</a>`);
-    }
-    return placeholder;
-  });
+  // Parse links BEFORE HTML escaping to handle parentheses in URLs
+  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
+  let processedText = text.replace(linkRegex, `<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1${BROWSER_ICON}</a>`);
 
   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-  
-  // Restore images
-  html = imageBlocks.reduce((acc, block, i) => acc.replace(`__IMAGE_${i}__`, block), html);
-  
+  const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
+  html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
   html = html.replace(footnoteGroupRegex, match => {
     const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
@@ -638,9 +544,6 @@ function processMarkdownFormatting(text) {
     }
     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
   });
-  
-  // Restore links
-  html = linkBlocks.reduce((acc, block, i) => acc.replace(`__LINK_${i}__`, block), html);
 
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
   const inlineCodeBlocks = [];

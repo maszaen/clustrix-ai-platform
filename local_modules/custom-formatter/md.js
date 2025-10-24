@@ -12,6 +12,9 @@ function esc(text) {
 // Browser icon SVG untuk external links
 const BROWSER_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>';
 
+// Email icon SVG untuk mailto links
+const EMAIL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mail-icon"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>';
+
 function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   const isThinkingText = options.isThinkingText || false;
   let sanitizedSrc = src.trimStart();
@@ -464,13 +467,33 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
 function processMarkdownFormatting(text) {
   if (!text) return "";
   
-  // Parse links BEFORE HTML escaping to handle parentheses in URLs
-  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
-  let processedText = text.replace(linkRegex, `<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1${BROWSER_ICON}</a>`);
+  // Parse images BEFORE HTML escaping to preserve alt text
+  const imageBlocks = [];
+  let processedText = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+    const placeholder = `__IMAGE_${imageBlocks.length}__`;
+    imageBlocks.push(`<img class="md-image" src="${src}" alt="${alt || 'Image'}" loading="lazy">`);
+    return placeholder;
+  });
+
+  // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
+  const linkBlocks = [];
+  processedText = processedText.replace(/\[([^\]]*)\]\(([^)]+)\)/g, (match, text, url) => {
+    const placeholder = `__LINK_${linkBlocks.length}__`;
+    if (url.startsWith('mailto:')) {
+      // Email link
+      linkBlocks.push(`<a href="${url}" class="link email-link">${text}${EMAIL_ICON}</a>`);
+    } else {
+      // Regular link
+      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${text}${BROWSER_ICON}</a>`);
+    }
+    return placeholder;
+  });
   
   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-  const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
-  html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
+  
+  // Restore images
+  html = imageBlocks.reduce((acc, block, i) => acc.replace(`__IMAGE_${i}__`, block), html);
+  
   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
   html = html.replace(footnoteGroupRegex, match => {
     const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
@@ -484,7 +507,9 @@ function processMarkdownFormatting(text) {
     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
   });
   
-  html = html.replace(linkRegex, `<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1${BROWSER_ICON}</a>`);
+  // Restore links
+  html = linkBlocks.reduce((acc, block, i) => acc.replace(`__LINK_${i}__`, block), html);
+
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
   const inlineCodeBlocks = [];
   html = html.replace(/`([^`]+?)`/g, (match, content) => {
@@ -546,10 +571,34 @@ function parseInlineMarkdown(text) {
   }
   let processedText = text.replace(/<br\s*\/?>/gi, "__BR_TAG__");
   
+  // Parse images BEFORE HTML escaping to preserve alt text
+  const imageBlocks = [];
+  processedText = processedText.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+    const placeholder = `__IMAGE_${imageBlocks.length}__`;
+    imageBlocks.push(`<img class="md-image" src="${src}" alt="${alt || 'Image'}" loading="lazy">`);
+    return placeholder;
+  });
+
+  // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
+  const linkBlocks = [];
+  processedText = processedText.replace(/\[([^\]]*)\]\(([^)]+)\)/g, (match, text, url) => {
+    const placeholder = `__LINK_${linkBlocks.length}__`;
+    if (url.startsWith('mailto:')) {
+      // Email link
+      linkBlocks.push(`<a href="${url}" class="link email-link">${text}${EMAIL_ICON}</a>`);
+    } else {
+      // Regular link
+      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${text}${BROWSER_ICON}</a>`);
+    }
+    return placeholder;
+  });
+
   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   html = html.replace(/__BR_TAG__/g, "<br>");
-  const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
-  html = html.replace(imageRegex, '<img class="md-image" src="$2" alt="$1">');
+  
+  // Restore images
+  html = imageBlocks.reduce((acc, block, i) => acc.replace(`__IMAGE_${i}__`, block), html);
+  
   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
   html = html.replace(footnoteGroupRegex, match => {
     const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
@@ -562,9 +611,10 @@ function parseInlineMarkdown(text) {
     }
     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
   });
-  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
   
-  html = html.replace(linkRegex, `<a href="$2" target="_blank" rel="noopener noreferrer" class="link">$1${BROWSER_ICON}</a>`);
+  // Restore links
+  html = linkBlocks.reduce((acc, block, i) => acc.replace(`__LINK_${i}__`, block), html);
+  
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
   const inlineCodeBlocks = [];
   html = html.replace(/`([^`]+?)`/g, (match, content) => {

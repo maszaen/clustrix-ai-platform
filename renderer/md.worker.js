@@ -36,6 +36,21 @@ function esc(value) {
     .replace(/'/g, "&#39;");
 }
 
+// Helper function to process inline markdown formatting within link/image text
+function parseInlineContent(text) {
+  if (!text) return "";
+  // Process bold, italic, strikethrough, code
+  return text
+    .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
+    .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>")
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__(.*?)__/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/_([^_]+)_/g, "<em>$1</em>")
+    .replace(/~~(.*?)~~/g, "<del>$1</del>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
 function escapeAttribute(value) {
   return esc(value).replace(/`/g, "&#96;");
 }
@@ -204,8 +219,35 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   let html = "";
   const listStack = [];
   let paragraphBuffer = [];
+  let imageBuffer = []; // Buffer for consecutive image-only lines
   let currentListItemEndPos = -1; // Track end position of current list item
   let lastLineWasCodeblock = false;
+  
+  const flushImageGroup = () => {
+    if (imageBuffer.length > 0) {
+      const totalImages = imageBuffer.length;
+      const isCollapsible = totalImages > 1; // Only collapse if more than 1 image
+      
+      // Calculate columns for the visible row (1-3 images)
+      const visibleCount = Math.min(totalImages, 3);
+      
+      if (isCollapsible) {
+        html += `<div class="md-image-group" data-total="${totalImages}" data-collapsed="true">`;
+        html += `<div class="md-image-group-header" onclick="toggleImageGroup(this)">`;
+        html += `<span class="image-count">${totalImages} image${totalImages > 1 ? 's' : ''}</span>`;
+        html += `<svg class="expand-icon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
+        html += `</div>`;
+        html += `<div class="md-image-group-content">${imageBuffer.join("")}</div>`;
+        html += `</div>`;
+      } else {
+        // Single image, no collapse
+        html += `<div class="md-image-group" data-total="1">${imageBuffer.join("")}</div>`;
+      }
+      
+      imageBuffer = [];
+    }
+  };
+  
   const flushParagraph = () => {
     if (paragraphBuffer.length > 0) {
       html += `<p>${paragraphBuffer.join("<br>")}</p>`;
@@ -221,6 +263,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     return false;
   };
   const closeOpenBlocks = () => {
+    flushImageGroup();
     flushParagraph();
     while (listStack.length > 0) html += `</${listStack.pop().type}>`;
     currentListItemEndPos = -1; // Reset when closing list blocks
@@ -278,6 +321,13 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         lastLineWasCodeblock = false;
         continue;
       }
+      
+      // If we have pending images, don't close blocks yet (allow blank lines between images)
+      if (imageBuffer.length > 0) {
+        lastLineWasCodeblock = false;
+        continue;
+      }
+      
       closeOpenBlocks();
       lastLineWasCodeblock = false;
       continue;
@@ -326,7 +376,17 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       let indent = listMatch[1].length;
       const type = olMatch ? "ol" : "ul";
       const number = olMatch ? parseInt(olMatch[2], 10) : null;
-      const content = olMatch ? listMatch[3] : ulMatch[2];
+      let content = olMatch ? listMatch[3] : ulMatch[2];
+      
+      // Handle task lists (- [ ] or - [x])
+      let isTaskList = false;
+      let isChecked = false;
+      const taskMatch = content.match(/^\[([ x])\]\s+(.*)/);
+      if (type === "ul" && taskMatch) {
+        isTaskList = true;
+        isChecked = taskMatch[1] === 'x';
+        content = taskMatch[2]; // Get the text after the checkbox
+      }
       const lastList = listStack.length > 0 ? listStack[listStack.length - 1] : null;
       if (type === "ul" && lastList?.type === "ul" && lastList.implicit && indent < lastList.indent) indent = lastList.indent;
       else if (type === "ul" && lastList?.type === "ol" && indent <= lastList.indent) indent = lastList.indent + 2;
@@ -346,7 +406,12 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
       // Wrap text content with <p> for consistent styling
       const parsedContent = parseInlineMarkdown(content);
-      html += `<li><p>${parsedContent}</p></li>`;
+      if (isTaskList) {
+        const checkboxHtml = `<input type="checkbox"${isChecked ? ' checked' : ''} disabled> `;
+        html += `<li><p>${checkboxHtml}${parsedContent}</p></li>`;
+      } else {
+        html += `<li><p>${parsedContent}</p></li>`;
+      }
       // Track the end position of this list item for appending nested content
       // Position before "</p></li>" to insert nested content after the paragraph
       currentListItemEndPos = html.length - 9; // Position before "</p></li>"
@@ -455,18 +520,37 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       } else {
         // Check if this line is a container tag (brain or prompt) - don't wrap in <p>
         if (trimmedLine.includes("XCONTAINERX")) {
+          flushImageGroup();
           flushParagraph();
           html += parseInlineMarkdown(line) + '\n';
         } else {
-          paragraphBuffer.push(parseInlineMarkdown(line));
+          // Check if this line is ONLY an image (no text before/after)
+          const isImageOnly = /^!\[.*?\]\(.*?\)(\s*=\s*\d+x\d+)?$/.test(trimmedLine);
+          
+          if (isImageOnly) {
+            // This is an image-only line
+            flushParagraph(); // Flush any pending text first
+            imageBuffer.push(parseInlineMarkdown(line.trim()));
+          } else {
+            // This is text or mixed content
+            flushImageGroup(); // Flush any pending images first
+            paragraphBuffer.push(parseInlineMarkdown(line));
+          }
         }
       }
       lastLineWasCodeblock = false;
     }
   }
   closeOpenBlocks();
-  let finalHtml = codeBlocks.reduce((acc, block, i) => acc.replace(`__CODEBLOCK_${i}__`, block), html);
-  finalHtml = latexBlocks.reduce((acc, block, i) => acc.replace(`__LATEX_${i}__`, block), finalHtml);
+  
+  // Restore LaTeX blocks FIRST (before processing other placeholders that might be wrapped in HTML)
+  let finalHtml = html;
+  finalHtml = latexBlocks.reduce((acc, block, i) => {
+    // Use split/join to avoid $ being treated as special character in replace()
+    return acc.split(`__LATEX_${i}__`).join(block);
+  }, finalHtml);
+  
+  finalHtml = codeBlocks.reduce((acc, block, i) => acc.replace(`__CODEBLOCK_${i}__`, block), finalHtml);
   finalHtml = containerBlocks.reduce((acc, block, i) => {
     // Don't call parseInlineMarkdown - it will escape the HTML
     // Instead, just process the inner tags
@@ -489,6 +573,15 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     return acc.replace(`XCONTAINERX${i}XCONTAINERX`, processed);
   }, finalHtml);
   return finalHtml;
+}
+
+function groupConsecutiveImages(html, imageBlocks) {
+  // Simply replace all image placeholders with their actual HTML
+  let processedHtml = html;
+  imageBlocks.forEach((block, index) => {
+    processedHtml = processedHtml.replace(new RegExp(`__IMAGE_${index}__`, 'g'), block);
+  });
+  return processedHtml;
 }
 
 function parseInlineMarkdown(text) {
@@ -535,29 +628,74 @@ function parseInlineMarkdown(text) {
   const imageBlocks = [];
   processedText = processedText.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
     const placeholder = `__IMAGE_${imageBlocks.length}__`;
-    imageBlocks.push(`<img class="md-image" src="${src}" alt="${alt || 'Image'}" loading="lazy">`);
+    // Strip markdown formatting from alt text for accessibility
+    const cleanAlt = alt.replace(/\*\*|__|[\*_~`]/g, '') || 'Image';
+    // Handle image size parameter (=WIDTHxHEIGHT)
+    let imgSrc = src;
+    let sizeAttr = '';
+    const sizeMatch = src.match(/^(.+?)\s+=\s*(\d+)x(\d+)$/);
+    if (sizeMatch) {
+      imgSrc = sizeMatch[1];
+      sizeAttr = ` width="${sizeMatch[2]}" height="${sizeMatch[3]}"`;
+    }
+    imageBlocks.push(`<div class="md-image-wrapper"><img class="md-image" src="${imgSrc}" alt=""${sizeAttr} loading="lazy"><button class="md-image-download" data-image-url="${escapeAttribute(imgSrc)}"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></div>`);
     return placeholder;
   });
 
+  // Parse footnotes BEFORE links
+  const footnoteRefs = [];
+  processedText = processedText.replace(/\[\^([^\]]+)\]/g, (match, ref) => {
+    const placeholder = `__FOOTNOTE_REF_${footnoteRefs.length}__`;
+    footnoteRefs.push(`<sup class="footnote-ref"><a href="#fn-${ref}">[${ref}]</a></sup>`);
+    return placeholder;
+  });
+  
   // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
   const linkBlocks = [];
   processedText = processedText.replace(/\[([^\]]*)\]\(([^)]+)\)/g, (match, text, url) => {
     const placeholder = `__LINK_${linkBlocks.length}__`;
+    
+    // Check if link contains image placeholder (clickable image)
+    const hasImage = /__IMAGE_(\d+)__/.test(text);
+    
     if (url.startsWith('mailto:')) {
-      // Email link
-      linkBlocks.push(`<a href="${url}" class="link email-link">${text}${EMAIL_ICON}</a>`);
+      // Email link - process inline content
+      const processedText = hasImage ? text : parseInlineContent(text);
+      linkBlocks.push(`<a href="${url}" class="link email-link">${processedText}${EMAIL_ICON}</a>`);
     } else {
-      // Regular link
-      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${text}${BROWSER_ICON}</a>`);
+      // Regular link - process inline content
+      const processedText = hasImage ? text : parseInlineContent(text);
+      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${processedText}${BROWSER_ICON}</a>`);
     }
     return placeholder;
   });
 
   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-  html = html.replace(/__BR_TAG__/g, "<br>");
   
-  // Restore images
-  html = imageBlocks.reduce((acc, block, i) => acc.replace(`__IMAGE_${i}__`, block), html);
+  // Restore common HTML entities (prevent double escaping)
+  const entities = {
+    '&amp;copy;': '&copy;',
+    '&amp;reg;': '&reg;',
+    '&amp;trade;': '&trade;',
+    '&amp;hellip;': '&hellip;',
+    '&amp;mdash;': '&mdash;',
+    '&amp;ndash;': '&ndash;',
+    '&amp;lsquo;': '&lsquo;',
+    '&amp;rsquo;': '&rsquo;',
+    '&amp;ldquo;': '&ldquo;',
+    '&amp;rdquo;': '&rdquo;',
+    '&amp;nbsp;': '&nbsp;',
+    '&amp;lt;': '&lt;',
+    '&amp;gt;': '&gt;',
+    '&amp;quot;': '&quot;',
+    '&amp;apos;': '&apos;'
+  };
+  
+  for (const [escaped, entity] of Object.entries(entities)) {
+    html = html.replaceAll(escaped, entity);
+  }
+  
+  html = html.replace(/__BR_TAG__/g, "<br>");
   
   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
   html = html.replace(footnoteGroupRegex, match => {
@@ -572,8 +710,15 @@ function parseInlineMarkdown(text) {
     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
   });
   
-  // Restore links
+  // Restore footnotes FIRST
+  html = footnoteRefs.reduce((acc, block, i) => acc.replace(`__FOOTNOTE_REF_${i}__`, block), html);
+  
+  // Restore links (they may contain image placeholders)
   html = linkBlocks.reduce((acc, block, i) => acc.replace(`__LINK_${i}__`, block), html);
+  
+  // Restore images AFTER links (so images inside links work correctly)
+  // Group consecutive images together
+  html = groupConsecutiveImages(html, imageBlocks);
   
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
   const inlineCodeBlocks = [];
@@ -585,14 +730,64 @@ function parseInlineMarkdown(text) {
   const tldList = ["com","net","org","io","gov","edu","co","info","biz","online","app","id","me","site","tech","dev","ai","cloud","shop","store","live","blog","club","news","xyz","link","cloud","space","page","pro","design","agency","group","company","inc","us","uk","au","ca","de","fr","es","it","nl","se","no","fi","ru","cn","jp","br","in","cz","pl","be","ch","at","sg","hk","nz","mx","ar","cl","kr","za","ae","sa"];
   const tldPattern = tldList.join("|");
   const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
-  html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl) => {
-    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`)) return match;
+  html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl, offset) => {
+    // Skip if inside href, src attributes, or near placeholders
+    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`) || 
+        html.includes(`href=&quot;${match}`) || html.includes(`src=&quot;${match}`) ||
+        /__(?:IMAGE|LINK|INLINE_CODE)_\d+__/.test(match)) return match;
+    
+    // Skip if preceded by @ (email addresses in mailto links)
+    if (offset > 0 && html[offset - 1] === '@') return match;
+    
+    // Skip if inside existing link tag
+    const beforeMatch = html.substring(0, offset);
+    const lastOpenTag = beforeMatch.lastIndexOf('<a ');
+    const lastCloseTag = beforeMatch.lastIndexOf('</a>');
+    if (lastOpenTag > lastCloseTag) return match; // Inside <a> tag
+    
     let href = protocolUrl || domainUrl;
     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
     return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}${BROWSER_ICON}</a>`;
   });
   html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
-  html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/___(.*?)___/g, "<strong><em>$1</em></strong>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>").replace(/~~(.*?)~~/g, "<del>$1</del>");
+  
+  // Inline formatting - but protect placeholders and HTML attributes from being formatted
+  // First, protect all __PLACEHOLDER__ patterns (use # to avoid underscore issues)
+  const allPlaceholders = [];
+  html = html.replace(/__[A-Z_]+_\d+__/g, (match) => {
+    const placeholder = `@@PROTECTED#${allPlaceholders.length}@@`;
+    allPlaceholders.push(match);
+    return placeholder;
+  });
+  
+  // Then protect content inside HTML tags (including attributes)
+  const htmlTagPattern = /<[^>]+>/g;
+  const protectedTags = [];
+  html = html.replace(htmlTagPattern, (match) => {
+    const placeholder = `@@TAG#${protectedTags.length}@@`;
+    protectedTags.push(match);
+    return placeholder;
+  });
+  
+  // Now apply formatting to the remaining text (safe from placeholders)
+  html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
+    .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>")
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__((?!PROTECTED|TAG)\w+?)__/g, "<strong>$1</strong>") // Protect new placeholders
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/(?<!_)_([^_]+)_(?!_)/g, "<em>$1</em>")
+    .replace(/~~(.*?)~~/g, "<del>$1</del>");
+  
+  // Restore protected HTML tags
+  protectedTags.forEach((tag, i) => {
+    html = html.replace(`@@TAG#${i}@@`, tag);
+  });
+  
+  // Restore all placeholders
+  allPlaceholders.forEach((ph, i) => {
+    html = html.replace(`@@PROTECTED#${i}@@`, ph);
+  });
+  
   return html;
 }
 
@@ -603,28 +798,79 @@ function processMarkdownFormatting(text) {
   const imageBlocks = [];
   let processedText = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
     const placeholder = `__IMAGE_${imageBlocks.length}__`;
-    imageBlocks.push(`<img class="md-image" src="${src}" alt="${alt || 'Image'}" loading="lazy">`);
+    // Strip markdown formatting from alt text for accessibility
+    const cleanAlt = alt.replace(/\*\*|__|[\*_~`]/g, '') || 'Image';
+    // Handle image size parameter (=WIDTHxHEIGHT)
+    let imgSrc = src;
+    let sizeAttr = '';
+    const sizeMatch = src.match(/^(.+?)\s+=\s*(\d+)x(\d+)$/);
+    if (sizeMatch) {
+      imgSrc = sizeMatch[1];
+      sizeAttr = ` width="${sizeMatch[2]}" height="${sizeMatch[3]}"`;
+    }
+    imageBlocks.push(`<div class="md-image-wrapper"><img class="md-image" src="${imgSrc}" alt=""${sizeAttr} loading="lazy"><button class="md-image-download" data-image-url="${escapeAttribute(imgSrc)}"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></div>`);
     return placeholder;
   });
 
+  // Parse footnotes BEFORE links
+  const footnoteRefs = [];
+  processedText = processedText.replace(/\[\^([^\]]+)\]/g, (match, ref) => {
+    const placeholder = `__FOOTNOTE_REF_${footnoteRefs.length}__`;
+    footnoteRefs.push(`<sup class="footnote-ref"><a href="#fn-${ref}">[${ref}]</a></sup>`);
+    return placeholder;
+  });
+  
   // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
   const linkBlocks = [];
   processedText = processedText.replace(/\[([^\]]*)\]\(([^)]+)\)/g, (match, text, url) => {
     const placeholder = `__LINK_${linkBlocks.length}__`;
+    
+    // Check if link contains image placeholder (clickable image)
+    const hasImage = /__IMAGE_(\d+)__/.test(text);
+    
     if (url.startsWith('mailto:')) {
-      // Email link
-      linkBlocks.push(`<a href="${url}" class="link email-link">${text}${EMAIL_ICON}</a>`);
+      // Email link - process inline content
+      const processedText = hasImage ? text : parseInlineContent(text);
+      linkBlocks.push(`<a href="${url}" class="link email-link">${processedText}${EMAIL_ICON}</a>`);
     } else {
-      // Regular link
-      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${text}${BROWSER_ICON}</a>`);
+      // Regular link - process inline content
+      const processedText = hasImage ? text : parseInlineContent(text);
+      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${processedText}${BROWSER_ICON}</a>`);
     }
     return placeholder;
   });
 
   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   
-  // Restore images
-  html = imageBlocks.reduce((acc, block, i) => acc.replace(`__IMAGE_${i}__`, block), html);
+  // Restore common HTML entities (prevent double escaping)
+  const entities = {
+    '&amp;copy;': '&copy;',
+    '&amp;reg;': '&reg;',
+    '&amp;trade;': '&trade;',
+    '&amp;hellip;': '&hellip;',
+    '&amp;mdash;': '&mdash;',
+    '&amp;ndash;': '&ndash;',
+    '&amp;lsquo;': '&lsquo;',
+    '&amp;rsquo;': '&rsquo;',
+    '&amp;ldquo;': '&ldquo;',
+    '&amp;rdquo;': '&rdquo;',
+    '&amp;nbsp;': '&nbsp;',
+    '&amp;lt;': '&lt;',
+    '&amp;gt;': '&gt;',
+    '&amp;quot;': '&quot;',
+    '&amp;apos;': '&apos;'
+  };
+  
+  for (const [escaped, entity] of Object.entries(entities)) {
+    html = html.replaceAll(escaped, entity);
+  }
+  
+  // Restore footnotes FIRST  
+  html = footnoteRefs.reduce((acc, block, i) => acc.replace(`__FOOTNOTE_REF_${i}__`, block), html);
+  
+  // Restore images (before links, for clickable images)
+  // Group consecutive images together
+  html = groupConsecutiveImages(html, imageBlocks);
   
   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
   html = html.replace(footnoteGroupRegex, match => {
@@ -652,14 +898,64 @@ function processMarkdownFormatting(text) {
   const tldList = ["com","net","org","io","gov","edu","co","info","biz","online","app","id","me","site","tech","dev","ai","cloud","shop","store","live","blog","club","news","xyz","link","cloud","space","page","pro","design","agency","group","company","inc","us","uk","au","ca","de","fr","es","it","nl","se","no","fi","ru","cn","jp","br","in","cz","pl","be","ch","at","sg","hk","nz","mx","ar","cl","kr","za","ae","sa"];
   const tldPattern = tldList.join("|");
   const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
-  html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl) => {
-    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`)) return match;
+  html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl, offset) => {
+    // Skip if inside href, src attributes, or near placeholders
+    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`) || 
+        html.includes(`href=&quot;${match}`) || html.includes(`src=&quot;${match}`) ||
+        /__(?:IMAGE|LINK|INLINE_CODE)_\d+__/.test(match)) return match;
+    
+    // Skip if preceded by @ (email addresses in mailto links)
+    if (offset > 0 && html[offset - 1] === '@') return match;
+    
+    // Skip if inside existing link tag
+    const beforeMatch = html.substring(0, offset);
+    const lastOpenTag = beforeMatch.lastIndexOf('<a ');
+    const lastCloseTag = beforeMatch.lastIndexOf('</a>');
+    if (lastOpenTag > lastCloseTag) return match; // Inside <a> tag
+    
     let href = protocolUrl || domainUrl;
     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
     return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}${BROWSER_ICON}</a>`;
   });
   html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
-  html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>").replace(/___(.*?)___/g, "<strong><em>$1</em></strong>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>").replace(/\*([^*]+)\*/g, "<em>$1</em>").replace(/_([^_]+)_/g, "<em>$1</em>").replace(/~~(.*?)~~/g, "<del>$1</del>");
+  
+  // Inline formatting - but protect placeholders and HTML attributes from being formatted
+  // First, protect all __PLACEHOLDER__ patterns (use # to avoid underscore issues)
+  const allPlaceholders = [];
+  html = html.replace(/__[A-Z_]+_\d+__/g, (match) => {
+    const placeholder = `@@PROTECTED#${allPlaceholders.length}@@`;
+    allPlaceholders.push(match);
+    return placeholder;
+  });
+  
+  // Then protect content inside HTML tags (including attributes)
+  const htmlTagPattern = /<[^>]+>/g;
+  const protectedTags = [];
+  html = html.replace(htmlTagPattern, (match) => {
+    const placeholder = `@@TAG#${protectedTags.length}@@`;
+    protectedTags.push(match);
+    return placeholder;
+  });
+  
+  // Now apply formatting to the remaining text (safe from placeholders)
+  html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
+    .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>")
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__((?!PROTECTED|TAG)\w+?)__/g, "<strong>$1</strong>") // Protect new placeholders
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+    .replace(/(?<!_)_([^_]+)_(?!_)/g, "<em>$1</em>")
+    .replace(/~~(.*?)~~/g, "<del>$1</del>");
+  
+  // Restore protected HTML tags
+  protectedTags.forEach((tag, i) => {
+    html = html.replace(`@@TAG#${i}@@`, tag);
+  });
+  
+  // Restore all placeholders
+  allPlaceholders.forEach((ph, i) => {
+    html = html.replace(`@@PROTECTED#${i}@@`, ph);
+  });
+  
   return html;
 }
 

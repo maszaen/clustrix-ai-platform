@@ -12,7 +12,7 @@ function log(logHelper, context, func, message, details = {}) {
   }
 }
 
-async function performWebSearch(queries, config, logHelper) {
+async function performWebSearch(queries, config, logHelper, options = {}) {
   if (!Array.isArray(queries) || queries.length === 0) {
     log(logHelper, 'WEB_SEARCH', 'performWebSearch', 'Skipping search - no queries received.');
     return [];
@@ -24,7 +24,10 @@ async function performWebSearch(queries, config, logHelper) {
   }
 
   const provider = config.provider || 'serpapi';
-  log(logHelper, 'WEB_SEARCH', 'performWebSearch', `Starting search with provider ${provider}.`, { queries });
+  const includeImages = options.includeImages !== false;
+  const imageCount = options.imageCount || 2;
+  
+  log(logHelper, 'WEB_SEARCH', 'performWebSearch', `Starting search with provider ${provider}.`, { queries, includeImages });
 
   if (provider === 'google') {
     if (!config.googleApiKey || !config.googleCseId) {
@@ -33,15 +36,20 @@ async function performWebSearch(queries, config, logHelper) {
     }
 
     try {
-      const promises = queries.map((q) => new Promise((resolve, reject) => {
+      const makeGoogleRequest = (query, searchType = null) => new Promise((resolve, reject) => {
         const url = new URL('https://www.googleapis.com/customsearch/v1');
         url.searchParams.set('key', config.googleApiKey);
         url.searchParams.set('cx', config.googleCseId);
-        url.searchParams.set('q', q);
+        url.searchParams.set('q', query);
         url.searchParams.set('hl', 'id');
         url.searchParams.set('gl', 'id');
+        if (searchType) {
+          url.searchParams.set('searchType', searchType);
+          url.searchParams.set('num', String(imageCount));
+        }
 
-        log(logHelper, 'WEB_SEARCH', 'performWebSearch', 'Dispatching Google CSE request.', { query: q });
+        const logType = searchType === 'image' ? 'image search' : 'web search';
+        log(logHelper, 'WEB_SEARCH', 'performWebSearch', `Dispatching Google CSE ${logType} request.`, { query });
 
         const req = https.get(url, (res) => {
           let data = '';
@@ -65,12 +73,23 @@ async function performWebSearch(queries, config, logHelper) {
           log(logHelper, 'WEB_SEARCH', 'performWebSearch', 'Google CSE request failed.', { error: err.message });
           resolve({ items: [] });
         });
-      }));
+      });
 
-      const responses = await Promise.all(promises);
-      const transformed = responses
+      const webPromises = queries.map((q) => makeGoogleRequest(q, null));
+      const allPromises = [...webPromises];
+      
+      if (includeImages && queries.length > 0) {
+        const imagePromise = makeGoogleRequest(queries[0], 'image');
+        allPromises.push(imagePromise);
+      }
+
+      const responses = await Promise.all(allPromises);
+      const imageResponse = includeImages && responses.length > queries.length ? responses.pop() : null;
+      
+      const webResults = responses
         .flatMap((res) => Array.isArray(res.items) ? res.items : [])
         .map((item) => ({
+          type: 'web',
           link: item.link,
           title: item.title,
           snippet: item.snippet,
@@ -78,8 +97,19 @@ async function performWebSearch(queries, config, logHelper) {
         .filter((item) => item.link && !item.link.includes('youtube.com'))
         .slice(0, 5);
 
-      log(logHelper, 'WEB_SEARCH', 'performWebSearch', `Google CSE returned ${transformed.length} results.`);
-      return transformed;
+      const imageResults = imageResponse && Array.isArray(imageResponse.items)
+        ? imageResponse.items.slice(0, imageCount).map((item) => ({
+            type: 'image',
+            link: item.link,
+            title: item.title,
+            snippet: item.snippet || item.image?.contextLink,
+            thumbnail: item.image?.thumbnailLink,
+          }))
+        : [];
+
+      const allResults = [...webResults, ...imageResults];
+      log(logHelper, 'WEB_SEARCH', 'performWebSearch', `Google CSE returned ${webResults.length} web + ${imageResults.length} image results.`);
+      return allResults;
     } catch (error) {
       log(logHelper, 'WEB_SEARCH', 'performWebSearch', 'Google CSE fatal error.', { error: error.message });
       return [];
@@ -93,16 +123,50 @@ async function performWebSearch(queries, config, logHelper) {
   }
 
   try {
-    const responses = await Promise.all(
-      queries.map((q) => getJson({ q, api_key: config.serpApiKey, hl: 'id', gl: 'id' }))
+    const webPromises = queries.map((q) => 
+      getJson({ q, api_key: config.serpApiKey, hl: 'id', gl: 'id' })
     );
-    const organicResults = responses
+    
+    const allPromises = [...webPromises];
+    if (includeImages && queries.length > 0) {
+      const imagePromise = getJson({ 
+        q: queries[0], 
+        api_key: config.serpApiKey, 
+        tbm: 'isch',
+        hl: 'id', 
+        gl: 'id',
+        num: imageCount
+      });
+      allPromises.push(imagePromise);
+    }
+
+    const responses = await Promise.all(allPromises);
+    const imageResponse = includeImages && responses.length > queries.length ? responses.pop() : null;
+    
+    const webResults = responses
       .flatMap((res) => Array.isArray(res.organic_results) ? res.organic_results : [])
+      .map((item) => ({
+        type: 'web',
+        link: item.link,
+        title: item.title,
+        snippet: item.snippet,
+      }))
       .filter((item) => item.link && !item.link.includes('youtube.com'))
       .slice(0, 5);
 
-    log(logHelper, 'WEB_SEARCH', 'performWebSearch', `SerpAPI returned ${organicResults.length} results.`);
-    return organicResults;
+    const imageResults = imageResponse && Array.isArray(imageResponse.images_results)
+      ? imageResponse.images_results.slice(0, imageCount).map((item) => ({
+          type: 'image',
+          link: item.original,
+          title: item.title,
+          snippet: item.source,
+          thumbnail: item.thumbnail,
+        }))
+      : [];
+
+    const allResults = [...webResults, ...imageResults];
+    log(logHelper, 'WEB_SEARCH', 'performWebSearch', `SerpAPI returned ${webResults.length} web + ${imageResults.length} image results.`);
+    return allResults;
   } catch (error) {
     log(logHelper, 'WEB_SEARCH', 'performWebSearch', 'SerpAPI fatal error.', { error: error.message });
     return [];

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    .md-image-wrapper {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+      max-width: 500px;
+      margin: 20px;
+    }
+    .md-image {
+      width: 100%;
+      min-height: 100px;
+      border-radius: 8px;
+      background: #f0f0f0;
+      height: auto;
+      display: block;
+      object-fit: cover;
+    }
+    .md-image-download {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      border: none;
+      border-radius: 8px;
+      padding: 8px;
+      cursor: pointer;
+      opacity: 0;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    .md-image-download:hover {
+      background: rgba(0, 0, 0, 0.85);
+      transform: scale(1.05);
+    }
+    .md-image-wrapper:hover .md-image-download {
+      opacity: 1;
+    }
+    .md-image-download svg {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <h2>Test Image Download Button</h2>
+  
+  <div class="md-image-wrapper">
+    <img class="md-image" src="https://picsum.photos/500/300" alt="" loading="lazy">
+    <button class="md-image-download" data-image-url="https://picsum.photos/500/300">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </button>
+  </div>
+
+  <script>
+    document.addEventListener('click', function(e) {
+      const downloadBtn = e.target.closest('.md-image-download');
+      if (downloadBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const imageUrl = downloadBtn.getAttribute('data-image-url');
+        alert('Would download: ' + imageUrl);
+      }
+    });
+  </script>
+  
+  <p><strong>Hover gambar di atas</strong> - Download button harus muncul di top-right corner</p>
+</body>
+</html>

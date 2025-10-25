@@ -80,6 +80,11 @@ class DynamicResearchAgent {
 
       const limitedQueries = plan.queries.slice(0, maxQueries);
       
+      const imageCount = typeof plan.imageCount === 'number' && plan.imageCount >= 0 
+        ? Math.min(Math.floor(plan.imageCount), 10) 
+        : 2;
+      const includeImages = imageCount > 0;
+      
       // Send individual web search thinking updates
       for (const query of limitedQueries) {
         progressCallback({
@@ -91,10 +96,18 @@ class DynamicResearchAgent {
         });
       }
       
-      const searchResults = await performWebSearch(limitedQueries, searchApiConfig, logHelper);
+      const searchResults = await performWebSearch(
+        limitedQueries, 
+        searchApiConfig, 
+        logHelper,
+        { includeImages, imageCount }
+      );
 
       if (Array.isArray(searchResults) && searchResults.length > 0) {
-        const topResults = searchResults.slice(0, maxSearchResults);
+        const webResults = searchResults.filter(r => r.type !== 'image');
+        const imageResults = searchResults.filter(r => r.type === 'image');
+        
+        const topResults = webResults.slice(0, maxSearchResults);
         const scrapedContent = await scrapeUrls(topResults.map((r) => r.link), logHelper);
 
         combinedFindings = topResults
@@ -105,6 +118,9 @@ class DynamicResearchAgent {
             content: scrapedContent[index] || '',
           }))
           .filter((item) => (item.content && item.content.trim()) || (item.snippet && item.snippet.trim()));
+        
+        // Store imageResults for synthesis
+        combinedFindings.imageResults = imageResults;
 
         if (progressCallback) {
           progressCallback({
@@ -288,9 +304,14 @@ TASK:
 1. Write one line bullet point title summarizing research focus (use "•" symbol at start of line).
 2. Create "FILE INSIGHTS:" section with 2-5 points about file context above.
 3. Create "WEB SEARCH QUERIES:" section with 2-4 priority search queries (no automatic numbering from model, use "-" or "•"). Include the current date in queries when searching for recent or time-sensitive information.
-4. (Optional) Add "PLAN NOTES:" section with important notes if needed.
-5. Avoid table, JSON, or code formats. Only plain text with headings like example.
-6. Do not answer user question now; only plan.
+4. Add "IMAGE COUNT:" with a single number (0-10) indicating how many images needed:
+   - 0: No images (pure text/code queries, calculations)
+   - 1-2: Minimal images (news, articles, info)
+   - 3-5: Moderate images (tutorials, travel, visual aids)
+   - 6-10: High visual content (wallpapers, design, galleries, art, memes)
+5. (Optional) Add "PLAN NOTES:" section with important notes if needed.
+6. Avoid table, JSON, or code formats. Only plain text with headings like example.
+7. Do not answer user question now; only plan.
 
 Follow this example format:
 - Research focus title
@@ -298,6 +319,8 @@ FILE INSIGHTS:
 - context point
 WEB SEARCH QUERIES:
 - first query
+IMAGE COUNT:
+2
 PLAN NOTES:
 - additional note
 `;
@@ -309,6 +332,7 @@ PLAN NOTES:
       fileInsights: [],
       queries: [],
       notes: [],
+      imageCount: 2,
     };
 
     if (!text || typeof text !== 'string') {
@@ -338,6 +362,10 @@ PLAN NOTES:
         section = 'queries';
         continue;
       }
+      if (/^IMAGE COUNT/i.test(line)) {
+        section = 'imageCount';
+        continue;
+      }
       if (/^(PLAN NOTES|NOTES)/i.test(line)) {
         section = 'notes';
         continue;
@@ -350,6 +378,12 @@ PLAN NOTES:
         plan.fileInsights.push(value);
       } else if (section === 'queries') {
         plan.queries.push(value.replace(/^"|"$/g, ''));
+      } else if (section === 'imageCount') {
+        const num = parseInt(value, 10);
+        if (!isNaN(num) && num >= 0 && num <= 10) {
+          plan.imageCount = num;
+        }
+        section = 'notes';
       } else {
         plan.notes.push(value);
       }
@@ -411,6 +445,17 @@ PLAN NOTES:
       ? plan.fileInsights.map((insight) => `- ${insight}`).join('\n')
       : '- Tidak ada insight khusus dari file.';
 
+    const imageResults = Array.isArray(findings.imageResults) ? findings.imageResults : [];
+    let imageSection = '';
+    if (imageResults.length > 0) {
+      imageSection = '\n\nIMAGE RESULTS FOUND:\n';
+      imageSection += 'Display these relevant images in your answer using markdown syntax `![alt text](image_url)` at appropriate positions:\n';
+      imageResults.forEach((img, idx) => {
+        imageSection += `- Image ${idx + 1}: "${img.title}" - ${img.link}\n`;
+        if (img.snippet) imageSection += `  Context: ${img.snippet}\n`;
+      });
+    }
+
     const findingsSection = Array.isArray(findings) && findings.length > 0
       ? findings
           .map((item, index) => {
@@ -441,7 +486,7 @@ SELECTED FILE SUMMARY:
 ${contextSection}
 
 LATEST WEB FINDINGS:
-${findingsSection}
+${findingsSection}${imageSection}
 
 USER QUESTION:
 """
@@ -452,6 +497,7 @@ OUTPUT INSTRUCTIONS:
 - Answer the user's question directly with an easy-to-understand structure.
 - If the user speaks Indonesian, use Indonesian; if unclear, use neutral English.
 - Include references to web sources using markdown link format: [Source Name](URL).
+- If image results are provided, display them using markdown image syntax ![alt text](image_url) at relevant positions (e.g., after intro or within related sections).
 - Combine information from internal context and web results without copying raw text.
 - Emphasize next steps or practical recommendations when relevant.
 - Do not use JSON or table formats in the final answer.

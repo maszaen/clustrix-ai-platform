@@ -2137,7 +2137,7 @@ app.whenReady().then(() => {
           "script-src 'self' 'unsafe-inline' mjx: pkg:",
           "style-src 'self' 'unsafe-inline' pkg:",
           "font-src 'self' data: mjx: pkg:",
-          "img-src 'self' data:",
+          "img-src 'self' data: https: http:",
           "connect-src 'self' mjx: blob: pkg:",
           "worker-src 'self' blob:",
           "frame-src 'self'"
@@ -2445,18 +2445,21 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
     
     if (useSQLite && db) {
       db.transaction(() => {
-        // Get current session IDs in database
-        const existingSessionIds = new Set(db.getAllSessions().map(s => s.id));
-        const incomingSessionIds = new Set(data.sessions.map(s => s.id));
-        
-        // Delete sessions that are in database but not in incoming data
-        for (const sessionId of existingSessionIds) {
-          if (!incomingSessionIds.has(sessionId)) {
-            db.deleteSession(sessionId);
-            log('DATABASE', 2, 'sessions:save', 'Deleted session not present in save data', { sessionId });
+        // FULL SAVE: Delete sessions yang tidak ada di data.sessions
+        if (!data.isIncremental) {
+          const currentSessionIds = new Set(data.sessions.map(s => s.id));
+          const allSessions = db.getAllSessions();
+          
+          for (const existingSession of allSessions) {
+            if (!currentSessionIds.has(existingSession.id)) {
+              // Delete session yang tidak ada di data baru
+              db.deleteSession(existingSession.id);
+              console.log(`[SAVE] Deleted session ${existingSession.id} (not in new data)`);
+            }
           }
         }
         
+        // Save/update sessions yang ada di data
         for (const session of data.sessions) {
           db.saveSession(session);
           
@@ -2531,6 +2534,19 @@ ipcMain.handle('artifacts:save', async (_evt, artifacts) => {
     
     if (useSQLite && db) {
       db.transaction(() => {
+        // FULL SAVE: Delete artifacts yang tidak ada di data baru
+        const currentArtifactIds = new Set(artifacts.map(a => a.id));
+        const allArtifacts = db.getAllArtifacts();
+        
+        for (const existingArtifact of allArtifacts) {
+          if (!currentArtifactIds.has(existingArtifact.id)) {
+            // Delete artifact yang tidak ada di data baru
+            db.deleteArtifact(existingArtifact.id);
+            console.log(`[SAVE] Deleted artifact ${existingArtifact.id} (not in new data)`);
+          }
+        }
+        
+        // Save/update artifacts yang ada di data
         for (const artifact of artifacts) {
           db.saveArtifact(artifact);
         }
@@ -2654,6 +2670,19 @@ ipcMain.handle('projects:save', async (_evt, projects) => {
     
     if (useSQLite && db) {
       db.transaction(() => {
+        // FULL SAVE: Delete projects yang tidak ada di data baru
+        const currentProjectIds = new Set(projects.map(p => p.id));
+        const allProjects = db.getAllProjects();
+        
+        for (const existingProject of allProjects) {
+          if (!currentProjectIds.has(existingProject.id)) {
+            // Delete project yang tidak ada di data baru (cascade will delete files)
+            db.deleteProject(existingProject.id);
+            console.log(`[SAVE] Deleted project ${existingProject.id} (not in new data)`);
+          }
+        }
+        
+        // Save/update projects yang ada di data
         for (const project of projects) {
           log('PROJECTS', 1, 'projects:save', 'Saving project', { 
             id: project.id, 
@@ -4058,11 +4087,18 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
   }
 });
 const TRIAGE_SYSTEM_PROMPT = `You are a reasoning agent. Your first task is to analyze the user's query and decide if it requires real-time internet access. The current date is ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric' })}. Respond ONLY with a single JSON object. Do not add any text before or after it.
-JSON format: {"requires_search": boolean, "reasoning": "string", "user_prompt": "string", "search_queries": ["string", ...], "summary_key": "string"}
+JSON format: {"requires_search": boolean, "reasoning": "string", "user_prompt": "string", "search_queries": ["string", ...], "summary_key": "string", "image_count": number}
 Set "requires_search" to true if the query is about recent events (relative to the current date), specific facts, or explicitly asks to search. Otherwise, set it to false.
 "user_prompt" MUST be the exact original user query.
 "summary_key" MUST be a very short, 2-4 word summary of the user's query in English.
-If "requires_search" is true, provide 1-3 effective Google search queries relevant to the current date.`;
+If "requires_search" is true, provide 1-3 effective Google search queries relevant to the current date.
+
+"image_count" determines how many images to fetch (0-10):
+- 0: No images needed (pure text/code queries, calculations, etc)
+- 1-2: Minimal images for context (news, articles, general info)
+- 3-5: Moderate images (tutorials, explanations with visual aids, travel info)
+- 6-10: High visual content (image search, wallpapers, design inspiration, photo galleries, art, memes, visual references)
+Analyze the query intent to decide the appropriate image_count.`;
 
 async function runWebSearchChat(event, payload) {
   const { reqId, messages } = payload;
@@ -4115,8 +4151,24 @@ async function runWebSearchChat(event, payload) {
     logHelper('WEB_CHAT', 'runWebSearchChat', 'Keputusan: Web search diperlukan.');
 
     event.sender.send('chat-update', { type: 'SEARCHING', messageIndex: payload.aiMessageIndex, data: { summarizedQuery: decision.search_queries[0] } });
-    logHelper('WEB_CHAT', 'performWebSearch', 'Memulai pencarian di internet...', { queries: decision.search_queries });
-    const searchResults = await performWebSearch(decision.search_queries, payload.searchApiConfig);
+    
+    const imageCount = typeof decision.image_count === 'number' && decision.image_count >= 0 
+      ? Math.min(Math.floor(decision.image_count), 10) 
+      : 2;
+    const includeImages = imageCount > 0;
+    
+    logHelper('WEB_CHAT', 'performWebSearch', 'Memulai pencarian di internet...', { 
+      queries: decision.search_queries, 
+      imageCount, 
+      includeImages 
+    });
+    
+    const searchResults = await performWebSearch(
+      decision.search_queries, 
+      payload.searchApiConfig, 
+      logHelper,
+      { includeImages, imageCount }
+    );
     
     if (searchResults.length === 0) {
       logHelper('WEB_CHAT', 'performWebSearch', 'Pencarian tidak menemukan hasil atau API gagal/limit.');
@@ -4139,7 +4191,9 @@ async function runWebSearchChat(event, payload) {
     logHelper('WEB_CHAT', 'performWebSearch', `Pencarian berhasil. Ditemukan ${searchResults.length} hasil.`, { titles: searchResults.map(r => r.title) });
     event.sender.send('search:status', { step: 'FOUND_URLS', data: searchResults });
 
-    const urlsToScrape = searchResults.map(r => r.link);
+    const webResults = searchResults.filter(r => r.type !== 'image');
+    const imageResults = searchResults.filter(r => r.type === 'image');
+    const urlsToScrape = webResults.map(r => r.link);
     
     // Send scraping status before starting
     event.sender.send('search:status', { 
@@ -4163,8 +4217,21 @@ async function runWebSearchChat(event, payload) {
     event.sender.send('chat-update', { type: 'READING_COMPLETE', messageIndex: payload.aiMessageIndex, data: { pageCount: nonEmptyContent.length } });
 
     let searchContext = "Use the following search results to answer the user's original query. The user's original query was: \"" + decision.user_prompt + "\". Base your answer on these facts and cite sources with markdown links `[**Summarized Title Max 4 Words**](URL)`.\n\n";
+    
+    if (imageResults.length > 0) {
+      searchContext += "IMPORTANT - IMAGE RESULTS:\n";
+      searchContext += "The following image(s) are relevant to the query. Display them in your answer using markdown image syntax `![alt text](image_url)` at a relevant position (e.g., after the title/intro or within related sections):\n";
+      imageResults.forEach((img, idx) => {
+        searchContext += `- Image ${idx+1}: "${img.title}" - ${img.link}\n`;
+        if (img.snippet) searchContext += `  Context: ${img.snippet}\n`;
+      });
+      searchContext += "\n";
+    }
+    
+    searchContext += "WEB PAGE SOURCES:\n";
     nonEmptyContent.forEach((content, i) => {
-      const result = searchResults[i];
+      const result = webResults[i];
+      if (!result) return;
       searchContext += `--- Source ${i+1}: ${result.title} (${result.link}) ---\n${content}\n\n`;
     });
     const lastUserMessage = messages.slice().reverse().find(m => m.role === 'user');

@@ -3875,13 +3875,27 @@ textarea::-webkit-scrollbar {
 }
 
 /* Artifact Modal Code Highlighting */
+.modal-body:has(.hljs) {
+  background: var(--bg-secondary) !important;
+  overflow: hidden;
+}
+
+.modal-body pre * {
+
+  user-select: text !important;
+  font-size: 13px !important;
+}
+
 .modal-body pre {
+  user-select: text !important;
+  cursor: text;
   margin: 0;
-  padding: 16px !important;
+  padding: 16px 16px 56px 16px !important;
   background: var(--bg-secondary) !important;
   border-radius: var(--radius-sm);
   overflow: auto;
-  max-height: 60vh;
+  line-height: 0.5;
+  height: calc(100vh - 371px);
 }
 
 .modal-body pre code {
@@ -4509,6 +4523,7 @@ blockquote blockquote blockquote blockquote::before {
 .message-text pre, pre[class*="language-"]  {
   max-width: 100% !important;
   overflow-x: scroll;
+  cursor: text;
   background: var(--bg-secondary);
   padding: var(--spacing-lg);
   border-top: 2px solid var(--bg) !important;
@@ -7750,6 +7765,7 @@ button:disabled .btn-icon {
   transform: translateX(-50%);
   align-items: center;
   width: fit-content;
+  box-shadow: var(--shadow-md);
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
   background: var(--surface);
@@ -7783,7 +7799,7 @@ button:disabled .btn-icon {
 .modal-body:has(.artifact-btn) {
   padding: 0px !important;
   border-top: 1px solid var(--border);
-  height: 100%;
+  height: calc(100vh - 371px);
   border-radius: var(--radius-xl);
 
 }

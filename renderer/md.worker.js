@@ -775,7 +775,7 @@ function parseInlineMarkdown(text) {
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
     .replace(/__((?!PROTECTED|TAG)\w+?)__/g, "<strong>$1</strong>") // Protect new placeholders
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(/(?<!_)_([^_]+)_(?!_)/g, "<em>$1</em>")
+    .replace(/(^|[\s"'([{])_([^_\s][^_]*?[^_\s])_(\s|["')\]},;.!?]|$)/g, "$1<em>$2</em>$3")
     .replace(/~~(.*?)~~/g, "<del>$1</del>");
   
   // Restore protected HTML tags
@@ -943,7 +943,7 @@ function processMarkdownFormatting(text) {
     .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
     .replace(/__((?!PROTECTED|TAG)\w+?)__/g, "<strong>$1</strong>") // Protect new placeholders
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(/(?<!_)_([^_]+)_(?!_)/g, "<em>$1</em>")
+    .replace(/(^|[\s"'([{])_([^_\s][^_]*?[^_\s])_(\s|["')\]},;.!?]|$)/g, "$1<em>$2</em>$3")
     .replace(/~~(.*?)~~/g, "<del>$1</del>");
   
   // Restore protected HTML tags

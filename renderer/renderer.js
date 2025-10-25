@@ -4883,7 +4883,7 @@ function showArtifactModal(artifact) {
   modal.className = "modal";
   modal.innerHTML = `
     <div class="modal-overlay"></div>
-    <div class="modal-card" style="min-width: 50vw; max-width: 60vw; max-height: 90vh;">
+    <div class="modal-card" style="min-width: 50vw; max-width: 90vw; max-height: 90vh;">
       <div class="modal-header">
         <h2>${escapeHtml(artifact.title)}</h2>
         <button class="close-btn">
@@ -4895,8 +4895,20 @@ function showArtifactModal(artifact) {
         <div class="modal-body">
         ${highlightedCode}
         <div class="artifact-view-actions"">
-          <button class="artifact-btn copy-full-code-btn">Copy All</button>
-          ${artifact.sessionId ? `<button class="artifact-btn view-in-chat-btn" data-session-id="${artifact.sessionId}" data-message-index="${artifact.messageIndex || ""}">View in Chat</button>` : ""}
+          <button class="artifact-btn copy-full-code-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="copy-icon">
+              <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+              <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+            </svg>
+            Copy All
+          </button>
+          ${artifact.sessionId ? `<button class="artifact-btn view-in-chat-btn" data-session-id="${artifact.sessionId}" data-message-index="${artifact.messageIndex || ""}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="eye-icon">
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+            View in Chat
+          </button>` : ""}
         </div>
         
       </div>
@@ -4936,10 +4948,16 @@ function showArtifactModal(artifact) {
   modal.querySelector(".copy-full-code-btn").addEventListener("click", () => {
     navigator.clipboard.writeText(artifact.code).then(() => {
       const btn = modal.querySelector(".copy-full-code-btn");
-      const originalText = btn.textContent;
-      btn.textContent = "Copied!";
+      const originalHTML = btn.innerHTML;
+      btn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="check-icon">
+          <path d="M9 11l3 3L22 4"/>
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+        Copied!
+      `;
       setTimeout(() => {
-        btn.textContent = originalText;
+        btn.innerHTML = originalHTML;
       }, 1000);
     });
   });

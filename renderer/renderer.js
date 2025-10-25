@@ -1168,6 +1168,255 @@ function toggleGoogleCseInput() {
 }
 
 /**
+ * Toggle image group expand/collapse
+ */
+function toggleImageGroup(headerElement) {
+  const group = headerElement.closest('.md-image-group');
+  if (!group) return;
+  
+  const isCollapsed = group.getAttribute('data-collapsed') === 'true';
+  const content = group.querySelector('.md-image-group-content');
+  
+  if (!content) return;
+  
+  if (isCollapsed) {
+    // EXPAND: collapsed → expanded
+    // Step 1: Set to current collapsed height (230px)
+    const currentHeight = content.offsetHeight;
+    content.style.maxHeight = currentHeight + 'px';
+    
+    // Step 2: Change state (this will show hidden images)
+    group.setAttribute('data-collapsed', 'false');
+    
+    // Step 3: Get full content height after showing all images
+    const targetHeight = content.scrollHeight;
+    
+    // Step 4: Force reflow
+    content.offsetHeight;
+    
+    // Step 5: Animate to target height in next frame
+    requestAnimationFrame(() => {
+      content.style.maxHeight = targetHeight + 'px';
+    });
+  } else {
+    // COLLAPSE: expanded → collapsed
+    // Step 1: Set to current expanded height
+    const currentHeight = content.scrollHeight;
+    content.style.maxHeight = currentHeight + 'px';
+    
+    // Step 2: Force reflow
+    content.offsetHeight;
+    
+    // Step 3: Animate to collapsed height in next frame
+    requestAnimationFrame(() => {
+      content.style.maxHeight = '230px';
+      
+      // Step 4: Update state after animation completes
+      setTimeout(() => {
+        group.setAttribute('data-collapsed', 'true');
+      }, 400);
+    });
+  }
+}
+
+// Make toggleImageGroup available globally
+window.toggleImageGroup = toggleImageGroup;
+
+/**
+ * Download image from URL (bypass CSP by using canvas)
+ */
+async function downloadImage(imageUrl) {
+  try {
+    log('IMAGE_DOWNLOAD', 1, 'downloadImage', 'Starting image download', { url: imageUrl });
+    
+    // Find existing img element with this src (already loaded, bypass CSP)
+    const imgElement = document.querySelector(`img.md-image[src="${imageUrl}"]`);
+    
+    if (!imgElement) {
+      throw new Error('Image element not found in DOM');
+    }
+    
+    // Create canvas to convert image to blob
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Set canvas size to match image
+    canvas.width = imgElement.naturalWidth || imgElement.width;
+    canvas.height = imgElement.naturalHeight || imgElement.height;
+    
+    // Draw image to canvas
+    try {
+      ctx.drawImage(imgElement, 0, 0);
+    } catch (drawError) {
+      // If CORS issue, try direct download fallback
+      log('IMAGE_DOWNLOAD', 2, 'downloadImage', 'Canvas draw failed, trying direct download', { error: drawError.message });
+      
+      // Fallback: Just create link with image URL
+      const a = document.createElement('a');
+      a.href = imageUrl;
+      a.download = extractFilename(imageUrl);
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      log('IMAGE_DOWNLOAD', 1, 'downloadImage', 'Direct download triggered');
+      return;
+    }
+    
+    // Convert canvas to blob
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        throw new Error('Failed to convert canvas to blob');
+      }
+      
+      // Extract filename from URL or generate one
+      const filename = extractFilename(imageUrl);
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        log('IMAGE_DOWNLOAD', 1, 'downloadImage', 'Image downloaded successfully', { filename });
+      }, 100);
+      
+    }, 'image/png');
+    
+  } catch (error) {
+    log('IMAGE_DOWNLOAD', 3, 'downloadImage', 'Failed to download image', { error: error.message, url: imageUrl });
+    showToast(`Failed to download image: ${error.message}`, 'error');
+  }
+}
+
+function extractFilename(imageUrl) {
+  let filename = 'image';
+  try {
+    const urlObj = new URL(imageUrl);
+    const pathname = urlObj.pathname;
+    const filenameMatch = pathname.match(/([^/]+?)(\?.*)?$/);
+    if (filenameMatch && filenameMatch[1]) {
+      filename = filenameMatch[1].split('!')[0]; // Remove query-like suffixes (e.g., !w700wp)
+    }
+  } catch (e) {
+    // If URL parsing fails, use timestamp
+    filename = `image-${Date.now()}`;
+  }
+  
+  // Ensure filename has extension
+  if (!filename.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i)) {
+    filename += '.png'; // default to png since we're using canvas
+  }
+  
+  return filename;
+}
+
+window.downloadImage = downloadImage;
+
+/**
+ * Handle broken images - replace with placeholder (GLOBAL)
+ */
+function setupGlobalImageErrorHandler() {
+  document.addEventListener('error', function(e) {
+    if (e.target.classList && e.target.classList.contains('md-image')) {
+      if (!e.target.dataset.errorHandled) {
+        e.target.dataset.errorHandled = 'true';
+        e.target.src = '../public/images/default-placeholder.png';
+      }
+    }
+  }, true); // Use capture phase
+}
+
+// Setup event delegation for image download buttons
+document.addEventListener('click', function(e) {
+  const downloadBtn = e.target.closest('.md-image-download');
+  if (downloadBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const imageUrl = downloadBtn.getAttribute('data-image-url');
+    if (imageUrl) {
+      downloadImage(imageUrl);
+    }
+  }
+});
+
+// Wrap existing .md-image elements with download button
+function wrapImagesWithDownloadButton() {
+  const images = document.querySelectorAll('.md-image:not(.wrapped)');
+  images.forEach(img => {
+    // Skip if already wrapped
+    if (img.parentElement && img.parentElement.classList.contains('md-image-wrapper')) {
+      img.classList.add('wrapped');
+      return;
+    }
+    
+    // Create wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'md-image-wrapper';
+    
+    // Create download button
+    const button = document.createElement('button');
+    button.className = 'md-image-download';
+    button.setAttribute('data-image-url', img.src);
+    button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+    
+    // Wrap image
+    img.parentNode.insertBefore(wrapper, img);
+    wrapper.appendChild(img);
+    wrapper.appendChild(button);
+    img.classList.add('wrapped');
+  });
+}
+
+// Run on DOM changes using MutationObserver
+const imageObserver = new MutationObserver((mutations) => {
+  let shouldWrap = false;
+  for (const mutation of mutations) {
+    if (mutation.addedNodes.length > 0) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType === 1) { // Element node
+          if (node.classList && node.classList.contains('md-image')) {
+            shouldWrap = true;
+            break;
+          }
+          if (node.querySelectorAll && node.querySelectorAll('.md-image').length > 0) {
+            shouldWrap = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+  if (shouldWrap) {
+    wrapImagesWithDownloadButton();
+  }
+});
+
+// Start observing
+const chatLog = document.querySelector('#chat-log');
+if (chatLog) {
+  imageObserver.observe(chatLog, { childList: true, subtree: true });
+}
+
+// Initial wrap for existing images
+wrapImagesWithDownloadButton();
+
+// Initialize on load
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupGlobalImageErrorHandler);
+} else {
+  setupGlobalImageErrorHandler();
+}
+
+/**
  * Format research agent action to human-readable text
  */
 function formatResearchAction(actionType, actionParams, actionReason) {
@@ -3935,6 +4184,7 @@ function setupChatsPageListeners() {
           state.sessions = state.sessions.filter(
             (s) => !idsToDelete.includes(s.id),
           );
+          clearDirtyTracking(); // Force full save untuk ensure backend dapat update yang benar
           save();
           isChatsSelectMode = false;
           selectedChatIds.clear();
@@ -12674,9 +12924,16 @@ function deleteSession(sessionToDelete) {
     sessionName: sessionToDelete.name,
     createdAt: sessionToDelete.created_at,
   });
+  
+  // Invalidate cache untuk session yang dihapus
+  if (sessionToDelete.id) {
+    invalidateSessionCache(sessionToDelete.id);
+  }
+  
   state.sessions = state.sessions.filter((s) => s !== sessionToDelete);
   if (current === sessionToDelete) showWelcomeScreen();
   else renderSessions();
+  clearDirtyTracking(); // Force full save untuk ensure backend dapat update yang benar
   save();
 }
 
@@ -14770,6 +15027,7 @@ function setupEventListeners() {
       streamManager.shutdownGracefully();
       state.sessions = [];
       current = null;
+      clearDirtyTracking(); // Force full save untuk ensure backend dapat update yang benar
       await save();
       closeModalWithAnimation($("#settings-modal"));
       closeModalWithAnimation($("#quick-model-switch-modal"));
@@ -15377,36 +15635,100 @@ document.addEventListener("DOMContentLoaded", initializeApp);
 
 // ===== TOAST NOTIFICATION (In-app, no native dialogs) =====
 
-function showToast(message, type = 'info') {
-  // Remove existing toast
-  const existing = document.querySelector('.toast-notification');
-  if (existing) existing.remove();
+function showToast(message, type = 'info', delay = null) {
+  // Kalau delay ga di-set, hitung otomatis berdasarkan panjang karakter
+  if (delay === null) {
+    const charLength = message.length;
+    delay = Math.min(Math.max(4000, charLength * 50), 10000);
+  }
   
+  // Buat container untuk semua toast kalau belum ada
+  let container = document.querySelector('.toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'toast-container';
+    container.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 10px;
+      z-index: 10000;
+      pointer-events: none;
+    `;
+    document.body.appendChild(container);
+  }
+  
+  // Buat toast baru
   const toast = document.createElement('div');
   toast.className = `toast-notification toast-${type}`;
   toast.textContent = message;
   toast.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
     padding: 12px 16px;
-    background: ${type === 'error' ? '#ef444485' : type === 'success' ? '#0fdc576e' : '#3b83f685'};
+    background: ${type === 'error' ? '#902424b4' : type === 'success' ? '#0e8a3aa1' : '#1b4d9e9e'};
     color: white;
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     font-size: 14px;
-    z-index: 10000;
     max-width: 300px;
     word-wrap: break-word;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    animation: slideIn 0.3s ease-out;
+    pointer-events: auto;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out, margin-bottom 0.3s ease-out;
   `;
   
-  document.body.appendChild(toast);
+  // Tambahkan CSS animation kalau belum ada
+  if (!document.querySelector('#toast-animations')) {
+    const style = document.createElement('style');
+    style.id = 'toast-animations';
+    style.textContent = `
+      .toast-notification {
+        transition: transform 0.3s ease-out, opacity 0.3s ease-out, margin-bottom 0.3s ease-out, max-height 0.3s ease-out;
+      }
+    `;
+    document.head.appendChild(style);
+  }
   
+  // Masukkan toast ke container (karena column-reverse, ini akan muncul di bawah)
+  container.appendChild(toast);
+  
+  // Trigger animation slide up
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      toast.style.transform = 'translateY(0)';
+      toast.style.opacity = '1';
+    });
+  });
+  
+  // Auto remove setelah delay dengan smooth collapse
   setTimeout(() => {
-    toast.style.animation = 'slideOut 0.3s ease-out';
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
+    // Ambil tinggi toast sebelum dihapus
+    const toastHeight = toast.offsetHeight;
+    
+    // Animasi keluar: slide down dan fade out
+    toast.style.transform = 'translateY(20px)';
+    toast.style.opacity = '0';
+    toast.style.maxHeight = toastHeight + 'px';
+    
+    // Setelah fade out, collapse height-nya
+    setTimeout(() => {
+      toast.style.maxHeight = '0';
+      toast.style.marginBottom = '0';
+      toast.style.padding = '0 12px';
+      toast.style.overflow = 'hidden';
+      
+      // Hapus element setelah animasi collapse selesai
+      setTimeout(() => {
+        toast.remove();
+        // Hapus container kalau udah kosong
+        if (container.children.length === 0) {
+          container.remove();
+        }
+      }, 300);
+    }, 300);
+  }, delay);
 }
 
 // Add CSS animation if not exists

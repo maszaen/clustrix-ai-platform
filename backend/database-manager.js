@@ -206,11 +206,23 @@ class DatabaseManager {
   }
   
   getAllSessions() {
-    return this.db.prepare(`
-      SELECT * FROM sessions 
-      WHERE deleted = 0
-      ORDER BY updated_at DESC
-    `).all();
+    // Check if 'deleted' column exists (added in migration V2)
+    const columns = this.db.prepare(`PRAGMA table_info(sessions)`).all();
+    const hasDeletedColumn = columns.some(col => col.name === 'deleted');
+    
+    if (hasDeletedColumn) {
+      return this.db.prepare(`
+        SELECT * FROM sessions 
+        WHERE deleted = 0
+        ORDER BY updated_at DESC
+      `).all();
+    } else {
+      // Fallback for old schema (no deleted column)
+      return this.db.prepare(`
+        SELECT * FROM sessions 
+        ORDER BY updated_at DESC
+      `).all();
+    }
   }
   
   getSession(sessionId) {

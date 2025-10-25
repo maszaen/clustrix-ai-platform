@@ -1,0 +1,16 @@
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @font-face {
+      font-family: 'Anthropic';
+      src: url('Anthropic-Sans-AI.woff2') format('woff2');
+    }
+    text {
+      font-family: 'Anthropic', sans-serif;
+    }
+  </style>
+  <rect width="400" height="300" fill="#2a2a2a" />
+  <text x="50%" y="50%" text-anchor="middle" dy=".3em"
+        fill="#b0b0b0" font-size="14">
+      Preview not available
+  </text>
+</svg>

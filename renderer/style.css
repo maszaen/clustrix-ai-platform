@@ -8271,7 +8271,6 @@ button:disabled .btn-icon {
   font-size: 15px !important;
   font-style: normal;
   position: relative;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   /* animation: slideInLeft 0.3s ease-out; */
   transition: all 0.2s ease;
   line-height: 1.6;

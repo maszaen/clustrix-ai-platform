@@ -10624,12 +10624,21 @@ function setCurrent(s) {
       saveDraftForSession(current.id, msgInput.value);
     }
     
-    // Cache current session before switching
-    const chatLog = $("#chat-log");
-    if (chatLog && chatLog.innerHTML.trim()) {
-      const scroller = getChatScroller();
-      const scrollPos = scroller ? scroller.scrollTop : 0;
-      cacheSession(current.id, chatLog.innerHTML, scrollPos, current._lazyState);
+    // Cache current session before switching ONLY if not streaming in this session
+    // If streaming, the finalize will handle caching when stream completes
+    const isStreamingInCurrentSession = streamManager.isStreamingInSession(current);
+    if (!isStreamingInCurrentSession) {
+      const chatLog = $("#chat-log");
+      if (chatLog && chatLog.innerHTML.trim()) {
+        const scroller = getChatScroller();
+        const scrollPos = scroller ? scroller.scrollTop : 0;
+        cacheSession(current.id, chatLog.innerHTML, scrollPos, current._lazyState);
+        log("CACHE", 1, "setCurrent", "Cached session before switch (not streaming)");
+      }
+    } else {
+      // Invalidate cache if streaming - let finalize handle caching when complete
+      invalidateSessionCache(current.id);
+      log("CACHE", 1, "setCurrent", "Invalidated cache for streaming session before switch");
     }
   }
   
@@ -11819,8 +11828,9 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     } catch {}
     
     // Auto-cache session after streaming completes for instant restore
+    // CRITICAL: Only cache if this session is currently active to prevent caching wrong content
     try {
-      if (session && session.id) {
+      if (session && session.id && current && current.id === session.id) {
         const chatLog = $("#chat-log");
         if (chatLog && chatLog.innerHTML.trim()) {
           const scroller = getChatScroller();
@@ -11828,6 +11838,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           cacheSession(session.id, chatLog.innerHTML, scrollPos, session._lazyState);
           log("CACHE", 1, "finalize", "Auto-cached session after streaming completed");
         }
+      } else if (session && session.id && (!current || current.id !== session.id)) {
+        log("CACHE", 1, "finalize", "Skipped caching - session not currently active", {
+          streamSessionId: session.id,
+          currentSessionId: current?.id
+        });
       }
     } catch (err) {
       log("CACHE", 3, "finalize", "Failed to cache session after streaming", { error: err });
@@ -15666,6 +15681,204 @@ function setupEventListeners() {
           }
         } catch (err) {
           log("UI", 4, "preview-mermaid-btn:click", "Error rendering mermaid", { error: err });
+        }
+      }
+      return;
+    }
+
+    const previewHtmlBtn = event.target.closest(".preview-html-btn");
+    if (previewHtmlBtn) {
+      const block = previewHtmlBtn.closest(".code-block-container");
+      const preEl = block?.querySelector("pre");
+      if (!preEl) return;
+
+      // Toggle between code and preview
+      if (preEl.classList.contains("html-preview")) {
+        // Switch back to code
+        const code = preEl.dataset.originalCode || "";
+        
+        // Clean up temp file
+        const iframe = preEl.querySelector('iframe');
+        if (iframe && iframe.dataset.previewId) {
+          window.api.htmlPreview.delete(iframe.dataset.previewId).catch(err => {
+            log("UI", 3, "preview-html-btn:click", "Failed to delete preview file", { error: err });
+          });
+        }
+        
+        const escapedCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        preEl.innerHTML = `<code class="language-html">${escapedCode}</code>`;
+        preEl.classList.remove("html-preview");
+        
+        // Remove preview marker from block
+        block.classList.remove('has-html-preview');
+        
+        // Re-apply syntax highlighting
+        if (typeof highlightAllUnder === 'function') {
+          highlightAllUnder(block);
+        }
+        
+        previewHtmlBtn.title = "Preview HTML";
+        previewHtmlBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+      } else {
+        // Get code from the code element
+        const codeEl = preEl.querySelector("code");
+        if (!codeEl) return;
+        const originalCode = codeEl.textContent;
+        let htmlCode = originalCode;
+
+        // Store original code
+        preEl.dataset.originalCode = originalCode;
+        
+        // Inject script to prevent parent window scroll on hash navigation
+        const preventScrollScript = `
+          <script>
+            (function() {
+              // Prevent all hash links from changing parent window location
+              document.addEventListener('click', function(e) {
+                const link = e.target.closest('a');
+                if (link && link.hash) {
+                  e.preventDefault();
+                  const targetId = link.hash.substring(1);
+                  const targetElement = document.getElementById(targetId);
+                  if (targetElement) {
+                    targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                  // Update URL hash without triggering hashchange on parent
+                  if (window.history && window.history.replaceState) {
+                    window.history.replaceState(null, null, link.hash);
+                  }
+                }
+              }, true);
+              
+              // Prevent onclick that does location.hash changes
+              const originalLocationSetter = Object.getOwnPropertyDescriptor(window.Location.prototype || window.location, 'hash').set;
+              Object.defineProperty(window.location, 'hash', {
+                set: function(value) {
+                  const targetId = value.replace('#', '');
+                  const targetElement = document.getElementById(targetId);
+                  if (targetElement) {
+                    targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                  if (window.history && window.history.replaceState) {
+                    window.history.replaceState(null, null, '#' + targetId);
+                  }
+                }
+              });
+            })();
+          </script>
+        `;
+
+        // Find the message container to collect CSS and JS from other codeblocks
+        const messageEl = block.closest('.message');
+        if (messageEl) {
+          const allCodeBlocks = messageEl.querySelectorAll('.code-block-container');
+          
+          let cssCode = '';
+          let jsCode = '';
+          
+          // Collect CSS and JS from other codeblocks in the same message
+          allCodeBlocks.forEach(cb => {
+            if (cb === block) return; // Skip the HTML block itself
+            
+            const lang = cb.dataset.language?.toLowerCase();
+            const codeElement = cb.querySelector('pre:not(.html-preview):not(.mermaid-preview) code');
+            if (!codeElement) return;
+            
+            if (lang === 'css') {
+              cssCode += codeElement.textContent + '\n';
+            } else if (lang === 'javascript' || lang === 'js') {
+              jsCode += codeElement.textContent + '\n';
+            }
+          });
+          
+          // Inject CSS into HTML
+          if (cssCode.trim()) {
+            const styleTag = `<style>\n${cssCode}</style>\n`;
+            
+            // Try to inject in <head>
+            if (/<\/head>/i.test(htmlCode)) {
+              htmlCode = htmlCode.replace(/<\/head>/i, `${styleTag}</head>`);
+            } else if (/<head[^>]*>/i.test(htmlCode)) {
+              htmlCode = htmlCode.replace(/(<head[^>]*>)/i, `$1\n${styleTag}`);
+            } else if (/<html[^>]*>/i.test(htmlCode)) {
+              // No <head> tag, create one
+              htmlCode = htmlCode.replace(/(<html[^>]*>)/i, `$1\n<head>\n${styleTag}</head>`);
+            } else {
+              // Fallback: prepend to HTML
+              htmlCode = styleTag + htmlCode;
+            }
+            
+            log("UI", 1, "preview-html-btn:click", "Injected CSS from separate codeblock", { cssLength: cssCode.length });
+          }
+          
+          // Inject JS into HTML
+          if (jsCode.trim()) {
+            const scriptTag = `<script>\n${jsCode}\n</script>\n`;
+            
+            // Try to inject before </body>
+            if (/<\/body>/i.test(htmlCode)) {
+              htmlCode = htmlCode.replace(/<\/body>/i, `${scriptTag}</body>`);
+            } else if (/<\/html>/i.test(htmlCode)) {
+              // No </body>, inject before </html>
+              htmlCode = htmlCode.replace(/<\/html>/i, `${scriptTag}</html>`);
+            } else {
+              // Fallback: append to HTML
+              htmlCode += '\n' + scriptTag;
+            }
+            
+            log("UI", 1, "preview-html-btn:click", "Injected JS from separate codeblock", { jsLength: jsCode.length });
+          }
+        }
+        
+        // Inject scroll prevention script at the end of body
+        if (/<\/body>/i.test(htmlCode)) {
+          htmlCode = htmlCode.replace(/<\/body>/i, `${preventScrollScript}</body>`);
+        } else if (/<\/html>/i.test(htmlCode)) {
+          htmlCode = htmlCode.replace(/<\/html>/i, `${preventScrollScript}</html>`);
+        } else {
+          htmlCode += '\n' + preventScrollScript;
+        }
+
+        // Create iframe for preview
+        try {
+          // Create temp HTML file for proper isolated environment
+          window.api.htmlPreview.create(htmlCode).then(({ previewId, filePath }) => {
+            const iframe = document.createElement('iframe');
+            iframe.className = 'html-preview-iframe';
+            // Keep allow-same-origin for full functionality
+            // Script injection will prevent parent scroll
+            iframe.sandbox = 'allow-scripts allow-same-origin allow-forms';
+            iframe.src = `file://${filePath}`;
+            
+            // Store preview ID for cleanup
+            iframe.dataset.previewId = previewId;
+            
+
+
+            // Create wrapper
+            const wrapper = document.createElement('div');
+            wrapper.className = 'html-preview-wrapper';
+            wrapper.appendChild(iframe);
+
+            // Replace code with preview
+            preEl.innerHTML = '';
+            preEl.appendChild(wrapper);
+            preEl.classList.add("html-preview");
+            
+            // Mark block as having active preview
+            block.classList.add('has-html-preview');
+            
+            previewHtmlBtn.title = "Show code";
+            previewHtmlBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code-icon lucide-code"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>`;
+          }).catch(err => {
+            log("UI", 4, "preview-html-btn:click", "Error creating HTML preview file", { error: err });
+            const escapedCode = originalCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            preEl.innerHTML = `<code class="language-html">${escapedCode}</code>`;
+          });
+        } catch (err) {
+          log("UI", 4, "preview-html-btn:click", "Error rendering HTML preview", { error: err });
+          const escapedCode = originalCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+          preEl.innerHTML = `<code class="language-html">${escapedCode}</code>`;
         }
       }
       return;

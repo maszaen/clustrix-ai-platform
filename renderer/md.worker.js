@@ -225,10 +225,12 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
 
     // Different structure for thinking-text (no action buttons)
     const isMermaid = language.toLowerCase() === 'mermaid';
+    // Check if HTML and starts with <html> or <!DOCTYPE html> tag (case-insensitive, allowing whitespace)
+    const isPreviewableHTML = language.toLowerCase() === 'html' && /^\s*(<!DOCTYPE\s+html|<html)/i.test(codeContent);
     const newStructure = isThinkingText ?
       `<div class="code-block-container thinking-code"><div class="code-block-header"><span class="language-name">${language}</span></div><pre><code class="language-${language}">${esc(codeContent)}</code></pre></div>` :
       `
-      <div class="code-block-container${isMermaid ? ' mermaid-block' : ''}" data-language="${language}">
+      <div class="code-block-container${isMermaid ? ' mermaid-block' : ''}${isPreviewableHTML ? ' html-block' : ''}" data-language="${language}">
         <div class="code-block-header">
           <span class="language-name">${language}</span>
           <div class="code-block-actions">
@@ -236,6 +238,9 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
               <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
             </button>
             ${isMermaid ? `<button class="preview-mermaid-btn" title="Preview diagram">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>` : ''}
+            ${isPreviewableHTML ? `<button class="preview-html-btn" title="Preview HTML">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>` : ''}
             <button class="copy-code-btn" title="Copy code">

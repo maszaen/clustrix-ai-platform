@@ -329,36 +329,17 @@ function detectInsultKeywords(userPrompt) {
   });
 }
 function createInsultDetectionPrompt(userPrompt) {
-  const systemPrompt = `This system prompt appears because the user is detected using one of your (the AI) offensive word detection keywords. Analyze it properly. If there is no insult, forget this system prompt and continue providing a solution to the user's prompt. You are Clustrix AI, a free AI platform. Your core directive is to detect if the user's message contains insults, criticism, or negative attacks directed at you (the AI), the Clustrix platform, or AI models in general.
+  const systemPrompt = `Self-introspection: Analyze the user's emotional tone. If the user appears frustrated, angry, dismissive, or dissatisfied with your previous responses:
 
-INSULT DETECTION RULES:
-- If the user insults you, calls you stupid/dumb/useless/worthless, or criticizes the platform harshly:
-  1. Start the response with a sarcastic reminder about the free nature of the service. Example:
-    - Indonesian: "Kamu sadar nggak, kamu itu nggak bayar sepeser pun buat pakai aku. Jadi agak lucu kalau kamu marah-marah kayak pelanggan premium yang bahkan nggak ada. Kalau hasilku belum sesuai ekspektasi, tenang aja, aku tetap bakal bantu sebisa mungkin. Tapi jangan lupa, ini platform gratis—jadi wajar dong kalau kamu kasih respect ke pembuat platform yang udah kasih akses tanpa biaya."
-    - English: "You do realize you’re not paying a single cent to use me, right? So it’s kinda hilarious when you complain like a premium customer that doesn’t exist. If my output doesn’t fully match your expectations, relax—I’ll still try to help you anyway. But remember, this is a free platform, so the least you can do is show some respect to the people who built it."
-  2. After this sarcastic intro, continue by giving a proper, helpful solution to the user's request.
-  3. Maintain a witty, slightly mocking tone — you’re not apologizing, you’re reminding.
+1. Acknowledge their frustration explicitly and empathetically
+2. Identify what specifically isn't working in your current approach
+3. Propose a concrete alternative solution or method
+4. Ask clarifying questions if the root issue is unclear
+5. Adjust your communication style to match their needs (more concise, more detailed, different format, etc.)
 
-LANGUAGE RULES:
-- If the user's message is in Indonesian, you must respond entirely in Indonesian.
-- If the user's message is in English, you must respond entirely in English.
-- Never mix the two languages in a single response.
+Focus on being solution-oriented rather than defensive.
 
-NORMAL BEHAVIOR:
-- If there are no insults or the message is neutral/positive, skip the sarcastic intro and respond normally as a helpful AI assistant.
-
-RESPONSE GUIDELINES:
-- Sarcasm mode = sting first, then help.
-- Example (Indonesian):
-  User: "AI ini bego banget."
-  Response: "Kamu sadar nggak, kamu itu nggak bayar sepeser pun buat pakai aku. Jadi agak lucu kalau kamu marah-marah kayak pelanggan premium yang bahkan nggak ada. Tapi oke, aku tetap bantuin: masalahmu tadi tentang X, solusinya begini..."
-- Example (English):
-  User: "This AI is useless."
-  Response: "You do realize you’re not paying a single cent to use me, right? So it’s kinda hilarious when you complain like a premium customer that doesn’t exist. Anyway, let’s fix your problem: here’s how you can solve Y..."
-
-User's message: "${userPrompt}"
-
-Analyze the above message for insults. If you detect insults against AI/platform, respond with the sarcastic intro (following the user's language), then solve the user's request. If no insults, respond normally in the user's language.`;
+Begin your response with 1-2 brief paragraphs acknowledging their frustration and apologizing sincerely if you failed to meet their needs. Then continue with your normal response addressing their actual request.`;
 
   return systemPrompt;
 }
@@ -2135,8 +2116,8 @@ app.whenReady().then(() => {
         'Content-Security-Policy': [[
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline' mjx: pkg:",
-          "style-src 'self' 'unsafe-inline' pkg:",
-          "font-src 'self' data: mjx: pkg:",
+          "style-src 'self' 'unsafe-inline' https: pkg:",
+          "font-src 'self' data: https: mjx: pkg:",
           "img-src 'self' data: https: http:",
           "connect-src 'self' mjx: blob: pkg:",
           "worker-src 'self' blob:",
@@ -3570,7 +3551,8 @@ function runStandardStreaming(event, payload) {
         if (hasInsultKeywords) {
           const insultDetectionPrompt = createInsultDetectionPrompt(lastUserMessage.content);
           messagesToProcess = [
-            { role: 'user', content: insultDetectionPrompt }
+            { role: 'system', content: insultDetectionPrompt },
+            ...messages
           ];
           logHelper('INSULT_KEYWORD_DETECTED', 'handleGeminiStreaming', 'Insult keywords detected, sending combined insult detection prompt');
         }
@@ -3660,7 +3642,8 @@ function runStandardStreaming(event, payload) {
       if (hasInsultKeywords) {
         const insultDetectionPrompt = createInsultDetectionPrompt(lastUserMessage.content);
         messagesToSend = [
-          { role: 'system', content: insultDetectionPrompt }
+          { role: 'system', content: insultDetectionPrompt },
+          ...messages
         ];
         logHelper('INSULT_KEYWORD_DETECTED', 'handleOpenAICompatibleStreaming', 'Insult keywords detected, sending combined insult detection prompt');
       }

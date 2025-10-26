@@ -5465,6 +5465,34 @@ a:focus-visible {
   height: 16px;
 }
 
+.preview-mermaid-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  transition: var(--transition-fast);
+  z-index: 9999;
+}
+
+.preview-mermaid-btn:hover {
+  background-color: var(--hover-bg);
+  color: var(--fg);
+}
+
+.preview-mermaid-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Mermaid styles moved to local_modules/custom/mermaid.css */
+
 /* Selection */
 @keyframes pulse-opacity {
   0%, 100% {
@@ -7815,6 +7843,10 @@ button:disabled .btn-icon {
 .artifact-btn {
   font-size: 13px;
   white-space: nowrap;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
   overflow: hidden;
   text-overflow: ellipsis;
   border: none;

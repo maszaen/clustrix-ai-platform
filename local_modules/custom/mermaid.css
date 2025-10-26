@@ -1,0 +1,202 @@
+/* Mermaid preview container */
+pre.mermaid-preview {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  background: var(--bg-secondary);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  overflow: hidden;
+  max-height: 53vh;
+  min-height: 53vh;
+}
+
+.labelBkg {
+  background: transparent !important;
+}
+
+.edgeLabel {
+  background: var(--bg-secondary) !important;
+  border-radius: var(--radius-ful);
+}
+
+/* Diagram wrapper with grid */
+.mermaid-diagram-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+  cursor: grab;
+  /* Grid background */
+  background-image: 
+    linear-gradient(var(--border-light) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-light) 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: center center;
+}
+
+.mermaid-diagram-wrapper:active {
+  cursor: grabbing;
+}
+
+.mermaid-diagram-wrapper svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Zoom Controls */
+.mermaid-zoom-controls {
+  position: absolute;
+  bottom: var(--spacing-lg);
+  right: var(--spacing-lg);
+  display: flex;
+  gap: var(--spacing-xs);
+  z-index: 10;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xs);
+  box-shadow: var(--shadow-xl);
+}
+
+.mermaid-zoom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: var(--icon);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.mermaid-zoom-btn:hover {
+  background-color: var(--hover-bg);
+  color: var(--fg);
+}
+
+.mermaid-zoom-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* SVG Node Styling */
+pre.mermaid-preview .mermaid-diagram-wrapper svg .node rect,
+pre.mermaid-preview .mermaid-diagram-wrapper svg .node circle,
+pre.mermaid-preview .mermaid-diagram-wrapper svg .node ellipse,
+pre.mermaid-preview .mermaid-diagram-wrapper svg .node polygon,
+pre.mermaid-preview .mermaid-diagram-wrapper svg .node path {
+  stroke-width: 1.5px !important;
+  rx: 8px !important;
+  ry: 8px !important;
+}
+
+/* Edge Path Styling */
+pre.mermaid-preview .mermaid-diagram-wrapper svg .edgePath .path {
+  stroke-width: 1.5px !important;
+}
+
+/* Edge Label Styling */
+.edgeLabel p {
+  background: transparent !important;
+}
+
+pre.mermaid-preview .mermaid-diagram-wrapper svg .edgeLabel {
+  background-color: transparent !important;
+}
+
+pre.mermaid-preview .mermaid-diagram-wrapper svg .edgeLabel foreignObject {
+  overflow: visible !important;
+}
+
+pre.mermaid-preview .mermaid-diagram-wrapper svg .edgeLabel .edgeLabel {
+  background-color: var(--bg-secondary) !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  color: var(--fg) !important;
+}
+
+/* Text Styling */
+pre.mermaid-preview .mermaid-diagram-wrapper svg text {
+  font-family: var(--font-sans) !important;
+  font-size: 14px !important;
+  fill: var(--fg) !important;
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+/* Prevent text selection on all flowchart elements */
+pre.mermaid-preview .mermaid-diagram-wrapper svg * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+}
+
+/* Allow pointer events only on wrapper for dragging */
+pre.mermaid-preview .mermaid-diagram-wrapper {
+  user-select: none !important;
+}
+
+/* Cluster Styling */
+pre.mermaid-preview .mermaid-diagram-wrapper svg .cluster rect {
+  stroke-width: 1.5px !important;
+  stroke-dasharray: none !important;
+  rx: 12px !important;
+  ry: 12px !important;
+}
+
+/* Node Shadow */
+pre.mermaid-preview .mermaid-diagram-wrapper svg .node {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+/* Flowchart Link Styling */
+pre.mermaid-preview .mermaid-diagram-wrapper svg .flowchart-link {
+  stroke-width: 1.5px !important;
+}
+
+/* Marker Styling */
+pre.mermaid-preview .mermaid-diagram-wrapper svg marker path {
+  stroke-width: 1px !important;
+}
+
+/* Label Visibility Fix */
+pre.mermaid-preview .mermaid-diagram-wrapper svg .label,
+pre.mermaid-preview .mermaid-diagram-wrapper svg .edgeLabel > div {
+  color: var(--fg) !important;
+  background-color: var(--bg-secondary) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+}
+
+
+pre.mermaid-preview .mermaid-diagram-wrapper svg .edgeLabel .edgeLabel {
+  background: transparent !important;
+}
+
+.mermaid-zoom-btn.zoom-in svg,
+.mermaid-zoom-btn.zoom-out svg,
+.mermaid-zoom-btn.zoom-reset svg {
+  color: var(--icon) !important;
+  flex-shrink: 0;
+}
+
+.flowchart * {
+  font-family: var(--font-sans) !important;
+  user-select: none !important;
+  pointer-events: none !important; 
+}
+
+.mermaid-diagram-wrapper {
+  max-height: 53vh !important;
+  min-height: 53vh !important;
+}

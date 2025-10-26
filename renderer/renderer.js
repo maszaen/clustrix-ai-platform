@@ -28,6 +28,7 @@ let selectedProjectIds = new Set();
 let justSentMessage = false;
 let currentProject = null;
 let projectsData = [];
+let mermaidInitialized = false;
 let previousWebSearchState = null; // Track websearch state before entering project
 let confirmationModal = null;
 let confirmationTitleEl = null;
@@ -2530,6 +2531,7 @@ function createHighlightedCode(code, language) {
     text: "plaintext",
     plain: "plaintext",
     plaintext: "plaintext",
+    mermaid: "mermaid"
   };
 
   const requestedLanguage = language?.toLowerCase();
@@ -15374,6 +15376,299 @@ function setupEventListeners() {
         });
         // Could add error feedback here
       }
+    }
+
+    const previewMermaidBtn = event.target.closest(".preview-mermaid-btn");
+    if (previewMermaidBtn) {
+      const block = previewMermaidBtn.closest(".code-block-container");
+      const preEl = block?.querySelector("pre");
+      if (!preEl) return;
+
+      // Toggle between code and diagram
+      if (preEl.classList.contains("mermaid-preview")) {
+        // Switch back to code
+        const code = preEl.dataset.originalCode || "";
+        const escapedCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        preEl.innerHTML = `<code class="language-mermaid">${escapedCode}</code>`;
+        preEl.classList.remove("mermaid-preview");
+        
+        // Remove zoom controls
+        const existingControls = block.querySelector('.mermaid-zoom-controls');
+        if (existingControls) existingControls.remove();
+        
+        // Re-apply syntax highlighting
+        if (typeof highlightAllUnder === 'function') {
+          highlightAllUnder(block);
+        }
+        
+        previewMermaidBtn.title = "Preview diagram";
+        previewMermaidBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+      } else {
+        // Get code from the code element
+        const codeEl = preEl.querySelector("code");
+        if (!codeEl) return;
+        const code = codeEl.textContent;
+
+        // Store original code
+        preEl.dataset.originalCode = code;
+
+        // Render diagram
+        try {
+          const renderMermaid = (mermaidLib) => {
+            const currentTheme = document.body.classList.contains('dark-theme') ? 'dark' : 'base';
+            
+            if (!mermaidInitialized) {
+              mermaidLib.initialize({ 
+                startOnLoad: false, 
+                theme: currentTheme,
+                themeVariables: currentTheme === 'dark' ? {
+                  // Dark theme colors
+                  primaryColor: '#4a90e2',
+                  primaryTextColor: '#e4e8ed',
+                  primaryBorderColor: '#6ba3ec',
+                  lineColor: '#7aa2f7',
+                  secondaryColor: '#7c3aed',
+                  tertiaryColor: '#10b981',
+                  background: '#1f2937',
+                  mainBkg: '#374151',
+                  secondBkg: '#4b5563',
+                  tertiaryBkg: '#6b7280',
+                  textColor: '#e4e8ed',
+                  border1: '#6b7280',
+                  border2: '#9ca3af',
+                  arrowheadColor: '#7aa2f7',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: '15px',
+                  labelBackground: '#374151',
+                  nodeBorder: '#6ba3ec',
+                  clusterBkg: '#1f2937',
+                  clusterBorder: '#6b7280',
+                  defaultLinkColor: '#7aa2f7',
+                  titleColor: '#e4e8ed',
+                  edgeLabelBackground: '#374151',
+                  nodeTextColor: '#e4e8ed'
+                } : {
+                  // Light theme colors
+                  primaryColor: '#4a90e2',
+                  primaryTextColor: '#1f1f1f',
+                  primaryBorderColor: '#2563eb',
+                  lineColor: '#2563eb',
+                  secondaryColor: '#7c3aed',
+                  tertiaryColor: '#10b981',
+                  background: '#ffffff',
+                  mainBkg: '#e3f2fd',
+                  secondBkg: '#f0f4f9',
+                  tertiaryBkg: '#f8fafc',
+                  textColor: '#1f1f1f',
+                  border1: '#cbd5e1',
+                  border2: '#94a3b8',
+                  arrowheadColor: '#2563eb',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: '15px',
+                  labelBackground: '#f0f4f9',
+                  nodeBorder: '#2563eb',
+                  clusterBkg: '#f8fafc',
+                  clusterBorder: '#cbd5e1',
+                  defaultLinkColor: '#2563eb',
+                  titleColor: '#1f1f1f',
+                  edgeLabelBackground: '#f0f4f9',
+                  nodeTextColor: '#1f1f1f'
+                },
+                flowchart: {
+                  curve: 'basis',
+                  padding: 20,
+                  nodeSpacing: 50,
+                  rankSpacing: 50,
+                  diagramPadding: 20,
+                  htmlLabels: true
+                }
+              });
+              mermaidInitialized = true;
+            }
+            
+            const id = 'mermaid-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            mermaidLib.render(id, code).then((result) => {
+              // Create wrapper for diagram with pan/zoom
+              const wrapper = document.createElement('div');
+              wrapper.className = 'mermaid-diagram-wrapper';
+              wrapper.innerHTML = result.svg;
+              
+              const svg = wrapper.querySelector('svg');
+              if (svg) {
+                // Set SVG attributes for better rendering
+                svg.setAttribute('width', '100%');
+                svg.setAttribute('height', '100%');
+                svg.style.maxWidth = '100%';
+                svg.style.height = 'auto';
+                
+                // Initialize pan & zoom state
+                let scale = 1;
+                let translateX = 0;
+                let translateY = 0;
+                let isDragging = false;
+                let startX = 0;
+                let startY = 0;
+                
+                // Apply initial transform
+                const updateTransform = () => {
+                  svg.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+                  svg.style.transformOrigin = '0 0'; // Top-left origin for proper zoom to point
+                  svg.style.transition = isDragging ? 'none' : 'transform 0.2s ease-out';
+                  
+                  // Update grid background to follow pan/zoom
+                  const gridSize = 20 * scale;
+                  wrapper.style.backgroundSize = `${gridSize}px ${gridSize}px`;
+                  wrapper.style.backgroundPosition = `${translateX}px ${translateY}px`;
+                };
+                
+                // Zoom to point (mouse position)
+                const zoomToPoint = (mouseX, mouseY, zoomIn) => {
+                  const oldScale = scale;
+                  
+                  // Calculate new scale
+                  if (zoomIn) {
+                    scale = Math.min(scale * 1.2, 5);
+                  } else {
+                    scale = Math.max(scale / 1.2, 0.5);
+                  }
+                  
+                  // Scale factor change
+                  const factor = scale / oldScale;
+                  
+                  // Adjust pan to zoom towards mouse
+                  // Formula: new_pan = mouse - (mouse - old_pan) * factor
+                  translateX = mouseX - (mouseX - translateX) * factor;
+                  translateY = mouseY - (mouseY - translateY) * factor;
+                  
+                  updateTransform();
+                };
+                
+                // Zoom controls (zoom to center)
+                const zoomIn = () => {
+                  const rect = wrapper.getBoundingClientRect();
+                  const centerX = rect.width / 2;
+                  const centerY = rect.height / 2;
+                  zoomToPoint(centerX, centerY, true);
+                };
+                
+                const zoomOut = () => {
+                  const rect = wrapper.getBoundingClientRect();
+                  const centerX = rect.width / 2;
+                  const centerY = rect.height / 2;
+                  zoomToPoint(centerX, centerY, false);
+                };
+                
+                const resetZoom = () => {
+                  scale = 1;
+                  translateX = 0;
+                  translateY = 0;
+                  updateTransform();
+                };
+                
+                // Mouse wheel zoom (zoom to cursor)
+                wrapper.addEventListener('wheel', (e) => {
+                  e.preventDefault();
+                  
+                  // Get mouse position relative to wrapper
+                  const rect = wrapper.getBoundingClientRect();
+                  const mouseX = e.clientX - rect.left;
+                  const mouseY = e.clientY - rect.top;
+                  
+                  // deltaY < 0 = scroll up = zoom in
+                  // deltaY > 0 = scroll down = zoom out
+                  const shouldZoomIn = e.deltaY < 0;
+                  zoomToPoint(mouseX, mouseY, shouldZoomIn);
+                });
+                
+                // Drag to pan
+                wrapper.addEventListener('mousedown', (e) => {
+                  // Allow drag from anywhere in wrapper (text has pointer-events: none)
+                  // Just make sure we're not clicking on zoom controls
+                  if (!e.target.closest('.mermaid-zoom-controls')) {
+                    isDragging = true;
+                    startX = e.clientX - translateX;
+                    startY = e.clientY - translateY;
+                    wrapper.style.cursor = 'grabbing';
+                    e.preventDefault(); // Prevent text selection
+                  }
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                  if (isDragging) {
+                    e.preventDefault(); // Prevent text selection during drag
+                    translateX = e.clientX - startX;
+                    translateY = e.clientY - startY;
+                    updateTransform();
+                  }
+                });
+                
+                document.addEventListener('mouseup', () => {
+                  if (isDragging) {
+                    isDragging = false;
+                    wrapper.style.cursor = 'grab';
+                  }
+                });
+                
+                // Add zoom controls UI
+                const controls = document.createElement('div');
+                controls.className = 'mermaid-zoom-controls';
+                controls.innerHTML = `
+                  <button class="mermaid-zoom-btn zoom-in" title="Zoom In">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                  </button>
+                  <button class="mermaid-zoom-btn zoom-out" title="Zoom Out">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                  </button>
+                  <button class="mermaid-zoom-btn zoom-reset" title="Reset Zoom">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+                  </button>
+                `;
+                
+                controls.querySelector('.zoom-in').addEventListener('click', zoomIn);
+                controls.querySelector('.zoom-out').addEventListener('click', zoomOut);
+                controls.querySelector('.zoom-reset').addEventListener('click', resetZoom);
+                
+                // Prevent default drag behavior on SVG elements
+                wrapper.addEventListener('dragstart', (e) => {
+                  e.preventDefault();
+                  return false;
+                });
+                
+                preEl.innerHTML = '';
+                preEl.appendChild(wrapper);
+                preEl.appendChild(controls);
+                
+                // Initialize grid
+                updateTransform();
+              } else {
+                preEl.innerHTML = result.svg;
+              }
+              
+              preEl.classList.add("mermaid-preview");
+              previewMermaidBtn.title = "Show code";
+              previewMermaidBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code-icon lucide-code"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>`;
+            }).catch((err) => {
+              log("UI", 4, "preview-mermaid-btn:click", "Failed to render mermaid diagram", { error: err });
+              const escapedCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+              preEl.innerHTML = `<code class="language-mermaid">${escapedCode}</code>`;
+            });
+          };
+          
+          if (typeof mermaid !== 'undefined') {
+            renderMermaid(mermaid);
+          } else {
+            // Try dynamic import
+            import('../node_modules/mermaid/dist/mermaid.esm.min.mjs').then((mermaidModule) => {
+              renderMermaid(mermaidModule.default);
+            }).catch((err) => {
+              log("UI", 4, "preview-mermaid-btn:click", "Failed to load mermaid", { error: err });
+            });
+          }
+        } catch (err) {
+          log("UI", 4, "preview-mermaid-btn:click", "Error rendering mermaid", { error: err });
+        }
+      }
+      return;
     }
 
     if (!$("#settings-container").contains(event.target)) {

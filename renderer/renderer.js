@@ -306,6 +306,30 @@ let markdownWorker = null;
 let workerMessageId = 0;
 const workerPromises = new Map();
 
+function shouldNormalizeParagraphLists(html) {
+  if (typeof html !== 'string' || !html) return false;
+  if (html.includes('p-has-li')) return true;
+  return /<\/p>\s*<(?:ul|ol)(?=\b|>)/i.test(html);
+}
+
+function normalizeParagraphListHtml(html) {
+  if (!shouldNormalizeParagraphLists(html)) {
+    return html || '';
+  }
+  if (typeof addPHasListClass !== 'function' || typeof document === 'undefined') {
+    return html || '';
+  }
+  try {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html || '';
+    addPHasListClass(tempDiv);
+    return tempDiv.innerHTML;
+  } catch (err) {
+    log('MARKDOWN', 2, 'normalizeParagraphListHtml', 'Failed to normalize paragraph/list spacing', { error: err.message });
+    return html || '';
+  }
+}
+
 function initMarkdownWorker() {
   if (markdownWorker) return;
   
@@ -320,7 +344,8 @@ function initMarkdownWorker() {
         const { resolve } = workerPromises.get(messageId);
         workerPromises.delete(messageId);
         log('WORKER', 1, 'onmessage', 'Worker resolved message', { messageId, htmlLength: html?.length || 0 });
-        resolve(html || '');
+        const normalizedHtml = normalizeParagraphListHtml(html || '');
+        resolve(normalizedHtml);
       }
     };
     
@@ -15726,6 +15751,87 @@ function setupEventListeners() {
         const originalCode = codeEl.textContent;
         let htmlCode = originalCode;
 
+        const injectIntoHeadOrDocumentStart = (snippet) => {
+          if (!snippet || !snippet.trim()) {
+            return;
+          }
+
+          if (/<\/head>/i.test(htmlCode)) {
+            htmlCode = htmlCode.replace(/<\/head>/i, `${snippet}\n</head>`);
+          } else if (/<html[^>]*>/i.test(htmlCode)) {
+            htmlCode = htmlCode.replace(/<html[^>]*>/i, (match) => `${match}\n${snippet}`);
+          } else {
+            htmlCode = `${snippet}\n${htmlCode}`;
+          }
+        };
+
+        const buildPreviewScrollbarStyle = () => {
+          const defaults = {
+            size: '6px',
+            track: 'transparent',
+            thumb: '#8181811f',
+            thumbHover: '#090909ff',
+          };
+
+          const styleBlock = (values) => `
+            <style data-preview-scrollbar="true">
+              :root {
+                --scrollbar-size: ${values.size};
+                --scrollbar-track: ${values.track};
+                --scrollbar-thumb: ${values.thumb};
+                --scrollbar-thumb-hover: ${values.thumbHover};
+              }
+              html, body {
+                height: 100%;
+                max-height: 100vh !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                overscroll-behavior: contain;
+                
+              }
+              :where(*) {
+                scrollbar-width: thin !important;
+                scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track) !important;
+              }
+              :where(*::-webkit-scrollbar) {
+                width: var(--scrollbar-size);
+                height: var(--scrollbar-size);
+              }
+              :where(*::-webkit-scrollbar-track) {
+                background: var(--scrollbar-track);
+              }
+              :where(*::-webkit-scrollbar-thumb) {
+                background: var(--scrollbar-thumb);
+                border-radius: 999px;
+              }
+              :where(*::-webkit-scrollbar-thumb:hover) {
+                background: var(--scrollbar-thumb-hover);
+              }
+            </style>
+          `;
+
+          try {
+            if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function' || !document || !document.documentElement) {
+              return styleBlock(defaults);
+            }
+
+            const computed = window.getComputedStyle(document.documentElement);
+            const resolve = (prop, fallback) => {
+              const value = computed.getPropertyValue(prop);
+              return (value && value.trim()) || fallback;
+            };
+
+            return styleBlock({
+              size: resolve('--scrollbar-size', defaults.size),
+              track: resolve('--scrollbar-track', defaults.track),
+              thumb: resolve('--scrollbar-thumb', defaults.thumb),
+              thumbHover: resolve('--scrollbar-thumb-hover', defaults.thumbHover),
+            });
+          } catch (err) {
+            return styleBlock(defaults);
+          }
+        };
+
         // Store original code
         preEl.dataset.originalCode = originalCode;
         
@@ -15733,37 +15839,81 @@ function setupEventListeners() {
         const preventScrollScript = `
           <script>
             (function() {
-              // Prevent all hash links from changing parent window location
-              document.addEventListener('click', function(e) {
-                const link = e.target.closest('a');
-                if (link && link.hash) {
-                  e.preventDefault();
-                  const targetId = link.hash.substring(1);
-                  const targetElement = document.getElementById(targetId);
-                  if (targetElement) {
-                    targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
-                  // Update URL hash without triggering hashchange on parent
-                  if (window.history && window.history.replaceState) {
-                    window.history.replaceState(null, null, link.hash);
-                  }
+              const scrollRoot = document.scrollingElement || document.documentElement || document.body;
+              if (!scrollRoot) {
+                return;
+              }
+
+              const clamp = (value) => (value < 0 ? 0 : value);
+              const currentScrollTop = () => window.pageYOffset || scrollRoot.scrollTop || 0;
+
+              const targetPosition = (element) => {
+                const rect = element.getBoundingClientRect();
+                return clamp(rect.top + currentScrollTop() - 12);
+              };
+
+              const animateScroll = (nextTop) => {
+                try {
+                  window.scrollTo({ top: nextTop, behavior: 'smooth' });
+                } catch (err) {
+                  window.scrollTo(0, nextTop);
+                }
+              };
+
+              const navigateToHash = (hashValue, shouldUpdateHistory) => {
+                if (!hashValue || hashValue === '#') {
+                  return false;
+                }
+
+                const targetId = hashValue.replace(/^#/, '');
+                if (!targetId) {
+                  return false;
+                }
+
+                const destination = document.getElementById(targetId);
+                if (!destination) {
+                  return false;
+                }
+
+                animateScroll(targetPosition(destination));
+
+                if (shouldUpdateHistory && window.history && window.history.replaceState) {
+                  window.history.replaceState(null, document.title, '#' + targetId);
+                }
+
+                return true;
+              };
+
+              document.addEventListener('click', function(event) {
+                const anchor = event.target.closest('a[href^="#"]');
+                if (!anchor) {
+                  return;
+                }
+
+                const hashValue = anchor.getAttribute('href');
+                const navigated = navigateToHash(hashValue, true);
+
+                // Always swallow default behavior for in-document hashes
+                event.preventDefault();
+                event.stopPropagation();
+
+                // Ensure focus remains on the clicked anchor without forcing parent scroll
+                if (anchor.blur) {
+                  anchor.blur();
+                }
+
+                if (!navigated && hashValue === '#') {
+                  animateScroll(0);
                 }
               }, true);
-              
-              // Prevent onclick that does location.hash changes
-              const originalLocationSetter = Object.getOwnPropertyDescriptor(window.Location.prototype || window.location, 'hash').set;
-              Object.defineProperty(window.location, 'hash', {
-                set: function(value) {
-                  const targetId = value.replace('#', '');
-                  const targetElement = document.getElementById(targetId);
-                  if (targetElement) {
-                    targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
-                  if (window.history && window.history.replaceState) {
-                    window.history.replaceState(null, null, '#' + targetId);
-                  }
-                }
+
+              window.addEventListener('hashchange', function() {
+                navigateToHash(window.location.hash, false);
               });
+
+              if (window.location.hash) {
+                navigateToHash(window.location.hash, false);
+              }
             })();
           </script>
         `;
@@ -15794,20 +15944,8 @@ function setupEventListeners() {
           // Inject CSS into HTML
           if (cssCode.trim()) {
             const styleTag = `<style>\n${cssCode}</style>\n`;
-            
-            // Try to inject in <head>
-            if (/<\/head>/i.test(htmlCode)) {
-              htmlCode = htmlCode.replace(/<\/head>/i, `${styleTag}</head>`);
-            } else if (/<head[^>]*>/i.test(htmlCode)) {
-              htmlCode = htmlCode.replace(/(<head[^>]*>)/i, `$1\n${styleTag}`);
-            } else if (/<html[^>]*>/i.test(htmlCode)) {
-              // No <head> tag, create one
-              htmlCode = htmlCode.replace(/(<html[^>]*>)/i, `$1\n<head>\n${styleTag}</head>`);
-            } else {
-              // Fallback: prepend to HTML
-              htmlCode = styleTag + htmlCode;
-            }
-            
+            injectIntoHeadOrDocumentStart(styleTag);
+
             log("UI", 1, "preview-html-btn:click", "Injected CSS from separate codeblock", { cssLength: cssCode.length });
           }
           
@@ -15829,7 +15967,10 @@ function setupEventListeners() {
             log("UI", 1, "preview-html-btn:click", "Injected JS from separate codeblock", { jsLength: jsCode.length });
           }
         }
-        
+
+        const previewScrollbarStyle = buildPreviewScrollbarStyle();
+        injectIntoHeadOrDocumentStart(previewScrollbarStyle);
+
         // Inject scroll prevention script at the end of body
         if (/<\/body>/i.test(htmlCode)) {
           htmlCode = htmlCode.replace(/<\/body>/i, `${preventScrollScript}</body>`);

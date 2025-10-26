@@ -8,7 +8,7 @@ pre.html-preview {
   background: var(--bg-secondary);
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   overflow: hidden;
-  max-height: 70vh;
+  max-height: 80vh;
   min-height: 400px;
 }
 
@@ -25,16 +25,46 @@ pre.html-preview {
   /* Add subtle border to distinguish from background */
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.25);
 }
 
 /* HTML preview iframe */
 .html-preview-iframe {
   width: 100%;
   height: 100%;
-  min-height: 400px;
+
+  min-height: calc(100vh - 100px);
   border: none;
-  background: white;
+  background: transparent;
   border-radius: var(--radius-md);
+  overscroll-behavior: contain;
+  zoom: var(--preview-iframe-zoom, 0.8); /* non-standard but supported in Chromium/Electron */
+}
+
+.code-block-container:has(.html-preview-iframe) .code-block-header {
+  position: relative !important;
+  top: 0;
+}
+
+.html-preview-iframe:where(*) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track) !important;
+}
+
+/* Chromium/Safari */
+.html-preview-iframe:where(*::-webkit-scrollbar) {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+.html-preview-iframe:where(*::-webkit-scrollbar-track) {
+  background: var(--scrollbar-track);
+}
+.html-preview-iframe:where(*::-webkit-scrollbar-thumb) {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+}
+.html-preview-iframe:where(*::-webkit-scrollbar-thumb:hover) {
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Preview button styling */

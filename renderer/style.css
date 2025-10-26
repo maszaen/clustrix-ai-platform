@@ -366,6 +366,7 @@ body.dark-theme {
   --scrollbar-thumb: var(--border-input, #8181811f);
   --scrollbar-thumb-hover: var(--fg-muted, #090909ff);
   --scrollbar-track: transparent;
+  --preview-iframe-zoom: 0.8; /* shrink preview HTML to mimic browser zoom-out */
 }
 
 /* Firefox */

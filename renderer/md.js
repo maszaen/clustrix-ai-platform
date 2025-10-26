@@ -37,54 +37,8 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   sanitizedSrc = sanitizedSrc.replace(boldListFixRegex, "$1$2 **$3**");
   const normalizedSrc = sanitizedSrc.replace(/\u00A0/g, " ").replace(/\r\n/g, "\n");
 
-  const trimUnclosedContainers = (text) => {
-    const tags = ["clarify", "try"];
-    let result = text;
-
-    tags.forEach(tag => {
-      const openTag = `<${tag}>`;
-      const closeTag = `</${tag}>`;
-      const lowerOpenTag = openTag.toLowerCase();
-      const lowerCloseTag = closeTag.toLowerCase();
-      let lowerResult = result.toLowerCase();
-      let searchStart = 0;
-
-      while (true) {
-        const openIndex = lowerResult.indexOf(lowerOpenTag, searchStart);
-        if (openIndex === -1) break;
-
-        // Check if this tag is inside a codeblock - if so, skip it
-        const codeblockPattern = /```[\s\S]*?(?:```|$)/g;
-        let isInsideCodeblock = false;
-        let codeblockMatch;
-        while ((codeblockMatch = codeblockPattern.exec(result)) !== null) {
-          if (openIndex >= codeblockMatch.index && openIndex < codeblockMatch.index + codeblockMatch[0].length) {
-            isInsideCodeblock = true;
-            break;
-          }
-        }
-
-        if (isInsideCodeblock) {
-          // Skip this tag - it's inside a codeblock, don't trim
-          searchStart = openIndex + lowerOpenTag.length;
-          continue;
-        }
-
-        const closeIndex = lowerResult.indexOf(lowerCloseTag, openIndex + lowerOpenTag.length);
-        if (closeIndex === -1) {
-          result = result.substring(0, openIndex);
-          lowerResult = result.toLowerCase();
-          break;
-        }
-
-        searchStart = closeIndex + lowerCloseTag.length;
-      }
-    });
-
-    return result;
-  };
-
-  const truncatedSrc = trimUnclosedContainers(normalizedSrc);
+  // Realtime render: tidak perlu trim, langsung render jika pattern valid
+  const truncatedSrc = normalizedSrc;
   
   // Fix mismatched and malformed container tags before processing
   // AI sometimes generates wrong closing tags or missing closing brackets
@@ -137,12 +91,22 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     return placeholder;
   });
 
-  // Now extract container tags from the protected source (codeblocks are placeholders)
-  processedSrcAfterContainers = tempProtectedSrc.replace(/<(clarify|try)>([\s\S]*?)<\/\1>/gi, (match) => {
-    const placeholder = `XCONTAINERX${containerBlocks.length}XCONTAINERX`;
-    containerBlocks.push(match);
-    return placeholder;
-  });
+  // Realtime render: extract dan render container jika ada title tag setelah opening tag
+  // Pattern: <try><try-title> atau <try>\n<try-title> (dengan optional whitespace)
+  processedSrcAfterContainers = tempProtectedSrc.replace(
+    /<(clarify|try)>(\s*)<\1-title>([\s\S]*?)(?:<\/\1>|$)/gi,
+    (match, tagName, whitespace, content) => {
+      // Trigger: ada title tag setelah opening tag (dengan optional newline/whitespace)
+      const placeholder = `XCONTAINERX${containerBlocks.length}XCONTAINERX`;
+      
+      // Build container dengan atau tanpa closing tag
+      const hasClosingTag = match.includes(`</${tagName}>`);
+      const containerContent = `<${tagName}>${whitespace}<${tagName}-title>${content}${hasClosingTag ? `</${tagName}>` : ''}`;
+      
+      containerBlocks.push(containerContent);
+      return placeholder;
+    }
+  );
 
   // Restore the codeblocks
   processedSrcAfterContainers = tempCodeBlocks.reduce((acc, block, i) =>
@@ -563,22 +527,21 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   
   finalHtml = codeBlocks.reduce((acc, block, i) => acc.replace(`__CODEBLOCK_${i}__`, block), finalHtml);
   finalHtml = containerBlocks.reduce((acc, block, i) => {
-    // Don't call parseInlineMarkdown - it will escape the HTML
-    // Instead, just process the inner tags
+    // Realtime render: process container dengan atau tanpa closing tag
     const processed = block
-      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-      // Semantic tags: <clarify>
-      .replace(/<clarify>(.*?)<\/clarify>/gis, (match, content) => {
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&') // Unescape first
+      // Handle <clarify> dengan atau tanpa closing tag
+      .replace(/<clarify>([\s\S]*?)(?:<\/clarify>|$)/gis, (match, content) => {
         const processedContent = content
-          .replace(/<clarify-title>(.*?)<\/clarify-title>/gi, '<div class="brain-title">$1</div>')
-          .replace(/<li>(.*?)<\/li>/gi, '<span class="bli"><svg width="11" height="14" viewBox="0 0 11 14" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="text-emerald-600 dark:text-emerald-400/80 w-3.5 h-auto" aria-label="Tip"><path d="M3.12794 12.4232C3.12794 12.5954 3.1776 12.7634 3.27244 12.907L3.74114 13.6095C3.88471 13.8248 4.21067 14 4.46964 14H6.15606C6.41415 14 6.74017 13.825 6.88373 13.6095L7.3508 12.9073C7.43114 12.7859 7.49705 12.569 7.49705 12.4232L7.50055 11.3513H3.12521L3.12794 12.4232ZM5.31288 0C2.52414 0.00875889 0.5 2.26889 0.5 4.78826C0.5 6.00188 0.949566 7.10829 1.69119 7.95492C2.14321 8.47011 2.84901 9.54727 3.11919 10.4557C3.12005 10.4625 3.12175 10.4698 3.12261 10.4771H7.50342C7.50427 10.4698 7.50598 10.463 7.50684 10.4557C7.77688 9.54727 8.48281 8.47011 8.93484 7.95492C9.67728 7.13181 10.1258 6.02703 10.1258 4.78826C10.1258 2.15486 7.9709 0.000106649 5.31288 0ZM7.94902 7.11267C7.52078 7.60079 6.99082 8.37878 6.6077 9.18794H4.02051C3.63739 8.37878 3.10743 7.60079 2.67947 7.11294C2.11997 6.47551 1.8126 5.63599 1.8126 4.78826C1.8126 3.09829 3.12794 1.31944 5.28827 1.3126C7.2435 1.3126 8.81315 2.88226 8.81315 4.78826C8.81315 5.63599 8.50688 6.47551 7.94902 7.11267ZM4.87534 2.18767C3.66939 2.18767 2.68767 3.16939 2.68767 4.37534C2.68767 4.61719 2.88336 4.81288 3.12521 4.81288C3.36705 4.81288 3.56274 4.61599 3.56274 4.37534C3.56274 3.6515 4.1515 3.06274 4.87534 3.06274C5.11719 3.06274 5.31288 2.86727 5.31288 2.62548C5.31288 2.38369 5.11599 2.18767 4.87534 2.18767Z"></path></svg> $1</span>');
+          .replace(/<clarify-title>(.*?)(?:<\/clarify-title>|$)/gi, '<div class="brain-title">$1</div>')
+          .replace(/<li>(.*?)(?:<\/li>|$)/gi, '<span class="bli"><svg width="11" height="14" viewBox="0 0 11 14" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="text-emerald-600 dark:text-emerald-400/80 w-3.5 h-auto" aria-label="Tip"><path d="M3.12794 12.4232C3.12794 12.5954 3.1776 12.7634 3.27244 12.907L3.74114 13.6095C3.88471 13.8248 4.21067 14 4.46964 14H6.15606C6.41415 14 6.74017 13.825 6.88373 13.6095L7.3508 12.9073C7.43114 12.7859 7.49705 12.569 7.49705 12.4232L7.50055 11.3513H3.12521L3.12794 12.4232ZM5.31288 0C2.52414 0.00875889 0.5 2.26889 0.5 4.78826C0.5 6.00188 0.949566 7.10829 1.69119 7.95492C2.14321 8.47011 2.84901 9.54727 3.11919 10.4557C3.12005 10.4625 3.12175 10.4698 3.12261 10.4771H7.50342C7.50427 10.4698 7.50598 10.463 7.50684 10.4557C7.77688 9.54727 8.48281 8.47011 8.93484 7.95492C9.67728 7.13181 10.1258 6.02703 10.1258 4.78826C10.1258 2.15486 7.9709 0.000106649 5.31288 0ZM7.94902 7.11267C7.52078 7.60079 6.99082 8.37878 6.6077 9.18794H4.02051C3.63739 8.37878 3.10743 7.60079 2.67947 7.11294C2.11997 6.47551 1.8126 5.63599 1.8126 4.78826C1.8126 3.09829 3.12794 1.31944 5.28827 1.3126C7.2435 1.3126 8.81315 2.88226 8.81315 4.78826C8.81315 5.63599 8.50688 6.47551 7.94902 7.11267ZM4.87534 2.18767C3.66939 2.18767 2.68767 3.16939 2.68767 4.37534C2.68767 4.61719 2.88336 4.81288 3.12521 4.81288C3.36705 4.81288 3.56274 4.61599 3.56274 4.37534C3.56274 3.6515 4.1515 3.06274 4.87534 3.06274C5.11719 3.06274 5.31288 2.86727 5.31288 2.62548C5.31288 2.38369 5.11599 2.18767 4.87534 2.18767Z"></path></svg> $1</span>');
         return `<div class="brain">${processedContent}</div>`;
       })
-      // Semantic tags: <try>
-      .replace(/<try>(.*?)<\/try>/gis, (match, content) => {
+      // Handle <try> dengan atau tanpa closing tag
+      .replace(/<try>([\s\S]*?)(?:<\/try>|$)/gis, (match, content) => {
         const processedContent = content
-          .replace(/<try-title>(.*?)<\/try-title>/gi, '<div class="prompt-title">$1</div>')
-          .replace(/<li>(.*?)<\/li>/gi, '<span class="pli" data-text="$1"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-corner-down-right-icon lucide-corner-down-right"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg> $1</span>');
+          .replace(/<try-title>(.*?)(?:<\/try-title>|$)/gi, '<div class="prompt-title">$1</div>')
+          .replace(/<li>(.*?)(?:<\/li>|$)/gi, '<span class="pli" data-text="$1"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-corner-down-right-icon lucide-corner-down-right"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg> $1</span>');
         return `<div class="prompt">${processedContent}</div>`;
       });
     return acc.replace(`XCONTAINERX${i}XCONTAINERX`, processed);

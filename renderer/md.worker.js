@@ -115,12 +115,42 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   };
 
   const truncatedSrc = trimUnclosedContainers(normalizedSrc);
+  
+  // Fix mismatched and malformed container tags before processing
+  // AI sometimes generates wrong closing tags or missing closing brackets
+  const fixMismatchedTags = (text) => {
+    let fixed = text;
+    
+    // STEP 1: Fix malformed closing tags (missing >)
+    // Fix: </try-title -> </try-title>
+    fixed = fixed.replace(/<\/try-title(?!>)/gi, '</try-title>');
+    fixed = fixed.replace(/<\/clarify-title(?!>)/gi, '</clarify-title>');
+    
+    // STEP 2: Fix mismatched opening/closing tags
+    // Fix: <try-title>content</try> -> <try-title>content</try-title>
+    // Match try-title opening tag followed by content and wrong </try> closing
+    fixed = fixed.replace(/<try-title>((?:(?!<\/try-title>|<\/try>|<try-title>).)*?)<\/try>/gi, '<try-title>$1</try-title>');
+    
+    // Fix: <try>content</try-title> -> <try-title>content</try-title>
+    // Match wrong <try> used as title tag
+    fixed = fixed.replace(/<try>([^<]*?)<\/try-title>/gi, '<try-title>$1</try-title>');
+    
+    // Fix: <clarify-title>content</clarify> -> <clarify-title>content</clarify-title>
+    fixed = fixed.replace(/<clarify-title>((?:(?!<\/clarify-title>|<\/clarify>|<clarify-title>).)*?)<\/clarify>/gi, '<clarify-title>$1</clarify-title>');
+    
+    // Fix: <clarify>content</clarify-title> -> <clarify-title>content</clarify-title>
+    fixed = fixed.replace(/<clarify>([^<]*?)<\/clarify-title>/gi, '<clarify-title>$1</clarify-title>');
+    
+    return fixed;
+  };
+  
+  const fixedSrc = fixMismatchedTags(truncatedSrc);
   const codeBlocks = sharedCodeBlocks || [];
   const isTopLevel = !sharedCodeBlocks;
   const latexBlocks = [];
   const containerBlocks = [];
   const latexRegex = /(\$\$[\s\S]*?\$\$|\\\(.*?\\\))/g;
-  let protectedSrc = truncatedSrc.replace(latexRegex, match => {
+  let protectedSrc = fixedSrc.replace(latexRegex, match => {
     const placeholder = `__LATEX_${latexBlocks.length}__`;
     latexBlocks.push(match);
     return placeholder;
@@ -194,16 +224,20 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     codeContent = cleanedLines.join('\n').trim();
 
     // Different structure for thinking-text (no action buttons)
+    const isMermaid = language.toLowerCase() === 'mermaid';
     const newStructure = isThinkingText ?
       `<div class="code-block-container thinking-code"><div class="code-block-header"><span class="language-name">${language}</span></div><pre><code class="language-${language}">${esc(codeContent)}</code></pre></div>` :
       `
-      <div class="code-block-container">
+      <div class="code-block-container${isMermaid ? ' mermaid-block' : ''}" data-language="${language}">
         <div class="code-block-header">
           <span class="language-name">${language}</span>
           <div class="code-block-actions">
             <button class="save-code-btn" title="Save to artifacts" data-code="${esc(codeContent).replace(/"/g, "&quot;")}" data-language="${language}">
               <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>
             </button>
+            ${isMermaid ? `<button class="preview-mermaid-btn" title="Preview diagram">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>` : ''}
             <button class="copy-code-btn" title="Copy code">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
             </button>

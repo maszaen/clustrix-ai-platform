@@ -1,337 +1,353 @@
-# Clustrix AI Platform (This is deprecated readme file)
+# Clustrix - Enterprise Grade AI Platform
 
-**Clustrix** adalah platform AI desktop canggih berbasis Electron yang menggabungkan kemampuan AI mutakhir dengan pengalaman chat yang intuitif. Dirancang untuk power-user yang membutuhkan kontrol penuh atas model AI, kemampuan reasoning yang mendalam, dan integrasi yang mulus dengan workflow pengembangan.
+<div align="center">
+
+![Version](https://img.shields.io/badge/version-29.9.9-blue.svg)
+![Electron](https://img.shields.io/badge/Electron-38.3.0-47848F.svg)
+![Node](https://img.shields.io/badge/Node-%E2%89%A518.0.0-339933.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
+**Platform AI desktop berbasis Electron dengan kemampuan multi-agent orchestration, advanced markdown parsing, dan integrasi mendalam dengan berbagai AI providers**
+
+[Quick Start](#-quick-start) • [Features](#-fitur-utama) • [Documentation](#-dokumentasi) • [Architecture](#-arsitektur)
+
+</div>
+
+---
+
+## 📖 Tentang Clustrix
+
+**Clustrix** adalah platform AI desktop yang dirancang untuk power-user yang membutuhkan kontrol penuh atas model AI, kemampuan reasoning yang mendalam, dan integrasi mulus dengan workflow pengembangan. Dibangun dengan Electron dan LangChain, Clustrix menyediakan pengalaman chat AI yang kaya fitur dengan dukungan multi-provider, file processing, web search, dan banyak lagi.
+
+<div align="center">
+  <img src="public/images/preview/code-preview.png" alt="Code Rendering" width="45%" />
+  <img src="public/images/preview/mermaid-preview.png" alt="Mermaid Diagrams" width="45%" />
+</div>
+
+<p align="center"><i>Advanced markdown rendering dengan syntax highlighting dan Mermaid diagram support</i></p>
+
+### Mengapa Clustrix?
+
+- 🎯 **Multi-Provider Support**: Gunakan OpenRouter, Groq, Gemini, Z AI, atau custom endpoints
+- 🤖 **AI Orchestration**: Multi-agent system dengan RE+ACT reasoning engine
+- 📁 **File Intelligence**: Upload dan analisis DOCX, Excel, CSV, dan format lainnya
+- 🔍 **Dual Search Engine**: Web search (SerpAPI) dan local desktop search tanpa internet
+- 🎨 **Enterprise-Grade Parser**: Markdown parser yang powerful dengan MathJax dan syntax highlighting
+- 💾 **Data Management**: SQLite database dengan GitHub sync/backup integration
+- 🔒 **Privacy-First**: Semua data disimpan lokal dengan kontrol penuh
 
 ---
 
 ## 🎯 Fitur Utama
 
-### 🤖 **Multi-Agent AI Orchestration**
-- **Dynamic Research Agent**: Sistem multi-agent yang secara otomatis merencanakan, mencari, dan mensintesis informasi
-- **RE+ACT Reasoning Engine**: Agent yang dapat berpikir dan bertindak (Reasoning + Action) untuk menyelesaikan tugas kompleks
-- **Thinking Mode**: UI yang menampilkan proses reasoning AI secara real-time dengan indikator visual
+### 🤖 Multi-Agent AI Orchestration
+- **Dynamic Research Agent**: Sistem multi-agent yang merencanakan, mencari, dan mensintesis informasi otomatis
+- **RE+ACT Reasoning Engine**: Agent dengan kemampuan berpikir dan bertindak (Reasoning + Action) untuk tugas kompleks
+- **Thinking Mode**: UI real-time yang menampilkan proses reasoning AI dengan indikator visual
+- **Memory & Context**: Vector store untuk konteks percakapan persisten dengan embeddings
 
-### 🔍 **Advanced Search & Knowledge Base**
-- **Web Search Integration**: SerpAPI dan Google Custom Search Engine untuk pencarian web real-time
-- **Local Desktop Search Engine**: Indexing dan pencarian file lokal tanpa koneksi internet
-- **Vector Memory Store**: Penyimpanan memori vektor untuk konteks percakapan yang persisten
-- **Local Embedding Engine**: Sistem embedding TF-IDF lokal tanpa biaya API
-
-### 📁 **File Processing & Analysis**
-- **Multi-format Support**: Docx, Excel, CSV, dan file teks
-- **Intelligent Summarization**: Ringkasan otomatis file panjang dengan AI
-- **Project Context Integration**: Analisis file proyek untuk konteks yang lebih akurat
-- **File Upload & Processing**: Drag-and-drop dengan preview dan parsing otomatis
-
-### 🎨 **Modern Chat Interface**
-- **Real-time Streaming**: Respons streaming dengan indikator typing dan thinking
-- **Markdown Rendering**: Dukungan lengkap markdown dengan syntax highlighting
-- **MathJax Integration**: Rendering matematika dan formula LaTeX
-- **Code Artifacts**: Ekstraksi dan highlighting kode dari respons AI
-- **Continue Placeholder**: Sistem resume untuk respons yang terputus
-
-### 🔧 **Multi-Provider AI Support**
+### 🔧 Multi-Provider AI Support
 - **OpenRouter**: Akses ke ratusan model AI (free & paid)
-- **Groq**: Inferensi cepat dengan model Llama dan Mixtral
+- **Groq**: Inferensi super cepat dengan model Llama dan Mixtral
 - **Gemini**: Model Google dengan multimodal capabilities
 - **Z AI**: Platform AI Indonesia
-- **Custom OpenAI-compatible**: Endpoint apa saja yang mendukung format OpenAI
-
-### 🛠️ **Developer Features**
-- **Per-Provider Configuration**: API key dan endpoint terpisah per provider
+- **Custom**: Endpoint OpenAI-compatible lainnya
+- **Per-Provider Config**: API key dan endpoint terpisah untuk setiap provider
 - **Model Switching**: Ganti model real-time tanpa restart
-- **Debug Mode**: Logging komprehensif dan error tracking
+
+<div align="center">
+  <img src="public/images/preview/personalization-preview.png" alt="Personalization Settings" width="80%" />
+</div>
+
+<p align="center"><i>UI Personalization dengan kontrol penuh atas model dan provider</i></p>
+
+### 📁 File Processing & Analysis
+- **Multi-Format Support**: DOCX (Mammoth), XLSX/XLS (native), CSV, TXT, MD, JSON
+- **Intelligent Summarization**: Ringkasan otomatis untuk file >1500 tokens
+- **Project Context**: Analisis struktur proyek untuk respons akurat
+- **Drag & Drop**: Upload mudah dengan preview dan parsing otomatis
+
+### 🔍 Advanced Search
+- **Web Search**: Integrasi SerpAPI dan Google Custom Search Engine
+- **Desktop Search**: Indexing lokal dengan TF-IDF vectorization tanpa internet
+- **Semantic Search**: Pencarian berbasis makna untuk file discovery
+- **Multi-Query**: Parallel search untuk efisiensi maksimal
+
+<div align="center">
+  <img src="public/images/preview/web-search-features-preview.png" alt="Web Search" width="45%" />
+  <img src="public/images/preview/local-search-research-agent-web-searching-preview.png" alt="Research Agent" width="45%" />
+</div>
+
+<p align="center"><i>Web search integration dan research agent dengan multi-query capabilities</i></p>
+
+<div align="center">
+  <img src="public/images/preview/local-search-research-agent-files-searching-preview.png" alt="Local File Search" width="80%" />
+</div>
+
+<p align="center"><i>Local desktop search dengan semantic understanding</i></p>
+
+### 🎨 Modern UI/UX
+- **Real-time Streaming**: Token streaming dengan typing indicators
+- **Markdown Excellence**: Parser enterprise-grade dengan dukungan nested blockquotes, tables, dan codeblocks
+- **MathJax Integration**: Rendering formula matematika dan LaTeX
+- **Syntax Highlighting**: Prism.js untuk 200+ bahasa pemrograman
+- **Multi-Session**: Switch antar percakapan dengan session management
+- **Continue Placeholder**: Auto-handling untuk respons terputus
+
+<div align="center">
+  <img src="public/images/preview/prompt-recommendation-preview.png" alt="Prompt Recommendations" width="45%" />
+  <img src="public/images/preview/can-search-for-image-preview.png" alt="Image Search" width="45%" />
+</div>
+
+<p align="center"><i>Smart prompt recommendations dan image search capabilities</i></p>
+
+### 💾 Data & Sync
+- **SQLite Database**: Database lokal untuk performa tinggi
+- **GitHub Integration**: Sync dan backup otomatis ke GitHub
+- **Smart Backup**: Timestamped backups dengan conflict resolution
+- **Migration Tools**: JSON to SQLite migrator untuk legacy data
+
+<div align="center">
+  <img src="public/images/preview/account-settings-and-data-source-preview.png" alt="Account & Data Settings" width="45%" />
+  <img src="public/images/preview/settings-modal-preview.png" alt="Settings Modal" width="45%" />
+</div>
+
+<p align="center"><i>Account settings, data source management, dan comprehensive settings modal</i></p>
+
+### 🛠️ Developer Features
+- **Comprehensive Logging**: Debug mode dengan contextual logging
 - **Session Management**: Multi-session dengan persistence
-- **Project Workflows**: Dukungan workflow development dengan file staging
+- **Message Optimization**: Token usage optimization
+- **IPC Bridge**: Secure communication antara main dan renderer process
+- **Testing Suite**: Unit, integration, dan E2E tests dengan Jest
+
+<div align="center">
+  <img src="public/images/preview/projects-detail-page-preview.png" alt="Projects Detail" width="80%" />
+</div>
+
+<p align="center"><i>Project management dengan detail view untuk organized workflow</i></p>
 
 ---
 
-## 📋 Daftar Isi
-
-* [Instalasi & Setup](#instalasi--setup)
-* [Konfigurasi Model](#konfigurasi-model)
-* [Fitur AI Canggih](#fitur-ai-canggih)
-* [File Processing](#file-processing)
-* [Web Search](#web-search)
-* [Local Search Engine](#local-search-engine)
-* [UI & UX Features](#ui--ux-features)
-* [Troubleshooting](#troubleshooting)
-* [Architecture](#architecture)
-* [Contributing](#contributing)
-
----
-
-## 🚀 Instalasi & Setup
+## 🚀 Quick Start
 
 ### Prasyarat
 - **Node.js** ≥ 18.0.0
-- **npm** atau **yarn**
+- **npm**, **yarn**, atau **pnpm**
 - OS: Windows 10+, macOS 10.15+, Linux (Ubuntu 18.04+)
 
-### Quick Start
+### Instalasi
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/maszaen/zenai-4.5-flash.git
-cd zenai-4.5-flash
+# Clone repository
+git clone https://github.com/maszaen/clustrix-ai-platform.git
+cd clustrix-ai-platform
 
-# 2. Install dependencies
+# Install dependencies
 npm install
 
-# 3. Jalankan development mode
+# Jalankan development mode
 npm run dev
 
-# 4. Build untuk production (opsional)
+# Build untuk production
 npm run make
 ```
 
-### Environment Variables
+### Konfigurasi Awal
+
+1. Jalankan aplikasi
+2. Buka **Personalization → Switch Model**
+3. Pilih **Provider** (OpenRouter, Groq, Gemini, Z AI, atau Custom)
+4. Masukkan **API Key** dan **Base URL**
+5. Pilih **Model** dari daftar
+6. Mulai chat!
+
+### Environment Variables (Opsional)
+
 ```bash
-# Untuk debugging
+# Debug mode
 CLUSTRIX_DEBUG=true
 
-# Custom API endpoints (opsional)
-OPENROUTER_API_KEY=your_key_here
-GROQ_API_KEY=your_key_here
-GOOGLE_API_KEY=your_key_here
-SERPAPI_KEY=your_key_here
+# Custom API keys
+OPENROUTER_API_KEY=your_key
+GROQ_API_KEY=your_key
+GOOGLE_API_KEY=your_key
+SERPAPI_KEY=your_key
 ```
 
 ---
 
-## ⚙️ Konfigurasi Model
+## 📋 Dokumentasi
 
-### Multi-Provider Setup
+### Konfigurasi Model
 
-1. **Buka Personalization → Switch Model**
-2. **Pilih Provider**: OpenRouter, Groq, Gemini, Z AI, atau Custom
-3. **Konfigurasi per Provider**:
-   - **Base URL**: Endpoint API spesifik provider
-   - **API Key**: Kunci akses (disimpan plain text untuk debugging)
-   - **Model Selection**: Pilih dari daftar model tersedia
-   - **Label & Notes**: Kustomisasi tampilan dan deskripsi
+**Personalization → Switch Model** menyediakan kontrol penuh atas:
 
-### Model Management
+#### Per-Provider Settings
+- **Base URL**: Endpoint API spesifik provider
+- **API Key**: Kunci akses (disimpan plain text untuk debugging)
+- **Model List**: Daftar model dengan label dan catatan kustom
 
+#### Model Management
 ```javascript
-// Contoh konfigurasi models
+// Format konfigurasi model
 {
-  "openrouter": {
-    "baseUrl": "https://openrouter.ai/api/v1",
-    "apiKey": "sk-or-v1-...",
-    "models": [
-      {
-        "id": "anthropic/claude-3-haiku",
-        "label": "Claude 3 Haiku",
-        "note": "Fast and efficient for general tasks"
-      }
-    ]
-  }
+  "id": "anthropic/claude-3-haiku",
+  "label": "Claude 3 Haiku",
+  "note": "Fast and efficient for general tasks"
 }
 ```
 
-### Title Generator
-Pilih model khusus untuk pembuatan judul otomatis:
+#### Title Generator
 - **Default**: Gunakan model chat aktif
-- **Custom**: Pilih model spesifik untuk efisiensi biaya
+- **Custom**: Pilih model spesifik (lebih murah/cepat) untuk pembuatan judul
 
----
+### Provider Base URLs
 
-## 🧠 Fitur AI Canggih
+| Provider | Base URL | Catatan |
+|----------|----------|---------|
+| OpenRouter | `https://openrouter.ai/api/v1` | Ratusan model tersedia |
+| Groq | `https://api.groq.com/openai/v1` | Inferensi super cepat |
+| Gemini | `https://generativelanguage.googleapis.com/v1beta` | Multimodal capabilities |
+| Z AI | `https://api.z.ai/api/paas/v4/` | Platform AI Indonesia |
+| Custom | Your endpoint | OpenAI-compatible format |
 
-### Multi-Agent Orchestration
+### File Processing
 
-**Dynamic Research Agent** secara otomatis:
-- 📋 **Planning**: Menganalisis query dan merencanakan pendekatan
-- 🔍 **Research**: Melakukan web search dan file analysis
-- 📝 **Synthesis**: Menggabungkan informasi menjadi respons koheren
-- 🎯 **Action**: Menjalankan task-specific actions
+#### Supported Formats
+- **DOCX**: Text extraction dengan Mammoth
+- **XLSX/XLS**: Sheet parsing dan data extraction
+- **CSV**: Auto-detection delimiter dan encoding
+- **TXT/MD**: Full text processing
+- **JSON**: Structured data parsing
 
-### RE+ACT Reasoning Engine
+#### Workflow
+1. **Upload**: Drag & drop atau file dialog
+2. **Preview**: Syntax highlighting otomatis
+3. **Processing**: Parsing berdasarkan format
+4. **Integration**: Context disuntikkan ke AI reasoning
+5. **Storage**: Persistent dalam session
 
-```javascript
-// Contoh workflow RE+ACT
-1. Think: "User asked about React performance"
-2. Search: Query local files for React patterns
-3. Analyze: Review code examples and best practices
-4. Synthesize: Provide comprehensive optimization guide
-5. Act: Generate code examples and benchmarks
-```
+### Search Engines
 
-### Thinking Mode UI
-
-- **Real-time Indicators**: "Reading your request" → "Processing thoughts" → "Organizing response"
-- **Progress Visualization**: Typing animation dengan smooth transitions
-- **Duration Tracking**: Waktu reasoning ditampilkan setelah selesai
-
-### Memory & Context Management
-
-- **Vector Store**: Persistent memory untuk konteks percakapan
-- **Session Memory**: Riwayat percakapan dengan embeddings
-- **File Context**: Integrasi konten file ke dalam reasoning
-- **Project Awareness**: Pemahaman struktur proyek untuk respons yang lebih akurat
-
----
-
-## 📁 File Processing
-
-### Supported Formats
-
-| Format | Library | Capabilities |
-|--------|---------|--------------|
-| **.docx** | Mammoth | Text extraction, formatting preservation |
-| **.xlsx/.xls** | XLSX | Sheet parsing, data extraction |
-| **.csv** | Native | Delimiter detection, encoding support |
-| **.txt/.md** | Native | Full text processing |
-| **.json** | Native | Structured data parsing |
-
-### Intelligent Summarization
-
-```javascript
-// Automatic file analysis
-- Token estimation (>1500 tokens trigger summarization)
-- Code file prioritization (JS, Python, Java, etc.)
-- Content chunking dengan overlap
-- AI-powered summarization dengan context preservation
-```
-
-### File Upload Workflow
-
-1. **Drag & Drop** atau **Dialog Selection**
-2. **Preview** dengan syntax highlighting
-3. **Automatic Processing** berdasarkan tipe file
-4. **Context Integration** ke AI reasoning
-5. **Persistent Storage** dalam session
-
----
-
-## 🌐 Web Search
-
-### Provider Support
-
-#### SerpAPI Integration
+#### Web Search (SerpAPI/Google CSE)
 ```javascript
 // Konfigurasi SerpAPI
 {
   "provider": "serpapi",
-  "apiKey": "your_serpapi_key",
+  "apiKey": "your_key",
   "maxResults": 5
 }
-```
 
-#### Google Custom Search Engine
-```javascript
 // Konfigurasi Google CSE
 {
   "provider": "google",
-  "apiKey": "your_google_api_key",
-  "cseId": "your_cse_id",
-  "region": "id"
+  "apiKey": "your_key",
+  "cseId": "your_cse_id"
 }
 ```
 
-### Search Capabilities
+#### Local Desktop Search
+- **TF-IDF Vectorization**: Semantic search lokal
+- **No API Costs**: Semua processing offline
+- **Instant Results**: Sub-second response time
+- **Incremental Indexing**: Update otomatis saat file berubah
 
-- **Multi-query Processing**: Parallel search untuk efisiensi
-- **Result Synthesis**: AI menggabungkan hasil pencarian
-- **Source Attribution**: Link dan referensi otomatis
-- **Caching**: Hasil pencarian disimpan untuk performa
+### UI Features
 
----
+#### Streaming Interface
+- **Real-time Streaming**: Respons muncul bertahap
+- **Thinking Indicators**: Visual feedback saat AI processing
+- **Continue Placeholder**: Auto-handling respons terputus (auto-hide 5 detik)
 
-## 💻 Local Search Engine
+#### Message Actions
+- **Copy**: Copy respons ke clipboard
+- **Regenerate**: Generate ulang respons dengan parameter sama
+- **Continue**: Lanjutkan respons yang terputus
 
-### Desktop Indexing
-
-```javascript
-// Local file indexing tanpa internet
-- TF-IDF vectorization
-- Cosine similarity matching
-- Stop word filtering
-- Incremental indexing
-```
-
-### Search Capabilities
-
-- **Pattern Matching**: Regex dan text search
-- **Semantic Search**: Meaning-based file discovery
-- **Project Context**: Pemahaman struktur kode
-- **Action Planning**: RE+ACT integration untuk task execution
-
-### Performance Features
-
-- **No API Costs**: Semua processing lokal
-- **Instant Results**: Sub-second response times
-- **Memory Efficient**: Optimized untuk large codebases
-- **Persistent Index**: Index tersimpan di disk
+#### Markdown Parser
+Parser enterprise-grade yang menangani:
+- ✅ Nested blockquotes dengan benar
+- ✅ Codeblocks dalam lists dengan indentasi tepat
+- ✅ Tables dengan row continuation
+- ✅ MathJax inline dan block
+- ✅ Syntax highlighting 200+ bahasa
+- ✅ Mermaid diagrams
 
 ---
 
-## 🎨 UI & UX Features
+## 🏗️ Arsitektur
 
-### Streaming Interface
-
-- **Real-time Token Streaming**: Respons muncul secara bertahap
-- **Thinking Indicators**: Visual feedback selama AI processing
-- **Smooth Transitions**: Animasi antara thinking dan content
-- **Error Handling**: Graceful degradation dengan continue options
-
-### Advanced Chat Features
-
-- **Multi-session Management**: Switch antar percakapan
-- **Message Actions**: Copy, regenerate, continue
-- **Code Highlighting**: Syntax highlighting dengan Prism.js
-- **Math Rendering**: LaTeX dan MathJax support
-- **Artifact Extraction**: Code snippets otomatis disimpan
-
-### Accessibility & Performance
-
-- **Keyboard Navigation**: Full keyboard support
-- **Screen Reader**: ARIA labels dan live regions
-- **Performance Optimized**: Virtual scrolling untuk chat panjang
-- **Memory Management**: Automatic cleanup dan garbage collection
-
----
-
-## 🏗️ Architecture
-
-### Core Components
+### Struktur Aplikasi
 
 ```
-├── Main Process (Electron)
-│   ├── Window Management
-│   ├── IPC Bridge
-│   └── File System Access
-│
-├── Backend Services
-│   ├── LangChain Service (AI Orchestration)
-│   ├── Multi-Agent System
-│   ├── Web Search Engine
-│   ├── Local Search Engine
-│   ├── File Processor
-│   └── Vector Store
-│
-└── Renderer (UI)
-    ├── Chat Interface
-    ├── File Management
-    ├── Model Configuration
-    └── Streaming Engine
+Clustrix-AI-Platform/
+├── main.js                      # Electron main process
+├── preload.js                   # IPC bridge & security layer
+├── renderer/
+│   ├── renderer.js              # UI logic & state management
+│   ├── index.html               # Main UI template
+│   ├── style.css                # Styling & themes
+│   ├── md.js                    # Markdown parser
+│   ├── md.worker.js             # Markdown worker thread
+│   └── core/
+│       └── title-gen.js         # Title generation logic
+├── backend/
+│   ├── langchain-service.js     # LangChain orchestration
+│   ├── langchain-agents.js      # Multi-agent system
+│   ├── reasoning-action-agent.js # RE+ACT engine
+│   ├── web-search.js            # Web search integration
+│   ├── desktop-search-engine.js # Local search engine
+│   ├── file-summarizer.js       # File processing
+│   ├── local-embedding-engine.js # TF-IDF embeddings
+│   ├── database-manager.js      # SQLite manager
+│   ├── github-storage-service.js # GitHub sync
+│   ├── smart-backup-service.js  # Backup automation
+│   └── sync-manager.js          # Sync orchestration
+├── utils/
+│   ├── logger.js                # Logging system
+│   └── message-optimizer.js     # Token optimization
+├── local_modules/
+│   ├── custom/                  # Custom modules
+│   ├── custom-formatter/        # Markdown formatter
+│   ├── prism/                   # Syntax highlighting
+│   └── xlsx/                    # Excel parser
+└── public/
+    ├── images/                  # Assets
+    └── fonts/                   # Custom fonts
 ```
 
 ### Data Flow
 
-1. **User Input** → IPC Bridge → Main Process
-2. **AI Processing** → LangChain → Model APIs
-3. **Response Streaming** → IPC Events → UI Updates
-4. **File Processing** → Local Analysis → Context Integration
-5. **Search Queries** → Web/Local Engines → Result Synthesis
+```
+User Input
+    ↓
+IPC Bridge (preload.js)
+    ↓
+Main Process (main.js)
+    ↓
+Backend Services
+    ├─→ LangChain Service → AI Providers
+    ├─→ File Processor → Context Integration
+    ├─→ Web/Local Search → Results Synthesis
+    └─→ Database Manager → Persistent Storage
+    ↓
+Response Streaming
+    ↓
+IPC Events → Renderer Process
+    ↓
+UI Updates (renderer.js)
+    ├─→ Markdown Parser → Rendered HTML
+    ├─→ Syntax Highlighting → Code Blocks
+    └─→ MathJax → Math Formulas
+```
 
 ### Security Model
 
-- **Context Isolation**: Renderer tidak akses langsung ke Node.js
-- **IPC Validation**: Semua komunikasi divalidasi
-- **File Access Control**: Sandboxed file operations
-- **API Key Management**: Plain text untuk debugging (development)
+- **Context Isolation**: Renderer tidak akses langsung Node.js APIs
+- **IPC Validation**: Semua komunikasi main-renderer divalidasi
+- **File Sandboxing**: File operations terbatas pada allowed directories
+- **API Key Storage**: Plain text (development) dengan rencana encryption (production)
 
 ---
 
@@ -340,28 +356,20 @@ Pilih model khusus untuk pembuatan judul otomatis:
 ### Common Issues
 
 #### "Response Interrupted"
-```
-Cause: Network timeout atau rate limiting
-Solution: Gunakan "Continue" button atau switch model
-```
+**Penyebab**: Network timeout, rate limiting, atau model behavior  
+**Solusi**: Klik tombol **Continue** atau switch ke model lain
 
 #### "Model Not Found"
-```
-Cause: Invalid model ID atau API key expired
-Solution: Check model configuration dan refresh API keys
-```
+**Penyebab**: Invalid model ID atau API key expired  
+**Solusi**: Periksa konfigurasi di Switch Model, refresh API key
 
 #### "File Processing Failed"
-```
-Cause: Unsupported format atau corrupted file
-Solution: Check file format dan try re-uploading
-```
+**Penyebab**: Format tidak didukung atau file corrupt  
+**Solusi**: Periksa format file, coba upload ulang
 
 #### "Search Not Working"
-```
-Cause: API key missing atau quota exceeded
-Solution: Configure search provider credentials
-```
+**Penyebab**: API key missing atau quota exceeded  
+**Solusi**: Konfigurasi credentials di settings
 
 ### Debug Mode
 
@@ -369,319 +377,100 @@ Solution: Configure search provider credentials
 # Enable debug logging
 CLUSTRIX_DEBUG=true npm run dev
 
-# Check logs
-tail -f app.log
+# Check logs (Windows)
+type %APPDATA%\Clustrix\logs\app.log
+
+# Check logs (macOS/Linux)
+tail -f ~/Library/Application\ Support/Clustrix/logs/app.log
 ```
 
 ### Reset Configuration
 
 ```bash
-# Delete config files
-rm -rf ~/AppData/Roaming/Clustrix/ai-model.conf.json
-rm -rf ~/AppData/Roaming/Clustrix/vector_data.json
+# Windows
+del %APPDATA%\Clustrix\ai-model.conf.json
+del %APPDATA%\Clustrix\chat_data.db
 
-# Restart application
-npm run dev
+# macOS/Linux
+rm ~/Library/Application\ Support/Clustrix/ai-model.conf.json
+rm ~/Library/Application\ Support/Clustrix/chat_data.db
 ```
+
+Atau gunakan tombol **Reset Defaults** di modal Switch Model.
+
+---
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run specific test suite
+npm test -- file-summarizer.test.js
+```
+
+### Test Coverage
+- ✅ Unit tests untuk backend services
+- ✅ Integration tests untuk IPC communication
+- ⏳ E2E tests (in progress)
 
 ---
 
 ## 🤝 Contributing
 
-### Development Setup
+Kontribusi sangat diterima! Untuk berkontribusi:
 
-```bash
-# Fork dan clone
-git clone https://github.com/your-username/clustrix-ai-platform.git
-cd clustrix-ai-platform
+1. Fork repository
+2. Create feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit changes (`git commit -m 'Add AmazingFeature'`)
+4. Push to branch (`git push origin feature/AmazingFeature`)
+5. Open Pull Request
 
-# Install dependencies
-npm install
+### Development Guidelines
 
-# Setup development environment
-npm run dev
-
-# Run tests
-npm test
-```
-
-### Code Structure
-
-```
-├── main.js                 # Electron main process
-├── preload.js              # IPC bridge dan security
-├── renderer/
-│   ├── renderer.js         # UI logic dan state management
-│   ├── index.html          # Main UI template
-│   ├── style.css           # Styling dan themes
-│   └── md.worker.js  # Markdown processing worker
-├── backend/
-│   ├── langchain-service.js    # AI orchestration
-│   ├── langchain-agents.js     # Multi-agent system
-│   ├── web-search.js           # Web search integration
-│   ├── desktop-search-engine.js # Local search
-│   ├── file-summarizer.js      # File processing
-│   └── local-embedding-engine.js # TF-IDF embeddings
-├── utils/
-│   └── logger.js           # Logging system
-└── public/                 # Static assets
-```
-
-### Testing
-
-```bash
-# Unit tests
-npm run test:unit
-
-# Integration tests
-npm run test:integration
-
-# E2E tests
-npm run test:e2e
-```
+- Follow existing code style dan patterns
+- Add tests untuk fitur baru
+- Update dokumentasi jika diperlukan
+- Gunakan conventional commits
+- Test thoroughly sebelum submit PR
 
 ---
 
 ## 📄 License
 
-**Clustrix AI Platform** adalah software open-source yang didistribusikan di bawah lisensi MIT.
+Distributed under the MIT License. See `LICENSE` file for more information.
 
 ---
 
 ## 🙏 Acknowledgments
 
-- **Electron**: Desktop application framework
-- **LangChain**: AI orchestration framework
-- **OpenRouter**: Multi-model AI platform
-- **SerpAPI**: Web search API
-- **MathJax**: Mathematical rendering
-- **Prism.js**: Code syntax highlighting
-- **Perfect Scrollbar**: Custom scrollbar implementation
+### Core Technologies
+- **Electron** - Desktop application framework
+- **LangChain** - AI orchestration dan agent framework
+- **OpenRouter** - Multi-model AI platform
+- **Better SQLite3** - High-performance database
+
+### Libraries & Tools
+- **Mammoth** - DOCX processing
+- **SerpAPI** - Web search API
+- **MathJax** - Mathematical rendering
+- **Prism.js** - Syntax highlighting
+- **Cheerio** - HTML/XML parsing
+- **UUID** - Unique identifier generation
+
+### Acknowledgments
+Special thanks ke semua contributors dan open-source community yang membuat Clustrix mungkin terwujud.
 
 ---
 
-*Built with ❤️ for the AI-powered future*
+<div align="center">
 
----
+**Built with ❤️ by [Maszaen Corporation](https://github.com/maszaen)**
 
-## Isi
+*For the AI-powered future*
 
-* [Fitur Utama](#fitur-utama)
-* [Instalasi & Menjalankan](#instalasi--menjalankan)
-* [Konfigurasi Model (Switch Model)](#konfigurasi-model-switch-model)
-* [Generator Judul (Title Generator)](#generator-judul-title-generator)
-* [Penyimpanan Data](#penyimpanan-data)
-* [Perilaku UI: Continue Placeholder](#perilaku-ui-continue-placeholder)
-* [Provider & Base URL](#provider--base-url)
-* [Menambah Model Baru](#menambah-model-baru)
-* [Troubleshooting](#troubleshooting)
-
----
-
-## Fitur Utama
-
-* **Multi-Provider Switch**
-  Ganti platform & model lewat **Personalization → Switch Model**:
-
-  * **OpenRouter** (beragam model free/paid)
-  * **Groq**
-  * **Gemini**
-  * **Z AI**
-  * **Custom (OpenAI-style)**
-
-* **Per-Provider Credentials**
-  Setiap provider punya **Base URL** dan **API Key** sendiri. Key **tidak disembunyikan** (plain text) untuk memudahkan debug lokal.
-
-* **Label & Catatan per Model**
-
-  * Header menampilkan **label** (ringkas) alih-alih ID panjang.
-  * Di modal, kamu bisa set **Label** dan **Note**. Note tampil otomatis di bawah pilihan model dan berubah saat model diganti.
-
-* **Title Generator Model**
-  Pilih model khusus untuk pembuat judul via dropdown **“Model for Title Generator”** dengan opsi:
-
-  * **Default (using current model)**, atau
-  * Pilih model tertentu (mis. **DeepSeek v3.1** atau **GPT-OSS 120B**).
-
-* **Streaming Stabil**
-  Mendukung aliran token real-time. *Free Model Endpoint* bisa diaktifkan (jika tersedia) untuk akses model gratis yang mendukung stream.
-
-* **Continue Placeholder UX**
-  Saat respons terlihat terputus, muncul banner **di atas** tombol aksi:
-
-  * Tombol **Continue** & **Close**
-  * **Auto-hide 5 detik**
-
----
-
-## Instalasi & Menjalankan
-
-### Prasyarat
-
-* **Node.js** ≥ 18
-* **npm** atau **pnpm/yarn**
-* OS: Windows / macOS / Linux
-
-### Setup Cepat
-
-```bash
-# 1) install deps
-npm install
-
-# 2) jalankan (dev)
-npm run dev
-# atau
-npx electron .
-
-# 3) build (opsional)
-npm run build
-# atau electron-builder jika disiapkan:
-npx electron-builder
-```
-
-> Script build/dev bisa berbeda tergantung `package.json` milikmu.
-
----
-
-## Konfigurasi Model (Switch Model)
-
-Buka **Personalization → Switch Model**. Form berisi:
-
-* **Platform**: OpenRouter / Groq / Gemini / Z AI / Custom
-* **Model**: pilih dari list provider, atau isi manual (jika diaktifkan)
-* **Base URL**: endpoint API (per provider berbeda)
-* **API Key**: kunci akses (per provider, tidak disembunyikan)
-* **Label tampilan**: nama pendek untuk header (mis. `Deepseek v3.1`)
-* **Catatan**: deskripsi singkat (mis. `Model pintar, dan cepat`)
-
-**Penyimpanan**: setiap platform menyimpan **Base URL**, **API Key**, dan **list model** masing-masing. Saat kamu ganti platform, field akan **ikut berubah** ke kredensial platform tersebut.
-
-**Tips**
-
-* Pakai **Reset Defaults** untuk mengembalikan seed bawaan.
-* Untuk model yang baru muncul/berubah status free, cukup **ketik manual ID** lalu **Save**. Model akan di-append ke daftar provider.
-
----
-
-## Generator Judul (Title Generator)
-
-Di bagian bawah modal **Switch Model** terdapat:
-
-* **Model for Title Generator**:
-
-  * **Default (using current model)** → judul dibuat oleh model yang sama dengan chat aktif.
-  * Atau pilih model tertentu (mis. **DeepSeek v3.1**, **GPT-OSS 120B**).
-
-> Ini mempercepat pembuatan judul dengan model yang lebih murah/cepat tanpa mengganggu model utama chat.
-
----
-
-## Penyimpanan Data
-
-* **Models config**:
-  `${userData}/ai-model.conf.json`
-  Menyimpan platform aktif, model aktif, base URL, API key, daftar model per provider (beserta label & note).
-
-* **Sessions/riwayat chat**:
-  `${userData}/chat_data.json` (sesuai implementasi aplikasi)
-
-* **Debug mirror**:
-  **localStorage** juga menyimpan cermin konfigurasi (untuk debugging cepat).
-
-> `userData` Electron (Windows contoh):
-> `C:\Users\<nama>\AppData\Roaming\<NamaApp>\`
-
----
-
-## Perilaku UI: Continue Placeholder
-
-Jika model tidak mengirim end-indicator/stream berhenti tiba-tiba, UI menampilkan **placeholder**:
-
-* Letak **di atas** tombol **Copy / Regenerate**
-* Tombol **Continue** (mengirimkan prompt `continue`) dan **Close**
-* **Otomatis hilang setelah 5 detik**
-
-Kamu tetap bisa lanjutkan chat atau menutup banner jika tidak diperlukan.
-
----
-
-## Provider & Base URL
-
-Contoh base URL standar (ubah sesuai kebutuhan):
-
-* **OpenRouter**: `https://openrouter.ai/api/v1`
-* **Groq**: `https://api.groq.com/openai/v1`
-* **Gemini**: `https://generativelanguage.googleapis.com/v1beta`
-* **Z AI**: `https://api.z.ai/api/paas/v4/`
-* **Custom (OpenAI-style)**: isi sendiri (wajib dukung `POST /chat/completions`)
-
-> **Catatan**: Status **free** model sering berubah (rate limit/kuota/promosi). Kalau 429/error, coba model lain yang free.
-
----
-
-## Menambah Model Baru
-
-### Cara 1 — Lewat UI (disarankan)
-
-1. Buka **Switch Model**.
-2. Pilih **Platform**.
-3. (Opsional) Centang “manual model ID” lalu **ketik ID** (mis. `deepseek/deepseek-chat-v3.1:free`).
-4. Isi **Label** dan **Catatan**.
-5. **Save**. Model akan otomatis ditambahkan ke daftar provider tersebut.
-
-### Cara 2 — Hardcode Default Seed (opsional untuk developer)
-
-* Tambahkan ke fungsi **`defaultModels()`** (renderer) dan **`defaultModelsConf()`** (main) di bagian `providers.<platform>.models`.
-* Gunakan format objek:
-
-  ```json
-  { "id": "deepseek/deepseek-chat-v3.1:free", "label": "Deepseek v3.1", "note": "Model pintar, dan cepat" }
-  ```
-* Tekan **Reset Defaults** di aplikasi untuk menerapkan seed baru pada instalasi yang sudah punya config.
-
----
-
-## Troubleshooting
-
-### “Response Interrupted”
-
-* Penyebab umum:
-
-  * Model free **rate-limited** / habis kuota sementara.
-  * Provider mengubah perilaku stream.
-* Solusi:
-
-  * Klik **Continue** pada placeholder, atau **Switch Model** ke kandidat lain yang free.
-  * Pastikan **Free Model Endpoint** sudah aktif (jika memakai integrasi itu).
-
-### Judul error “invalid model id”
-
-* Biasanya terjadi saat **Title Generator** menembak provider A dengan **model milik provider B**.
-* Buka **Switch Model → Model for Title Generator**:
-
-  * Pilih **Default (using current model)**, atau
-  * Pilih model yang **valid** di provider tersebut.
-
-### Dropdown “Model for Title Generator” kosong
-
-* Pastikan fungsi pengisi opsi dipanggil saat modal dibuka & platform diganti.
-* Normalisasi daftar model ke `{ id, label, note }`.
-* Cek `models-conf` di localStorage/file apakah list model memang ada.
-
-### Tidak ada output / sangat lambat
-
-* Model free bisa padat. Ganti ke model lain (DeepSeek v3 / GPT-OSS 120B / Llama 3.\*).
-* Cek koneksi; coba ulang prompt yang sama.
-
-### Reset total konfigurasi
-
-* Hapus `${userData}/ai-model.conf.json`, lalu jalankan aplikasi lagi.
-* Atau gunakan tombol **Reset Defaults** di modal.
-
----
-
-### Kredit
-
-* App desktop: **Electron**
-* Model & API: **OpenRouter / Groq / Gemini / Z AI / Custom OpenAI-style**
-* UX: model label & notes, title-gen selector, continue placeholder.
+</div>

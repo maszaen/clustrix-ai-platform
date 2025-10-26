@@ -2720,6 +2720,37 @@ ipcMain.handle('projects:save', async (_evt, projects) => {
   }
 });
 
+// HTML Preview handlers
+ipcMain.handle('html-preview:create', async (_evt, htmlContent) => {
+  const previewsDir = path.join(app.getPath('userData'), 'html-previews');
+  
+  // Create directory if not exists
+  if (!fs.existsSync(previewsDir)) {
+    fs.mkdirSync(previewsDir, { recursive: true });
+  }
+  
+  // Generate unique ID
+  const previewId = `preview-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  const filePath = path.join(previewsDir, `${previewId}.html`);
+  
+  // Write HTML file
+  fs.writeFileSync(filePath, htmlContent, 'utf-8');
+  
+  return { previewId, filePath };
+});
+
+ipcMain.handle('html-preview:delete', async (_evt, previewId) => {
+  const previewsDir = path.join(app.getPath('userData'), 'html-previews');
+  const filePath = path.join(previewsDir, `${previewId}.html`);
+  
+  // Delete file if exists
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+  
+  return true;
+});
+
 ipcMain.handle('files:open-dialog', async (event) => {
   logHelper('FILE_DIALOG', 'ipc:handle', 'Received request to open file dialog.');
   const window = BrowserWindow.fromWebContents(event.sender);

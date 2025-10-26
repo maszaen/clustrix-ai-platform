@@ -131,12 +131,33 @@
 
 ## 🚀 Quick Start
 
-### Prasyarat
+### Instalasi untuk End-Users (Recommended)
+
+**Download Release Version:**
+
+1. Kunjungi [Releases Page](https://github.com/maszaen/clustrix-ai-platform/releases)
+2. Download versi terbaru untuk OS Anda:
+   - **Windows**: `Clustrix-Setup-32.0.5.exe`
+   - **macOS**: `Clustrix-32.0.5.dmg`
+   - **Linux**: `Clustrix-32.0.5.AppImage`
+3. Install aplikasi:
+   - **Windows**: Jalankan installer dan ikuti wizard instalasi
+   - **macOS**: Buka DMG file dan drag Clustrix ke Applications folder
+   - **Linux**: Berikan permission execute (`chmod +x Clustrix-*.AppImage`) dan jalankan
+4. Buka aplikasi dan mulai setup API keys
+
+> **Note**: Tidak perlu Node.js atau tools development untuk menggunakan release version!
+
+---
+
+### Instalasi untuk Developers
+
+**Prasyarat:**
 - **Node.js** ≥ 18.0.0
 - **npm**, **yarn**, atau **pnpm**
 - OS: Windows 10+, macOS 10.15+, Linux (Ubuntu 18.04+)
 
-### Instalasi
+**Setup Development:**
 
 ```bash
 # Clone repository
@@ -174,6 +195,95 @@ GROQ_API_KEY=your_key
 GOOGLE_API_KEY=your_key
 SERPAPI_KEY=your_key
 ```
+
+---
+
+## 📖 How to Use Clustrix
+
+### Core Concept: Bring Your Own Key (BYOK)
+
+Clustrix AI beroperasi dengan model **Bring Your Own Key (BYOK)**. Ini berarti Anda menghubungkan API key Anda sendiri dari berbagai penyedia layanan AI. Data Anda dikirim langsung dari komputer Anda ke layanan yang Anda pilih. Kami tidak melihat, menyimpan, atau memproses percakapan Anda.
+
+**Keuntungan BYOK:**
+- 🔒 **Privacy**: Percakapan tetap privat antara Anda dan AI provider
+- 🔄 **Flexibility**: Gunakan model apapun dari provider yang didukung
+- 💰 **Cost Control**: Bayar langsung ke provider, no subscriptions
+
+### Setting Up Your First API Key
+
+1. Buka **Settings → Switch Model** (atau **Personalization → Switch Model**)
+2. Pilih platform dari dropdown (OpenRouter, OpenAI, Anthropic, dll)
+3. Dapatkan API key dari provider:
+   - [OpenRouter](https://openrouter.ai/keys) - Akses ratusan model dengan satu key
+   - [OpenAI](https://platform.openai.com/api-keys) - GPT models
+   - [Anthropic](https://console.anthropic.com/settings/keys) - Claude models
+   - [Groq](https://console.groq.com/keys) - Ultra-fast inference
+4. Masukkan API key di field **"API Key"**
+5. Klik **Save settings** - aplikasi akan validate dan load available models
+
+**Custom Providers:**
+Untuk menambahkan provider custom atau model baru:
+- Ketik nama baru di field "Platform" untuk create provider baru
+- Tambahkan Base URL, API Key, dan model ID
+- Berguna untuk custom endpoints atau self-hosted models
+
+### Key Features Overview
+
+#### 🔄 Model Switching
+Ganti AI model untuk session aktif melalui **Settings → Switch Model**. Perubahan berlaku real-time tanpa restart.
+
+#### 🔍 Web Search
+Enable real-time web search:
+1. Buka **Settings → Search API**
+2. Tambahkan Google Search API key atau SerpAPI key
+3. Web search akan tersedia di chat dengan hasil real-time
+
+#### 📁 File Uploads
+Drag & drop files ke chat untuk AI analysis:
+- **Supported**: DOCX, XLSX, CSV, PDF, TXT, MD, JSON
+- **Auto-processing**: Files diparsing otomatis berdasarkan format
+- **Context integration**: Content file digunakan sebagai context reasoning
+
+#### 📂 Projects
+Organisir chats dan files ke dalam projects:
+- Better context management
+- Grouped conversations
+- Project-specific file uploads
+
+#### ☁️ Cloud Sync (Optional)
+Sync data across devices:
+1. Login dengan GitHub di **Settings → Account settings**
+2. Data disimpan di private repository GitHub Anda
+3. Fully optional dan bisa disabled kapan saja
+4. Anda tetap kontrol penuh atas data
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+### General Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl + N` | Create new session |
+| `Ctrl + Tab` | Switch to next session |
+| `Ctrl + Shift + Tab` | Switch to previous session |
+| `Ctrl + R` | Reload application |
+| `Esc` | Close any open modal/dialog |
+| `/` | Focus input field or search bar |
+
+### Message Input Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Enter` | Send message (regular chat) |
+| `Shift + Enter` | Create new line in input |
+| `Ctrl + Enter` | Send message (project sessions) |
+
+### Navigation Tips
+- Use keyboard shortcuts untuk faster workflow
+- `Esc` key untuk quick dismiss modals
+- Tab navigation works across all input fields
 
 ---
 
@@ -353,23 +463,210 @@ UI Updates (renderer.js)
 
 ## 🔧 Troubleshooting
 
-### Common Issues
+### API Key Issues
 
-#### "Response Interrupted"
-**Penyebab**: Network timeout, rate limiting, atau model behavior  
-**Solusi**: Klik tombol **Continue** atau switch ke model lain
+#### Invalid API Key Error
+**Penyebab**: Key tidak valid atau salah format  
+**Solusi**: 
+- Verifikasi key di dashboard provider
+- Pastikan tidak ada spasi atau karakter extra
+- Cek apakah menggunakan correct key type (secret key vs organization key)
 
-#### "Model Not Found"
-**Penyebab**: Invalid model ID atau API key expired  
-**Solusi**: Periksa konfigurasi di Switch Model, refresh API key
+#### Key Not Recognized
+**Penyebab**: Format key berbeda per provider  
+**Solusi**:
+- OpenAI: Gunakan "secret key" bukan organization key
+- OpenRouter: Pastikan key dimulai dengan `sk-or-v1-`
+- Anthropic: Key format `sk-ant-api03-`
 
-#### "File Processing Failed"
-**Penyebab**: Format tidak didukung atau file corrupt  
-**Solusi**: Periksa format file, coba upload ulang
+#### Rate Limited
+**Penyebab**: Melebihi quota atau rate limits provider  
+**Solusi**:
+- Cek usage dashboard di provider website
+- Tunggu beberapa saat sebelum retry
+- Upgrade plan jika perlu quota lebih besar
 
-#### "Search Not Working"
-**Penyebab**: API key missing atau quota exceeded  
-**Solusi**: Konfigurasi credentials di settings
+#### Cannot Save Settings
+**Penyebab**: Permission issue atau corrupted config  
+**Solusi**:
+- Restart Clustrix AI
+- Cek write permissions di application data directory
+- Windows: `%APPDATA%\Clustrix`
+- macOS: `~/Library/Application Support/Clustrix`
+- Linux: `~/.config/Clustrix`
+
+---
+
+### Chat and Connection Issues
+
+#### No Response from AI
+**Penyebab**: Connection, API key, atau quota issues  
+**Solusi**:
+- Verifikasi internet connection active
+- Cek API key valid dan has remaining credits
+- Try switching ke model atau provider berbeda
+- Periksa provider status page untuk outages
+
+#### Connection Timeout
+**Penyebab**: Provider experiencing high load  
+**Solusi**:
+- Tunggu beberapa saat dan retry
+- Switch ke faster model (Groq untuk speed)
+- Reduce prompt complexity jika terlalu panjang
+
+#### Incomplete Responses
+**Penyebab**: Model limits atau interrupted stream  
+**Solusi**:
+- Gunakan tombol **Continue** yang muncul otomatis
+- Break question into smaller parts
+- Increase max tokens di model settings
+
+#### "Response Interrupted" Banner
+**Penyebab**: Stream ended unexpectedly  
+**Solusi**: 
+- Klik **Continue** untuk melanjutkan response
+- Switch model jika problem persists
+- Close banner jika response sudah cukup
+
+#### Web Search Not Working
+**Penyebab**: Search API key missing atau invalid  
+**Solusi**:
+- Add valid Google Search API key or SerpAPI key
+- Go to **Settings → Search API**
+- Verify API has remaining quota
+- Check search API billing status
+
+---
+
+### File Upload Issues
+
+#### File Not Uploading
+**Penyebab**: File size atau format issues  
+**Solusi**:
+- Check file size reasonable (usually < 50MB)
+- Supported formats: DOCX, XLSX, CSV, PDF, TXT, MD, JSON
+- Try compressing file jika terlalu besar
+
+#### File Upload Fails
+**Penyebab**: Memory atau processing issues  
+**Solusi**:
+- Upload smaller test file first
+- Restart Clustrix AI
+- Check available disk space
+
+#### File Content Not Recognized
+**Penyebab**: Corrupted atau encrypted file  
+**Solusi**:
+- Verify file is not corrupted
+- Remove password protection from files
+- Convert to supported format
+- Try opening file in native app first
+
+---
+
+### Performance Issues
+
+#### App Runs Slowly
+**Penyebab**: Memory usage atau large data  
+**Solusi**:
+- Close other memory-intensive applications
+- Clear old chat history
+- Archive completed sessions
+- Reduce simultaneous open projects
+
+#### High Memory Usage
+**Penyebab**: Large files atau long conversations  
+**Solusi**:
+- Break work into smaller sessions
+- Remove large file uploads when done
+- Clear cached data periodically
+- Restart app untuk free memory
+
+#### UI Freezes
+**Penyebab**: Heavy processing operation  
+**Solusi**:
+- Wait a few seconds for processing
+- Check if AI is reasoning (thinking indicator)
+- Force quit and restart if persists (Ctrl+Q or Cmd+Q)
+
+---
+
+### Sync and Data Issues
+
+#### Cloud Sync Not Working
+**Penyebab**: Authentication atau connection issues  
+**Solusi**:
+- Verify logged in with GitHub (**Settings → Account settings**)
+- Check internet connection active
+- Re-authenticate with GitHub
+- Check GitHub API rate limits
+
+#### Data Not Syncing
+**Penyebab**: Auto-sync disabled atau conflicts  
+**Solusi**:
+- Enable auto-sync in settings
+- Trigger manual sync: Click **Sync Now**
+- Resolve merge conflicts if prompted
+- Check GitHub repository access
+
+#### Lost Data
+**Penyebab**: Sync conflict atau local corruption  
+**Solusi**:
+- Check local backups in app data directory
+- Restore from timestamped backups
+- Pull latest from GitHub if synced
+- Export data regularly as precaution
+
+#### Conflict Resolution
+**Penyebab**: Changes made on multiple devices  
+**Solusi**:
+- Clustrix AI auto-merges when possible
+- Most recent version kept for unresolvable conflicts
+- Review merged data after conflict resolution
+- Use manual sync untuk better control
+
+---
+
+### Installation Issues
+
+#### Windows Installation Blocked
+**Penyebab**: SmartScreen protection  
+**Solusi**:
+- Click "More info" → "Run anyway"
+- Application is safe but not code-signed yet
+- Check SHA hash matches release notes
+
+#### macOS "Cannot Open" Error
+**Penyebab**: Gatekeeper security  
+**Solusi**:
+- Right-click app → Open (first time)
+- Or: System Preferences → Security → Allow
+- Application is safe but not notarized yet
+
+#### Linux Permission Denied
+**Penyebab**: Execute permission not set  
+**Solusi**:
+```bash
+chmod +x Clustrix-*.AppImage
+./Clustrix-*.AppImage
+```
+
+---
+
+### Still Need Help?
+
+Jika issue tidak covered di sini:
+
+1. **Check GitHub Issues**: [github.com/maszaen/clustrix-ai-platform/issues](https://github.com/maszaen/clustrix-ai-platform/issues)
+2. **Open New Issue**: Include:
+   - What you were trying to do
+   - Exact error message (screenshot if possible)
+   - OS and Clustrix version
+   - Steps to reproduce
+3. **Community Support**: Join discussions di GitHub
+4. **Email**: exqeon@gmail.com untuk private issues
+
+The community dan maintainers ready to help!
 
 ### Debug Mode
 

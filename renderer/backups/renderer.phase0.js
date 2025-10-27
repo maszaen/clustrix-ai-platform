@@ -58,423 +58,6 @@ window.addEventListener('DOMContentLoaded', () => {
 const hoverStates = new WeakMap();
 const activeHoverElements = new Set();
 
-function fallbackShowToast(message, type, duration) {
-  if (typeof document === 'undefined') return;
-  let container = document.querySelector('#toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    container.className = 'toast-container';
-    container.style.cssText = `
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      display: flex;
-      flex-direction: column-reverse;
-      gap: 10px;
-      z-index: 10000;
-      pointer-events: none;
-    `;
-    document.body.appendChild(container);
-  }
-
-  const toast = document.createElement('div');
-  toast.className = `toast-notification toast-${type}`;
-  toast.textContent = message;
-  toast.style.cssText = `
-    padding: 12px 16px;
-    background: ${type === 'error' ? '#902424b4' : type === 'success' ? '#0e8a3aa1' : '#1b4d9e9e'};
-    color: white;
-    border-radius: var(--radius-lg);
-    font-size: 14px;
-    max-width: 300px;
-    word-wrap: break-word;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    pointer-events: auto;
-    margin-top: 10px;
-  `;
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => {
-      toast.remove();
-      if (container.children.length === 0) {
-        container.remove();
-      }
-    }, 300);
-  }, duration);
-
-  toast.addEventListener('click', () => {
-    toast.remove();
-    if (container.children.length === 0) {
-      container.remove();
-    }
-  });
-}
-
-const uiModuleCache = {};
-const renderModuleCache = {};
-const handlerModuleCache = {};
-
-function getRequire() {
-  if (typeof require === 'function') return require;
-  if (typeof window !== 'undefined' && typeof window.require === 'function') {
-    return window.require;
-  }
-  return null;
-}
-
-function getModalManager() {
-  if (uiModuleCache.modalManager) return uiModuleCache.modalManager;
-  const globalFactory = typeof window !== 'undefined' && window.__uiModules?.createModalManager;
-  if (globalFactory) {
-    uiModuleCache.modalManager = globalFactory({
-      select: (selector) =>
-        typeof document !== 'undefined' ? document.querySelector(selector) : null,
-    });
-    return uiModuleCache.modalManager;
-  }
-  const req = getRequire();
-  if (!req) return null;
-  const { createModalManager } = req('./ui/modals/modal-manager');
-  uiModuleCache.modalManager = createModalManager({
-    select: (selector) =>
-      typeof document !== 'undefined' ? document.querySelector(selector) : null,
-  });
-  return uiModuleCache.modalManager;
-}
-
-function getToastManager() {
-  if (uiModuleCache.toastManager) return uiModuleCache.toastManager;
-  const globalFactory = typeof window !== 'undefined' && window.__uiModules?.createToastManager;
-  if (globalFactory) {
-    uiModuleCache.toastManager = globalFactory({
-      select: (selector) => {
-        if (typeof document === 'undefined') return null;
-        if (selector !== '#toast-container') return document.querySelector(selector);
-        let container = document.querySelector('#toast-container');
-        if (!container) {
-          container = document.createElement('div');
-          container.id = 'toast-container';
-          container.className = 'toast-container';
-          container.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            display: flex;
-            flex-direction: column-reverse;
-            gap: 10px;
-            z-index: 10000;
-            pointer-events: none;
-          `;
-          document.body.appendChild(container);
-        }
-        return container;
-      },
-    });
-    return uiModuleCache.toastManager;
-  }
-  const req = getRequire();
-  if (!req) return null;
-  const { createToastManager } = req('./ui/toasts');
-  uiModuleCache.toastManager = createToastManager({
-    select: (selector) => {
-      if (typeof document === 'undefined') return null;
-      if (selector !== '#toast-container') return document.querySelector(selector);
-      let container = document.querySelector('#toast-container');
-      if (!container) {
-        container = document.createElement('div');
-        container.id = 'toast-container';
-        container.className = 'toast-container';
-        container.style.cssText = `
-          position: fixed;
-          bottom: 20px;
-          right: 20px;
-          display: flex;
-          flex-direction: column-reverse;
-          gap: 10px;
-          z-index: 10000;
-          pointer-events: none;
-        `;
-        document.body.appendChild(container);
-      }
-      return container;
-    },
-  });
-  return uiModuleCache.toastManager;
-}
-
-function getSidebarController() {
-  if (uiModuleCache.sidebarController) return uiModuleCache.sidebarController;
-  const globalFactory = typeof window !== 'undefined' && window.__uiModules?.createSidebarController;
-  if (globalFactory) {
-    uiModuleCache.sidebarController = globalFactory({
-      select: (selector) =>
-        typeof document !== 'undefined' ? document.querySelector(selector) : null,
-    });
-    return uiModuleCache.sidebarController;
-  }
-  const req = getRequire();
-  if (!req) return null;
-  const { createSidebarController } = req('./ui/sidebar');
-  uiModuleCache.sidebarController = createSidebarController({
-    select: (selector) =>
-      typeof document !== 'undefined' ? document.querySelector(selector) : null,
-  });
-  return uiModuleCache.sidebarController;
-}
-
-function getSmartScroll() {
-  if (uiModuleCache.smartScroll) return uiModuleCache.smartScroll;
-  const globalFactory = typeof window !== 'undefined' && window.__uiModules?.createSmartScroll;
-  if (globalFactory) {
-    uiModuleCache.smartScroll = globalFactory({
-      select: (selector) =>
-        typeof document !== 'undefined' ? document.querySelector(selector) : null,
-    });
-    return uiModuleCache.smartScroll;
-  }
-  const req = getRequire();
-  if (!req) return null;
-  const { createSmartScroll } = req('./ui/scrolling/smart-scroll');
-  uiModuleCache.smartScroll = createSmartScroll({
-    select: (selector) =>
-      typeof document !== 'undefined' ? document.querySelector(selector) : null,
-  });
-  return uiModuleCache.smartScroll;
-}
-
-function getMessageRenderer() {
-  if (renderModuleCache.messageRenderer) {
-    return renderModuleCache.messageRenderer;
-  }
-
-  const globalFactory =
-    typeof window !== 'undefined' &&
-    window.__renderModules?.createMessageRenderer;
-
-  let factory = null;
-  if (typeof globalFactory === 'function') {
-    factory = globalFactory;
-  } else {
-    const req = getRequire();
-    if (!req) return null;
-    try {
-      const module = req('./rendering/messages/message-renderer');
-      if (module && typeof module.createMessageRenderer === 'function') {
-        factory = module.createMessageRenderer;
-      }
-    } catch (error) {
-      if (typeof console !== 'undefined' && console.warn) {
-        console.warn(
-          '[renderer] Unable to require message renderer:',
-          error?.message,
-        );
-      }
-    }
-  }
-
-  if (typeof factory !== 'function') {
-    return null;
-  }
-
-  const markdownRenderer = {
-    render: (src, options = {}) => md(src, options),
-    renderSync: (src, options = {}) => mdFallback(src, options),
-  };
-
-  try {
-    renderModuleCache.messageRenderer = factory({
-      formatUserMessage,
-      markdownRenderer,
-      getFileIcon,
-    });
-  } catch (error) {
-    if (typeof console !== 'undefined' && console.warn) {
-      console.warn(
-        '[renderer] Failed to initialize message renderer:',
-        error?.message,
-      );
-    }
-    renderModuleCache.messageRenderer = null;
-  }
-
-  return renderModuleCache.messageRenderer;
-}
-
-function getSessionHandlers() {
-  if (handlerModuleCache.sessionHandlers) {
-    return handlerModuleCache.sessionHandlers;
-  }
-
-  const globalFactory =
-    typeof window !== 'undefined' &&
-    window.__handlerModules?.createSessionHandlers;
-
-  let factory = null;
-  if (typeof globalFactory === 'function') {
-    factory = globalFactory;
-  } else {
-    const req = getRequire();
-    if (!req) return null;
-    try {
-      const module = req('./handlers/session-handlers');
-      if (module && typeof module.createSessionHandlers === 'function') {
-        factory = module.createSessionHandlers;
-      }
-    } catch (error) {
-      if (typeof console !== 'undefined' && console.warn) {
-        console.warn(
-          '[renderer] Unable to require session handlers:',
-          error?.message,
-        );
-      }
-    }
-  }
-
-  if (typeof factory !== 'function') {
-    return null;
-  }
-
-  handlerModuleCache.sessionHandlers = factory({
-    getState: () => state,
-    getCurrent: () => current,
-    setCurrent: (next) => {
-      current = next;
-      return current;
-    },
-    save,
-    invalidateCache: invalidateSessionCache,
-    showWelcomeScreen,
-    renderSessions,
-    getActiveChatConfig,
-    getModelMeta: (models, provider, model) =>
-      getModelMeta(models || state.settings.models, provider, model),
-    now: nowISO,
-    generateId: generateSessionId,
-  });
-
-  return handlerModuleCache.sessionHandlers;
-}
-
-function getMessageHandlers() {
-  if (handlerModuleCache.messageHandlers) {
-    return handlerModuleCache.messageHandlers;
-  }
-
-  const globalFactory =
-    typeof window !== 'undefined' &&
-    window.__handlerModules?.createMessageHandlers;
-
-  let factory = null;
-  if (typeof globalFactory === 'function') {
-    factory = globalFactory;
-  } else {
-    const req = getRequire();
-    if (!req) return null;
-    try {
-      const module = req('./handlers/message-handlers');
-      if (module && typeof module.createMessageHandlers === 'function') {
-        factory = module.createMessageHandlers;
-      }
-    } catch (error) {
-      if (typeof console !== 'undefined' && console.warn) {
-        console.warn(
-          '[renderer] Unable to require message handlers:',
-          error?.message,
-        );
-      }
-    }
-  }
-
-  if (typeof factory !== 'function') {
-    return null;
-  }
-
-  const sessionHandlers = getSessionHandlers();
-  if (!sessionHandlers) {
-    return null;
-  }
-
-  const sessionHandlerApi = Object.assign({}, sessionHandlers, {
-    getActiveChatConfig,
-    getModelMeta: (models, provider, model) =>
-      getModelMeta(models || state.settings.models, provider, model),
-  });
-
-  const handler = factory({
-    sessionHandlers: sessionHandlerApi,
-    appendMessage: (role, content, options) =>
-      addMessage(role, content, options),
-    getState: () => state,
-    getCurrent: () => current,
-    setCurrent,
-    save,
-    cacheSession,
-    invalidateSessionCache,
-    renderUploadedFiles,
-    renderSessions,
-    startStream,
-    loadAllArtifacts,
-    buildMessages: (session) => buildMessages(session),
-    buildMessagesUpTo: (index, session) => buildMessagesUpTo(index, session),
-    buildResumeMessages: buildResumeMessagesFromSession,
-    scheduleThinkingText,
-    isStreamingInSession: (session) => streamManager.isStreamingInSession(session),
-    now: nowISO,
-  });
-
-  handlerModuleCache.messageHandlers = handler;
-  return handlerModuleCache.messageHandlers;
-}
-
-function resolveSplitMarkdownForStreaming() {
-  if (renderModuleCache.splitMarkdownForStreaming) {
-    return renderModuleCache.splitMarkdownForStreaming;
-  }
-
-  const globalRenderer = typeof window !== 'undefined' ? window.__renderModules : null;
-  if (
-    globalRenderer &&
-    typeof globalRenderer.splitMarkdownForStreaming === 'function'
-  ) {
-    renderModuleCache.splitMarkdownForStreaming =
-      globalRenderer.splitMarkdownForStreaming;
-    return renderModuleCache.splitMarkdownForStreaming;
-  }
-
-  const req = getRequire();
-  if (req) {
-    try {
-      const { splitMarkdownForStreaming: splitFn } = req(
-        './rendering/markdown/markdown-renderer',
-      );
-      if (typeof splitFn === 'function') {
-        renderModuleCache.splitMarkdownForStreaming = splitFn;
-        return renderModuleCache.splitMarkdownForStreaming;
-      }
-    } catch (error) {
-      if (typeof console !== 'undefined' && console.warn) {
-        console.warn(
-          '[renderer] Unable to require splitMarkdownForStreaming:',
-          error?.message,
-        );
-      }
-    }
-  }
-
-  renderModuleCache.splitMarkdownForStreaming = function splitMarkdownFallback(
-    text,
-  ) {
-    if (!text) return [];
-    return String(text)
-      .split(/(\s+)/)
-      .filter((token) => token.length > 0);
-  };
-  return renderModuleCache.splitMarkdownForStreaming;
-}
-
 class SessionCacheEntry {
   constructor(sessionId, renderedHTML, scrollPosition = 0, lazyState = null) {
     this.sessionId = sessionId;
@@ -860,8 +443,8 @@ function isMarkdownTestSession(session) {
 }
 
 function splitMarkdownForStreaming(text) {
-  const splitter = resolveSplitMarkdownForStreaming();
-  return splitter(text);
+  if (!text) return [];
+  return text.split(/(\s+)/).filter((token) => token.length > 0);
 }
 
 function updateMarkdownControls() {
@@ -8392,8 +7975,6 @@ function initializeSmartScroll() {
         if (scrollPercent < 0.90 && Math.abs(e.deltaY) > 5) {
           isUserScrolledUp = true;
           autoScrollEnabled = false;
-          const smart = getSmartScroll();
-          smart?.markUserScrolled(true);
 
           scrollDetectionCooldown = true;
           clearTimeout(cooldownTimeout);
@@ -8419,8 +8000,6 @@ function initializeSmartScroll() {
       if (nearBottom && isUserScrolledUp) {
         isUserScrolledUp = false;
         autoScrollEnabled = true;
-        const smart = getSmartScroll();
-        smart?.markUserScrolled(false);
       }
     },
     { passive: true },
@@ -8462,8 +8041,6 @@ function scrollToBottom({ force = false, fromAI = false } = {}) {
   if (shouldScroll) {
     // Simple, direct scroll - no complex animations that cause conflicts
     scroller.scrollTop = scroller.scrollHeight;
-    const smart = getSmartScroll();
-    smart?.markUserScrolled(false);
   }
 }
 
@@ -9479,15 +9056,14 @@ function personaSystem() { // V3
   return prompt;
 }
 
-function buildMessages(session = current) {
+function buildMessages() {
   const msgs = [{ role: "system", content: personaSystem() }];
-  const target = session || current;
-  if (!target || !target.messages) return msgs;
+  if (!current || !current.messages) return msgs;
 
-  for (let i = 0; i < target.messages.length; i++) {
-    const messageData = target.messages[i];
+  for (let i = 0; i < current.messages.length; i++) {
+    const messageData = current.messages[i];
     const [role, content, metadata] = messageData;
-    if (role === "ai" && content === "" && i === target.messages.length - 1) continue;
+    if (role === "ai" && content === "" && i === current.messages.length - 1) continue;
 
     if (role === "user") {
       let fullUserPrompt = content;
@@ -9556,16 +9132,15 @@ function buildMessagesForProject(session) {
   return msgs;
 }
 
-function buildMessagesUpTo(indexInclusive, session = current) {
+function buildMessagesUpTo(indexInclusive) {
   const msgs = [{ role: "system", content: personaSystem() }];
-  const target = session || current;
-  if (!target || !target.messages) return msgs;
+  if (!current || !current.messages) return msgs;
   const upto = Math.max(
     0,
-    Math.min(indexInclusive, target.messages.length - 1),
+    Math.min(indexInclusive, current.messages.length - 1),
   );
   for (let i = 0; i <= upto; i++) {
-    const [role, content] = target.messages[i];
+    const [role, content] = current.messages[i];
     if (role === "user") msgs.push({ role: "user", content });
     else if (role === "ai") msgs.push({ role: "assistant", content });
   }
@@ -10698,6 +10273,7 @@ function addMessage(
   // PERFORMANCE: Use cached DOM query
   const log = domCache.getChatLog();
   const node = document.createElement("div");
+  const span = document.createElement("span");
   node.className = `message ${role}`;
   if (index >= 0) {
     node.setAttribute("data-message-index", index);
@@ -10711,41 +10287,9 @@ function addMessage(
   const regenIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>`;
   const baseActions = `<div class="message-actions"></div>`;
 
-  let rendererApplied = false;
-  const messageRenderer = getMessageRenderer();
-  if (messageRenderer && typeof messageRenderer.renderMessageSync === 'function') {
-    try {
-      const rendered = messageRenderer.renderMessageSync({
-        role,
-        content,
-        metadata,
-        final,
-      });
-      if (rendered && rendered.html) {
-        const template = document.createElement('template');
-        template.innerHTML = rendered.html.trim();
-        const renderedNode = template.content.firstElementChild;
-        if (renderedNode) {
-          node.className = renderedNode.className || node.className;
-          node.innerHTML = renderedNode.innerHTML;
-          Array.from(renderedNode.attributes || []).forEach((attr) => {
-            if (attr.name === 'class') return;
-            node.setAttribute(attr.name, attr.value);
-          });
-          rendererApplied = true;
-        }
-      }
-    } catch (error) {
-      console.warn(
-        '[renderer] messageRenderer.renderMessageSync failed:',
-        error?.message || error,
-      );
-    }
-  }
-
   setNodeMetadata(node, metadata);
 
-  if (role === "user" && !rendererApplied) {
+  if (role === "user") {
     let uiContent = "";
     let finalUiContent = "";
     let fileContent = "";
@@ -10805,14 +10349,14 @@ function addMessage(
     setTimeout(() => {
       setupUserMessageExpandCollapse(node);
     }, 0);
-  } else if (role === "ai_cancelled" && !rendererApplied) {
+  } else if (role === "ai_cancelled") {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
     node.innerHTML = `<div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${content}</span><button class="primary-btn regenerate-cancelled" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate?</button></div></div></div></div>`;
-  } else if (role === "ai_incomplete" && !rendererApplied) {
+  } else if (role === "ai_incomplete") {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
     const placeholderText = "Response data not found, due to connection loss or app closed during processing";
     node.innerHTML = `<div class="message-text"><div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;"><span style="color: var(--fg-muted); font-style: italic;">${placeholderText}</span><button class="primary-btn regenerate-incomplete" data-session-created="${current.created_at}" data-message-index="${index}" style="height: 32px; font-size: 13px;">Regenerate</button></div></div></div></div>`;
-  } else if (!rendererApplied) {
+  } else {
     const aiAvatar = `<div class="ai-avatar"><img src="../public/images/logo-bbchat.svg" alt="Clustrix Logo"></div>`;
     const thinking = `<div class="thinking-container"><div class="typing-indicator"><span></span></div><span class="thinking-text-indicator"></span></div>`;
     
@@ -10877,30 +10421,6 @@ function addMessage(
     if (role === "ai" && !final) {
       node.style.opacity = "0";
       node.style.transform = "translateY(20px)";
-    }
-  }
-
-  if (rendererApplied) {
-    if (role === "user") {
-      setTimeout(() => {
-        setupUserMessageExpandCollapse(node);
-      }, 0);
-    } else if (role === "ai_cancelled") {
-      const btn = node.querySelector(".regenerate-cancelled");
-      if (btn) {
-        btn.dataset.messageIndex = String(index);
-        if (current?.created_at) {
-          btn.dataset.sessionCreated = current.created_at;
-        }
-      }
-    } else if (role === "ai_incomplete") {
-      const btn = node.querySelector(".regenerate-incomplete");
-      if (btn) {
-        btn.dataset.messageIndex = String(index);
-        if (current?.created_at) {
-          btn.dataset.sessionCreated = current.created_at;
-        }
-      }
     }
   }
 
@@ -12649,97 +12169,31 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
             const shouldFullRender = isInitialRender || isSmallIncrement || gotEnd;
             
             if (shouldFullRender) {
-              const fallbackFullRender = () => {
-                md(display, {
-                  isStreaming: true,
-                  forceWorker: shouldUseWorkerForStreaming,
-                  forceSync: !shouldUseWorkerForStreaming && display.length < 1000,
-                })
-                  .then((html) => {
-                    div.innerHTML = html;
-                    div._lastRenderedLength = display.length;
-                    if (div.querySelector("pre code")) highlightAllUnder(div);
-                    renderMathInElement(div);
-                    requestAnimationFrame(() => {
-                      scrollToBottom({ fromAI: true });
-                    });
-                  })
-                  .catch((err) => {
-                    console.warn("Markdown rendering error:", err);
-                    div.innerHTML = mdFallback(display);
-                    div._lastRenderedLength = display.length;
-                    if (div.querySelector("pre code")) highlightAllUnder(div);
-                    renderMathInElement(div);
-                    requestAnimationFrame(() => {
-                      scrollToBottom({ fromAI: true });
-                    });
-                  });
-              };
-
-              const rendererInstance = getMessageRenderer();
-              const canUseRenderer =
-                rendererInstance &&
-                typeof rendererInstance.renderMessage === "function";
-
-              if (canUseRenderer) {
-                const streamState = s;
-                const sessionForMetadata = streamState?.session;
-                const messageIdx =
-                  typeof streamState?.messageIndex === "number"
-                    ? streamState.messageIndex
-                    : -1;
-                let metadata = {};
-                if (
-                  sessionForMetadata &&
-                  Array.isArray(sessionForMetadata.messages) &&
-                  messageIdx >= 0 &&
-                  messageIdx < sessionForMetadata.messages.length
-                ) {
-                  const entry = sessionForMetadata.messages[messageIdx];
-                  if (Array.isArray(entry)) {
-                    metadata = entry[2] || {};
-                  }
-                } else if (streamState?.aiNode?._messageMetadata) {
-                  metadata = streamState.aiNode._messageMetadata;
-                }
-
-                Promise.resolve(
-                  rendererInstance.renderMessage({
-                    role: "ai",
-                    content: display,
-                    metadata,
-                    final: gotEnd,
-                  }),
-                )
-                  .then((result) => {
-                    const html = result?.html || "";
-                    if (!html) {
-                      throw new Error("Empty renderer output");
-                    }
-                    const template = document.createElement("template");
-                    template.innerHTML = html.trim();
-                    const renderedNode = template.content.firstElementChild;
-                    const textElement =
-                      renderedNode?.querySelector(".message-text");
-                    const outputHtml = textElement ? textElement.innerHTML : html;
-                    div.innerHTML = outputHtml;
-                    div._lastRenderedLength = display.length;
-                    if (div.querySelector("pre code")) highlightAllUnder(div);
-                    renderMathInElement(div);
-                    requestAnimationFrame(() => {
-                      scrollToBottom({ fromAI: true });
-                    });
-                  })
-                  .catch((error) => {
-                    console.warn(
-                      "[renderer] messageRenderer.renderMessage streaming fallback:",
-                      error?.message || error,
-                    );
-                    fallbackFullRender();
-                  });
-              } else {
-                fallbackFullRender();
-              }
+              // Full re-render (for initial, small chunks, or final render)
+              md(display, { 
+                isStreaming: true,
+                forceWorker: shouldUseWorkerForStreaming,
+                forceSync: !shouldUseWorkerForStreaming && display.length < 1000
+              }).then(html => {
+                div.innerHTML = html;
+                div._lastRenderedLength = display.length;
+                if (div.querySelector("pre code")) highlightAllUnder(div);
+                renderMathInElement(div);
+                
+                requestAnimationFrame(() => {
+                  scrollToBottom({ fromAI: true });
+                });
+              }).catch(err => {
+                console.warn('Markdown rendering error:', err);
+                div.innerHTML = mdFallback(display);
+                div._lastRenderedLength = display.length;
+                if (div.querySelector("pre code")) highlightAllUnder(div);
+                renderMathInElement(div);
+                
+                requestAnimationFrame(() => {
+                  scrollToBottom({ fromAI: true });
+                });
+              });
             } else {
               // Incremental append for large chunks (prevents flashing)
               md(newContent, { 
@@ -13109,42 +12563,32 @@ function renderAiFinalActions(aiNode, content, messageIndex) {
 }
 
 async function createNewSession(initialMessages = [], options = {}) {
-  const sessionHandlers = getSessionHandlers();
-  if (sessionHandlers?.createSession) {
-    const session = await sessionHandlers.createSession(initialMessages, options);
-    log("SESSION", 2, "createNewSession", "Session created via module.", {
-      sessionId: session?.id,
-      type: session?.type,
-      projectId: session?.projectId || null,
-    });
-    return session;
-  }
-
-  log("SESSION", 2, "createNewSession", "Creating new session object (fallback)...");
-  const createdAt = nowISO();
-  const session = {
+  log("SESSION", 2, "createNewSession", "Creating new session object...");
+  const s = {
     id: generateSessionId(),
     name: null,
-    created_at: createdAt,
-    last_updated: createdAt,
+    created_at: nowISO(),
+    last_updated: nowISO(),
     messages: initialMessages,
     uploadedFiles: [],
     canvases: {},
     tokens_used: 0,
     tokens_by_message: {},
+
+    // Project-specific properties
     projectId: options.projectId || null,
-    type: options.type || "regular",
+    type: options.type || "regular", // 'regular' or 'project'
     isProject: options.type === "project" || false,
   };
 
-  state.sessions.unshift(session);
+  state.sessions.unshift(s);
   await save();
-  log("SESSION", 2, "createNewSession", "New session object created (fallback).", {
-    sessionId: session.id,
-    type: session.type,
-    projectId: session.projectId,
+  log("SESSION", 2, "createNewSession", "New session object created.", {
+    sessionId: s.id,
+    type: s.type,
+    projectId: s.projectId,
   });
-  return session;
+  return s;
 }
 
 async function send() {
@@ -13173,76 +12617,6 @@ async function send() {
     streamManager.isStreamingInSession(current)
   )
     return;
-
-  const messageHandlers = getMessageHandlers();
-  if (messageHandlers?.sendMessage) {
-    const aiNode = await messageHandlers.sendMessage(originalText, {
-      fromWelcome: false,
-    });
-    if (!aiNode) return;
-
-    const aiMessageIndex = current.messages.length - 1;
-    const userIndex = aiMessageIndex - 1;
-
-    if (current && current.id) {
-      markSessionDirty(current.id);
-    }
-    if (current) {
-      current._newMessages = current._newMessages || [];
-      const userMessage = current.messages[userIndex];
-      const aiMessage = current.messages[aiMessageIndex];
-      if (Array.isArray(userMessage)) {
-        current._newMessages.push([userIndex, userMessage]);
-      }
-      if (Array.isArray(aiMessage)) {
-        current._newMessages.push([aiMessageIndex, aiMessage]);
-      }
-    }
-
-    const scroller = getChatScroller();
-    if (scroller) {
-      requestAnimationFrame(() => {
-        scroller.scrollTo({
-          top: 0,
-          behavior: 'smooth',
-        });
-      });
-    }
-
-    createResponseSpacer();
-    setTimeout(() => {
-      expandSpacer();
-    }, 50);
-
-    input.value = "";
-    input.style.height = "auto";
-
-    saveDraftDebounced.cancel();
-
-    justSentMessage = true;
-    setTimeout(() => {
-      justSentMessage = false;
-    }, 1000);
-
-    if (current && current.id) {
-      sessionDrafts.delete(current.id);
-      saveDraftForSession(current.id, "");
-    }
-
-    if (current && current.name === null) {
-      const titlePromise = generateAndSetTitle(current);
-      if (titlePromise && typeof titlePromise.then === "function") {
-        titlePromise
-          .then(() => renderSessions())
-          .catch((error) => {
-            console.warn('[renderer] Title generation failed:', error?.message || error);
-          });
-      }
-    }
-
-    scheduleThinkingText(aiNode);
-    return;
-  }
 
   const filesToAttach = getFilesForMessage(current, 'conversation');
   
@@ -13357,86 +12731,6 @@ async function sendFromWelcome() {
     originalText || `Analyzing ${welcomeScreenStagedFiles.length} file(s)...`;
   const filesToAttach = [...welcomeScreenStagedFiles];
 
-  const messageHandlers = getMessageHandlers();
-  if (messageHandlers?.sendMessage) {
-    const session = await createNewSession();
-    setCurrent(session);
-    session.uploadedFiles = filesToAttach.slice();
-    current.uploadedFiles = filesToAttach.slice();
-
-    welcomeScreenStagedFiles = [];
-    renderWelcomeScreenFiles();
-
-    if (input) {
-      input.value = "";
-      saveDraftDebounced.cancel();
-
-      justSentMessage = true;
-      setTimeout(() => {
-        justSentMessage = false;
-      }, 1000);
-
-      sessionDrafts.delete("welcome-screen");
-      saveDraftForSession("welcome-screen", "");
-
-      const shell = input.closest(".ta-shell");
-      if (shell && shell.__taScroll) {
-        shell.__taScroll.updateLayout(true);
-      } else {
-        input.style.height = "auto";
-      }
-    }
-
-    clearLog();
-    const aiNode = await messageHandlers.sendMessage(userTextForUI, {
-      fromWelcome: true,
-    });
-    if (!aiNode) return;
-
-    const aiMessageIndex = current.messages.length - 1;
-    const userIndex = aiMessageIndex - 1;
-
-    if (current && current.id) {
-      markSessionDirty(current.id);
-      current._newMessages = current._newMessages || [];
-      const userMessage = current.messages[userIndex];
-      const aiMessage = current.messages[aiMessageIndex];
-      if (Array.isArray(userMessage)) {
-        current._newMessages.push([userIndex, userMessage]);
-      }
-      if (Array.isArray(aiMessage)) {
-        current._newMessages.push([aiMessageIndex, aiMessage]);
-      }
-    }
-
-    const scroller = getChatScroller();
-    if (scroller) {
-      requestAnimationFrame(() => {
-        scroller.scrollTo({
-          top: 0,
-          behavior: 'smooth',
-        });
-      });
-    }
-
-    createResponseSpacer();
-    setTimeout(() => {
-      expandSpacer();
-    }, 50);
-
-    const titlePromise = generateAndSetTitle(current);
-    if (titlePromise && typeof titlePromise.then === "function") {
-      titlePromise
-        .then(() => renderSessions())
-        .catch((error) => {
-          console.warn('[renderer] Title generation failed:', error?.message || error);
-        });
-    }
-
-    scheduleThinkingText(aiNode);
-    return;
-  }
-
   const s = await createNewSession();
   setCurrent(s);
 
@@ -13520,31 +12814,6 @@ async function sendFromWelcome() {
 async function regenerateFromIndex(aiIndex) {
   if (!current || streamManager.isStreamingInSession(current)) return;
 
-  const messageHandlers = getMessageHandlers();
-  if (messageHandlers?.regenerate) {
-    const chatLog = $("#chat-log");
-    if (chatLog) {
-      const allMessages = chatLog.querySelectorAll(".message");
-      for (let i = allMessages.length - 1; i >= 0; i--) {
-        const msgNode = allMessages[i];
-        const msgIndex = parseInt(msgNode.dataset.index || "-1", 10);
-        if (msgIndex >= aiIndex) {
-          msgNode.remove();
-        }
-      }
-    }
-
-    const aiNode = await messageHandlers.regenerate(aiIndex);
-    if (!aiNode) return;
-
-    if (current && current.id) {
-      markSessionDirty(current.id);
-    }
-
-    scheduleThinkingText(aiNode);
-    return;
-  }
-
   const userMessages = current.messages
     .slice(0, aiIndex)
     .filter((m) => m[0] === "user");
@@ -13622,12 +12891,6 @@ async function regenerateFromIndex(aiIndex) {
 async function regenerateFromCancelled(targetButton) {
   if (!current || streamManager.isStreamingInSession(current)) return;
 
-  const messageHandlers = getMessageHandlers();
-  if (messageHandlers?.regenerateCancelled) {
-    await messageHandlers.regenerateCancelled(targetButton);
-    return;
-  }
-
   const messageNode = targetButton.closest(".message.ai_cancelled");
   if (!messageNode) return;
 
@@ -13675,12 +12938,6 @@ async function regenerateFromCancelled(targetButton) {
 async function regenerateFromIncomplete(targetButton) {
   if (!current || streamManager.isStreamingInSession(current)) return;
 
-  const messageHandlers = getMessageHandlers();
-  if (messageHandlers?.regenerateIncomplete) {
-    await messageHandlers.regenerateIncomplete(targetButton);
-    return;
-  }
-
   const messageNode = targetButton.closest(".message.ai_incomplete");
   if (!messageNode) return;
 
@@ -13721,35 +12978,23 @@ async function regenerateFromIncomplete(targetButton) {
 }
 
 // Session Management
-async function deleteSession(sessionToDelete) {
-  if (!sessionToDelete) return false;
-  const handlers = getSessionHandlers();
-  if (handlers?.deleteSession) {
-    const deleted = await handlers.deleteSession(sessionToDelete);
-    if (deleted) {
-      clearDirtyTracking();
-    }
-    return deleted;
-  }
-
-  log("SESSION", 2, "deleteSession", "Deleting session (fallback)", {
+function deleteSession(sessionToDelete) {
+  if (!sessionToDelete) return;
+  log("SESSION", 2, "deleteSession", "Deleting session", {
     sessionName: sessionToDelete.name,
     createdAt: sessionToDelete.created_at,
   });
-
+  
+  // Invalidate cache untuk session yang dihapus
   if (sessionToDelete.id) {
     invalidateSessionCache(sessionToDelete.id);
   }
-
+  
   state.sessions = state.sessions.filter((s) => s !== sessionToDelete);
-  if (current === sessionToDelete) {
-    showWelcomeScreen();
-  } else {
-    renderSessions();
-  }
-  clearDirtyTracking();
-  await save();
-  return true;
+  if (current === sessionToDelete) showWelcomeScreen();
+  else renderSessions();
+  clearDirtyTracking(); // Force full save untuk ensure backend dapat update yang benar
+  save();
 }
 
 function deleteCurrentSession() {
@@ -13964,8 +13209,6 @@ function handleSidebarToggle() {
     }
   } else {
     collapsed = !collapsed;
-    const controller = getSidebarController();
-    controller?.setCollapsed(collapsed);
     const logo = $("#little-icon");
 
     if (!collapsed) {
@@ -16799,15 +16042,7 @@ function setupEventListeners() {
         "Regenerate-cancelled button clicked",
         { messageIndex },
       );
-      const messageHandlers = getMessageHandlers();
-      if (
-        messageHandlers &&
-        typeof messageHandlers.regenerateCancelled === "function"
-      ) {
-        messageHandlers.regenerateCancelled(regenCancelledTarget);
-      } else {
-        regenerateFromCancelled(regenCancelledTarget);
-      }
+      regenerateFromCancelled(regenCancelledTarget);
     }
 
     const regenIncompleteTarget = event.target.closest(".regenerate-incomplete");
@@ -16823,15 +16058,7 @@ function setupEventListeners() {
         "Regenerate-incomplete button clicked",
         { messageIndex },
       );
-      const messageHandlers = getMessageHandlers();
-      if (
-        messageHandlers &&
-        typeof messageHandlers.regenerateIncomplete === "function"
-      ) {
-        messageHandlers.regenerateIncomplete(regenIncompleteTarget);
-      } else {
-        regenerateFromIncomplete(regenIncompleteTarget);
-      }
+      regenerateFromIncomplete(regenIncompleteTarget);
     }
   });
 }
@@ -17076,16 +16303,99 @@ document.addEventListener("DOMContentLoaded", initializeApp);
 // ===== TOAST NOTIFICATION (In-app, no native dialogs) =====
 
 function showToast(message, type = 'info', delay = null) {
-  const duration =
-    delay === null
-      ? Math.min(Math.max(4000, message.length * 50), 10000)
-      : delay;
-  const manager = getToastManager();
-  if (manager) {
-    manager.showToast(message, type, duration);
-  } else {
-    fallbackShowToast(message, type, duration);
+  // Kalau delay ga di-set, hitung otomatis berdasarkan panjang karakter
+  if (delay === null) {
+    const charLength = message.length;
+    delay = Math.min(Math.max(4000, charLength * 50), 10000);
   }
+  
+  // Buat container untuk semua toast kalau belum ada
+  let container = document.querySelector('.toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'toast-container';
+    container.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 10px;
+      z-index: 10000;
+      pointer-events: none;
+    `;
+    document.body.appendChild(container);
+  }
+  
+  // Buat toast baru
+  const toast = document.createElement('div');
+  toast.className = `toast-notification toast-${type}`;
+  toast.textContent = message;
+  toast.style.cssText = `
+    padding: 12px 16px;
+    background: ${type === 'error' ? '#902424b4' : type === 'success' ? '#0e8a3aa1' : '#1b4d9e9e'};
+    color: white;
+    border-radius: var(--radius-lg);
+    font-size: 14px;
+    max-width: 300px;
+    word-wrap: break-word;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    pointer-events: auto;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out, margin-bottom 0.3s ease-out;
+  `;
+  
+  // Tambahkan CSS animation kalau belum ada
+  if (!document.querySelector('#toast-animations')) {
+    const style = document.createElement('style');
+    style.id = 'toast-animations';
+    style.textContent = `
+      .toast-notification {
+        transition: transform 0.3s ease-out, opacity 0.3s ease-out, margin-bottom 0.3s ease-out, max-height 0.3s ease-out;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  // Masukkan toast ke container (karena column-reverse, ini akan muncul di bawah)
+  container.appendChild(toast);
+  
+  // Trigger animation slide up
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      toast.style.transform = 'translateY(0)';
+      toast.style.opacity = '1';
+    });
+  });
+  
+  // Auto remove setelah delay dengan smooth collapse
+  setTimeout(() => {
+    // Ambil tinggi toast sebelum dihapus
+    const toastHeight = toast.offsetHeight;
+    
+    // Animasi keluar: slide down dan fade out
+    toast.style.transform = 'translateY(20px)';
+    toast.style.opacity = '0';
+    toast.style.maxHeight = toastHeight + 'px';
+    
+    // Setelah fade out, collapse height-nya
+    setTimeout(() => {
+      toast.style.maxHeight = '0';
+      toast.style.marginBottom = '0';
+      toast.style.padding = '0 12px';
+      toast.style.overflow = 'hidden';
+      
+      // Hapus element setelah animasi collapse selesai
+      setTimeout(() => {
+        toast.remove();
+        // Hapus container kalau udah kosong
+        if (container.children.length === 0) {
+          container.remove();
+        }
+      }, 300);
+    }, 300);
+  }, delay);
 }
 
 // Add CSS animation if not exists
@@ -18621,8 +17931,6 @@ function closeModalWithAnimation(modal, duration = 200) {
 
   // Add closing class to trigger animation
   modalElement.classList.add('closing');
-  const modalMgr = getModalManager();
-  modalMgr?.closeModal(modalElement);
 
   // After animation completes, add hidden class and remove closing
   setTimeout(() => {
@@ -18641,8 +17949,6 @@ function openModalWithAnimation(modal) {
 
   // Remove hidden and closing classes
   modalElement.classList.remove('hidden', 'closing');
-  const modalMgr = getModalManager();
-  modalMgr?.openModal(modalElement);
 }
 
 /**

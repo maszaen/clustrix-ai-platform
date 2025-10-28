@@ -1,0 +1,458 @@
+[
+  {
+    "line": 14096,
+    "element": "unknown",
+    "event": "keydown",
+    "code": "document.addEventListener(\"keydown\", (e) => {"
+  },
+  {
+    "line": 14227,
+    "element": "unknown",
+    "event": "click",
+    "code": "chatArea.addEventListener(\"click\", (event) => {"
+  },
+  {
+    "line": 14247,
+    "element": "unknown",
+    "event": "click",
+    "code": "searchBtn.addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14266,
+    "element": "unknown",
+    "event": "click",
+    "code": "modelBtn.addEventListener(\"click\", (e) =>"
+  },
+  {
+    "line": 14275,
+    "element": "p",
+    "event": "click",
+    "code": "btn.addEventListener(\"click\", async () => {"
+  },
+  {
+    "line": 14395,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#project-title-indicator\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14406,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#refresh-btn\").addEventListener(\"click\", async () => {"
+  },
+  {
+    "line": 14420,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#minimize-btn\").addEventListener(\"click\", async () => {"
+  },
+  {
+    "line": 14434,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#maximize-btn\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14439,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#close-btn\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14444,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#open-search-api-settings\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14458,
+    "element": "unknown",
+    "event": "change",
+    "code": "$(\"#search-api-provider\").addEventListener(\"change\", toggleGoogleCseInput);"
+  },
+  {
+    "line": 14462,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#close-search-api\").addEventListener(\"click\", closeSearchApiModal);"
+  },
+  {
+    "line": 14463,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#cancel-search-api\").addEventListener(\"click\", closeSearchApiModal);"
+  },
+  {
+    "line": 14464,
+    "element": "unknown",
+    "event": "unknown",
+    "code": "$(\"#search-api-modal .modal-overlay\").addEventListener("
+  },
+  {
+    "line": 14469,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#save-search-api\").addEventListener(\"click\", async () => {"
+  },
+  {
+    "line": 14490,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#open-accessibility-settings\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14510,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#close-accessibility-modal\").addEventListener(\"click\", closeAccessibilityModal);"
+  },
+  {
+    "line": 14511,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#close-accessibility\").addEventListener(\"click\", closeAccessibilityModal);"
+  },
+  {
+    "line": 14512,
+    "element": "unknown",
+    "event": "unknown",
+    "code": "$(\"#accessibility-modal .modal-overlay\").addEventListener("
+  },
+  {
+    "line": 14522,
+    "element": "unknown",
+    "event": "keydown",
+    "code": "newMsgCentral.addEventListener(\"keydown\", (e) => {"
+  },
+  {
+    "line": 14544,
+    "element": "unknown",
+    "event": "click",
+    "code": "newSendCentral.addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14562,
+    "element": "unknown",
+    "event": "click",
+    "code": "newMarkdownBtn.addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14576,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#open-model-mgmt\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14587,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#open-model-switcher\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14717,
+    "element": "unknown",
+    "event": "input",
+    "code": "// $(\"#model-note\").addEventListener(\"input\", (e) => applyNotePreview(e.target.value)); // form dimatikan"
+  },
+  {
+    "line": 14728,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#save-models\").addEventListener(\"click\", async () => {"
+  },
+  {
+    "line": 14797,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#close-models\").addEventListener(\"click\", () =>"
+  },
+  {
+    "line": 14800,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#cancel-models\").addEventListener(\"click\", () =>"
+  },
+  {
+    "line": 14803,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#models-modal .modal-overlay\").addEventListener(\"click\", () =>"
+  },
+  {
+    "line": 14807,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#reset-models\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14823,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#new-chat\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14835,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#chats-btn\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14846,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#projects-btn\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14862,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#announcement-btn\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14927,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#artifact-btn\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 14938,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#open-settings\").addEventListener(\"click\", handleSettingsClick);"
+  },
+  {
+    "line": 14942,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#open-persona-settings\").addEventListener(\"click\", handlePersonaSettingsClick);"
+  },
+  {
+    "line": 14953,
+    "element": "data-source-cloud",
+    "event": "click",
+    "code": "openAccountBtn.addEventListener('click', async (e) => {"
+  },
+  {
+    "line": 14963,
+    "element": "unknown",
+    "event": "click",
+    "code": "closeAccountBtn.addEventListener('click', () => {"
+  },
+  {
+    "line": 14970,
+    "element": "unknown",
+    "event": "click",
+    "code": "accountModal.addEventListener('click', (e) => {"
+  },
+  {
+    "line": 14978,
+    "element": "unknown",
+    "event": "click",
+    "code": "googleLoginBtn.addEventListener('click', () => handleGoogleLogin());"
+  },
+  {
+    "line": 14983,
+    "element": "account-close-modal-btn",
+    "event": "click",
+    "code": "closeModalBtn.addEventListener('click', () => {"
+  },
+  {
+    "line": 14994,
+    "element": "account-menu-dropdown",
+    "event": "click",
+    "code": "accountMenuBtn.addEventListener('click', (e) => {"
+  },
+  {
+    "line": 15022,
+    "element": "unknown",
+    "event": "click",
+    "code": "accountMenuDropdown.addEventListener('click', (e) => {"
+  },
+  {
+    "line": 15045,
+    "element": "unknown",
+    "event": "click",
+    "code": "internalBtn.addEventListener('click', () => handleDataSourceSwitch('internal'));"
+  },
+  {
+    "line": 15049,
+    "element": "unknown",
+    "event": "click",
+    "code": "cloudBtn.addEventListener('click', () => handleDataSourceSwitch('cloud'));"
+  },
+  {
+    "line": 15059,
+    "element": ".learn-more-tab-btn",
+    "event": "click",
+    "code": "openLearnMoreBtn.addEventListener('click', (e) => {"
+  },
+  {
+    "line": 15068,
+    "element": "unknown",
+    "event": "click",
+    "code": "closeLearnMoreBtn.addEventListener('click', () => {"
+  },
+  {
+    "line": 15075,
+    "element": "unknown",
+    "event": "click",
+    "code": "learnMoreModal.addEventListener('click', (e) => {"
+  },
+  {
+    "line": 15084,
+    "element": "unknown",
+    "event": "click",
+    "code": "btn.addEventListener('click', (e) => {"
+  },
+  {
+    "line": 15107,
+    "element": "auth-btn",
+    "event": "click",
+    "code": "authBtn.addEventListener('click', async (e) => {"
+  },
+  {
+    "line": 15127,
+    "element": "unknown",
+    "event": "change",
+    "code": "$(\"#show-projects-toggle\").addEventListener(\"change\", async (e) => {"
+  },
+  {
+    "line": 15137,
+    "element": "unknown",
+    "event": "change",
+    "code": "$(\"#show-starred-toggle\").addEventListener(\"change\", async (e) => {"
+  },
+  {
+    "line": 15147,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#close-modal\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 15151,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#close-settings\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 15155,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#save-settings\").addEventListener(\"click\", async () => {"
+  },
+  {
+    "line": 15177,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#delete-all\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 15209,
+    "element": "unknown",
+    "event": "change",
+    "code": "$(\"#web-search-switch\").addEventListener(\"change\", (e) => {"
+  },
+  {
+    "line": 15236,
+    "element": "unknown",
+    "event": "change",
+    "code": "$(\"#theme-slider\").addEventListener(\"change\", () => {"
+  },
+  {
+    "line": 15241,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#settings-modal .modal-overlay\").addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 15251,
+    "element": "unknown",
+    "event": "keydown",
+    "code": "$(\"#msg\").addEventListener(\"keydown\", (e) => {"
+  },
+  {
+    "line": 15271,
+    "element": "unknown",
+    "event": "click",
+    "code": "markdownChatBtn.addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 15287,
+    "element": "unknown",
+    "event": "click",
+    "code": "$(\"#send\").addEventListener(\"click\", async () => {"
+  },
+  {
+    "line": 15392,
+    "element": "unknown",
+    "event": "click",
+    "code": "btn.addEventListener(\"click\", () => {"
+  },
+  {
+    "line": 15438,
+    "element": "unknown",
+    "event": "click",
+    "code": "document.addEventListener(\"click\", (event) => {"
+  },
+  {
+    "line": 15713,
+    "element": "unknown",
+    "event": "wheel",
+    "code": "wrapper.addEventListener('wheel', (e) => {"
+  },
+  {
+    "line": 15728,
+    "element": "unknown",
+    "event": "mousedown",
+    "code": "wrapper.addEventListener('mousedown', (e) => {"
+  },
+  {
+    "line": 15740,
+    "element": "unknown",
+    "event": "mousemove",
+    "code": "document.addEventListener('mousemove', (e) => {"
+  },
+  {
+    "line": 15749,
+    "element": "unknown",
+    "event": "mouseup",
+    "code": "document.addEventListener('mouseup', () => {"
+  },
+  {
+    "line": 15771,
+    "element": "unknown",
+    "event": "click",
+    "code": "controls.querySelector('.zoom-in').addEventListener('click', zoomIn);"
+  },
+  {
+    "line": 15772,
+    "element": ".zoom-in",
+    "event": "click",
+    "code": "controls.querySelector('.zoom-out').addEventListener('click', zoomOut);"
+  },
+  {
+    "line": 15773,
+    "element": ".zoom-out",
+    "event": "click",
+    "code": "controls.querySelector('.zoom-reset').addEventListener('click', resetZoom);"
+  },
+  {
+    "line": 15776,
+    "element": ".zoom-reset",
+    "event": "dragstart",
+    "code": "wrapper.addEventListener('dragstart', (e) => {"
+  },
+  {
+    "line": 15991,
+    "element": "unknown",
+    "event": "click",
+    "code": "document.addEventListener('click', function(event) {"
+  },
+  {
+    "line": 16014,
+    "element": "unknown",
+    "event": "hashchange",
+    "code": "window.addEventListener('hashchange', function() {"
+  }
+]

@@ -5108,25 +5108,6 @@ function restoreHoverStates(containerElement, preservedStates) {
   log(`restoreHoverStates(). Restored ${restoredCount} out of ${preservedStates.length} hover states`, 'HOVER', 'DEBUG');
 }
 
-// Overload for single parameter using WeakMap-based system
-function restoreHoverStates(containerElement) {
-  if (!containerElement) return;
-  
-  // If called with only container, use WeakMap system
-  if (arguments.length === 1) {
-    const preservedStates = hoverStates.get(containerElement);
-    if (preservedStates && preservedStates.length > 0) {
-      // Call the main function with preserved states
-      restoreHoverStates(containerElement, preservedStates);
-      // Clear the preserved states after restoration
-      hoverStates.delete(containerElement);
-    }
-    return;
-  }
-  
-  // If called with 2 parameters, delegate to main function above
-  // This is handled by the function above
-}
 
 function setupHoverStateManagement() {
   // Global mouse tracking for better hover state detection
@@ -13032,21 +13013,148 @@ function toggleTheme() {
   save();
 }
 
-function showConfirmationModal(title, message, onConfirm) {
-  const modal = $("#confirm-modal");
-  $("#confirm-title").textContent = title;
-  $("#confirm-message").textContent = message;
-  openModalWithAnimation(modal);
-  const okBtn = $("#confirm-ok");
-  const newOkBtn = okBtn.cloneNode(true);
-  okBtn.parentNode.replaceChild(newOkBtn, okBtn);
-  const close = () => closeModalWithAnimation(modal);
-  newOkBtn.addEventListener("click", () => {
-    onConfirm();
-    close();
-  });
-  $("#confirm-cancel").onclick = close;
-  modal.querySelector(".modal-overlay").onclick = close;
+function showConfirmationModal(options = {}, legacyMessage, legacyOnConfirm) {
+  let normalizedOptions = options;
+
+  // Support legacy signature: showConfirmationModal(title, message, onConfirm)
+  if (
+    typeof options !== "object" ||
+    options === null ||
+    Array.isArray(options)
+  ) {
+    let legacyTitle = options != null ? String(options) : "Confirm";
+    let legacyConfirm = legacyOnConfirm;
+    let legacyMsg = legacyMessage;
+
+    // Allow omission of message (title, onConfirm)
+    if (typeof legacyMessage === "function" && legacyOnConfirm === undefined) {
+      legacyConfirm = legacyMessage;
+      legacyMsg = undefined;
+    }
+
+    normalizedOptions = {
+      title: legacyTitle,
+      message:
+        legacyMsg !== undefined && legacyMsg !== null
+          ? String(legacyMsg)
+          : "Are you sure?",
+      onConfirm: typeof legacyConfirm === "function" ? legacyConfirm : null,
+      __isLegacy: true,
+    };
+  }
+
+  if (!confirmationModal) {
+    initConfirmationModal();
+    if (!confirmationModal) return;
+  }
+
+  const { __isLegacy: isLegacyCall = false, ...modalOptions } = normalizedOptions || {};
+  const {
+    title = "Confirm",
+    message = "Are you sure?",
+    confirmText = "Confirm",
+    cancelText = "Cancel",
+    confirmLoadingText = "Processing...",
+    confirmVariant = "danger",
+    closeOnSuccess = true,
+    lockWhileProcessing = false,
+    onConfirm = null,
+    onError = null,
+    showErrorToast = true,
+  } = modalOptions;
+
+  confirmationModalOptions = {
+    closeOnSuccess,
+    lockWhileProcessing,
+    confirmText,
+    confirmLoadingText,
+    onConfirm,
+    onError,
+    showErrorToast,
+  };
+
+  isConfirmationProcessing = false;
+  confirmationModal.classList.remove('processing');
+
+  if (confirmationTitleEl) {
+    confirmationTitleEl.textContent = title;
+  }
+
+  if (confirmationMessageEl) {
+    if (isLegacyCall) {
+      confirmationMessageEl.textContent = message;
+    } else {
+      confirmationMessageEl.innerHTML = message;
+    }
+  }
+
+  if (confirmationCancelBtn) {
+    confirmationCancelBtn.textContent = cancelText;
+    confirmationCancelBtn.disabled = false;
+  }
+
+  if (confirmationCloseBtn) {
+    confirmationCloseBtn.disabled = false;
+  }
+
+  if (confirmationConfirmBtn) {
+    confirmationConfirmBtn.disabled = false;
+    confirmationConfirmBtn.className = confirmVariant === 'danger' ? 'danger-btn' : 'primary-btn';
+    confirmationConfirmBtn.innerHTML = confirmText;
+
+    confirmationConfirmBtn.onclick = async () => {
+      if (isConfirmationProcessing) return;
+
+      isConfirmationProcessing = true;
+      const spinner = `
+        <svg class="btn-spinner" style="animation: spin 1s linear infinite;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+        </svg>
+      `;
+      confirmationConfirmBtn.innerHTML = `${spinner}<span>${confirmLoadingText}</span>`;
+      confirmationConfirmBtn.disabled = true;
+
+      if (lockWhileProcessing) {
+        if (confirmationCancelBtn) confirmationCancelBtn.disabled = true;
+        if (confirmationCloseBtn) confirmationCloseBtn.disabled = true;
+        confirmationModal.classList.add('processing');
+      }
+
+      try {
+        if (typeof onConfirm === 'function') {
+          await onConfirm();
+        }
+
+        if (closeOnSuccess) {
+          closeModalWithAnimation(confirmationModal);
+        }
+      } catch (err) {
+        log('UI', 3, 'showConfirmationModal', 'Confirmation action failed', { error: err?.message || err });
+        isConfirmationProcessing = false;
+
+        if (lockWhileProcessing) {
+          if (confirmationCancelBtn) confirmationCancelBtn.disabled = false;
+          if (confirmationCloseBtn) confirmationCloseBtn.disabled = false;
+          confirmationModal.classList.remove('processing');
+        }
+
+        if (confirmationConfirmBtn) {
+          confirmationConfirmBtn.disabled = false;
+          confirmationConfirmBtn.innerHTML = confirmText;
+        }
+
+        if (typeof onError === 'function') {
+          onError(err);
+        } else if (showErrorToast && err?.message) {
+          showToast(err.message, 'error');
+        }
+
+        return;
+      }
+    };
+  }
+
+  openModalWithAnimation(confirmationModal);
 }
 
 // Helper function for closing mobile sidebar with proper cleanup
@@ -17776,150 +17884,6 @@ function initConfirmationModal() {
   }
 }
 
-function showConfirmationModal(options = {}, legacyMessage, legacyOnConfirm) {
-  let normalizedOptions = options;
-
-  // Support legacy signature: showConfirmationModal(title, message, onConfirm)
-  if (
-    typeof options !== "object" ||
-    options === null ||
-    Array.isArray(options)
-  ) {
-    let legacyTitle = options != null ? String(options) : "Confirm";
-    let legacyConfirm = legacyOnConfirm;
-    let legacyMsg = legacyMessage;
-
-    // Allow omission of message (title, onConfirm)
-    if (typeof legacyMessage === "function" && legacyOnConfirm === undefined) {
-      legacyConfirm = legacyMessage;
-      legacyMsg = undefined;
-    }
-
-    normalizedOptions = {
-      title: legacyTitle,
-      message:
-        legacyMsg !== undefined && legacyMsg !== null
-          ? String(legacyMsg)
-          : "Are you sure?",
-      onConfirm: typeof legacyConfirm === "function" ? legacyConfirm : null,
-      __isLegacy: true,
-    };
-  }
-
-  if (!confirmationModal) {
-    initConfirmationModal();
-    if (!confirmationModal) return;
-  }
-
-  const { __isLegacy: isLegacyCall = false, ...modalOptions } = normalizedOptions || {};
-  const {
-    title = "Confirm",
-    message = "Are you sure?",
-    confirmText = "Confirm",
-    cancelText = "Cancel",
-    confirmLoadingText = "Processing...",
-    confirmVariant = "danger",
-    closeOnSuccess = true,
-    lockWhileProcessing = false,
-    onConfirm = null,
-    onError = null,
-    showErrorToast = true,
-  } = modalOptions;
-
-  confirmationModalOptions = {
-    closeOnSuccess,
-    lockWhileProcessing,
-    confirmText,
-    confirmLoadingText,
-    onConfirm,
-    onError,
-    showErrorToast,
-  };
-
-  isConfirmationProcessing = false;
-  confirmationModal.classList.remove('processing');
-
-  if (confirmationTitleEl) {
-    confirmationTitleEl.textContent = title;
-  }
-
-  if (confirmationMessageEl) {
-    if (isLegacyCall) {
-      confirmationMessageEl.textContent = message;
-    } else {
-      confirmationMessageEl.innerHTML = message;
-    }
-  }
-
-  if (confirmationCancelBtn) {
-    confirmationCancelBtn.textContent = cancelText;
-    confirmationCancelBtn.disabled = false;
-  }
-
-  if (confirmationCloseBtn) {
-    confirmationCloseBtn.disabled = false;
-  }
-
-  if (confirmationConfirmBtn) {
-    confirmationConfirmBtn.disabled = false;
-    confirmationConfirmBtn.className = confirmVariant === 'danger' ? 'danger-btn' : 'primary-btn';
-    confirmationConfirmBtn.innerHTML = confirmText;
-
-    confirmationConfirmBtn.onclick = async () => {
-      if (isConfirmationProcessing) return;
-
-      isConfirmationProcessing = true;
-      const spinner = `
-        <svg class="btn-spinner" style="animation: spin 1s linear infinite;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-        </svg>
-      `;
-      confirmationConfirmBtn.innerHTML = `${spinner}<span>${confirmLoadingText}</span>`;
-      confirmationConfirmBtn.disabled = true;
-
-      if (lockWhileProcessing) {
-        if (confirmationCancelBtn) confirmationCancelBtn.disabled = true;
-        if (confirmationCloseBtn) confirmationCloseBtn.disabled = true;
-        confirmationModal.classList.add('processing');
-      }
-
-      try {
-        if (typeof onConfirm === 'function') {
-          await onConfirm();
-        }
-
-        if (closeOnSuccess) {
-          closeModalWithAnimation(confirmationModal);
-        }
-      } catch (err) {
-        log('UI', 3, 'showConfirmationModal', 'Confirmation action failed', { error: err?.message || err });
-        isConfirmationProcessing = false;
-
-        if (lockWhileProcessing) {
-          if (confirmationCancelBtn) confirmationCancelBtn.disabled = false;
-          if (confirmationCloseBtn) confirmationCloseBtn.disabled = false;
-          confirmationModal.classList.remove('processing');
-        }
-
-        if (confirmationConfirmBtn) {
-          confirmationConfirmBtn.disabled = false;
-          confirmationConfirmBtn.innerHTML = confirmText;
-        }
-
-        if (typeof onError === 'function') {
-          onError(err);
-        } else if (showErrorToast && err?.message) {
-          showToast(err.message, 'error');
-        }
-
-        return;
-      }
-    };
-  }
-
-  openModalWithAnimation(confirmationModal);
-}
-
 /**
  * Close modal with animation
  * @param {HTMLElement|string} modal - Modal element or selector
@@ -18340,3 +18304,5 @@ window.DEBUG = {
     activeHoverElements.clear();
   }
 };
+
+

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Exports</title>
+</head>
+<body>
+    <h1>Testing Window Exports</h1>
+    <div id="results"></div>
+    
+    <script>
+        // Check if log, LOGGING, and DEBUG_MODE are exported
+        const results = document.getElementById('results');
+        
+        const tests = [
+            { name: 'window.log', value: typeof window.log },
+            { name: 'window.LOGGING', value: typeof window.LOGGING },
+            { name: 'window.DEBUG_MODE', value: typeof window.DEBUG_MODE },
+            { name: 'window.$', value: typeof window.$ },
+            { name: 'window.setCurrent', value: typeof window.setCurrent },
+            { name: 'window.streamManager', value: typeof window.streamManager },
+            { name: 'window.showToast', value: typeof window.showToast }
+        ];
+        
+        let html = '<ul>';
+        tests.forEach(test => {
+            const status = test.value !== 'undefined' ? '✅' : '❌';
+            html += `<li>${status} ${test.name}: <strong>${test.value}</strong></li>`;
+        });
+        html += '</ul>';
+        
+        results.innerHTML = html;
+        
+        // Test log function if available
+        if (typeof window.log === 'function') {
+            console.log('Testing window.log():');
+            window.log('TEST', 2, 'testFunction', 'This is a test message', { detail: 'value' });
+        }
+    </script>
+</body>
+</html>

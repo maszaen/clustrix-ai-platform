@@ -1,14 +1,13 @@
-﻿// log() now exported from log.js (loaded in index.html BEFORE modules)
 // Utils modules loaded via script tags in index.html
 // ============================================================
 // MODULAR ARCHITECTURE - Extracted Functions
 // ============================================================
-// Module 1-4: utils/* (dom, format, file-icons, timing) âœ…
-// Module 5-6: state/*, cache/* (global-state, session-cache) âœ…
-// Module 7-10: markdown/*, messages/* (worker, renderer, test-mode, thinking) âœ…
-// Module 13-15: sessions/* (crud, switch, drafts) âœ…
-// Module 17-20: streaming/*, handlers/* (manager, send, regenerate, upload) âœ…
-// Module 30: ui/toast âœ…
+// Module 1-4: utils/* (dom, format, file-icons, timing) ✅
+// Module 5-6: state/*, cache/* (global-state, session-cache) ✅
+// Module 7-10: markdown/*, messages/* (worker, renderer, test-mode, thinking) ✅
+// Module 13-15: sessions/* (crud, switch, drafts) ✅
+// Module 17-20: streaming/*, handlers/* (manager, send, regenerate, upload) ✅
+// Module 30: ui/toast ✅
 //
 // All extracted functions are now loaded via script tags in index.html
 // and available globally via window.* exports
@@ -73,14 +72,14 @@ function escapeHtml(text) {
 
 const THINKING_TIMER = new WeakMap();
 const SESSIONS_PER_PAGE = 70;
-// DEBUG_MODE already exported at top (line 3)
+const DEBUG_MODE = typeof window.api === "undefined";
 
 // Markdown Worker moved to markdown/worker.js
 let markdownWorker = null;
 let workerMessageId = 0;
 const workerPromises = new Map();
 const DEBUG_MARKDOWN = false;
-// LOGGING already exported at top (line 2)
+const LOGGING = true;
 
 const MARKDOWN_TEST_SESSION_TYPE = "markdown-test";
 const MARKDOWN_TEST_TITLE = "Markdown Test Session";
@@ -125,9 +124,9 @@ console.log(greet("Markdown Test"));
 
 | Komponen | Status |
 | --- | --- |
-| Heading | âœ… |
-| List | âœ… |
-| Code block | âœ… |
+| Heading | ✅ |
+| List | ✅ |
+| Code block | ✅ |
 
 Tambahkan juga rumus inline seperti $E = mc^2$ dan teks akhir yang ringkas.
 `,
@@ -659,11 +658,11 @@ function renderUploadedFiles() {
   const container = $("#active-chat-file-upload-container");
   if (!container) return;
 
-  // ðŸŽ­ Use the new file display orchestrator for form context
+  // 🎭 Use the new file display orchestrator for form context
   const filesToShow = getFilesForDisplay(current, 'form');
   const currentFiles = current.uploadedFiles || [];
   
-  // ðŸ“Š Log visibility analysis for debugging
+  // 📊 Log visibility analysis for debugging
   const visibilityAnalysis = analyzeFileVisibility(current);
   if (visibilityAnalysis.formDisplay > 0 || visibilityAnalysis.totalFiles > 0) {
     log("RENDERER", 1, "renderUploadedFiles", 
@@ -684,7 +683,7 @@ function renderUploadedFiles() {
   container.innerHTML = "";
 
   filesToShow.forEach((file, index) => {
-    // ðŸ” Find the actual index in the original array for removal
+    // 🔍 Find the actual index in the original array for removal
     const actualIndex = currentFiles.indexOf(file);
     
     let pill = existingFileMap.get(file.name);
@@ -755,7 +754,7 @@ function toggleImageGroup(headerElement) {
   if (!content) return;
   
   if (isCollapsed) {
-    // EXPAND: collapsed â†’ expanded
+    // EXPAND: collapsed → expanded
     // Step 1: Set to current collapsed height (230px)
     const currentHeight = content.offsetHeight;
     content.style.maxHeight = currentHeight + 'px';
@@ -774,7 +773,7 @@ function toggleImageGroup(headerElement) {
       content.style.maxHeight = targetHeight + 'px';
     });
   } else {
-    // COLLAPSE: expanded â†’ collapsed
+    // COLLAPSE: expanded → collapsed
     // Step 1: Set to current expanded height
     const currentHeight = content.scrollHeight;
     content.style.maxHeight = currentHeight + 'px';
@@ -2207,7 +2206,6 @@ function log(context, level, contextFunc, message, details = {}) {
     console.warn("Failed to send log to backend:", error);
   }
 }
-// log already exported at top (line 10)
 
 function ensureTokenFields(session) {
   if (!session) return;
@@ -3115,7 +3113,7 @@ function startRename(sessionId) {
   if (!chatItem) return;
 
   const titleElement = chatItem.querySelector(".chat-item-title");
-  const currentName = titleElement.textContent.replace(/^â˜…\s*/, ""); // Remove star if present
+  const currentName = titleElement.textContent.replace(/^★\s*/, ""); // Remove star if present
 
   // Create input field
   const input = document.createElement("input");
@@ -3191,7 +3189,7 @@ function startSidebarRename(sessionId) {
   const nameElement = li.querySelector(".session-name");
   if (!nameElement) return;
 
-  const currentName = nameElement.textContent.replace(/^â˜…\s*/, ""); // Remove star if present
+  const currentName = nameElement.textContent.replace(/^★\s*/, ""); // Remove star if present
 
   // Create input field
   const input = document.createElement("input");
@@ -6804,9 +6802,9 @@ function showDeleteProjectConfirmation(project) {
   if (sessionCount > 0 || fileCount > 0) {
     message += `\n\nThis will also delete:`;
     if (sessionCount > 0)
-      message += `\nâ€¢ ${sessionCount} chat session${sessionCount > 1 ? "s" : ""}`;
+      message += `\n• ${sessionCount} chat session${sessionCount > 1 ? "s" : ""}`;
     if (fileCount > 0)
-      message += `\nâ€¢ ${fileCount} uploaded file${fileCount > 1 ? "s" : ""}`;
+      message += `\n• ${fileCount} uploaded file${fileCount > 1 ? "s" : ""}`;
   }
 
   showConfirmationModal("Delete Project", message, async () => {
@@ -7602,7 +7600,7 @@ function isComposerUsable(element) {
   return true;
 }
 
-const MARKDOWN_LATEX_PLACEHOLDER_PREFIX = "Â¤LATEX_";
+const MARKDOWN_LATEX_PLACEHOLDER_PREFIX = "¤LATEX_";
 
 let markdownRendererInstance = null;
 
@@ -7641,7 +7639,7 @@ function preprocessMarkdownSource(src) {
   const latexRegex = /(\$\$[\s\S]*?\$\$|\\\(.*?\\\))/g;
 
   const protectedSrc = normalizedSrc.replace(latexRegex, (match) => {
-    const placeholder = `${MARKDOWN_LATEX_PLACEHOLDER_PREFIX}${latexBlocks.length}Â¤`;
+    const placeholder = `${MARKDOWN_LATEX_PLACEHOLDER_PREFIX}${latexBlocks.length}¤`;
     latexBlocks.push(match);
     return placeholder;
   });
@@ -7652,7 +7650,7 @@ function preprocessMarkdownSource(src) {
 function restoreLatexPlaceholders(html, latexBlocks) {
   let result = html;
   latexBlocks.forEach((block, index) => {
-    const placeholder = `${MARKDOWN_LATEX_PLACEHOLDER_PREFIX}${index}Â¤`;
+    const placeholder = `${MARKDOWN_LATEX_PLACEHOLDER_PREFIX}${index}¤`;
     result = result.replaceAll(placeholder, block);
   });
   return result;
@@ -7666,13 +7664,13 @@ function ensureBreakSeparatedLists(container) {
 
     const items = parts.map((part) => part.trim()).filter(Boolean);
     if (items.length < 2) return;
-    if (!items.every((item) => /^[-â€¢]\s+/.test(item))) return;
+    if (!items.every((item) => /^[-•]\s+/.test(item))) return;
 
     const list = document.createElement("ul");
     list.className = "br-list";
     items.forEach((item) => {
       const li = document.createElement("li");
-      li.innerHTML = item.replace(/^[-â€¢]\s+/, "");
+      li.innerHTML = item.replace(/^[-•]\s+/, "");
       list.appendChild(li);
     });
     paragraph.replaceWith(list);
@@ -7933,7 +7931,7 @@ function mdFallback(src) {
         .replace(/&nbsp;/g, ' ');
 
       // Check if cell content contains list markers that need special processing
-      if (/^(\s*[-*+â€¢]\s|\s*\d+\.\s)/m.test(decodedContent) || decodedContent.includes('<br>')) {
+      if (/^(\s*[-*+•]\s|\s*\d+\.\s)/m.test(decodedContent) || decodedContent.includes('<br>')) {
         // Use custom parser instead of markdown-it
         // const cellMd = new MarkdownIt({
         //   html: true,
@@ -7946,7 +7944,7 @@ function mdFallback(src) {
 
         // Convert bullet points and line breaks to markdown format
         let markdownContent = decodedContent
-          .replace(/â€¢/g, '-')  // Convert all â€¢ to -
+          .replace(/•/g, '-')  // Convert all • to -
           .replace(/<br\s*\/?>/gi, '\n')  // Convert <br> to newlines
           .trim();
 
@@ -8065,7 +8063,7 @@ function formatErrorMessageForSaving(reason) {
   });
 
   const httpMatch = processingString.match(
-    /HTTP\s+(\d+)\s?([a-zA-Z\s]+)(?:\s?[â€”|-]\s?)/i,
+    /HTTP\s+(\d+)\s?([a-zA-Z\s]+)(?:\s?[—|-]\s?)/i,
   );
   if (httpMatch) {
     log(
@@ -8213,9 +8211,9 @@ function typewriterEffect(
   }
   element._twTimers = [];
 
-  element.textContent = "â€‹";
+  element.textContent = "​";
   let i = 0;
-  const punctuation = ".,?!;:-â€“";
+  const punctuation = ".,?!;:-–";
 
   function type() {
     if (i < text.length) {
@@ -8291,7 +8289,7 @@ function personaSystem() { // V3
   prompt += "- OPTIONAL: For ambiguous/complex requests, add reflection questions anywhere using <clarify><clarify-title>Creative relevant title</clarify-title><li>Question 1</li><li>Question 2</li></clarify>\n";
   prompt += "- MANDATORY: Always end response with 2-5 suggested next relevant prompts. These MUST be actionable commands or topic suggestions (e.g., 'Explain X', 'Compare X and Y', and other relevant suggestions). They must NOT be questions or interrogative sentences. Use the exact structure: <try><try-title>Creative relevant title</try-title><li>Suggestion 1</li><li>Suggestion 2</li></try>\n";
   prompt += "- MANDATORY: Use standard <li> tags for list items inside <clarify> and <try> containers.\n";
-  prompt += "All parts of your responseâ€”the main analysis, the optional <clarify> block, and the final <try> blockâ€”must be strongly interconnected and contextually relevant.\n";
+  prompt += "All parts of your response—the main analysis, the optional <clarify> block, and the final <try> block—must be strongly interconnected and contextually relevant.\n";
 
   if (isGemini) {
     prompt += "CRITICAL: Be MORE expressive - use MORE lists, emoji (2-3), bold. Fight plain text tendency.\n";
@@ -8797,7 +8795,7 @@ function migrateThinkingPatterns(session) {
       };
       // Update message content to remove thinking
       session.messages[idx][1] = cleanContent;
-      log("MIGRATION", 2, "migrateThinkingPatterns", `âœ“ Migrated thinking from message ${idx}`, {
+      log("MIGRATION", 2, "migrateThinkingPatterns", `✓ Migrated thinking from message ${idx}`, {
         sessionId: session.id,
         pattern: patternFound,
         thinkingLength: thinkingContent.length,
@@ -9365,7 +9363,7 @@ function updateSessionTitle(sessionId, newTitle, useTypewriter = true) {
   if (useTypewriter) {
     nameElement.textContent = "";
     let i = 0;
-    const punctuation = ".,?!;:-â€“";
+    const punctuation = ".,?!;:-–";
     function type() {
       if (i < newTitle.length) {
         const char = newTitle.charAt(i);
@@ -9552,10 +9550,10 @@ function addMessage(
       </svg>
     </button>`;
 
-    // ðŸ’¬ Use the new file display orchestrator for message context
+    // 💬 Use the new file display orchestrator for message context
     // Only show file pills for files that should be visible in this context
     if (metadata && metadata.files && metadata.files.length > 0) {
-      // ðŸŽ­ Show file bubbles directly from message metadata for historical messages
+      // 🎭 Show file bubbles directly from message metadata for historical messages
       const filesToShow = metadata.files;
       
       if (filesToShow.length > 0) {
@@ -9848,12 +9846,220 @@ function setupUserMessageExpandCollapse(messageNode) {
 // ============================================================
 // MOVED: setCurrent -> sessions/switch.js (Module 14)
 // ============================================================
-// setCurrent and updateActiveSessionState loaded from sessions/switch.js
 const setCurrent = window.setCurrent;
+const updateActiveSessionState = window.updateActiveSessionState;
 
 // setCurrent body deleted - now loaded from sessions/switch.js
 
 // =================================================================
+// === START DELETE === setCurrent body (Module 14) ===
+// =================================================================
+async function load() {
+  window._isLazyLoading = false;
+    // Switching TO project session: save websearch state and disable
+    previousWebSearchState = state.settings.webSearchEnabled;
+    log('WEBSEARCH', 2, 'toggle', 'Entering project session - saving and disabling websearch', { 
+      previousState: previousWebSearchState,
+      projectSession: s?.name 
+    });
+    if (state.settings.webSearchEnabled) {
+      state.settings.webSearchEnabled = false;
+      const webSearchSwitch = document.getElementById('web-search-switch');
+      if (webSearchSwitch) webSearchSwitch.checked = false;
+      log('WEBSEARCH', 2, 'toggle', 'WebSearch disabled for project session', { 
+        newState: false 
+      });
+    }
+  } else if (currentIsProject && !nextIsProject) {
+    // Switching FROM project session: restore previous websearch state
+    if (previousWebSearchState !== null) {
+      log('WEBSEARCH', 2, 'toggle', 'Leaving project session - restoring websearch', { 
+        restoreState: previousWebSearchState,
+        regularSession: s?.name 
+      });
+      state.settings.webSearchEnabled = previousWebSearchState;
+      const webSearchSwitch = document.getElementById('web-search-switch');
+      if (webSearchSwitch) webSearchSwitch.checked = previousWebSearchState;
+      previousWebSearchState = null;
+      log('WEBSEARCH', 2, 'toggle', 'WebSearch state restored', { 
+        newState: state.settings.webSearchEnabled 
+      });
+    }
+  }
+
+  // Save current session scroll position and cache rendered content
+  if (current && current.id) {
+    const msgInput = $("#msg");
+    if (msgInput) {
+      saveDraftForSession(current.id, msgInput.value);
+    }
+    
+    // Cache current session before switching ONLY if not streaming in this session
+    // If streaming, the finalize will handle caching when stream completes
+    const isStreamingInCurrentSession = streamManager.isStreamingInSession(current);
+    if (!isStreamingInCurrentSession) {
+      const chatLog = $("#chat-log");
+      if (chatLog && chatLog.innerHTML.trim()) {
+        const scroller = getChatScroller();
+        const scrollPos = scroller ? scroller.scrollTop : 0;
+        cacheSession(current.id, chatLog.innerHTML, scrollPos, current._lazyState);
+        log("CACHE", 1, "setCurrent", "Cached session before switch (not streaming)");
+      }
+    } else {
+      // Invalidate cache if streaming - let finalize handle caching when complete
+      invalidateSessionCache(current.id);
+      log("CACHE", 1, "setCurrent", "Invalidated cache for streaming session before switch");
+    }
+  }
+  
+  // Set session switching flag for optimized rendering and disable smooth scrolling
+  window._isSessionSwitching = true;
+  document.body.classList.add('session-switching');
+  current = s;
+
+  if (current && current.id) {
+    savePageState("chat", current.id);
+    
+    // Push to page history for back/forward navigation
+    if (typeof pushPageHistory === 'function') {
+      pushPageHistory({ page: 'chat', sessionId: current.id });
+    }
+    
+    log(
+      "SessionState",
+      0,
+      "setCurrent",
+      `Session set as current and saved: ${current.name || "Untitled"} (${current.id})`,
+    );
+  }
+
+  if (current) {
+    ensureTokenFields(current);
+  }
+
+  const msgInput = $("#msg");
+  if (msgInput) {
+    const draft =
+      justSentMessage || !current || !current.id
+        ? ""
+        : loadDraftForSession(current.id);
+    msgInput.value = draft;
+
+    const shell = msgInput.closest(".ta-shell");
+    if (shell && shell._scrollbarInstance) {
+      shell._scrollbarInstance.updateLayout();
+    } else {
+      msgInput.style.height = "auto";
+      msgInput.style.height = `${Math.min(msgInput.scrollHeight, 350)}px`;
+    }
+  }
+
+  const chatArea = document.querySelector(".chat-area");
+  const projectDetailView = document.querySelector(".project-detail-view");
+  chatArea.classList.remove("welcome-active");
+  chatArea.classList.remove("chats-active");
+  chatArea.classList.remove("artifacts-active");
+  chatArea.classList.remove("projects-active");
+  projectDetailView.classList.remove("active");
+
+  document.getElementById("chats-btn")?.classList.remove("active");
+  document.getElementById("artifact-btn")?.classList.remove("active");
+  document.getElementById("projects-btn")?.classList.remove("active");
+
+  const welcomeScreen = document.getElementById("welcome-screen");
+  if (welcomeScreen) welcomeScreen.style.display = "";
+
+  const chatLogContainer = document.querySelector(".chat-log-container");
+  if (chatLogContainer && !chatLogContainer.querySelector("#chat-log")) {
+    chatLogContainer.innerHTML = `
+      <div id="chat-log"></div>
+    `;
+  }
+
+  if (current) {
+    current._lazyState = null;
+    const scroller = getChatScroller();
+    if (scroller) {
+      scroller._lazyListenerAdded = false;
+    }
+    window._isLazyLoading = false;
+  }
+
+  renderHistory();
+  renderUploadedFiles();
+  for (const streamId in streamManager.activeStreams) {
+    const stream = streamManager.activeStreams[streamId];
+    if (stream.session === s) {
+      const newNode = $(
+        `#chat-log .message[data-index="${stream.messageIndex}"]`,
+      );
+      if (newNode) {
+        stream.aiNode = newNode;
+        hydrateThinkingIfAnyAsync(newNode, current, stream.messageIndex);
+        const contentDiv = newNode.querySelector(".message-text");
+        if (contentDiv) {
+          // If stream has accumulated content but wasn't rendered (due to switch before synthesis)
+          // Trigger rendering now that element is available
+          if (stream.fullResponse && stream.fullResponse.trim() !== "") {
+            md(stream.fullResponse, { 
+              isStreaming: true,
+              isSessionSwitch: window._isSessionSwitching === true 
+            }).then(html => {
+              contentDiv.innerHTML = html;
+              if (contentDiv.querySelector("pre code"))
+                highlightAllUnder(contentDiv);
+              renderMathInElement(contentDiv);
+            }).catch(err => {
+              console.warn('Markdown rendering error in stream restore:', err);
+              contentDiv.innerHTML = mdFallback(stream.fullResponse);
+              if (contentDiv.querySelector("pre code"))
+                highlightAllUnder(contentDiv);
+              renderMathInElement(contentDiv);
+            });
+          } else if (!stream.fullResponse || stream.fullResponse.trim() === "") {
+            // No full response yet (still in planning/synthesis phase), show thinking
+            contentDiv.innerHTML = getThinkingMarkup();
+            scheduleThinkingText(newNode);
+          }
+          // Don't scroll here - already handled by renderHistory
+        }
+      }
+    }
+  }
+  $("#clustrix-logo").innerHTML = ``;
+
+  renderSessions();
+  updateChatHeader({ animate: false });
+  updateInputState();
+  
+  // Auto focus message input with delay to prevent UI error
+  setTimeout(() => {
+    const msgInput = document.getElementById('msg');
+    if (msgInput) msgInput.focus();
+  }, 500);
+  
+  // Clear session switching flag after rendering is complete
+  setTimeout(() => {
+    window._isSessionSwitching = false;
+    document.body.classList.remove('session-switching');
+    
+    // Log performance metrics
+    const switchEndTime = performance.now();
+    const totalSwitchTime = switchEndTime - switchStartTime;
+    
+    log("SESSION", 1, "setCurrent", "Session switch performance", {
+      totalTime: `${totalSwitchTime.toFixed(2)}ms`,
+      wasFromCache: !!getCachedSession(current.id),
+      cacheSize: sessionCache.size
+    });
+  }, 100);
+  
+  log("SESSION", 2, "setCurrent", "Successfully switch session", {
+    newCurrentSession: current.name,
+  });
+}
+// =================================================================
+// === END DELETE === setCurrent body (Module 14) ===
 // =================================================================
 
 async function load() {
@@ -9953,7 +10159,7 @@ async function load() {
       //   const migratedCount = migrateThinkingPatterns(session);
       //   if (migratedCount > 0) {
       //     totalThinkingMigrations += migratedCount;
-      //     log("MIGRATION", 2, "appLoad", `âœ“ Migrated ${migratedCount} thinking patterns from session`, {
+      //     log("MIGRATION", 2, "appLoad", `✓ Migrated ${migratedCount} thinking patterns from session`, {
       //       sessionId: session.id,
       //       sessionName: session.name
       //     });
@@ -9961,7 +10167,7 @@ async function load() {
       // });
       
       // if (totalThinkingMigrations > 0) {
-      //   log("MIGRATION", 2, "appLoad", `âœ… Total thinking patterns migrated: ${totalThinkingMigrations}`);
+      //   log("MIGRATION", 2, "appLoad", `✅ Total thinking patterns migrated: ${totalThinkingMigrations}`);
       //   // Save all sessions after migration
       //   await save();
       // } else {
@@ -10130,6 +10336,105 @@ const debouncedSave = debounce(save, 500);
 // MOVED: updateInputState, setupTextareaResize -> ui/input.js (Module 29)
 // ============================================================
 // =================================================================
+// === START DELETE === updateInputState (Module 29) ===
+// =================================================================
+function updateInputState() {
+  const isStreaming = streamManager.isStreamingInSession(current);
+  const isCurrentNull = !current;
+  const isProjectSession = current && current.type === 'project';
+
+  const msgEl = $("#msg");
+  msgEl.disabled = isCurrentNull;
+  if (isCurrentNull) {
+    msgEl.placeholder = "Select a session to start";
+  } else if (isStreaming) {
+    msgEl.placeholder = "Ask anything";
+  } else {
+    msgEl.placeholder = "Ask anything";
+  }
+
+  const sendBtn = $("#send");
+  sendBtn.disabled = isCurrentNull;
+
+  if (isStreaming) {
+    sendBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 18 18" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-icon lucide-square"><rect width="12" height="12" x="3" y="3" rx="2"/></svg>`;
+    sendBtn.classList.add("interrupt");
+    sendBtn.title = "Interrupt response";
+  } else {
+    sendBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-icon lucide-arrow-up">
+        <path d="m5 12 7-7 7 7"/>
+        <path d="M12 19V5"/>
+      </svg>
+    `;
+    sendBtn.classList.remove("interrupt");
+    sendBtn.title = "Send message";
+  }
+
+  const msgCentral = $("#msg-central");
+  const sendCentral = $("#send-central");
+  if (msgCentral && sendCentral) {
+    msgCentral.disabled = false;
+    sendCentral.disabled = false;
+    msgCentral.placeholder = "How can i help you today?";
+  }
+
+  updateMarkdownControls();
+  
+  // Hide websearch toggle in project sessions (research agent includes websearch)
+  const webSearchSwitch = document.getElementById('web-search-switch');
+  if (webSearchSwitch) {
+    // Get the parent .theme-switcher container
+    const webSearchToggle = webSearchSwitch.closest('.theme-switcher');
+    if (webSearchToggle) {
+      const wasHidden = webSearchToggle.style.display === 'none';
+      const willHide = isProjectSession;
+      webSearchToggle.style.display = isProjectSession ? 'none' : '';
+      
+      if (wasHidden !== willHide) {
+        log('WEBSEARCH', 2, 'toggle', 'WebSearch sidebar toggle visibility changed', { 
+          isProjectSession,
+          visible: !willHide,
+          currentState: state.settings.webSearchEnabled
+        });
+      }
+    }
+  }
+  
+  // Hide websearch button in chat form when in project session
+  const webSearchChatBtn = document.getElementById('btn-web-search-chat');
+  if (webSearchChatBtn) {
+    const wasHidden = webSearchChatBtn.style.display === 'none';
+    const willHide = isProjectSession;
+    webSearchChatBtn.style.display = isProjectSession ? 'none' : '';
+    
+    if (wasHidden !== willHide) {
+      log('WEBSEARCH', 2, 'toggle', 'WebSearch chat button visibility changed', { 
+        isProjectSession,
+        visible: !willHide,
+        currentState: state.settings.webSearchEnabled
+      });
+    }
+  }
+
+  // Update project title indicator
+  const projectIndicator = $("#project-title-indicator");
+  const projectTitleText = projectIndicator?.querySelector(".project-title-text");
+  
+  if (current && (current.type === "project" || current.isProject) && current.projectId) {
+    // Find the project name
+    const project = projectsData?.find(p => p.id === current.projectId);
+    if (project && projectIndicator && projectTitleText) {
+      projectTitleText.textContent = `${project.name || "Project"}`;
+      projectIndicator.style.display = "flex";
+    }
+  } else if (projectIndicator) {
+    projectIndicator.style.display = "none";
+  }
+}
+// =================================================================
+// === END DELETE === updateInputState (Module 29) ===
 // =================================================================
 
 async function generateAndSetTitle(session) {
@@ -10263,9 +10568,7 @@ function saveSwitchModelForm() {
   save();
 }
 
-// hydrateThinkingIfAny loaded from messages/thinking.js - DUPLICATE REMOVED
-
-function SKIP_hydrateThinkingIfAny_DUPLICATE(aiNode, session, messageIndex) {
+function hydrateThinkingIfAny(aiNode, session, messageIndex) {
   const messageData =
     session &&
     Array.isArray(session.messages) &&
@@ -10346,7 +10649,6 @@ function SKIP_hydrateThinkingIfAny_DUPLICATE(aiNode, session, messageIndex) {
     }
   }
 }
-// ^^^ DUPLICATE FUNCTION ABOVE - SHOULD BE REMOVED ^^^
 
 // Async version for batch processing during lazy loading
 async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
@@ -10751,7 +11053,7 @@ function renderAiFinalActions(aiNode, content, messageIndex) {
   }
 }
 
-async function SKIP_createNewSession_DUPLICATE(initialMessages = [], options = {}) {
+async function createNewSession(initialMessages = [], options = {}) {
   log("SESSION", 2, "createNewSession", "Creating new session object...");
   const s = {
     id: generateSessionId(),
@@ -11190,6 +11492,27 @@ function deleteCurrentSession() {
 // MOVED: applyTheme, toggleTheme, getActiveModel -> api/models.js (Module 32)
 // ============================================================
 // =================================================================
+// === START DELETE === applyTheme, toggleTheme (Module 32) ===
+// =================================================================
+function applyTheme(theme) {
+  document.body.className =
+    theme === "dark" ? "dark-theme scrollable" : "light-theme scrollable";
+  document.documentElement.className =
+    theme === "dark" ? "dark-theme" : "light-theme";
+  $("#theme-slider").checked = theme === "dark";
+  state.settings.theme = theme;
+
+  // Save to localStorage immediately for instant loading on next refresh
+  localStorage.setItem("clustrix-theme", theme);
+}
+
+function toggleTheme() {
+  const newTheme = state.settings.theme === "light" ? "dark" : "light";
+  applyTheme(newTheme);
+  save();
+}
+// =================================================================
+// === END DELETE === applyTheme, toggleTheme (Module 32) ===
 // =================================================================
 
 function showConfirmationModal(title, message, onConfirm) {
@@ -11238,6 +11561,7 @@ function closeMobileSidebar() {
   sidebar._backdrop = null;
 }
 // =================================================================
+// === END DELETE === setupTextareaResize (Module 29) ===
 // =================================================================
 
 function setupTextareaCentralResize() {
@@ -11273,6 +11597,3322 @@ function setupMobileSidebar() {
 }
 
 // =================================================================
+// === START DELETE === setupTextareaResize (Module 29) ===
+// =================================================================
+function setupTextareaResize() {
+  const msgInput = $("#msg");
+  msgInput.addEventListener("input", function () {
+    if (current && current.id && !justSentMessage) {
+      saveDraftDebounced(current.id, this.value);
+    }
+
+    const shell = this.closest(".ta-shell");
+    if (shell && shell.__taScroll) {
+      return;
+    }
+
+    this.style.height = "auto";
+    this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
+  });
+}
+
+function setupTextareaProjectResize() {
+  const projectInput = $("#project-message-input");
+  if (projectInput) {
+    projectInput.addEventListener("input", function () {
+      // Save draft for current project session
+      if (currentProject && currentProject.id) {
+        saveDraftDebounced(`project-${currentProject.id}`, this.value);
+      }
+
+      const shell = this.closest(".ta-shell");
+      if (shell && shell.__taScroll) {
+        return;
+      }
+
+      this.style.height = "auto";
+      this.style.height = `${Math.min(this.scrollHeight, 350)}px`;
+    });
+
+    // Add Ctrl+Enter to send message
+    projectInput.addEventListener("keydown", function (e) {
+      if (e.ctrlKey && e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        log(
+          "UI",
+          0,
+          "event:keydown-CtrlEnter-project",
+          "Ctrl+Enter pressed in project input, sending message",
+        );
+        handleProjectSend();
+        return false;
+      }
+    });
+  }
+}
+
+function handleSidebarToggle() {
+  const toggleBtn = $("#toggle-sidebar");
+  const openedBtn = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 group-hover:scale-80 transition scale-100 text-text-300" aria-hidden="true"><path d="M16.5 4C17.3284 4 18 4.67157 18 5.5V14.5C18 15.3284 17.3284 16 16.5 16H3.5C2.67157 16 2 15.3284 2 14.5V5.5C2 4.67157 2.67157 4 3.5 4H16.5ZM7 15H16.5C16.7761 15 17 14.7761 17 14.5V5.5C17 5.22386 16.7761 5 16.5 5H7V15ZM3.5 5C3.22386 5 3 5.22386 3 5.5V14.5C3 14.7761 3.22386 15 3.5 15H6V5H3.5Z"></path></svg>`;
+  const closedBtn = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 !opacity-100 !scale-100 opacity-0 scale-75 absolute inset-0 group-hover:scale-100 group-hover:opacity-100 transition-all text-text-200" aria-hidden="true"><path d="M3.5 3C3.77614 3 4 3.22386 4 3.5V16.5L3.99023 16.6006C3.94371 16.8286 3.74171 17 3.5 17C3.25829 17 3.05629 16.8286 3.00977 16.6006L3 16.5V3.5C3 3.22386 3.22386 3 3.5 3ZM11.2471 5.06836C11.4476 4.95058 11.7104 4.98547 11.8721 5.16504C12.0338 5.34471 12.0407 5.60979 11.9023 5.79688L11.835 5.87207L7.80371 9.5H16.5C16.7761 9.5 17 9.72386 17 10C17 10.2761 16.7761 10.5 16.5 10.5H7.80371L11.835 14.1279C12.0402 14.3127 12.0568 14.6297 11.8721 14.835C11.6873 15.0402 11.3703 15.0568 11.165 14.8721L6.16504 10.3721L6.09473 10.2939C6.03333 10.2093 6 10.1063 6 10C6 9.85828 6.05972 9.72275 6.16504 9.62793L11.165 5.12793L11.2471 5.06836Z"></path></svg>`;
+
+  if (window.innerWidth <= 768) {
+    const sidebar = $("#sidebar");
+    const isOpening = !sidebar.classList.contains("open");
+
+    if (isOpening) {
+      // Create or get backdrop
+      let backdrop = document.getElementById("mobile-sidebar-backdrop");
+      if (!backdrop) {
+        backdrop = document.createElement("div");
+        backdrop.id = "mobile-sidebar-backdrop";
+        backdrop.className = "mobile-sidebar-backdrop";
+        document.body.appendChild(backdrop);
+      }
+
+      // Show sidebar and backdrop
+      sidebar.classList.add("open");
+      backdrop.classList.add("active");
+
+      // Add slight delay to content animation
+      setTimeout(() => {
+        sidebar.classList.add("content-visible");
+      }, 100);
+
+      // Setup event handlers
+      const closeOnBackdrop = () => closeMobileSidebar();
+      const closeOnEscape = (e) => {
+        if (e.key === "Escape") closeMobileSidebar();
+      };
+
+      backdrop.addEventListener("click", closeOnBackdrop);
+      document.addEventListener("keydown", closeOnEscape);
+
+      // Store handlers for cleanup
+      sidebar._closeOnBackdrop = closeOnBackdrop;
+      sidebar._closeOnEscape = closeOnEscape;
+      sidebar._backdrop = backdrop;
+    } else {
+      closeMobileSidebar();
+    }
+  } else {
+    collapsed = !collapsed;
+    const logo = $("#little-icon");
+
+    if (!collapsed) {
+      setTimeout(() => {
+        logo.style.opacity = "1";
+        document.querySelectorAll(".disappearing").forEach((btn) => {
+          const span = btn.querySelector("span");
+          span.style.opacity = "1";
+        });
+      }, 0);
+      document.querySelectorAll(".disappearing").forEach((btn) => {
+        const span = btn.querySelector("span");
+        span.style.display = "flex";
+      });
+      logo.style.display = "flex";
+      toggleBtn.innerHTML = closedBtn;
+    } else if (collapsed) {
+      logo.style.opacity = "0";
+      document.querySelectorAll(".disappearing").forEach((btn) => {
+        const span = btn.querySelector("span");
+        span.style.opacity = "0";
+        setTimeout(() => {
+          span.style.display = "none";
+        }, 0);
+      });
+      setTimeout(() => {
+        logo.style.display = "none";
+      }, 0);
+      toggleBtn.innerHTML = openedBtn;
+    }
+    $("#app").classList.toggle("sidebar-collapsed", collapsed);
+  }
+}
+
+function setupResponsiveHandlers() {
+  let isMobile = window.innerWidth <= 768;
+  let desktopCollapsedState = collapsed; // Track desktop sidebar state
+  
+  window.addEventListener("resize", () => {
+    const stillMobile = window.innerWidth <= 768;
+    
+    if (isMobile !== stillMobile) {
+      isMobile = stillMobile;
+      const sidebar = $("#sidebar");
+      const toggleBtn = $("#toggle-sidebar");
+      const logo = $("#little-icon");
+      
+      if (!stillMobile) {
+        // Switching to DESKTOP - restore previous desktop state
+        log("UI", 2, "setupResponsiveHandlers", "Switch to desktop size");
+        
+        // Close mobile sidebar properly
+        closeMobileSidebar();
+        
+        // Restore desktop sidebar state
+        collapsed = desktopCollapsedState;
+        $("#app").classList.toggle("sidebar-collapsed", collapsed);
+        
+        const openedBtn = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 group-hover:scale-80 transition scale-100 text-text-300" aria-hidden="true"><path d="M16.5 4C17.3284 4 18 4.67157 18 5.5V14.5C18 15.3284 17.3284 16 16.5 16H3.5C2.67157 16 2 15.3284 2 14.5V5.5C2 4.67157 2.67157 4 3.5 4H16.5ZM7 15H16.5C16.7761 15 17 14.7761 17 14.5V5.5C17 5.22386 16.7761 5 16.5 5H7V15ZM3.5 5C3.22386 5 3 5.22386 3 5.5V14.5C3 14.7761 3.22386 15 3.5 15H6V5H3.5Z"></path></svg>`;
+        const closedBtn = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 !opacity-100 !scale-100 opacity-0 scale-75 absolute inset-0 group-hover:scale-100 group-hover:opacity-100 transition-all text-text-200" aria-hidden="true"><path d="M3.5 3C3.77614 3 4 3.22386 4 3.5V16.5L3.99023 16.6006C3.94371 16.8286 3.74171 17 3.5 17C3.25829 17 3.05629 16.8286 3.00977 16.6006L3 16.5V3.5C3 3.22386 3.22386 3 3.5 3ZM11.2471 5.06836C11.4476 4.95058 11.7104 4.98547 11.8721 5.16504C12.0338 5.34471 12.0407 5.60979 11.9023 5.79688L11.835 5.87207L7.80371 9.5H16.5C16.7761 9.5 17 9.72386 17 10C17 10.2761 16.7761 10.5 16.5 10.5H7.80371L11.835 14.1279C12.0402 14.3127 12.0568 14.6297 11.8721 14.835C11.6873 15.0402 11.3703 15.0568 11.165 14.8721L6.16504 10.3721L6.09473 10.2939C6.03333 10.2093 6 10.1063 6 10C6 9.85828 6.05972 9.72275 6.16504 9.62793L11.165 5.12793L11.2471 5.06836Z"></path></svg>`;
+        
+        if (collapsed) {
+          // Was collapsed before mobile
+          logo.style.display = "none";
+          logo.style.opacity = "0";
+          document.querySelectorAll(".disappearing").forEach((btn) => {
+            const span = btn.querySelector("span");
+            span.style.display = "none";
+            span.style.opacity = "0";
+          });
+          toggleBtn.innerHTML = openedBtn;
+        } else {
+          // Was expanded before mobile
+          logo.style.display = "flex";
+          setTimeout(() => {
+            logo.style.opacity = "1";
+          }, 0);
+          document.querySelectorAll(".disappearing").forEach((btn) => {
+            const span = btn.querySelector("span");
+            span.style.display = "flex";
+            setTimeout(() => {
+              span.style.opacity = "1";
+            }, 0);
+          });
+          toggleBtn.innerHTML = closedBtn;
+        }
+        
+      } else {
+        // Switching to MOBILE - save current desktop state
+        desktopCollapsedState = collapsed; // Save before switching
+        log("UI", 2, "setupResponsiveHandlers", "Switch to mobile size");
+        
+        // Make sure mobile sidebar starts closed
+        sidebar.classList.remove("open", "content-visible");
+        $("#app").classList.remove("sidebar-collapsed");
+        
+        // Reset all elements to visible for mobile (in case desktop was collapsed)
+        logo.style.display = "flex";
+        logo.style.opacity = "1";
+        
+        document.querySelectorAll(".disappearing").forEach((btn) => {
+          const span = btn.querySelector("span");
+          span.style.display = "flex";
+          span.style.opacity = "1";
+        });
+        
+        // Remove any existing backdrop
+        const backdrop = document.getElementById("mobile-sidebar-backdrop");
+        if (backdrop) {
+          backdrop.classList.remove("active");
+        }
+      }
+    }
+  });
+}
+
+function initialModelSwitch() {
+  const conf = state?.settings?.models;
+  if (!conf?.active?.platform || !conf?.active?.model) {
+    return false;
+  }
+
+  ["welcome", "chat"].forEach((screen) => {
+    const activeProvider = conf.active.platform;
+    const models = normalizeProviderModels(
+      conf.providers[activeProvider]?.models || [],
+    );
+    const modelBtn = document.querySelector(`#btn-model-switch-${screen}`);
+
+    models.forEach((model) => {
+      if (model.id === conf.active.model) {
+        const p = modelBtn?.querySelector("p");
+        if (p) p.textContent = model.label || model.id;
+      }
+    });
+  });
+
+  return true;
+}
+
+// App Lifecycle
+function initWithRetry(maxRetry = 20, interval = 100) {
+  let attempt = 0;
+  const timer = setInterval(() => {
+    if (initialModelSwitch() || attempt >= maxRetry) {
+      clearInterval(timer);
+    }
+    attempt++;
+  }, interval);
+}
+
+// Search overlay functionality for current session
+let searchOverlay = null;
+let searchMatches = [];
+let currentMatchIndex = -1;
+let searchInput = null;
+let searchResults = null;
+let searchDebounceTimer = null;
+const handleSearchPrevClick = () => navigateSearch(-1);
+const handleSearchNextClick = () => navigateSearch(1);
+const handleSearchCloseClick = () => hideSearchOverlay();
+
+function showSearchOverlay() {
+  log("SEARCH", 2, "showSearchOverlay", "Showing search overlay");
+  
+  if (searchOverlay) {
+    searchOverlay.style.display = 'block';
+    // Trigger slide down animation
+    searchOverlay.classList.remove('sc-slide-out');
+    searchOverlay.classList.add('sc-slide-in');
+    
+    // Always re-query the input element in case DOM was modified
+    searchInput = document.getElementById('search-input');
+    searchResults = document.getElementById('sc-search-results');
+    if (searchInput) {
+      // Re-attach event listeners when reusing overlay
+      attachSearchEventListeners();
+      searchInput.focus();
+      if (searchInput.value.trim()) {
+        performSearch();
+      }
+    }
+    return;
+  }
+
+  // Create search overlay
+  searchOverlay = document.createElement('div');
+  searchOverlay.id = 'search-overlay';
+  searchOverlay.className = 'sc-slide-in';
+  searchOverlay.innerHTML = `
+    <div class="sc-search-container">
+      <svg class="sc-search-icon" viewBox="0 0 24 24" width="16" height="16">
+        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="sc-search-input-wrapper">
+        <input type="text" id="search-input" placeholder="Search in current session..." maxlength="100" />
+      </div>
+      <div class="sc-search-controls">
+        <button id="search-prev" class="sc-nav-btn" title="Previous">
+          <svg viewBox="0 0 24 24" width="14" height="14">
+            <path d="M18 15l-6-6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button id="search-next" class="sc-nav-btn" title="Next">
+          <svg viewBox="0 0 24 24" width="14" height="14">
+            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <span id="search-results" class="sc-results-count">0/0</span>
+        <button id="search-close" class="sc-close-btn" title="Close">
+          <svg viewBox="0 0 24 24" width="14" height="14">
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Add enhanced styles with animations
+  const style = document.createElement('style');
+  style.textContent = `
+    #search-overlay {
+      position: fixed;
+      top: 51px;
+      right: 20px;
+      z-index: 10000;
+      padding: 2px;
+      background: var(--bg-secondary);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1), 0 6px 12px rgba(0, 0, 0, 0.08);
+      min-width: 320px;
+      transform-origin: top right;
+      align-items: center;
+    }
+
+    /* Slide animations */
+    @keyframes sc-slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes sc-slideUp {
+      from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+      to {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+      }
+    }
+
+    #search-overlay.sc-slide-in {
+      animation: sc-slideDown 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    #search-overlay.sc-slide-out {
+      animation: sc-slideUp 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    }
+
+    #search-overlay .sc-search-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      position: relative;
+    }
+
+    .sc-search-input-wrapper {
+      position: relative;
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+
+    .sc-search-icon {
+      position: absolute;
+      left: 12px;
+      color: var(--icon);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    #search-input {
+      flex: 1;
+      padding: 8px 12px 8px 40px;
+      border: 1.5px solid transparent;
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 14px;
+      font-weight: 400;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      outline: none;
+    }
+
+    #search-input:focus {
+      border-color: var(--border-light);
+    }
+
+    .sc-search-controls {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .sc-nav-btn, .sc-close-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--icon);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      min-width: 32px;
+      height: 32px;
+    }
+
+    .sc-nav-btn:hover, .sc-close-btn:hover {
+      color: var(--fg);
+      transform: translateY(-1px);
+    }
+
+    .sc-nav-btn:active, .sc-close-btn:active {
+      transform: translateY(0);
+    }
+
+    .sc-close-btn {
+      background: transparent;
+    }
+
+    .sc-results-count {
+      font-size: 12px;
+      font-weight: 500;
+      color: #6b7280;
+      min-width: 45px;
+      text-align: center;
+      letter-spacing: 0.02em;
+    }
+
+    /* Responsive design */
+    @media (max-width: 480px) {
+      #search-overlay {
+        left: 10px;
+        right: 10px;
+        min-width: unset; 
+        max-width: unset;
+      }
+      
+      .sc-search-controls {
+        gap: 2px;
+      }
+      
+      .sc-nav-btn, .sc-close-btn {
+        min-width: 28px;
+        height: 28px;
+        padding: 6px;
+      }
+    }
+  `;
+  
+  document.head.appendChild(style);
+  document.body.appendChild(searchOverlay);
+
+  searchInput = document.getElementById('search-input');
+  searchResults = document.getElementById('search-results');
+
+  // Attach event listeners for new overlay
+  attachSearchEventListeners();
+
+  // Focus input after animation
+  setTimeout(() => searchInput.focus(), 100);
+}
+
+function attachSearchEventListeners() {
+  if (!searchInput) return;
+
+  // Remove existing event listeners to prevent duplicates
+  searchInput.removeEventListener('input', handleSearchInput);
+  searchInput.removeEventListener('keydown', handleSearchKeydown);
+
+  // Event listeners
+  searchInput.addEventListener('input', handleSearchInput);
+  searchInput.addEventListener('keydown', handleSearchKeydown);
+
+  const prevButton = document.getElementById('search-prev');
+  const nextButton = document.getElementById('search-next');
+  const closeButton = document.getElementById('search-close');
+
+  if (prevButton) {
+    prevButton.removeEventListener('click', handleSearchPrevClick);
+    prevButton.addEventListener('click', handleSearchPrevClick);
+  }
+
+  if (nextButton) {
+    nextButton.removeEventListener('click', handleSearchNextClick);
+    nextButton.addEventListener('click', handleSearchNextClick);
+  }
+
+  if (closeButton) {
+    closeButton.removeEventListener('click', handleSearchCloseClick);
+    closeButton.addEventListener('click', handleSearchCloseClick);
+  }
+}
+
+function handleSearchInput(e) {
+  debouncedPerformSearch();
+}
+
+function handleSearchKeydown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (e.shiftKey) {
+      navigateSearch(-1);
+    } else {
+      navigateSearch(1);
+    }
+  } else if (e.key === 'Escape') {
+    hideSearchOverlay();
+  }
+}
+
+function debouncedPerformSearch() {
+  if (!searchInput) return;
+  // Clear existing timer
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer);
+  }
+
+  // Set new timer with 100ms debounce for better responsiveness
+  searchDebounceTimer = setTimeout(() => {
+    performSearch();
+  }, 100);
+}
+
+function hideSearchOverlay() {
+  if (searchOverlay) {
+    searchOverlay.classList.remove('slide-out');
+    searchOverlay.classList.add('slide-in');
+    clearSearchHighlights();
+    
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = null;
+    }
+    setTimeout(() => {
+      if (searchOverlay) {
+        searchOverlay.style.display = 'none';
+      }
+    }, 200);
+  }
+}
+
+// Global search state
+let currentSearchId = 0;
+
+function performSearch() {
+  if (!searchInput) return;
+
+  const query = searchInput.value.trim().toLowerCase();
+  const searchId = ++currentSearchId; // Increment and get new search ID
+
+  if (!query) {
+    clearSearchHighlights();
+    updateSearchResults(0, 0);
+    return;
+  }
+
+  const chatContainer = getChatScroller();
+  if (!chatContainer) {
+    log("SEARCH", 3, "performSearch", "Chat container not found");
+    return;
+  }
+
+  // Clear previous highlights and merge any split text nodes from earlier searches
+  clearSearchHighlights();
+
+  const messageElements = Array.from(chatContainer.querySelectorAll('.message'));
+  const maxMatches = 500;
+  searchMatches = [];
+
+  for (let messageIndex = 0; messageIndex < messageElements.length; messageIndex++) {
+    const messageEl = messageElements[messageIndex];
+
+    try {
+      messageEl.normalize();
+    } catch (normalizeError) {
+      // Ignore normalization issues
+    }
+
+    const walker = document.createTreeWalker(
+      messageEl,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+
+    let node;
+    while ((node = walker.nextNode())) {
+      if (!node.textContent || !node.textContent.trim()) continue;
+
+      const text = node.textContent;
+      if (text.length > 500000) {
+        continue;
+      }
+
+      const lowerText = text.toLowerCase();
+      let startIndex = 0;
+      let index;
+
+      while ((index = lowerText.indexOf(query, startIndex)) !== -1) {
+        searchMatches.push({
+          node,
+          start: index,
+          end: index + query.length,
+          messageIndex,
+        });
+
+        startIndex = index + query.length;
+
+        if (searchMatches.length >= maxMatches) {
+          break;
+        }
+      }
+
+      if (searchMatches.length >= maxMatches) {
+        break;
+      }
+    }
+
+    if (searchMatches.length >= maxMatches) {
+      break;
+    }
+  }
+
+  const safeDetails = {
+    query,
+    matchCount: searchMatches.length,
+    messageCount: messageElements.length,
+  };
+
+  if (searchMatches.length === 0) {
+    currentMatchIndex = -1;
+    updateSearchResults(0, 0);
+    return;
+  }
+
+  const matchesByNode = new Map();
+  searchMatches.forEach((match) => {
+    const nodeMatches = matchesByNode.get(match.node) || [];
+    nodeMatches.push({ ...match });
+    matchesByNode.set(match.node, nodeMatches);
+  });
+
+  let highlightedCount = 0;
+  for (const [textNode, nodeMatches] of matchesByNode.entries()) {
+    if (highlightedCount >= searchMatches.length) break;
+
+    nodeMatches.sort((a, b) => a.start - b.start);
+
+    const remainingCapacity = searchMatches.length - highlightedCount;
+    const matchesToHighlight = nodeMatches.slice(0, remainingCapacity);
+    const applied = highlightTextNode(textNode, matchesToHighlight, highlightedCount);
+    highlightedCount += applied;
+  }
+
+  if (highlightedCount === 0) {
+    searchMatches = [];
+    currentMatchIndex = -1;
+    updateSearchResults(0, 0);
+    return;
+  }
+
+  searchMatches = Array.from({ length: highlightedCount }, (_, i) => i);
+
+  currentMatchIndex = 0;
+  updateHighlights();
+  scrollToMatch(0);
+  updateSearchResults(currentMatchIndex + 1, searchMatches.length);
+}
+
+function highlightTextNode(textNode, matches, startIndex = 0) {
+  const parent = textNode.parentNode;
+
+  if (!parent || !textNode.isConnected || matches.length === 0) return 0;
+
+  let currentNode = textNode;
+  let consumedUntil = 0;
+  let applied = 0;
+  let nextIndex = startIndex;
+
+  matches.forEach((match) => {
+    if (!currentNode || !currentNode.parentNode) {
+      consumedUntil = match.end;
+      return;
+    }
+
+    const startOffset = match.start - consumedUntil;
+    const matchLength = match.end - match.start;
+
+    if (startOffset < 0 || matchLength <= 0) {
+      consumedUntil = match.end;
+      return;
+    }
+
+    let matchNode;
+    let afterNode;
+    try {
+      matchNode = currentNode.splitText(startOffset);
+      afterNode = matchNode.splitText(matchLength);
+    } catch (splitError) {
+      console.warn('Failed to split text node for highlighting:', splitError);
+      consumedUntil = match.end;
+      currentNode = afterNode || currentNode;
+      return;
+    }
+
+    const highlightSpan = document.createElement('span');
+    highlightSpan.className = 'search-text-highlight';
+    highlightSpan.dataset.matchIndex = String(nextIndex);
+
+    const matchParent = matchNode.parentNode;
+    if (!matchParent) {
+      consumedUntil = match.end;
+      currentNode = afterNode;
+      return;
+    }
+
+    matchParent.replaceChild(highlightSpan, matchNode);
+    highlightSpan.appendChild(matchNode);
+
+    applied += 1;
+    currentNode = afterNode;
+    consumedUntil = match.end;
+    nextIndex += 1;
+  });
+
+  return applied;
+}
+
+function clearSearchHighlights() {
+  const highlights = document.querySelectorAll('.search-text-highlight');
+  if (highlights.length === 0) {
+    searchMatches = [];
+    currentMatchIndex = -1;
+    return;
+  }
+
+  const parentsToNormalize = new Set();
+
+  highlights.forEach((highlight) => {
+    const parent = highlight.parentNode;
+    if (!parent) return;
+
+    try {
+      const textNode = document.createTextNode(highlight.textContent || '');
+      parent.replaceChild(textNode, highlight);
+      parentsToNormalize.add(parent);
+    } catch (replaceError) {
+      try {
+        parent.removeChild(highlight);
+      } catch (removeError) {
+        // Ignore removal errors
+      }
+    }
+  });
+
+  parentsToNormalize.forEach((parent) => {
+    try {
+      parent.normalize();
+    } catch (normalizeError) {
+      // Ignore normalization issues
+    }
+  });
+
+  searchMatches = [];
+  currentMatchIndex = -1;
+}
+
+function navigateSearch(direction) {
+  if (searchMatches.length === 0) return;
+
+  currentMatchIndex += direction;
+  if (currentMatchIndex < 0) currentMatchIndex = searchMatches.length - 1;
+  if (currentMatchIndex >= searchMatches.length) currentMatchIndex = 0;
+
+  updateHighlights();
+  scrollToMatch(currentMatchIndex);
+  updateSearchResults(currentMatchIndex + 1, searchMatches.length);
+}
+
+function updateHighlights() {
+  document.querySelectorAll('.search-text-highlight').forEach((highlight) => {
+    const matchIndex = Number(highlight.dataset.matchIndex);
+    if (matchIndex === currentMatchIndex) {
+      highlight.className = 'search-text-highlight current-match';
+    } else {
+      highlight.className = 'search-text-highlight';
+    }
+  });
+}
+
+function scrollToMatch(index) {
+  const highlight = document.querySelector(`.search-text-highlight[data-match-index="${index}"]`);
+  if (highlight) {
+    const chatContainer = getChatScroller();
+    if (chatContainer) {
+      // Use the same column-reverse scroll logic as renderHistoryLazy
+      const containerRect = chatContainer.getBoundingClientRect();
+      const highlightRect = highlight.getBoundingClientRect();
+      const currentScrollTop = chatContainer.scrollTop;
+
+      // Calculate highlight position relative to container (same as renderHistoryLazy)
+      const highlightTopInContainer = highlightRect.top - containerRect.top;
+
+      // Debug logging
+      log('SEARCH', 1, 'scrollToMatch', 'Debug values', {
+        highlightTopInContainer,
+        containerHeight: containerRect.height,
+        highlightHeight: highlightRect.height,
+        currentScrollTop,
+        scrollHeight: chatContainer.scrollHeight,
+        highlightRectTop: highlightRect.top,
+        containerRectTop: containerRect.top
+      });
+
+      // In column-reverse, we need DIRECT scroll position calculation
+      // Just like renderHistoryLazy: position at top + offset
+      const targetScrollTop = currentScrollTop + highlightTopInContainer - 100; // 100px from top
+
+      log('SEARCH', 1, 'scrollToMatch', 'Target calculation', {
+        targetScrollTop,
+        calculation: `${currentScrollTop} + ${highlightTopInContainer} - 100`
+      });
+
+      // Ensure we don't scroll beyond bounds
+      // In column-reverse: scrollTop can be negative (0 = bottom, negative = scrolled up)
+      const maxScrollTop = chatContainer.scrollHeight - containerRect.height;
+      const minScrollTop = -(maxScrollTop); // Allow negative scroll in column-reverse
+      const clampedScrollTop = Math.max(minScrollTop, Math.min(0, targetScrollTop));
+
+      log('SEARCH', 1, 'scrollToMatch', 'Final values', {
+        clampedScrollTop,
+        maxScrollTop,
+        minScrollTop,
+        willScroll: clampedScrollTop !== currentScrollTop
+      });
+
+      chatContainer.scrollTo({
+        top: clampedScrollTop,
+        behavior: 'auto'  // Changed from 'smooth' to 'auto' for instant scroll
+      });
+    }
+  }
+}
+
+function updateSearchResults(current, total) {
+  if (searchResults) {
+    searchResults.textContent = total > 0 ? `${current}/${total}` : '0/0';
+  }
+}
+
+function setupEventListeners() {
+  let projectsListenersAdded = false;
+  if (!projectsListenersAdded) {
+    setupProjectsPageListeners();
+    projectsListenersAdded = true;
+  }
+  document.addEventListener("keydown", (e) => {
+    // Handle Ctrl+R for smooth reload
+    if (e.ctrlKey && e.key === "r") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      log(
+        "UI",
+        0,
+        "event:keydown-CtrlR",
+        "Ctrl+R pressed, triggering smooth reload",
+      );
+      
+      // Save data before reload to prevent data loss
+      (async () => {
+        try {
+          await save?.();
+          log("SAVE", 1, "keydown-CtrlR", "Data saved before Ctrl+R reload");
+        } catch (err) {
+          log("SAVE", 3, "keydown-CtrlR", "Failed to save before reload", { error: err });
+        }
+        
+        // Use setTimeout to ensure save completes first
+        setTimeout(() => {
+          window.__SMOOTH_RELOAD__();
+        }, 50);
+      })();
+      
+      return false;
+    }
+
+    // Handle Ctrl+F for search in current chat session
+    if (e.ctrlKey && e.key === "f") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      log(
+        "UI",
+        0,
+        "event:keydown-CtrlF",
+        "Ctrl+F pressed, triggering search in current session",
+      );
+      // Show custom search overlay for current session
+      showSearchOverlay();
+      return false;
+    }
+
+    if (e.key === "Escape" || e.key === "Esc") {
+      const modalsToClose = [
+        "#quick-model-switch-modal",
+        "#model-mgmt-modal",
+        "#mini-modal",
+        "#confirm-modal",
+        "#confirmation-modal",
+        "#search-api-modal",
+        "#models-modal",
+        "#settings-modal",
+        "#settings-menu",
+      ];
+      let aModalWasClosed = false;
+      modalsToClose.forEach((selector) => {
+        const modal = $(selector);
+        if (modal && !modal.classList.contains("hidden")) {
+          closeModalWithAnimation(modal);
+          aModalWasClosed = true;
+        }
+      });
+      if (aModalWasClosed) {
+        log(
+          "UI",
+          1,
+          "event:keydown-Escape",
+          "Escape key pressed, closing active modals/menus.",
+        );
+      }
+      return;
+    }
+
+    if (e.key === "Enter") {
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.id === "msg" || activeEl.id === "msg-central")
+      ) {
+        return;
+      }
+
+      if (e.shiftKey) {
+        return;
+      }
+
+      const modalActions = {
+        "#confirm-modal": "#confirm-ok",
+        "#confirmation-modal": "#confirmation-confirm-btn",
+        "#mini-modal": "#mini-save",
+        "#search-api-modal": "#save-search-api",
+        "#settings-modal": "#save-settings",
+        "#models-modal": "#save-models",
+      };
+
+      let modalIsActive = false;
+      let actionButton = null;
+
+      for (const modalSelector in modalActions) {
+        const modal = $(modalSelector);
+        if (modal && !modal.classList.contains("hidden")) {
+          modalIsActive = true;
+          actionButton = $(modalActions[modalSelector]);
+          break;
+        }
+      }
+
+      if (modalIsActive && actionButton) {
+        if (activeEl && activeEl.tagName === "TEXTAREA") {
+          return;
+        }
+
+        actionButton.click();
+        e.preventDefault();
+        log(
+          "UI",
+          1,
+          "event:keydown-Enter",
+          `Enter key triggered action for an active modal.`,
+        );
+      }
+    }
+  });
+
+  const chatArea = $(".chat-area");
+  if (chatArea) {
+    chatArea.addEventListener("click", (event) => {
+      const promptButton = event.target.closest(".pli");
+      if (promptButton && !event.defaultPrevented) {
+        event.preventDefault();
+        const text = promptButton.dataset.text || promptButton.textContent || "";
+        handlePromptSuggestionClick(text, promptButton);
+        return;
+      }
+
+      const saveButton = event.target.closest(".save-code-btn");
+      if (saveButton) {
+        // console.log("DEBUG: Save button click handled by persistent delegation."); // Removed console.log
+        handleSaveButtonClick(event);
+      }
+    });
+  }
+
+  ["welcome", "chat", "project"].forEach((screen) => {
+    const searchBtn = $(`#btn-web-search-${screen}`);
+    if (searchBtn)
+      searchBtn.addEventListener("click", () => {
+        state.settings.webSearchEnabled = !state.settings.webSearchEnabled;
+        $$('[id^="btn-web-search-"]').forEach((b) =>
+          b.classList.toggle("toggled", state.settings.webSearchEnabled),
+        );
+
+        // Save to localStorage immediately for instant loading
+        localStorage.setItem(
+          "clustrix-web-search",
+          state.settings.webSearchEnabled.toString(),
+        );
+        save();
+
+        $("#web-search-switch").checked = state.settings.webSearchEnabled;
+      });
+
+    initWithRetry();
+    const modelBtn = $(`#btn-model-switch-${screen}`);
+    if (modelBtn)
+      modelBtn.addEventListener("click", (e) =>
+        openQuickModelSwitch(e, screen),
+      );
+  });
+
+  document.querySelectorAll(".input-container-btn").forEach((btn) => {
+    const label = btn.querySelector("p");
+    if (!label || !label.textContent.includes("Upload Files")) return;
+
+    btn.addEventListener("click", async () => {
+      const context =
+        btn.dataset.uploadContext ||
+        (btn.closest("#project-detail-view")
+          ? "project-message"
+          : current
+            ? "chat"
+            : "welcome");
+
+      log(
+        "RENDERER",
+        1,
+        "upload:click",
+        `Upload File button clicked (${context}).`,
+      );
+
+      try {
+        const fileContents = await window.api.files.openDialogAndRead();
+        if (!fileContents || fileContents.length === 0) {
+          log(
+            "RENDERER",
+            1,
+            "upload:click",
+            `No files selected or dialog canceled (${context}).`,
+          );
+          return;
+        }
+
+        const validFiles = fileContents.filter((f) => !f.error);
+        if (validFiles.length === 0) {
+          log(
+            "RENDERER",
+            2,
+            "upload:click",
+            `All selected files failed to load (${context}).`,
+          );
+          return;
+        }
+
+        if (context === "project-message") {
+          if (!currentProject) {
+            log(
+              "PROJECTS",
+              3,
+              "upload:project-message",
+              "Cannot attach files without an active project.",
+            );
+            return;
+          }
+
+          projectMessageStagedFiles.push(...validFiles);
+          renderProjectMessageFiles();
+
+          log(
+            "PROJECTS",
+            1,
+            "upload:project-message",
+            `Added ${validFiles.length} file(s) to project message staging area.`,
+            {
+              projectId: currentProject.id,
+              stagedCount: projectMessageStagedFiles.length,
+            },
+          );
+          return;
+        }
+
+        if (context === "welcome") {
+          welcomeScreenStagedFiles.push(...validFiles);
+          renderWelcomeScreenFiles();
+
+          log(
+            "RENDERER",
+            1,
+            "upload:welcome",
+            `Added ${validFiles.length} file(s) to welcome staging area.`,
+            { stagedCount: welcomeScreenStagedFiles.length },
+          );
+          return;
+        }
+
+        if (!current) {
+          welcomeScreenStagedFiles.push(...validFiles);
+          renderWelcomeScreenFiles();
+
+          log(
+            "RENDERER",
+            1,
+            "upload:welcome-fallback",
+            `No active session, staged ${validFiles.length} file(s) for welcome screen.`,
+            { stagedCount: welcomeScreenStagedFiles.length },
+          );
+          return;
+        }
+
+        if (!Array.isArray(current.uploadedFiles)) {
+          current.uploadedFiles = [];
+        }
+
+        current.uploadedFiles.push(...validFiles);
+        renderUploadedFiles();
+
+        log(
+          "RENDERER",
+          1,
+          "upload:chat",
+          `Added ${validFiles.length} file(s) to active session.`,
+          { sessionId: current.id, totalFiles: current.uploadedFiles.length },
+        );
+      } catch (error) {
+        log(
+          "RENDERER",
+          4,
+          "upload:click",
+          `Error during file upload process (${context}).`,
+          { error },
+        );
+      }
+    });
+  });
+
+  $("#project-title-indicator").addEventListener("click", () => {
+    const projectId = current.projectId;
+    const project = projectsData.find(p => p.id === projectId);
+    log("STATE_PROJECT", 2, "Project state information", project)
+    showProjectsPage();
+    setTimeout(() => {
+      showProjectDetailView(project)
+    }, 100);
+    
+  })
+
+  $("#refresh-btn").addEventListener("click", async () => {
+    log("UI", 0, "event:refresh-btn", "Refresh button clicked");
+    
+    // Save data before refresh to prevent data loss
+    try {
+      await save?.();
+      log("SAVE", 1, "refresh-btn", "Data saved before refresh");
+    } catch (err) {
+      log("SAVE", 3, "refresh-btn", "Failed to save before refresh", { error: err });
+    }
+    
+    window.__SMOOTH_RELOAD__();
+  });
+
+  $("#minimize-btn").addEventListener("click", async () => {
+    log("UI", 0, "event:minimize-btn", "Minimize button clicked");
+    
+    // Save data before minimize to prevent data loss
+    try {
+      await save?.();
+      log("SAVE", 1, "minimize-btn", "Data saved before minimize");
+    } catch (err) {
+      log("SAVE", 3, "minimize-btn", "Failed to save before minimize", { error: err });
+    }
+    
+    window.api?.window.minimize();
+  });
+
+  $("#maximize-btn").addEventListener("click", () => {
+    log("UI", 0, "event:maximize-btn", "Maximize button clicked");
+    window.api?.window.maximize();
+  });
+
+  $("#close-btn").addEventListener("click", () => {
+    log("UI", 0, "event:close-btn", "Close button clicked");
+    window.api?.window.close();
+  });
+
+  $("#open-search-api-settings").addEventListener("click", () => {
+    log("UI", 2, "event:open-search-api-settings", "Opening Search API modal.");
+    $("#search-api-provider").value =
+      state.settings.searchApiProvider || "serpapi";
+    toggleGoogleCseInput();
+    openModalWithAnimation($("#search-api-modal"));
+    closeDropdownWithAnimation($("#settings-menu"));
+
+    // Close mobile sidebar when opening search API settings
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+  });
+
+  $("#search-api-provider").addEventListener("change", toggleGoogleCseInput);
+
+  const closeSearchApiModal = () =>
+    closeModalWithAnimation($("#search-api-modal"));
+  $("#close-search-api").addEventListener("click", closeSearchApiModal);
+  $("#cancel-search-api").addEventListener("click", closeSearchApiModal);
+  $("#search-api-modal .modal-overlay").addEventListener(
+    "click",
+    closeSearchApiModal,
+  );
+
+  $("#save-search-api").addEventListener("click", async () => {
+    const provider = $("#search-api-provider").value;
+    const apiKey = $("#search-api-key").value.trim();
+    const cseId = $("#google-cse-id").value.trim();
+
+    state.settings.searchApiProvider = provider;
+    if (provider === "google") {
+      state.settings.googleApiKey = apiKey;
+      state.settings.googleCseId = cseId;
+    } else {
+      state.settings.serpApiKey = apiKey;
+    }
+
+    log("SETTINGS", 2, "event:save-search-api", "Saving Search API settings", {
+      provider,
+    });
+    await save();
+    closeSearchApiModal();
+  });
+
+  // Accessibility Modal
+  $("#open-accessibility-settings").addEventListener("click", () => {
+    log("UI", 2, "event:open-accessibility-settings", "Opening Accessibility modal.");
+    
+    // Load current settings
+    $("#theme-slider").checked = localStorage.getItem('clustrix-theme') === 'dark';
+    $("#show-projects-toggle").checked = state.settings.showProjectSessions !== false;
+    $("#show-starred-toggle").checked = state.settings.showStarredSessions !== false;
+    
+    openModalWithAnimation($("#accessibility-modal"));
+    closeDropdownWithAnimation($("#settings-menu"));
+
+    // Close mobile sidebar when opening accessibility settings
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+  });
+
+  const closeAccessibilityModal = () =>
+    closeModalWithAnimation($("#accessibility-modal"));
+  
+  $("#close-accessibility-modal").addEventListener("click", closeAccessibilityModal);
+  $("#close-accessibility").addEventListener("click", closeAccessibilityModal);
+  $("#accessibility-modal .modal-overlay").addEventListener(
+    "click",
+    closeAccessibilityModal,
+  );
+
+  (function wireWelcomeInputs() {
+    const msgCentral = $("#msg-central");
+    if (msgCentral) {
+      const newMsgCentral = msgCentral.cloneNode(true);
+      msgCentral.parentNode.replaceChild(newMsgCentral, msgCentral);
+      newMsgCentral.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          log(
+            "UI",
+            0,
+            "event:msg-central-keydown",
+            "Enter pressed on welcome screen to start chat",
+            {
+              key: e.key,
+              shift: e.shiftKey,
+            },
+          );
+          sendFromWelcome();
+        }
+      });
+    }
+
+    const sendCentral = $("#send-central");
+    if (sendCentral) {
+      const newSendCentral = sendCentral.cloneNode(true);
+      sendCentral.parentNode.replaceChild(newSendCentral, sendCentral);
+      newSendCentral.addEventListener("click", () => {
+        log(
+          "UI",
+          0,
+          "event:send-central-click",
+          "Send button clicked on welcome screen",
+        );
+        sendFromWelcome();
+      });
+    }
+
+    const markdownBtn = $("#markdown-test-welcome");
+    if (markdownBtn) {
+      const newMarkdownBtn = markdownBtn.cloneNode(true);
+      markdownBtn.parentNode.replaceChild(newMarkdownBtn, markdownBtn);
+      if (DEBUG_MARKDOWN) {
+        newMarkdownBtn.style.display = "";
+      }
+      newMarkdownBtn.addEventListener("click", () => {
+        log(
+          "UI",
+          0,
+          "event:markdown-test-welcome",
+          "Markdown test button clicked on welcome screen",
+        );
+        startMarkdownTestFromWelcome();
+      });
+    }
+
+    updateMarkdownControls();
+  })();
+
+  $("#open-model-mgmt").addEventListener("click", () => {
+    openModelMgmt();
+    closeDropdownWithAnimation($("#settings-menu"));
+    closeModalWithAnimation($("#quick-model-switch-modal"));
+
+    // Close mobile sidebar when opening model management
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+  });
+
+  $("#open-model-switcher").addEventListener("click", () => {
+    const modelsConf = state.settings.models || defaultModels();
+    const platformEl = $("#platform-select");
+    const modelSelEl = $("#model-select");
+    const modelIdManualEl = $("#model-id-manual");
+    const baseUrlEl = $("#base-url");
+    const apiKeyEl = $("#api-key");
+    // const labelEl    = $("#model-label"); // form dimatikan
+    // const noteEl     = $("#model-note");  // form dimatikan
+    const notePrev = $("#model-note-preview");
+
+    // Close mobile sidebar when opening model switcher
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+
+    // Populate platform select with available providers
+    const providers = Object.keys(modelsConf.providers || {}).sort();
+    platformEl.innerHTML = providers
+      .map(p => `<option value="${p}">${p.charAt(0).toUpperCase() + p.slice(1)}</option>`)
+      .join("");
+
+    $("#extended-thinking").value = modelsConf.active?.thinkMode || "off";
+
+    function applyNotePreview(text) {
+      const t = text && String(text).trim() ? String(text).trim() : "—";
+      notePrev.textContent = t;
+      notePrev.title = t;
+    }
+
+    function fillForProvider(p, keepCurrent = false) {
+      const prov = modelsConf.providers?.[p] || {
+        baseUrl: "",
+        apiKey: "",
+        models: [],
+      };
+      const list = normalizeProviderModels(prov.models || []);
+
+      modelSelEl.innerHTML = "";
+      if (list.length) {
+        for (const m of list) {
+          const opt = document.createElement("option");
+          opt.value = m.id;
+          opt.textContent = m.label || m.id;
+          modelSelEl.appendChild(opt);
+        }
+        // Add manual entry option
+        const opt = document.createElement("option");
+        opt.value = "__manual__";
+        opt.textContent = "+ New model ID";
+        modelSelEl.appendChild(opt);
+      } else {
+        const opt = document.createElement("option");
+        opt.value = "__manual__";
+        opt.textContent = "+ New model ID";
+        modelSelEl.appendChild(opt);
+      }
+
+      const act = modelsConf.active || {};
+      if (keepCurrent && act.platform === p && act.model) {
+        if (list.find(m => m.id === act.model)) {
+          modelSelEl.value = act.model;
+          modelIdManualEl.style.display = "none";
+          modelIdManualEl.value = "";
+        } else {
+          modelSelEl.value = "__manual__";
+          modelIdManualEl.style.display = "block";
+          modelIdManualEl.value = act.model;
+        }
+      } else {
+        modelSelEl.selectedIndex = 0;
+        modelIdManualEl.style.display = "none";
+        modelIdManualEl.value = "";
+      }
+
+      baseUrlEl.value = prov.baseUrl || "";
+      apiKeyEl.value = prov.apiKey || "";
+
+      const selectedId = modelSelEl.value === "__manual__" ? modelIdManualEl.value : modelSelEl.value;
+      const meta = list.find((m) => m.id === selectedId) || {
+        id: selectedId,
+        label: selectedId,
+        note: "",
+      };
+
+      // if (labelEl) labelEl.value = meta.label || selectedId; // form dimatikan
+      // if (noteEl)  noteEl.value  = meta.note  || '';         // form dimatikan
+      applyNotePreview(meta.note);
+    }
+
+    const act = modelsConf.active || {};
+    platformEl.value = act.platform || "openrouter";
+    fillForProvider(platformEl.value, true);
+    populateTitleModelOptions(platformEl.value);
+
+    platformEl.onchange = (e) => {
+      const p = e.target.value;
+      fillForProvider(p, false);
+      populateTitleModelOptions(p);
+      // Hide manual input when switching platforms
+      modelIdManualEl.style.display = "none";
+      modelIdManualEl.value = "";
+    };
+
+    modelSelEl.onchange = () => {
+      const p = platformEl.value;
+      const list = normalizeProviderModels(
+        modelsConf.providers?.[p]?.models || [],
+      );
+      
+      if (modelSelEl.value === "__manual__") {
+        modelIdManualEl.style.display = "block";
+        modelIdManualEl.focus();
+        applyNotePreview("");
+      } else {
+        modelIdManualEl.style.display = "none";
+        modelIdManualEl.value = "";
+        const meta = list.find((m) => m.id === modelSelEl.value) || {
+          id: modelSelEl.value,
+          label: modelSelEl.value,
+          note: "",
+        };
+        applyNotePreview(meta.note);
+      }
+    };
+
+    modelIdManualEl.oninput = () => {
+      applyNotePreview("");
+    };
+
+    // $("#model-note").addEventListener("input", (e) => applyNotePreview(e.target.value)); // form dimatikan
+
+    openModalWithAnimation($("#models-modal"));
+    closeDropdownWithAnimation($("#settings-menu"));
+    closeModalWithAnimation($("#quick-model-switch-modal"));
+
+    // Hide any previous error messages
+    $("#switch-error").style.display = "none";
+    $("#switch-error").textContent = "";
+  });
+
+  $("#save-models").addEventListener("click", async () => {
+    const errorEl = $("#switch-error");
+    errorEl.style.display = "none";
+    errorEl.textContent = "";
+
+    const platform = $("#platform-select").value;
+    const modelSelectValue = $("#model-select").value;
+    const modelIdManual = $("#model-id-manual").value.trim();
+    const modelId = modelSelectValue === "__manual__" ? modelIdManual : modelSelectValue;
+    const baseUrl = $("#base-url").value.trim();
+    const apiKey = $("#api-key").value.trim();
+
+    if (modelSelectValue === "__manual__" && !modelId) {
+      errorEl.textContent = "* Please enter a model ID.";
+      errorEl.style.display = "block";
+      return;
+    }
+
+    const thinkMode = $("#extended-thinking").value;
+
+    const conf = state.settings.models || defaultModels();
+    conf.providers = conf.providers || {};
+
+    if (!conf.providers[platform])
+      conf.providers[platform] = { baseUrl: "", apiKey: "", models: [] };
+
+    conf.providers[platform].baseUrl = baseUrl;
+    conf.providers[platform].apiKey = apiKey;
+
+    const list = normalizeProviderModels(conf.providers[platform].models || []);
+    const idx = list.findIndex((m) => m.id === modelId);
+
+    if (idx >= 0) {
+      const existing = list[idx];
+      list[idx] = { ...existing, id: modelId };
+    } else {
+      list.unshift({ id: modelId, label: modelId, note: "" });
+    }
+    conf.providers[platform].models = list;
+
+    conf.active = { platform, model: modelId, baseUrl, apiKey, thinkMode };
+
+    state.settings.models = conf;
+    localStorage.setItem("models-conf", JSON.stringify(conf));
+    try {
+      if (!DEBUG_MODE) await window.api.models.save(conf);
+    } catch {}
+
+    const config = state.settings.models;
+    const activeProvider = config.active.platform;
+    log("UI", 1, "initialModelSwitch", `Model button updated for ${screen}`, {
+      activeProv: activeProvider,
+    });
+
+    const modelsState = normalizeProviderModels(
+      config.providers[activeProvider]?.models || [],
+    );
+    const modelBtn = $(`#btn-model-switch-welcome` || `#btn-model-switch-chat` || `#btn-model-switch-project`);
+    modelsState.forEach((model) => {
+      if (model.id === config.active.model) {
+        const p = modelBtn.querySelector("p");
+        if (p) p.textContent = model.label || model.id;
+      }
+    });
+
+    updateModelHeader();
+    closeModalWithAnimation($("#models-modal"));
+  });
+
+  $("#close-models").addEventListener("click", () =>
+    closeModalWithAnimation($("#models-modal")),
+  );
+  $("#cancel-models").addEventListener("click", () =>
+    closeModalWithAnimation($("#models-modal")),
+  );
+  $("#models-modal .modal-overlay").addEventListener("click", () =>
+    closeModalWithAnimation($("#models-modal")),
+  );
+
+  $("#reset-models").addEventListener("click", () => {
+    showConfirmationModal(
+      "Reset Model Configuration",
+      "Are you sure you want to reset all model settings to default? This will clear all saved providers and configurations.",
+      () => {
+        state.settings.models = defaultModels();
+        localStorage.setItem(
+          "models-conf",
+          JSON.stringify(state.settings.models),
+        );
+        updateModelHeader();
+        closeModalWithAnimation($("#models-modal"));
+      },
+    );
+  });
+
+  $("#new-chat").addEventListener("click", () => {
+    log("UI", 0, "event:new-chat-click", "New chat button clicked");
+    closeModalWithAnimation($("#quick-model-switch-modal"));
+
+    // Close mobile sidebar when creating new chat
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+
+    showWelcomeScreen();
+  });
+
+  $("#chats-btn").addEventListener("click", () => {
+    log("UI", 0, "event:chats-page-click", "Chats page button clicked");
+
+    // Close mobile sidebar when switching to chats page
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+
+    showChatsPage();
+  });
+
+  $("#projects-btn").addEventListener("click", () => {
+    log("UI", 0, "event:projects-page-click", "Projects page button clicked");
+
+    // Close mobile sidebar when switching to projects page
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+
+    // If currently in project detail view, use showProjectsListView() for smooth transition
+    if (currentProject) {
+      showProjectsListView();
+    } else {
+      showProjectsPage();
+    }
+  });
+
+  $("#announcement-btn").addEventListener("click", () => {
+    log("UI", 0, "event:projects-page-click", "Projects page button clicked");
+
+    // Close mobile sidebar when switching to projects page
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+
+    // If currently in project detail view, use showProjectsListView() for smooth transition
+    if (currentProject) {
+      showProjectsListView();
+    } else {
+      showProjectsPage();
+    }
+  });
+
+  function handleSettingsClick(e) {
+    e.stopPropagation();
+    const settingsMenu = $("#settings-menu");
+    const willShow = settingsMenu.classList.contains("hidden");
+    log("UI", 0, "event:open-settings-click", "Settings menu toggled", {
+      willShow,
+    });
+    
+    if (willShow) {
+      openDropdownWithAnimation(settingsMenu);
+    } else {
+      closeDropdownWithAnimation(settingsMenu);
+    }
+    
+    closeModalWithAnimation($("#quick-model-switch-modal"));
+
+    // Close mobile sidebar when opening customize/settings menu
+  }
+
+  function handlePersonaSettingsClick() {
+    const { name, work, prefs } = state.settings.persona;
+    const showProjects = state.settings.showProjects !== undefined ? state.settings.showProjects : false;
+    const showStarred = state.settings.showStarred !== undefined ? state.settings.showStarred : true;
+    const streamThrottling = state.settings.streamThrottling || "auto";
+    const language = state.settings.language || "autodetect";
+    log(
+      "UI",
+      0,
+      "event:open-persona-settings-click",
+      "Persona settings modal opened",
+      { hasName: !!name, hasWork: !!work, hasPrefs: !!prefs, showProjects, showStarred, streamThrottling, language },
+    );
+    $("#persona-name").value = name || "";
+    $("#persona-work").value = work || "";
+    $("#persona-prefs").value = prefs || "";
+    $("#show-projects-toggle").checked = showProjects;
+    $("#show-starred-toggle").checked = showStarred;
+    $("#stream-throttling").value = streamThrottling;
+    $("#language-select").value = language;
+    openModalWithAnimation($("#settings-modal"));
+    closeDropdownWithAnimation($("#settings-menu"));
+    closeModalWithAnimation($("#quick-model-switch-modal"));
+
+    // Close mobile sidebar when opening persona settings
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+  }
+
+  $("#artifact-btn").addEventListener("click", () => {
+    log("UI", 0, "event:artifacts-page-click", "Artifacts page button clicked");
+
+    // Close mobile sidebar when switching to artifacts page
+    if (window.innerWidth <= 768) {
+      closeMobileSidebar();
+    }
+
+    showArtifactsPage();
+  });
+
+  $("#open-settings").addEventListener("click", handleSettingsClick);
+
+  // Remove existing event listener to prevent duplicates
+  $("#open-persona-settings").removeEventListener("click", handlePersonaSettingsClick);
+  $("#open-persona-settings").addEventListener("click", handlePersonaSettingsClick);
+
+  // ===== ACCOUNT EVENT HANDLERS =====
+  const openAccountBtn = document.getElementById('open-account-settings');
+  const closeAccountBtn = document.getElementById('close-account-modal');
+  const accountModal = document.getElementById('account-settings-modal');
+  const googleLoginBtn = document.getElementById('google-login-btn');
+  const internalBtn = document.getElementById('data-source-internal');
+  const cloudBtn = document.getElementById('data-source-cloud');
+
+  if (openAccountBtn) {
+    openAccountBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      openModalWithAnimation($("#account-settings-modal"));
+      closeDropdownWithAnimation($("#settings-menu"));
+      await updateAccountModalUI();
+      log("UI", 0, "event:open-account-settings", "Account modal opened");
+    });
+  }
+
+  if (closeAccountBtn) {
+    closeAccountBtn.addEventListener('click', () => {
+      closeModalWithAnimation($("#account-settings-modal"));
+      log("UI", 0, "event:close-account-modal", "Account modal closed");
+    });
+  }
+
+  if (accountModal) {
+    accountModal.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-overlay')) {
+        closeModalWithAnimation($("#account-settings-modal"));
+      }
+    });
+  }
+
+  if (googleLoginBtn) {
+    googleLoginBtn.addEventListener('click', () => handleGoogleLogin());
+  }
+
+  const closeModalBtn = document.getElementById('account-close-modal-btn');
+  if (closeModalBtn) {
+    closeModalBtn.addEventListener('click', () => {
+      closeModalWithAnimation($("#account-settings-modal"));
+      log("UI", 0, "event:account-close-modal-btn", "Account modal closed via button");
+    });
+  }
+
+  // ===== ACCOUNT MENU DROPDOWN HANDLERS =====
+  const accountMenuBtn = document.getElementById('account-menu-btn');
+  const accountMenuDropdown = document.getElementById('account-menu-dropdown');
+
+  if (accountMenuBtn) {
+    accountMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      
+      // Close all other persistent-open menus
+      document
+        .querySelectorAll(".account-menu-dropdown.persistent-open")
+        .forEach((menu) => {
+          if (menu !== accountMenuDropdown) {
+            menu.classList.remove("persistent-open");
+            const otherBtn = menu.parentElement.querySelector(".account-menu-btn");
+            if (otherBtn) otherBtn.classList.remove("persistent-active");
+          }
+        });
+
+      // Toggle current menu's persistent state
+      const isPersistentOpen = accountMenuDropdown.classList.contains("persistent-open");
+
+      if (isPersistentOpen) {
+        accountMenuDropdown.classList.remove("persistent-open");
+        accountMenuBtn.classList.remove("persistent-active");
+      } else {
+        accountMenuDropdown.classList.add("persistent-open");
+        accountMenuBtn.classList.add("persistent-active");
+      }
+    });
+  }
+
+  if (accountMenuDropdown) {
+    accountMenuDropdown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const menuItem = e.target.closest(".account-menu-item");
+      if (!menuItem) return;
+
+      const action = menuItem.dataset.action;
+
+      // Close menu
+      accountMenuDropdown.classList.remove("persistent-open");
+      if (accountMenuBtn) accountMenuBtn.classList.remove("persistent-active");
+
+      // Handle actions
+      if (action === "sync-now") {
+        handleSyncNow();
+      } else if (action === "backup-now") {
+        handleBackupNow();
+      } else if (action === "logout") {
+        handleLogout();
+      }
+    });
+  }
+
+  if (internalBtn) {
+    internalBtn.addEventListener('click', () => handleDataSourceSwitch('internal'));
+  }
+
+  if (cloudBtn) {
+    cloudBtn.addEventListener('click', () => handleDataSourceSwitch('cloud'));
+  }
+
+  // ===== LEARN MORE MODAL HANDLERS =====
+  const openLearnMoreBtn = document.getElementById('open-learn-more');
+  const closeLearnMoreBtn = document.getElementById('close-learn-more-modal');
+  const learnMoreModal = document.getElementById('learn-more-modal');
+  const learnMoreTabBtns = document.querySelectorAll('.learn-more-tab-btn');
+
+  if (openLearnMoreBtn) {
+    openLearnMoreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openModalWithAnimation(learnMoreModal);
+      closeDropdownWithAnimation($("#settings-menu"));
+      log("UI", 0, "event:open-learn-more", "Learn More modal opened");
+    });
+  }
+
+  if (closeLearnMoreBtn) {
+    closeLearnMoreBtn.addEventListener('click', () => {
+      closeModalWithAnimation(learnMoreModal);
+      log("UI", 0, "event:close-learn-more-modal", "Learn More modal closed");
+    });
+  }
+
+  if (learnMoreModal) {
+    learnMoreModal.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal-overlay')) {
+        closeModalWithAnimation(learnMoreModal);
+      }
+    });
+  }
+
+  // Tab switching functionality
+  learnMoreTabBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const tabName = btn.dataset.tab;
+      
+      // Remove active class from all tabs and contents
+      learnMoreTabBtns.forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.learn-more-tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      
+      // Add active class to clicked tab and corresponding content
+      btn.classList.add('active');
+      const tabContent = document.getElementById(tabName);
+      if (tabContent) {
+        tabContent.classList.add('active');
+        log("UI", 0, "event:learn-more-tab-switch", "Switched to tab", { tab: tabName });
+      }
+    });
+  });
+
+  // ===== AUTH BUTTON HANDLER (Login/Logout) =====
+  const authBtn = document.getElementById('auth-btn');
+  if (authBtn) {
+    authBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      
+      // Check if we're in login or logout state
+      const loginState = document.getElementById('login-state');
+      const logoutState = document.getElementById('logout-state');
+      
+      if (loginState && !loginState.classList.contains('hidden')) {
+        // Login state is visible, so handle login
+        // Don't close dropdown - show loading state instead
+        await handleSidebarLogin();
+      } else if (logoutState && !logoutState.classList.contains('hidden')) {
+        // Logout state is visible, so handle logout
+        handleLogout();
+        closeDropdownWithAnimation($("#settings-menu"));
+      }
+    });
+  }
+
+  // Immediate save for sidebar display toggles
+  $("#show-projects-toggle").addEventListener("change", async (e) => {
+    const showProjects = e.target.checked;
+    log("SETTINGS", 2, "event:show-projects-toggle-change", "Show Projects toggle changed", {
+      showProjects,
+    });
+    state.settings.showProjects = showProjects;
+    await save();
+    renderSessions(); // Re-render sessions to reflect the new settings
+  });
+
+  $("#show-starred-toggle").addEventListener("change", async (e) => {
+    const showStarred = e.target.checked;
+    log("SETTINGS", 2, "event:show-starred-toggle-change", "Show Starred toggle changed", {
+      showStarred,
+    });
+    state.settings.showStarred = showStarred;
+    await save();
+    renderSessions(); // Re-render sessions to reflect the new settings
+  });
+
+  $("#close-modal").addEventListener("click", () => {
+    closeModalWithAnimation($("#settings-modal"));
+  });
+
+  $("#close-settings").addEventListener("click", () => {
+    closeModalWithAnimation($("#settings-modal"));
+  });
+
+  $("#save-settings").addEventListener("click", async () => {
+    const persona = {
+      name: $("#persona-name").value.trim(),
+      work: $("#persona-work").value.trim(),
+      prefs: $("#persona-prefs").value.trim(),
+    };
+    const streamThrottling = $("#stream-throttling").value;
+    const language = $("#language-select").value;
+    log("SETTINGS", 2, "event:save-settings-click", "Saving persona settings", {
+      hasName: !!persona.name,
+      hasWork: !!persona.work,
+      hasPrefs: !!persona.prefs,
+      streamThrottling,
+      language,
+    });
+    state.settings.persona = persona;
+    state.settings.streamThrottling = streamThrottling;
+    state.settings.language = language;
+    await save();
+    closeModalWithAnimation($("#settings-modal"));
+  });
+
+  $("#delete-all").addEventListener("click", () => {
+    log(
+      "SETTINGS",
+      3,
+      "event:delete-all-click",
+      "Delete all sessions process initiated",
+    );
+    showConfirmationModal("Delete All Sessions", "Are you sure?", async () => {
+      log(
+        "SETTINGS",
+        3,
+        "confirm:delete-all:accepted",
+        "Confirmation to delete all sessions received",
+      );
+      streamManager.shutdownGracefully();
+      state.sessions = [];
+      current = null;
+      clearDirtyTracking(); // Force full save untuk ensure backend dapat update yang benar
+      await save();
+      closeModalWithAnimation($("#settings-modal"));
+      closeModalWithAnimation($("#quick-model-switch-modal"));
+      showWelcomeScreen();
+      log(
+        "SETTINGS",
+        2,
+        "delete-all:completed",
+        "All sessions have been deleted",
+        { sessionsCount: state.sessions.length },
+      );
+    });
+  });
+
+  $("#web-search-switch").addEventListener("change", (e) => {
+    log('WEBSEARCH', 2, 'toggle', 'WebSearch switch toggled by user', { 
+      oldState: state.settings.webSearchEnabled,
+      newState: e.target.checked 
+    });
+    
+    state.settings.webSearchEnabled = e.target.checked;
+
+    localStorage.setItem(
+      "clustrix-web-search",
+      state.settings.webSearchEnabled.toString(),
+    );
+    save();
+
+    $$('[id^="btn-web-search-"]').forEach((b) =>
+      b.classList.toggle("toggled", state.settings.webSearchEnabled),
+    );
+    
+    log("WEBSEARCH", 2, "toggle", "WebSearch state updated and saved", {
+      enabled: e.target.checked,
+      savedToLocalStorage: true
+    });
+    log("SETTINGS", 2, "event:web-search-change", "Web Search Toggled", {
+      enabled: e.target.checked,
+    });
+  });
+
+  $("#theme-slider").addEventListener("change", () => {
+    log("UI", 0, "event:theme-slider-change", "Theme toggled");
+    toggleTheme();
+  });
+
+  $("#settings-modal .modal-overlay").addEventListener("click", () => {
+    log(
+      "UI",
+      0,
+      "event:modal-overlay-click",
+      "Settings modal hidden via overlay click",
+    );
+    closeModalWithAnimation($("#settings-modal"));
+  });
+
+  $("#msg").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      if (DEBUG_MARKDOWN && current && isMarkdownTestSession(current)) {
+        e.preventDefault();
+        if (!streamManager.isStreamingInSession(current)) {
+          runMarkdownTestTurn(current, e.target?.value ?? "");
+        }
+        return;
+      }
+      if (streamManager.isStreamingInSession(current)) {
+        e.preventDefault();
+        return;
+      }
+      e.preventDefault();
+      send();
+    }
+  });
+
+  const markdownChatBtn = $("#markdown-test-chat");
+  if (markdownChatBtn) {
+    markdownChatBtn.addEventListener("click", () => {
+      if (!DEBUG_MARKDOWN) return;
+      if (!current || !isMarkdownTestSession(current)) return;
+      if (streamManager.isStreamingInSession(current)) return;
+      log(
+        "UI",
+        0,
+        "event:markdown-test-chat",
+        "Markdown test button clicked in chat",
+        { sessionId: current.id },
+      );
+      const composer = $("#msg");
+      runMarkdownTestTurn(current, composer ? composer.value : "");
+    });
+  }
+
+  $("#send").addEventListener("click", async () => {
+    const modal = $("#quick-model-switch-modal");
+    closeModalWithAnimation(modal);
+
+    if (DEBUG_MARKDOWN && current && isMarkdownTestSession(current)) {
+      if (!streamManager.isStreamingInSession(current)) {
+        const composer = $("#msg");
+        runMarkdownTestTurn(current, composer ? composer.value : "");
+      }
+      return;
+    }
+
+    if (!current) return;
+
+    const isStreaming = streamManager.isStreamingInSession(current);
+    if (!isStreaming) {
+      send();
+      return;
+    }
+
+    log("STREAM", 3, "interrupt:click", "User clicked Interrupt button", {
+      session: current.name,
+    });
+    let interrupted = false;
+    for (const id in streamManager.activeStreams) {
+      const st = streamManager.activeStreams[id];
+      if (st.session !== current) continue;
+
+      interrupted = true;
+      const { aiNode, session, messageIndex } = st;
+
+      try {
+        st.controller?.cancel?.();
+      } catch {}
+      try {
+        streamManager.stopStream(id);
+      } catch {}
+
+      const partial = (st.fullResponse || "").trim();
+      
+      // Get modelInfo from existing message before updating
+      const existingMessageData = session.messages[messageIndex];
+      const modelInfo = existingMessageData && Array.isArray(existingMessageData)
+        ? existingMessageData[2]
+        : null;
+      
+      session.messages[messageIndex] = ["ai", partial, modelInfo];
+      
+      // Track updated message for incremental save
+      if (!session._newMessages) {
+        session._newMessages = [];
+      }
+      session._newMessages.push([messageIndex, ["ai", partial, modelInfo]]);
+
+      const div = aiNode.querySelector(".message-text");
+      if (div) {
+        // For manual interruption, don't show error message - just render whatever content we have
+        const content = partial || ""; // Don't show error for manual interruption
+        
+        if (content.trim()) {
+          md(content).then(html => {
+            div.innerHTML = html;
+            if (div.querySelector("pre code")) highlightAllUnder(div);
+            attachCodeBlockListeners(div);
+            renderMathInElement(div);
+          }).catch(err => {
+            console.warn('Markdown rendering error in interrupt handler:', err);
+            div.innerHTML = mdFallback(content);
+            if (div.querySelector("pre code")) highlightAllUnder(div);
+            attachCodeBlockListeners(div);
+            renderMathInElement(div);
+          });
+        }
+      }
+
+      let footer = aiNode.querySelector(".message-footer");
+      if (!footer) {
+        footer = document.createElement("div");
+        footer.className = "message-footer";
+        const messageContent = aiNode.querySelector(".message-content");
+        if (messageContent) messageContent.appendChild(footer);
+        else aiNode.appendChild(footer);
+      }
+      footer.innerHTML = "";
+
+      const placeholderCard = document.createElement("div");
+      placeholderCard.className = "continue-placeholder";
+
+      const hint = document.createElement("span");
+      hint.className = "placeholder-hint";
+      hint.textContent = "Response interrupted by user";
+
+      const btn = document.createElement("button");
+      btn.className = "primary-btn continue-fragment";
+      btn.textContent = "Continue";
+      btn.disabled = true;
+      btn.title = "Continue from interrupted point";
+
+      placeholderCard.appendChild(hint);
+      placeholderCard.appendChild(btn);
+
+      setTimeout(() => {
+        btn.disabled = false;
+      }, 1500);
+
+      btn.addEventListener("click", () => {
+        log(
+          "STREAM",
+          2,
+          "continue:interrupted:click",
+          "User clicked 'Continue' after manual interruption",
+          { session: session.created_at, messageIndex },
+        );
+
+        btn.disabled = true;
+        footer.innerHTML = "";
+
+        const msgs = buildResumeMessagesFromSession(
+          session,
+          messageIndex,
+          partial,
+        );
+
+        startStream(
+          session,
+          "[System] Continue EXACTLY where the last assistant message stopped. Do NOT repeat previous text or acknowledge this instruction. Just provide the continuation.",
+          aiNode,
+          messageIndex,
+          false,
+          msgs,
+          partial,
+        );
+        updateInputState();
+      });
+
+      footer.appendChild(placeholderCard);
+      break;
+    }
+
+    if (interrupted) {
+      // Save immediately after interrupt to ensure partial response is persisted
+      try {
+        await save();
+        log("STREAM", 2, "interrupt:save", "Saved session after manual interrupt");
+      } catch (err) {
+        log("STREAM", 3, "interrupt:save", "Failed to save after interrupt", { error: err.message });
+      }
+      updateInputState();
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    const copyBtn = event.target.closest(".copy-code-btn");
+    if (copyBtn) {
+      const block = copyBtn.closest(".code-block-container");
+      const codeEl = block?.querySelector("pre code");
+      if (!codeEl) return;
+
+      const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+      const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+
+      navigator.clipboard
+        .writeText(codeEl.textContent)
+        .then(() => {
+          copyBtn.innerHTML = checkIconSVG;
+          copyBtn.classList.add("copied");
+          setTimeout(() => {
+            copyBtn.innerHTML = copyIconSVG;
+            copyBtn.classList.remove("copied");
+          }, 2000);
+        })
+        .catch((err) => {
+          log("UI", 4, "copy-code-btn:click", "Failed to copy code block", {
+            error: err,
+          });
+        });
+      return;
+    }
+
+    const saveBtn = event.target.closest(".save-code-btn");
+
+    if (saveBtn) {
+      const block = saveBtn.closest(".code-block-container");
+      const codeEl = block?.querySelector("pre code");
+      if (!codeEl) return;
+
+      const code = codeEl.textContent;
+      const language = saveBtn.dataset.language || "text";
+
+      let sessionId = null;
+      let messageIndex = null;
+
+      const messageEl = saveBtn.closest(".message");
+      if (messageEl) {
+        const messageIndexAttr = messageEl.getAttribute("data-message-index");
+        if (messageIndexAttr) {
+          messageIndex = parseInt(messageIndexAttr, 10);
+          sessionId = current?.id;
+        }
+      }
+
+      log("UI", 2, "save-code-btn:click", "Extracted context", {
+        hasMessageEl: !!messageEl,
+        messageIndexAttr: messageEl?.getAttribute("data-message-index"),
+        sessionId,
+        messageIndex,
+        currentId: current?.id,
+      });
+
+      const firstLine = code.split('\n')[0].trim();
+      const title = firstLine.length > 50 ? `Code snippet (${language})` : firstLine || `Code snippet (${language})`;
+
+      try {
+        const artifact = saveCodeArtifact(title, code, language, sessionId, messageIndex);
+        log("UI", 2, "save-code-btn:click", "Code saved to artifacts", {
+          artifactId: artifact.id,
+          language,
+          sessionId,
+          messageIndex,
+        });
+
+        const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+        const saveIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>`;
+
+        saveBtn.innerHTML = `${checkIconSVG}`;
+        saveBtn.classList.add("saved");
+        setTimeout(() => {
+          saveBtn.innerHTML = `${saveIconSVG}`;
+          saveBtn.classList.remove("saved");
+        }, 2000);
+      } catch (err) {
+        log("UI", 4, "save-code-btn:click", "Failed to save code artifact", {
+          error: err,
+        });
+        // Could add error feedback here
+      }
+    }
+
+    const previewMermaidBtn = event.target.closest(".preview-mermaid-btn");
+    if (previewMermaidBtn) {
+      const block = previewMermaidBtn.closest(".code-block-container");
+      const preEl = block?.querySelector("pre");
+      if (!preEl) return;
+
+      // Toggle between code and diagram
+      if (preEl.classList.contains("mermaid-preview")) {
+        // Switch back to code
+        const code = preEl.dataset.originalCode || "";
+        const escapedCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        preEl.innerHTML = `<code class="language-mermaid">${escapedCode}</code>`;
+        preEl.classList.remove("mermaid-preview");
+        
+        // Remove zoom controls
+        const existingControls = block.querySelector('.mermaid-zoom-controls');
+        if (existingControls) existingControls.remove();
+        
+        // Re-apply syntax highlighting
+        if (typeof highlightAllUnder === 'function') {
+          highlightAllUnder(block);
+        }
+        
+        previewMermaidBtn.title = "Preview diagram";
+        previewMermaidBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+      } else {
+        // Get code from the code element
+        const codeEl = preEl.querySelector("code");
+        if (!codeEl) return;
+        const code = codeEl.textContent;
+
+        // Store original code
+        preEl.dataset.originalCode = code;
+
+        // Render diagram
+        try {
+          const renderMermaid = (mermaidLib) => {
+            const currentTheme = document.body.classList.contains('dark-theme') ? 'dark' : 'base';
+            
+            if (!mermaidInitialized) {
+              mermaidLib.initialize({ 
+                startOnLoad: false, 
+                theme: currentTheme,
+                themeVariables: currentTheme === 'dark' ? {
+                  // Dark theme colors
+                  primaryColor: '#4a90e2',
+                  primaryTextColor: '#e4e8ed',
+                  primaryBorderColor: '#6ba3ec',
+                  lineColor: '#7aa2f7',
+                  secondaryColor: '#7c3aed',
+                  tertiaryColor: '#10b981',
+                  background: '#1f2937',
+                  mainBkg: '#374151',
+                  secondBkg: '#4b5563',
+                  tertiaryBkg: '#6b7280',
+                  textColor: '#e4e8ed',
+                  border1: '#6b7280',
+                  border2: '#9ca3af',
+                  arrowheadColor: '#7aa2f7',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: '15px',
+                  labelBackground: '#374151',
+                  nodeBorder: '#6ba3ec',
+                  clusterBkg: '#1f2937',
+                  clusterBorder: '#6b7280',
+                  defaultLinkColor: '#7aa2f7',
+                  titleColor: '#e4e8ed',
+                  edgeLabelBackground: '#374151',
+                  nodeTextColor: '#e4e8ed'
+                } : {
+                  // Light theme colors
+                  primaryColor: '#4a90e2',
+                  primaryTextColor: '#1f1f1f',
+                  primaryBorderColor: '#2563eb',
+                  lineColor: '#2563eb',
+                  secondaryColor: '#7c3aed',
+                  tertiaryColor: '#10b981',
+                  background: '#ffffff',
+                  mainBkg: '#e3f2fd',
+                  secondBkg: '#f0f4f9',
+                  tertiaryBkg: '#f8fafc',
+                  textColor: '#1f1f1f',
+                  border1: '#cbd5e1',
+                  border2: '#94a3b8',
+                  arrowheadColor: '#2563eb',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: '15px',
+                  labelBackground: '#f0f4f9',
+                  nodeBorder: '#2563eb',
+                  clusterBkg: '#f8fafc',
+                  clusterBorder: '#cbd5e1',
+                  defaultLinkColor: '#2563eb',
+                  titleColor: '#1f1f1f',
+                  edgeLabelBackground: '#f0f4f9',
+                  nodeTextColor: '#1f1f1f'
+                },
+                flowchart: {
+                  curve: 'basis',
+                  padding: 20,
+                  nodeSpacing: 50,
+                  rankSpacing: 50,
+                  diagramPadding: 20,
+                  htmlLabels: true
+                }
+              });
+              mermaidInitialized = true;
+            }
+            
+            const id = 'mermaid-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            mermaidLib.render(id, code).then((result) => {
+              // Create wrapper for diagram with pan/zoom
+              const wrapper = document.createElement('div');
+              wrapper.className = 'mermaid-diagram-wrapper';
+              wrapper.innerHTML = result.svg;
+              
+              const svg = wrapper.querySelector('svg');
+              if (svg) {
+                // Set SVG attributes for better rendering
+                svg.setAttribute('width', '100%');
+                svg.setAttribute('height', '100%');
+                svg.style.maxWidth = '100%';
+                svg.style.height = 'auto';
+                
+                // Initialize pan & zoom state
+                let scale = 1;
+                let translateX = 0;
+                let translateY = 0;
+                let isDragging = false;
+                let startX = 0;
+                let startY = 0;
+                
+                // Apply initial transform
+                const updateTransform = () => {
+                  svg.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+                  svg.style.transformOrigin = '0 0'; // Top-left origin for proper zoom to point
+                  svg.style.transition = isDragging ? 'none' : 'transform 0.2s ease-out';
+                  
+                  // Update grid background to follow pan/zoom
+                  const gridSize = 20 * scale;
+                  wrapper.style.backgroundSize = `${gridSize}px ${gridSize}px`;
+                  wrapper.style.backgroundPosition = `${translateX}px ${translateY}px`;
+                };
+                
+                // Zoom to point (mouse position)
+                const zoomToPoint = (mouseX, mouseY, zoomIn) => {
+                  const oldScale = scale;
+                  
+                  // Calculate new scale
+                  if (zoomIn) {
+                    scale = Math.min(scale * 1.2, 5);
+                  } else {
+                    scale = Math.max(scale / 1.2, 0.5);
+                  }
+                  
+                  // Scale factor change
+                  const factor = scale / oldScale;
+                  
+                  // Adjust pan to zoom towards mouse
+                  // Formula: new_pan = mouse - (mouse - old_pan) * factor
+                  translateX = mouseX - (mouseX - translateX) * factor;
+                  translateY = mouseY - (mouseY - translateY) * factor;
+                  
+                  updateTransform();
+                };
+                
+                // Zoom controls (zoom to center)
+                const zoomIn = () => {
+                  const rect = wrapper.getBoundingClientRect();
+                  const centerX = rect.width / 2;
+                  const centerY = rect.height / 2;
+                  zoomToPoint(centerX, centerY, true);
+                };
+                
+                const zoomOut = () => {
+                  const rect = wrapper.getBoundingClientRect();
+                  const centerX = rect.width / 2;
+                  const centerY = rect.height / 2;
+                  zoomToPoint(centerX, centerY, false);
+                };
+                
+                const resetZoom = () => {
+                  scale = 1;
+                  translateX = 0;
+                  translateY = 0;
+                  updateTransform();
+                };
+                
+                // Mouse wheel zoom (zoom to cursor)
+                wrapper.addEventListener('wheel', (e) => {
+                  e.preventDefault();
+                  
+                  // Get mouse position relative to wrapper
+                  const rect = wrapper.getBoundingClientRect();
+                  const mouseX = e.clientX - rect.left;
+                  const mouseY = e.clientY - rect.top;
+                  
+                  // deltaY < 0 = scroll up = zoom in
+                  // deltaY > 0 = scroll down = zoom out
+                  const shouldZoomIn = e.deltaY < 0;
+                  zoomToPoint(mouseX, mouseY, shouldZoomIn);
+                });
+                
+                // Drag to pan
+                wrapper.addEventListener('mousedown', (e) => {
+                  // Allow drag from anywhere in wrapper (text has pointer-events: none)
+                  // Just make sure we're not clicking on zoom controls
+                  if (!e.target.closest('.mermaid-zoom-controls')) {
+                    isDragging = true;
+                    startX = e.clientX - translateX;
+                    startY = e.clientY - translateY;
+                    wrapper.style.cursor = 'grabbing';
+                    e.preventDefault(); // Prevent text selection
+                  }
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                  if (isDragging) {
+                    e.preventDefault(); // Prevent text selection during drag
+                    translateX = e.clientX - startX;
+                    translateY = e.clientY - startY;
+                    updateTransform();
+                  }
+                });
+                
+                document.addEventListener('mouseup', () => {
+                  if (isDragging) {
+                    isDragging = false;
+                    wrapper.style.cursor = 'grab';
+                  }
+                });
+                
+                // Add zoom controls UI
+                const controls = document.createElement('div');
+                controls.className = 'mermaid-zoom-controls';
+                controls.innerHTML = `
+                  <button class="mermaid-zoom-btn zoom-in" title="Zoom In">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                  </button>
+                  <button class="mermaid-zoom-btn zoom-out" title="Zoom Out">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                  </button>
+                  <button class="mermaid-zoom-btn zoom-reset" title="Reset Zoom">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+                  </button>
+                `;
+                
+                controls.querySelector('.zoom-in').addEventListener('click', zoomIn);
+                controls.querySelector('.zoom-out').addEventListener('click', zoomOut);
+                controls.querySelector('.zoom-reset').addEventListener('click', resetZoom);
+                
+                // Prevent default drag behavior on SVG elements
+                wrapper.addEventListener('dragstart', (e) => {
+                  e.preventDefault();
+                  return false;
+                });
+                
+                preEl.innerHTML = '';
+                preEl.appendChild(wrapper);
+                preEl.appendChild(controls);
+                
+                // Initialize grid
+                updateTransform();
+              } else {
+                preEl.innerHTML = result.svg;
+              }
+              
+              preEl.classList.add("mermaid-preview");
+              previewMermaidBtn.title = "Show code";
+              previewMermaidBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code-icon lucide-code"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>`;
+            }).catch((err) => {
+              log("UI", 4, "preview-mermaid-btn:click", "Failed to render mermaid diagram", { error: err });
+              const escapedCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+              preEl.innerHTML = `<code class="language-mermaid">${escapedCode}</code>`;
+            });
+          };
+          
+          if (typeof mermaid !== 'undefined') {
+            renderMermaid(mermaid);
+          } else {
+            // Try dynamic import
+            import('../node_modules/mermaid/dist/mermaid.esm.min.mjs').then((mermaidModule) => {
+              renderMermaid(mermaidModule.default);
+            }).catch((err) => {
+              log("UI", 4, "preview-mermaid-btn:click", "Failed to load mermaid", { error: err });
+            });
+          }
+        } catch (err) {
+          log("UI", 4, "preview-mermaid-btn:click", "Error rendering mermaid", { error: err });
+        }
+      }
+      return;
+    }
+
+    const previewHtmlBtn = event.target.closest(".preview-html-btn");
+    if (previewHtmlBtn) {
+      const block = previewHtmlBtn.closest(".code-block-container");
+      const preEl = block?.querySelector("pre");
+      if (!preEl) return;
+
+      // Toggle between code and preview
+      if (preEl.classList.contains("html-preview")) {
+        // Switch back to code
+        const code = preEl.dataset.originalCode || "";
+        
+        // Clean up temp file
+        const iframe = preEl.querySelector('iframe');
+        if (iframe && iframe.dataset.previewId) {
+          window.api.htmlPreview.delete(iframe.dataset.previewId).catch(err => {
+            log("UI", 3, "preview-html-btn:click", "Failed to delete preview file", { error: err });
+          });
+        }
+        
+        const escapedCode = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        preEl.innerHTML = `<code class="language-html">${escapedCode}</code>`;
+        preEl.classList.remove("html-preview");
+        
+        // Remove preview marker from block
+        block.classList.remove('has-html-preview');
+        
+        // Re-apply syntax highlighting
+        if (typeof highlightAllUnder === 'function') {
+          highlightAllUnder(block);
+        }
+        
+        previewHtmlBtn.title = "Preview HTML";
+        previewHtmlBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+      } else {
+        // Get code from the code element
+        const codeEl = preEl.querySelector("code");
+        if (!codeEl) return;
+        const originalCode = codeEl.textContent;
+        let htmlCode = originalCode;
+
+        const injectIntoHeadOrDocumentStart = (snippet) => {
+          if (!snippet || !snippet.trim()) {
+            return;
+          }
+
+          if (/<\/head>/i.test(htmlCode)) {
+            htmlCode = htmlCode.replace(/<\/head>/i, `${snippet}\n</head>`);
+          } else if (/<html[^>]*>/i.test(htmlCode)) {
+            htmlCode = htmlCode.replace(/<html[^>]*>/i, (match) => `${match}\n${snippet}`);
+          } else {
+            htmlCode = `${snippet}\n${htmlCode}`;
+          }
+        };
+
+        const buildPreviewScrollbarStyle = () => {
+          const defaults = {
+            size: '6px',
+            track: 'transparent',
+            thumb: '#8181811f',
+            thumbHover: '#090909ff',
+          };
+
+          const styleBlock = (values) => `
+            <style data-preview-scrollbar="true">
+              :root {
+                --scrollbar-size: ${values.size};
+                --scrollbar-track: ${values.track};
+                --scrollbar-thumb: ${values.thumb};
+                --scrollbar-thumb-hover: ${values.thumbHover};
+              }
+              html, body {
+                height: 100%;
+                max-height: 100vh !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                overscroll-behavior: contain;
+                
+              }
+              :where(*) {
+                scrollbar-width: thin !important;
+                scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track) !important;
+              }
+              :where(*::-webkit-scrollbar) {
+                width: var(--scrollbar-size);
+                height: var(--scrollbar-size);
+              }
+              :where(*::-webkit-scrollbar-track) {
+                background: var(--scrollbar-track);
+              }
+              :where(*::-webkit-scrollbar-thumb) {
+                background: var(--scrollbar-thumb);
+                border-radius: 999px;
+              }
+              :where(*::-webkit-scrollbar-thumb:hover) {
+                background: var(--scrollbar-thumb-hover);
+              }
+            </style>
+          `;
+
+          try {
+            if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function' || !document || !document.documentElement) {
+              return styleBlock(defaults);
+            }
+
+            const computed = window.getComputedStyle(document.documentElement);
+            const resolve = (prop, fallback) => {
+              const value = computed.getPropertyValue(prop);
+              return (value && value.trim()) || fallback;
+            };
+
+            return styleBlock({
+              size: resolve('--scrollbar-size', defaults.size),
+              track: resolve('--scrollbar-track', defaults.track),
+              thumb: resolve('--scrollbar-thumb', defaults.thumb),
+              thumbHover: resolve('--scrollbar-thumb-hover', defaults.thumbHover),
+            });
+          } catch (err) {
+            return styleBlock(defaults);
+          }
+        };
+
+        // Store original code
+        preEl.dataset.originalCode = originalCode;
+        
+        // Inject script to prevent parent window scroll on hash navigation
+        const preventScrollScript = `
+          <script>
+            (function() {
+              const scrollRoot = document.scrollingElement || document.documentElement || document.body;
+              if (!scrollRoot) {
+                return;
+              }
+
+              const clamp = (value) => (value < 0 ? 0 : value);
+              const currentScrollTop = () => window.pageYOffset || scrollRoot.scrollTop || 0;
+
+              const targetPosition = (element) => {
+                const rect = element.getBoundingClientRect();
+                return clamp(rect.top + currentScrollTop() - 12);
+              };
+
+              const animateScroll = (nextTop) => {
+                try {
+                  window.scrollTo({ top: nextTop, behavior: 'smooth' });
+                } catch (err) {
+                  window.scrollTo(0, nextTop);
+                }
+              };
+
+              const navigateToHash = (hashValue, shouldUpdateHistory) => {
+                if (!hashValue || hashValue === '#') {
+                  return false;
+                }
+
+                const targetId = hashValue.replace(/^#/, '');
+                if (!targetId) {
+                  return false;
+                }
+
+                const destination = document.getElementById(targetId);
+                if (!destination) {
+                  return false;
+                }
+
+                animateScroll(targetPosition(destination));
+
+                if (shouldUpdateHistory && window.history && window.history.replaceState) {
+                  window.history.replaceState(null, document.title, '#' + targetId);
+                }
+
+                return true;
+              };
+
+              document.addEventListener('click', function(event) {
+                const anchor = event.target.closest('a[href^="#"]');
+                if (!anchor) {
+                  return;
+                }
+
+                const hashValue = anchor.getAttribute('href');
+                const navigated = navigateToHash(hashValue, true);
+
+                // Always swallow default behavior for in-document hashes
+                event.preventDefault();
+                event.stopPropagation();
+
+                // Ensure focus remains on the clicked anchor without forcing parent scroll
+                if (anchor.blur) {
+                  anchor.blur();
+                }
+
+                if (!navigated && hashValue === '#') {
+                  animateScroll(0);
+                }
+              }, true);
+
+              window.addEventListener('hashchange', function() {
+                navigateToHash(window.location.hash, false);
+              });
+
+              if (window.location.hash) {
+                navigateToHash(window.location.hash, false);
+              }
+            })();
+          </script>
+        `;
+
+        // Find the message container to collect CSS and JS from other codeblocks
+        const messageEl = block.closest('.message');
+        if (messageEl) {
+          const allCodeBlocks = messageEl.querySelectorAll('.code-block-container');
+          
+          let cssCode = '';
+          let jsCode = '';
+          
+          // Collect CSS and JS from other codeblocks in the same message
+          allCodeBlocks.forEach(cb => {
+            if (cb === block) return; // Skip the HTML block itself
+            
+            const lang = cb.dataset.language?.toLowerCase();
+            const codeElement = cb.querySelector('pre:not(.html-preview):not(.mermaid-preview) code');
+            if (!codeElement) return;
+            
+            if (lang === 'css') {
+              cssCode += codeElement.textContent + '\n';
+            } else if (lang === 'javascript' || lang === 'js') {
+              jsCode += codeElement.textContent + '\n';
+            }
+          });
+          
+          // Inject CSS into HTML
+          if (cssCode.trim()) {
+            const styleTag = `<style>\n${cssCode}</style>\n`;
+            injectIntoHeadOrDocumentStart(styleTag);
+
+            log("UI", 1, "preview-html-btn:click", "Injected CSS from separate codeblock", { cssLength: cssCode.length });
+          }
+          
+          // Inject JS into HTML
+          if (jsCode.trim()) {
+            const scriptTag = `<script>\n${jsCode}\n</script>\n`;
+            
+            // Try to inject before </body>
+            if (/<\/body>/i.test(htmlCode)) {
+              htmlCode = htmlCode.replace(/<\/body>/i, `${scriptTag}</body>`);
+            } else if (/<\/html>/i.test(htmlCode)) {
+              // No </body>, inject before </html>
+              htmlCode = htmlCode.replace(/<\/html>/i, `${scriptTag}</html>`);
+            } else {
+              // Fallback: append to HTML
+              htmlCode += '\n' + scriptTag;
+            }
+            
+            log("UI", 1, "preview-html-btn:click", "Injected JS from separate codeblock", { jsLength: jsCode.length });
+          }
+        }
+
+        const previewScrollbarStyle = buildPreviewScrollbarStyle();
+        injectIntoHeadOrDocumentStart(previewScrollbarStyle);
+
+        // Inject scroll prevention script at the end of body
+        if (/<\/body>/i.test(htmlCode)) {
+          htmlCode = htmlCode.replace(/<\/body>/i, `${preventScrollScript}</body>`);
+        } else if (/<\/html>/i.test(htmlCode)) {
+          htmlCode = htmlCode.replace(/<\/html>/i, `${preventScrollScript}</html>`);
+        } else {
+          htmlCode += '\n' + preventScrollScript;
+        }
+
+        // Create iframe for preview
+        try {
+          // Create temp HTML file for proper isolated environment
+          window.api.htmlPreview.create(htmlCode).then(({ previewId, filePath }) => {
+            const iframe = document.createElement('iframe');
+            iframe.className = 'html-preview-iframe';
+            // Keep allow-same-origin for full functionality
+            // Script injection will prevent parent scroll
+            iframe.sandbox = 'allow-scripts allow-same-origin allow-forms';
+            iframe.src = `file://${filePath}`;
+            
+            // Store preview ID for cleanup
+            iframe.dataset.previewId = previewId;
+            
+
+
+            // Create wrapper
+            const wrapper = document.createElement('div');
+            wrapper.className = 'html-preview-wrapper';
+            wrapper.appendChild(iframe);
+
+            // Replace code with preview
+            preEl.innerHTML = '';
+            preEl.appendChild(wrapper);
+            preEl.classList.add("html-preview");
+            
+            // Mark block as having active preview
+            block.classList.add('has-html-preview');
+            
+            previewHtmlBtn.title = "Show code";
+            previewHtmlBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-code-icon lucide-code"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></svg>`;
+          }).catch(err => {
+            log("UI", 4, "preview-html-btn:click", "Error creating HTML preview file", { error: err });
+            const escapedCode = originalCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            preEl.innerHTML = `<code class="language-html">${escapedCode}</code>`;
+          });
+        } catch (err) {
+          log("UI", 4, "preview-html-btn:click", "Error rendering HTML preview", { error: err });
+          const escapedCode = originalCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+          preEl.innerHTML = `<code class="language-html">${escapedCode}</code>`;
+        }
+      }
+      return;
+    }
+
+    if (!$("#settings-container").contains(event.target)) {
+      closeDropdownWithAnimation($("#settings-menu"));
+    }
+
+    const regenCancelledTarget = event.target.closest(".regenerate-cancelled");
+    if (regenCancelledTarget) {
+      const messageIndex = parseInt(
+        regenCancelledTarget.dataset.messageIndex,
+        10,
+      );
+      log(
+        "UI",
+        0,
+        "event:regenerate-cancelled-click",
+        "Regenerate-cancelled button clicked",
+        { messageIndex },
+      );
+      regenerateFromCancelled(regenCancelledTarget);
+    }
+
+    const regenIncompleteTarget = event.target.closest(".regenerate-incomplete");
+    if (regenIncompleteTarget) {
+      const messageIndex = parseInt(
+        regenIncompleteTarget.dataset.messageIndex,
+        10,
+      );
+      log(
+        "UI",
+        0,
+        "event:regenerate-incomplete-click",
+        "Regenerate-incomplete button clicked",
+        { messageIndex },
+      );
+      regenerateFromIncomplete(regenIncompleteTarget);
+    }
+  });
+}
+
+function initializeApp() {
+  log("APP", 2, "initializeApp", "Initializing application.");
+
+  sessionCache.clear();
+  log('CACHE', 1, 'initializeApp', 'Session cache cleared on app initialization');
+
+  initializeSmartScroll();
+  initColumnReverseScrollDetection(); 
+  initScrollToBottomButton(); 
+
+  setTimeout(() => {
+    const scroller = getChatScroller();
+    if (scroller) {
+      const scrollTop = scroller.scrollTop;
+      const isNearBottom = scrollTop > -200;
+      log('SCROLL', 1, 'initializeApp', `Initial scroll check - scrollTop: ${scrollTop}px, isNearBottom: ${isNearBottom}`);
+      if (!isNearBottom) {
+        showScrollToBottomButton();
+        log('SCROLL', 1, 'initializeApp', 'Scroll button SHOWN on init (scrolled up)');
+      } else {
+        hideScrollToBottomButton();
+        log('SCROLL', 1, 'initializeApp', 'Scroll button HIDDEN on init (near bottom)');
+      }
+    }
+  }, 100);
+
+  if (window.api) {
+    window.api.on("chat-update", (payload) => {
+      try { console.debug('RENDERER: chat-update received', payload); } catch (e) {}
+      const { type, messageIndex, data } = payload;
+      const bubbleNode = $(`#chat-log .message[data-message-index="${messageIndex}"]`) || $('#chat-log .message.ai:last-child');
+
+      if (!bubbleNode) {
+          console.warn(`chat-update: Could not find message node for index ${messageIndex}`);
+          return;
+      }
+
+      if (type === "TOKEN_USAGE") {
+        const sessionId = payload.sessionId || current?.id;
+        const session = state.sessions.find((s) => s.id === sessionId) || current;
+        if (!session || typeof messageIndex !== "number" || messageIndex < 0) {
+          log("UI", 3, "chat-update:TOKEN_USAGE", "Skipping TOKEN_USAGE - missing session or invalid index", {
+            hasSession: !!session,
+            messageIndex,
+            sessionId
+          });
+          return;
+        }
+
+        log("UI", 2, "chat-update:TOKEN_USAGE", "Processing TOKEN_USAGE update", {
+          messageIndex,
+          sessionId: session.id,
+          data
+        });
+
+        ensureTokenFields(session);
+
+        const usageData = data || {};
+        const rawPrompt = Number(usageData.prompt_tokens ?? 0);
+        const rawCompletion = Number(usageData.completion_tokens ?? 0);
+        const rawTotal = Number(usageData.total_tokens ?? 0);
+
+        const promptTokens = Number.isFinite(rawPrompt)
+          ? Math.max(0, Math.round(rawPrompt))
+          : 0;
+        const completionTokens = Number.isFinite(rawCompletion)
+          ? Math.max(0, Math.round(rawCompletion))
+          : 0;
+        let totalTokens = Number.isFinite(rawTotal)
+          ? Math.max(0, Math.round(rawTotal))
+          : 0;
+        if (totalTokens === 0) {
+          totalTokens = promptTokens + completionTokens;
+        }
+        const breakdown = Array.isArray(usageData.breakdown)
+          ? usageData.breakdown
+          : [];
+
+        const messageEntry = Array.isArray(session.messages)
+          ? session.messages[messageIndex]
+          : null;
+        if (Array.isArray(messageEntry)) {
+          const meta =
+            messageEntry[2] && typeof messageEntry[2] === "object"
+              ? messageEntry[2]
+              : {};
+          meta.usage = {
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
+            total_tokens: totalTokens,
+            breakdown,
+          };
+          messageEntry[2] = meta;
+        }
+
+        const previousTokens = session.tokens_by_message?.[messageIndex] || 0;
+        session.tokens_by_message[messageIndex] = totalTokens;
+
+        if (typeof session.tokens_used !== "number" || Number.isNaN(session.tokens_used)) {
+          session.tokens_used = 0;
+        }
+        session.tokens_used += totalTokens - previousTokens;
+        if (session.tokens_used < 0) {
+          session.tokens_used = 0;
+        }
+
+        markSessionDirty(session.id);
+        if (!session._newMessages) {
+          session._newMessages = [];
+        }
+        session._newMessages.push([messageIndex, session.messages[messageIndex]]);
+
+        updateTokensUI(session);
+        debouncedSave();
+
+        if (current && session.id === current.id) {
+          const node = bubbleNode;
+          if (node) {
+            setNodeMetadata(node, session.messages[messageIndex]?.[2] || {});
+            renderAiFinalActions(
+              node,
+              session.messages[messageIndex]?.[1] || "",
+              messageIndex,
+            );
+          }
+        }
+        return;
+      }
+
+      const indicator = bubbleNode.querySelector(".thinking-toggle .web-search-indicator");
+      const mainText = bubbleNode.querySelector(".message-text");
+
+      if (type === "SEARCHING") {
+        mainText.innerHTML = "";
+        const toggleContent = bubbleNode.querySelector(".thinking-toggle-content");
+        if (toggleContent) {
+          toggleContent.innerHTML = `
+            <div class="web-search-indicator searching" style="display: flex; align-items: center; gap: 6px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.54 12a9.5 9.5 0 1 1-9.5-9.5 9.5 9.5 0 0 1 9.5 9.5Z"/><path d="M22 12h-2"/></svg>
+              <span class="status-text">Searching for "${data.summarizedQuery}"...</span>
+            </div>
+            <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+          `;
+        }
+        scrollToBottom({ fromAI: true });
+      } else if (type === "READING_COMPLETE") {
+        console.log("READING_COMPLETE received:", { messageIndex, data, payload });
+        const toggleContent = bubbleNode.querySelector(".thinking-toggle-content");
+        if (toggleContent) {
+          toggleContent.innerHTML = `
+            <div class="web-search-indicator" style="display: flex; align-items: center; gap: 6px;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chromium-icon lucide-chromium"><path d="M10.88 21.94 15.46 14"/><path d="M21.17 8H12"/><path d="M3.95 6.06 8.54 14"/><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/></svg>
+              <span class="status-text">Read ${data.pageCount} web pages</span>
+            </div>
+            <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round"/></svg>
+          `;
+        }
+        mainText.innerHTML = getThinkingMarkup();
+        scrollToBottom({ fromAI: true });
+
+        const sessionId = payload.sessionId || current?.id;
+        if (sessionId) {
+          storePendingWebSearchData(sessionId, data.pageCount);
+        }
+      } else if (type === "REACT_START") {
+        mainText.innerHTML = getThinkingMarkup();
+        scrollToBottom({ fromAI: true });
+      } else if (type === "THINKING") {
+        try {
+            console.log('[THINKING] Received chat-update THINKING:', { type, data, thinkData: data?.think });
+            mainText.innerHTML = getThinkingMarkup();
+            const thinkData = data?.think;
+            const sessionId = data?.sessionId || payload.sessionId || current?.id;
+            const sess = state.sessions.find(s => s.id === sessionId) || current;
+
+            if (thinkData && sess) {
+                // Check if it's structured thinking update (has title) or plain text
+                if (typeof thinkData === 'object' && thinkData.title) {
+                    // Backend thinking update with structure {title, content}
+                    console.log('[THINKING] Routing to appendThinkingUpdate (structured):', thinkData);
+                    appendThinkingUpdate(bubbleNode, thinkData, sess, messageIndex).catch(console.error);
+                } else {
+                    // Legacy: Plain text thinking stream
+                    const thinkContent = typeof thinkData === 'string' ? thinkData : thinkData?.content || '';
+                    console.log('[THINKING] Routing to appendThinking (plain text):', thinkContent);
+                    appendThinking(bubbleNode, thinkContent, sess, messageIndex).catch(console.error);
+                }
+                scrollToBottom({ fromAI: true });
+            }
+        } catch (e) {
+            console.error('Error handling THINKING update:', e);
+        }
+    }
+    });
+    window.api.on("search:status", (status) => {
+      searchStatusQueue.push(status);
+      log(
+        "UI_SEARCH",
+        1,
+        "onSearchStatus",
+        `Event '${status.step}' added to queue.`,
+        { queue_length: searchStatusQueue.length },
+      );
+      processSearchStatusQueue();
+    });
+  }
+
+  setupEventListeners();
+  setupMobileSidebar();
+
+  setupTextareaResize();
+  setupTextareaCentralResize();
+  setupTextareaProjectResize();
+  setupResponsiveHandlers();
+  window.addEventListener("beforeunload", async (e) => {
+    // Save data before unload to prevent data loss
+    try {
+      await save?.();
+      log("SAVE", 1, "beforeunload", "Data saved before page unload");
+    } catch (err) {
+      log("SAVE", 3, "beforeunload", "Failed to save before unload", { error: err });
+    }
+    
+    streamManager.shutdownGracefully();
+    if (markdownWorker) {
+      markdownWorker.terminate();
+      markdownWorker = null;
+    }
+  });
+  
+  initMarkdownWorker();
+  
+  load();
+}
+
+document.addEventListener("DOMContentLoaded", initializeApp);
+
+// ===== TOAST NOTIFICATION (In-app, no native dialogs) =====
+// ============================================================
+// MOVED: showToast -> ui/toast.js (Module 30)
+// ============================================================
+// showToast is now loaded from ui/toast.js
+// Available globally as window.showToast
+// Keeping local implementation for backward compatibility during transition
+// =================================================================
+// === START DELETE === showToast (Module 30) ===
+// =================================================================
+function showToast(message, type = 'info', delay = null) {
+  // Kalau delay ga di-set, hitung otomatis berdasarkan panjang karakter
+  if (delay === null) {
+    const charLength = message.length;
+    delay = Math.min(Math.max(4000, charLength * 50), 10000);
+  }
+  
+  // Buat container untuk semua toast kalau belum ada
+  let container = document.querySelector('.toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'toast-container';
+    container.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 10px;
+      z-index: 10000;
+      pointer-events: none;
+    `;
+    document.body.appendChild(container);
+  }
+  
+  // Buat toast baru
+  const toast = document.createElement('div');
+  toast.className = `toast-notification toast-${type}`;
+  toast.textContent = message;
+  toast.style.cssText = `
+    padding: 12px 16px;
+    background: ${type === 'error' ? '#902424b4' : type === 'success' ? '#0e8a3aa1' : '#1b4d9e9e'};
+    color: white;
+    border-radius: var(--radius-lg);
+    font-size: 14px;
+    max-width: 300px;
+    word-wrap: break-word;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    pointer-events: auto;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out, margin-bottom 0.3s ease-out;
+  `;
+  
+  // Tambahkan CSS animation kalau belum ada
+  if (!document.querySelector('#toast-animations')) {
+    const style = document.createElement('style');
+    style.id = 'toast-animations';
+    style.textContent = `
+      .toast-notification {
+        transition: transform 0.3s ease-out, opacity 0.3s ease-out, margin-bottom 0.3s ease-out, max-height 0.3s ease-out;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  // Masukkan toast ke container (karena column-reverse, ini akan muncul di bawah)
+  container.appendChild(toast);
+  
+  // Trigger animation slide up
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      toast.style.transform = 'translateY(0)';
+      toast.style.opacity = '1';
+    });
+  });
+  
+  // Auto remove setelah delay dengan smooth collapse
+  setTimeout(() => {
+    // Ambil tinggi toast sebelum dihapus
+    const toastHeight = toast.offsetHeight;
+    
+    // Animasi keluar: slide down dan fade out
+    toast.style.transform = 'translateY(20px)';
+    toast.style.opacity = '0';
+    toast.style.maxHeight = toastHeight + 'px';
+    
+    // Setelah fade out, collapse height-nya
+    setTimeout(() => {
+      toast.style.maxHeight = '0';
+      toast.style.marginBottom = '0';
+      toast.style.padding = '0 12px';
+      toast.style.overflow = 'hidden';
+      
+      // Hapus element setelah animasi collapse selesai
+      setTimeout(() => {
+        toast.remove();
+        // Hapus container kalau udah kosong
+        if (container.children.length === 0) {
+          container.remove();
+        }
+      }, 300);
+    }, 300);
+  }, delay);
+}
+
+// Add CSS animation if not exists
+if (!document.querySelector('style[data-toast-animations]')) {
+  const style = document.createElement('style');
+  style.setAttribute('data-toast-animations', 'true');
+  style.textContent = `
+    @keyframes slideIn {
+      from { transform: translateX(400px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOut {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(400px); opacity: 0; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+// =================================================================
+// === END DELETE === showToast (Module 30) ===
 // =================================================================
 
 // ===== ACCOUNT HANDLER FUNCTIONS (Top-level) =====
@@ -13142,7 +16782,7 @@ window.DEBUG = {
       setCurrent(targetSession);
       setTimeout(() => {
         const endTime = performance.now();
-        console.log(`âœ… Session switch took ${(endTime - startTime).toFixed(2)}ms`);
+        console.log(`✅ Session switch took ${(endTime - startTime).toFixed(2)}ms`);
         console.log('Cache stats:', getCacheStats());
       }, 150);
     } else {
@@ -13155,11 +16795,11 @@ window.DEBUG = {
     let totalTime = 0;
     let switchCount = 0;
     
-    console.log(`ðŸš€ Profiling ${sessions.length} session switches...`);
+    console.log(`🚀 Profiling ${sessions.length} session switches...`);
     
     function switchNext(index) {
       if (index >= sessions.length) {
-        console.log(`ðŸ“Š Average switch time: ${(totalTime / switchCount).toFixed(2)}ms`);
+        console.log(`📊 Average switch time: ${(totalTime / switchCount).toFixed(2)}ms`);
         console.log('Final cache stats:', getCacheStats());
         return;
       }

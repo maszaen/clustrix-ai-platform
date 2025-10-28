@@ -334,8 +334,7 @@ function initMarkdownWorker() {
   if (markdownWorker) return;
   
   try {
-    log('WORKER', 1, 'initMarkdownWorker', 'Initializing markdown worker...');
-    markdownWorker = new Worker('./md.worker.js');
+    markdownWorker = new Worker('./core/md.worker.js');
     
     markdownWorker.onmessage = function(event) {
       const { type, html, streamId, messageId } = event.data || {};
@@ -343,20 +342,16 @@ function initMarkdownWorker() {
       if (messageId && workerPromises.has(messageId)) {
         const { resolve } = workerPromises.get(messageId);
         workerPromises.delete(messageId);
-        log('WORKER', 1, 'onmessage', 'Worker resolved message', { messageId, htmlLength: html?.length || 0 });
         const normalizedHtml = normalizeParagraphListHtml(html || '');
         resolve(normalizedHtml);
       }
     };
     
     markdownWorker.onerror = function(error) {
-      log('WORKER', 3, 'onerror', 'Markdown worker error', { error: error.message });
-      // Clear worker to force fallback
       markdownWorker = null;
     };
     
     markdownWorker.onmessageerror = function(error) {
-      log('WORKER', 3, 'onmessageerror', 'Worker message error', { error: error.message });
       markdownWorker = null;
     };
     
@@ -366,6 +361,7 @@ function initMarkdownWorker() {
     markdownWorker = null;
   }
 }
+
 const DEBUG_MARKDOWN = false;
 const LOGGING = true;
 

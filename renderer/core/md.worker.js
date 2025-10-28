@@ -19,7 +19,7 @@ const EMAIL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" 
 // Import highlight.js for syntax highlighting
 if (typeof self.importScripts === "function") {
   try {
-    self.importScripts("../local_modules/highlight/modules/highlight.min.js");
+    self.importScripts("../../local_modules/highlight/modules/highlight.min.js");
   } catch (err) {
     console.warn("Failed to import highlight.js in worker", err);
   }

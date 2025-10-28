@@ -103,4 +103,4 @@ analysis.classes.forEach(cls => {
 
 // Save ke JSON
 fs.writeFileSync('analysis-result.json', JSON.stringify(analysis, null, 2));
-console.log('\n✅ Full report saved to: analysis-result.json');
+console.log('\n✅ Full report saved to: results/analysis-result.json');

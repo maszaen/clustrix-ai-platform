@@ -8,6 +8,7 @@ const https = require('https');
 const http = require('http');
 const url = require('url');
 const mammoth = require('mammoth');
+const { PDFParse } = require('pdf-parse');
 const xlsx = require('./local_modules/xlsx/xlsx');
 const { log, logWithContext, setLogFile, setDebug, rotateLogWithCheckpoint } = require('./utils/logger');
 const { optimizeMessages } = require('./utils/message-optimizer');
@@ -2601,6 +2602,7 @@ async function loadProjectsFromStorage() {
           id: p.id,
           name: p.name,
           description: p.description,
+          instruction: p.instruction || '',
           created_at: new Date(p.created_at).toISOString(),
           updated_at: new Date(p.updated_at).toISOString(),
           isFavorite: p.is_favorite === 1,
@@ -2668,6 +2670,8 @@ ipcMain.handle('projects:save', async (_evt, projects) => {
           log('PROJECTS', 1, 'projects:save', 'Saving project', { 
             id: project.id, 
             name: project.name,
+            instruction: project.instruction,
+            hasInstruction: !!project.instruction,
             filesCount: project.files?.length || 0
           });
           
@@ -2748,7 +2752,7 @@ ipcMain.handle('files:open-dialog', async (event) => {
       { 
         name: 'Supported Files', 
         extensions: [
-          'docx', 'xlsx', 'xls', 'csv', 'tsv',
+          'pdf', 'docx', 'xlsx', 'xls', 'csv', 'tsv',
           'txt', 'md', 'log', 'ini',
           'json', 'yaml', 'yml', 'xml',
           'html', 'css',
@@ -2906,6 +2910,37 @@ ipcMain.handle('files:open-dialog', async (event) => {
           logHelper('FILE_READER', 'docx-error', `DOCX processing failed for ${fileInfo.name}`, {
             error: docxError.message,
             stack: docxError.stack
+          });
+        }
+      } else if (extension === '.pdf') {
+        try {
+          const parser = new PDFParse({ url: filePath });
+          const pdfText = await parser.getText();
+          
+          fileInfo.content = (pdfText.text || '').trim();
+          fileInfo.pageCount = Array.isArray(pdfText.pages) ? pdfText.pages.length : undefined;
+          
+          if (pdfText.info && Object.keys(pdfText.info).length > 0) {
+            fileInfo.metadata = pdfText.info;
+          }
+          
+          logHelper('FILE_READER', 'pdf-extraction', `Extracted content from ${fileInfo.name}`, {
+            contentLength: fileInfo.content.length,
+            pageCount: fileInfo.pageCount,
+            hasMetadata: !!pdfText.info
+          });
+          
+          if (!fileInfo.content) {
+            fileInfo.error = 'PDF file appears to be empty or contains no extractable text content.';
+            logHelper('FILE_READER', 'pdf-warning', `PDF extraction resulted in empty content for ${fileInfo.name}`, {
+              fileSize: fileInfo.size
+            });
+          }
+        } catch (pdfError) {
+          fileInfo.error = `Failed to process PDF file: ${pdfError.message}`;
+          logHelper('FILE_READER', 'pdf-error', `PDF processing failed for ${fileInfo.name}`, {
+            error: pdfError.message,
+            stack: pdfError.stack
           });
         }
       } else if (['.xlsx', '.xls'].includes(extension)) {

@@ -149,6 +149,7 @@ class DatabaseManager {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         description TEXT,
+        instruction TEXT,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         is_favorite INTEGER DEFAULT 0,
@@ -203,6 +204,21 @@ class DatabaseManager {
         timestamp INTEGER NOT NULL
       );
     `);
+    
+    // CRITICAL: Add instruction column for existing databases
+    // Without this, INSERT will fail on old databases
+    try {
+      const tableInfo = this.db.prepare("PRAGMA table_info(projects)").all();
+      const hasInstructionColumn = tableInfo.some(col => col.name === 'instruction');
+      
+      if (!hasInstructionColumn) {
+        console.log('[DATABASE] Adding instruction column to projects table (migration)');
+        this.db.exec("ALTER TABLE projects ADD COLUMN instruction TEXT");
+        console.log('[DATABASE] Successfully added instruction column');
+      }
+    } catch (migrationError) {
+      console.error('[DATABASE] Migration failed:', migrationError.message);
+    }
   }
   
   getAllSessions() {
@@ -443,17 +459,26 @@ class DatabaseManager {
   saveProject(project) {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO projects 
-      (id, name, description, created_at, updated_at, is_favorite, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      (id, name, description, instruction, created_at, updated_at, is_favorite, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     const createdAt = project.created_at ? Date.parse(project.created_at) : Date.now();
     const updatedAt = project.updated_at || project.last_updated ? Date.parse(project.updated_at || project.last_updated) : Date.now();
+    const instruction = project.instruction || '';
+    
+    console.log('[DB] saveProject:', {
+      id: project.id,
+      name: project.name,
+      instruction: instruction,
+      instructionLength: instruction.length
+    });
     
     return stmt.run(
       project.id,
       project.name,
       project.description || '',
+      instruction,
       createdAt,
       updatedAt,
       project.isFavorite ? 1 : 0,

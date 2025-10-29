@@ -240,6 +240,21 @@ const ICONS = {
 </svg>
 </div>`.trim(),
 
+  pdf: `
+<div class="file-icon" aria-hidden="true">
+<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"
+  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
+  stroke-linecap="round" stroke-linejoin="round"
+  class="lucide lucide-file-type-icon lucide-file-type">
+  <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+  <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+  <path d="M9 13v-1h1v1"/>
+  <path d="M9 17v-2h2"/>
+  <path d="M13 13h2"/>
+  <path d="M13 17v-2l2-2"/>
+</svg>
+</div>`.trim(),
+
   spreadsheet: `
 <div class="file-icon" aria-hidden="true">
 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"
@@ -295,6 +310,7 @@ const ICONS = {
 };
 
 const EXT_GROUPS = {
+  pdf: new Set(['pdf']),
   spreadsheet: new Set(['xlsx','xls','csv','tsv']),
   terminal: new Set(['sh','bash','zsh','ksh','bat','cmd','ps1']),
   text: new Set(['txt','md','rtf','docx']),

@@ -1,0 +1,3657 @@
+{
+  "file": "renderer/renderer.js",
+  "range": "entire file",
+  "analyzedAt": "2025-10-29T19:07:18.305Z",
+  "summary": {
+    "totalListeners": 197,
+    "uniqueElements": 45,
+    "eventTypes": {
+      "DOMContentLoaded": 7,
+      "click": 121,
+      "error": 2,
+      "scroll": 3,
+      "blur": 4,
+      "keydown": 11,
+      "mouseleave": 2,
+      "mousemove": 3,
+      "input": 8,
+      "mouseover": 1,
+      "mouseout": 1,
+      "change": 6,
+      "resize": 1,
+      "wheel": 1,
+      "mousedown": 2,
+      "mouseup": 1,
+      "dragstart": 1,
+      "hashchange": 1,
+      "beforeunload": 1,
+      "mouseenter": 1
+    },
+    "handlerTypes": {
+      "arrow": 135,
+      "function": 8,
+      "named": 35,
+      "inline": 19
+    }
+  },
+  "groups": {
+    "misc": [
+      {
+        "line": 52,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "DOMContentLoaded",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "window.addEventListener('DOMContentLoaded', () => {"
+      },
+      {
+        "line": 1041,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener(\"click\", async () => {"
+      },
+      {
+        "line": 1079,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "pill.querySelector(\".remove-file-btn\").addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 1097,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "pill.querySelector(\".remove-file-btn\").addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 1149,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "pill.querySelector(\".remove-file-btn\").addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 1350,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "error",
+        "handler": "inline",
+        "handlerType": "function",
+        "code": "document.addEventListener('error', function(e) {"
+      },
+      {
+        "line": 1361,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "function",
+        "code": "document.addEventListener('click', function(e) {"
+      },
+      {
+        "line": 1847,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "scroll",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "body.addEventListener('scroll', () => {"
+      },
+      {
+        "line": 1901,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "toggle.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 1922,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "scroll",
+        "handler": "scrollListener",
+        "handlerType": "named",
+        "code": "body.addEventListener('scroll', scrollListener);"
+      },
+      {
+        "line": 2968,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "closeModelMgmt",
+        "handlerType": "named",
+        "code": "$(\"#mgmt-close\").addEventListener(\"click\", closeModelMgmt);"
+      },
+      {
+        "line": 2970,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "closeModelMgmt",
+        "handlerType": "named",
+        "code": "$(\"#close-mgmt\").addEventListener(\"click\", closeModelMgmt);"
+      },
+      {
+        "line": 2971,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "closeModelMgmt",
+        "handlerType": "named",
+        "code": "$(\"#model-mgmt-modal .modal-overlay\").addEventListener(\"click\", closeModelMgmt);"
+      },
+      {
+        "line": 3772,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.getElementById(\"chats-show-more\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 3857,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "blur",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "input.addEventListener(\"blur\", () => finishRename(true));"
+      },
+      {
+        "line": 3858,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "keydown",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "input.addEventListener(\"keydown\", (e) => {"
+      },
+      {
+        "line": 3926,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "blur",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "input.addEventListener(\"blur\", () => finishRename(true));"
+      },
+      {
+        "line": 3927,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "keydown",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "input.addEventListener(\"keydown\", (e) => {"
+      },
+      {
+        "line": 3986,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "li.addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 4089,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "mouseleave",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "li.addEventListener(\"mouseleave\", (e) => {"
+      },
+      {
+        "line": 4288,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "pageListener",
+        "handlerType": "named",
+        "code": "page.addEventListener(\"click\", pageListener);"
+      },
+      {
+        "line": 4292,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "page.addEventListener("
+      },
+      {
+        "line": 4343,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "page.addEventListener("
+      },
+      {
+        "line": 4388,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "mousemove",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "page.addEventListener(\"mousemove\", (e) => {"
+      },
+      {
+        "line": 4394,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 4845,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 4960,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "modal.addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 4971,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "modal.querySelector(\".copy-full-code-btn\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 5112,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "mouseover",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener('mouseover', (e) => {"
+      },
+      {
+        "line": 5120,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "mouseout",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener('mouseout', (e) => {"
+      },
+      {
+        "line": 5936,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "fileCard.addEventListener('click', (e) => {"
+      },
+      {
+        "line": 5943,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "fileCard.querySelector('.file-card-delete-btn').addEventListener('click', (e) =>..."
+      },
+      {
+        "line": 6334,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "pageListener",
+        "handlerType": "named",
+        "code": "projectsPage.addEventListener(\"click\", pageListener);"
+      },
+      {
+        "line": 6432,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "projectsDocumentListener",
+        "handlerType": "named",
+        "code": "document.addEventListener(\"click\", projectsDocumentListener);"
+      },
+      {
+        "line": 6436,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "projectsPage.addEventListener("
+      },
+      {
+        "line": 6487,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "projectsPage.addEventListener("
+      },
+      {
+        "line": 6534,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "mousemove",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener(\"mousemove\", (e) => {"
+      },
+      {
+        "line": 6541,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "document.addEventListener("
+      },
+      {
+        "line": 6594,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "document.addEventListener("
+      },
+      {
+        "line": 6642,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "document.addEventListener("
+      },
+      {
+        "line": 6695,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "document.addEventListener("
+      },
+      {
+        "line": 7057,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "modal.addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 7239,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "modal.addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 7452,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "blur",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "input.addEventListener(\"blur\", () => finishRename(true));"
+      },
+      {
+        "line": 7453,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "keydown",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "input.addEventListener(\"keydown\", (e) => {"
+      },
+      {
+        "line": 7674,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "scroll",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "scroller.addEventListener('scroll', () => {"
+      },
+      {
+        "line": 7968,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "scroller.addEventListener("
+      },
+      {
+        "line": 9710,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "scroller.addEventListener("
+      },
+      {
+        "line": 9989,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "projectHeader.addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 10056,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "moreLi.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 10141,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "sessionElement.addEventListener(\"click\", () => setCurrent(sessionData));"
+      },
+      {
+        "line": 10142,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "sessionElement.querySelector(\"button\").addEventListener(\"click\", (ev) => {"
+      },
+      {
+        "line": 10453,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "editBtn.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 10473,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "regenBtn.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 10547,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "expandBtn.addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 11587,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 12463,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener(\"click\", (event) => {"
+      },
+      {
+        "line": 12496,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "copyBtn.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 12525,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "regenBtn.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 13187,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "input",
+        "handler": "inline",
+        "handlerType": "function",
+        "code": "msgCentral.addEventListener(\"input\", function () {"
+      },
+      {
+        "line": 13210,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "handleSidebarToggle",
+        "handlerType": "named",
+        "code": "newBtn.addEventListener(\"click\", handleSidebarToggle);"
+      },
+      {
+        "line": 13214,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "handleSidebarToggle",
+        "handlerType": "named",
+        "code": "newBtn2.addEventListener(\"click\", handleSidebarToggle);"
+      },
+      {
+        "line": 13219,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "input",
+        "handler": "inline",
+        "handlerType": "function",
+        "code": "msgInput.addEventListener(\"input\", function () {"
+      },
+      {
+        "line": 13237,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "input",
+        "handler": "inline",
+        "handlerType": "function",
+        "code": "projectInput.addEventListener(\"input\", function () {"
+      },
+      {
+        "line": 13253,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "keydown",
+        "handler": "inline",
+        "handlerType": "function",
+        "code": "projectInput.addEventListener(\"keydown\", function (e) {"
+      },
+      {
+        "line": 13304,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "closeOnBackdrop",
+        "handlerType": "named",
+        "code": "backdrop.addEventListener(\"click\", closeOnBackdrop);"
+      },
+      {
+        "line": 13305,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "keydown",
+        "handler": "closeOnEscape",
+        "handlerType": "named",
+        "code": "document.addEventListener(\"keydown\", closeOnEscape);"
+      },
+      {
+        "line": 13354,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "resize",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "window.addEventListener(\"resize\", () => {"
+      },
+      {
+        "line": 13710,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "input",
+        "handler": "handleSearchInput",
+        "handlerType": "named",
+        "code": "searchInput.addEventListener('input', handleSearchInput);"
+      },
+      {
+        "line": 13711,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "keydown",
+        "handler": "handleSearchKeydown",
+        "handlerType": "named",
+        "code": "searchInput.addEventListener('keydown', handleSearchKeydown);"
+      },
+      {
+        "line": 13729,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "handleSearchCloseClick",
+        "handlerType": "named",
+        "code": "closeButton.addEventListener('click', handleSearchCloseClick);"
+      },
+      {
+        "line": 14096,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "keydown",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener(\"keydown\", (e) => {"
+      },
+      {
+        "line": 14227,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "chatArea.addEventListener(\"click\", (event) => {"
+      },
+      {
+        "line": 14247,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "searchBtn.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14266,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "modelBtn.addEventListener(\"click\", (e) =>"
+      },
+      {
+        "line": 14395,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#project-title-indicator\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14406,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "$(\"#refresh-btn\").addEventListener(\"click\", async () => {"
+      },
+      {
+        "line": 14420,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "$(\"#minimize-btn\").addEventListener(\"click\", async () => {"
+      },
+      {
+        "line": 14434,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#maximize-btn\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14439,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#close-btn\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14444,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#open-search-api-settings\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14458,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "change",
+        "handler": "toggleGoogleCseInput",
+        "handlerType": "named",
+        "code": "$(\"#search-api-provider\").addEventListener(\"change\", toggleGoogleCseInput);"
+      },
+      {
+        "line": 14462,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "closeSearchApiModal",
+        "handlerType": "named",
+        "code": "$(\"#close-search-api\").addEventListener(\"click\", closeSearchApiModal);"
+      },
+      {
+        "line": 14463,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "closeSearchApiModal",
+        "handlerType": "named",
+        "code": "$(\"#cancel-search-api\").addEventListener(\"click\", closeSearchApiModal);"
+      },
+      {
+        "line": 14464,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "$(\"#search-api-modal .modal-overlay\").addEventListener("
+      },
+      {
+        "line": 14469,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "$(\"#save-search-api\").addEventListener(\"click\", async () => {"
+      },
+      {
+        "line": 14490,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#open-accessibility-settings\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14510,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "closeAccessibilityModal",
+        "handlerType": "named",
+        "code": "$(\"#close-accessibility-modal\").addEventListener(\"click\", closeAccessibilityModa..."
+      },
+      {
+        "line": 14511,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "closeAccessibilityModal",
+        "handlerType": "named",
+        "code": "$(\"#close-accessibility\").addEventListener(\"click\", closeAccessibilityModal);"
+      },
+      {
+        "line": 14512,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "$(\"#accessibility-modal .modal-overlay\").addEventListener("
+      },
+      {
+        "line": 14522,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "keydown",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "newMsgCentral.addEventListener(\"keydown\", (e) => {"
+      },
+      {
+        "line": 14544,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "newSendCentral.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14562,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "newMarkdownBtn.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14576,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#open-model-mgmt\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14587,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#open-model-switcher\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14717,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "input",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "// $(\"#model-note\").addEventListener(\"input\", (e) => applyNotePreview(e.target.v..."
+      },
+      {
+        "line": 14728,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "$(\"#save-models\").addEventListener(\"click\", async () => {"
+      },
+      {
+        "line": 14800,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#cancel-models\").addEventListener(\"click\", () =>"
+      },
+      {
+        "line": 14803,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#models-modal .modal-overlay\").addEventListener(\"click\", () =>"
+      },
+      {
+        "line": 14807,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#reset-models\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14823,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#new-chat\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14835,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#chats-btn\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14846,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#projects-btn\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14862,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#announcement-btn\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14927,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#artifact-btn\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 14938,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "handleSettingsClick",
+        "handlerType": "named",
+        "code": "$(\"#open-settings\").addEventListener(\"click\", handleSettingsClick);"
+      },
+      {
+        "line": 14942,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "handlePersonaSettingsClick",
+        "handlerType": "named",
+        "code": "$(\"#open-persona-settings\").addEventListener(\"click\", handlePersonaSettingsClick..."
+      },
+      {
+        "line": 14963,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "closeAccountBtn.addEventListener('click', () => {"
+      },
+      {
+        "line": 14970,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "accountModal.addEventListener('click', (e) => {"
+      },
+      {
+        "line": 14978,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "googleLoginBtn.addEventListener('click', () => handleGoogleLogin());"
+      },
+      {
+        "line": 15022,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "accountMenuDropdown.addEventListener('click', (e) => {"
+      },
+      {
+        "line": 15045,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "internalBtn.addEventListener('click', () => handleDataSourceSwitch('internal'));..."
+      },
+      {
+        "line": 15049,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "cloudBtn.addEventListener('click', () => handleDataSourceSwitch('cloud'));"
+      },
+      {
+        "line": 15068,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "closeLearnMoreBtn.addEventListener('click', () => {"
+      },
+      {
+        "line": 15075,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "learnMoreModal.addEventListener('click', (e) => {"
+      },
+      {
+        "line": 15084,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener('click', (e) => {"
+      },
+      {
+        "line": 15127,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "change",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "$(\"#show-projects-toggle\").addEventListener(\"change\", async (e) => {"
+      },
+      {
+        "line": 15137,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "change",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "$(\"#show-starred-toggle\").addEventListener(\"change\", async (e) => {"
+      },
+      {
+        "line": 15147,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#close-modal\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 15151,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#close-settings\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 15155,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "$(\"#save-settings\").addEventListener(\"click\", async () => {"
+      },
+      {
+        "line": 15177,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#delete-all\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 15209,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "change",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#web-search-switch\").addEventListener(\"change\", (e) => {"
+      },
+      {
+        "line": 15236,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "change",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#theme-slider\").addEventListener(\"change\", () => {"
+      },
+      {
+        "line": 15241,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#settings-modal .modal-overlay\").addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 15251,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "keydown",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#msg\").addEventListener(\"keydown\", (e) => {"
+      },
+      {
+        "line": 15271,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "markdownChatBtn.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 15287,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "$(\"#send\").addEventListener(\"click\", async () => {"
+      },
+      {
+        "line": 15392,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 15438,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener(\"click\", (event) => {"
+      },
+      {
+        "line": 15713,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "wheel",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "wrapper.addEventListener('wheel', (e) => {"
+      },
+      {
+        "line": 15728,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "mousedown",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "wrapper.addEventListener('mousedown', (e) => {"
+      },
+      {
+        "line": 15740,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "mousemove",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener('mousemove', (e) => {"
+      },
+      {
+        "line": 15749,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "mouseup",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener('mouseup', () => {"
+      },
+      {
+        "line": 15771,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "zoomIn",
+        "handlerType": "named",
+        "code": "controls.querySelector('.zoom-in').addEventListener('click', zoomIn);..."
+      },
+      {
+        "line": 15991,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "function",
+        "code": "document.addEventListener('click', function(event) {"
+      },
+      {
+        "line": 16014,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "hashchange",
+        "handler": "inline",
+        "handlerType": "function",
+        "code": "window.addEventListener('hashchange', function() {"
+      },
+      {
+        "line": 16384,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "beforeunload",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "window.addEventListener(\"beforeunload\", async (e) => {"
+      },
+      {
+        "line": 16405,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "DOMContentLoaded",
+        "handler": "initializeApp",
+        "handlerType": "named",
+        "code": "document.addEventListener(\"DOMContentLoaded\", initializeApp);"
+      },
+      {
+        "line": 17664,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "DOMContentLoaded",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "document.addEventListener('DOMContentLoaded', async () => {"
+      },
+      {
+        "line": 17826,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "DOMContentLoaded",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener(\"DOMContentLoaded\", () => {"
+      },
+      {
+        "line": 17871,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "handleDismiss",
+        "handlerType": "named",
+        "code": "overlay.addEventListener('click', handleDismiss);"
+      },
+      {
+        "line": 17875,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "handleDismiss",
+        "handlerType": "named",
+        "code": "confirmationCancelBtn.addEventListener('click', handleDismiss);"
+      },
+      {
+        "line": 17879,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "click",
+        "handler": "handleDismiss",
+        "handlerType": "named",
+        "code": "confirmationCloseBtn.addEventListener('click', handleDismiss);"
+      },
+      {
+        "line": 17947,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "keydown",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener('keydown', (e) => {"
+      },
+      {
+        "line": 18217,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "mousedown",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener('mousedown', (e) => {"
+      },
+      {
+        "line": 18228,
+        "element": "unknown",
+        "selectorType": "",
+        "event": "DOMContentLoaded",
+        "handler": "initPageHistory",
+        "handlerType": "named",
+        "code": "document.addEventListener('DOMContentLoaded', initPageHistory);"
+      }
+    ],
+    "cha": [
+      {
+        "line": 1436,
+        "element": "chat-log",
+        "selectorType": "id",
+        "event": "DOMContentLoaded",
+        "handler": "setupGlobalImageErrorHandler",
+        "handlerType": "named",
+        "code": "document.addEventListener('DOMContentLoaded', setupGlobalImageErrorHandler);"
+      },
+      {
+        "line": 4309,
+        "element": "chat-menu-btn",
+        "selectorType": "class",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "page.addEventListener("
+      }
+    ],
+    "thinkin": [
+      {
+        "line": 1839,
+        "element": "thinking-update",
+        "selectorType": "class",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "newToggle.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 9311,
+        "element": "thinking-toggle",
+        "selectorType": "multiple",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "newToggle.addEventListener(\"click\", () => {"
+      }
+    ],
+    "pro": [
+      {
+        "line": 3011,
+        "element": "prov-list .modal-menu-item",
+        "selectorType": "multiple",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener(\"click\", () => renderMgmtProvider(btn.dataset.prov));"
+      }
+    ],
+    "[data-del]": [
+      {
+        "line": 3108,
+        "element": "[data-del]",
+        "selectorType": "multiple",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener(\"click\", () => {"
+      }
+    ],
+    "mode": [
+      {
+        "line": 3128,
+        "element": "model-list .menu-item",
+        "selectorType": "multiple",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "it.addEventListener(\"click\", (e) => {"
+      }
+    ],
+    "chat": [
+      {
+        "line": 4422,
+        "element": "chats-search",
+        "selectorType": "id",
+        "event": "input",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "searchInput.addEventListener(\"input\", () => renderChatsPage());"
+      }
+    ],
+    "bac": [
+      {
+        "line": 4616,
+        "element": "back-to-chat-from-artifacts",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "backBtn.addEventListener(\"click\", () => {"
+      }
+    ],
+    "artifact": [
+      {
+        "line": 4625,
+        "element": "artifacts-search",
+        "selectorType": "id",
+        "event": "input",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "searchInput.addEventListener(\"input\", (e) => {"
+      },
+      {
+        "line": 4631,
+        "element": "artifacts-search",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "document.addEventListener(\"click\", (e) => {"
+      },
+      {
+        "line": 4788,
+        "element": "artifacts-page",
+        "selectorType": "id",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "artifactsPage.addEventListener("
+      }
+    ],
+    "artifac": [
+      {
+        "line": 4805,
+        "element": "artifact-menu-btn",
+        "selectorType": "class",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "artifactsPage.addEventListener("
+      }
+    ],
+    "vie": [
+      {
+        "line": 4991,
+        "element": "view-in-chat-btn",
+        "selectorType": "class",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "viewInChatBtn.addEventListener(\"click\", () => {"
+      }
+    ],
+    "instructio": [
+      {
+        "line": 5846,
+        "element": "instruction-content",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "modal.addEventListener(\"click\", async (e) => {"
+      }
+    ],
+    "project": [
+      {
+        "line": 5956,
+        "element": "projects-search",
+        "selectorType": "id",
+        "event": "input",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "searchInput.addEventListener(\"input\", (e) => {"
+      },
+      {
+        "line": 5964,
+        "element": "projects-search",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "newProjectBtn.addEventListener(\"click\", () => {"
+      }
+    ],
+    "ne": [
+      {
+        "line": 5972,
+        "element": "new-project-btn",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "backBtn.addEventListener(\"click\", () => {"
+      }
+    ],
+    "projec": [
+      {
+        "line": 6453,
+        "element": "project-menu-btn",
+        "selectorType": "class",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "projectsPage.addEventListener("
+      },
+      {
+        "line": 6660,
+        "element": "project-title-menu-btn",
+        "selectorType": "class",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "document.addEventListener("
+      },
+      {
+        "line": 6784,
+        "element": "project-name",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "modal.addEventListener(\"click\", async (e) => {"
+      },
+      {
+        "line": 7384,
+        "element": "project-item-date",
+        "selectorType": "class",
+        "event": "blur",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "input.addEventListener(\"blur\", () => finishRename(true));"
+      },
+      {
+        "line": 7385,
+        "element": "project-item-date",
+        "selectorType": "class",
+        "event": "keydown",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "input.addEventListener(\"keydown\", (e) => {"
+      }
+    ],
+    "sessio": [
+      {
+        "line": 6559,
+        "element": "session-menu-btn",
+        "selectorType": "class",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "document.addEventListener("
+      }
+    ],
+    "scrolltobottombt": [
+      {
+        "line": 7710,
+        "element": "scrollToBottomBtn",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener('click', () => {"
+      }
+    ],
+    "message": [
+      {
+        "line": 7938,
+        "element": "messages-container",
+        "selectorType": "class",
+        "event": "unknown",
+        "handler": "inline",
+        "handlerType": "inline",
+        "code": "scroller.addEventListener("
+      }
+    ],
+    "cop": [
+      {
+        "line": 8220,
+        "element": "copy-code-btn",
+        "selectorType": "multiple",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener(\"click\", () => {"
+      },
+      {
+        "line": 9354,
+        "element": "copy-btn",
+        "selectorType": "class",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "newCopyBtn.addEventListener(\"click\", () => {"
+      }
+    ],
+    "pl": [
+      {
+        "line": 8255,
+        "element": "pli",
+        "selectorType": "multiple",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener(\"click\", (event) => {"
+      }
+    ],
+    "edi": [
+      {
+        "line": 9379,
+        "element": "edit-btn",
+        "selectorType": "class",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "newEditBtn.addEventListener(\"click\", () => {"
+      }
+    ],
+    "rege": [
+      {
+        "line": 9397,
+        "element": "regen-btn",
+        "selectorType": "class",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "newRegenBtn.addEventListener(\"click\", () => {"
+      }
+    ],
+    "usag": [
+      {
+        "line": 9411,
+        "element": "usage-info-btn",
+        "selectorType": "class",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "newUsageBtn.addEventListener(\"click\", (event) => {"
+      }
+    ],
+    "messag": [
+      {
+        "line": 10422,
+        "element": "message-actions",
+        "selectorType": "class",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener(\"click\", () => {"
+      }
+    ],
+    "extende": [
+      {
+        "line": 10827,
+        "element": "extended-thinking",
+        "selectorType": "id",
+        "event": "change",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "thinkSel.addEventListener(\"change\", async () => {"
+      }
+    ],
+    "searc": [
+      {
+        "line": 13719,
+        "element": "search-prev",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "handleSearchPrevClick",
+        "handlerType": "named",
+        "code": "prevButton.addEventListener('click', handleSearchPrevClick);"
+      },
+      {
+        "line": 13724,
+        "element": "search-next",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "handleSearchNextClick",
+        "handlerType": "named",
+        "code": "nextButton.addEventListener('click', handleSearchNextClick);"
+      }
+    ],
+    "inpu": [
+      {
+        "line": 14275,
+        "element": "input-container-btn",
+        "selectorType": "multiple",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "btn.addEventListener(\"click\", async () => {"
+      }
+    ],
+    "p": [
+      {
+        "line": 14797,
+        "element": "p",
+        "selectorType": "class",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "$(\"#close-models\").addEventListener(\"click\", () =>"
+      }
+    ],
+    "ope": [
+      {
+        "line": 14953,
+        "element": "open-account-settings",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "openAccountBtn.addEventListener('click', async (e) => {"
+      },
+      {
+        "line": 15059,
+        "element": "open-learn-more",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "openLearnMoreBtn.addEventListener('click', (e) => {"
+      }
+    ],
+    "accoun": [
+      {
+        "line": 14983,
+        "element": "account-close-modal-btn",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "closeModalBtn.addEventListener('click', () => {"
+      },
+      {
+        "line": 14994,
+        "element": "account-menu-btn",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "accountMenuBtn.addEventListener('click', (e) => {"
+      }
+    ],
+    "aut": [
+      {
+        "line": 15107,
+        "element": "auth-btn",
+        "selectorType": "id",
+        "event": "click",
+        "handler": "async",
+        "handlerType": "arrow",
+        "code": "authBtn.addEventListener('click', async (e) => {"
+      }
+    ],
+    "zoo": [
+      {
+        "line": 15772,
+        "element": "zoom-in",
+        "selectorType": "class",
+        "event": "click",
+        "handler": "zoomOut",
+        "handlerType": "named",
+        "code": "controls.querySelector('.zoom-out').addEventListener('click', zoomOut);..."
+      },
+      {
+        "line": 15773,
+        "element": "zoom-in",
+        "selectorType": "class",
+        "event": "click",
+        "handler": "resetZoom",
+        "handlerType": "named",
+        "code": "controls.querySelector('.zoom-reset').addEventListener('click', resetZoom);..."
+      },
+      {
+        "line": 15776,
+        "element": "zoom-in",
+        "selectorType": "class",
+        "event": "dragstart",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "wrapper.addEventListener('dragstart', (e) => {"
+      }
+    ],
+    "[title]": [
+      {
+        "line": 17699,
+        "element": "[title]",
+        "selectorType": "multiple",
+        "event": "mouseenter",
+        "handler": "handleMouseEnter",
+        "handlerType": "named",
+        "code": "element.addEventListener('mouseenter', handleMouseEnter);"
+      },
+      {
+        "line": 17700,
+        "element": "[title]",
+        "selectorType": "multiple",
+        "event": "mouseleave",
+        "handler": "handleMouseLeave",
+        "handlerType": "named",
+        "code": "element.addEventListener('mouseleave', handleMouseLeave);"
+      }
+    ],
+    "loadin": [
+      {
+        "line": 17838,
+        "element": "loading-overlay",
+        "selectorType": "id",
+        "event": "error",
+        "handler": "inline",
+        "handlerType": "arrow",
+        "code": "window.addEventListener(\"error\", (event) => {"
+      }
+    ],
+    "ms": [
+      {
+        "line": 18045,
+        "element": "msg",
+        "selectorType": "id",
+        "event": "DOMContentLoaded",
+        "handler": "initKeyboardShortcuts",
+        "handlerType": "named",
+        "code": "document.addEventListener('DOMContentLoaded', initKeyboardShortcuts);"
+      }
+    ]
+  },
+  "details": [
+    {
+      "line": 52,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "DOMContentLoaded",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "window.addEventListener('DOMContentLoaded', () => {"
+    },
+    {
+      "line": 1041,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener(\"click\", async () => {"
+    },
+    {
+      "line": 1079,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "pill.querySelector(\".remove-file-btn\").addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 1097,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "pill.querySelector(\".remove-file-btn\").addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 1149,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "pill.querySelector(\".remove-file-btn\").addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 1350,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "error",
+      "handler": "inline",
+      "handlerType": "function",
+      "code": "document.addEventListener('error', function(e) {"
+    },
+    {
+      "line": 1361,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "function",
+      "code": "document.addEventListener('click', function(e) {"
+    },
+    {
+      "line": 1436,
+      "element": "chat-log",
+      "selectorType": "id",
+      "event": "DOMContentLoaded",
+      "handler": "setupGlobalImageErrorHandler",
+      "handlerType": "named",
+      "code": "document.addEventListener('DOMContentLoaded', setupGlobalImageErrorHandler);"
+    },
+    {
+      "line": 1839,
+      "element": "thinking-update",
+      "selectorType": "class",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "newToggle.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 1847,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "scroll",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "body.addEventListener('scroll', () => {"
+    },
+    {
+      "line": 1901,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "toggle.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 1922,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "scroll",
+      "handler": "scrollListener",
+      "handlerType": "named",
+      "code": "body.addEventListener('scroll', scrollListener);"
+    },
+    {
+      "line": 2968,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "closeModelMgmt",
+      "handlerType": "named",
+      "code": "$(\"#mgmt-close\").addEventListener(\"click\", closeModelMgmt);"
+    },
+    {
+      "line": 2970,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "closeModelMgmt",
+      "handlerType": "named",
+      "code": "$(\"#close-mgmt\").addEventListener(\"click\", closeModelMgmt);"
+    },
+    {
+      "line": 2971,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "closeModelMgmt",
+      "handlerType": "named",
+      "code": "$(\"#model-mgmt-modal .modal-overlay\").addEventListener(\"click\", closeModelMgmt);"
+    },
+    {
+      "line": 3011,
+      "element": "prov-list .modal-menu-item",
+      "selectorType": "multiple",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener(\"click\", () => renderMgmtProvider(btn.dataset.prov));"
+    },
+    {
+      "line": 3108,
+      "element": "[data-del]",
+      "selectorType": "multiple",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 3128,
+      "element": "model-list .menu-item",
+      "selectorType": "multiple",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "it.addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 3772,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.getElementById(\"chats-show-more\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 3857,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "blur",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "input.addEventListener(\"blur\", () => finishRename(true));"
+    },
+    {
+      "line": 3858,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "keydown",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "input.addEventListener(\"keydown\", (e) => {"
+    },
+    {
+      "line": 3926,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "blur",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "input.addEventListener(\"blur\", () => finishRename(true));"
+    },
+    {
+      "line": 3927,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "keydown",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "input.addEventListener(\"keydown\", (e) => {"
+    },
+    {
+      "line": 3986,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "li.addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 4089,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "mouseleave",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "li.addEventListener(\"mouseleave\", (e) => {"
+    },
+    {
+      "line": 4288,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "pageListener",
+      "handlerType": "named",
+      "code": "page.addEventListener(\"click\", pageListener);"
+    },
+    {
+      "line": 4292,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "page.addEventListener("
+    },
+    {
+      "line": 4309,
+      "element": "chat-menu-btn",
+      "selectorType": "class",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "page.addEventListener("
+    },
+    {
+      "line": 4343,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "page.addEventListener("
+    },
+    {
+      "line": 4388,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "mousemove",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "page.addEventListener(\"mousemove\", (e) => {"
+    },
+    {
+      "line": 4394,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 4422,
+      "element": "chats-search",
+      "selectorType": "id",
+      "event": "input",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "searchInput.addEventListener(\"input\", () => renderChatsPage());"
+    },
+    {
+      "line": 4616,
+      "element": "back-to-chat-from-artifacts",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "backBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 4625,
+      "element": "artifacts-search",
+      "selectorType": "id",
+      "event": "input",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "searchInput.addEventListener(\"input\", (e) => {"
+    },
+    {
+      "line": 4631,
+      "element": "artifacts-search",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 4788,
+      "element": "artifacts-page",
+      "selectorType": "id",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "artifactsPage.addEventListener("
+    },
+    {
+      "line": 4805,
+      "element": "artifact-menu-btn",
+      "selectorType": "class",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "artifactsPage.addEventListener("
+    },
+    {
+      "line": 4845,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 4960,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "modal.addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 4971,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "modal.querySelector(\".copy-full-code-btn\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 4991,
+      "element": "view-in-chat-btn",
+      "selectorType": "class",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "viewInChatBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 5112,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "mouseover",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener('mouseover', (e) => {"
+    },
+    {
+      "line": 5120,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "mouseout",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener('mouseout', (e) => {"
+    },
+    {
+      "line": 5846,
+      "element": "instruction-content",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "modal.addEventListener(\"click\", async (e) => {"
+    },
+    {
+      "line": 5936,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "fileCard.addEventListener('click', (e) => {"
+    },
+    {
+      "line": 5943,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "fileCard.querySelector('.file-card-delete-btn').addEventListener('click', (e) =>..."
+    },
+    {
+      "line": 5956,
+      "element": "projects-search",
+      "selectorType": "id",
+      "event": "input",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "searchInput.addEventListener(\"input\", (e) => {"
+    },
+    {
+      "line": 5964,
+      "element": "projects-search",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "newProjectBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 5972,
+      "element": "new-project-btn",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "backBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 6334,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "pageListener",
+      "handlerType": "named",
+      "code": "projectsPage.addEventListener(\"click\", pageListener);"
+    },
+    {
+      "line": 6432,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "projectsDocumentListener",
+      "handlerType": "named",
+      "code": "document.addEventListener(\"click\", projectsDocumentListener);"
+    },
+    {
+      "line": 6436,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "projectsPage.addEventListener("
+    },
+    {
+      "line": 6453,
+      "element": "project-menu-btn",
+      "selectorType": "class",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "projectsPage.addEventListener("
+    },
+    {
+      "line": 6487,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "projectsPage.addEventListener("
+    },
+    {
+      "line": 6534,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "mousemove",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener(\"mousemove\", (e) => {"
+    },
+    {
+      "line": 6541,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "document.addEventListener("
+    },
+    {
+      "line": 6559,
+      "element": "session-menu-btn",
+      "selectorType": "class",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "document.addEventListener("
+    },
+    {
+      "line": 6594,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "document.addEventListener("
+    },
+    {
+      "line": 6642,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "document.addEventListener("
+    },
+    {
+      "line": 6660,
+      "element": "project-title-menu-btn",
+      "selectorType": "class",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "document.addEventListener("
+    },
+    {
+      "line": 6695,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "document.addEventListener("
+    },
+    {
+      "line": 6784,
+      "element": "project-name",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "modal.addEventListener(\"click\", async (e) => {"
+    },
+    {
+      "line": 7057,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "modal.addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 7239,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "modal.addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 7384,
+      "element": "project-item-date",
+      "selectorType": "class",
+      "event": "blur",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "input.addEventListener(\"blur\", () => finishRename(true));"
+    },
+    {
+      "line": 7385,
+      "element": "project-item-date",
+      "selectorType": "class",
+      "event": "keydown",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "input.addEventListener(\"keydown\", (e) => {"
+    },
+    {
+      "line": 7452,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "blur",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "input.addEventListener(\"blur\", () => finishRename(true));"
+    },
+    {
+      "line": 7453,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "keydown",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "input.addEventListener(\"keydown\", (e) => {"
+    },
+    {
+      "line": 7674,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "scroll",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "scroller.addEventListener('scroll', () => {"
+    },
+    {
+      "line": 7710,
+      "element": "scrollToBottomBtn",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener('click', () => {"
+    },
+    {
+      "line": 7938,
+      "element": "messages-container",
+      "selectorType": "class",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "scroller.addEventListener("
+    },
+    {
+      "line": 7968,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "scroller.addEventListener("
+    },
+    {
+      "line": 8220,
+      "element": "copy-code-btn",
+      "selectorType": "multiple",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 8255,
+      "element": "pli",
+      "selectorType": "multiple",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener(\"click\", (event) => {"
+    },
+    {
+      "line": 9311,
+      "element": "thinking-toggle",
+      "selectorType": "multiple",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "newToggle.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 9354,
+      "element": "copy-btn",
+      "selectorType": "class",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "newCopyBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 9379,
+      "element": "edit-btn",
+      "selectorType": "class",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "newEditBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 9397,
+      "element": "regen-btn",
+      "selectorType": "class",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "newRegenBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 9411,
+      "element": "usage-info-btn",
+      "selectorType": "class",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "newUsageBtn.addEventListener(\"click\", (event) => {"
+    },
+    {
+      "line": 9710,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "scroller.addEventListener("
+    },
+    {
+      "line": 9989,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "projectHeader.addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 10056,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "moreLi.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 10141,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "sessionElement.addEventListener(\"click\", () => setCurrent(sessionData));"
+    },
+    {
+      "line": 10142,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "sessionElement.querySelector(\"button\").addEventListener(\"click\", (ev) => {"
+    },
+    {
+      "line": 10422,
+      "element": "message-actions",
+      "selectorType": "class",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 10453,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "editBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 10473,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "regenBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 10547,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "expandBtn.addEventListener(\"click\", (e) => {"
+    },
+    {
+      "line": 10827,
+      "element": "extended-thinking",
+      "selectorType": "id",
+      "event": "change",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "thinkSel.addEventListener(\"change\", async () => {"
+    },
+    {
+      "line": 11587,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 12463,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener(\"click\", (event) => {"
+    },
+    {
+      "line": 12496,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "copyBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 12525,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "regenBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 13187,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "input",
+      "handler": "inline",
+      "handlerType": "function",
+      "code": "msgCentral.addEventListener(\"input\", function () {"
+    },
+    {
+      "line": 13210,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "handleSidebarToggle",
+      "handlerType": "named",
+      "code": "newBtn.addEventListener(\"click\", handleSidebarToggle);"
+    },
+    {
+      "line": 13214,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "handleSidebarToggle",
+      "handlerType": "named",
+      "code": "newBtn2.addEventListener(\"click\", handleSidebarToggle);"
+    },
+    {
+      "line": 13219,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "input",
+      "handler": "inline",
+      "handlerType": "function",
+      "code": "msgInput.addEventListener(\"input\", function () {"
+    },
+    {
+      "line": 13237,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "input",
+      "handler": "inline",
+      "handlerType": "function",
+      "code": "projectInput.addEventListener(\"input\", function () {"
+    },
+    {
+      "line": 13253,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "keydown",
+      "handler": "inline",
+      "handlerType": "function",
+      "code": "projectInput.addEventListener(\"keydown\", function (e) {"
+    },
+    {
+      "line": 13304,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "closeOnBackdrop",
+      "handlerType": "named",
+      "code": "backdrop.addEventListener(\"click\", closeOnBackdrop);"
+    },
+    {
+      "line": 13305,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "keydown",
+      "handler": "closeOnEscape",
+      "handlerType": "named",
+      "code": "document.addEventListener(\"keydown\", closeOnEscape);"
+    },
+    {
+      "line": 13354,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "resize",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "window.addEventListener(\"resize\", () => {"
+    },
+    {
+      "line": 13710,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "input",
+      "handler": "handleSearchInput",
+      "handlerType": "named",
+      "code": "searchInput.addEventListener('input', handleSearchInput);"
+    },
+    {
+      "line": 13711,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "keydown",
+      "handler": "handleSearchKeydown",
+      "handlerType": "named",
+      "code": "searchInput.addEventListener('keydown', handleSearchKeydown);"
+    },
+    {
+      "line": 13719,
+      "element": "search-prev",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "handleSearchPrevClick",
+      "handlerType": "named",
+      "code": "prevButton.addEventListener('click', handleSearchPrevClick);"
+    },
+    {
+      "line": 13724,
+      "element": "search-next",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "handleSearchNextClick",
+      "handlerType": "named",
+      "code": "nextButton.addEventListener('click', handleSearchNextClick);"
+    },
+    {
+      "line": 13729,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "handleSearchCloseClick",
+      "handlerType": "named",
+      "code": "closeButton.addEventListener('click', handleSearchCloseClick);"
+    },
+    {
+      "line": 14096,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "keydown",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener(\"keydown\", (e) => {"
+    },
+    {
+      "line": 14227,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "chatArea.addEventListener(\"click\", (event) => {"
+    },
+    {
+      "line": 14247,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "searchBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14266,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "modelBtn.addEventListener(\"click\", (e) =>"
+    },
+    {
+      "line": 14275,
+      "element": "input-container-btn",
+      "selectorType": "multiple",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener(\"click\", async () => {"
+    },
+    {
+      "line": 14395,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#project-title-indicator\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14406,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "$(\"#refresh-btn\").addEventListener(\"click\", async () => {"
+    },
+    {
+      "line": 14420,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "$(\"#minimize-btn\").addEventListener(\"click\", async () => {"
+    },
+    {
+      "line": 14434,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#maximize-btn\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14439,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#close-btn\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14444,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#open-search-api-settings\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14458,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "change",
+      "handler": "toggleGoogleCseInput",
+      "handlerType": "named",
+      "code": "$(\"#search-api-provider\").addEventListener(\"change\", toggleGoogleCseInput);"
+    },
+    {
+      "line": 14462,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "closeSearchApiModal",
+      "handlerType": "named",
+      "code": "$(\"#close-search-api\").addEventListener(\"click\", closeSearchApiModal);"
+    },
+    {
+      "line": 14463,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "closeSearchApiModal",
+      "handlerType": "named",
+      "code": "$(\"#cancel-search-api\").addEventListener(\"click\", closeSearchApiModal);"
+    },
+    {
+      "line": 14464,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "$(\"#search-api-modal .modal-overlay\").addEventListener("
+    },
+    {
+      "line": 14469,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "$(\"#save-search-api\").addEventListener(\"click\", async () => {"
+    },
+    {
+      "line": 14490,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#open-accessibility-settings\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14510,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "closeAccessibilityModal",
+      "handlerType": "named",
+      "code": "$(\"#close-accessibility-modal\").addEventListener(\"click\", closeAccessibilityModa..."
+    },
+    {
+      "line": 14511,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "closeAccessibilityModal",
+      "handlerType": "named",
+      "code": "$(\"#close-accessibility\").addEventListener(\"click\", closeAccessibilityModal);"
+    },
+    {
+      "line": 14512,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "unknown",
+      "handler": "inline",
+      "handlerType": "inline",
+      "code": "$(\"#accessibility-modal .modal-overlay\").addEventListener("
+    },
+    {
+      "line": 14522,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "keydown",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "newMsgCentral.addEventListener(\"keydown\", (e) => {"
+    },
+    {
+      "line": 14544,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "newSendCentral.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14562,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "newMarkdownBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14576,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#open-model-mgmt\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14587,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#open-model-switcher\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14717,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "input",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "// $(\"#model-note\").addEventListener(\"input\", (e) => applyNotePreview(e.target.v..."
+    },
+    {
+      "line": 14728,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "$(\"#save-models\").addEventListener(\"click\", async () => {"
+    },
+    {
+      "line": 14797,
+      "element": "p",
+      "selectorType": "class",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#close-models\").addEventListener(\"click\", () =>"
+    },
+    {
+      "line": 14800,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#cancel-models\").addEventListener(\"click\", () =>"
+    },
+    {
+      "line": 14803,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#models-modal .modal-overlay\").addEventListener(\"click\", () =>"
+    },
+    {
+      "line": 14807,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#reset-models\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14823,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#new-chat\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14835,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#chats-btn\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14846,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#projects-btn\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14862,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#announcement-btn\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14927,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#artifact-btn\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 14938,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "handleSettingsClick",
+      "handlerType": "named",
+      "code": "$(\"#open-settings\").addEventListener(\"click\", handleSettingsClick);"
+    },
+    {
+      "line": 14942,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "handlePersonaSettingsClick",
+      "handlerType": "named",
+      "code": "$(\"#open-persona-settings\").addEventListener(\"click\", handlePersonaSettingsClick..."
+    },
+    {
+      "line": 14953,
+      "element": "open-account-settings",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "openAccountBtn.addEventListener('click', async (e) => {"
+    },
+    {
+      "line": 14963,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "closeAccountBtn.addEventListener('click', () => {"
+    },
+    {
+      "line": 14970,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "accountModal.addEventListener('click', (e) => {"
+    },
+    {
+      "line": 14978,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "googleLoginBtn.addEventListener('click', () => handleGoogleLogin());"
+    },
+    {
+      "line": 14983,
+      "element": "account-close-modal-btn",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "closeModalBtn.addEventListener('click', () => {"
+    },
+    {
+      "line": 14994,
+      "element": "account-menu-btn",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "accountMenuBtn.addEventListener('click', (e) => {"
+    },
+    {
+      "line": 15022,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "accountMenuDropdown.addEventListener('click', (e) => {"
+    },
+    {
+      "line": 15045,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "internalBtn.addEventListener('click', () => handleDataSourceSwitch('internal'));..."
+    },
+    {
+      "line": 15049,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "cloudBtn.addEventListener('click', () => handleDataSourceSwitch('cloud'));"
+    },
+    {
+      "line": 15059,
+      "element": "open-learn-more",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "openLearnMoreBtn.addEventListener('click', (e) => {"
+    },
+    {
+      "line": 15068,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "closeLearnMoreBtn.addEventListener('click', () => {"
+    },
+    {
+      "line": 15075,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "learnMoreModal.addEventListener('click', (e) => {"
+    },
+    {
+      "line": 15084,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener('click', (e) => {"
+    },
+    {
+      "line": 15107,
+      "element": "auth-btn",
+      "selectorType": "id",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "authBtn.addEventListener('click', async (e) => {"
+    },
+    {
+      "line": 15127,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "change",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "$(\"#show-projects-toggle\").addEventListener(\"change\", async (e) => {"
+    },
+    {
+      "line": 15137,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "change",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "$(\"#show-starred-toggle\").addEventListener(\"change\", async (e) => {"
+    },
+    {
+      "line": 15147,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#close-modal\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 15151,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#close-settings\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 15155,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "$(\"#save-settings\").addEventListener(\"click\", async () => {"
+    },
+    {
+      "line": 15177,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#delete-all\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 15209,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "change",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#web-search-switch\").addEventListener(\"change\", (e) => {"
+    },
+    {
+      "line": 15236,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "change",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#theme-slider\").addEventListener(\"change\", () => {"
+    },
+    {
+      "line": 15241,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#settings-modal .modal-overlay\").addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 15251,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "keydown",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "$(\"#msg\").addEventListener(\"keydown\", (e) => {"
+    },
+    {
+      "line": 15271,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "markdownChatBtn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 15287,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "$(\"#send\").addEventListener(\"click\", async () => {"
+    },
+    {
+      "line": 15392,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "btn.addEventListener(\"click\", () => {"
+    },
+    {
+      "line": 15438,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener(\"click\", (event) => {"
+    },
+    {
+      "line": 15713,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "wheel",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "wrapper.addEventListener('wheel', (e) => {"
+    },
+    {
+      "line": 15728,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "mousedown",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "wrapper.addEventListener('mousedown', (e) => {"
+    },
+    {
+      "line": 15740,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "mousemove",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener('mousemove', (e) => {"
+    },
+    {
+      "line": 15749,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "mouseup",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener('mouseup', () => {"
+    },
+    {
+      "line": 15771,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "zoomIn",
+      "handlerType": "named",
+      "code": "controls.querySelector('.zoom-in').addEventListener('click', zoomIn);..."
+    },
+    {
+      "line": 15772,
+      "element": "zoom-in",
+      "selectorType": "class",
+      "event": "click",
+      "handler": "zoomOut",
+      "handlerType": "named",
+      "code": "controls.querySelector('.zoom-out').addEventListener('click', zoomOut);..."
+    },
+    {
+      "line": 15773,
+      "element": "zoom-in",
+      "selectorType": "class",
+      "event": "click",
+      "handler": "resetZoom",
+      "handlerType": "named",
+      "code": "controls.querySelector('.zoom-reset').addEventListener('click', resetZoom);..."
+    },
+    {
+      "line": 15776,
+      "element": "zoom-in",
+      "selectorType": "class",
+      "event": "dragstart",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "wrapper.addEventListener('dragstart', (e) => {"
+    },
+    {
+      "line": 15991,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "inline",
+      "handlerType": "function",
+      "code": "document.addEventListener('click', function(event) {"
+    },
+    {
+      "line": 16014,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "hashchange",
+      "handler": "inline",
+      "handlerType": "function",
+      "code": "window.addEventListener('hashchange', function() {"
+    },
+    {
+      "line": 16384,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "beforeunload",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "window.addEventListener(\"beforeunload\", async (e) => {"
+    },
+    {
+      "line": 16405,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "DOMContentLoaded",
+      "handler": "initializeApp",
+      "handlerType": "named",
+      "code": "document.addEventListener(\"DOMContentLoaded\", initializeApp);"
+    },
+    {
+      "line": 17664,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "DOMContentLoaded",
+      "handler": "async",
+      "handlerType": "arrow",
+      "code": "document.addEventListener('DOMContentLoaded', async () => {"
+    },
+    {
+      "line": 17699,
+      "element": "[title]",
+      "selectorType": "multiple",
+      "event": "mouseenter",
+      "handler": "handleMouseEnter",
+      "handlerType": "named",
+      "code": "element.addEventListener('mouseenter', handleMouseEnter);"
+    },
+    {
+      "line": 17700,
+      "element": "[title]",
+      "selectorType": "multiple",
+      "event": "mouseleave",
+      "handler": "handleMouseLeave",
+      "handlerType": "named",
+      "code": "element.addEventListener('mouseleave', handleMouseLeave);"
+    },
+    {
+      "line": 17826,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "DOMContentLoaded",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener(\"DOMContentLoaded\", () => {"
+    },
+    {
+      "line": 17838,
+      "element": "loading-overlay",
+      "selectorType": "id",
+      "event": "error",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "window.addEventListener(\"error\", (event) => {"
+    },
+    {
+      "line": 17871,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "handleDismiss",
+      "handlerType": "named",
+      "code": "overlay.addEventListener('click', handleDismiss);"
+    },
+    {
+      "line": 17875,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "handleDismiss",
+      "handlerType": "named",
+      "code": "confirmationCancelBtn.addEventListener('click', handleDismiss);"
+    },
+    {
+      "line": 17879,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "click",
+      "handler": "handleDismiss",
+      "handlerType": "named",
+      "code": "confirmationCloseBtn.addEventListener('click', handleDismiss);"
+    },
+    {
+      "line": 17947,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "keydown",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener('keydown', (e) => {"
+    },
+    {
+      "line": 18045,
+      "element": "msg",
+      "selectorType": "id",
+      "event": "DOMContentLoaded",
+      "handler": "initKeyboardShortcuts",
+      "handlerType": "named",
+      "code": "document.addEventListener('DOMContentLoaded', initKeyboardShortcuts);"
+    },
+    {
+      "line": 18217,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "mousedown",
+      "handler": "inline",
+      "handlerType": "arrow",
+      "code": "document.addEventListener('mousedown', (e) => {"
+    },
+    {
+      "line": 18228,
+      "element": "unknown",
+      "selectorType": "",
+      "event": "DOMContentLoaded",
+      "handler": "initPageHistory",
+      "handlerType": "named",
+      "code": "document.addEventListener('DOMContentLoaded', initPageHistory);"
+    }
+  ]
+}

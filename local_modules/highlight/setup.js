@@ -25,6 +25,7 @@ import mermaid from './modules/es/languages/mermaid.js';
 import bash from './modules/es/languages/bash.js';
 import sql from './modules/es/languages/sql.js';
 import plaintext from './modules/es/languages/plaintext.js';
+import powershell from './modules/es/languages/powershell.js';
 import diff from './modules/es/languages/diff.js';
 
 hljs.registerLanguage('javascript', javascript);
@@ -52,6 +53,7 @@ hljs.registerLanguage('mermaid', mermaid);
 hljs.registerLanguage('bash', bash);
 hljs.registerLanguage('sql', sql);
 hljs.registerLanguage('plaintext', plaintext);
+hljs.registerLanguage('powershell', powershell);
 hljs.registerLanguage('diff', diff);
 
 window.hljs = hljs;

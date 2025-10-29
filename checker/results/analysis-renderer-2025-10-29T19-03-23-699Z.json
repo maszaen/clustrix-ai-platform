@@ -1,4 +1,7 @@
 {
+  "file": "renderer/renderer.js",
+  "fileSize": 662829,
+  "totalLines": 18305,
   "functions": [
     {
       "name": "setupEventListeners",
@@ -18,9 +21,18 @@
       "params": [
         "streamId",
         "text",
-        null
+        "AssignmentPattern"
       ],
       "lines": 765
+    },
+    {
+      "name": "pageListener",
+      "line": 5987,
+      "params": [
+        "e"
+      ],
+      "lines": 345,
+      "type": "arrow/expression"
     },
     {
       "name": "setupChatsPageListeners",
@@ -34,7 +46,7 @@
       "params": [
         "role",
         "content",
-        null
+        "AssignmentPattern"
       ],
       "lines": 258
     },
@@ -45,10 +57,28 @@
       "lines": 257
     },
     {
+      "name": "renderMermaid",
+      "line": 15561,
+      "params": [
+        "mermaidLib"
+      ],
+      "lines": 238,
+      "type": "arrow/expression"
+    },
+    {
       "name": "initializeApp",
       "line": 16170,
       "params": [],
       "lines": 233
+    },
+    {
+      "name": "finalize",
+      "line": 11628,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 228,
+      "type": "arrow/expression"
     },
     {
       "name": "showSearchOverlay",
@@ -82,7 +112,7 @@
       "params": [
         "sessionId",
         "messageIndex",
-        null
+        "AssignmentPattern"
       ],
       "lines": 190
     },
@@ -100,7 +130,7 @@
         "level",
         "contextFunc",
         "message",
-        null
+        "AssignmentPattern"
       ],
       "lines": 189
     },
@@ -112,11 +142,20 @@
         "text",
         "aiNode",
         "aiMessageIndex",
-        null,
-        null,
-        null
+        "AssignmentPattern",
+        "AssignmentPattern",
+        "AssignmentPattern"
       ],
       "lines": 187
+    },
+    {
+      "name": "pageListener",
+      "line": 4112,
+      "params": [
+        "e"
+      ],
+      "lines": 174,
+      "type": "arrow/expression"
     },
     {
       "name": "renderChatsPage",
@@ -147,6 +186,13 @@
       "lines": 155
     },
     {
+      "name": "performSmartRender",
+      "line": 12058,
+      "params": [],
+      "lines": 148,
+      "type": "arrow/expression"
+    },
+    {
       "name": "updateAccountModalUI",
       "line": 16633,
       "params": [],
@@ -164,7 +210,7 @@
       "name": "showConfirmationModal",
       "line": 13012,
       "params": [
-        null,
+        "AssignmentPattern",
         "legacyMessage",
         "legacyOnConfirm"
       ],
@@ -312,8 +358,8 @@
       "line": 16409,
       "params": [
         "message",
-        null,
-        null
+        "AssignmentPattern",
+        "AssignmentPattern"
       ],
       "lines": 94
     },
@@ -337,7 +383,7 @@
         "session",
         "messageIndex",
         "seedText",
-        null
+        "AssignmentPattern"
       ],
       "lines": 92
     },
@@ -360,7 +406,7 @@
       "line": 8511,
       "params": [
         "src",
-        null
+        "AssignmentPattern"
       ],
       "lines": 86
     },
@@ -368,7 +414,7 @@
       "name": "runMarkdownTestTurn",
       "line": 507,
       "params": [
-        null,
+        "AssignmentPattern",
         "rawInput"
       ],
       "lines": 85
@@ -568,6 +614,13 @@
       "lines": 65
     },
     {
+      "name": "buildPreviewScrollbarStyle",
+      "line": 15872,
+      "params": [],
+      "lines": 65,
+      "type": "arrow/expression"
+    },
+    {
       "name": "handleSyncNow",
       "line": 17196,
       "params": [],
@@ -606,7 +659,7 @@
       "name": "updateCodeBlocksWithArtifactInfo",
       "line": 8693,
       "params": [
-        null
+        "AssignmentPattern"
       ],
       "lines": 60
     },
@@ -643,7 +696,7 @@
       "line": 14617,
       "params": [
         "p",
-        null
+        "AssignmentPattern"
       ],
       "lines": 58
     },
@@ -683,7 +736,7 @@
       "params": [
         "textNode",
         "matches",
-        null
+        "AssignmentPattern"
       ],
       "lines": 57
     },
@@ -781,7 +834,7 @@
         "element",
         "text",
         "totalDuration",
-        null
+        "AssignmentPattern"
       ],
       "lines": 47
     },
@@ -870,8 +923,8 @@
       "params": [
         "sessionId",
         "renderedHTML",
-        null,
-        null
+        "AssignmentPattern",
+        "AssignmentPattern"
       ],
       "lines": 40
     },
@@ -921,6 +974,13 @@
       "lines": 37
     },
     {
+      "name": "beginStreaming",
+      "line": 635,
+      "params": [],
+      "lines": 36,
+      "type": "arrow/expression"
+    },
+    {
       "name": "deleteProject",
       "line": 7484,
       "params": [
@@ -932,7 +992,7 @@
       "name": "scrollToBottom",
       "line": 7986,
       "params": [
-        null
+        "AssignmentPattern"
       ],
       "lines": 36
     },
@@ -951,10 +1011,19 @@
         "title",
         "code",
         "language",
-        null,
-        null
+        "AssignmentPattern",
+        "AssignmentPattern"
       ],
       "lines": 35
+    },
+    {
+      "name": "styleBlock",
+      "line": 15880,
+      "params": [
+        "values"
+      ],
+      "lines": 35,
+      "type": "arrow/expression"
     },
     {
       "name": "startMarkdownTestFromWelcome",
@@ -994,7 +1063,7 @@
       "params": [
         "element",
         "text",
-        null
+        "AssignmentPattern"
       ],
       "lines": 31
     },
@@ -1017,7 +1086,7 @@
       "line": 7525,
       "params": [
         "aiNode",
-        null
+        "AssignmentPattern"
       ],
       "lines": 29
     },
@@ -1064,7 +1133,7 @@
       "params": [
         "sessionId",
         "newTitle",
-        null
+        "AssignmentPattern"
       ],
       "lines": 27
     },
@@ -1072,8 +1141,8 @@
       "name": "createNewSession",
       "line": 12542,
       "params": [
-        null,
-        null
+        "AssignmentPattern",
+        "AssignmentPattern"
       ],
       "lines": 27
     },
@@ -1081,7 +1150,7 @@
       "name": "openMiniModal",
       "line": 3270,
       "params": [
-        null
+        "ObjectPattern"
       ],
       "lines": 26
     },
@@ -1110,7 +1179,7 @@
       "line": 719,
       "params": [
         "pageState",
-        null
+        "AssignmentPattern"
       ],
       "lines": 25
     },
@@ -1168,6 +1237,15 @@
       "lines": 24
     },
     {
+      "name": "finishRename",
+      "line": 7358,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 24,
+      "type": "arrow/expression"
+    },
+    {
       "name": "getWelcomeMessage",
       "line": 8893,
       "params": [],
@@ -1209,16 +1287,23 @@
       "params": [
         "aiNode",
         "duration",
-        null
+        "AssignmentPattern"
       ],
       "lines": 23
+    },
+    {
+      "name": "breatheAnimation",
+      "line": 5276,
+      "params": [],
+      "lines": 23,
+      "type": "arrow/expression"
     },
     {
       "name": "createNewProject",
       "line": 6810,
       "params": [
         "name",
-        null
+        "AssignmentPattern"
       ],
       "lines": 23
     },
@@ -1259,10 +1344,33 @@
       "lines": 23
     },
     {
+      "name": "renderCopy",
+      "line": 10417,
+      "params": [],
+      "lines": 23,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "getThrottleMs",
+      "line": 12075,
+      "params": [],
+      "lines": 23,
+      "type": "arrow/expression"
+    },
+    {
       "name": "getTitleGenConfig",
       "line": 3437,
       "params": [],
       "lines": 22
+    },
+    {
+      "name": "finishRename",
+      "line": 3832,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 22,
+      "type": "arrow/expression"
     },
     {
       "name": "setupHoverStateManagement",
@@ -1314,6 +1422,15 @@
       "lines": 21
     },
     {
+      "name": "finishRename",
+      "line": 7429,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 21,
+      "type": "arrow/expression"
+    },
+    {
       "name": "smartScrollToBottom",
       "line": 7576,
       "params": [],
@@ -1323,7 +1440,7 @@
       "name": "updateChatHeader",
       "line": 10177,
       "params": [
-        null
+        "AssignmentPattern"
       ],
       "lines": 21
     },
@@ -1371,7 +1488,7 @@
       "params": [
         "printer",
         "logColor",
-        null
+        "AssignmentPattern"
       ],
       "lines": 19
     },
@@ -1394,6 +1511,24 @@
       "line": 13185,
       "params": [],
       "lines": 19
+    },
+    {
+      "name": "zoomToPoint",
+      "line": 15669,
+      "params": [
+        "mouseX",
+        "mouseY",
+        "zoomIn"
+      ],
+      "lines": 19,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "attemptScroll",
+      "line": 2094,
+      "params": [],
+      "lines": 18,
+      "type": "arrow/expression"
     },
     {
       "name": "loadAllDrafts",
@@ -1512,6 +1647,15 @@
       "lines": 16
     },
     {
+      "name": "finishRename",
+      "line": 3907,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 16,
+      "type": "arrow/expression"
+    },
+    {
       "name": "initScrollToBottomButton",
       "line": 7704,
       "params": [],
@@ -1538,10 +1682,26 @@
       "lines": 16
     },
     {
+      "name": "getContentGrowthThreshold",
+      "line": 12107,
+      "params": [],
+      "lines": 16,
+      "type": "arrow/expression"
+    },
+    {
       "name": "hideSearchOverlay",
       "line": 13763,
       "params": [],
       "lines": 16
+    },
+    {
+      "name": "handleResolution",
+      "line": 17441,
+      "params": [
+        "resolution"
+      ],
+      "lines": 16,
+      "type": "arrow/expression"
     },
     {
       "name": "goBackHistory",
@@ -1604,6 +1764,13 @@
         "aiMessageElement"
       ],
       "lines": 14
+    },
+    {
+      "name": "showThinking",
+      "line": 11504,
+      "params": [],
+      "lines": 14,
+      "type": "arrow/expression"
     },
     {
       "name": "deleteCurrentSession",
@@ -1685,11 +1852,37 @@
       "lines": 12
     },
     {
+      "name": "checkContentReachBottom",
+      "line": 7785,
+      "params": [],
+      "lines": 12,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "startDemoStreaming",
+      "line": 12275,
+      "params": [
+        "response",
+        "delay"
+      ],
+      "lines": 12,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "injectIntoHeadOrDocumentStart",
+      "line": 15858,
+      "params": [
+        "snippet"
+      ],
+      "lines": 12,
+      "type": "arrow/expression"
+    },
+    {
       "name": "closeModalWithAnimation",
       "line": 17888,
       "params": [
         "modal",
-        null
+        "AssignmentPattern"
       ],
       "lines": 12
     },
@@ -1698,7 +1891,7 @@
       "line": 17919,
       "params": [
         "element",
-        null
+        "AssignmentPattern"
       ],
       "lines": 12
     },
@@ -1707,7 +1900,7 @@
       "line": 10227,
       "params": [
         "node",
-        null
+        "AssignmentPattern"
       ],
       "lines": 11
     },
@@ -1772,6 +1965,13 @@
       "lines": 10
     },
     {
+      "name": "cleanupStream",
+      "line": 11492,
+      "params": [],
+      "lines": 10,
+      "type": "arrow/expression"
+    },
+    {
       "name": "applyTheme",
       "line": 12994,
       "params": [
@@ -1788,6 +1988,13 @@
       "lines": 10
     },
     {
+      "name": "clearTimers",
+      "line": 603,
+      "params": [],
+      "lines": 9,
+      "type": "arrow/expression"
+    },
+    {
       "name": "setupGlobalImageErrorHandler",
       "line": 1349,
       "params": [],
@@ -1800,6 +2007,13 @@
         "s"
       ],
       "lines": 9
+    },
+    {
+      "name": "scrollListener",
+      "line": 1912,
+      "params": [],
+      "lines": 9,
+      "type": "arrow/expression"
     },
     {
       "name": "getModelMeta",
@@ -1848,6 +2062,13 @@
       "line": 14019,
       "params": [],
       "lines": 9
+    },
+    {
+      "name": "updateTransform",
+      "line": 15657,
+      "params": [],
+      "lines": 9,
+      "type": "arrow/expression"
     },
     {
       "name": "initPageHistory",
@@ -1915,8 +2136,8 @@
       "name": "initWithRetry",
       "line": 13457,
       "params": [
-        null,
-        null
+        "AssignmentPattern",
+        "AssignmentPattern"
       ],
       "lines": 8
     },
@@ -1927,6 +2148,31 @@
         "text"
       ],
       "lines": 7
+    },
+    {
+      "name": "escapeHtml",
+      "line": 2322,
+      "params": [
+        "str"
+      ],
+      "lines": 7,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "escapeHtml",
+      "line": 2358,
+      "params": [
+        "str"
+      ],
+      "lines": 7,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "closeModal",
+      "line": 4950,
+      "params": [],
+      "lines": 7,
+      "type": "arrow/expression"
     },
     {
       "name": "isComposerUsable",
@@ -1960,6 +2206,20 @@
         "session"
       ],
       "lines": 6
+    },
+    {
+      "name": "hideLoader",
+      "line": 11520,
+      "params": [],
+      "lines": 6,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "handleDismiss",
+      "line": 17862,
+      "params": [],
+      "lines": 6,
+      "type": "arrow/expression"
     },
     {
       "name": "openModalWithAnimation",
@@ -2034,6 +2294,27 @@
       "lines": 5
     },
     {
+      "name": "zoomIn",
+      "line": 15691,
+      "params": [],
+      "lines": 5,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "zoomOut",
+      "line": 15698,
+      "params": [],
+      "lines": 5,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "resetZoom",
+      "line": 15705,
+      "params": [],
+      "lines": 5,
+      "type": "arrow/expression"
+    },
+    {
       "name": "clearSessionCache",
       "line": 150,
       "params": [],
@@ -2060,7 +2341,7 @@
       "line": 676,
       "params": [
         "session",
-        null
+        "AssignmentPattern"
       ],
       "lines": 4
     },
@@ -2069,7 +2350,7 @@
       "line": 682,
       "params": [
         "session",
-        null
+        "AssignmentPattern"
       ],
       "lines": 4
     },
@@ -2098,7 +2379,7 @@
       "line": 7722,
       "params": [
         "el",
-        null
+        "AssignmentPattern"
       ],
       "lines": 4
     },
@@ -2156,6 +2437,15 @@
       "lines": 3
     },
     {
+      "name": "debounced",
+      "line": 2429,
+      "params": [
+        "RestElement"
+      ],
+      "lines": 3,
+      "type": "arrow/expression"
+    },
+    {
       "name": "storePendingWebSearchData",
       "line": 2450,
       "params": [
@@ -2179,10 +2469,27 @@
       "lines": 3
     },
     {
+      "name": "later",
+      "line": 9860,
+      "params": [],
+      "lines": 3,
+      "type": "arrow/expression"
+    },
+    {
       "name": "clearDirtyTracking",
       "line": 10997,
       "params": [],
       "lines": 3
+    },
+    {
+      "name": "resolve",
+      "line": 15923,
+      "params": [
+        "prop",
+        "fallback"
+      ],
+      "lines": 3,
+      "type": "arrow/expression"
     },
     {
       "name": "getExtension",
@@ -2229,6 +2536,15 @@
       "lines": 2
     },
     {
+      "name": "closeOnEscape",
+      "line": 13300,
+      "params": [
+        "e"
+      ],
+      "lines": 2,
+      "type": "arrow/expression"
+    },
+    {
       "name": "handleSearchInput",
       "line": 13733,
       "params": [
@@ -2241,6 +2557,103 @@
       "line": 7872,
       "params": [],
       "lines": 1
+    },
+    {
+      "name": "closeSearchApiModal",
+      "line": 14460,
+      "params": [],
+      "lines": 1,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "closeAccessibilityModal",
+      "line": 14507,
+      "params": [],
+      "lines": 1,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "$",
+      "line": 271,
+      "params": [
+        "sel"
+      ],
+      "lines": 0,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "$$",
+      "line": 272,
+      "params": [
+        "sel"
+      ],
+      "lines": 0,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "close",
+      "line": 1065,
+      "params": [],
+      "lines": 0,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "close",
+      "line": 3284,
+      "params": [],
+      "lines": 0,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "closeModal",
+      "line": 5844,
+      "params": [],
+      "lines": 0,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "trimEnd",
+      "line": 11488,
+      "params": [
+        "s"
+      ],
+      "lines": 0,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "getState",
+      "line": 11490,
+      "params": [],
+      "lines": 0,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "closeOnBackdrop",
+      "line": 13299,
+      "params": [],
+      "lines": 0,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "handleSearchPrevClick",
+      "line": 13474,
+      "params": [],
+      "lines": 0,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "handleSearchNextClick",
+      "line": 13475,
+      "params": [],
+      "lines": 0,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "handleSearchCloseClick",
+      "line": 13476,
+      "params": [],
+      "lines": 0,
+      "type": "arrow/expression"
     }
   ],
   "classes": [
@@ -2248,10 +2661,26 @@
       "name": "SessionCacheEntry",
       "line": 61,
       "methods": [
-        "constructor",
-        "isExpired",
-        "touch",
-        "getAge"
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "lines": 8
+        },
+        {
+          "name": "isExpired",
+          "kind": "method",
+          "lines": 2
+        },
+        {
+          "name": "touch",
+          "kind": "method",
+          "lines": 3
+        },
+        {
+          "name": "getAge",
+          "kind": "method",
+          "lines": 2
+        }
       ],
       "lines": 23
     }
@@ -2460,10 +2889,6 @@
       "kind": "const"
     },
     {
-      "line": 103,
-      "kind": "const"
-    },
-    {
       "name": "oldestEntry",
       "line": 111,
       "kind": "let"
@@ -2472,10 +2897,6 @@
       "name": "oldestTime",
       "line": 112,
       "kind": "let"
-    },
-    {
-      "line": 114,
-      "kind": "const"
     },
     {
       "name": "cacheEntry",
@@ -2500,10 +2921,6 @@
     {
       "name": "stats",
       "line": 182,
-      "kind": "const"
-    },
-    {
-      "line": 188,
       "kind": "const"
     },
     {
@@ -2584,16 +3001,6 @@
     {
       "name": "html",
       "line": 264,
-      "kind": "const"
-    },
-    {
-      "name": "$",
-      "line": 271,
-      "kind": "const"
-    },
-    {
-      "name": "$$",
-      "line": 272,
       "kind": "const"
     },
     {
@@ -2810,18 +3217,8 @@
       "kind": "let"
     },
     {
-      "name": "clearTimers",
-      "line": 603,
-      "kind": "const"
-    },
-    {
       "name": "controller",
       "line": 614,
-      "kind": "const"
-    },
-    {
-      "name": "beginStreaming",
-      "line": 635,
       "kind": "const"
     },
     {
@@ -2920,11 +3317,6 @@
       "kind": "const"
     },
     {
-      "name": "id",
-      "line": 866,
-      "kind": "const"
-    },
-    {
       "name": "s",
       "line": 867,
       "kind": "const"
@@ -2945,11 +3337,6 @@
       "kind": "const"
     },
     {
-      "name": "id",
-      "line": 892,
-      "kind": "const"
-    },
-    {
       "name": "s",
       "line": 893,
       "kind": "const"
@@ -2962,11 +3349,6 @@
     {
       "name": "STALE_MS",
       "line": 903,
-      "kind": "const"
-    },
-    {
-      "name": "id",
-      "line": 904,
       "kind": "const"
     },
     {
@@ -2996,21 +3378,6 @@
     },
     {
       "line": 970,
-      "kind": "const"
-    },
-    {
-      "name": "k",
-      "line": 987,
-      "kind": "const"
-    },
-    {
-      "name": "streamId",
-      "line": 1001,
-      "kind": "const"
-    },
-    {
-      "name": "streamId",
-      "line": 1011,
       "kind": "const"
     },
     {
@@ -3076,11 +3443,6 @@
     {
       "name": "onWelcomePage",
       "line": 1053,
-      "kind": "const"
-    },
-    {
-      "name": "close",
-      "line": 1065,
       "kind": "const"
     },
     {
@@ -3299,16 +3661,6 @@
       "kind": "let"
     },
     {
-      "name": "mutation",
-      "line": 1404,
-      "kind": "const"
-    },
-    {
-      "name": "node",
-      "line": 1406,
-      "kind": "const"
-    },
-    {
       "name": "chatLog",
       "line": 1426,
       "kind": "const"
@@ -3483,11 +3835,6 @@
       "kind": "const"
     },
     {
-      "name": "chunk",
-      "line": 1781,
-      "kind": "const"
-    },
-    {
       "name": "processedChunk",
       "line": 1783,
       "kind": "const"
@@ -3588,11 +3935,6 @@
       "kind": "let"
     },
     {
-      "name": "scrollListener",
-      "line": 1912,
-      "kind": "const"
-    },
-    {
       "name": "isAtBottom",
       "line": 1915,
       "kind": "const"
@@ -3680,11 +4022,6 @@
     {
       "name": "thinkingBody",
       "line": 2087,
-      "kind": "const"
-    },
-    {
-      "name": "attemptScroll",
-      "line": 2094,
       "kind": "const"
     },
     {
@@ -3798,11 +4135,6 @@
       "kind": "const"
     },
     {
-      "name": "finalResult",
-      "line": 2198,
-      "kind": "let"
-    },
-    {
       "name": "cleanedHtml",
       "line": 2225,
       "kind": "let"
@@ -3828,11 +4160,6 @@
       "kind": "const"
     },
     {
-      "name": "node",
-      "line": 2263,
-      "kind": "let"
-    },
-    {
       "name": "finalHtml",
       "line": 2276,
       "kind": "let"
@@ -3853,11 +4180,6 @@
       "kind": "const"
     },
     {
-      "name": "escapeHtml",
-      "line": 2322,
-      "kind": "const"
-    },
-    {
       "name": "formatted",
       "line": 2332,
       "kind": "let"
@@ -3865,11 +4187,6 @@
     {
       "name": "cleaned",
       "line": 2357,
-      "kind": "const"
-    },
-    {
-      "name": "escapeHtml",
-      "line": 2358,
       "kind": "const"
     },
     {
@@ -3903,18 +4220,9 @@
       "kind": "const"
     },
     {
-      "line": 2412,
-      "kind": "const"
-    },
-    {
       "name": "timer",
       "line": 2428,
       "kind": "let"
-    },
-    {
-      "name": "debounced",
-      "line": 2429,
-      "kind": "const"
     },
     {
       "name": "saveDraftDebounced",
@@ -3939,10 +4247,6 @@
     {
       "name": "now",
       "line": 2467,
-      "kind": "const"
-    },
-    {
-      "line": 2468,
       "kind": "const"
     },
     {
@@ -4180,10 +4484,6 @@
       "kind": "const"
     },
     {
-      "line": 2845,
-      "kind": "const"
-    },
-    {
       "name": "logEntry",
       "line": 2854,
       "kind": "const"
@@ -4364,18 +4664,8 @@
       "kind": "const"
     },
     {
-      "name": "close",
-      "line": 3284,
-      "kind": "const"
-    },
-    {
       "name": "vals",
       "line": 3289,
-      "kind": "const"
-    },
-    {
-      "name": "f",
-      "line": 3290,
       "kind": "const"
     },
     {
@@ -4411,11 +4701,6 @@
     {
       "name": "provs",
       "line": 3406,
-      "kind": "const"
-    },
-    {
-      "name": "p",
-      "line": 3407,
       "kind": "const"
     },
     {
@@ -4699,11 +4984,6 @@
       "kind": "const"
     },
     {
-      "name": "finishRename",
-      "line": 3832,
-      "kind": "const"
-    },
-    {
       "name": "session",
       "line": 3834,
       "kind": "const"
@@ -4731,11 +5011,6 @@
     {
       "name": "input",
       "line": 3883,
-      "kind": "const"
-    },
-    {
-      "name": "finishRename",
-      "line": 3907,
       "kind": "const"
     },
     {
@@ -4816,11 +5091,6 @@
     {
       "name": "page",
       "line": 4103,
-      "kind": "const"
-    },
-    {
-      "name": "pageListener",
-      "line": 4112,
       "kind": "const"
     },
     {
@@ -5329,11 +5599,6 @@
       "kind": "const"
     },
     {
-      "name": "closeModal",
-      "line": 4950,
-      "kind": "const"
-    },
-    {
       "name": "btn",
       "line": 4973,
       "kind": "const"
@@ -5505,11 +5770,6 @@
     {
       "name": "maxBreathes",
       "line": 5274,
-      "kind": "const"
-    },
-    {
-      "name": "breatheAnimation",
-      "line": 5276,
       "kind": "const"
     },
     {
@@ -5818,11 +6078,6 @@
       "kind": "const"
     },
     {
-      "name": "closeModal",
-      "line": 5844,
-      "kind": "const"
-    },
-    {
       "name": "newContent",
       "line": 5852,
       "kind": "const"
@@ -5895,11 +6150,6 @@
     {
       "name": "projectsPage",
       "line": 5978,
-      "kind": "const"
-    },
-    {
-      "name": "pageListener",
-      "line": 5987,
       "kind": "const"
     },
     {
@@ -6688,11 +6938,6 @@
       "kind": "const"
     },
     {
-      "name": "finishRename",
-      "line": 7358,
-      "kind": "const"
-    },
-    {
       "name": "newTitle",
       "line": 7372,
       "kind": "const"
@@ -6723,11 +6968,6 @@
       "kind": "const"
     },
     {
-      "name": "finishRename",
-      "line": 7429,
-      "kind": "const"
-    },
-    {
       "name": "newTitle",
       "line": 7443,
       "kind": "const"
@@ -6750,11 +6990,6 @@
     {
       "name": "sessionsToDelete",
       "line": 7487,
-      "kind": "const"
-    },
-    {
-      "name": "session",
-      "line": 7490,
       "kind": "const"
     },
     {
@@ -7003,11 +7238,6 @@
       "kind": "const"
     },
     {
-      "name": "checkContentReachBottom",
-      "line": 7785,
-      "kind": "const"
-    },
-    {
       "name": "now",
       "line": 7786,
       "kind": "const"
@@ -7131,11 +7361,6 @@
       "name": "messageContainer",
       "line": 7932,
       "kind": "const"
-    },
-    {
-      "name": "scrollTimeout",
-      "line": 7936,
-      "kind": "let"
     },
     {
       "name": "scrollingUp",
@@ -7765,11 +7990,6 @@
       "kind": "const"
     },
     {
-      "name": "t",
-      "line": 8925,
-      "kind": "const"
-    },
-    {
       "name": "i",
       "line": 8933,
       "kind": "let"
@@ -7888,11 +8108,6 @@
       "kind": "const"
     },
     {
-      "name": "messageData",
-      "line": 9087,
-      "kind": "const"
-    },
-    {
       "line": 9088,
       "kind": "const"
     },
@@ -7972,11 +8187,6 @@
     {
       "name": "messages",
       "line": 9200,
-      "kind": "const"
-    },
-    {
-      "name": "messageEl",
-      "line": 9201,
       "kind": "const"
     },
     {
@@ -8298,10 +8508,6 @@
       "kind": "const"
     },
     {
-      "line": 9604,
-      "kind": "const"
-    },
-    {
       "name": "expandBtn",
       "line": 9612,
       "kind": "const"
@@ -8491,16 +8697,6 @@
       "kind": "const"
     },
     {
-      "name": "timeout",
-      "line": 9858,
-      "kind": "let"
-    },
-    {
-      "name": "later",
-      "line": 9860,
-      "kind": "const"
-    },
-    {
       "name": "ul",
       "line": 9870,
       "kind": "const"
@@ -8591,28 +8787,13 @@
       "kind": "const"
     },
     {
-      "name": "session",
-      "line": 9931,
-      "kind": "const"
-    },
-    {
       "name": "favoritesHeader",
       "line": 9940,
       "kind": "const"
     },
     {
-      "name": "s",
-      "line": 9945,
-      "kind": "const"
-    },
-    {
       "name": "li",
       "line": 9946,
-      "kind": "const"
-    },
-    {
-      "name": "projectId",
-      "line": 9953,
       "kind": "const"
     },
     {
@@ -8651,11 +8832,6 @@
       "kind": "const"
     },
     {
-      "name": "s",
-      "line": 10018,
-      "kind": "const"
-    },
-    {
       "name": "li",
       "line": 10019,
       "kind": "const"
@@ -8664,11 +8840,6 @@
       "name": "lastDateGroup",
       "line": 10026,
       "kind": "let"
-    },
-    {
-      "name": "s",
-      "line": 10027,
-      "kind": "const"
     },
     {
       "name": "basisDate",
@@ -8768,11 +8939,6 @@
     {
       "name": "titleText",
       "line": 10182,
-      "kind": "const"
-    },
-    {
-      "name": "t",
-      "line": 10186,
       "kind": "const"
     },
     {
@@ -8928,11 +9094,6 @@
     {
       "name": "actions",
       "line": 10415,
-      "kind": "const"
-    },
-    {
-      "name": "renderCopy",
-      "line": 10417,
       "kind": "const"
     },
     {
@@ -9106,11 +9267,6 @@
       "kind": "const"
     },
     {
-      "name": "streamId",
-      "line": 10722,
-      "kind": "const"
-    },
-    {
       "name": "stream",
       "line": 10723,
       "kind": "const"
@@ -9179,11 +9335,6 @@
       "name": "overlay",
       "line": 10978,
       "kind": "const"
-    },
-    {
-      "name": "dataToSave",
-      "line": 11005,
-      "kind": "let"
     },
     {
       "name": "shouldUseIncremental",
@@ -9406,11 +9557,6 @@
       "kind": "const"
     },
     {
-      "name": "update",
-      "line": 11311,
-      "kind": "const"
-    },
-    {
       "name": "updateItem",
       "line": 11312,
       "kind": "const"
@@ -9468,11 +9614,6 @@
     {
       "name": "el",
       "line": 11391,
-      "kind": "const"
-    },
-    {
-      "name": "update",
-      "line": 11394,
       "kind": "const"
     },
     {
@@ -9571,33 +9712,8 @@
       "kind": "const"
     },
     {
-      "name": "trimEnd",
-      "line": 11488,
-      "kind": "const"
-    },
-    {
-      "name": "getState",
-      "line": 11490,
-      "kind": "const"
-    },
-    {
-      "name": "cleanupStream",
-      "line": 11492,
-      "kind": "const"
-    },
-    {
       "name": "st",
       "line": 11493,
-      "kind": "const"
-    },
-    {
-      "name": "k",
-      "line": 11498,
-      "kind": "const"
-    },
-    {
-      "name": "showThinking",
-      "line": 11504,
       "kind": "const"
     },
     {
@@ -9609,11 +9725,6 @@
       "name": "el",
       "line": 11508,
       "kind": "let"
-    },
-    {
-      "name": "hideLoader",
-      "line": 11520,
-      "kind": "const"
     },
     {
       "name": "s",
@@ -9677,11 +9788,6 @@
     {
       "name": "textEl",
       "line": 11609,
-      "kind": "const"
-    },
-    {
-      "name": "finalize",
-      "line": 11628,
       "kind": "const"
     },
     {
@@ -9923,11 +10029,6 @@
       "kind": "const"
     },
     {
-      "name": "performSmartRender",
-      "line": 12058,
-      "kind": "const"
-    },
-    {
       "name": "now",
       "line": 12059,
       "kind": "const"
@@ -9953,19 +10054,9 @@
       "kind": "const"
     },
     {
-      "name": "getThrottleMs",
-      "line": 12075,
-      "kind": "const"
-    },
-    {
       "name": "throttleMs",
       "line": 12101,
       "kind": "let"
-    },
-    {
-      "name": "getContentGrowthThreshold",
-      "line": 12107,
-      "kind": "const"
     },
     {
       "name": "contentGrowthThreshold",
@@ -10018,23 +10109,8 @@
       "kind": "const"
     },
     {
-      "name": "interval",
-      "line": 12255,
-      "kind": "let"
-    },
-    {
-      "name": "timeout",
-      "line": 12256,
-      "kind": "let"
-    },
-    {
       "name": "simulatedController",
       "line": 12257,
-      "kind": "const"
-    },
-    {
-      "name": "startDemoStreaming",
-      "line": 12275,
       "kind": "const"
     },
     {
@@ -10438,11 +10514,6 @@
       "kind": "const"
     },
     {
-      "name": "promptContent",
-      "line": 12889,
-      "kind": "let"
-    },
-    {
       "name": "userMessages",
       "line": 12893,
       "kind": "const"
@@ -10626,16 +10697,6 @@
       "kind": "let"
     },
     {
-      "name": "closeOnBackdrop",
-      "line": 13299,
-      "kind": "const"
-    },
-    {
-      "name": "closeOnEscape",
-      "line": 13300,
-      "kind": "const"
-    },
-    {
       "name": "logo",
       "line": 13316,
       "kind": "const"
@@ -10781,21 +10842,6 @@
       "kind": "let"
     },
     {
-      "name": "handleSearchPrevClick",
-      "line": 13474,
-      "kind": "const"
-    },
-    {
-      "name": "handleSearchNextClick",
-      "line": 13475,
-      "kind": "const"
-    },
-    {
-      "name": "handleSearchCloseClick",
-      "line": 13476,
-      "kind": "const"
-    },
-    {
       "name": "style",
       "line": 13535,
       "kind": "const"
@@ -10861,11 +10907,6 @@
       "kind": "const"
     },
     {
-      "name": "node",
-      "line": 13825,
-      "kind": "let"
-    },
-    {
       "name": "text",
       "line": 13829,
       "kind": "const"
@@ -10878,11 +10919,6 @@
     {
       "name": "startIndex",
       "line": 13835,
-      "kind": "let"
-    },
-    {
-      "name": "index",
-      "line": 13836,
       "kind": "let"
     },
     {
@@ -10904,10 +10940,6 @@
       "name": "highlightedCount",
       "line": 13882,
       "kind": "let"
-    },
-    {
-      "line": 13883,
-      "kind": "const"
     },
     {
       "name": "remainingCapacity",
@@ -10958,16 +10990,6 @@
       "name": "matchLength",
       "line": 13926,
       "kind": "const"
-    },
-    {
-      "name": "matchNode",
-      "line": 13933,
-      "kind": "let"
-    },
-    {
-      "name": "afterNode",
-      "line": 13934,
-      "kind": "let"
     },
     {
       "name": "highlightSpan",
@@ -11095,11 +11117,6 @@
       "kind": "let"
     },
     {
-      "name": "modalSelector",
-      "line": 14199,
-      "kind": "const"
-    },
-    {
       "name": "modal",
       "line": 14200,
       "kind": "const"
@@ -11165,11 +11182,6 @@
       "kind": "const"
     },
     {
-      "name": "closeSearchApiModal",
-      "line": 14460,
-      "kind": "const"
-    },
-    {
       "name": "provider",
       "line": 14470,
       "kind": "const"
@@ -11182,11 +11194,6 @@
     {
       "name": "cseId",
       "line": 14472,
-      "kind": "const"
-    },
-    {
-      "name": "closeAccessibilityModal",
-      "line": 14507,
       "kind": "const"
     },
     {
@@ -11272,11 +11279,6 @@
     {
       "name": "list",
       "line": 14623,
-      "kind": "const"
-    },
-    {
-      "name": "m",
-      "line": 14627,
       "kind": "const"
     },
     {
@@ -11619,11 +11621,6 @@
       "kind": "let"
     },
     {
-      "name": "id",
-      "line": 15311,
-      "kind": "const"
-    },
-    {
       "name": "st",
       "line": 15312,
       "kind": "const"
@@ -11823,11 +11820,6 @@
       "kind": "const"
     },
     {
-      "name": "renderMermaid",
-      "line": 15561,
-      "kind": "const"
-    },
-    {
       "name": "currentTheme",
       "line": 15562,
       "kind": "const"
@@ -11878,18 +11870,8 @@
       "kind": "let"
     },
     {
-      "name": "updateTransform",
-      "line": 15657,
-      "kind": "const"
-    },
-    {
       "name": "gridSize",
       "line": 15663,
-      "kind": "const"
-    },
-    {
-      "name": "zoomToPoint",
-      "line": 15669,
       "kind": "const"
     },
     {
@@ -11900,11 +11882,6 @@
     {
       "name": "factor",
       "line": 15680,
-      "kind": "const"
-    },
-    {
-      "name": "zoomIn",
-      "line": 15691,
       "kind": "const"
     },
     {
@@ -11923,11 +11900,6 @@
       "kind": "const"
     },
     {
-      "name": "zoomOut",
-      "line": 15698,
-      "kind": "const"
-    },
-    {
       "name": "rect",
       "line": 15699,
       "kind": "const"
@@ -11940,11 +11912,6 @@
     {
       "name": "centerY",
       "line": 15701,
-      "kind": "const"
-    },
-    {
-      "name": "resetZoom",
-      "line": 15705,
       "kind": "const"
     },
     {
@@ -12023,33 +11990,13 @@
       "kind": "let"
     },
     {
-      "name": "injectIntoHeadOrDocumentStart",
-      "line": 15858,
-      "kind": "const"
-    },
-    {
-      "name": "buildPreviewScrollbarStyle",
-      "line": 15872,
-      "kind": "const"
-    },
-    {
       "name": "defaults",
       "line": 15873,
       "kind": "const"
     },
     {
-      "name": "styleBlock",
-      "line": 15880,
-      "kind": "const"
-    },
-    {
       "name": "computed",
       "line": 15922,
-      "kind": "const"
-    },
-    {
-      "name": "resolve",
-      "line": 15923,
       "kind": "const"
     },
     {
@@ -12787,11 +12734,6 @@
       "kind": "const"
     },
     {
-      "name": "handleResolution",
-      "line": 17441,
-      "kind": "const"
-    },
-    {
       "name": "conflict",
       "line": 17442,
       "kind": "const"
@@ -12884,11 +12826,6 @@
     {
       "name": "overlay",
       "line": 17860,
-      "kind": "const"
-    },
-    {
-      "name": "handleDismiss",
-      "line": 17862,
       "kind": "const"
     },
     {

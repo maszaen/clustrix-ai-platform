@@ -1,6 +1,6 @@
 {
   "name": "clustrix",
-  "version": "32.0.5",
+  "version": "32.3.5",
   "private": true,
   "description": "Clustrix - A smart AI chat assistant.",
   "author": "Maszaen Corporation",
@@ -13,8 +13,7 @@
     "test:watch": "jest --watch",
     "make": "electron-builder",
     "package": "electron-builder --dir",
-    "publish": "electron-builder --publish=always",
-    "node": "cross-env BASE_URL=https://api.z.ai/api/paas/v4/ Z_API_KEY=b7f88f50fbeb465b8318ae2270473c80.rWD9EyijW0zniHA1 npm run start"
+    "publish": "electron-builder --publish=always"
   },
   "build": {
     "appId": "com.zaen.clustrix",

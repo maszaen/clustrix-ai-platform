@@ -256,7 +256,8 @@ function getFileIcon(nameOrExt) {
 
   if (ext === "json") {
     group = "json";
-  } else if (EXT_GROUPS.spreadsheet.has(ext)) group = "spreadsheet";
+  } else if (EXT_GROUPS.pdf.has(ext)) group = "pdf";
+  else if (EXT_GROUPS.spreadsheet.has(ext)) group = "spreadsheet";
   else if (EXT_GROUPS.terminal.has(ext)) group = "terminal";
   else if (EXT_GROUPS.text.has(ext)) group = "text";
   else if (EXT_GROUPS.code.has(ext)) group = "code";

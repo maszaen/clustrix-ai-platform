@@ -1,0 +1,1455 @@
+{
+  "file": "renderer/pages/projectsController.js",
+  "fileSize": 82318,
+  "totalLines": 2243,
+  "functions": [
+    {
+      "name": "init",
+      "line": 46,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 2193
+    },
+    {
+      "name": "setupProjectsPageListeners",
+      "line": 716,
+      "params": [],
+      "lines": 793
+    },
+    {
+      "name": "pageListener",
+      "line": 751,
+      "params": [
+        "e"
+      ],
+      "lines": 345,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "startProjectRename",
+      "line": 1851,
+      "params": [
+        "project"
+      ],
+      "lines": 144
+    },
+    {
+      "name": "renderProjectSessions",
+      "line": 418,
+      "params": [
+        "project"
+      ],
+      "lines": 100
+    },
+    {
+      "name": "handleProjectSend",
+      "line": 1707,
+      "params": [],
+      "lines": 82
+    },
+    {
+      "name": "createProjectListItem",
+      "line": 344,
+      "params": [
+        "project"
+      ],
+      "lines": 72
+    },
+    {
+      "name": "renderProjectsPage",
+      "line": 275,
+      "params": [],
+      "lines": 67
+    },
+    {
+      "name": "startProjectDetailRename",
+      "line": 1997,
+      "params": [
+        "project"
+      ],
+      "lines": 66
+    },
+    {
+      "name": "showCreateProjectModal",
+      "line": 1547,
+      "params": [],
+      "lines": 63
+    },
+    {
+      "name": "handleProjectFileUpload",
+      "line": 1791,
+      "params": [],
+      "lines": 58
+    },
+    {
+      "name": "showProjectDetailView",
+      "line": 216,
+      "params": [
+        "project"
+      ],
+      "lines": 57
+    },
+    {
+      "name": "renderProjectFiles",
+      "line": 546,
+      "params": [
+        "project"
+      ],
+      "lines": 57
+    },
+    {
+      "name": "viewInstruction",
+      "line": 2110,
+      "params": [
+        "index"
+      ],
+      "lines": 50
+    },
+    {
+      "name": "showProjectsPage",
+      "line": 130,
+      "params": [],
+      "lines": 48
+    },
+    {
+      "name": "viewProjectFile",
+      "line": 630,
+      "params": [
+        "index"
+      ],
+      "lines": 46
+    },
+    {
+      "name": "deleteProject",
+      "line": 678,
+      "params": [
+        "project"
+      ],
+      "lines": 36
+    },
+    {
+      "name": "showProjectsListView",
+      "line": 180,
+      "params": [],
+      "lines": 34
+    },
+    {
+      "name": "setupTextareaProjectResize",
+      "line": 1511,
+      "params": [],
+      "lines": 34
+    },
+    {
+      "name": "renderProjectInstructions",
+      "line": 520,
+      "params": [
+        "project"
+      ],
+      "lines": 24
+    },
+    {
+      "name": "finishRename",
+      "line": 1959,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 24,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "updateInstruction",
+      "line": 2162,
+      "params": [
+        "index",
+        "title",
+        "content"
+      ],
+      "lines": 24
+    },
+    {
+      "name": "deleteProjectFile",
+      "line": 605,
+      "params": [
+        "index"
+      ],
+      "lines": 23
+    },
+    {
+      "name": "createNewProject",
+      "line": 1612,
+      "params": [
+        "name",
+        "AssignmentPattern"
+      ],
+      "lines": 23
+    },
+    {
+      "name": "saveProjectsData",
+      "line": 1637,
+      "params": [],
+      "lines": 23
+    },
+    {
+      "name": "addInstruction",
+      "line": 2085,
+      "params": [
+        "title",
+        "content"
+      ],
+      "lines": 23
+    },
+    {
+      "name": "loadProjectsData",
+      "line": 1662,
+      "params": [],
+      "lines": 22
+    },
+    {
+      "name": "finishRename",
+      "line": 2030,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 21,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "showDeleteProjectConfirmation",
+      "line": 2065,
+      "params": [
+        "project"
+      ],
+      "lines": 18
+    },
+    {
+      "name": "deleteInstruction",
+      "line": 2188,
+      "params": [],
+      "lines": 18
+    },
+    {
+      "name": "renderProjectMessageFiles",
+      "line": 111,
+      "params": [],
+      "lines": 17
+    },
+    {
+      "name": "updateProjectStarButton",
+      "line": 1696,
+      "params": [],
+      "lines": 9
+    },
+    {
+      "name": "toggleProjectFavorite",
+      "line": 1686,
+      "params": [
+        "project"
+      ],
+      "lines": 8
+    }
+  ],
+  "classes": [],
+  "imports": [],
+  "exports": [],
+  "variables": [
+    {
+      "name": "REQUIRED_KEYS",
+      "line": 4,
+      "kind": "const"
+    },
+    {
+      "line": 53,
+      "kind": "const"
+    },
+    {
+      "line": 95,
+      "kind": "const"
+    },
+    {
+      "name": "container",
+      "line": 112,
+      "kind": "const"
+    },
+    {
+      "name": "stagedFiles",
+      "line": 116,
+      "kind": "const"
+    },
+    {
+      "name": "pill",
+      "line": 118,
+      "kind": "const"
+    },
+    {
+      "name": "chatArea",
+      "line": 135,
+      "kind": "const"
+    },
+    {
+      "name": "titleEl",
+      "line": 148,
+      "kind": "const"
+    },
+    {
+      "name": "logo",
+      "line": 153,
+      "kind": "const"
+    },
+    {
+      "name": "welcomeScreen",
+      "line": 156,
+      "kind": "const"
+    },
+    {
+      "name": "detailView",
+      "line": 159,
+      "kind": "const"
+    },
+    {
+      "name": "searchInput",
+      "line": 174,
+      "kind": "const"
+    },
+    {
+      "name": "listView",
+      "line": 181,
+      "kind": "const"
+    },
+    {
+      "name": "detailView",
+      "line": 182,
+      "kind": "const"
+    },
+    {
+      "name": "chatArea",
+      "line": 184,
+      "kind": "const"
+    },
+    {
+      "name": "projectInput",
+      "line": 209,
+      "kind": "const"
+    },
+    {
+      "name": "listView",
+      "line": 219,
+      "kind": "const"
+    },
+    {
+      "name": "detailView",
+      "line": 220,
+      "kind": "const"
+    },
+    {
+      "name": "chatArea",
+      "line": 221,
+      "kind": "const"
+    },
+    {
+      "name": "activeProject",
+      "line": 240,
+      "kind": "const"
+    },
+    {
+      "name": "isDifferentProject",
+      "line": 241,
+      "kind": "const"
+    },
+    {
+      "name": "projectInput",
+      "line": 252,
+      "kind": "const"
+    },
+    {
+      "name": "titleEl",
+      "line": 261,
+      "kind": "const"
+    },
+    {
+      "name": "descEl",
+      "line": 262,
+      "kind": "const"
+    },
+    {
+      "name": "projectInput",
+      "line": 271,
+      "kind": "const"
+    },
+    {
+      "name": "projectsList",
+      "line": 276,
+      "kind": "const"
+    },
+    {
+      "name": "searchValue",
+      "line": 279,
+      "kind": "const"
+    },
+    {
+      "name": "projects",
+      "line": 284,
+      "kind": "let"
+    },
+    {
+      "name": "nameMatch",
+      "line": 287,
+      "kind": "const"
+    },
+    {
+      "name": "descMatch",
+      "line": 290,
+      "kind": "const"
+    },
+    {
+      "name": "infoBar",
+      "line": 308,
+      "kind": "const"
+    },
+    {
+      "name": "actionBar",
+      "line": 309,
+      "kind": "const"
+    },
+    {
+      "name": "totalCountEl",
+      "line": 310,
+      "kind": "const"
+    },
+    {
+      "name": "selectedCountEl",
+      "line": 311,
+      "kind": "const"
+    },
+    {
+      "name": "deleteBtn",
+      "line": 312,
+      "kind": "const"
+    },
+    {
+      "name": "selectMode",
+      "line": 313,
+      "kind": "const"
+    },
+    {
+      "name": "projectItem",
+      "line": 339,
+      "kind": "const"
+    },
+    {
+      "name": "item",
+      "line": 345,
+      "kind": "const"
+    },
+    {
+      "name": "sessionCount",
+      "line": 349,
+      "kind": "const"
+    },
+    {
+      "name": "fileCount",
+      "line": 352,
+      "kind": "const"
+    },
+    {
+      "name": "isSelected",
+      "line": 354,
+      "kind": "const"
+    },
+    {
+      "name": "checkboxHTML",
+      "line": 356,
+      "kind": "const"
+    },
+    {
+      "name": "formattedDate",
+      "line": 370,
+      "kind": "const"
+    },
+    {
+      "name": "sessionsList",
+      "line": 419,
+      "kind": "const"
+    },
+    {
+      "name": "projectSessions",
+      "line": 423,
+      "kind": "let"
+    },
+    {
+      "name": "total",
+      "line": 444,
+      "kind": "const"
+    },
+    {
+      "name": "pageSize",
+      "line": 445,
+      "kind": "const"
+    },
+    {
+      "name": "limit",
+      "line": 446,
+      "kind": "const"
+    },
+    {
+      "name": "sessionsToShow",
+      "line": 450,
+      "kind": "const"
+    },
+    {
+      "name": "hasMoreSessions",
+      "line": 451,
+      "kind": "const"
+    },
+    {
+      "name": "sessionItem",
+      "line": 454,
+      "kind": "const"
+    },
+    {
+      "name": "lastMessage",
+      "line": 459,
+      "kind": "const"
+    },
+    {
+      "name": "preview",
+      "line": 460,
+      "kind": "const"
+    },
+    {
+      "name": "formattedDate",
+      "line": 464,
+      "kind": "const"
+    },
+    {
+      "name": "showMoreItem",
+      "line": 509,
+      "kind": "const"
+    },
+    {
+      "name": "container",
+      "line": 521,
+      "kind": "const"
+    },
+    {
+      "name": "oldInstructionText",
+      "line": 525,
+      "kind": "const"
+    },
+    {
+      "name": "instructionText",
+      "line": 533,
+      "kind": "const"
+    },
+    {
+      "name": "header",
+      "line": 539,
+      "kind": "const"
+    },
+    {
+      "name": "filesList",
+      "line": 547,
+      "kind": "const"
+    },
+    {
+      "name": "isDarkTheme",
+      "line": 553,
+      "kind": "const"
+    },
+    {
+      "name": "iconSVG",
+      "line": 554,
+      "kind": "const"
+    },
+    {
+      "name": "lineCount",
+      "line": 568,
+      "kind": "const"
+    },
+    {
+      "name": "extension",
+      "line": 569,
+      "kind": "const"
+    },
+    {
+      "name": "fileCard",
+      "line": 571,
+      "kind": "const"
+    },
+    {
+      "name": "file",
+      "line": 609,
+      "kind": "const"
+    },
+    {
+      "name": "file",
+      "line": 634,
+      "kind": "const"
+    },
+    {
+      "name": "modal",
+      "line": 636,
+      "kind": "const"
+    },
+    {
+      "name": "sessionsToDelete",
+      "line": 681,
+      "kind": "const"
+    },
+    {
+      "name": "projectIndex",
+      "line": 689,
+      "kind": "const"
+    },
+    {
+      "name": "searchInput",
+      "line": 718,
+      "kind": "const"
+    },
+    {
+      "name": "newProjectBtn",
+      "line": 726,
+      "kind": "const"
+    },
+    {
+      "name": "backBtn",
+      "line": 734,
+      "kind": "const"
+    },
+    {
+      "name": "projectsPage",
+      "line": 742,
+      "kind": "const"
+    },
+    {
+      "name": "target",
+      "line": 752,
+      "kind": "const"
+    },
+    {
+      "name": "projectId",
+      "line": 753,
+      "kind": "const"
+    },
+    {
+      "name": "idsToDelete",
+      "line": 780,
+      "kind": "const"
+    },
+    {
+      "name": "checkbox",
+      "line": 799,
+      "kind": "const"
+    },
+    {
+      "name": "checkboxProjectId",
+      "line": 800,
+      "kind": "const"
+    },
+    {
+      "name": "isChecked",
+      "line": 826,
+      "kind": "const"
+    },
+    {
+      "name": "visibleProjectIds",
+      "line": 827,
+      "kind": "const"
+    },
+    {
+      "name": "menuContainer",
+      "line": 843,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 844,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 845,
+      "kind": "const"
+    },
+    {
+      "name": "otherButton",
+      "line": 853,
+      "kind": "const"
+    },
+    {
+      "name": "isPersistentOpen",
+      "line": 860,
+      "kind": "const"
+    },
+    {
+      "name": "menuItem",
+      "line": 877,
+      "kind": "const"
+    },
+    {
+      "name": "action",
+      "line": 878,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 879,
+      "kind": "const"
+    },
+    {
+      "name": "menuProjectId",
+      "line": 880,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 884,
+      "kind": "const"
+    },
+    {
+      "name": "project",
+      "line": 888,
+      "kind": "const"
+    },
+    {
+      "name": "project",
+      "line": 891,
+      "kind": "const"
+    },
+    {
+      "name": "project",
+      "line": 894,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 906,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 914,
+      "kind": "const"
+    },
+    {
+      "name": "menuContainer",
+      "line": 915,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 916,
+      "kind": "const"
+    },
+    {
+      "name": "otherButton",
+      "line": 924,
+      "kind": "const"
+    },
+    {
+      "name": "isPersistentOpen",
+      "line": 931,
+      "kind": "const"
+    },
+    {
+      "name": "menuItem",
+      "line": 948,
+      "kind": "const"
+    },
+    {
+      "name": "action",
+      "line": 949,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 950,
+      "kind": "const"
+    },
+    {
+      "name": "menuSessionId",
+      "line": 951,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 955,
+      "kind": "const"
+    },
+    {
+      "name": "session",
+      "line": 959,
+      "kind": "const"
+    },
+    {
+      "name": "session",
+      "line": 973,
+      "kind": "const"
+    },
+    {
+      "name": "session",
+      "line": 982,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 996,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1007,
+      "kind": "const"
+    },
+    {
+      "name": "menuContainer",
+      "line": 1015,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1016,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 1017,
+      "kind": "const"
+    },
+    {
+      "name": "otherButton",
+      "line": 1025,
+      "kind": "const"
+    },
+    {
+      "name": "isPersistentOpen",
+      "line": 1032,
+      "kind": "const"
+    },
+    {
+      "name": "menuItem",
+      "line": 1049,
+      "kind": "const"
+    },
+    {
+      "name": "action",
+      "line": 1050,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 1051,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1055,
+      "kind": "const"
+    },
+    {
+      "name": "project",
+      "line": 1089,
+      "kind": "const"
+    },
+    {
+      "name": "sessionItem",
+      "line": 1115,
+      "kind": "const"
+    },
+    {
+      "name": "sessionId",
+      "line": 1116,
+      "kind": "const"
+    },
+    {
+      "name": "session",
+      "line": 1118,
+      "kind": "const"
+    },
+    {
+      "name": "showMoreBtn",
+      "line": 1127,
+      "kind": "const"
+    },
+    {
+      "name": "projectId",
+      "line": 1128,
+      "kind": "const"
+    },
+    {
+      "name": "projectSessions",
+      "line": 1133,
+      "kind": "const"
+    },
+    {
+      "name": "total",
+      "line": 1134,
+      "kind": "const"
+    },
+    {
+      "name": "pageSize",
+      "line": 1135,
+      "kind": "const"
+    },
+    {
+      "name": "currentLimit",
+      "line": 1136,
+      "kind": "const"
+    },
+    {
+      "name": "project",
+      "line": 1148,
+      "kind": "const"
+    },
+    {
+      "name": "projectSessions",
+      "line": 1150,
+      "kind": "const"
+    },
+    {
+      "name": "total",
+      "line": 1151,
+      "kind": "const"
+    },
+    {
+      "name": "pageSize",
+      "line": 1152,
+      "kind": "const"
+    },
+    {
+      "name": "currentLimit",
+      "line": 1153,
+      "kind": "const"
+    },
+    {
+      "name": "fileItem",
+      "line": 1179,
+      "kind": "const"
+    },
+    {
+      "name": "index",
+      "line": 1180,
+      "kind": "const"
+    },
+    {
+      "name": "fileItem",
+      "line": 1188,
+      "kind": "const"
+    },
+    {
+      "name": "index",
+      "line": 1189,
+      "kind": "const"
+    },
+    {
+      "name": "projectItem",
+      "line": 1203,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 1205,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1208,
+      "kind": "const"
+    },
+    {
+      "name": "projectItem",
+      "line": 1220,
+      "kind": "const"
+    },
+    {
+      "name": "rect",
+      "line": 1223,
+      "kind": "const"
+    },
+    {
+      "name": "isStillInside",
+      "line": 1224,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 1231,
+      "kind": "const"
+    },
+    {
+      "name": "isHoveringDropdown",
+      "line": 1234,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1239,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 1254,
+      "kind": "const"
+    },
+    {
+      "name": "projectItem",
+      "line": 1260,
+      "kind": "const"
+    },
+    {
+      "name": "projectRect",
+      "line": 1263,
+      "kind": "const"
+    },
+    {
+      "name": "dropdownRect",
+      "line": 1264,
+      "kind": "const"
+    },
+    {
+      "name": "mouseX",
+      "line": 1267,
+      "kind": "const"
+    },
+    {
+      "name": "mouseY",
+      "line": 1268,
+      "kind": "const"
+    },
+    {
+      "name": "isInProjectItem",
+      "line": 1270,
+      "kind": "const"
+    },
+    {
+      "name": "isInDropdown",
+      "line": 1276,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1284,
+      "kind": "const"
+    },
+    {
+      "name": "sessionItem",
+      "line": 1309,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 1311,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1314,
+      "kind": "const"
+    },
+    {
+      "name": "sessionItem",
+      "line": 1327,
+      "kind": "const"
+    },
+    {
+      "name": "rect",
+      "line": 1330,
+      "kind": "const"
+    },
+    {
+      "name": "isStillInside",
+      "line": 1331,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 1338,
+      "kind": "const"
+    },
+    {
+      "name": "isHoveringDropdown",
+      "line": 1341,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1346,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 1362,
+      "kind": "const"
+    },
+    {
+      "name": "sessionItem",
+      "line": 1368,
+      "kind": "const"
+    },
+    {
+      "name": "sessionRect",
+      "line": 1371,
+      "kind": "const"
+    },
+    {
+      "name": "dropdownRect",
+      "line": 1372,
+      "kind": "const"
+    },
+    {
+      "name": "mouseX",
+      "line": 1375,
+      "kind": "const"
+    },
+    {
+      "name": "mouseY",
+      "line": 1376,
+      "kind": "const"
+    },
+    {
+      "name": "isInSessionItem",
+      "line": 1378,
+      "kind": "const"
+    },
+    {
+      "name": "isInDropdown",
+      "line": 1384,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1392,
+      "kind": "const"
+    },
+    {
+      "name": "titleContainer",
+      "line": 1410,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 1412,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1415,
+      "kind": "const"
+    },
+    {
+      "name": "titleContainer",
+      "line": 1428,
+      "kind": "const"
+    },
+    {
+      "name": "rect",
+      "line": 1431,
+      "kind": "const"
+    },
+    {
+      "name": "isStillInside",
+      "line": 1432,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 1439,
+      "kind": "const"
+    },
+    {
+      "name": "isHoveringDropdown",
+      "line": 1442,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1447,
+      "kind": "const"
+    },
+    {
+      "name": "dropdown",
+      "line": 1463,
+      "kind": "const"
+    },
+    {
+      "name": "titleContainer",
+      "line": 1469,
+      "kind": "const"
+    },
+    {
+      "name": "titleRect",
+      "line": 1472,
+      "kind": "const"
+    },
+    {
+      "name": "dropdownRect",
+      "line": 1473,
+      "kind": "const"
+    },
+    {
+      "name": "mouseX",
+      "line": 1476,
+      "kind": "const"
+    },
+    {
+      "name": "mouseY",
+      "line": 1477,
+      "kind": "const"
+    },
+    {
+      "name": "isInTitleContainer",
+      "line": 1479,
+      "kind": "const"
+    },
+    {
+      "name": "isInDropdown",
+      "line": 1485,
+      "kind": "const"
+    },
+    {
+      "name": "menuButton",
+      "line": 1493,
+      "kind": "const"
+    },
+    {
+      "name": "projectInput",
+      "line": 1512,
+      "kind": "const"
+    },
+    {
+      "name": "shell",
+      "line": 1520,
+      "kind": "const"
+    },
+    {
+      "name": "modal",
+      "line": 1549,
+      "kind": "const"
+    },
+    {
+      "name": "nameInput",
+      "line": 1582,
+      "kind": "const"
+    },
+    {
+      "name": "name",
+      "line": 1596,
+      "kind": "const"
+    },
+    {
+      "name": "description",
+      "line": 1602,
+      "kind": "const"
+    },
+    {
+      "name": "project",
+      "line": 1613,
+      "kind": "const"
+    },
+    {
+      "name": "result",
+      "line": 1645,
+      "kind": "const"
+    },
+    {
+      "name": "saved",
+      "line": 1668,
+      "kind": "const"
+    },
+    {
+      "name": "starBtn",
+      "line": 1697,
+      "kind": "const"
+    },
+    {
+      "name": "input",
+      "line": 1710,
+      "kind": "const"
+    },
+    {
+      "name": "originalText",
+      "line": 1711,
+      "kind": "const"
+    },
+    {
+      "name": "stagedUserFiles",
+      "line": 1712,
+      "kind": "const"
+    },
+    {
+      "name": "userFilesForSession",
+      "line": 1716,
+      "kind": "const"
+    },
+    {
+      "name": "config",
+      "line": 1717,
+      "kind": "const"
+    },
+    {
+      "name": "modelInfo",
+      "line": 1718,
+      "kind": "const"
+    },
+    {
+      "name": "s",
+      "line": 1727,
+      "kind": "const"
+    },
+    {
+      "name": "chatArea",
+      "line": 1745,
+      "kind": "const"
+    },
+    {
+      "name": "projectDetailView",
+      "line": 1746,
+      "kind": "const"
+    },
+    {
+      "name": "aiMessageIndex",
+      "line": 1760,
+      "kind": "const"
+    },
+    {
+      "name": "aiNode",
+      "line": 1761,
+      "kind": "const"
+    },
+    {
+      "name": "messagesForAI",
+      "line": 1782,
+      "kind": "const"
+    },
+    {
+      "name": "fileContents",
+      "line": 1806,
+      "kind": "const"
+    },
+    {
+      "name": "validFiles",
+      "line": 1822,
+      "kind": "const"
+    },
+    {
+      "name": "projectItem",
+      "line": 1861,
+      "kind": "const"
+    },
+    {
+      "name": "titleElement",
+      "line": 1881,
+      "kind": "const"
+    },
+    {
+      "name": "targetElement",
+      "line": 1882,
+      "kind": "let"
+    },
+    {
+      "name": "h3Element",
+      "line": 1885,
+      "kind": "const"
+    },
+    {
+      "name": "headerElement",
+      "line": 1894,
+      "kind": "const"
+    },
+    {
+      "name": "newTitle",
+      "line": 1896,
+      "kind": "const"
+    },
+    {
+      "name": "contentElement",
+      "line": 1906,
+      "kind": "const"
+    },
+    {
+      "name": "newTitle",
+      "line": 1908,
+      "kind": "const"
+    },
+    {
+      "name": "originalName",
+      "line": 1935,
+      "kind": "const"
+    },
+    {
+      "name": "input",
+      "line": 1938,
+      "kind": "const"
+    },
+    {
+      "name": "parent",
+      "line": 1954,
+      "kind": "const"
+    },
+    {
+      "name": "newTitle",
+      "line": 1973,
+      "kind": "const"
+    },
+    {
+      "name": "dateElement",
+      "line": 1979,
+      "kind": "const"
+    },
+    {
+      "name": "titleElement",
+      "line": 1998,
+      "kind": "const"
+    },
+    {
+      "name": "originalName",
+      "line": 2006,
+      "kind": "const"
+    },
+    {
+      "name": "input",
+      "line": 2009,
+      "kind": "const"
+    },
+    {
+      "name": "parent",
+      "line": 2025,
+      "kind": "const"
+    },
+    {
+      "name": "newTitle",
+      "line": 2044,
+      "kind": "const"
+    },
+    {
+      "name": "sessionCount",
+      "line": 2066,
+      "kind": "const"
+    },
+    {
+      "name": "fileCount",
+      "line": 2069,
+      "kind": "const"
+    },
+    {
+      "name": "message",
+      "line": 2071,
+      "kind": "let"
+    },
+    {
+      "name": "newInstruction",
+      "line": 2089,
+      "kind": "const"
+    },
+    {
+      "name": "instruction",
+      "line": 2118,
+      "kind": "const"
+    },
+    {
+      "name": "modal",
+      "line": 2120,
+      "kind": "const"
+    }
+  ]
+}

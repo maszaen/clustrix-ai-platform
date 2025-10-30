@@ -1,1 +1,0 @@
-<try><try-title>Optimasi Static Analysis di Legacy</try-title><li>Bagaimana membuat custom rule untuk legacy code yang unik di perusahaan</li<li>Strategi CI/CD pipeline untuk legacy system dengan static analysis</li<li>Case study: Migrasi SonarQube ke SonarCloud di enterprise legacy</li></try>

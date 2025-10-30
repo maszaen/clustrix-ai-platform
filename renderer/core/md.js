@@ -500,7 +500,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
           html += parseInlineMarkdown(line) + '\n';
         } else {
           // Check if this line is ONLY an image (no text before/after)
-          const isImageOnly = /^!\[.*?\]\(.*?\)(\s*=\s*\d+x\d+)?$/.test(trimmedLine);
+          const isImageOnly = /^!\[.*?\]\([^\s]+\)(\s*=\s*\d+x\d+)?$/.test(trimmedLine);
           
           if (isImageOnly) {
             // This is an image-only line
@@ -554,7 +554,7 @@ function processMarkdownFormatting(text) {
   
   // Parse images BEFORE HTML escaping to preserve alt text
   const imageBlocks = [];
-  let processedText = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+  let processedText = text.replace(/!\[([^\]]*)\]\(([^\s]+)\)/g, (match, alt, src) => {
     const placeholder = `__IMAGE_${imageBlocks.length}__`;
     // Strip markdown formatting from alt text for accessibility
     const cleanAlt = alt.replace(/\*\*|__|[\*_~`]/g, '') || 'Image';
@@ -580,7 +580,7 @@ function processMarkdownFormatting(text) {
   
   // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
   const linkBlocks = [];
-  processedText = processedText.replace(/\[([^\]]*)\]\(([^)]+)\)/g, (match, text, url) => {
+  processedText = processedText.replace(/\[([^\]]*)\]\(([^\s]+)\)/g, (match, text, url) => {
     const placeholder = `__LINK_${linkBlocks.length}__`;
     
     // Check if link contains image placeholder (clickable image)
@@ -639,11 +639,19 @@ function processMarkdownFormatting(text) {
     // Skip if preceded by @ (email addresses in mailto links)
     if (offset > 0 && html[offset - 1] === '@') return match;
     
-    // Skip if inside existing link tag
+    // Skip if inside any HTML tag (link, button, img, etc.)
     const beforeMatch = html.substring(0, offset);
-    const lastOpenTag = beforeMatch.lastIndexOf('<a ');
-    const lastCloseTag = beforeMatch.lastIndexOf('</a>');
-    if (lastOpenTag > lastCloseTag) return match; // Inside <a> tag
+    const lastOpenTag = Math.max(
+      beforeMatch.lastIndexOf('<a '),
+      beforeMatch.lastIndexOf('<button '),
+      beforeMatch.lastIndexOf('<img ')
+    );
+    const lastCloseTag = Math.max(
+      beforeMatch.lastIndexOf('</a>'),
+      beforeMatch.lastIndexOf('</button>'),
+      beforeMatch.lastIndexOf('/>')
+    );
+    if (lastOpenTag > lastCloseTag) return match; // Inside HTML tag
     
     let href = protocolUrl || domainUrl;
     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
@@ -742,7 +750,7 @@ function parseInlineMarkdown(text) {
   
   // Parse images BEFORE HTML escaping to preserve alt text
   const imageBlocks = [];
-  processedText = processedText.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+  processedText = processedText.replace(/!\[([^\]]*)\]\(([^\s]+)\)/g, (match, alt, src) => {
     const placeholder = `__IMAGE_${imageBlocks.length}__`;
     // Strip markdown formatting from alt text for accessibility
     const cleanAlt = alt.replace(/\*\*|__|[\*_~`]/g, '') || 'Image';
@@ -768,7 +776,7 @@ function parseInlineMarkdown(text) {
   
   // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
   const linkBlocks = [];
-  processedText = processedText.replace(/\[([^\]]*)\]\(([^)]+)\)/g, (match, text, url) => {
+  processedText = processedText.replace(/\[([^\]]*)\]\(([^\s]+)\)/g, (match, text, url) => {
     const placeholder = `__LINK_${linkBlocks.length}__`;
     
     // Check if link contains image placeholder (clickable image)
@@ -855,11 +863,19 @@ function parseInlineMarkdown(text) {
     // Skip if preceded by @ (email addresses in mailto links)
     if (offset > 0 && html[offset - 1] === '@') return match;
     
-    // Skip if inside existing link tag
+    // Skip if inside any HTML tag (link, button, img, etc.)
     const beforeMatch = html.substring(0, offset);
-    const lastOpenTag = beforeMatch.lastIndexOf('<a ');
-    const lastCloseTag = beforeMatch.lastIndexOf('</a>');
-    if (lastOpenTag > lastCloseTag) return match; // Inside <a> tag
+    const lastOpenTag = Math.max(
+      beforeMatch.lastIndexOf('<a '),
+      beforeMatch.lastIndexOf('<button '),
+      beforeMatch.lastIndexOf('<img ')
+    );
+    const lastCloseTag = Math.max(
+      beforeMatch.lastIndexOf('</a>'),
+      beforeMatch.lastIndexOf('</button>'),
+      beforeMatch.lastIndexOf('/>')
+    );
+    if (lastOpenTag > lastCloseTag) return match; // Inside HTML tag
     
     let href = protocolUrl || domainUrl;
     if (!/^https?:\/\//i.test(href)) href = "https://" + href;

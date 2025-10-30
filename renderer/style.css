@@ -5425,6 +5425,11 @@ a:focus-visible {
   display: none !important;
 }
 
+/* Hide image download button during streaming */
+.message.streaming-active .md-image-download {
+  display: none !important;
+}
+
 
 
 .save-code-btn:hover {
@@ -8278,13 +8283,16 @@ button:disabled .btn-icon {
   line-height: 1.6;
 }
 
+.brain > .bli:not(:last-child):not(:first-child) {
+  border-bottom: 1px solid var(--border);
+}
+
 .brain > .bli:first-of-type {
   border-top-right-radius: var(--radius-lg);
   border-top-left-radius: var(--radius-lg);
 }
 
 .brain > .bli:last-child {
-  border-top: 1px solid var(--border);
   border-bottom-right-radius: var(--radius-lg);
   border-bottom-left-radius: var(--radius-lg);
 }

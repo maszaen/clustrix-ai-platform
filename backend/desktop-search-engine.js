@@ -13,6 +13,31 @@ class DesktopSearchEngine {
     this.searchApiConfig = null;
   }
 
+  /**
+   * Detect if query indicates research intent (needs comprehensive data)
+   * @param {string} query - Search query
+   * @returns {boolean} - True if research mode should be enabled
+   */
+  detectResearchIntent(query) {
+    if (!query || typeof query !== 'string') return false;
+
+    const researchKeywords = [
+      'research', 'penelitian', 'riset',
+      'analisis', 'analysis', 'analyze',
+      'comparison', 'compare', 'bandingkan', 'komparasi',
+      'comprehensive', 'lengkap', 'komprehensif', 'mendalam',
+      'case study', 'studi kasus',
+      'detail', 'detailed', 'rinci',
+      'overview', 'ringkasan lengkap', 'gambaran umum',
+      'survey', 'tinjauan',
+      'state of the art', 'terkini',
+      'literature review', 'kajian literatur'
+    ];
+
+    const queryLower = query.toLowerCase();
+    return researchKeywords.some(kw => queryLower.includes(kw));
+  }
+
   loadProjectFiles(files) {
     console.log(`Loading ${files.length} files into search engine...`);
     this.projectFiles.clear();
@@ -488,26 +513,47 @@ class DesktopSearchEngine {
       throw new Error('webSearch requires a non-empty query parameter');
     }
 
+    // NEW: Detect research intent for adaptive parameters
+    const isResearch = this.detectResearchIntent(normalizedQuery) || params.researchMode === true;
+
+    console.log(`webSearch: query="${normalizedQuery}", isResearch=${isResearch}`);
+
+    // ADAPTIVE maxResults: Research mode allows more results (20), quick search stays at 10
     const maxCandidate = Number(params.maxResults ?? options.maxResults ?? 5);
     const maxResults = Number.isFinite(maxCandidate) && maxCandidate > 0
-      ? Math.min(Math.floor(maxCandidate), 10)
-      : 5;
+      ? Math.min(Math.floor(maxCandidate), isResearch ? 20 : 10)  // Research: 20, Quick: 10
+      : (isResearch ? 10 : 5);  // Default: Research 10, Quick 5
 
+    // ADAPTIVE autoFetch: Research mode fetches more aggressively
     const autoFetch = params.autoFetch !== undefined ? Boolean(params.autoFetch)
       : options.autoFetch !== undefined ? Boolean(options.autoFetch)
       : true;
-    const fetchCountCandidate = Number(params.fetchCount ?? options.fetchCount ?? Math.min(3, maxResults));
+
+    // ADAPTIVE fetchCount: Research fetches 75%, quick fetches 30%
+    const defaultFetchCount = isResearch
+      ? Math.floor(maxResults * 0.75)  // Research: Scrape 75% (e.g., 15 of 20)
+      : Math.min(3, maxResults);        // Quick: Scrape 3
+
+    const fetchCountCandidate = Number(params.fetchCount ?? options.fetchCount ?? defaultFetchCount);
     const fetchCount = Number.isFinite(fetchCountCandidate) && fetchCountCandidate >= 0
       ? Math.min(Math.floor(fetchCountCandidate), maxResults)
-      : Math.min(3, maxResults);
-    const maxCharsCandidate = Number(params.maxChars ?? options.maxChars ?? 4000);
+      : defaultFetchCount;
+
+    // ADAPTIVE maxChars: Research prioritizes depth (12000), quick prioritizes speed (4000)
+    const defaultMaxChars = isResearch ? 12000 : 4000;
+    const maxCharsCandidate = Number(params.maxChars ?? options.maxChars ?? defaultMaxChars);
     const maxChars = Number.isFinite(maxCharsCandidate) && maxCharsCandidate > 0
       ? Math.min(Math.floor(maxCharsCandidate), 12000)
-      : 4000;
-    const timeoutCandidate = Number(params.timeoutMs ?? options.timeoutMs ?? 8000);
+      : defaultMaxChars;
+
+    // ADAPTIVE timeout: Research allows more time (7000ms), quick needs speed (4000ms)
+    const defaultTimeout = isResearch ? 7000 : 4000;
+    const timeoutCandidate = Number(params.timeoutMs ?? options.timeoutMs ?? defaultTimeout);
     const timeoutMs = Number.isFinite(timeoutCandidate) && timeoutCandidate > 0
       ? Math.floor(timeoutCandidate)
-      : 8000;
+      : defaultTimeout;
+
+    console.log(`webSearch adaptive params: maxResults=${maxResults}, fetchCount=${fetchCount}, maxChars=${maxChars}, timeout=${timeoutMs}ms`);
 
     let results = [];
 

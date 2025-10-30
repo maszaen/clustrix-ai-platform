@@ -26,8 +26,9 @@ async function performWebSearch(queries, config, logHelper, options = {}) {
   const provider = config.provider || 'serpapi';
   const includeImages = options.includeImages !== false;
   const imageCount = options.imageCount || 2;
-  
-  log(logHelper, 'WEB_SEARCH', 'performWebSearch', `Starting search with provider ${provider}.`, { queries, includeImages });
+  const resultCount = options.resultCount || 5;  // Dynamic result count with default 5
+
+  log(logHelper, 'WEB_SEARCH', 'performWebSearch', `Starting search with provider ${provider}.`, { queries, includeImages, resultCount });
 
   if (provider === 'google') {
     if (!config.googleApiKey || !config.googleCseId) {
@@ -95,7 +96,7 @@ async function performWebSearch(queries, config, logHelper, options = {}) {
           snippet: item.snippet,
         }))
         .filter((item) => item.link && !item.link.includes('youtube.com'))
-        .slice(0, 5);
+        .slice(0, resultCount);
 
       const imageResults = imageResponse && Array.isArray(imageResponse.items)
         ? imageResponse.items.slice(0, imageCount).map((item) => ({
@@ -152,7 +153,7 @@ async function performWebSearch(queries, config, logHelper, options = {}) {
         snippet: item.snippet,
       }))
       .filter((item) => item.link && !item.link.includes('youtube.com'))
-      .slice(0, 5);
+      .slice(0, resultCount);
 
     const imageResults = imageResponse && Array.isArray(imageResponse.images_results)
       ? imageResponse.images_results.slice(0, imageCount).map((item) => ({
@@ -173,17 +174,28 @@ async function performWebSearch(queries, config, logHelper, options = {}) {
   }
 }
 
-async function scrapeUrls(urls, logHelper) {
+async function scrapeUrls(urls, logHelper, resultCount = 5) {
   if (!Array.isArray(urls) || urls.length === 0) {
     log(logHelper, 'WEB_SEARCH', 'scrapeUrls', 'No URLs to scrape.');
     return [];
   }
 
-  const MAX_CHARS_PER_PAGE = 2000;
+  // Smart optimization: adjust scraping parameters based on result count
+  // For many sources: prioritize speed with shorter content per page
+  // For few sources: prioritize depth with more content per page
+  const MAX_CHARS_PER_PAGE = resultCount > 10 ? 1500 : 2000;
+  const SCRAPE_TIMEOUT = resultCount > 10 ? 3000 : 5000;
+
+  log(logHelper, 'WEB_SEARCH', 'scrapeUrls', `Smart scraping: ${urls.length} URLs with optimized settings`, {
+    resultCount,
+    charsPerPage: MAX_CHARS_PER_PAGE,
+    timeout: SCRAPE_TIMEOUT
+  });
+
   const scrapePromises = urls.map(async (url) => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      const timeout = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT);
       const response = await fetch(url, { signal: controller.signal });
       clearTimeout(timeout);
 

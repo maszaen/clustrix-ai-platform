@@ -96,11 +96,35 @@ class ReasoningActionAgent {
     // Store conversation history in session state
     sessionState.conversationHistory = existingMessages;
     sessionState.language = language;
+    sessionState.sessionId = sessionId; // Store sessionId for helper methods
     log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
       `Stored ${existingMessages.length} previous messages in session state for context, language: ${language}`);
-    
+
     const usageBreakdown = [];
-    
+    sessionState.usageBreakdown = usageBreakdown; // Store reference for triage
+
+    // NEW: Pre-search triage to avoid unnecessary web searches
+    const triageDecision = await this.triageSearchNeed(userQuery, sessionState);
+
+    log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+      `Search triage result: needsWebSearch=${triageDecision.needsWebSearch}, confidence=${triageDecision.confidence}, reasoning="${triageDecision.reasoning}"`);
+
+    // Temporarily disable web search if not needed (high confidence)
+    const originalWebCapability = sessionState.capabilities.supportsWebSearch;
+    if (!triageDecision.needsWebSearch && triageDecision.confidence > 0.7) {
+      sessionState.capabilities.supportsWebSearch = false;
+
+      log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+        `Web search disabled for this query (confidence: ${triageDecision.confidence}): ${triageDecision.reasoning}`);
+
+      if (progressCallback) {
+        progressCallback({
+          type: 'thinking',
+          content: `Triage: ${triageDecision.reasoning} (focusing on ${sessionState.files.length > 0 ? 'file analysis' : 'general knowledge'})`
+        });
+      }
+    }
+
     if (progressCallback) {
       progressCallback({
         type: 'searching',
@@ -207,7 +231,28 @@ class ReasoningActionAgent {
         }
         break;
       }
-      
+
+      // NEW: Validate action before execution to prevent redundancy
+      const validationResult = this.validateActionNecessity(
+        action,
+        sessionState.actionHistory,
+        userQuery
+      );
+
+      if (!validationResult.necessary) {
+        log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+          `Skipping unnecessary action ${index + 1}: ${validationResult.reason}`);
+
+        if (progressCallback) {
+          progressCallback({
+            type: 'thinking',
+            content: `Skipping redundant search: ${validationResult.reason}`
+          });
+        }
+
+        continue; // Skip this action
+      }
+
       log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
         `Executing action ${index + 1}/${plan.actions.length}:\n  Type: ${action.type}\n  Params: ${JSON.stringify(action.params)}\n  Reason: ${action.reason}`);
       
@@ -494,7 +539,15 @@ class ReasoningActionAgent {
         });
       }
       finalResponse = typeof synthesized === "string" ? synthesized : "";
-    }    return {
+    }
+
+    // Restore original web capability
+    sessionState.capabilities.supportsWebSearch = originalWebCapability;
+
+    log(logHelper, 'REASONING_ACTION_AGENT', 'processWithReasoningAction',
+      `Query processing complete. Web capability restored to: ${originalWebCapability}`);
+
+    return {
       response: finalResponse,
       actionsExecuted: sessionState.actionHistory.length,
       searchResults: sessionState.actionHistory.map(h => h.result),
@@ -505,13 +558,18 @@ class ReasoningActionAgent {
 
   
   buildSynthesisPrompt(userQuery, actionHistory, sessionState) {
-    const { summaryText, webSources } = this.prepareActionSummary(actionHistory);
+    const { summaryText, webSources, rawWebContent } = this.prepareActionSummary(actionHistory);
     const hasFiles = Array.isArray(sessionState.files) && sessionState.files.length > 0;
     const fileList = hasFiles
       ? sessionState.files.slice(0, 20).map(f => `- ${f.name} (${f.type})`).join('\n')
       : '- Tidak ada file lokal yang tersedia untuk sesi ini.';
+
+    // NEW: Expand web sources limit from 6 to 20 for comprehensive research
+    const maxWebSources = sessionState.capabilities?.supportsWebSearch ? 20 : 6;
     const webSourcesSection = webSources.length > 0
-      ? webSources.slice(0, 6).map((item, idx) => `${idx + 1}. ${item.url} -> ${item.snippet || '(ringkasan tidak tersedia)'}`).join('\n')
+      ? webSources.slice(0, maxWebSources).map((item, idx) =>
+          `${idx + 1}. [**${item.title || 'Source ' + (idx+1)}**](${item.url})\n   Preview: ${(item.snippet || '(ringkasan tidak tersedia)').substring(0, 200)}...`
+        ).join('\n\n')
       : 'Tidak ada sumber web yang berhasil diambil.';
     const userLanguage = this.detectUserLanguage(userQuery, sessionState);
     
@@ -519,25 +577,87 @@ class ReasoningActionAgent {
     const totalResults = actionHistory.reduce((sum, entry) => {
       return sum + (entry.result?.resultCount || 0);
     }, 0);
-    
-    // Determine confidence level based on results
+
+    // NEW: Detect if this is web research session (no files + web actions)
+    const webActionCount = actionHistory.filter(h =>
+      ['webSearch', 'fetchWebPage'].includes(h.action.type)
+    ).length;
+    const isWebResearch = webActionCount > 0 && !hasFiles;
+
+    // Adaptive instructions based on research mode
     const hasGoodData = totalResults > 50;
     const confidenceInstruction = hasGoodData
-      ? 'IMPORTANT: You have extensive data from the files. Be CONFIDENT and COMPREHENSIVE in your final answer. Provide detailed insights based on the data you found. Do NOT use disclaimers like "keterbatasan" or "perlu verifikasi" - you have direct access to the content.'
-      : 'You have gathered data from the files. Provide your final analysis based on what was found during the search phase.';
+      ? 'IMPORTANT: You have extensive data from the search results. Be CONFIDENT and COMPREHENSIVE in your final answer. Provide detailed insights based on the data you found. Do NOT use disclaimers like "keterbatasan" or "perlu verifikasi" - you have direct access to the content.'
+      : 'You have gathered data from the search results. Provide your final analysis based on what was found during the search phase.';
+
+    // NEW: Research-specific instructions for web research mode
+    const responseStyle = isWebResearch
+      ? `CRITICAL - RESEARCH REPORT REQUIREMENTS:
+You are generating a COMPREHENSIVE RESEARCH REPORT, not a quick answer.
+
+MANDATORY STRUCTURE:
+1. **Executive Summary** (2-3 paragraphs)
+   - Overview of the topic
+   - Key findings overview
+   - Main conclusions
+
+2. **Detailed Findings** (Main body - LONGEST section)
+   For EACH web source (you have ${webSources.length} sources):
+   - Source title and URL as markdown link
+   - Key information from that source (3-5 bullet points minimum)
+   - Relevant quotes or data points
+   - Critical insights
+
+3. **Comparative Analysis** (if applicable)
+   - Compare findings across sources
+   - Identify patterns, agreements, and contradictions
+   - Synthesize common themes
+
+4. **Conclusion & Recommendations**
+   - Summary of insights
+   - Practical implications
+   - Further research directions
+
+DEPTH REQUIREMENTS:
+- MINIMUM 800 words for web research reports
+- Each source should get 200-550 words of analysis
+- Use ALL ${webSources.length} sources provided in PRIMARY WEB SOURCES section
+- DO NOT summarize briefly - this is RESEARCH, not chat
+- Include specific details, numbers, quotes from sources
+- Cite sources with markdown links: [**Source Title**](URL)
+
+CRITICAL: You have ${totalResults} results with extensive data below. USE ALL OF IT.
+Do not write "berdasarkan hasil pencarian" and then give 3 sentences.
+Write a COMPREHENSIVE RESEARCH REPORT that justifies the data gathered.`
+      : `Provide a comprehensive answer based on the ${hasFiles ? 'file analysis' : 'search'} results below.
+
+STRUCTURE:
+- Direct findings from the search results (specific, with details)
+- Analysis and insights
+- Clear conclusion that answers the user's question
+- Use Markdown HR to separate each section`;
 
     return `You are an expert research assistant providing the FINAL ANSWER based on completed search results.
 
 === THIS IS THE FINAL SYNTHESIS PHASE ===
-All search actions have been completed. Your task is to provide a comprehensive final answer based ONLY on the data gathered below.
+All search actions have been completed. Your task is to provide a ${isWebResearch ? 'comprehensive research report' : 'detailed answer'} based ONLY on the data gathered below.
 
-DO NOT REQUEST ADDITIONAL SEARCHES. This is the conclusion phase.
+${responseStyle}
 
 ACTION LOG (Search Results):
 ${summaryText || 'Tidak ada aksi yang dieksekusi.'}
 
-PRIMARY WEB SOURCES:
+PRIMARY WEB SOURCES (${webSources.length} sources - USE ALL OF THEM):
 ${webSourcesSection}
+
+${rawWebContent.length > 0 ? `
+FULL WEB CONTENT (${rawWebContent.length} sources - use for detailed analysis):
+${rawWebContent.map((item, idx) =>
+  `\n--- SOURCE ${idx + 1}: ${item.title} ---\nURL: ${item.url}\n${item.content}\n`
+).join('\n')}
+
+NOTE: Use BOTH the summaries above AND the full content below for comprehensive analysis.
+` : ''}
 
 PROJECT FILE CONTEXT:
 ${fileList}
@@ -552,27 +672,24 @@ ${confidenceInstruction}
 FINAL ANSWER REQUIREMENTS:
 - Jawab dalam bahasa pengguna (detected: ${userLanguage})
 - Sertakan <thinking>...</thinking> untuk proses analisis internal
-- BE COMPREHENSIVE: Extract and synthesize ALL relevant information from the search results above
-- BE CONFIDENT: You have direct access to file content - present findings authoritatively
-- Cite specific details: line numbers, function names, actual code snippets from the results
-- DO NOT say "kemungkinan", "mungkin", "tampaknya" if you have concrete data in the results
-- DO NOT add disclaimers about "keterbatasan" or "perlu membuka file" - the data is already provided above
-- When a source includes a URL, format it as a Markdown link: [**Summarized Title Max 4 Words**](URL)
+${isWebResearch ? `- MINIMUM 800 words with detailed analysis of ALL sources
+- Each source deserves 100-150 words of analysis
+- Use professional research report format with clear sections` : `- BE COMPREHENSIVE: Extract and synthesize ALL relevant information
+- Cite specific details: line numbers, function names, code snippets`}
+- BE CONFIDENT: Present findings authoritatively based on the data provided
+- When a source includes a URL, format it as a Markdown link: [**Source Title**](URL)
+- DO NOT say "kemungkinan", "mungkin", "tampaknya" if you have concrete data
+- DO NOT add disclaimers about "keterbatasan" or "perlu mencari lebih lanjut"
 
 CRITICAL INSTRUCTION:
-DO NOT REQUEST MORE SEARCHES - This is the final answer phase, All searches are completed
+DO NOT REQUEST MORE SEARCHES - This is the final answer phase
 DO NOT suggest "additional searches needed" - Work with the ${totalResults} results provided
 
-MANDATORY STRUCTURE YOUR FINAL ANSWER:
-1. <thinking>Brief analysis of the search results</thinking>
-2. Direct findings from the search results (specific, with line numbers and code excerpts)
-3. Comprehensive analysis and insights
-4. Clear conclusion that answers the user's question
-
-Remember: Provide a FINAL, CONCLUSIVE answer. No follow-up searches. You have ${totalResults} pieces of data - use them to give a complete response.`;
+Remember: This is ${isWebResearch ? 'RESEARCH MODE - comprehensive depth required' : 'standard mode'}.
+${isWebResearch ? `Your response should be 800+ words with detailed analysis of ALL ${webSources.length} sources.` : 'Provide clear, concise answer.'}`;
   }
 
-  
+
   buildReasoningPrompt(userQuery, sessionState) {
     const hasFiles = Array.isArray(sessionState.files) && sessionState.files.length > 0;
     const fileList = hasFiles
@@ -1037,7 +1154,221 @@ CURRENT THINKING: [What you expect to learn from these actions and how they will
     return indonesianScore > englishScore ? 'id' : 'en';
   }
 
-  
+  /**
+   * Decide if web search is actually needed for this query
+   * Returns: { needsWebSearch: boolean, reasoning: string, confidence: number }
+   */
+  async triageSearchNeed(userQuery, sessionState) {
+    const logHelper = { sessionId: sessionState.sessionId || 'unknown' };
+    const hasFiles = sessionState.files && sessionState.files.length > 0;
+    const hasWebCapability = sessionState.capabilities?.supportsWebSearch;
+
+    log(logHelper, 'REASONING_ACTION_AGENT', 'triageSearchNeed',
+      `Triaging search need for query: "${userQuery.substring(0, 100)}..." (hasFiles: ${hasFiles}, hasWebCapability: ${hasWebCapability})`);
+
+    // FAST RULES: No AI call needed
+
+    // Rule 1: No web capability = no web search possible
+    if (!hasWebCapability) {
+      log(logHelper, 'REASONING_ACTION_AGENT', 'triageSearchNeed',
+        'Fast rule: Web search not configured');
+      return { needsWebSearch: false, reasoning: 'Web search not configured', confidence: 1.0 };
+    }
+
+    // Rule 2: User explicitly mentions uploaded files
+    const fileKeywords = ['file', 'uploaded', 'document', 'kode', 'code', 'script', 'di file', 'dari file', 'dalam file', 'file ini', 'file yang'];
+    const mentionsFiles = fileKeywords.some(kw => userQuery.toLowerCase().includes(kw));
+    if (hasFiles && mentionsFiles) {
+      log(logHelper, 'REASONING_ACTION_AGENT', 'triageSearchNeed',
+        'Fast rule: Query explicitly about uploaded files');
+      return { needsWebSearch: false, reasoning: 'Query explicitly about uploaded files', confidence: 0.9 };
+    }
+
+    // Rule 3: User explicitly requests web search
+    const webKeywords = ['cari di internet', 'search online', 'google', 'web search', 'latest', 'terbaru', 'news', 'berita', 'current', 'sekarang', 'hari ini', 'bulan ini'];
+    const explicitWeb = webKeywords.some(kw => userQuery.toLowerCase().includes(kw));
+    if (explicitWeb) {
+      log(logHelper, 'REASONING_ACTION_AGENT', 'triageSearchNeed',
+        'Fast rule: User explicitly requested web search');
+      return { needsWebSearch: true, reasoning: 'User explicitly requested web search', confidence: 1.0 };
+    }
+
+    // Rule 4: No files uploaded AND query needs external info = likely web search
+    if (!hasFiles) {
+      const needsExternalInfo = /what is|apa itu|explain|jelaskan|how to|bagaimana|cara|research|analisis|comparison|compare|bandingkan/i.test(userQuery);
+      if (needsExternalInfo) {
+        log(logHelper, 'REASONING_ACTION_AGENT', 'triageSearchNeed',
+          'Fast rule: No local files, query needs external information');
+        return { needsWebSearch: true, reasoning: 'No local files, query needs external information', confidence: 0.8 };
+      }
+    }
+
+    // Rule 5: Has files, but query about current/external topic
+    if (hasFiles) {
+      const externalTopics = ['latest', 'terbaru', '2024', '2025', 'current', 'news', 'trend', 'sekarang'];
+      const isExternal = externalTopics.some(kw => userQuery.toLowerCase().includes(kw));
+      if (isExternal) {
+        log(logHelper, 'REASONING_ACTION_AGENT', 'triageSearchNeed',
+          'Fast rule: Query about current/external information despite having files');
+        return { needsWebSearch: true, reasoning: 'Query about current/external information', confidence: 0.7 };
+      }
+    }
+
+    // FALLBACK: Use lightweight AI triage for ambiguous cases
+    log(logHelper, 'REASONING_ACTION_AGENT', 'triageSearchNeed',
+      'Fast rules inconclusive, using AI triage');
+    return await this.aiTriageSearchNeed(userQuery, sessionState);
+  }
+
+  /**
+   * AI-powered triage for ambiguous cases
+   * Uses lightweight prompt (< 500 tokens)
+   */
+  async aiTriageSearchNeed(userQuery, sessionState) {
+    const logHelper = { sessionId: sessionState.sessionId || 'unknown' };
+    const hasFiles = sessionState.files && sessionState.files.length > 0;
+    const fileList = hasFiles
+      ? sessionState.files.map(f => f.name).slice(0, 5).join(', ') + (sessionState.files.length > 5 ? '...' : '')
+      : 'none';
+
+    const triagePrompt = `Quick triage decision. Response MUST be valid JSON only, no other text.
+
+User uploaded files: ${fileList}
+User query: "${userQuery}"
+
+Decide: Does this query NEED web search, or can it be answered from uploaded files or general knowledge?
+
+Respond ONLY with JSON (no markdown, no explanation):
+{"needsWebSearch": true/false, "reasoning": "brief reason", "confidence": 0.0-1.0}
+
+Examples:
+- "Analyze my code" → {"needsWebSearch": false, "reasoning": "Query about uploaded files", "confidence": 0.9}
+- "Latest React 19 features" → {"needsWebSearch": true, "reasoning": "Needs current information", "confidence": 0.95}
+- "What is JWT?" → {"needsWebSearch": false, "reasoning": "General knowledge question", "confidence": 0.7}
+
+Your response:`;
+
+    try {
+      log(logHelper, 'REASONING_ACTION_AGENT', 'aiTriageSearchNeed',
+        `Sending AI triage request (${triagePrompt.length} chars)`);
+
+      const result = await this.makeAIRequest(triagePrompt, sessionState.sessionId || 'triage');
+
+      log(logHelper, 'REASONING_ACTION_AGENT', 'aiTriageSearchNeed',
+        `Received AI triage response: ${result.content}`);
+
+      // Try to extract JSON from response (might have markdown code blocks)
+      let jsonText = result.content.trim();
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonText = jsonMatch[0];
+      }
+
+      const decision = JSON.parse(jsonText);
+
+      // Record usage
+      if (result.usage && sessionState.usageBreakdown) {
+        sessionState.usageBreakdown.push({
+          stage: 'search-triage',
+          usage: result.usage,
+          provider: sessionState.model?.provider,
+          model: sessionState.model?.model,
+        });
+      }
+
+      log(logHelper, 'REASONING_ACTION_AGENT', 'aiTriageSearchNeed',
+        `AI triage decision: ${JSON.stringify(decision)}`);
+
+      return decision;
+    } catch (e) {
+      log(logHelper, 'REASONING_ACTION_AGENT', 'aiTriageSearchNeed',
+        `Triage failed (${e.message}), defaulting to allow search`);
+      // Fallback: If triage fails, err on the side of allowing search
+      return { needsWebSearch: true, reasoning: 'Triage failed, allowing search', confidence: 0.5 };
+    }
+  }
+
+  /**
+   * Assess if web search results are relevant to the query
+   * Returns: 0.0-1.0 score
+   */
+  assessWebResultRelevance(results, params) {
+    if (!Array.isArray(results) || results.length === 0) {
+      return 0.0;
+    }
+
+    const query = params.query || params.q || '';
+    if (!query) return 0.5; // Can't assess without query
+
+    const queryTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 3);
+    if (queryTerms.length === 0) return 0.5;
+
+    let totalRelevance = 0;
+
+    results.forEach(result => {
+      const title = (result.title || '').toLowerCase();
+      const snippet = (result.snippet || result.preview || '').toLowerCase();
+      const content = (result.content || '').toLowerCase();
+      const combined = `${title} ${snippet} ${content}`;
+
+      // Count how many query terms appear in result
+      const matchCount = queryTerms.filter(term => combined.includes(term)).length;
+      const matchRatio = matchCount / queryTerms.length;
+
+      totalRelevance += matchRatio;
+    });
+
+    return Math.min(totalRelevance / results.length, 1.0);
+  }
+
+  /**
+   * Validate if an action is necessary or redundant
+   */
+  validateActionNecessity(action, actionHistory, userQuery) {
+    // Rule 1: Don't repeat exact same search
+    const duplicate = actionHistory.find(h =>
+      h.action.type === action.type &&
+      JSON.stringify(h.action.params) === JSON.stringify(action.params)
+    );
+    if (duplicate) {
+      return {
+        necessary: false,
+        reason: 'Duplicate search - already executed with same parameters'
+      };
+    }
+
+    // Rule 2: Don't web search if we have > 15 web results already
+    if (['webSearch', 'fetchWebPage'].includes(action.type)) {
+      const webResultCount = actionHistory
+        .filter(h => ['webSearch', 'fetchWebPage'].includes(h.action.type))
+        .reduce((sum, h) => sum + (h.result?.resultCount || 0), 0);
+
+      if (webResultCount >= 15) {
+        return {
+          necessary: false,
+          reason: `Already have ${webResultCount} web results - sufficient for analysis`
+        };
+      }
+    }
+
+    // Rule 3: Don't search for file structure multiple times
+    if (action.type === 'analyzeFileStructure') {
+      const alreadyAnalyzed = actionHistory.find(h =>
+        h.action.type === 'analyzeFileStructure' &&
+        h.action.params.fileName === action.params.fileName
+      );
+      if (alreadyAnalyzed && alreadyAnalyzed.result?.success) {
+        return {
+          necessary: false,
+          reason: `File ${action.params.fileName} already analyzed`
+        };
+      }
+    }
+
+    return { necessary: true, reason: 'Action is necessary' };
+  }
+
+
   parseReasoningResponse(response) {
     const plan = {
       reasoning: '',
@@ -1344,9 +1675,35 @@ CURRENT THINKING: [What you expect to learn from these actions and how they will
       const result = await this.searchEngine.executeSearchCommand(action.type, action.params);
       log(logHelper, 'REASONING_ACTION_AGENT', 'executeAction',
         `Search engine returned: ${Array.isArray(result) ? result.length : 1} raw results`);
-      
-      const limitedResult = this.limitSearchResults(result, 100);
+
       const resultCount = Array.isArray(result) ? result.length : (result ? 1 : 0);
+
+      // NEW: Check relevance for web actions to enable early stop
+      if (['webSearch', 'fetchWebPage'].includes(action.type)) {
+        const relevanceScore = this.assessWebResultRelevance(result, action.params);
+
+        log(logHelper, 'REASONING_ACTION_AGENT', 'executeAction',
+          `Web search relevance assessment: score=${relevanceScore.toFixed(2)}, resultCount=${resultCount}`);
+
+        // If very low relevance and we have 0 results, mark as requires followup = false
+        // This prevents AI from retrying with different queries endlessly
+        if (relevanceScore < 0.3 && resultCount === 0) {
+          log(logHelper, 'REASONING_ACTION_AGENT', 'executeAction',
+            `Low relevance (${relevanceScore.toFixed(2)}) + 0 results = stopping search attempts`);
+
+          return {
+            success: false,
+            action: action.type,
+            params: action.params,
+            resultCount: 0,
+            results: [],
+            error: 'No relevant results found for query',
+            requiresFollowup: false  // ← Stop retry attempts
+          };
+        }
+      }
+
+      const limitedResult = this.limitSearchResults(result, 100, action.type);
 
       log(logHelper, 'REASONING_ACTION_AGENT', 'executeAction',
         `Action ${action.type} completed successfully:\n  Total results: ${resultCount}\n  Limited results: ${Array.isArray(limitedResult) ? limitedResult.length : 1}\n  Full result preview:\n${JSON.stringify(limitedResult, null, 2).substring(0, 1000)}...`);
@@ -1376,21 +1733,33 @@ CURRENT THINKING: [What you expect to learn from these actions and how they will
   }
 
   
-  limitSearchResults(results, maxLines = 100) {
+  limitSearchResults(results, maxLines = 100, actionType = null) {
     if (!Array.isArray(results)) return results;
 
-    // CRITICAL FIX: Increase maxLines for function searches
-    // Functions can be 50-100 lines, need enough budget to show full context
+    // NEW: Context-aware line budget based on action type
+    // Research web searches need much more data than file searches
+    const isWebSearchAction = actionType && ['webSearch', 'fetchWebPage'].includes(actionType);
+
+    // Check if this is a function search result (has function keyword in first result)
+    const isFunctionSearch = results.length > 0 && results[0].context &&
+      /function\s+\w+|const\s+\w+\s*=\s*\(|class\s+\w+/.test(results[0].context);
+
+    // ADAPTIVE LINE BUDGET:
+    // - Web research: 1000 lines (allow ~20 results × 50 lines each)
+    // - Function search: 800 lines (allow complete function bodies)
+    // - File search: 200 lines (standard)
+    let effectiveMaxLines;
+    if (isWebSearchAction) {
+      effectiveMaxLines = 1000;  // Research mode: maximize data
+    } else if (isFunctionSearch) {
+      effectiveMaxLines = Math.max(maxLines, 800);  // Code search: show full functions
+    } else {
+      effectiveMaxLines = maxLines || 200;  // File search: compact
+    }
+
+    const bypassLineBudget = isFunctionSearch && results.length <= 10;
     let totalLines = 0;
     const limitedResults = [];
-    
-    // Check if this is a function search result (has function keyword in first result)
-    const isFunctionSearch = results.length > 0 && results[0].context && 
-      /function\s+\w+|const\s+\w+\s*=\s*\(|class\s+\w+/.test(results[0].context);
-    
-    // Increase budget for function searches
-    const bypassLineBudget = isFunctionSearch && results.length <= 10;
-    const effectiveMaxLines = isFunctionSearch ? Math.max(maxLines, 800) : maxLines;
     
     for (const result of results) {
       const snippetSource = result.context || result.snippet || result.preview || result.text || result.content || '';
@@ -1426,24 +1795,37 @@ CURRENT THINKING: [What you expect to learn from these actions and how they will
     if (typeof raw !== 'string') {
       return '';
     }
-    
+
     // IMPROVED FORMATTING: Preserve line breaks and indentation for code readability
     // DON'T collapse whitespace - preserve code structure!
     const lines = raw.split('\n');
     const normalized = lines
       .filter(line => line.trim().length > 0)  // Remove empty lines
       .join('\n');
-    
-    // SMART LENGTH: For function definitions, allow MUCH longer snippets
-    // Functions can be 50-100+ lines, need to show complete body
+
+    // NEW: Detect if this is web result (has URL) - needs more space for research
+    const isWebResult = /^https?:/.test(result.url || result.source || '');
+
+    // SMART LENGTH: Different limits for different content types
+    // - Web research: 4000 chars (full article excerpts)
+    // - Function code: 4000 chars (complete function bodies)
+    // - File snippets: 1500 chars (compact context)
     const isFunctionSnippet = /^[\s>]*\d+:\s*(async\s+)?(function\s+\w+|const\s+\w+\s*=\s*(?:async\s+)?\(|class\s+\w+)/m.test(normalized);
-    const maxLength = isFunctionSnippet ? 4000 : 1500; // 4000 chars for functions (100 lines), 1500 for others
-    
-    // DON'T truncate if close to limit - better to show complete function
+
+    let maxLength;
+    if (isWebResult) {
+      maxLength = 4000;  // Web research: maximize content
+    } else if (isFunctionSnippet) {
+      maxLength = 4000;  // Code: show complete functions
+    } else {
+      maxLength = 1500;  // File snippets: compact
+    }
+
+    // DON'T truncate if close to limit - better to show complete content
     if (normalized.length <= maxLength * 1.1) {
       return normalized;
     }
-    
+
     return normalized.slice(0, maxLength) + '\n... [truncated]';
   }
 
@@ -1560,17 +1942,32 @@ CURRENT THINKING: [What you expect to learn from these actions and how they will
   prepareActionSummary(actionHistory = []) {
     const summaries = [];
     const webSources = [];
+    const rawWebContent = [];  // NEW: Preserve raw content for deep research
     const seenUrls = new Set();
 
     actionHistory.forEach((entry, index) => {
       const action = entry.action || {};
       const result = entry.result || {};
+      const isWebAction = ['webSearch', 'fetchWebPage'].includes(action.type);
       const header = `ACTION ${index + 1}: ${action.type || 'unknown'} with ${JSON.stringify(action.params || {})}`;
 
       if (!result.success) {
         const errorMessage = result.error || 'Unknown error';
         summaries.push(`${header}\nRESULT: FAILED - ${errorMessage}`);
         return;
+      }
+
+      // NEW: Store raw web content for research analysis
+      if (isWebAction && result.results && Array.isArray(result.results)) {
+        result.results.forEach(item => {
+          if (item.content && item.url && !seenUrls.has(item.url)) {
+            rawWebContent.push({
+              url: item.url,
+              title: item.title || item.name || 'Untitled Source',
+              content: item.content.substring(0, 8000)  // Full content, not snippet
+            });
+          }
+        });
       }
 
       // OPTIMIZATION: Use cached summary if available (from 2-tier summarization)
@@ -1634,8 +2031,13 @@ CURRENT THINKING: [What you expect to learn from these actions and how they will
         return;
       }
 
-      // OPTIMIZATION: Only include top 3-5 results, not all results (reduced from slice(0, 5))
-      const topResults = items.slice(0, 3);
+      // NEW: Adaptive slicing based on action type
+      // - Web research: Show ALL results (up to 20) for comprehensive analysis
+      // - File search: Show top 5 for focused context
+      // isWebAction already declared above
+      const topResults = isWebAction
+        ? items.slice(0, 20)  // Research: Show ALL results
+        : items.slice(0, 5);   // File search: Top 5 sufficient
       const formattedItems = topResults.map((item, itemIndex) => {
         const label = item.fileName || item.source || item.url || `Item ${itemIndex + 1}`;
         const snippet = this.normalizeResultSnippet(item) || '(ringkasan tidak tersedia)';
@@ -1644,7 +2046,11 @@ CURRENT THINKING: [What you expect to learn from these actions and how they will
 
         if (item.url && !seenUrls.has(item.url)) {
           seenUrls.add(item.url);
-          webSources.push({ url: item.url, snippet });
+          webSources.push({
+            url: item.url,
+            title: item.title || item.name || 'Untitled',
+            snippet
+          });
         }
 
         // IMPROVED: Multi-line snippets get indentation for better readability
@@ -1679,16 +2085,29 @@ CURRENT THINKING: [What you expect to learn from these actions and how they will
 
       // Log optimization note
       const totalItems = items.length;
-      if (totalItems > 3) {
-        summaries.push(`${header}\nRESULTS: (Showing top 3 of ${totalItems} results)${completenessNote}\n${formattedItems}`);
+      const showingCount = topResults.length;
+
+      if (isWebAction) {
+        // For web research, show we're including all results for comprehensive analysis
+        if (totalItems > showingCount) {
+          summaries.push(`${header}\nRESULTS: (Showing ${showingCount} of ${totalItems} web results for comprehensive research)${completenessNote}\n${formattedItems}`);
+        } else {
+          summaries.push(`${header}\nRESULTS: (${totalItems} web results - all included for comprehensive analysis)${completenessNote}\n${formattedItems}`);
+        }
       } else {
-        summaries.push(`${header}\nRESULTS:${completenessNote}\n${formattedItems}`);
+        // For file search, show we're using top results for focused context
+        if (totalItems > showingCount) {
+          summaries.push(`${header}\nRESULTS: (Showing top ${showingCount} of ${totalItems} results)${completenessNote}\n${formattedItems}`);
+        } else {
+          summaries.push(`${header}\nRESULTS:${completenessNote}\n${formattedItems}`);
+        }
       }
     });
 
     return {
       summaryText: summaries.join('\n\n'),
-      webSources
+      webSources,
+      rawWebContent  // NEW: Return raw content for deep research
     };
   }
 
@@ -1720,22 +2139,22 @@ CURRENT THINKING: [What you expect to learn from these actions and how they will
 
   
   buildFollowupPrompt(action, actionResult, originalPlan, actionIndex) {
-    const resultSummary = actionResult.success 
+    const resultSummary = actionResult.success
       ? `Found ${actionResult.resultCount} results`
       : `Failed: ${actionResult.error}`;
-    
+
     let resultsText = '';
     if (actionResult.success && actionResult.results) {
       if (Array.isArray(actionResult.results)) {
         // Handle different result types properly
         if (action.type === 'listAvailableFiles') {
           // File listing results have fileName, size, extension, lines
-          resultsText = actionResult.results.map(r => 
+          resultsText = actionResult.results.map(r =>
             `FILE: ${r.fileName} (${r.size || 'unknown'} bytes, ${r.lines || '?'} lines)`
           ).join('\n');
         } else {
           // Search results have fileName, lineNumber, context
-          resultsText = actionResult.results.map(r => 
+          resultsText = actionResult.results.map(r =>
             `FILE: ${r.fileName}:${r.lineNumber}\n${r.context}`
           ).join('\n---\n');
         }
@@ -1744,16 +2163,57 @@ CURRENT THINKING: [What you expect to learn from these actions and how they will
       }
     }
 
+    // NEW: Calculate total data gathered for smart stopping
+    const completedActions = actionIndex + 1;
+    const remainingActions = originalPlan.actions.length - completedActions;
+    const totalDataSoFar = actionResult.resultCount || 0; // This should ideally sum all previous actions
+
+    // NEW: Smart stopping guidance based on data sufficiency
+    const stoppingGuidance = `
+DATA SUFFICIENCY CHECK:
+- Actions completed: ${completedActions}
+- Results from this action: ${actionResult.resultCount}
+- Remaining planned actions: ${remainingActions}
+
+CRITICAL DECISION POINT:
+${totalDataSoFar >= 10
+      ? `✅ This action returned ${totalDataSoFar} results. For most queries, this is SUFFICIENT data.
+     ONLY request additional searches if absolutely critical information is MISSING.
+     Consider proceeding to FINAL ANSWER instead of more searches.`
+      : totalDataSoFar >= 5
+        ? `⚠ This action returned ${totalDataSoFar} results. This may be sufficient depending on query complexity.
+       Evaluate: Is the data quality good? Does it answer the user's question?
+       If YES → Proceed to FINAL ANSWER.
+       If NO → Request 1-2 targeted searches for specific missing information.`
+        : `❌ Only ${totalDataSoFar} results from this action. You likely need more data.
+       Request additional targeted searches with different approaches.`
+}
+
+STOPPING CRITERIA (Choose ONE):
+1. PROCEED TO SYNTHESIS: If you have sufficient data (≥ 8 results) AND data answers the query
+   Response: "FINAL ANSWER: [your comprehensive analysis based on gathered data]"
+
+2. REQUEST MORE SEARCHES: If critical information is MISSING AND you have < 8 results
+   Response: "ACTION: <searchType> with {...}
+             WHY: [specific information gap that needs filling]"
+
+3. ACKNOWLEDGE LIMITATION: If search returned 0 results and you've tried 2+ different approaches
+   Response: "FINAL ANSWER: [answer based on available knowledge + note about search limitations]"
+
+IMPORTANT: Do NOT request additional searches just because remaining actions exist in the plan.
+Only search if you genuinely need more specific information to answer the user's query.
+`;
+
     const followupPromptText = `SEARCH ACTION COMPLETED:
 Action: ${action.type} with ${JSON.stringify(action.params)}
 Result: ${resultSummary}
 
+${stoppingGuidance}
+
 SEARCH RESULTS:
 ${resultsText}
 
-REMAINING ACTIONS: ${originalPlan.actions.length - actionIndex - 1}
-
-Based on these search results, continue your analysis. 
+Based on these search results, decide whether to continue searching or proceed to final answer. 
 
 AVAILABLE CAPABILITIES for additional searches:
 1. searchPattern(pattern, options) - Search for text/regex patterns across files

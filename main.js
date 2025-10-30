@@ -4135,8 +4135,37 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
     }
   }
 });
+
+/**
+ * Extract explicit source count from user query using NLP patterns
+ * @param {string} query - User query text
+ * @returns {number|null} - Requested count or null if not found
+ */
+function extractRequestedSourceCount(query) {
+  const patterns = [
+    /minimal\s+(\d+)\s+(sumber|source|sources|artikel|link|links|url|urls|website|websites|halaman|pages)/i,
+    /(?:at\s+least|setidaknya|paling\s+sedikit)\s+(\d+)\s+(sumber|source|sources|artikel|link|links)/i,
+    /(\d+)\s+(sumber|source|sources|artikel|link|links|referensi|references)/i,
+    /cari\s+(\d+)\s+(sumber|source|artikel|link)/i,
+    /(\d+)\s+case\s+stud(?:y|ies)/i,
+    /butuh\s+(\d+)\s+(sumber|artikel|referensi)/i,
+    /find\s+(\d+)\s+(sources?|articles?|links?)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = query.match(pattern);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num >= 3 && num <= 50) {  // Sanity check: reasonable range
+        return Math.min(num, 20);  // Cap at 20 for API safety
+      }
+    }
+  }
+  return null;  // Let AI decide
+}
+
 const TRIAGE_SYSTEM_PROMPT = `You are a reasoning agent. Your first task is to analyze the user's query and decide if it requires real-time internet access. The current date is ${new Date().toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric' })}. Respond ONLY with a single JSON object. Do not add any text before or after it.
-JSON format: {"requires_search": boolean, "reasoning": "string", "user_prompt": "string", "search_queries": ["string", ...], "summary_key": "string", "image_count": number}
+JSON format: {"requires_search": boolean, "reasoning": "string", "user_prompt": "string", "search_queries": ["string", ...], "summary_key": "string", "image_count": number, "result_count": number}
 Set "requires_search" to true if the query is about recent events (relative to the current date), specific facts, or explicitly asks to search. Otherwise, set it to false.
 "user_prompt" MUST be the exact original user query.
 "summary_key" MUST be a very short, 2-4 word summary of the user's query in English.
@@ -4147,7 +4176,14 @@ If "requires_search" is true, provide 1-3 effective Google search queries releva
 - 1-2: Minimal images for context (news, articles, general info)
 - 3-5: Moderate images (tutorials, explanations with visual aids, travel info)
 - 6-10: High visual content (image search, wallpapers, design inspiration, photo galleries, art, memes, visual references)
-Analyze the query intent to decide the appropriate image_count.`;
+Analyze the query intent to decide the appropriate image_count.
+
+"result_count" determines how many web results to fetch (3-20):
+- 3-5: Quick fact check, simple questions, brief answers
+- 6-10: Standard research, comparisons, general analysis
+- 11-15: Comprehensive analysis, multiple perspectives needed, detailed research
+- 16-20: Deep research, academic queries, case studies, extensive source requirements
+IMPORTANT: If user explicitly mentions a number (e.g., "10 sources", "minimal 15 sumber", "5 artikel"), use that exact number. Otherwise, analyze the query complexity and depth required to decide the appropriate result_count.`;
 
 async function runWebSearchChat(event, payload) {
   const { reqId, messages } = payload;
@@ -4201,22 +4237,37 @@ async function runWebSearchChat(event, payload) {
 
     event.sender.send('chat-update', { type: 'SEARCHING', messageIndex: payload.aiMessageIndex, data: { summarizedQuery: decision.search_queries[0] } });
     
-    const imageCount = typeof decision.image_count === 'number' && decision.image_count >= 0 
-      ? Math.min(Math.floor(decision.image_count), 10) 
+    const imageCount = typeof decision.image_count === 'number' && decision.image_count >= 0
+      ? Math.min(Math.floor(decision.image_count), 10)
       : 2;
     const includeImages = imageCount > 0;
-    
-    logHelper('WEB_CHAT', 'performWebSearch', 'Memulai pencarian di internet...', { 
-      queries: decision.search_queries, 
-      imageCount, 
-      includeImages 
+
+    // Hybrid approach for result count: Explicit > AI > Default
+    const explicitCount = extractRequestedSourceCount(userQuery);
+    const aiSuggestedCount = decision.result_count;
+    const resultCount = explicitCount
+      || (typeof aiSuggestedCount === 'number' && aiSuggestedCount >= 3 ? Math.min(Math.floor(aiSuggestedCount), 20) : null)
+      || 5;
+
+    logHelper('WEB_CHAT', 'runWebSearchChat', 'Result count determined via hybrid approach', {
+      explicit: explicitCount,
+      ai_suggested: aiSuggestedCount,
+      final: resultCount,
+      source: explicitCount ? 'user_explicit' : (aiSuggestedCount ? 'ai_decision' : 'default')
+    });
+
+    logHelper('WEB_CHAT', 'performWebSearch', 'Memulai pencarian di internet...', {
+      queries: decision.search_queries,
+      imageCount,
+      includeImages,
+      resultCount
     });
     
     const searchResults = await performWebSearch(
-      decision.search_queries, 
-      payload.searchApiConfig, 
+      decision.search_queries,
+      payload.searchApiConfig,
       logHelper,
-      { includeImages, imageCount }
+      { includeImages, imageCount, resultCount }
     );
     
     if (searchResults.length === 0) {
@@ -4253,8 +4304,8 @@ async function runWebSearchChat(event, payload) {
       } 
     });
     
-    logHelper('WEB_CHAT', 'scrapeUrls', 'Memulai scraping...', { urls: urlsToScrape });
-    const scrapedContent = await scrapeUrls(urlsToScrape);
+    logHelper('WEB_CHAT', 'scrapeUrls', 'Memulai scraping...', { urls: urlsToScrape, resultCount });
+    const scrapedContent = await scrapeUrls(urlsToScrape, logHelper, resultCount);
     const nonEmptyContent = scrapedContent.filter(c => c.trim().length > 10);
 
     if (nonEmptyContent.length === 0) {

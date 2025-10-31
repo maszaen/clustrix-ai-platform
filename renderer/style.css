@@ -604,6 +604,28 @@ hr {
   margin-left: 3px;
 }
 
+.message.ai a:not(:not([href])):not([href=""]) strong {
+  font-weight: normal !important;
+  
+}
+
+.message.ai a:not(:not([href])):not([href=""]) svg {
+  flex-shrink: 0;
+  
+}
+
+.message.ai a:not(:not([href])):not([href=""]) img {
+  margin: 5px 0;
+}
+
+.message.ai a:not(:not([href])):not([href=""]):hover {
+  
+
+  background: var(--primary-light) !important;
+  border: 1px solid var(--primary) !important;
+  color: var(--link);
+}
+
 .learn-more-content .link {
   font-size: 11px;
   color: var(--link-hover);
@@ -683,36 +705,18 @@ hr {
   flex-direction: column;
 }
 
-.inside-image-link .md-image.wrapped {
+.md-image-group-content .inside-image-link .md-image {
   min-width: 100% !important;
-  max-height: 124px !important;
+  max-height: 190px !important;
 }
 
 .image-link-label {
-  font-size: 10px;
+  font-size: 12px;
+  margin-left: 4px;
+  margin-bottom: 3px;
 }
 
-.message.ai a:not(:not([href])):not([href=""]) strong {
-  font-weight: normal !important;
-  
-}
 
-.message.ai a:not(:not([href])):not([href=""]) svg {
-  flex-shrink: 0;
-  
-}
-
-.message.ai a:not(:not([href])):not([href=""]) img {
-  margin: 5px 0;
-}
-
-.message.ai a:not(:not([href])):not([href=""]):hover {
-  
-
-  background: var(--primary-light);
-  border: 1px solid var(--primary);
-  color: var(--link);
-}
 
 /* .message.ai a:not(:not([href])):not([href=""]) {
     white-space: nowrap;

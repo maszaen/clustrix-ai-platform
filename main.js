@@ -645,6 +645,19 @@ ipcMain.handle('sync:switchMode', async (_evt, params) => {
         throw new Error('Not logged in. Please login first before switching to cloud mode.');
       }
 
+      // Check if backup is still in progress (from previous cloud->internal switch)
+      if (config.pendingBackupAndCleanup) {
+        log('sync:switchMode', 2, 'handleSync', 'Cannot switch to cloud - backup still in progress', {
+          scheduledAt: config.pendingBackupAndCleanup.scheduledAt,
+          reason: config.pendingBackupAndCleanup.reason
+        });
+        return {
+          success: false,
+          backupInProgress: true,
+          error: 'Cannot switch to cloud mode while backup is still in progress. Please wait for the backup to complete.'
+        };
+      }
+
       // Create cloud user folder if doesn't exist
       try {
         syncManager.createCloudUserFolder(cloudUser);
@@ -705,6 +718,27 @@ ipcMain.handle('sync:switchMode', async (_evt, params) => {
         if (!fs.existsSync(cloudDbPath)) {
           const tempManager = new DatabaseManager(app, cloudDataPath);
           tempManager.close();
+        }
+      }
+
+      // Also download ai-model-config if available
+      const cloudConfigPath = path.join(cloudDataPath, 'ai-model.conf.json');
+      try {
+        const githubStorage = new GitHubStorageService(cloudToken, config.currentCloudUsername);
+        log('sync:switchMode', 1, 'handleSync', 'Downloading ai-model-config from GitHub...');
+        await githubStorage.downloadModelConfig(cloudConfigPath);
+        log('sync:switchMode', 1, 'handleSync', 'ai-model-config downloaded successfully');
+      } catch (configErr) {
+        if (isNotFoundError(configErr)) {
+          log('sync:switchMode', 1, 'handleSync', 'No ai-model-config found on GitHub, using default');
+          // Create default config if doesn't exist
+          if (!fs.existsSync(cloudConfigPath)) {
+            const defaultModelConfig = getDefaultModelConfig();
+            fs.writeFileSync(cloudConfigPath, JSON.stringify(defaultModelConfig, null, 2), 'utf-8');
+            log('sync:switchMode', 1, 'handleSync', 'Default ai-model-config created');
+          }
+        } else {
+          log('sync:switchMode', 2, 'handleSync', 'Failed to download ai-model-config', { error: configErr.message });
         }
       }
 

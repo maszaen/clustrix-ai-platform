@@ -16733,7 +16733,19 @@ async function updateAccountModalUI() {
         internalBtn.classList.add('active');
         internalBtn.disabled = true; // Disable active button
         cloudBtn.classList.remove('active');
-        cloudBtn.disabled = false;
+        
+        // Check if backup is still in progress
+        if (syncConfig.pendingBackupAndCleanup) {
+          cloudBtn.disabled = true;
+          cloudBtn.style.opacity = '0.5';
+          cloudBtn.title = 'Backup in progress. Please wait...';
+          log('UI', 2, 'updateAccountModalUI', 'Cloud button disabled - backup in progress');
+        } else {
+          cloudBtn.disabled = false;
+          cloudBtn.style.opacity = '1';
+          cloudBtn.title = '';
+        }
+        
         document.getElementById('data-source-info').textContent = 'Data is loaded from your device\'s internal storage.';
       }
       
@@ -17621,7 +17633,7 @@ async function executeDataSourceSwitch(mode) {
       }, 800);
       
     } else {
-      log('SYNC', 4, 'handleDataSourceSwitch', 'Failed to switch mode', { error: result.error });
+      log('SYNC', 4, 'handleDataSourceSwitch', 'Failed to switch mode', { error: result.error, backupInProgress: result.backupInProgress });
       
       // Restore button state
       targetBtn.classList.remove('loading');
@@ -17634,8 +17646,16 @@ async function executeDataSourceSwitch(mode) {
           internalBtn.classList.add('active');
         }
         if (cloudBtn) {
-          cloudBtn.disabled = false;
-          cloudBtn.classList.remove('active');
+          // If backup is in progress, keep cloud button disabled
+          if (result.backupInProgress) {
+            cloudBtn.disabled = true;
+            cloudBtn.classList.remove('active');
+            cloudBtn.style.opacity = '0.5';
+            cloudBtn.title = 'Backup in progress. Please wait...';
+          } else {
+            cloudBtn.disabled = false;
+            cloudBtn.classList.remove('active');
+          }
         }
       } else {
         if (internalBtn) {
@@ -17648,7 +17668,13 @@ async function executeDataSourceSwitch(mode) {
         }
       }
 
-      showToast(`Failed: ${result.error}`, 'error');
+      // Show special message for backup in progress
+      if (result.backupInProgress) {
+        showToast('Backup still in progress. Please wait for it to complete before switching to cloud mode.', 'warning');
+      } else {
+        showToast(`Failed: ${result.error}`, 'error');
+      }
+      
       const switchError = new Error(result.error || 'Failed to switch data source');
       switchError.handled = true;
       throw switchError;

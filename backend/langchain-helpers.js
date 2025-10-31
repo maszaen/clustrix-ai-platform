@@ -46,9 +46,19 @@ function applyThinkingHints({ provider, model, bodyObj, thinkMode }) {
   }
 }
 
+function isPerplexityModel(modelConfig) {
+  if (!modelConfig) return false;
+  
+  const baseUrl = (modelConfig.baseUrl || '').toLowerCase();
+  const provider = (modelConfig.provider || '').toLowerCase();
+  
+  return baseUrl.includes('perplexity.ai') || provider === 'perplexity';
+}
+
 module.exports = {
   getBaseUrl,
   getApiKey,
   joinEndpoint,
-  applyThinkingHints
+  applyThinkingHints,
+  isPerplexityModel
 };

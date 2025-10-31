@@ -1982,9 +1982,10 @@ async function appendThinkingUpdate(aiNode, updateData, session, messageIndex) {
   
   ensureThinkingUI(aiNode);
   
-  // Structure: { title, content }
+  // Structure: { title, content, type (optional) }
   const title = updateData.title || 'Update';
   const content = updateData.content || '';
+  const type = updateData.type || 'normal';  // 'normal' or 'perplexity_search'
   
   // Store in session
   session._x_think_updates = session._x_think_updates || {};
@@ -1993,7 +1994,8 @@ async function appendThinkingUpdate(aiNode, updateData, session, messageIndex) {
   }
   session._x_think_updates[messageIndex].push({ 
     title, 
-    content, 
+    content,
+    type,
     timestamp: Date.now() 
   });
   
@@ -2022,6 +2024,13 @@ async function updateThinkingUpdateUI(aiNode, session, messageIndex) {
   // Only render new updates
   for (let i = startIndex; i < updates.length; i++) {
     const update = updates[i];
+    
+    // Check if this is a Perplexity search result
+    if (update.type === 'perplexity_search') {
+      const container = createPerplexitySearchCards(update);
+      el.thinkingUpdate.appendChild(container);
+      continue;
+    }
     
     const updateItem = document.createElement('div');
     updateItem.className = 'thinking-update-item';
@@ -2063,6 +2072,71 @@ async function updateThinkingUpdateUI(aiNode, session, messageIndex) {
   }
   
   scrollThinkingToBottom(el);
+}
+
+function createPerplexitySearchCards(update) {
+  const container = document.createElement('div');
+  container.className = 'perplexity-search-container';
+  
+  try {
+    const data = JSON.parse(update.content);
+    const results = data.results || [];
+    
+    // Header
+    const header = document.createElement('div');
+    header.className = 'perplexity-search-header';
+    header.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="m21 21-4.35-4.35"></path>
+      </svg>
+      <span>${update.title} (${results.length})</span>
+    `;
+    container.appendChild(header);
+    
+    // Scrollable cards container
+    const scroll = document.createElement('div');
+    scroll.className = 'perplexity-search-scroll';
+    
+    results.forEach((result, index) => {
+      const card = document.createElement('div');
+      card.className = 'perplexity-search-card';
+      
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'card-meta';
+      metaDiv.innerHTML = `
+        <span class="card-date">${result.date || 'Recent'}</span>
+        <span class="card-source">${result.source || 'web'}</span>
+      `;
+      
+      const titleEl = document.createElement('h4');
+      titleEl.textContent = result.title || 'Untitled';
+      
+      const snippetEl = document.createElement('p');
+      snippetEl.textContent = result.snippet || '';
+      
+      const linkEl = document.createElement('a');
+      linkEl.href = result.url || '#';
+      linkEl.target = '_blank';
+      linkEl.rel = 'noopener noreferrer';
+      linkEl.textContent = 'View source →';
+      
+      card.appendChild(metaDiv);
+      card.appendChild(titleEl);
+      card.appendChild(snippetEl);
+      card.appendChild(linkEl);
+      
+      scroll.appendChild(card);
+    });
+    
+    container.appendChild(scroll);
+    
+  } catch (e) {
+    console.error('Failed to parse Perplexity search results:', e);
+    container.textContent = 'Failed to display search results';
+  }
+  
+  return container;
 }
 
 function cleanLeadingWhitespace(text) {
@@ -11313,6 +11387,13 @@ function hydrateThinkingIfAny(aiNode, session, messageIndex) {
     if (el && el.thinkingUpdate) {
       // Render all thinking updates without animation (for loading)
       for (const update of thinkUpdates) {
+        // Check if this is a Perplexity search result
+        if (update.type === 'perplexity_search') {
+          const container = createPerplexitySearchCards(update);
+          el.thinkingUpdate.appendChild(container);
+          continue;
+        }
+        
         const updateItem = document.createElement('div');
         updateItem.className = 'thinking-update-item';
         
@@ -11396,6 +11477,13 @@ async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
     if (el && el.thinkingUpdate) {
       // Render all thinking updates without animation (for loading)
       for (const update of thinkUpdates) {
+        // Check if this is a Perplexity search result
+        if (update.type === 'perplexity_search') {
+          const container = createPerplexitySearchCards(update);
+          el.thinkingUpdate.appendChild(container);
+          continue;
+        }
+        
         const updateItem = document.createElement('div');
         updateItem.className = 'thinking-update-item';
         
@@ -12459,10 +12547,21 @@ function createUsageInfoButton(usageData) {
   btn.className = "usage-info-btn";
   btn.type = "button";
   btn.innerHTML = usageInfoIconSVG;
-  btn.title = `Cost: ${totalDisplay} Tokens (${promptDisplay} Input + ${completionDisplay} Output)`;
+  
+  // Check if cost information is available (Perplexity)
+  const cost = usageData.cost?.total_cost || null;
+  let title = `${totalDisplay} Tokens (${promptDisplay} Input + ${completionDisplay} Output)`;
+  if (cost !== null && cost > 0) {
+    title = `$${cost.toFixed(4)} | ${title}`;
+    btn.classList.add('has-cost');
+  }
+  
+  btn.title = title;
   btn.setAttribute(
     "aria-label",
-    `Token usage. Input ${promptDisplay}, output ${completionDisplay}, total ${totalDisplay}.`,
+    cost !== null 
+      ? `Cost $${cost.toFixed(4)}. Token usage: ${totalDisplay} total, ${promptDisplay} input, ${completionDisplay} output.`
+      : `Token usage. Input ${promptDisplay}, output ${completionDisplay}, total ${totalDisplay}.`,
   );
   btn.addEventListener("click", (event) => {
     event.preventDefault();
@@ -16362,6 +16461,34 @@ function initializeApp() {
             }
         } catch (e) {
             console.error('Error handling THINKING update:', e);
+        }
+    } else if (type === "THINKING_TIME") {
+        try {
+            log('UI', 1, 'chat-update:THINKING_TIME', 'Finalizing thinking UI with duration', { messageIndex, duration: data?.duration });
+            const duration = data?.duration || 0;
+            const sessionId = data?.sessionId || payload.sessionId || current?.id;
+            const sess = state.sessions.find(s => s.id === sessionId) || current;
+            
+            if (duration > 0 && bubbleNode && sess) {
+                // Save duration to session
+                if (!sess._x_think) sess._x_think = {};
+                if (!sess._x_think[messageIndex]) sess._x_think[messageIndex] = { text: '' };
+                sess._x_think[messageIndex].duration = duration;
+                
+                // Update message metadata
+                if (Array.isArray(sess.messages) && Array.isArray(sess.messages[messageIndex])) {
+                    const meta = sess.messages[messageIndex][2] || {};
+                    if (!meta.thinkContent) meta.thinkContent = {};
+                    meta.thinkContent.duration = duration;
+                    sess.messages[messageIndex][2] = meta;
+                }
+                
+                // Update UI
+                finalizeThinkingUI(bubbleNode, duration);
+                debouncedSave();
+            }
+        } catch (e) {
+            console.error('Error handling THINKING_TIME update:', e);
         }
     }
     });

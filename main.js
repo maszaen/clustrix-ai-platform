@@ -3037,11 +3037,18 @@ function normalizeUsage(rawUsage) {
     return null;
   }
 
-  return {
+  const normalized = {
     prompt_tokens: safePrompt,
     completion_tokens: safeCompletion,
     total_tokens: total,
   };
+  
+  // Preserve cost if available (Perplexity)
+  if (rawUsage.cost) {
+    normalized.cost = rawUsage.cost;
+  }
+  
+  return normalized;
 }
 
 function recordTokenUsage(reqId, stage, rawUsage, meta = {}) {
@@ -3053,11 +3060,18 @@ function recordTokenUsage(reqId, stage, rawUsage, meta = {}) {
   tracker.prompt_tokens += usage.prompt_tokens;
   tracker.completion_tokens += usage.completion_tokens;
   tracker.total_tokens += usage.total_tokens;
+  
+  // Preserve cost if available
+  if (usage.cost) {
+    tracker.cost = usage.cost;
+  }
+  
   tracker.breakdown.push({
     stage,
     prompt_tokens: usage.prompt_tokens,
     completion_tokens: usage.completion_tokens,
     total_tokens: usage.total_tokens,
+    cost: usage.cost || null,
     provider: meta.provider || null,
     model: meta.model || null,
   });
@@ -3073,16 +3087,23 @@ function finalizeTokenUsage(reqId, event) {
     return;
   }
 
+  const usageData = {
+    prompt_tokens: tracker.prompt_tokens,
+    completion_tokens: tracker.completion_tokens,
+    total_tokens: tracker.total_tokens,
+    breakdown: tracker.breakdown,
+  };
+  
+  // Include cost if available (Perplexity)
+  if (tracker.cost) {
+    usageData.cost = tracker.cost;
+  }
+
   event.sender.send('chat-update', {
     type: 'TOKEN_USAGE',
     messageIndex: tracker.messageIndex,
     sessionId: tracker.sessionId || null,
-    data: {
-      prompt_tokens: tracker.prompt_tokens,
-      completion_tokens: tracker.completion_tokens,
-      total_tokens: tracker.total_tokens,
-      breakdown: tracker.breakdown,
-    },
+    data: usageData,
   });
 }
 
@@ -3124,10 +3145,176 @@ function runStandardStreaming(event, payload) {
   const provider = (payload.provider || 'openrouter').toLowerCase();
   const sessionId = payload.sessionId || 'default';
   const session = payload.session || {};
+  
+  // Check if Perplexity model - handle differently (no stream)
+  const BASE_URL = getBaseUrl(provider, payload);
+  const API_KEY = getApiKey(provider, payload);
+  const { isPerplexityModel } = require('./backend/langchain-helpers');
+  const isPerplexity = isPerplexityModel({ baseUrl: BASE_URL, provider });
+  
+  if (isPerplexity) {
+    log('INFO', 'runStandardStreaming', 'Perplexity detected - using non-streaming mode with cost tracking');
+    return handlePerplexityRequest();
+  }
+  
   if (langchainService && agentOrchestrator) {
     processWithLangChain();
   } else {
     processWithoutLangChain();
+  }
+
+  async function handlePerplexityRequest() {
+    try {
+      const thinkStartTime = Date.now();
+      activeStreams.set(reqId, { startedAt: thinkStartTime, provider: 'perplexity' });
+      
+      const url = new URL(joinEndpoint(BASE_URL, 'chat/completions'));
+      const bodyObj = { 
+        model, 
+        messages, 
+        stream: false
+      };
+      const body = JSON.stringify(bodyObj);
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      };
+
+      log('INFO', 'handlePerplexityRequest', 'Sending Perplexity API request', { reqId, model });
+
+      return new Promise((resolve, reject) => {
+        const https = require('https');
+        const req = https.request(url, { method: 'POST', headers }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', async () => {
+          try {
+            if (res.statusCode < 200 || res.statusCode >= 300) {
+              const errorMsg = `Perplexity API error: ${res.statusCode} ${data.slice(0, 200)}`;
+              log('ERROR', 'handlePerplexityRequest', errorMsg, { reqId });
+              event.sender.send(`chat:chunk-${reqId}`, { error: errorMsg });
+              event.sender.send(`chat:done-${reqId}`);
+              activeStreams.delete(reqId);
+              return reject(new Error(errorMsg));
+            }
+
+            const response = JSON.parse(data);
+            
+            log('INFO', 'handlePerplexityRequest', 'Received Perplexity response', {
+              reqId,
+              hasSearchResults: !!response.search_results,
+              searchResultCount: response.search_results?.length || 0,
+              hasCitations: !!response.citations,
+              citationCount: response.citations?.length || 0
+            });
+
+            // Calculate thinking duration
+            const thinkDuration = (Date.now() - thinkStartTime) / 1000;
+            
+            // Send search results as thinking update
+            if (response.search_results && response.search_results.length > 0) {
+              log('INFO', 'handlePerplexityRequest', 'Sending search results to renderer as thinking update', {
+                reqId,
+                resultCount: response.search_results.length,
+                type: 'perplexity_search',
+                thinkDuration
+              });
+              
+              event.sender.send('chat-update', {
+                type: 'THINKING',
+                messageIndex: payload.aiMessageIndex || 0,
+                data: {
+                  sessionId,
+                  think: {
+                    title: 'Search Results',
+                    type: 'perplexity_search',
+                    content: JSON.stringify({
+                      results: response.search_results,
+                      citations: response.citations || []
+                    })
+                  }
+                }
+              });
+              
+              await new Promise(r => setTimeout(r, 100));
+            } else {
+              log('WARN', 'handlePerplexityRequest', 'No search results in response', { reqId });
+            }
+            
+            // Send thinking time to finalize UI
+            event.sender.send('chat-update', {
+              type: 'THINKING_TIME',
+              messageIndex: payload.aiMessageIndex || 0,
+              data: {
+                sessionId,
+                duration: thinkDuration
+              }
+            });
+
+            // Stream the content response word by word
+            const content = response.choices?.[0]?.message?.content || '';
+            if (content) {
+              const words = content.split(' ');
+              for (const word of words) {
+                if (word.trim()) {
+                  event.sender.send(`chat:chunk-${reqId}`, word + ' ');
+                  await new Promise(r => setTimeout(r, 20));
+                }
+              }
+            }
+
+            // Send token usage with cost
+            if (response.usage) {
+              const usage = response.usage;
+              const usageWithCost = {
+                prompt_tokens: usage.prompt_tokens,
+                completion_tokens: usage.completion_tokens,
+                total_tokens: usage.total_tokens,
+                cost: usage.cost
+              };
+
+              log('TOKEN_USAGE', 'handlePerplexityRequest', 'Token usage with cost', { ...usageWithCost, reqId });
+              recordTokenUsage(reqId, 'final-response', usageWithCost, { provider, model });
+              finalizeTokenUsage(reqId, event);
+            }
+
+            event.sender.send(`chat:done-${reqId}`);
+            activeStreams.delete(reqId);
+            resolve();
+
+          } catch (parseError) {
+            const errorMsg = `Failed to parse Perplexity response: ${parseError.message}`;
+            log('ERROR', 'handlePerplexityRequest', errorMsg, { reqId });
+            event.sender.send(`chat:chunk-${reqId}`, { error: errorMsg });
+            event.sender.send(`chat:done-${reqId}`);
+            activeStreams.delete(reqId);
+            reject(parseError);
+          }
+        });
+        });
+
+        req.on('error', (err) => {
+          const errorMsg = `Perplexity request failed: ${err.message}`;
+          log('ERROR', 'handlePerplexityRequest', errorMsg, { reqId });
+          event.sender.send(`chat:chunk-${reqId}`, { error: errorMsg });
+          event.sender.send(`chat:done-${reqId}`);
+          activeStreams.delete(reqId);
+          reject(err);
+        });
+
+        req.write(body);
+        req.end();
+      });
+
+    } catch (error) {
+      const errorMsg = `Perplexity handler error: ${error.message}`;
+      log('ERROR', 'handlePerplexityRequest', errorMsg, { reqId });
+      event.sender.send(`chat:chunk-${reqId}`, { error: errorMsg });
+      event.sender.send(`chat:done-${reqId}`);
+      activeStreams.delete(reqId);
+      throw error;
+    }
   }
 
   async function processWithLangChain() {
@@ -3950,8 +4137,21 @@ ipcMain.on('chat:stream-cancel', (event, reqId) => {
 });
 ipcMain.handle('chat:title', async (_evt, payload) => {
   const text     = payload?.text  || '';
-  const model    = payload?.model || 'glm-4.5-flash';
-  const provider = String(payload?.provider || '').toLowerCase();
+  let model    = payload?.model || 'glm-4.5-flash';
+  let provider = String(payload?.provider || '').toLowerCase();
+  
+  // Check if main model is Perplexity - use fallback model for title generation
+  const { isPerplexityModel } = require('./backend/langchain-helpers');
+  const isMainModelPerplexity = isPerplexityModel({ 
+    baseUrl: payload?.baseUrl, 
+    provider: payload?.provider 
+  });
+  
+  if (isMainModelPerplexity) {
+    log('INFO', 'chat:title', 'Main model is Perplexity - using fallback model (zhipu) for title generation');
+    model = 'glm-4.5-flash';
+    provider = 'zhipu';
+  }
   const extraHdr = payload?.headers || {};
   const defBase = (p) =>
     p === 'openrouter' ? 'https://openrouter.ai/api/v1' :
@@ -3961,12 +4161,14 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
     p === 'cerebras'   ? 'https://api.cerebras.ai/v1' :
                           'https://api.z.ai/api/paas/v4/';
 
-  const BASE_URL = (payload?.baseUrl || '').trim() || defBase(provider);
-  const API_KEY  = (payload?.apiKey  || '').trim()
+  const BASE_URL = isMainModelPerplexity ? defBase(provider) : ((payload?.baseUrl || '').trim() || defBase(provider));
+  const API_KEY  = isMainModelPerplexity 
+                ? (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || '') 
+                : ((payload?.apiKey  || '').trim()
                 || (provider === 'openrouter' ? (process.env.OPENROUTER_API_KEY || '') :
                     provider === 'groq'       ? (process.env.GROQ_API_KEY || '') :
                     provider === 'gemini'     ? (process.env.GEMINI_API_KEY || '') :
-                                                (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || ''));
+                                                (process.env.Z_API_KEY || process.env.OPENAI_API_KEY || '')));
 
   const sys = 'You are a title generator. Your job is to summarize the user query into a 3-6 word title. The title must be Title Case and have no punctuation. If the query is code, summarize its purpose. (Your response only the 3-6 title)';
   

@@ -1112,6 +1112,16 @@ Decision:`;
     const isProject = this.getSessionType(session);
     console.log(`LangChain: Session type: ${isProject ? 'PROJECT' : 'REGULAR'}`);
     
+    // Block Perplexity models in project sessions
+    const { isPerplexityModel } = require('./langchain-helpers');
+    const isPerplexity = isPerplexityModel(options);
+    
+    if (isProject && isPerplexity) {
+      const errorMessage = 'Perplexity models are not supported in project sessions. These models are optimized for web search, not reasoning over files. Please select a reasoning-capable model like GPT-4, Claude, or Gemini.';
+      console.log(`LangChain: BLOCKED - ${errorMessage}`);
+      throw new Error(errorMessage);
+    }
+    
     const startTime = Date.now();
     let result;
     

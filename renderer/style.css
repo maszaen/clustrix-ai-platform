@@ -8841,3 +8841,118 @@ button:disabled .btn-icon {
     height: 180px;
   }
 }
+
+/* ===== PERFORMANCE MONITORING UI ===== */
+#monitoring-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  pointer-events: auto;
+  font-family: var(--font-sans);
+}
+
+.monitoring-panel {
+  background: var(--bg-secondary);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  min-width: 280px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  color: var(--fg);
+}
+
+.monitoring-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.monitoring-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.monitoring-close {
+  background: none;
+  border: none;
+  color: var(--fg-muted);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-fast);
+}
+
+.monitoring-close:hover {
+  background: var(--hover-bg);
+  color: var(--fg);
+}
+
+.monitoring-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.metric-item {
+  background: var(--bg);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  text-align: center;
+}
+
+.metric-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--fg-muted);
+  margin-bottom: 4px;
+}
+
+.metric-value {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.metric-good { color: #4ade80; }
+.metric-warning { color: #fbbf24; }
+.metric-danger { color: #f87171; }
+
+.monitoring-details {
+  background: var(--bg);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  font-size: 11px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  color: var(--fg);
+}
+
+.detail-label {
+  color: var(--fg-muted);
+}
+
+.detail-value {
+  font-family: var(--font-mono);
+  font-weight: 500;
+}

@@ -12,6 +12,7 @@ const { PDFParse } = require('pdf-parse');
 const xlsx = require('./local_modules/xlsx/xlsx');
 const { log, logWithContext, setLogFile, setDebug, rotateLogWithCheckpoint } = require('./utils/logger');
 const { optimizeMessages } = require('./utils/message-optimizer');
+const { PerformanceMonitor, MONITORING_ENABLED } = require('./utils/performance-monitor');
 
 const ClustrixLangChainService = require('./backend/langchain-service');
 const { MultiAgentOrchestrator } = require('./backend/langchain-agents');
@@ -101,6 +102,7 @@ let useSQLite = false;
 let syncManager = null;
 let directoryMigrator = null;
 let callbackServer = null;
+let performanceMonitor = null;
 
 app.whenReady().then(async () => {
   setLogFile(path.join(app.getPath('userData'), 'app.log'));
@@ -1860,7 +1862,7 @@ function createWindow(){
     }
   });
 
-  // win.webContents.openDevTools();
+  win.webContents.openDevTools({ mode: 'detach' }); 
   
   let lastLogSignature = null;
   ipcMain.on('log:write', (_event, logData) => {
@@ -4365,6 +4367,68 @@ async function runWebSearchChat(event, payload) {
     event.sender.send(`chat:error-${payload.reqId}`, error.message);
   }
 }
+
+// ============================================================================
+// Performance Monitoring IPC Handlers
+// ============================================================================
+
+// Initialize performance monitor
+if (MONITORING_ENABLED) {
+  performanceMonitor = new PerformanceMonitor();
+  log('PERFORMANCE', 1, 'init', 'Performance monitor initialized');
+}
+
+// Get current performance metrics
+ipcMain.handle('monitoring:getMetrics', async () => {
+  if (!MONITORING_ENABLED || !performanceMonitor) {
+    return { enabled: false };
+  }
+
+  try {
+    const metrics = await performanceMonitor.getAllMetrics();
+    return metrics;
+  } catch (error) {
+    log('PERFORMANCE', 3, 'monitoring:getMetrics', 'Failed to get metrics', { error: error.message });
+    return { enabled: true, error: error.message };
+  }
+});
+
+// Start continuous monitoring
+ipcMain.handle('monitoring:start', async (event) => {
+  if (!MONITORING_ENABLED || !performanceMonitor) {
+    return { success: false, message: 'Monitoring is disabled' };
+  }
+
+  try {
+    performanceMonitor.startMonitoring((metrics) => {
+      event.sender.send('monitoring:update', metrics);
+    }, 2000); // Update every 2 seconds to reduce overhead
+
+    log('PERFORMANCE', 1, 'monitoring:start', 'Continuous monitoring started');
+    return { success: true };
+  } catch (error) {
+    log('PERFORMANCE', 3, 'monitoring:start', 'Failed to start monitoring', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// Stop continuous monitoring
+ipcMain.handle('monitoring:stop', async () => {
+  if (!MONITORING_ENABLED || !performanceMonitor) {
+    return { success: false, message: 'Monitoring is disabled' };
+  }
+
+  try {
+    performanceMonitor.stopMonitoring();
+    log('PERFORMANCE', 1, 'monitoring:stop', 'Continuous monitoring stopped');
+    return { success: true };
+  } catch (error) {
+    log('PERFORMANCE', 3, 'monitoring:stop', 'Failed to stop monitoring', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// ============================================================================
 
 function invokeLLM_nonStream(messages, options) {
   return new Promise((resolve, reject) => {

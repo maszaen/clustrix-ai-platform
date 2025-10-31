@@ -99,12 +99,21 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   };
   
   const fixedSrc = fixMismatchedTags(truncatedSrc);
+
+  // Extract ALL reference-style definitions FIRST (before line-by-line parsing)
+  // This allows references to work across paragraphs
+  const globalReferences = {};
+  const srcWithoutRefs = fixedSrc.replace(/^\[([^\]]+)\]:\s*(\S+)(?:\s+"([^"]*)")?\s*$/gm, (_, refId, url, title) => {
+    globalReferences[refId.toLowerCase()] = { url, title: title || '' };
+    return ''; // Remove reference definition from text
+  });
+
   const codeBlocks = sharedCodeBlocks || [];
   const isTopLevel = !sharedCodeBlocks;
   const latexBlocks = [];
   const containerBlocks = [];
   const latexRegex = /(\$\$[\s\S]*?\$\$|\\\(.*?\\\))/g;
-  let protectedSrc = fixedSrc.replace(latexRegex, match => {
+  let protectedSrc = srcWithoutRefs.replace(latexRegex, match => {
     const placeholder = `__LATEX_${latexBlocks.length}__`;
     latexBlocks.push(match);
     return placeholder;
@@ -349,7 +358,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       let tableHtml = '<div class="table-container"><table>';
       const headers = trimmedLine.split("|").map(h => h.trim()).filter(Boolean);
       tableHtml += "<thead><tr>";
-      for (const header of headers) tableHtml += `<th>${parseInlineMarkdown(header)}</th>`;
+      for (const header of headers) tableHtml += `<th>${parseInlineMarkdown(header, globalReferences)}</th>`;
       tableHtml += "</tr></thead><tbody>";
       let tableRowIndex = i + 2;
       while (tableRowIndex < lines.length && lines[tableRowIndex].trim().includes("|")) {
@@ -357,7 +366,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         tableHtml += "<tr>";
         for (let j = 0; j < headers.length; j++) {
           const cellContent = cells[j] || "";
-          tableHtml += `<td>${parseInlineMarkdown(cellContent)}</td>`;
+          tableHtml += `<td>${parseInlineMarkdown(cellContent, globalReferences)}</td>`;
         }
         tableHtml += "</tr>";
         tableRowIndex++;
@@ -408,7 +417,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         listStack.push({ type, indent, implicit: isImplicit });
       }
       // Wrap text content with <p> for consistent styling
-      const parsedContent = parseInlineMarkdown(content);
+      const parsedContent = parseInlineMarkdown(content, globalReferences);
       if (isTaskList) {
         const checkboxHtml = `<input type="checkbox"${isChecked ? ' checked' : ''} disabled> `;
         html += `<li><p>${checkboxHtml}${parsedContent}</p></li>`;
@@ -507,7 +516,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       lastLineWasCodeblock = true;
     } else if (hMatch || hrMatch) {
       closeOpenBlocks();
-      if (hMatch) html += `<h${hMatch[1].length}>${parseInlineMarkdown(hMatch[2])}</h${hMatch[1].length}>`;
+      if (hMatch) html += `<h${hMatch[1].length}>${parseInlineMarkdown(hMatch[2], globalReferences)}</h${hMatch[1].length}>`;
       else if (hrMatch) html += "<hr>";
       lastLineWasCodeblock = false;
     } else {
@@ -516,7 +525,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         if (currentListItemEndPos !== -1) {
           // Don't add <br> if previous line was a codeblock
           const prefix = lastLineWasCodeblock ? '' : '<br>';
-          const textHtml = `${prefix}${parseInlineMarkdown(line.trim())}`;
+          const textHtml = `${prefix}${parseInlineMarkdown(line.trim(), globalReferences)}`;
           html = `${html.substring(0, currentListItemEndPos)}${textHtml}${html.substring(currentListItemEndPos)}`;
           currentListItemEndPos += textHtml.length;
         }
@@ -525,19 +534,21 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         if (trimmedLine.includes("XCONTAINERX")) {
           flushImageGroup();
           flushParagraph();
-          html += parseInlineMarkdown(line) + '\n';
+          html += parseInlineMarkdown(line, globalReferences) + '\n';
         } else {
           // Check if this line is ONLY an image (no text before/after)
+          // Include nested image+link: [![alt](img)](url) should also go to imageBuffer
+          const isNestedImageLink = /^\[!\[.*?\]\([^)]+\)\]\([^)]+\)$/.test(trimmedLine);
           const isImageOnly = /^!\[.*?\]\([^\s]+\)(\s*=\s*\d+x\d+)?$/.test(trimmedLine);
-          
-          if (isImageOnly) {
-            // This is an image-only line
+
+          if (isImageOnly || isNestedImageLink) {
+            // This is an image-only line or nested image+link
             flushParagraph(); // Flush any pending text first
-            imageBuffer.push(parseInlineMarkdown(line.trim()));
+            imageBuffer.push(parseInlineMarkdown(line.trim(), globalReferences));
           } else {
             // This is text or mixed content
             flushImageGroup(); // Flush any pending images first
-            paragraphBuffer.push(parseInlineMarkdown(line));
+            paragraphBuffer.push(parseInlineMarkdown(line, globalReferences));
           }
         }
       }
@@ -586,7 +597,7 @@ function groupConsecutiveImages(html, imageBlocks) {
   return processedHtml;
 }
 
-function parseInlineMarkdown(text) {
+function parseInlineMarkdown(text, globalReferences = {}) {
   if (!text) return "";
   // Unescape HTML entities first to handle custom tags that might be escaped
   text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
@@ -617,7 +628,7 @@ function parseInlineMarkdown(text) {
       let listHtml = '<ul class="br-list">';
       listItems.forEach(item => {
         const cleanItem = item.replace(/^[-•]\s*/, "");
-        const processedItem = processMarkdownFormatting(cleanItem);
+        const processedItem = processMarkdownFormatting(cleanItem, globalReferences);
         listHtml += `<li>${processedItem}</li>`;
       });
       listHtml += "</ul>";
@@ -626,18 +637,61 @@ function parseInlineMarkdown(text) {
   }
   let processedText = text.replace(/<br\s*\/?>/gi, "__BR_TAG__");
 
+  // Use global references (passed from enhancedMarkdownParse)
+  // Also parse local references in case they exist in this text block
+  const references = {...globalReferences};
+  processedText = processedText.replace(/^\[([^\]]+)\]:\s*(\S+)(?:\s+"([^"]*)")?\s*$/gm, (_, refId, url, title) => {
+    references[refId.toLowerCase()] = { url, title: title || '' };
+    return ''; // Remove reference definition from text
+  });
+
   // Parse images BEFORE HTML escaping to preserve alt text
   const imageBlocks = [];
-  processedText = processedText.replace(/!\[([^\]]*)\]\(([^\s]+)\)/g, (match, alt, src) => {
+
+  // FIRST: Parse nested image+link pattern: [![alt](img)](url)
+  // This must be done BEFORE parsing standalone images
+  processedText = processedText.replace(/\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)/g, (match, alt, imgSrc, linkUrl) => {
+    const placeholder = `__IMAGE_${imageBlocks.length}__`;
+    const cleanAlt = alt.replace(/\*\*|__|[\*_~`]/g, '') || 'Image';
+
+    // Handle image size parameter
+    let finalImgSrc = imgSrc;
+    let sizeAttr = '';
+    const sizeMatch = imgSrc.match(/^(.+?)\s+=\s*(\d+)x(\d+)$/);
+    if (sizeMatch) {
+      finalImgSrc = sizeMatch[1];
+      sizeAttr = ` width="${sizeMatch[2]}" height="${sizeMatch[3]}"`;
+    }
+
+    // Create clickable image with label (flex layout: image + text) - with download button
+    const labelHtml = cleanAlt ? `<span class="image-link-label">${cleanAlt}</span>` : '';
+    imageBlocks.push(`<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="link image-link image-link-with-label"><div style="inside-image-link"><img class="md-image wrapped" src="${finalImgSrc}" alt=""${sizeAttr} loading="lazy">${labelHtml}</div></a>`);
+    return placeholder;
+  });
+
+  // Parse reference-style images: ![alt][ref-id]
+  processedText = processedText.replace(/!\[([^\]]*)\]\[([^\]]+)\]/g, (match, alt, refId) => {
+    const ref = references[refId.toLowerCase()];
+    if (!ref) return match; // Keep original if reference not found
+
+    const placeholder = `__IMAGE_${imageBlocks.length}__`;
+    const cleanAlt = alt.replace(/\*\*|__|[\*_~`]/g, '') || 'Image';
+    const titleAttr = ref.title ? ` title="${esc(ref.title)}"` : '';
+    imageBlocks.push(`<div class="md-image-wrapper"><img class="md-image" src="${ref.url}" alt=""${titleAttr} loading="lazy"><button class="md-image-download" data-image-url="${escapeAttribute(ref.url)}"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></div>`);
+    return placeholder;
+  });
+
+  // Parse inline images: ![alt](src) or ![alt](src =WxH)
+  processedText = processedText.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
     const placeholder = `__IMAGE_${imageBlocks.length}__`;
     // Strip markdown formatting from alt text for accessibility
     const cleanAlt = alt.replace(/\*\*|__|[\*_~`]/g, '') || 'Image';
     // Handle image size parameter (=WIDTHxHEIGHT)
-    let imgSrc = src;
+    let imgSrc = src.trim();
     let sizeAttr = '';
-    const sizeMatch = src.match(/^(.+?)\s+=\s*(\d+)x(\d+)$/);
+    const sizeMatch = imgSrc.match(/^(.+?)\s+=\s*(\d+)x(\d+)$/);
     if (sizeMatch) {
-      imgSrc = sizeMatch[1];
+      imgSrc = sizeMatch[1].trim();
       sizeAttr = ` width="${sizeMatch[2]}" height="${sizeMatch[3]}"`;
     }
     imageBlocks.push(`<div class="md-image-wrapper"><img class="md-image" src="${imgSrc}" alt=""${sizeAttr} loading="lazy"><button class="md-image-download" data-image-url="${escapeAttribute(imgSrc)}"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></div>`);
@@ -654,20 +708,53 @@ function parseInlineMarkdown(text) {
   
   // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
   const linkBlocks = [];
-  processedText = processedText.replace(/\[([^\]]*)\]\(([^\s]+)\)/g, (match, text, url) => {
+
+  // Parse reference-style links: [text][ref-id] or [text][] (implicit reference)
+  processedText = processedText.replace(/\[([^\]]+)\]\[([^\]]*)\]/g, (match, text, refId) => {
+    // If refId is empty, use text as refId (implicit reference)
+    const lookupId = (refId || text).toLowerCase();
+    const ref = references[lookupId];
+    if (!ref) return match; // Keep original if reference not found
+
     const placeholder = `__LINK_${linkBlocks.length}__`;
-    
+
+    // Check if link contains image placeholder
+    const hasImage = /__IMAGE_(\d+)__/.test(text);
+    const processedText = hasImage ? text : parseInlineContent(text);
+    const icon = hasImage ? '' : BROWSER_ICON;
+    const titleAttr = ref.title ? ` title="${esc(ref.title)}"` : '';
+
+    if (ref.url.startsWith('mailto:')) {
+      linkBlocks.push(`<a href="${ref.url}" class="link email-link ${hasImage ? 'image-link' : ''}"${titleAttr}>${processedText}${hasImage ? '' : EMAIL_ICON}</a>`);
+    } else {
+      linkBlocks.push(`<a href="${ref.url}" target="_blank" rel="noopener noreferrer" class="link ${hasImage ? 'image-link' : ''}"${titleAttr}>${processedText}${icon}</a>`);
+    }
+    return placeholder;
+  });
+
+  // Parse inline links: [text](url)
+  processedText = processedText.replace(/\[([^\]]*)\]\(([^\s]+)\)/g, (_match, text, url) => {
+    // Check if text is ONLY an image placeholder (nested image+link already handled)
+    // Pattern: __IMAGE_0__ (nothing else)
+    if (/^__IMAGE_\d+__$/.test(text.trim())) {
+      return text.trim(); // Return just the placeholder, remove the [...](...) wrapper
+    }
+
+    const placeholder = `__LINK_${linkBlocks.length}__`;
+
     // Check if link contains image placeholder (clickable image)
     const hasImage = /__IMAGE_(\d+)__/.test(text);
-    
+
     if (url.startsWith('mailto:')) {
       // Email link - process inline content
       const processedText = hasImage ? text : parseInlineContent(text);
-      linkBlocks.push(`<a href="${url}" class="link email-link">${processedText}${EMAIL_ICON}</a>`);
+      const icon = hasImage ? '' : EMAIL_ICON; // No icon for image links
+      linkBlocks.push(`<a href="${url}" class="link email-link ${hasImage ? 'image-link' : ''}">${processedText}${icon}</a>`);
     } else {
       // Regular link - process inline content
       const processedText = hasImage ? text : parseInlineContent(text);
-      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${processedText}${BROWSER_ICON}</a>`);
+      const icon = hasImage ? '' : BROWSER_ICON; // No icon for image links
+      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link ${hasImage ? 'image-link' : ''}">${processedText}${icon}</a>`);
     }
     return placeholder;
   });
@@ -801,21 +888,64 @@ function parseInlineMarkdown(text) {
   return html;
 }
 
-function processMarkdownFormatting(text) {
+function processMarkdownFormatting(text, globalReferences = {}) {
   if (!text) return "";
+
+  // Use global references (passed from parseInlineMarkdown)
+  // Also parse local references in case they exist in this text block
+  const references = {...globalReferences};
+  let processedText = text.replace(/^\[([^\]]+)\]:\s*(\S+)(?:\s+"([^"]*)")?\s*$/gm, (_, refId, url, title) => {
+    references[refId.toLowerCase()] = { url, title: title || '' };
+    return ''; // Remove reference definition from text
+  });
 
   // Parse images BEFORE HTML escaping to preserve alt text
   const imageBlocks = [];
-  let processedText = text.replace(/!\[([^\]]*)\]\(([^\s]+)\)/g, (match, alt, src) => {
+
+  // FIRST: Parse nested image+link pattern: [![alt](img)](url)
+  // This must be done BEFORE parsing standalone images
+  processedText = processedText.replace(/\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)/g, (match, alt, imgSrc, linkUrl) => {
+    const placeholder = `__IMAGE_${imageBlocks.length}__`;
+    const cleanAlt = alt.replace(/\*\*|__|[\*_~`]/g, '') || 'Image';
+
+    // Handle image size parameter
+    let finalImgSrc = imgSrc;
+    let sizeAttr = '';
+    const sizeMatch = imgSrc.match(/^(.+?)\s+=\s*(\d+)x(\d+)$/);
+    if (sizeMatch) {
+      finalImgSrc = sizeMatch[1];
+      sizeAttr = ` width="${sizeMatch[2]}" height="${sizeMatch[3]}"`;
+    }
+
+    // Create clickable image with label (flex layout: image + text) - with download button
+    const labelHtml = cleanAlt ? `<span class="image-link-label">${cleanAlt}</span>` : '';
+    imageBlocks.push(`<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="link image-link image-link-with-label"><div style="inside-image-link"><img class="md-image wrapped" src="${finalImgSrc}" alt=""${sizeAttr} loading="lazy">${labelHtml}</div></a>`);
+    return placeholder;
+  });
+
+  // Parse reference-style images: ![alt][ref-id]
+  processedText = processedText.replace(/!\[([^\]]*)\]\[([^\]]+)\]/g, (match, alt, refId) => {
+    const ref = references[refId.toLowerCase()];
+    if (!ref) return match; // Keep original if reference not found
+
+    const placeholder = `__IMAGE_${imageBlocks.length}__`;
+    const cleanAlt = alt.replace(/\*\*|__|[\*_~`]/g, '') || 'Image';
+    const titleAttr = ref.title ? ` title="${esc(ref.title)}"` : '';
+    imageBlocks.push(`<div class="md-image-wrapper"><img class="md-image" src="${ref.url}" alt=""${titleAttr} loading="lazy"><button class="md-image-download" data-image-url="${escapeAttribute(ref.url)}"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></div>`);
+    return placeholder;
+  });
+
+  // Parse inline images: ![alt](src) or ![alt](src =WxH)
+  processedText = processedText.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
     const placeholder = `__IMAGE_${imageBlocks.length}__`;
     // Strip markdown formatting from alt text for accessibility
     const cleanAlt = alt.replace(/\*\*|__|[\*_~`]/g, '') || 'Image';
     // Handle image size parameter (=WIDTHxHEIGHT)
-    let imgSrc = src;
+    let imgSrc = src.trim();
     let sizeAttr = '';
-    const sizeMatch = src.match(/^(.+?)\s+=\s*(\d+)x(\d+)$/);
+    const sizeMatch = imgSrc.match(/^(.+?)\s+=\s*(\d+)x(\d+)$/);
     if (sizeMatch) {
-      imgSrc = sizeMatch[1];
+      imgSrc = sizeMatch[1].trim();
       sizeAttr = ` width="${sizeMatch[2]}" height="${sizeMatch[3]}"`;
     }
     imageBlocks.push(`<div class="md-image-wrapper"><img class="md-image" src="${imgSrc}" alt=""${sizeAttr} loading="lazy"><button class="md-image-download" data-image-url="${escapeAttribute(imgSrc)}"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button></div>`);
@@ -832,20 +962,53 @@ function processMarkdownFormatting(text) {
   
   // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
   const linkBlocks = [];
-  processedText = processedText.replace(/\[([^\]]*)\]\(([^\s]+)\)/g, (match, text, url) => {
+
+  // Parse reference-style links: [text][ref-id] or [text][] (implicit reference)
+  processedText = processedText.replace(/\[([^\]]+)\]\[([^\]]*)\]/g, (match, text, refId) => {
+    // If refId is empty, use text as refId (implicit reference)
+    const lookupId = (refId || text).toLowerCase();
+    const ref = references[lookupId];
+    if (!ref) return match; // Keep original if reference not found
+
     const placeholder = `__LINK_${linkBlocks.length}__`;
-    
+
+    // Check if link contains image placeholder
+    const hasImage = /__IMAGE_(\d+)__/.test(text);
+    const processedText = hasImage ? text : parseInlineContent(text);
+    const icon = hasImage ? '' : BROWSER_ICON;
+    const titleAttr = ref.title ? ` title="${esc(ref.title)}"` : '';
+
+    if (ref.url.startsWith('mailto:')) {
+      linkBlocks.push(`<a href="${ref.url}" class="link email-link ${hasImage ? 'image-link' : ''}"${titleAttr}>${processedText}${hasImage ? '' : EMAIL_ICON}</a>`);
+    } else {
+      linkBlocks.push(`<a href="${ref.url}" target="_blank" rel="noopener noreferrer" class="link ${hasImage ? 'image-link' : ''}"${titleAttr}>${processedText}${icon}</a>`);
+    }
+    return placeholder;
+  });
+
+  // Parse inline links: [text](url)
+  processedText = processedText.replace(/\[([^\]]*)\]\(([^\s]+)\)/g, (_match, text, url) => {
+    // Check if text is ONLY an image placeholder (nested image+link already handled)
+    // Pattern: __IMAGE_0__ (nothing else)
+    if (/^__IMAGE_\d+__$/.test(text.trim())) {
+      return text.trim(); // Return just the placeholder, remove the [...](...) wrapper
+    }
+
+    const placeholder = `__LINK_${linkBlocks.length}__`;
+
     // Check if link contains image placeholder (clickable image)
     const hasImage = /__IMAGE_(\d+)__/.test(text);
-    
+
     if (url.startsWith('mailto:')) {
       // Email link - process inline content
       const processedText = hasImage ? text : parseInlineContent(text);
-      linkBlocks.push(`<a href="${url}" class="link email-link">${processedText}${EMAIL_ICON}</a>`);
+      const icon = hasImage ? '' : EMAIL_ICON; // No icon for image links
+      linkBlocks.push(`<a href="${url}" class="link email-link ${hasImage ? 'image-link' : ''}">${processedText}${icon}</a>`);
     } else {
       // Regular link - process inline content
       const processedText = hasImage ? text : parseInlineContent(text);
-      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link">${processedText}${BROWSER_ICON}</a>`);
+      const icon = hasImage ? '' : BROWSER_ICON; // No icon for image links
+      linkBlocks.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="link ${hasImage ? 'image-link' : ''}">${processedText}${icon}</a>`);
     }
     return placeholder;
   });

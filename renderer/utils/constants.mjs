@@ -1,4 +1,4 @@
-const welcomeMessages = {
+export const welcomeMessages = {
   pagi: [
     "Morning, [USERNAME]! What's up?",
     "Rise and grind, [USERNAME]!",
@@ -35,7 +35,7 @@ const welcomeMessages = {
   ],
 };
 
-const DEMO_RESPONSE = `# Arsitektur UI Chat Modern: Performa, Aksesibilitas, dan Skalabilitas 
+export const DEMO_RESPONSE = `# Arsitektur UI Chat Modern: Performa, Aksesibilitas, dan Skalabilitas 
 
 Kualitas pengalaman chat bukan cuma soal "jawaban cepat". Di balik layar ada orkestrasi rendering, state, jaringan, serta strategi fallback. Berikut ringkasan keputusan arsitektural yang terbukti praktis pada aplikasi chat skala menengah–besar.
 
@@ -212,7 +212,7 @@ function withStreamBatchedRender({ onChunk, onDone, onError }) {
 Keputusan kecil (delegasi event, *batching* render, tema terstandar) bikin UI chat jauh lebih tangguh. Selama rantai "input → stream → render → aksi" konsisten dan dapat dipulihkan, pengalaman pengguna bakal terasa mulus, bahkan saat jaringan lagi moody.
 `;
 
-const ICONS = {
+export const ICONS = {
   code: `
 <div class="file-icon" aria-hidden="true">
 <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30"
@@ -309,7 +309,7 @@ const ICONS = {
 </div>`.trim(),
 };
 
-const EXT_GROUPS = {
+export const EXT_GROUPS = {
   pdf: new Set(['pdf']),
   spreadsheet: new Set(['xlsx','xls','csv','tsv']),
   terminal: new Set(['sh','bash','zsh','ksh','bat','cmd','ps1']),
@@ -320,7 +320,7 @@ const EXT_GROUPS = {
   ]),
 };
 
-const filesUploadDark = `<svg xmlns="http://www.w3.org/2000/svg" width="126" height="67.2" viewBox="0 0 105 56" fill="none">
+export const filesUploadDark = `<svg xmlns="http://www.w3.org/2000/svg" width="126" height="67.2" viewBox="0 0 105 56" fill="none">
 <g filter="url(#filter0_d_234_2197)">
 <g clip-path="url(#clip0_234_2197)">
 <rect x="5.16711" y="18.7499" width="30.3333" height="30.3333" rx="6.5" fill="#1b1c1d"/>
@@ -437,7 +437,7 @@ const filesUploadDark = `<svg xmlns="http://www.w3.org/2000/svg" width="126" hei
 </defs>
 </svg>`
 
-const filesUploadLight = `<svg xmlns="http://www.w3.org/2000/svg" width="126" height="67.2" viewBox="0 0 105 56" fill="none">
+export const filesUploadLight = `<svg xmlns="http://www.w3.org/2000/svg" width="126" height="67.2" viewBox="0 0 105 56" fill="none">
 <g filter="url(#filter0_d_234_2197)">
 <g clip-path="url(#clip0_234_2197)">
 <rect x="5.16711" y="18.7499" width="30.3333" height="30.3333" rx="6.5" fill="white"/>

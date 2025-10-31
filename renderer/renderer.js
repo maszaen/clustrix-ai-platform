@@ -1,12 +1,7 @@
-let state = {
-  sessions: [],
-  settings: { 
-    persona: { name: "", work: "", prefs: "" }, 
-    theme: "light",
-    streamThrottling: "auto",
-    language: "autodetect"
-  },
-};
+import { welcomeMessages, DEMO_RESPONSE, EXT_GROUPS, ICONS, filesUploadDark, filesUploadLight } from './utils/constants.mjs';
+import { monitoringUI } from './utils/monitoring-ui.mjs';
+
+let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",streamThrottling: "auto",language: "autodetect"},};
 let welcomeScreenStagedFiles = [];
 let projectMessageStagedFiles = [];
 let current = null;
@@ -15,7 +10,6 @@ let loadedSessionCount = 0;
 let loadedChatPageCount = 0;
 let loadedProjectSessionCount = 0;
 let isAdvancedSearch = false;
-let onlineResumeTimer = null;
 let searchStatusQueue = [];
 let isProcessingQueue = false;
 let sessionDrafts = new Map();
@@ -38,10 +32,10 @@ let confirmationCancelBtn = null;
 let confirmationCloseBtn = null;
 let confirmationModalOptions = null;
 let isConfirmationProcessing = false;
+let saveScheduled = false;
 
 // PERFORMANCE: Dirty session tracking for incremental saves
 const dirtySessionIds = new Set();
-let saveScheduled = false;
 
 // Smart Session Caching System
 const sessionCache = new Map();
@@ -2599,6 +2593,9 @@ function highlightAllUnder(container) {
     }
   });
 }
+
+// Expose to global scope for md.js
+window.highlightAllUnder = highlightAllUnder;
 
 async function loadAllArtifacts() {
   try {
@@ -8262,6 +8259,9 @@ function attachCodeBlockListeners(container) {
   });
 }
 
+// Expose to global scope for md.js
+window.attachCodeBlockListeners = attachCodeBlockListeners;
+
 function handlePromptSuggestionClick(rawText, sourceElement) {
   const text = typeof rawText === "string" ? rawText.trim() : "";
   if (!text) return;
@@ -8752,6 +8752,9 @@ async function updateCodeBlocksWithArtifactInfo(container = document) {
     );
   }
 }
+
+// Expose to global scope for md.js
+window.updateCodeBlocksWithArtifactInfo = updateCodeBlocksWithArtifactInfo;
 
 function formatErrorMessageForSaving(reason) {
   log(
@@ -18299,7 +18302,12 @@ window.DEBUG = {
       el.classList.remove('force-hover-state');
     });
     activeHoverElements.clear();
-  }
+  },
+
+  // Performance monitoring
+  startMonitoring: () => monitoringUI.start(),
+  stopMonitoring: () => monitoringUI.stop(),
+  toggleMonitoring: () => monitoringUI.toggle()
 };
 
 

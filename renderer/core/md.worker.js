@@ -665,7 +665,7 @@ function parseInlineMarkdown(text, globalReferences = {}) {
 
     // Create clickable image with label (flex layout: image + text) - with download button
     const labelHtml = cleanAlt ? `<span class="image-link-label">${cleanAlt}</span>` : '';
-    imageBlocks.push(`<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="link image-link image-link-with-label"><div style="inside-image-link"><img class="md-image wrapped" src="${finalImgSrc}" alt=""${sizeAttr} loading="lazy">${labelHtml}</div></a>`);
+    imageBlocks.push(`<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="link image-link image-link-with-label"><div class="inside-image-link"><img class="md-image wrapped" src="${finalImgSrc}" alt=""${sizeAttr} loading="lazy">${labelHtml}</div></a>`);
     return placeholder;
   });
 
@@ -919,7 +919,7 @@ function processMarkdownFormatting(text, globalReferences = {}) {
 
     // Create clickable image with label (flex layout: image + text) - with download button
     const labelHtml = cleanAlt ? `<span class="image-link-label">${cleanAlt}</span>` : '';
-    imageBlocks.push(`<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="link image-link image-link-with-label"><div style="inside-image-link"><img class="md-image wrapped" src="${finalImgSrc}" alt=""${sizeAttr} loading="lazy">${labelHtml}</div></a>`);
+    imageBlocks.push(`<a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="link image-link image-link-with-label"><div class="inside-image-link"><img class="md-image wrapped" src="${finalImgSrc}" alt=""${sizeAttr} loading="lazy">${labelHtml}</div></a>`);
     return placeholder;
   });
 

@@ -599,6 +599,11 @@ hr {
   align-items: center;
 }
 
+.email-link svg {
+  height: 13px;
+  margin-left: 3px;
+}
+
 .learn-more-content .link {
   font-size: 11px;
   color: var(--link-hover);
@@ -627,7 +632,7 @@ hr {
   color: var(--link);
 }
 
-.message.ai a:not(:not([href])):not([href=""]) {
+.message.ai a:not(:not([href])):not([href=""]):not(.image-link) {
   font-size: 11px;
   color: var(--link-hover);
   border: 1px solid var(--border);
@@ -636,7 +641,7 @@ hr {
   white-space: nowrap;
   margin: 0 3px;
   display: inline-flex;
-  max-width: 300px;
+  max-width: 320px;
   min-width: 0 !important;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -647,6 +652,44 @@ hr {
   transition: all 0.4s ease;
   transform: translateY(-1px);
   font-weight: normal !important;
+}
+
+.message.ai .image-link {
+  font-size: 11px;
+  color: var(--link-hover);
+  border: 1px solid var(--border);
+  background: var(--hover-bg);
+  padding: 0px 7px;
+  white-space: nowrap;
+  margin: 0 3px;
+  margin-top: 3px;
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  align-items: center;
+  gap: 2px;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  transition: all 0.4s ease;
+  transform: translateY(-1px);
+  font-weight: normal !important;
+  max-height: 224px !important;
+}
+
+.image-link .inside-image-link {
+  display: flex;
+  flex-direction: column;
+}
+
+.inside-image-link .md-image.wrapped {
+  min-width: 100% !important;
+  max-height: 124px !important;
+}
+
+.image-link-label {
+  font-size: 10px;
 }
 
 .message.ai a:not(:not([href])):not([href=""]) strong {
@@ -8677,7 +8720,7 @@ button:disabled .btn-icon {
 .md-image-group {
   margin: 12px 0;
   border-radius: var(--radius-lg);
-  background: rgba(0, 0, 0, 0.02);
+  background: transparent;
   overflow: hidden;
 }
 

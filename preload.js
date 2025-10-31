@@ -3,7 +3,7 @@ function rid(){ return `${Date.now().toString(36)}-${Math.random().toString(36).
 
 contextBridge.exposeInMainWorld('api', {
   on: (channel, callback) => {
-    const validChannels = ['chat-update', 'stats:update', 'search:status', 'chat:think-']; 
+    const validChannels = ['chat-update', 'stats:update', 'search:status', 'chat:think-', 'monitoring:update'];
     if (validChannels.some(valid => channel.startsWith(valid))) {
       ipcRenderer.on(channel, (event, ...args) => callback(...args));
     }
@@ -101,5 +101,16 @@ contextBridge.exposeInMainWorld('api', {
     restart: () => ipcRenderer.invoke('app:restart'),
     getProfilePhoto: () => ipcRenderer.invoke('app:getProfilePhoto'),
     getDefaultProfilePhoto: () => ipcRenderer.invoke('app:getDefaultProfilePhoto'),
+  },
+  monitoring: {
+    getMetrics: () => ipcRenderer.invoke('monitoring:getMetrics'),
+    start: () => ipcRenderer.invoke('monitoring:start'),
+    stop: () => ipcRenderer.invoke('monitoring:stop'),
+    onUpdate: (callback) => {
+      ipcRenderer.on('monitoring:update', (event, metrics) => callback(metrics));
+    },
+    removeUpdateListener: () => {
+      ipcRenderer.removeAllListeners('monitoring:update');
+    }
   }
 });

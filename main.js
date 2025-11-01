@@ -191,6 +191,23 @@ app.whenReady().then(async () => {
       });
       return;
     }
+
+    // Fallback for relative font path (if HTML uses ./filename)
+    if (parsedUrl.pathname === '/OpenAISansVariableVF.woff' && req.method === 'GET') {
+      const fontPath = path.join(__dirname, 'callback', 'OpenAISansVariableVF.woff');
+      fs.readFile(fontPath, (err, data) => {
+        if (err) {
+          log('CALLBACK', 3, 'server', 'Failed to read font file (fallback)', { error: err.message });
+          res.writeHead(404, { 'Content-Type': 'text/plain' });
+          res.end('Not Found');
+          return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'font/woff' });
+        res.end(data);
+      });
+      return;
+    }
     
     // 404 for other routes
     res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -4017,9 +4034,6 @@ function runStandardStreaming(event, payload) {
         let contentBuffer = ''; // Buffer to detect (Internal Reasoning: ...) pattern
         let inInternalReasoning = false;
         let reasoningBuffer = '';
-
-        // Initialize thinking parser for this stream
-        thinkingParser.initializeStream(reqId);
 
         res.on('data', (chunk) => {
           buffer += chunk;

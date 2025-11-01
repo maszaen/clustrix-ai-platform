@@ -1697,7 +1697,8 @@ input:checked + .slider:before {
   padding: var(--spacing-2xl);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
   transition: opacity 0.3s ease-out, transform 0.3s ease-out;
   background: var(--bg);
 }
@@ -1713,7 +1714,8 @@ input:checked + .slider:before {
   align-items: center;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
   transition: opacity 0.4s ease-out, transform 0.4s ease-out;
   background: var(--bg);
 }
@@ -1788,7 +1790,8 @@ input:checked + .slider:before {
   width: 100%;
   max-width: 1300px;
   margin: 0px auto;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
   transition: opacity 0.3s ease-out, transform 0.3s ease-out;
   padding: 0 20px;
 }
@@ -2368,7 +2371,8 @@ input:checked + .slider:before {
   align-items: center;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
   transition: opacity 0.3s ease-out, transform 0.3s ease-out;
   background: var(--bg);
 }
@@ -2444,7 +2448,8 @@ input:checked + .slider:before {
   align-items: center;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
   transition: opacity 0.3s ease-out, transform 0.3s ease-out;
   background: var(--bg);
 }
@@ -2506,6 +2511,7 @@ input:checked + .slider:before {
 .chat-area.welcome-active #welcome-screen {
   opacity: 1;
   pointer-events: auto;
+  max-height: 100vh;
   transform: translateY(0) scale(1);
   animation: slideInPage 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -2513,13 +2519,15 @@ input:checked + .slider:before {
 .chat-area.welcome-active #chats-page {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area.welcome-active #artifacts-page {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area.welcome-active #chat-log {
@@ -2534,12 +2542,14 @@ input:checked + .slider:before {
 .chat-area.chats-active #welcome-screen {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area.chats-active #chats-page {
   opacity: 1;
   pointer-events: auto;
+  max-height: 100vh;
   transform: translateY(0) scale(1);
   animation: slideInPage 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -2547,7 +2557,8 @@ input:checked + .slider:before {
 .chat-area.chats-active #artifacts-page {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area.chats-active #chat-log {
@@ -2562,18 +2573,21 @@ input:checked + .slider:before {
 .chat-area.artifacts-active #welcome-screen {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area.artifacts-active #chats-page {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area.artifacts-active #artifacts-page {
   opacity: 1;
   pointer-events: auto;
+  max-height: 100vh;
   transform: translateY(0) scale(1);
   animation: slideInPage 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -2590,24 +2604,28 @@ input:checked + .slider:before {
 .chat-area.projects-active #welcome-screen {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area.projects-active #chats-page {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area.projects-active #artifacts-page {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area.projects-active #projects-page {
   opacity: 1;
   pointer-events: auto;
+  max-height: 100vh;
   transform: translateY(0) scale(1);
   animation: slideInPage 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -2625,25 +2643,29 @@ input:checked + .slider:before {
 .chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active) #welcome-screen {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active) #chats-page {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active) #artifacts-page {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active) #projects-page {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(30px) scale(0.95);
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
 }
 
 .chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active) #chat-log {
@@ -3827,7 +3849,8 @@ textarea::-webkit-scrollbar {
 @keyframes slideInPage {
   from {
     opacity: 0;
-    transform: translateY(30px) scale(0.95);
+    transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
   }
   to {
     opacity: 1;

@@ -1,0 +1,121 @@
+{
+  "default": {
+    "type": "echo",
+    "description": "Echo back user's message",
+    "thinking": {
+      "enabled": true,
+      "duration": "auto",
+      "content": "Processing your request..."
+    },
+    "response": {
+      "type": "echo"
+    },
+    "streaming": {
+      "minCharsPerChunk": 10,
+      "maxCharsPerChunk": 14,
+      "minTokensPerSec": 20,
+      "maxTokensPerSec": 25
+    }
+  },
+  "markdown_showcase": {
+    "type": "template",
+    "description": "Display markdown showcase",
+    "thinking": {
+      "enabled": true,
+      "duration": 2,
+      "content": "Preparing markdown examples..."
+    },
+    "response": {
+      "type": "static",
+      "content": "## Markdown Showcase\n\nBerikut contoh elemen markdown umum:\n\n- **Teks tebal** dan _teks miring_\n- Daftar bernomor:\n  1. Langkah pertama\n  2. Langkah kedua dengan tautan [Clustrix](https://example.com)\n- Kutipan blok untuk catatan penting.\n\n> Markdown membantu menjaga struktur jawaban.\n\n### Potongan kode\n\n```js\nfunction greet(name) {\n  return `Halo, ${name}!`;\n}\nconsole.log(greet(\"Response Debug\"));\n```\n\n| Komponen | Status |\n| --- | --- |\n| Heading | ✅ |\n| List | ✅ |\n| Code block | ✅ |\n| Table | ✅ |\n\nTambahkan juga rumus inline seperti $E = mc^2$ dan teks akhir yang ringkas."
+    },
+    "streaming": {
+      "minCharsPerChunk": 10,
+      "maxCharsPerChunk": 14,
+      "minTokensPerSec": 20,
+      "maxTokensPerSec": 25
+    }
+  },
+  "long_response": {
+    "type": "template",
+    "description": "Test long response with heavy markdown",
+    "thinking": {
+      "enabled": true,
+      "duration": 3,
+      "content": "Analyzing request...\n\nGathering information...\n\nPreparing detailed response..."
+    },
+    "response": {
+      "type": "static",
+      "content": "# Comprehensive Guide to AI Development\n\n## Introduction\n\nArtificial Intelligence has revolutionized the way we interact with technology. This guide covers the fundamental concepts and practical applications.\n\n## Core Concepts\n\n### Machine Learning\n\nMachine learning is a subset of AI that enables systems to learn from data:\n\n1. **Supervised Learning**: Training with labeled data\n2. **Unsupervised Learning**: Finding patterns in unlabeled data\n3. **Reinforcement Learning**: Learning through rewards and penalties\n\n### Neural Networks\n\nNeural networks are inspired by the human brain:\n\n```python\nimport tensorflow as tf\n\nmodel = tf.keras.Sequential([\n    tf.keras.layers.Dense(128, activation='relu'),\n    tf.keras.layers.Dense(64, activation='relu'),\n    tf.keras.layers.Dense(10, activation='softmax')\n])\n```\n\n## Practical Applications\n\n| Domain | Application | Impact |\n|--------|-------------|--------|\n| Healthcare | Diagnosis | High |\n| Finance | Fraud Detection | High |\n| Transportation | Self-driving | Medium |\n| Entertainment | Recommendations | Medium |\n\n### Code Example\n\nHere's a simple neural network implementation:\n\n```javascript\nclass NeuralNetwork {\n  constructor(inputSize, hiddenSize, outputSize) {\n    this.weights1 = this.initWeights(inputSize, hiddenSize);\n    this.weights2 = this.initWeights(hiddenSize, outputSize);\n  }\n\n  forward(input) {\n    this.hidden = this.sigmoid(this.matmul(input, this.weights1));\n    this.output = this.sigmoid(this.matmul(this.hidden, this.weights2));\n    return this.output;\n  }\n\n  sigmoid(x) {\n    return 1 / (1 + Math.exp(-x));\n  }\n}\n```\n\n## Future Directions\n\n> The future of AI lies in creating systems that can reason, learn, and adapt in ways that are transparent and beneficial to humanity.\n\n### Emerging Trends\n\n- **Explainable AI**: Making AI decisions understandable\n- **Edge AI**: Running AI on local devices\n- **Quantum AI**: Leveraging quantum computing\n- **Federated Learning**: Privacy-preserving ML\n\n## Conclusion\n\nAI continues to evolve rapidly. Understanding these fundamentals provides a solid foundation for working with modern AI systems.\n\n**Key Takeaways:**\n- AI is transforming multiple industries\n- Understanding core concepts is essential\n- Practical implementation requires both theory and practice\n- Ethical considerations must guide development\n\nFor more information, explore resources like papers, courses, and open-source projects."
+    },
+    "streaming": {
+      "minCharsPerChunk": 8,
+      "maxCharsPerChunk": 12,
+      "minTokensPerSec": 15,
+      "maxTokensPerSec": 20
+    }
+  },
+  "error_simulation": {
+    "type": "error",
+    "description": "Simulate API error",
+    "error": {
+      "message": "Simulated API error for testing error handling",
+      "delayMs": 1000
+    }
+  },
+  "thinking_showcase": {
+    "type": "template",
+    "description": "Test thinking mode with detailed reasoning",
+    "thinking": {
+      "enabled": true,
+      "duration": 5,
+      "content": "Analyzing the request structure...\n\nBreaking down the problem into components:\n1. Understanding the core question\n2. Identifying relevant information\n3. Structuring the response\n\nGathering knowledge from various domains...\n\nSynthesizing information into coherent response...\n\nReady to present findings."
+    },
+    "response": {
+      "type": "static",
+      "content": "Based on my analysis, here's a comprehensive response:\n\n## Key Points\n\n1. The request has been thoroughly analyzed\n2. Multiple perspectives have been considered\n3. The response is structured for clarity\n\n### Detailed Explanation\n\nAfter careful consideration of the various factors involved, I can provide this structured answer that addresses all aspects of your question.\n\n**Conclusion:** The thinking process has led to a well-reasoned response that balances accuracy with comprehensiveness."
+    },
+    "streaming": {
+      "minCharsPerChunk": 10,
+      "maxCharsPerChunk": 14,
+      "minTokensPerSec": 20,
+      "maxTokensPerSec": 25
+    }
+  },
+  "fast_response": {
+    "type": "template",
+    "description": "Test fast streaming speed",
+    "thinking": {
+      "enabled": false
+    },
+    "response": {
+      "type": "static",
+      "content": "This is a quick response to test fast streaming speeds. The chunks will be delivered rapidly to simulate a high-performance AI model. Notice how the text appears almost instantly on your screen!"
+    },
+    "streaming": {
+      "minCharsPerChunk": 8,
+      "maxCharsPerChunk": 10,
+      "minTokensPerSec": 35,
+      "maxTokensPerSec": 45
+    }
+  },
+  "slow_response": {
+    "type": "template",
+    "description": "Test slow streaming speed",
+    "thinking": {
+      "enabled": true,
+      "duration": 2,
+      "content": "Taking time to carefully formulate the response..."
+    },
+    "response": {
+      "type": "static",
+      "content": "This response is deliberately slow to simulate a complex reasoning process. Each word appears gradually, giving you time to read and process the information as it streams in. This can be useful for testing UI behavior during slower network conditions or complex model processing."
+    },
+    "streaming": {
+      "minCharsPerChunk": 5,
+      "maxCharsPerChunk": 8,
+      "minTokensPerSec": 8,
+      "maxTokensPerSec": 12
+    }
+  }
+}

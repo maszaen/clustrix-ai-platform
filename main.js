@@ -3154,6 +3154,13 @@ function runStandardStreaming(event, payload) {
   const sessionId = payload.sessionId || 'default';
   const session = payload.session || {};
 
+  // Check if this is a debug request (provider: local or model: debugging)
+  const { isDebugRequest, handleDebugRequest } = require('./backend/debug/response-debugger');
+  if (isDebugRequest(provider, model)) {
+    log('INFO', 'runStandardStreaming', 'Debug mode detected - routing to response debugger');
+    return handleDebugRequest(event, payload);
+  }
+
   // Check if Perplexity model - handle differently (no stream)
   const BASE_URL = getBaseUrl(provider, payload);
   const API_KEY = getApiKey(provider, payload);
@@ -4141,6 +4148,14 @@ function runStandardStreaming(event, payload) {
 }
 
 ipcMain.on('chat:stream-cancel', (event, reqId) => {
+  // Check if this is a debug request
+  const { cancelDebugRequest } = require('./backend/debug/response-debugger');
+  if (global.debugControllers && global.debugControllers.has(reqId)) {
+    cancelDebugRequest(reqId);
+    return;
+  }
+
+  // Handle normal stream cancellation
   const r = activeStreams.get(reqId);
   if (r){ try{ r.destroy(new Error('Cancelled')); }catch{} activeStreams.delete(reqId); }
   clearTokenUsage(reqId);

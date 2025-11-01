@@ -9577,7 +9577,10 @@ function migrateThinkingPatterns(session) {
     checkedCount++;
     
     // Skip ONLY if already has _x_think data WITH non-empty text
-    const hasValidThinkData = session._x_think[idx] && session._x_think[idx].text && session._x_think[idx].text.trim().length > 0;
+    const hasValidThinkData =
+      session._x_think[idx] &&
+      session._x_think[idx].text &&
+      session._x_think[idx].text.trim().length > 0;
     
     if (hasValidThinkData) {
       log("MIGRATION", 1, "migrateThinkingPatterns", `Message ${idx} already has valid _x_think data, skipping`);
@@ -9589,20 +9592,33 @@ function migrateThinkingPatterns(session) {
     let patternFound = null;
     
     // Pattern 1: <thinking>...</thinking>
-    const thinkingTagMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/i);
+    const thinkingTagMatch = cleanContent.match(/<thinking>([\s\S]*?)<\/thinking>/i);
     if (thinkingTagMatch) {
       thinkingContent = thinkingTagMatch[1].trim();
-      cleanContent = content.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+      cleanContent = cleanContent.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
       patternFound = '<thinking>';
       migrationCount++;
     }
     
-    // Pattern 2: *(Internal Reasoning: ...)*
+    // Pattern 1.5: <think>...</think> (baru ditambah)
+    // cuma jalan kalau belum nemu thinkingContent dari pola sebelumnya
     if (!thinkingContent) {
-      const internalReasoningMatch = content.match(/\*\(Internal Reasoning:\s*([\s\S]*?)\)\*/i);
+      const thinkTagMatch = cleanContent.match(/<think>([\s\S]*?)<\/think>/i);
+      if (thinkTagMatch) {
+        thinkingContent = thinkTagMatch[1].trim();
+        cleanContent = cleanContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        patternFound = '<think>';
+        migrationCount++;
+      }
+    }
+
+    // Pattern 2: *(Internal Reasoning: ...)* 
+    // fallback terakhir kalau belum nemu dua pola di atas
+    if (!thinkingContent) {
+      const internalReasoningMatch = cleanContent.match(/\*\(Internal Reasoning:\s*([\s\S]*?)\)\*/i);
       if (internalReasoningMatch) {
         thinkingContent = internalReasoningMatch[1].trim();
-        cleanContent = content.replace(/\*\(Internal Reasoning:\s*[\s\S]*?\)\*/gi, '').trim();
+        cleanContent = cleanContent.replace(/\*\(Internal Reasoning:\s*[\s\S]*?\)\*/gi, '').trim();
         patternFound = '*(Internal Reasoning:)*';
         migrationCount++;
       }
@@ -9614,8 +9630,10 @@ function migrateThinkingPatterns(session) {
         text: thinkingContent,
         expanded: false
       };
+      
       // Update message content to remove thinking
       session.messages[idx][1] = cleanContent;
+      
       log("MIGRATION", 2, "migrateThinkingPatterns", `✓ Migrated thinking from message ${idx}`, {
         sessionId: session.id,
         pattern: patternFound,
@@ -9635,6 +9653,7 @@ function migrateThinkingPatterns(session) {
   return migrationCount;
 }
 
+
 function renderHistoryLazy() {
   if (!current || !current.messages) return;
 
@@ -9648,13 +9667,13 @@ function renderHistoryLazy() {
 
   // Migration: Extract thinking patterns from old messages to _x_think
   // DISABLED: Causing lag - uncomment if needed
-  // const migrationCount = migrateThinkingPatterns(current);
+  const migrationCount = migrateThinkingPatterns(current);
   
-  // if (migrationCount > 0) {
-  //   log("SESSION", 1, "renderHistoryLazy", `Migrated ${migrationCount} messages with thinking content`);
-  //   // Save session after migration
-  //   saveSession();
-  // }
+  if (migrationCount > 0) {
+    log("SESSION", 1, "renderHistoryLazy", `Migrated ${migrationCount} messages with thinking content`);
+    // Save session after migration
+    saveSession();
+  }
 
   const startIndex = Math.max(0, totalMessages - INITIAL_LOAD_COUNT);
   const initialMessages = current.messages.slice(startIndex);

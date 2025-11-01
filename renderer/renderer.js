@@ -357,7 +357,7 @@ function initMarkdownWorker() {
   }
 }
 
-const DEBUG_MARKDOWN = false;
+const DEBUG_MARKDOWN = true;
 const LOGGING = true;
 
 const MARKDOWN_TEST_SESSION_TYPE = "markdown-test";
@@ -2086,10 +2086,7 @@ function createPerplexitySearchCards(update) {
     const header = document.createElement('div');
     header.className = 'perplexity-search-header';
     header.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="11" cy="11" r="8"></circle>
-        <path d="m21 21-4.35-4.35"></path>
-      </svg>
+      <svg viewBox="0 0 101 116" width="16" height="16" stroke="currentColor" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="stroke-foreground group-hover:stroke-super transition-colors duration-300" d="M86.4325 6.53418L50.4634 36.9696H86.4325V6.53418Z M50.4625 36.9696L17.2603 6.53418V36.9696H50.4625Z M50.4634 1L50.4634 114.441 M83.6656 70.172L50.4634 36.9697V79.3026L83.6656 108.908V70.172Z M17.2603 70.172L50.4625 36.9697V78.4497L17.2603 108.908V70.172Z M3.42627 36.9697V81.2394H17.2605V70.172L50.4628 36.9697H3.42627Z M50.4634 36.9697L83.6656 70.172V81.2394H97.4999V36.9697L50.4634 36.9697Z" stroke-width="5.53371" stroke-miterlimit="10"></path></svg>
       <span>${update.title} (${results.length})</span>
     `;
     container.appendChild(header);
@@ -2119,8 +2116,18 @@ function createPerplexitySearchCards(update) {
       linkEl.href = result.url || '#';
       linkEl.target = '_blank';
       linkEl.rel = 'noopener noreferrer';
-      linkEl.textContent = 'View source →';
-      
+      linkEl.classList.add('pplx-link-card');
+      linkEl.innerHTML = 'View source<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>';
+
+      // Force override inline styles to kill all conflicting CSS
+      linkEl.style.cssText = `
+        border: none !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        outline: none !important;
+        box-shadow: none !important;
+      `;
+
       card.appendChild(metaDiv);
       card.appendChild(titleEl);
       card.appendChild(snippetEl);
@@ -2128,9 +2135,27 @@ function createPerplexitySearchCards(update) {
       
       scroll.appendChild(card);
     });
-    
+
     container.appendChild(scroll);
-    
+
+    // Scroll detection for fade
+    scroll.addEventListener('scroll', () => {
+      const isAtStart = scroll.scrollLeft <= 5;
+      const isAtEnd = scroll.scrollLeft + scroll.clientWidth >= scroll.scrollWidth - 5;
+
+      if (isAtStart) {
+        scroll.classList.remove('scrolled-start');
+      } else {
+        scroll.classList.add('scrolled-start');
+      }
+
+      if (isAtEnd) {
+        scroll.classList.add('scrolled-end');
+      } else {
+        scroll.classList.remove('scrolled-end');
+      }
+    });
+
   } catch (e) {
     console.error('Failed to parse Perplexity search results:', e);
     container.textContent = 'Failed to display search results';
@@ -11377,7 +11402,14 @@ function hydrateThinkingIfAny(aiNode, session, messageIndex) {
     messageData && typeof messageData[2] === "object" ? messageData[2] : {};
   setNodeMetadata(aiNode, messageMetadata);
 
-  const thinkData = session?._x_think && session._x_think[messageIndex];
+  // Check both _x_think and metadata.thinkContent for thinking data
+  let thinkData = session?._x_think && session._x_think[messageIndex];
+  
+  // If no _x_think data, check metadata.thinkContent (for persisted data)
+  if (!thinkData && messageMetadata.thinkContent) {
+    thinkData = messageMetadata.thinkContent;
+  }
+  
   const thinkUpdates = session?._x_think_updates && session._x_think_updates[messageIndex];
   
   // Hydrate thinking updates if they exist
@@ -11427,7 +11459,8 @@ function hydrateThinkingIfAny(aiNode, session, messageIndex) {
     }
   }
   
-  if (!thinkData || thinkData.text == "") return;
+  // Skip if no thinking data exists (neither text nor duration)
+  if (!thinkData || ((!thinkData.text || thinkData.text == "") && !thinkData.duration)) return;
 
   const thinkText =
     (typeof thinkData === "object" ? thinkData.text : thinkData) || "";
@@ -11467,7 +11500,14 @@ async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
     messageData && typeof messageData[2] === "object" ? messageData[2] : {};
   setNodeMetadata(aiNode, messageMetadata);
 
-  const thinkData = session?._x_think && session._x_think[messageIndex];
+  // Check both _x_think and metadata.thinkContent for thinking data
+  let thinkData = session?._x_think && session._x_think[messageIndex];
+  
+  // If no _x_think data, check metadata.thinkContent (for persisted data)
+  if (!thinkData && messageMetadata.thinkContent) {
+    thinkData = messageMetadata.thinkContent;
+  }
+  
   const thinkUpdates = session?._x_think_updates && session._x_think_updates[messageIndex];
   
   // Hydrate thinking updates if they exist
@@ -11518,7 +11558,8 @@ async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
     }
   }
   
-  if (!thinkData || thinkData.text == "") return;
+  // Skip if no thinking data exists (neither text nor duration)
+  if (!thinkData || ((!thinkData.text || thinkData.text == "") && !thinkData.duration)) return;
 
   const thinkText =
     (typeof thinkData === "object" ? thinkData.text : thinkData) || "";
@@ -11546,11 +11587,6 @@ async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
       el.body.classList.add("collapsed");
       el.toggle.setAttribute("aria-collapsed", "true");
     }
-  }
-
-  if (typeof thinkDuration === "number" && thinkDuration > 0) {
-    ensureThinkingUI(aiNode);
-    finalizeThinkingUI(aiNode, thinkDuration, messageMetadata);
   }
 
   if (typeof thinkDuration === "number" && thinkDuration > 0) {
@@ -12549,7 +12585,7 @@ function createUsageInfoButton(usageData) {
   btn.innerHTML = usageInfoIconSVG;
   
   // Check if cost information is available (Perplexity)
-  const cost = usageData.cost?.total_cost || null;
+  const cost = usageData.cost?.total_cost || usageData.cost || null;
   let title = `${totalDisplay} Tokens (${promptDisplay} Input + ${completionDisplay} Output)`;
   if (cost !== null && cost > 0) {
     title = `$${cost.toFixed(4)} | ${title}`;
@@ -16361,6 +16397,7 @@ function initializeApp() {
             completion_tokens: completionTokens,
             total_tokens: totalTokens,
             breakdown,
+            cost: usageData.cost || null
           };
           messageEntry[2] = meta;
         }

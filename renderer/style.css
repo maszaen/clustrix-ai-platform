@@ -654,7 +654,7 @@ hr {
   color: var(--link);
 }
 
-.message.ai a:not(:not([href])):not([href=""]):not(.image-link) {
+.message.ai a:not(:not([href])):not([href=""]):not(.image-link):not(.perplexity-search-card a) {
   font-size: 11px;
   color: var(--link-hover);
   border: 1px solid var(--border);
@@ -6064,38 +6064,84 @@ a:focus-visible {
 
 /* Perplexity search results - Horizontal scroll cards */
 .perplexity-search-container {
-  margin: 8px 0 16px 0;
+  position: relative;
+  /* margin: 8px 0 16px 0; */
   animation: fadeIn 0.3s ease-out;
 }
 
 .perplexity-search-header {
   display: flex;
+  position: relative;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
-  font-size: 14px;
-  color: var(--fg);
+  margin-bottom: 8px;
+  z-index: 5;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--fg-muted);
   font-family: var(--font-display-italic);
-  padding: 0 17px;
+  padding: 0 14px;
 }
 
 .perplexity-search-header svg {
   flex-shrink: 0;
   opacity: 0.7;
+  margin-bottom: 3px;
 }
 
 .perplexity-search-scroll {
   display: flex;
   gap: 12px;
   overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  padding: 4px 17px 12px 17px;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  padding: 0px 12px 5px 0px;
+  scroll-padding-left: 9px;
+  scrollbar-width: thin;
+}
+
+.perplexity-search-scroll::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 25px;
+  background: linear-gradient(to right, var(--bg-secondary), transparent);
+  pointer-events: none;
+  opacity: 1;
+  transition: left 0.3s ease, width 0.3s ease;
+  z-index: 1;
+}
+
+.perplexity-search-scroll::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+  background: linear-gradient(to left, var(--bg-secondary), transparent);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+}
+
+.perplexity-search-scroll.scrolled-end::before {
+  left: 0;
+  width: 60px;
+}
+
+.perplexity-search-scroll.scrolled-end::after {
+  opacity: 0;
 }
 
 .perplexity-search-scroll::-webkit-scrollbar {
   display: none;
+}
+
+.perplexity-search-card:first-child {
+  margin-left: 8px;
 }
 
 .perplexity-search-card {
@@ -6103,10 +6149,10 @@ a:focus-visible {
   max-width: 320px;
   flex-shrink: 0;
   scroll-snap-align: start;
-  padding: 16px;
+  padding: 16px 16px 10px 16px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -6115,7 +6161,6 @@ a:focus-visible {
 }
 
 .perplexity-search-card:hover {
-  border-color: var(--fg-muted);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -6164,18 +6209,45 @@ a:focus-visible {
   font-family: var(--font-sans);
 }
 
-.perplexity-search-card a {
+.perplexity-search-card .pplx-link-card {
+  all: unset;
   font-size: 12px;
-  color: var(--accent);
+  color: var(--fg);
   text-decoration: none;
   margin-top: auto;
+  padding: 6px 10px;
   font-weight: 500;
-  transition: opacity 0.2s ease;
+  width: fit-content;
+  align-self: flex-end;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  cursor: pointer;
+  box-sizing: border-box;
 }
 
-.perplexity-search-card a:hover {
-  text-decoration: underline;
-  opacity: 0.8;
+.perplexity-search-card .pplx-link-card:hover {
+  border: none !important;
+  border-color: transparent !important;
+  background: transparent !important;
+} 
+
+.perplexity-search-card .pplx-link-card::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 10px;
+  right: 10px;
+  height: 1px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease;
+}
+
+.perplexity-search-card .pplx-link-card:hover::after {
+  transform: scaleX(1);
 }
 
 /* Usage button with cost indicator */

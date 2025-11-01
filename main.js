@@ -25,9 +25,6 @@ const DirectoryMigrator = require('./backend/directory-migrator');
 const GitHubOAuthHelper = require('./backend/github-oauth-helper');
 const GitHubStorageService = require('./backend/github-storage-service');
 const SmartBackupService = require('./backend/smart-backup-service');
-const thinkingParser = require('./backend/core/thinking-parser');
-const thinkingMigration = require('./backend/core/thinking-migration');
-const debugMarkdown = require('./backend/debug/markdown-simulator');
 
 function createTimestampedBackup(filePath, reason = '') {
   try {
@@ -1899,7 +1896,7 @@ function createWindow(){
     }
   });
 
-  win.webContents.openDevTools({ mode: 'detach' }); 
+  // win.webContents.openDevTools({ mode: 'detach' }); 
   
   let lastLogSignature = null;
   ipcMain.on('log:write', (_event, logData) => {
@@ -2259,36 +2256,6 @@ ipcMain.handle('sessions:load', async () => {
           })
         };
       });
-
-      // Run thinking migration if enabled
-      if (thinkingMigration.isMigrationEnabled()) {
-        const migratedCount = thinkingMigration.migrateAllSessions(transformed);
-        if (migratedCount > 0) {
-          log('MIGRATION', 1, 'sessions:load', 'Thinking migration completed, saving to database', {
-            totalMigrated: migratedCount
-          });
-
-          // Save migrated sessions to database
-          db.transaction(() => {
-            for (const session of transformed) {
-              if (session._x_think && Object.keys(session._x_think).length > 0) {
-                // Update messages with migrated thinking data
-                session.messages.forEach((msg, idx) => {
-                  if (session._x_think[idx]) {
-                    const [role, content, metadata = {}] = msg;
-                    metadata.thinkContent = session._x_think[idx];
-
-                    // Save updated message to database
-                    db.saveMessage(session.id, idx, role, content, metadata);
-                  }
-                });
-              }
-            }
-          });
-
-          log('MIGRATION', 1, 'sessions:load', 'Thinking migration saved to database successfully');
-        }
-      }
 
       // Auto-migrate sessions from JSON if database is empty
       // ONLY migrate for internal database (backward compatibility)
@@ -3179,69 +3146,6 @@ function runStandardStreaming(event, payload) {
   const sessionId = payload.sessionId || 'default';
   const session = payload.session || {};
 
-  // Check if this is a debug markdown request
-  if (debugMarkdown.isDebugMarkdownRequest(provider, model)) {
-    log('DEBUG_MARKDOWN', 1, 'runStandardStreaming', 'Debug markdown mode detected - using simulator', {
-      reqId,
-      provider,
-      model,
-    });
-
-    // Use exact same flow as normal streaming
-    // Initialize thinking parser
-    thinkingParser.initializeStream(reqId);
-
-    // Intercept chunks before sending to renderer
-    const originalSend = event.sender.send.bind(event.sender);
-    const chunkEventName = `chat:chunk-${reqId}`;
-
-    event.sender.send = (eventName, data) => {
-      if (eventName === chunkEventName && typeof data === 'string') {
-        // Process through thinking parser
-        const parsed = thinkingParser.processChunk(reqId, data);
-
-        if (parsed.think) {
-          originalSend(`chat:chunk-${reqId}`, { think: parsed.think });
-        }
-        if (parsed.content) {
-          originalSend(`chat:chunk-${reqId}`, parsed.content);
-        }
-      } else {
-        originalSend(eventName, data);
-      }
-    };
-
-    const controller = debugMarkdown.handleDebugMarkdownRequest(
-      event,
-      reqId,
-      messages,
-      {
-        sessionId: payload.sessionId,
-        tokenSpeed: 30,
-        chunkSize: 1,
-      }
-    );
-
-    // Restore original send when done
-    setTimeout(() => {
-      event.sender.send = originalSend;
-
-      // Finalize thinking parser
-      const final = thinkingParser.finalizeStream(reqId);
-      if (final.content) {
-        event.sender.send(`chat:chunk-${reqId}`, final.content);
-        }
-      if (final.think) {
-        event.sender.send(`chat:chunk-${reqId}`, { think: final.think });
-      }
-
-      activeStreams.delete(reqId);
-    }, 100);
-
-    activeStreams.set(reqId, controller);
-    return;
-  }
-
   // Check if Perplexity model - handle differently (no stream)
   const BASE_URL = getBaseUrl(provider, payload);
   const API_KEY = getApiKey(provider, payload);
@@ -3943,18 +3847,6 @@ function runStandardStreaming(event, payload) {
               let text = (j.candidates?.[0]?.content?.parts || [])
                 .map(p => p.text || '').join('');
 
-              // STEP 1: Parse <thinking> tags first (highest priority)
-              thinkingParser.initializeStream(reqId);
-              const parsed = thinkingParser.processChunk(reqId, text);
-              const finalParsed = thinkingParser.finalizeStream(reqId);
-
-              if (parsed.think || finalParsed.think) {
-                const allThinking = (parsed.think || '') + (finalParsed.think || '');
-                event.sender.send(`chat:chunk-${reqId}`, { think: allThinking });
-              }
-
-              // Use remaining content after thinking extraction
-              text = parsed.content || finalParsed.content || text;
 
               // STEP 2: Handle Gemini's *(Internal Reasoning: ...)* pattern
               const internalReasoningMatch = text.match(/\*\(Internal Reasoning:\s*([\s\S]*?)\)\*/i);
@@ -4089,19 +3981,6 @@ function runStandardStreaming(event, payload) {
 
               if (Array.isArray(text)) text = text.map(p => (p?.text ?? p)).join('');
 
-              // STEP 1: Parse <thinking> tags first (highest priority)
-              thinkingParser.initializeStream(reqId);
-              const parsed = thinkingParser.processChunk(reqId, text);
-              const finalParsed = thinkingParser.finalizeStream(reqId);
-
-              if (parsed.think || finalParsed.think) {
-                const allThinking = (parsed.think || '') + (finalParsed.think || '');
-                event.sender.send(`chat:chunk-${reqId}`, { think: allThinking });
-              }
-
-              // Use remaining content after thinking extraction
-              text = parsed.content || finalParsed.content || text;
-
               // STEP 2: Handle Gemini's *(Internal Reasoning: ...)* pattern in OpenAI-compatible responses
               const internalReasoningMatch = text.match(/\*\(Internal Reasoning:\s*([\s\S]*?)\)\*/i);
               if (internalReasoningMatch) {
@@ -4193,57 +4072,47 @@ function runStandardStreaming(event, payload) {
                 j?.content ?? '';
 
               if (delta) {
-                // STEP 1: Parse <thinking> tags first (highest priority)
-                const parsed = thinkingParser.processChunk(reqId, delta);
-
-                if (parsed.think) {
-                  // Send thinking content to thinking body
-                  event.sender.send(`chat:chunk-${reqId}`, { think: parsed.think });
+                // Accumulate content to detect *(Internal Reasoning: ...)* pattern
+                contentBuffer += delta;
+                
+                // Check if we're starting Internal Reasoning pattern
+                if (!inInternalReasoning && contentBuffer.includes('*(Internal Reasoning:')) {
+                  inInternalReasoning = true;
+                  const beforeReasoning = contentBuffer.split('*(Internal Reasoning:')[0];
+                  if (beforeReasoning) {
+                    event.sender.send(`chat:chunk-${reqId}`, beforeReasoning);
+                  }
+                  reasoningBuffer = '';
+                  contentBuffer = contentBuffer.substring(beforeReasoning.length + '*(Internal Reasoning:'.length);
                 }
-
-                // STEP 2: Parse *(Internal Reasoning: ...)* pattern from remaining content
-                const contentToProcess = parsed.content || '';
-                if (contentToProcess) {
-                  contentBuffer += contentToProcess;
-
-                  // Check if we're starting Internal Reasoning pattern
-                  if (!inInternalReasoning && contentBuffer.includes('*(Internal Reasoning:')) {
-                    inInternalReasoning = true;
-                    const beforeReasoning = contentBuffer.split('*(Internal Reasoning:')[0];
-                    if (beforeReasoning) {
-                      event.sender.send(`chat:chunk-${reqId}`, beforeReasoning);
+                
+                // If inside Internal Reasoning, accumulate it
+                if (inInternalReasoning) {
+                  if (contentBuffer.includes(')*')) {
+                    const endIndex = contentBuffer.indexOf(')*');
+                    reasoningBuffer += contentBuffer.substring(0, endIndex);
+                    // Send accumulated reasoning as thinking
+                    if (reasoningBuffer.trim()) {
+                      event.sender.send(`chat:chunk-${reqId}`, { think: reasoningBuffer.trim() });
                     }
                     reasoningBuffer = '';
-                    contentBuffer = contentBuffer.substring(beforeReasoning.length + '*(Internal Reasoning:'.length);
-                  }
-
-                  // If inside Internal Reasoning, accumulate it
-                  if (inInternalReasoning) {
-                    if (contentBuffer.includes(')*')) {
-                      const endIndex = contentBuffer.indexOf(')*');
-                      reasoningBuffer += contentBuffer.substring(0, endIndex);
-                      // Send accumulated reasoning as thinking
-                      if (reasoningBuffer.trim()) {
-                        event.sender.send(`chat:chunk-${reqId}`, { think: reasoningBuffer.trim() });
-                      }
-                      // Continue with content after the closing )*
-                      contentBuffer = contentBuffer.substring(endIndex + 2);
-                      inInternalReasoning = false;
-                      reasoningBuffer = '';
-                      // Send remaining content
-                      if (contentBuffer) {
-                        event.sender.send(`chat:chunk-${reqId}`, contentBuffer);
-                        contentBuffer = '';
-                      }
-                    } else {
-                      reasoningBuffer += contentBuffer;
+                    // Continue with content after the closing )*
+                    contentBuffer = contentBuffer.substring(endIndex + 2);
+                    inInternalReasoning = false;
+                    reasoningBuffer = '';
+                    // Send remaining content
+                    if (contentBuffer) {
+                      event.sender.send(`chat:chunk-${reqId}`, contentBuffer);
                       contentBuffer = '';
                     }
                   } else {
-                    // Normal content, send it
-                    event.sender.send(`chat:chunk-${reqId}`, contentToProcess);
+                    reasoningBuffer += contentBuffer;
                     contentBuffer = '';
                   }
+                  } else {
+                  // Normal content, send it
+                  event.sender.send(`chat:chunk-${reqId}`, delta);
+                  contentBuffer = '';
                 }
               }
 
@@ -4257,17 +4126,7 @@ function runStandardStreaming(event, payload) {
           }
         });
 
-        res.on('end', () => {
-          // Finalize thinking parser
-          const final = thinkingParser.finalizeStream(reqId);
-          if (final.content) {
-            event.sender.send(`chat:chunk-${reqId}`, final.content);
-          }
-          if (final.think) {
-            event.sender.send(`chat:chunk-${reqId}`, { think: final.think });
-          }
-          sendDone();
-        });
+        res.on('end', sendDone);
       });
       req.on('error', e => sendErr(e.message || String(e)));
       req.write(body); req.end();

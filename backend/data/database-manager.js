@@ -1,12 +1,12 @@
 const Database = require('better-sqlite3');
 const path = require('path');
-const { logWithContext } = require('../utils/logger');
+const { logWithContext } = require('../../utils/logger');
 const SchemaMigrationV2 = require('./schema-migration-v2');
 const { 
   getDeviceId, // Only called once in constructor, then cached
   generateSessionHash, 
   getCurrentTimestamp 
-} = require('./sync-helpers');
+} = require('../sync/sync-helpers');
 
 function log(context, level, func, message, details = {}) {
   logWithContext(context, func, message, details);

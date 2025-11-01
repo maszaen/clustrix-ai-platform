@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { app } = require('electron');
-const { logWithContext } = require('../utils/logger');
+const { logWithContext } = require('../../utils/logger');
 const {
   getDeviceId,
   getLastBackupTime,

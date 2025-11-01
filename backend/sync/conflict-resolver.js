@@ -6,7 +6,7 @@
  * different hash), presents a modal for user to choose resolution.
  */
 
-const { logWithContext } = require('../utils/logger');
+const { logWithContext } = require('../../utils/logger');
 const { timestampsMatch, formatTimestamp } = require('./sync-helpers');
 
 const log = (level, method, message, data = {}) => {

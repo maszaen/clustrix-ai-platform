@@ -1,4 +1,4 @@
-const { performWebSearch, scrapeUrls } = require('./web-search');
+const { performWebSearch, scrapeUrls } = require('../search/web-search');
 
 class ClustrixAgentSystem {
   constructor(langchainService) {

@@ -2853,7 +2853,10 @@ function renderMgmtProvider(pkey) {
         <label>Base URL</label>
         <input type="text" id="prov-base" value="${prov.baseUrl || ""}">
       </div>
-      <button style="display:flex; margin-left: auto;" id="save-prov" class="primary-btn">Save provider</button>
+      <div style="display: flex; gap: 8px; margin-left: auto;">
+        <button id="delete-prov" class="danger-btn">Delete provider</button>
+        <button style="display:flex;" id="save-prov" class="primary-btn">Save provider</button>
+      </div>
     </div>
 
     <div class="form-group">
@@ -2890,6 +2893,30 @@ function renderMgmtProvider(pkey) {
     conf2.providers[pkey].baseUrl = base;
     conf2.providers[pkey].apiKey = key;
     persistModels(conf2);
+  };
+
+  $("#delete-prov").onclick = () => {
+    showConfirmationModal(
+      "Delete Provider",
+      `Are you sure you want to delete the provider "${pkey}"? This will remove all associated models.`,
+      () => {
+        const conf2 = state.settings.models || defaultModels();
+        delete conf2.providers[pkey];
+        
+        // Reset active model if it was using this provider
+        if (conf2.active?.platform === pkey) {
+          const firstProv = Object.keys(conf2.providers)[0];
+          conf2.active = {
+            platform: firstProv || "",
+            model: firstProv ? (conf2.providers[firstProv].models?.[0]?.id || "") : "",
+          };
+        }
+        
+        persistModels(conf2);
+        renderMgmtProviders();
+        populateTitleModelOptions?.();
+      }
+    );
   };
 
   body.querySelectorAll("[data-del]").forEach((btn) => {
@@ -6079,6 +6106,8 @@ function setupProjectsPageListeners() {
 
       if (action === "rename") {
         if (currentProject) startProjectDetailRename(currentProject);
+      } else if (action === "edit-description") {
+        if (currentProject) startProjectDetailDescriptionEdit(currentProject);
       } else if (action === "delete") {
         if (currentProject) showDeleteProjectConfirmation(currentProject);
       }
@@ -6412,107 +6441,6 @@ function setupProjectsPageListeners() {
             // Close menu if mouse is not in project-session-item or dropdown
             if (!isInSessionItem && !isInDropdown) {
               const menuButton = sessionItem.querySelector(".session-menu-btn");
-              if (menuButton) {
-                dropdown.classList.remove("persistent-open");
-                menuButton.classList.remove("persistent-active");
-              }
-            }
-          }
-        }, 50);
-      }
-    },
-    true,
-  );
-
-  // Add hover management for project-title-menu persistent menus
-  document.addEventListener(
-    "mouseenter",
-    (e) => {
-      if (!(e.target instanceof Element)) return;
-      const titleContainer = e.target.closest(".project-title-menu-container");
-      if (titleContainer) {
-        const dropdown = titleContainer.querySelector(
-          ".project-title-menu-dropdown.persistent-open",
-        );
-        const menuButton = titleContainer.querySelector(".project-title-menu-btn");
-        if (dropdown && menuButton) {
-          menuButton.classList.add("persistent-active");
-        }
-      }
-    },
-    true,
-  );
-
-  document.addEventListener(
-    "mouseleave",
-    (e) => {
-      if (!(e.target instanceof Element)) return;
-      const titleContainer = e.target.closest(".project-title-menu-container");
-      if (titleContainer) {
-        // Check if mouse is actually leaving the project-title-menu-container
-        const rect = titleContainer.getBoundingClientRect();
-        const isStillInside =
-          e.clientX >= rect.left &&
-          e.clientX <= rect.right &&
-          e.clientY >= rect.top &&
-          e.clientY <= rect.bottom;
-
-        // Check if mouse is hovering over dropdown menu
-        const dropdown = titleContainer.querySelector(
-          ".project-title-menu-dropdown.persistent-open",
-        );
-        const isHoveringDropdown =
-          dropdown && e.target.closest(".project-title-menu-dropdown");
-
-        // Only close menu if mouse actually left project-title-menu-container AND not hovering dropdown
-        if (!isStillInside && !isHoveringDropdown) {
-          const menuButton = titleContainer.querySelector(".project-title-menu-btn");
-          if (dropdown && menuButton) {
-            dropdown.classList.remove("persistent-open");
-            menuButton.classList.remove("persistent-active");
-          }
-        }
-      }
-    },
-    true,
-  );
-
-  // Handle mouseleave from project title dropdown menu
-  document.addEventListener(
-    "mouseleave",
-    (e) => {
-      if (!(e.target instanceof Element)) return;
-      const dropdown = e.target.closest(
-        ".project-title-menu-dropdown.persistent-open",
-      );
-      if (dropdown) {
-        // Delay check to ensure mouse isn't moving to project-title-menu-container
-        setTimeout(() => {
-          const titleContainer = dropdown.closest(".project-title-menu-container");
-          if (titleContainer) {
-            // Check if mouse is still within project-title-menu-container or dropdown
-            const titleRect = titleContainer.getBoundingClientRect();
-            const dropdownRect = dropdown.getBoundingClientRect();
-
-            // Get current mouse position (approximate)
-            const mouseX = window.lastMouseX || 0;
-            const mouseY = window.lastMouseY || 0;
-
-            const isInTitleContainer =
-              mouseX >= titleRect.left &&
-              mouseX <= titleRect.right &&
-              mouseY >= titleRect.top &&
-              mouseY <= titleRect.bottom;
-
-            const isInDropdown =
-              mouseX >= dropdownRect.left &&
-              mouseX <= dropdownRect.right &&
-              mouseY >= dropdownRect.top &&
-              mouseY <= dropdownRect.bottom;
-
-            // Close menu if mouse is not in project-title-menu-container or dropdown
-            if (!isInTitleContainer && !isInDropdown) {
-              const menuButton = titleContainer.querySelector(".project-title-menu-btn");
               if (menuButton) {
                 dropdown.classList.remove("persistent-open");
                 menuButton.classList.remove("persistent-active");
@@ -7243,6 +7171,74 @@ function startProjectDetailRename(project) {
     } else if (e.key === "Escape") {
       e.preventDefault();
       finishRename(false);
+    }
+  });
+}
+
+function startProjectDetailDescriptionEdit(project) {
+  const descElement = document.getElementById("project-detail-desc");
+  if (!descElement) {
+    log("PROJECTS", 4, "startProjectDetailDescriptionEdit", "Description element not found", {
+      projectId: project.id,
+    });
+    return;
+  }
+  
+  const originalDesc = project.description || "";
+
+  // Create textarea element for editing
+  const textarea = document.createElement("textarea");
+  textarea.value = originalDesc;
+  textarea.className = "project-detail-description-edit";
+  textarea.placeholder = "Enter project description (optional)";
+  textarea.style.cssText = `
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-size: inherit;
+    font-family: inherit;
+    padding: 8px 12px;
+    border-radius: 4px;
+    width: 100%;
+    min-height: 80px;
+    max-height: 150px;
+    resize: vertical;
+    line-height: 1.4;
+  `;
+
+  // Replace description with textarea
+  const parent = descElement.parentNode;
+  parent.replaceChild(textarea, descElement);
+  textarea.focus();
+
+  const finishEdit = async (save = false) => {
+    if (save) {
+      const newDesc = textarea.value.trim();
+      if (newDesc !== originalDesc) {
+        project.description = newDesc;
+        project.last_updated = nowISO();
+        await saveProjectsData();
+
+        log("PROJECTS", 2, "startProjectDetailDescriptionEdit", "Project description updated", {
+          projectId: project.id,
+          oldDesc: originalDesc,
+          newDesc: newDesc,
+        });
+      }
+    }
+
+    // Restore description element
+    const newDesc = document.createElement("p");
+    newDesc.id = "project-detail-desc";
+    newDesc.textContent = project.description || "";
+    parent.replaceChild(newDesc, textarea);
+  };
+
+  textarea.addEventListener("blur", () => finishEdit(true));
+  textarea.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      finishEdit(false);
     }
   });
 }
@@ -9222,6 +9218,36 @@ function hydrateInteractiveElements() {
       // Ensure save button is also clickable
       saveBtn.style.pointerEvents = 'auto';
     }
+  });
+
+  // Re-hydrate Perplexity search cards scroll detection
+  const perplexityScrollContainers = document.querySelectorAll('.perplexity-search-scroll');
+  perplexityScrollContainers.forEach(scroll => {
+    // Remove old scroll listener first by cloning
+    const newScroll = scroll.cloneNode(true);
+    scroll.parentNode.replaceChild(newScroll, scroll);
+    
+    // Re-add scroll detection for fade effect
+    newScroll.addEventListener('scroll', () => {
+      const isAtStart = newScroll.scrollLeft <= 5;
+      const isAtEnd = newScroll.scrollLeft + newScroll.clientWidth >= newScroll.scrollWidth - 5;
+
+      if (isAtStart) {
+        newScroll.classList.remove('scrolled-start');
+      } else {
+        newScroll.classList.add('scrolled-start');
+      }
+
+      if (isAtEnd) {
+        newScroll.classList.add('scrolled-end');
+      } else {
+        newScroll.classList.remove('scrolled-end');
+      }
+    });
+
+    // Trigger initial scroll detection
+    const scrollEvent = new Event('scroll', { bubbles: true });
+    newScroll.dispatchEvent(scrollEvent);
   });
   
   // Re-setup any other interactive elements as needed

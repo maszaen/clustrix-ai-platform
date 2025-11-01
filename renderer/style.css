@@ -9178,3 +9178,297 @@ button:disabled .btn-icon {
   font-family: var(--font-mono);
   font-weight: 500;
 }
+
+/* Mgmt modal */
+#mgmt-body {
+  transition: all 0.4s ease;
+}
+
+/* Footer action buttons - full width */
+#model-mgmt-modal .modal-actions {
+  padding: 0 var(--spacing-2xl) var(--spacing-2xl);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100% !important;
+}
+
+#model-mgmt-modal .action-group {
+  display: flex;
+  gap: var(--spacing-md);
+  flex: 1;
+  padding-top: 10px;
+  width: 100% !important;
+}
+
+#model-mgmt-modal .action-group .primary-btn {
+  max-width: fit-content !important;
+}
+
+#mgmt-add-prov,
+#mgmt-close {
+  flex: 1;
+  min-width: 0;
+}
+
+#prov-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.provider-item {
+  position: relative;
+  border-radius: var(--radius-lg);
+  transition: all 0.4s ease;
+}
+
+.provider-item::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 30px);
+  height: 1px;
+  background: var(--border);
+}
+
+.provider-item:last-child::after {
+  display: none;
+}
+
+.provider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  cursor: pointer;
+  border-radius: var(--radius-lg);
+
+  transition: all 0.4s ease;
+}
+
+.provider-item:not(.expanded) .provider-header:hover {
+  background: var(--hover-bg);
+}
+
+.provider-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.provider-title {
+  text-transform: capitalize;
+  font-weight: 500;
+  font-size: 0.95em;
+  color: var(--fg);
+  transition: all 0.4s ease;
+}
+
+.provider-count {
+  color: var(--fg-muted);
+  font-size: 0.8em;
+  transition: all 0.4s ease;
+}
+
+.provider-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.4s ease;
+}
+
+.provider-arrow {
+  transition: all 0.4s ease;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}
+
+.provider-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+.provider-actions {
+  display: flex;
+  opacity: 0;
+  visibility: hidden;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+}
+
+.provider-header:hover .provider-actions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.provider-action-btn {
+  padding: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--icon);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.provider-action-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.provider-action-btn:hover {
+  background-color: var(--hover-bg-secondary);
+  color: var(--fg);
+  transform: scale(1.1);
+}
+
+.provider-action-btn.danger:hover {
+  color: var(--danger);
+}
+
+.model-action-btn.danger:hover {
+  color: var(--danger);
+}
+
+.use-model {
+  display: flex;
+  flex-direction: row;
+  gap: 7px;
+  animation: pulse-opacity 2s infinite;
+}
+
+.use-model span {
+  margin-top: 2px;
+}
+
+.provider-item.expanded {
+  background-color: var(--bg-secondary);
+}
+
+.models-container {
+  max-height: 0;
+  overflow: hidden;
+  transition: all 0.4s ease;
+  position: relative;
+}
+
+.models-container.expanded {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.models-container.expanded::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  top: 4px;
+  bottom: 24px;
+  width: 2px;
+  background-color: var(--border);
+  opacity: 1;
+  z-index: 0;
+}
+
+.model-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px 12px 40px;
+  cursor: pointer;
+  transition: all 0.4s ease;
+  font-size: 0.9em;
+  border-radius: var(--radius-md);
+  color: var(--fg);
+  background-color: transparent;
+}
+
+.model-item:first-child {
+  border-top-right-radius: var(--radius-lg);
+  border-top-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-md);
+  border-bottom-left-radius: var(--radius-md);
+}
+
+.model-item:last-child {
+  border-bottom-right-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-md);
+  border-top-left-radius: var(--radius-md);
+}
+
+.model-item::before {
+  content: "";
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background-color: var(--icon);
+  opacity: 0.5;
+  border-radius: var(--radius-full);
+  transition: all 0.3s ease;
+}
+
+.model-item:hover {
+  background-color: var(--hover-bg-secondary);
+  padding-left: 44px;
+}
+
+.model-item:hover::before {
+  width: 13px;
+  height: 3px;
+}
+
+.model-actions {
+  display: flex;
+  opacity: 0;
+  visibility: hidden;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.4s ease;
+}
+
+.model-item:hover .model-actions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.model-action-btn {
+  padding: 6px;
+  color: var(--icon);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.4s ease;
+}
+
+.model-action-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  transition: all 0.4s ease;
+}
+
+.model-action-btn:hover {
+  background-color: var(--hover-bg);
+  color: var(--fg);
+  transform: scale(1.05);
+}
+
+.model-action-btn.active {
+  color: var(--primary);
+}

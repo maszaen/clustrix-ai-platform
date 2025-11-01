@@ -1,7 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const { logWithContext } = require('../../utils/logger');
-const SchemaMigrationV2 = require('./schema-migration-v2');
 const { 
   getDeviceId, // Only called once in constructor, then cached
   generateSessionHash, 
@@ -36,8 +35,6 @@ class DatabaseManager {
     
     this.initSchema();
     
-    // Run schema migration V2 (for sync/backup support)
-    this.runSchemaMigration();
     
     // Cache device ID once per DatabaseManager instance
     // This prevents thousands of repeated calls to getDeviceId()
@@ -48,24 +45,6 @@ class DatabaseManager {
       isCloudDatabase: this.isCloudDatabase,
       deviceId: this._cachedDeviceId
     });
-  }
-  
-  runSchemaMigration() {
-    try {
-      const migration = new SchemaMigrationV2(this.db, this.dbPath, this.isCloudDatabase);
-      const result = migration.migrate();
-      
-      if (result.success) {
-        log('DATABASE', 1, 'runSchemaMigration', 'Schema migration completed', result);
-      } else {
-        log('DATABASE', 4, 'runSchemaMigration', 'Schema migration failed', result);
-      }
-    } catch (error) {
-      log('DATABASE', 4, 'runSchemaMigration', 'Schema migration error', {
-        error: error.message,
-        stack: error.stack
-      });
-    }
   }
   
   initSchema() {

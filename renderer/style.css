@@ -1823,7 +1823,6 @@ input:checked + .slider:before {
   display: flex;
   flex-direction: row;
   gap: 10px;
-  width: 100%;
   background: transparent;
   border: 1px solid transparent;
   padding: var(--spacing-xs);

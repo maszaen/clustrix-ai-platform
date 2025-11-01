@@ -515,6 +515,10 @@
                             </svg>
                             <span>Rename</span>
                           </div>
+                          <div class="project-title-menu-item" data-action="edit-description">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-pen-line-icon lucide-file-pen-line"><path d="m18.226 5.226-2.52-2.52A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.351"/><path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><path d="M8 18h1"/></svg>
+                            <span>Description</span>
+                          </div>
                           <div class="project-title-menu-item project-title-menu-item-danger" data-action="delete">
                             <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
                               <path d="M6 2l-2 2h12l-2-2H6zM4 6v10c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6H4zm2 2h8v8H6V8z"/>
@@ -1008,30 +1012,6 @@
             </button>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Confirmation Modal -->
-  <div id="confirmation-modal" class="modal hidden">
-    <div class="modal-overlay"></div>
-    <div class="modal-card confirm-modal">
-      <div class="modal-header">
-        <h2 id="confirmation-title">Confirm</h2>
-        <button id="confirmation-close-btn" class="close-btn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M18 6 6 18" />
-            <path d="m6 6 12 12" />
-          </svg>
-        </button>
-      </div>
-      <hr />
-      <div class="modal-body">
-        <p id="confirmation-message" style="margin-bottom: 0;">Are you sure?</p>
-      </div>
-      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
-        <button id="confirmation-cancel-btn" class="primary-btn">Cancel</button>
-        <button id="confirmation-confirm-btn" class="danger-btn">Confirm</button>
       </div>
     </div>
   </div>
@@ -1544,24 +1524,6 @@
     </div>
   </div>
 
-  <!-- Confirmation Modal -->
-  <div id="confirm-modal" class="modal hidden">
-    <div class="modal-overlay"></div>
-    <div class="modal-card confirm-modal">
-      <div class="modal-header">
-        <h2 id="confirm-title">Confirm Action</h2>
-      </div>
-      <hr />
-      <div class="modal-body">
-        <p id="confirm-message">Are you sure you want to proceed?</p>
-      </div>
-      <div class="modal-actions">
-        <button id="confirm-cancel" class="primary-btn">Cancel</button>
-        <button id="confirm-ok" class="danger-btn">Confirm</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Model Management (Edit List) -->
   <div id="model-mgmt-modal" class="modal hidden">
     <div class="modal-overlay"></div>
@@ -1692,6 +1654,48 @@
           </svg>
           Merge Both
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card confirm-modal">
+      <div class="modal-header">
+        <h2 id="confirm-title">Confirm Action</h2>
+      </div>
+      <hr />
+      <div class="modal-body">
+        <p id="confirm-message">Are you sure you want to proceed?</p>
+      </div>
+      <div class="modal-actions">
+        <button id="confirm-cancel" class="primary-btn">Cancel</button>
+        <button id="confirm-ok" class="danger-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirmation-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card confirm-modal">
+      <div class="modal-header">
+        <h2 id="confirmation-title">Confirm</h2>
+        <button id="confirmation-close-btn" class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+      </div>
+      <hr />
+      <div class="modal-body">
+        <p id="confirmation-message" style="margin-bottom: 0;">Are you sure?</p>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="confirmation-cancel-btn" class="primary-btn">Cancel</button>
+        <button id="confirmation-confirm-btn" class="danger-btn">Confirm</button>
       </div>
     </div>
   </div>

@@ -6263,7 +6263,7 @@ a:focus-visible {
   left: 10px;
   right: 10px;
   height: 1px;
-  background: var(--accent);
+  background: var(--primary);
   transform: scaleX(0);
   transform-origin: left;
   transition: transform 0.3s ease;

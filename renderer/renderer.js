@@ -1,4 +1,4 @@
-import { welcomeMessages, DEMO_RESPONSE, EXT_GROUPS, ICONS, filesUploadDark, filesUploadLight } from './utils/constants.mjs';
+import { welcomeMessages, EXT_GROUPS, ICONS, filesUploadDark, filesUploadLight } from './utils/constants.mjs';
 import { monitoringUI } from './utils/monitoring-ui.mjs';
 
 let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",streamThrottling: "auto",language: "autodetect"},};
@@ -294,7 +294,7 @@ const domCache = {
 
 const THINKING_TIMER = new WeakMap();
 const SESSIONS_PER_PAGE = 70;
-const DEBUG_MODE = typeof window.api === "undefined";
+const BROWSER_MODE = typeof window.api === "undefined";
 
 // Markdown Worker Management
 let markdownWorker = null;
@@ -2731,7 +2731,7 @@ async function persistModels(conf) {
   localStorage.setItem("models-conf", JSON.stringify(conf));
 
   try {
-    if (!DEBUG_MODE) {
+    if (!BROWSER_MODE) {
       await window.api?.models?.save?.(conf);
     }
   } catch (err) {
@@ -3185,7 +3185,7 @@ function defaultModels() {
 
 async function loadModelsConf() {
   try {
-    const conf = DEBUG_MODE
+    const conf = BROWSER_MODE
       ? JSON.parse(localStorage.getItem("models-conf"))
       : await window.api.models.load();
 
@@ -9355,13 +9355,14 @@ function renderHistoryLazy() {
   });
 
   // Migration: Extract thinking patterns from old messages to _x_think
-  // DISABLED: Causing lag - uncomment if needed
   const migrationCount = migrateThinkingPatterns(current);
-  
+
   if (migrationCount > 0) {
     log("SESSION", 1, "renderHistoryLazy", `Migrated ${migrationCount} messages with thinking content`);
-    // Save session after migration
-    saveSession();
+    // Save session after migration (fire and forget - non-blocking)
+    save().catch(err => {
+      log("SESSION", 3, "renderHistoryLazy", "Failed to save after migration", { error: err.message });
+    });
   }
 
   const startIndex = Math.max(0, totalMessages - INITIAL_LOAD_COUNT);
@@ -10644,7 +10645,7 @@ async function load() {
   }
 
   try {
-    const data = DEBUG_MODE
+    const data = BROWSER_MODE
       ? JSON.parse(localStorage.getItem("clustrix-data"))
       : await window.api.sessions.load();
     if (data) {
@@ -10814,15 +10815,15 @@ async function save() {
   try {
     // PERFORMANCE: Incremental save - check if we have dirty sessions
     let dataToSave;
-    const shouldUseIncremental = dirtySessionIds.size > 0 && 
+    const shouldUseIncremental = dirtySessionIds.size > 0 &&
                                   dirtySessionIds.size < state.sessions.length &&
-                                  !DEBUG_MODE; // Full save in debug mode for simplicity
-    
+                                  !BROWSER_MODE; // Full save in browser mode for simplicity
+
     if (shouldUseIncremental) {
       // INCREMENTAL: Only save dirty sessions + settings
       const dirtySessions = state.sessions.filter(s => dirtySessionIds.has(s.id));
-      dataToSave = { 
-        sessions: dirtySessions, 
+      dataToSave = {
+        sessions: dirtySessions,
         settings: state.settings,
         isIncremental: true,
         dirtyIds: Array.from(dirtySessionIds)
@@ -10835,12 +10836,12 @@ async function save() {
       dataToSave = { sessions: state.sessions, settings: state.settings };
       log("SAVE", 1, "save", `Full save: ${state.sessions.length} sessions`);
     }
-    
-    if (DEBUG_MODE) {
-      // In debug mode, always do full save to localStorage
-      localStorage.setItem("clustrix-data", JSON.stringify({ 
-        sessions: state.sessions, 
-        settings: state.settings 
+
+    if (BROWSER_MODE) {
+      // In browser mode, always do full save to localStorage
+      localStorage.setItem("clustrix-data", JSON.stringify({
+        sessions: state.sessions,
+        settings: state.settings
       }));
     } else {
       await window.api.sessions.save(dataToSave);
@@ -12093,108 +12094,9 @@ async function startStream(
   const messages = overrideMessages || buildMessagesUpTo(aiMessageIndex - 1);
   const handler = createStreamHandler(streamId, text, isFirstInteraction);
 
-  if (DEBUG_MODE) {
-    let interval;
-    let timeout;
-    const simulatedController = {
-      cancel: () => {
-        clearTimeout(timeout);
-        clearInterval(interval);
-        handler(null);
-      },
-    };
-
-    streamManager.startStream(streamId, {
-      controller: simulatedController,
-      aiNode,
-      session,
-      messageIndex: aiMessageIndex,
-      messages,
-      contextPrompt: text,
-      fullResponse: initialFullResponse,
-    });
-
-    const startDemoStreaming = (response, delay) => {
-      const chunks = response.split(" ");
-      let i = 0;
-      interval = setInterval(() => {
-        if (i < chunks.length) {
-          handler(chunks[i] + " ");
-          i++;
-        } else {
-          clearInterval(interval);
-          handler(null);
-        }
-      }, delay);
-    };
-
-    if (text === "think-indicator") {
-      log("DEBUG", 2, "startStream", "Mode Debug: think-indicator (50s wait)");
-      timeout = setTimeout(() => {
-        startDemoStreaming(DEMO_RESPONSE, 80);
-      }, 50000);
-      return;
-    } else if (text === "think-indicator&think-mode") {
-      log("DEBUG", 2, "startStream", "Mode Debug: think-indicator&think-mode");
-      const thinkingTextEl = aiNode.querySelector(".thinking-text-indicator");
-
-      timeout = setTimeout(() => {
-        if (thinkingTextEl) {
-          typewriterEffect(thinkingTextEl, DEMO_RESPONSE, {
-            speed: 10,
-            punctuationDelay: 100,
-          });
-        }
-
-        const thinkingDuration = DEMO_RESPONSE.length * 15;
-        setTimeout(() => {
-          if (thinkingTextEl) thinkingTextEl.innerHTML = "";
-
-          const div = aiNode.querySelector(".message-text");
-          if (div) {
-            div.innerHTML = "";
-          }
-
-          startDemoStreaming(DEMO_RESPONSE, 80);
-        }, thinkingDuration + 500);
-      }, 3000);
-      return;
-    }
-
-    const isSlow = /slow/.test(text);
-    const isImmediateError = /error/.test(text) && !/\d+error/.test(text);
-    const errorMatch = text.match(/(\d+)error/);
-    const delay = isSlow ? 250 : 80;
-
-    if (isImmediateError) {
-      setTimeout(() => handler({ error: "Simulated failure." }), 500);
-      return;
-    }
-
-    const chunks = DEMO_RESPONSE.split(" ");
-    const failAtPercent = errorMatch ? parseInt(errorMatch[1], 10) : null;
-    const failAtIndex = failAtPercent
-      ? Math.floor(chunks.length * (failAtPercent / 100))
-      : -1;
-    let i = 0;
-
-    interval = setInterval(() => {
-      if (failAtIndex !== -1 && i >= failAtIndex) {
-        clearInterval(interval);
-        handler({ error: "Simulated failure." });
-        return;
-      }
-      if (i < chunks.length) {
-        handler(chunks[i] + " ");
-        i++;
-      } else {
-        clearInterval(interval);
-        handler(null);
-      }
-    }, delay);
-
-    simulatedController.cancel = () => clearInterval(interval);
-
+  // Browser mode check - show warning modal
+  if (BROWSER_MODE) {
+    showBrowserWarningModal();
     return;
   }
 
@@ -14597,7 +14499,7 @@ function setupEventListeners() {
     state.settings.models = conf;
     localStorage.setItem("models-conf", JSON.stringify(conf));
     try {
-      if (!DEBUG_MODE) await window.api.models.save(conf);
+      if (!BROWSER_MODE) await window.api.models.save(conf);
     } catch {}
 
     const config = state.settings.models;
@@ -15963,6 +15865,10 @@ function setupEventListeners() {
 }
 
 function initializeApp() {
+  if (BROWSER_MODE) {
+    showBrowserWarningModal();
+  }
+
   log("APP", 2, "initializeApp", "Initializing application.");
 
   sessionCache.clear();
@@ -17753,6 +17659,40 @@ function closeModalWithAnimation(modal, duration = 200) {
  * Open modal with animation
  * @param {HTMLElement|string} modal - Modal element or selector
  */
+/**
+ * Show browser warning modal (no buttons, cannot be closed)
+ */
+function showBrowserWarningModal() {
+  // Create modal if doesn't exist
+  let modal = document.getElementById('browser-warning-modal');
+
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'browser-warning-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+      <div class="modal-overlay" style="pointer-events: none;"></div>
+      <div class="modal-card" style="text-align: center; max-width: 450px;">
+        <div class="modal-header" style="border: none; padding-bottom: 0;">
+          <h2 style="margin: 0;">Can't Run The Process</h2>
+        </div>
+        <div class="modal-body">
+          <p style="margin-top: 16px; color: var(--text-secondary); line-height: 1.6;">
+            You are running the application inside the browser.
+            <br><br>
+            This application requires Electron environment to function properly.
+          </p>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  // Show modal (remove hidden class)
+  modal.classList.remove('hidden');
+  log("BROWSER", 2, "showBrowserWarningModal", "Browser mode detected - showing warning");
+}
+
 function openModalWithAnimation(modal) {
   const modalElement = typeof modal === 'string' ? document.querySelector(modal) : modal;
   if (!modalElement) return;

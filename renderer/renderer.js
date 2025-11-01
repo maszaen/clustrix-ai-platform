@@ -2746,7 +2746,6 @@ async function persistModels(conf) {
 function openModelMgmt() {
   renderMgmtProviders();
   openModalWithAnimation($("#model-mgmt-modal"));
-  $("#mgmt-back").style.visibility = "hidden";
 }
 
 function closeModelMgmt() {
@@ -2762,220 +2761,405 @@ function renderMgmtProviders() {
   const conf = state.settings.models || defaultModels();
   const body = $("#mgmt-body");
   $("#mgmt-title").textContent = "Model Management";
-  $("#mgmt-back").style.visibility = "hidden";
-  $("#mgmt-close").textContent = "Close";
+  
+  // Remove back button if exists
+  const backBtn = $("#mgmt-back");
+  if (backBtn) {
+    backBtn.remove();
+  }
+  
+  // Update footer buttons
+  const mgmtClose = $("#mgmt-close");
+  mgmtClose.textContent = "Close";
+  mgmtClose.className = "primary-btn";
+  mgmtClose.onclick = closeModelMgmt;
+  
+  // Add "Add Provider" button next to close button
+  const actionGroup = mgmtClose.parentElement;
+  let addProvBtn = $("#mgmt-add-prov");
+  if (!addProvBtn) {
+    addProvBtn = document.createElement("button");
+    addProvBtn.id = "mgmt-add-prov";
+    addProvBtn.className = "primary-btn";
+    addProvBtn.textContent = "Add new provider";
+    actionGroup.style.display = "flex";
+    actionGroup.style.justifyContent = "space-between";
+    actionGroup.insertBefore(addProvBtn, mgmtClose);
+  } else {
+    addProvBtn.style.display = "";
+  }
 
   const provs = conf.providers || {};
   const items = Object.keys(provs).sort();
 
   body.innerHTML = `
-    <div class="form-group no-padding">
-      <div id="prov-list" class="prov-list">
-        <button id="add-prov" class="add-item" style="width:100%;justify-content:center">
-            <span style="display:flex;align-items:center;gap:10px;text-transform:capitalize;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-plus-icon lucide-circle-plus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
-              Add new provider
-            </span>
-            <span class="help-text" style="color: var(--fg-muted)"></span>
-          </button>
-        ${items
-          .map(
-            (p) => `
-          <button class="modal-menu-item" data-prov="${p}" style="width:100%;justify-content:space-between">
-            <span class="mm-prov-title" style="display:flex;align-items:center;gap:10px;text-transform:capitalize;">
-              ${p}
-            </span>
-            <span class="help-text" style="color: var(--fg-muted)">${(provs[p].models || []).length} models</span>
-          </button>
-        `,
-          )
-          .join("")}
-          
-      </div>
+    <div id="prov-list">
+      ${items.length === 0 ? '<div style="padding: 32px; text-align: center; color: var(--fg-muted);">No providers yet. Add one to get started.</div>' : ''}
+      ${items
+        .map(
+          (p) => {
+            const models = normalizeProviderModels(provs[p].models || []);
+            return `
+          <div class="provider-item" data-prov="${p}">
+            <div class="provider-header" data-prov-toggle="${p}">
+              <div class="provider-left">
+                <span class="provider-title">${p}</span>
+                <span class="provider-count">${models.length} models</span>
+              </div>
+              <div class="provider-right">
+                <div class="provider-actions">
+                  <button class="provider-action-btn" data-add-model="${p}" title="Add model">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>
+                    </svg>
+                  </button>
+                  <button class="provider-action-btn" data-settings="${p}" title="Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/>
+                      <circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>
+                    </svg>
+                  </button>
+                  <button class="provider-action-btn" data-edit="${p}" title="Edit name">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/>
+                    </svg>
+                  </button>
+                  <button class="provider-action-btn danger" data-delete="${p}" title="Delete provider">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
+                </div>
+                <svg class="provider-arrow" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </div>
+            </div>
+            <div class="models-container" data-models="${p}">
+              ${models.length === 0 ? '<div style="padding: 16px 32px; color: var(--fg-muted); font-size: 0.9em;">No models yet</div>' : ''}
+              ${models
+                .map(
+                  (m) => {
+                    const isActive = conf.active?.platform === p && conf.active?.model === m.id;
+                    return `
+                <div class="model-item" title="Edit model" data-prov="${p}" data-mid="${m.id}">
+                  <span>${m.label || m.id}</span>
+                  <div class="model-actions">
+                    <button class="model-action-btn use-model ${isActive ? 'active' : ''}" data-use-model="${p}" data-use-mid="${m.id}" title="${isActive ? 'Currently active' : 'Use this model'}">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m17 2 4 4-4 4"/>
+                        <path d="M3 11v-1a4 4 0 0 1 4-4h14"/>
+                        <path d="m7 22-4-4 4-4"/>
+                        <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
+                      </svg>
+                      <span>Use model</span>
+                    </button>
+                    <button class="model-action-btn danger" data-delete-model="${p}" data-delete-mid="${m.id}" title="Delete model">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              `;
+                  },
+                )
+                .join("")}
+            </div>
+          </div>
+        `;
+          },
+        )
+        .join("")}
     </div>
   `;
 
-  body.querySelectorAll("#prov-list .modal-menu-item").forEach((btn) => {
-    btn.addEventListener("click", () => renderMgmtProvider(btn.dataset.prov));
+  // Toggle expand/collapse (accordion - only one open at a time)
+  body.querySelectorAll("[data-prov-toggle]").forEach((header) => {
+    header.addEventListener("click", (e) => {
+      // Ignore clicks on action buttons
+      if (e.target.closest(".provider-action-btn")) return;
+      
+      const prov = header.dataset.provToggle;
+      const providerItem = header.closest(".provider-item");
+      const container = body.querySelector(`[data-models="${prov}"]`);
+      const arrow = header.querySelector(".provider-arrow");
+      
+      const isCurrentlyExpanded = container.classList.contains("expanded");
+      
+      // Collapse all other providers
+      body.querySelectorAll(".provider-item.expanded").forEach((item) => {
+        if (item !== providerItem) {
+          item.classList.remove("expanded");
+        }
+      });
+      
+      body.querySelectorAll(".models-container.expanded").forEach((otherContainer) => {
+        if (otherContainer !== container) {
+          otherContainer.classList.remove("expanded");
+          const otherProv = otherContainer.dataset.models;
+          const otherHeader = body.querySelector(`[data-prov-toggle="${otherProv}"]`);
+          const otherArrow = otherHeader?.querySelector(".provider-arrow");
+          if (otherArrow) otherArrow.classList.remove("expanded");
+        }
+      });
+      
+      // Toggle current provider
+      if (!isCurrentlyExpanded) {
+        providerItem.classList.add("expanded");
+        container.classList.add("expanded");
+        arrow.classList.add("expanded");
+      } else {
+        providerItem.classList.remove("expanded");
+        container.classList.remove("expanded");
+        arrow.classList.remove("expanded");
+      }
+    });
   });
 
-  $("#add-prov").onclick = () =>
+  // Settings button
+  body.querySelectorAll("[data-settings]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const prov = btn.dataset.settings;
+      const provData = conf.providers[prov] || { baseUrl: "", apiKey: "" };
+      
+      openMiniModal({
+        title: `${prov} Settings`,
+        fields: [
+          { id: "prov-key", label: "API Key", placeholder: "sk-...", value: provData.apiKey || "" },
+          { id: "prov-base", label: "Base URL", placeholder: "https://...", value: provData.baseUrl || "" },
+        ],
+        onSave: (vals) => {
+          const conf2 = state.settings.models || defaultModels();
+          if (!conf2.providers[prov]) conf2.providers[prov] = { baseUrl: "", apiKey: "", models: [] };
+          conf2.providers[prov].apiKey = vals["prov-key"].trim();
+          conf2.providers[prov].baseUrl = vals["prov-base"].trim();
+          persistModels(conf2);
+        },
+      });
+    });
+  });
+
+  // Edit button
+  body.querySelectorAll("[data-edit]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const oldName = btn.dataset.edit;
+      
+      openMiniModal({
+        title: "Edit Provider Name",
+        fields: [
+          { id: "prov-name", label: "Provider Name", placeholder: "openrouter", value: oldName },
+        ],
+        onSave: (vals) => {
+          const newName = vals["prov-name"].trim();
+          if (!newName || newName === oldName) return;
+          
+          const conf2 = state.settings.models || defaultModels();
+          if (conf2.providers[newName]) {
+            alert("Provider name already exists!");
+            return;
+          }
+          
+          // Rename provider
+          conf2.providers[newName] = conf2.providers[oldName];
+          delete conf2.providers[oldName];
+          
+          // Update active model if needed
+          if (conf2.active?.platform === oldName) {
+            conf2.active.platform = newName;
+          }
+          
+          persistModels(conf2);
+          renderMgmtProviders();
+          populateTitleModelOptions?.();
+        },
+      });
+    });
+  });
+
+  // Delete button
+  body.querySelectorAll("[data-delete]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const prov = btn.dataset.delete;
+      
+      showConfirmationModal(
+        "Delete Provider",
+        `Are you sure you want to delete "${prov}"? This will remove all associated models.`,
+        () => {
+          const conf2 = state.settings.models || defaultModels();
+          delete conf2.providers[prov];
+          
+          // Reset active model if it was using this provider
+          if (conf2.active?.platform === prov) {
+            const firstProv = Object.keys(conf2.providers)[0];
+            conf2.active = {
+              platform: firstProv || "",
+              model: firstProv ? (conf2.providers[firstProv].models?.[0]?.id || "") : "",
+            };
+          }
+          
+          persistModels(conf2);
+          renderMgmtProviders();
+          populateTitleModelOptions?.();
+        }
+      );
+    });
+  });
+
+  // Use model button
+  body.querySelectorAll("[data-use-model]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const prov = btn.dataset.useModel;
+      const mid = btn.dataset.useMid;
+      
+      const conf2 = state.settings.models || defaultModels();
+      conf2.active = {
+        platform: prov,
+        model: mid,
+      };
+      
+      persistModels(conf2);
+      renderMgmtProviders();
+      populateTitleModelOptions?.();
+      
+      // Optional: show feedback
+      const modelName = conf2.providers[prov]?.models?.find(m => (typeof m === 'string' ? m : m.id) === mid);
+      const label = typeof modelName === 'string' ? modelName : (modelName?.label || mid);
+      showToast?.(`Model switched to ${label}`);
+    });
+  });
+
+  // Delete model button
+  body.querySelectorAll("[data-delete-model]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const prov = btn.dataset.deleteModel;
+      const mid = btn.dataset.deleteMid;
+      
+      showConfirmationModal(
+        "Delete Model",
+        `Are you sure you want to delete this model?`,
+        () => {
+          const conf2 = state.settings.models || defaultModels();
+          if (!conf2.providers[prov]) return;
+          
+          const arr = normalizeProviderModels(conf2.providers[prov].models || []);
+          conf2.providers[prov].models = arr.filter(m => m.id !== mid);
+          
+          // Reset active model if it was this one
+          if (conf2.active?.platform === prov && conf2.active?.model === mid) {
+            const firstModel = conf2.providers[prov].models?.[0];
+            conf2.active = {
+              platform: prov,
+              model: firstModel ? (typeof firstModel === 'string' ? firstModel : firstModel.id) : "",
+            };
+          }
+          
+          persistModels(conf2);
+          renderMgmtProviders();
+          populateTitleModelOptions?.();
+        }
+      );
+    });
+  });
+
+  // Model item click - open edit
+  body.querySelectorAll(".model-item").forEach((item) => {
+    item.addEventListener("click", (e) => {
+      // Only trigger if not clicking on action buttons
+      if (e.target.closest(".model-action-btn")) return;
+      
+      const prov = item.dataset.prov;
+      const mid = item.dataset.mid;
+      renderMgmtModel(prov, mid);
+    });
+  });
+
+  // Add model button
+  body.querySelectorAll("[data-add-model]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const prov = btn.dataset.addModel;
+      
+      openMiniModal({
+        title: `Add Model to ${prov}`,
+        fields: [
+          { id: "mod-id", label: "Model ID", placeholder: "deepseek/deepseek-chat-v3.1:free" },
+          { id: "mod-label", label: "Label (optional)", placeholder: "Deepseek v3.1" },
+        ],
+        onSave: (vals) => {
+          const id = vals["mod-id"].trim();
+          if (!id) return;
+          const label = vals["mod-label"].trim();
+          
+          const conf2 = state.settings.models || defaultModels();
+          const arr = normalizeProviderModels(conf2.providers?.[prov]?.models || []);
+          
+          if (arr.find((x) => x.id === id)) {
+            alert("Model ID already exists!");
+            return;
+          }
+          
+          arr.unshift({ id, label });
+          conf2.providers[prov].models = arr;
+          persistModels(conf2);
+          renderMgmtProviders();
+          populateTitleModelOptions?.(prov);
+          
+          // Auto-expand the provider after adding
+          setTimeout(() => {
+            const container = body.querySelector(`[data-models="${prov}"]`);
+            const arrow = body.querySelector(`[data-prov-toggle="${prov}"] .provider-arrow`);
+            if (container && arrow) {
+              container.classList.add("expanded");
+              arrow.classList.add("expanded");
+            }
+          }, 100);
+        },
+      });
+    });
+  });
+
+  // "Add new provider" button in footer
+  addProvBtn.onclick = () => {
     openMiniModal({
       title: "Add Provider",
       fields: [
-        { id: "prov-id", label: "Provider ID", placeholder: "mis. openrouter" },
-        { id: "prov-base", label: "Base URL", placeholder: "https://..." },
-        { id: "prov-key", label: "API Key", placeholder: "..." },
+        { id: "prov-id", label: "Provider ID", placeholder: "openrouter" },
+        { id: "prov-base", label: "Base URL (optional)", placeholder: "https://..." },
+        { id: "prov-key", label: "API Key (optional)", placeholder: "sk-..." },
       ],
       onSave: (vals) => {
         const id = vals["prov-id"].trim();
         if (!id) return;
+        
         const conf2 = state.settings.models || defaultModels();
         if (!conf2.providers) conf2.providers = {};
-        conf2.providers[id] = conf2.providers[id] || {
-          baseUrl: "",
-          apiKey: "",
+        
+        if (conf2.providers[id]) {
+          alert("Provider already exists!");
+          return;
+        }
+        
+        conf2.providers[id] = {
+          baseUrl: vals["prov-base"].trim() || "",
+          apiKey: vals["prov-key"].trim() || "",
           models: [],
         };
-        if (vals["prov-base"].trim())
-          conf2.providers[id].baseUrl = vals["prov-base"].trim();
-        if (vals["prov-key"].trim())
-          conf2.providers[id].apiKey = vals["prov-key"].trim();
+        
         persistModels(conf2);
         populateTitleModelOptions?.(id);
         renderMgmtProviders();
       },
     });
-}
-
-function renderMgmtProvider(pkey) {
-  const conf = state.settings.models || defaultModels();
-  const prov = conf.providers?.[pkey] || {
-    baseUrl: "",
-    apiKey: "",
-    models: [],
   };
-  const list = normalizeProviderModels(prov.models);
-
-  $("#mgmt-title").textContent = pkey;
-  $("#mgmt-back").style.visibility = "visible";
-  $("#mgmt-back").onclick = renderMgmtProviders;
-  $("#mgmt-close").textContent = "Close";
-
-  const body = $("#mgmt-body");
-  body.innerHTML = `
-    <div style="padding: 8px 16px; border-bottom: 1px solid var(--border)">
-      <div class="form-group">
-        <label>API Key</label>
-        <input type="text" id="prov-api" value="${prov.apiKey || ""}">
-      </div>
-      <div class="form-group">
-        <label>Base URL</label>
-        <input type="text" id="prov-base" value="${prov.baseUrl || ""}">
-      </div>
-      <div style="display: flex; gap: 8px; margin-left: auto;">
-        <button id="delete-prov" class="danger-btn">Delete provider</button>
-        <button style="display:flex;" id="save-prov" class="primary-btn">Save provider</button>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <div style="display: flex; gap: 8px; padding-left: 16px; padding-top: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);" class="row-center">
-        <label class="no-padding-left">Models</label>
-        <svg id="add-model" style="margin-bottom: 8px; cursor: pointer;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-plus-icon lucide-circle-plus"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
-      </div>
-      <div id="model-list" style="max-height: 400px; overflow: auto;">
-        ${list
-          .map(
-            (m) => `
-          <div class="menu-item no-padding mgmt-list" data-mid="${m.id}" style="width:100%; justify-content:space-between; padding: 8px 16px !important; border-radius: none !important;">
-            <span class="mm-prov-title">${m.label || m.id}</span>
-            <button class="icon-btn danger" data-del="${m.id}" title="Delete">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
-          </div>
-        `,
-          )
-          .join("")}
-      </div>
-    </div>    
-  `;
-
-  $("#save-prov").onclick = () => {
-    const base = $("#prov-base").value.trim();
-    const key = $("#prov-api").value.trim();
-    const conf2 = state.settings.models || defaultModels();
-    conf2.providers[pkey] = conf2.providers[pkey] || {
-      baseUrl: "",
-      apiKey: "",
-      models: [],
-    };
-    conf2.providers[pkey].baseUrl = base;
-    conf2.providers[pkey].apiKey = key;
-    persistModels(conf2);
-  };
-
-  $("#delete-prov").onclick = () => {
-    showConfirmationModal(
-      "Delete Provider",
-      `Are you sure you want to delete the provider "${pkey}"? This will remove all associated models.`,
-      () => {
-        const conf2 = state.settings.models || defaultModels();
-        delete conf2.providers[pkey];
-        
-        // Reset active model if it was using this provider
-        if (conf2.active?.platform === pkey) {
-          const firstProv = Object.keys(conf2.providers)[0];
-          conf2.active = {
-            platform: firstProv || "",
-            model: firstProv ? (conf2.providers[firstProv].models?.[0]?.id || "") : "",
-          };
-        }
-        
-        persistModels(conf2);
-        renderMgmtProviders();
-        populateTitleModelOptions?.();
-      }
-    );
-  };
-
-  body.querySelectorAll("[data-del]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const mid = btn.dataset.del;
-      const conf2 = state.settings.models || defaultModels();
-      const arr = normalizeProviderModels(
-        conf2.providers?.[pkey]?.models || [],
-      );
-      conf2.providers[pkey].models = arr.filter((x) => x.id !== mid);
-      if (conf2.active?.platform === pkey && conf2.active?.model === mid) {
-        conf2.active = {
-          platform: pkey,
-          model: arr.find((x) => x.id !== mid)?.id || "",
-        };
-      }
-      persistModels(conf2);
-      renderMgmtProvider(pkey);
-      populateTitleModelOptions?.(pkey);
-    });
-  });
-
-  body.querySelectorAll("#model-list .menu-item").forEach((it) => {
-    it.addEventListener("click", (e) => {
-      if (e.target.closest("[data-del]")) return;
-      renderMgmtModel(pkey, it.dataset.mid);
-    });
-  });
-
-  $("#add-model").onclick = () =>
-    openMiniModal({
-      title: `Add Model to ${pkey}`,
-      fields: [
-        {
-          id: "mod-id",
-          label: "Model ID",
-          placeholder: "mis. deepseek/deepseek-chat-v3.1:free",
-        },
-        {
-          id: "mod-label",
-          label: "Label (optional)",
-          placeholder: "mis. Deepseek v3.1",
-        },
-      ],
-      onSave: (vals) => {
-        const id = vals["mod-id"].trim();
-        if (!id) return;
-        const label = vals["mod-label"].trim();
-        const conf2 = state.settings.models || defaultModels();
-        const arr = normalizeProviderModels(
-          conf2.providers?.[pkey]?.models || [],
-        );
-        if (!arr.find((x) => x.id === id)) arr.unshift({ id, label });
-        conf2.providers[pkey].models = arr;
-        persistModels(conf2);
-        renderMgmtProvider(pkey);
-        populateTitleModelOptions?.(pkey);
-      },
-    });
 }
 
 function renderMgmtModel(pkey, mid) {
@@ -2985,9 +3169,32 @@ function renderMgmtModel(pkey, mid) {
   const meta = arr.find((m) => m.id === mid) || { id: mid };
 
   $("#mgmt-title").textContent = meta.label || meta.id;
-  $("#mgmt-back").style.visibility = "visible";
-  $("#mgmt-back").onclick = () => renderMgmtProvider(pkey);
-  $("#mgmt-close").textContent = "Save and Close";
+  
+  // Update footer buttons
+  const modalActions = $("#model-mgmt-modal .modal-actions");
+  const actionGroup = modalActions.querySelector(".action-group");
+  
+  // Create back button if not exists
+  let backBtn = $("#mgmt-back");
+  if (!backBtn) {
+    backBtn = document.createElement("button");
+    backBtn.id = "mgmt-back";
+    backBtn.className = "primary-btn";
+    backBtn.textContent = "Back";
+    actionGroup.insertBefore(backBtn, actionGroup.firstChild);
+  }
+  backBtn.style.display = "";
+  backBtn.onclick = renderMgmtProviders;
+  
+  // Hide add provider button
+  const addProvBtn = $("#mgmt-add-prov");
+  if (addProvBtn) {
+    addProvBtn.style.display = "none";
+  }
+  
+  const mgmtClose = $("#mgmt-close");
+  mgmtClose.textContent = "Save and Close";
+  mgmtClose.className = "primary-btn";
 
   const body = $("#mgmt-body");
   body.innerHTML = `
@@ -3075,9 +3282,8 @@ function renderMgmtModel(pkey, mid) {
       updateModelHeader?.();
     }
 
-    // Close modal and return to provider model list
-    closeModelMgmt();
-    renderMgmtProvider(pkey);
+    // Return to provider list instead of closing modal
+    renderMgmtProviders();
     populateTitleModelOptions?.(pkey);
   };
 }
@@ -3089,7 +3295,7 @@ function openMiniModal({ title, fields, onSave }) {
       (f) => `
     <div class="form-group">
       <label for="${f.id}">${f.label || f.id}</label>
-      <input type="text" id="${f.id}" placeholder="${f.placeholder || ""}">
+      <input type="text" id="${f.id}" placeholder="${f.placeholder || ""}" value="${f.value || ""}">
     </div>
   `,
     )

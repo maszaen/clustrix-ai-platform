@@ -67,8 +67,8 @@ function calculateDelay(minTPS, maxTPS) {
  */
 function streamChunks(chunks, onChunk, options = {}) {
   const {
-    minTokensPerSec = 20,
-    maxTokensPerSec = 25,
+    minTokensPerSec = 45,
+    maxTokensPerSec = 60,
     onComplete = () => {},
     onError = () => {}
   } = options;
@@ -158,16 +158,16 @@ function simulateWithThinking(params) {
     if (cancelled) return;
 
     const responseChunks = chunkText(responseContent, {
-      minChars: streamingOptions.minCharsPerChunk || 10,
-      maxChars: streamingOptions.maxCharsPerChunk || 14
+      minChars: streamingOptions.minCharsPerChunk || 20,
+      maxChars: streamingOptions.maxCharsPerChunk || 25
     });
 
     currentController = streamChunks(
       responseChunks,
       onResponseChunk,
       {
-        minTokensPerSec: streamingOptions.minTokensPerSec || 20,
-        maxTokensPerSec: streamingOptions.maxTokensPerSec || 25,
+        minTokensPerSec: streamingOptions.minTokensPerSec || 45,
+        maxTokensPerSec: streamingOptions.maxTokensPerSec || 60,
         onComplete: () => {
           if (!cancelled) {
             onComplete();
@@ -188,8 +188,8 @@ function simulateWithThinking(params) {
       thinkingChunks,
       onThinkingChunk,
       {
-        minTokensPerSec: 30,
-        maxTokensPerSec: 40,
+        minTokensPerSec: 45,
+        maxTokensPerSec: 60,
         onComplete: () => {
           if (!cancelled) {
             try {

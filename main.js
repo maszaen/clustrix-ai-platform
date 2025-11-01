@@ -19,7 +19,6 @@ const { MultiAgentOrchestrator } = require('./backend/integration/langchain-agen
 const { getBaseUrl, getApiKey, joinEndpoint, applyThinkingHints } = require('./backend/integration/langchain-helpers');
 const { performWebSearch, scrapeUrls } = require('./backend/search/web-search');
 const DatabaseManager = require('./backend/data/database-manager');
-const JSONToSQLiteMigrator = require('./backend/data/json-to-sqlite-migrator');
 const SyncManager = require('./backend/sync/sync-manager');
 const GitHubOAuthHelper = require('./backend/github/github-oauth-helper');
 const GitHubStorageService = require('./backend/github/github-storage-service');
@@ -225,22 +224,7 @@ app.whenReady().then(async () => {
   // Initialize SyncManager
   syncManager = new SyncManager(app);
   syncManager.ensureDirectories();
-  
-  // MIGRATE: Move ai-model.conf.json from root to internal folder
-  const oldConfigPath = path.join(app.getPath('userData'), 'ai-model.conf.json');
-  const newConfigPath = path.join(syncManager.internalDbDir, 'ai-model.conf.json');
-  
-  if (fs.existsSync(oldConfigPath) && !fs.existsSync(newConfigPath)) {
-    try {
-      log('MIGRATION', 1, 'init', 'Migrating ai-model.conf.json from root to internal folder');
-      fs.copyFileSync(oldConfigPath, newConfigPath);
-      fs.unlinkSync(oldConfigPath); // Delete old file
-      log('MIGRATION', 1, 'init', 'Model config migrated successfully');
-    } catch (migrateErr) {
-      log('MIGRATION', 2, 'init', 'Failed to migrate model config', { error: migrateErr.message });
-    }
-  }
-  
+
   langchainService = new ClustrixLangChainService(app);
   agentOrchestrator = new MultiAgentOrchestrator(langchainService);
   log('LangChain services initialized');
@@ -280,31 +264,9 @@ app.whenReady().then(async () => {
     log('DATABASE', 1, 'init', 'Using SQLite database');
   } else {
     // Check old location for backward compatibility
-    const oldDbPath = path.join(app.getPath('userData'), 'clustrix.db');
-    if (fs.existsSync(oldDbPath)) {
-      log('DATABASE', 2, 'init', 'Found old database format, initializing with old path');
-      db = new DatabaseManager(app);
-      useSQLite = true;
-    } else {
-      const jsonPath = path.join(app.getPath('userData'), 'chat_data.json');
-      if (fs.existsSync(jsonPath)) {
-        log('DATABASE', 2, 'init', 'JSON files detected, starting migration');
-        db = new DatabaseManager(app, dbSourcePath === syncManager.getInternalDataPath() ? null : dbSourcePath);
-        const migrator = new JSONToSQLiteMigrator(app, db);
-        const result = await migrator.migrate();
-        if (result.success) {
-          useSQLite = true;
-          log('DATABASE', 1, 'migration', 'Migration completed successfully');
-        } else {
-          log('DATABASE', 4, 'migration', 'Migration failed', { error: result.error });
-          useSQLite = false;
-        }
-      } else {
-        log('DATABASE', 2, 'init', 'No existing data, creating new SQLite database');
-        db = new DatabaseManager(app, dbSourcePath === syncManager.getInternalDataPath() ? null : dbSourcePath);
-        useSQLite = true;
-      }
-    }
+    log('DATABASE', 2, 'init', 'Initializing SQLite database');
+    db = new DatabaseManager(app, dbSourcePath === syncManager.getInternalDataPath() ? null : dbSourcePath);
+    useSQLite = true;
   }
 });
 
@@ -2265,135 +2227,6 @@ ipcMain.handle('sessions:load', async () => {
         };
       });
 
-      // Auto-migrate sessions from JSON if database is empty
-      // ONLY migrate for internal database (backward compatibility)
-      // DO NOT migrate for cloud database (should start fresh)
-      // CRITICAL FIX: Use db.isCloudDatabase property instead of path check
-      const isCloudDatabase = db && db.isCloudDatabase;
-      
-      log('MIGRATION', 1, 'sessions', 'Checking migration eligibility', {
-        dbPath: db?.dbPath,
-        isCloudDatabase,
-        isEmpty: transformed.length === 0,
-        jsonFileExists: fs.existsSync(dataFile)
-      });
-      
-      if (transformed.length === 0 && fs.existsSync(dataFile) && !isCloudDatabase) {
-        try {
-          log('MIGRATION', 1, 'sessions', 'Database empty, attempting JSON migration (INTERNAL DATABASE ONLY)');
-          const raw = fs.readFileSync(dataFile, 'utf-8');
-          const parsed = JSON.parse(raw);
-          const jsonSessions = Array.isArray(parsed) ? parsed : (parsed?.sessions || []);
-          
-          if (jsonSessions.length > 0) {
-            log('MIGRATION', 1, 'sessions', `Migrating ${jsonSessions.length} sessions from JSON to SQLite`);
-            db.transaction(() => {
-              for (const session of jsonSessions) {
-                db.saveSession(session);
-                
-                if (session.messages && Array.isArray(session.messages)) {
-                  for (let i = 0; i < session.messages.length; i++) {
-                    const [role, content, metadata = {}] = session.messages[i];
-                    
-                    // Preserve _x_think and _x_think_updates data during migration
-                    if (session._x_think && session._x_think[i]) {
-                      metadata.thinkContent = session._x_think[i];
-                    }
-                    if (session._x_think_updates && session._x_think_updates[i]) {
-                      metadata.thinkingUpdate = session._x_think_updates[i];
-                    }
-                    
-                    db.addMessage(session.id, role, content, metadata, i);
-                  }
-                }
-              }
-            });
-            
-            // Reload from database after migration
-            const migratedSessions = db.getAllSessions();
-            const migratedTransformed = migratedSessions.map(session => {
-              const messages = db.getMessages(session.id);
-              const metadata = JSON.parse(session.metadata || '{}');
-              
-              // Reconstruct _x_think and _x_think_updates from database
-              const _x_think = {};
-              const _x_think_updates = {};
-              messages.forEach((m, idx) => {
-                if (m.think_content) {
-                  try {
-                    _x_think[idx] = JSON.parse(m.think_content);
-                  } catch (e) {
-                    log('DATABASE', 4, 'sessions:load', 'Failed to parse think_content', { 
-                      sessionId: session.id, 
-                      messageIndex: idx 
-                    });
-                  }
-                }
-                if (m.thinking_update) {
-                  try {
-                    _x_think_updates[idx] = JSON.parse(m.thinking_update);
-                  } catch (e) {
-                    log('DATABASE', 4, 'sessions:load', 'Failed to parse thinking_update', { 
-                      sessionId: session.id, 
-                      messageIndex: idx 
-                    });
-                  }
-                }
-              });
-              
-              return {
-                id: session.id,
-                name: session.name,
-                type: session.type,
-                created_at: session.last_updated,
-                last_updated: session.last_updated,
-                projectId: session.project_id,
-                isProject: session.is_project === 1,
-                isFavorite: session.is_favorite === 1,
-                persona: {
-                  name: session.persona_name || '',
-                  work: session.persona_work || '',
-                  prefs: session.persona_prefs || ''
-                },
-                tokens_used: session.tokens_used || 0,
-                tokens_by_message: metadata.tokens_by_message || {},
-                canvases: metadata.canvases || {},
-                _x_think: Object.keys(_x_think).length > 0 ? _x_think : undefined,
-                _x_think_updates: Object.keys(_x_think_updates).length > 0 ? _x_think_updates : undefined,
-                messages: messages.map(m => {
-                  const msgMetadata = JSON.parse(m.metadata || '{}');
-                  const parsedWebSearchData = m.web_search_data ? JSON.parse(m.web_search_data) : undefined;
-                  return [
-                    m.role,
-                    m.content,
-                    {
-                      model: m.model_id,
-                      modelLabel: m.model_label,
-                      provider: m.provider,
-                      baseUrl: m.base_url,
-                      thinkMode: m.think_mode,
-                      thinkContent: m.think_content ? JSON.parse(m.think_content) : undefined,
-                      thinkingUpdate: m.thinking_update ? JSON.parse(m.thinking_update) : undefined,
-                      webSearchEnabled: m.web_search_enabled === 1,
-                      webSearchData: parsedWebSearchData,
-                      webSearchPages: parsedWebSearchData?.pages || parsedWebSearchData?.pageCount || undefined,
-                      files: m.files ? JSON.parse(m.files) : undefined,
-                      ...msgMetadata
-                    }
-                  ];
-                })
-              };
-            });
-            
-            const settings = db.getAllSettings();
-            log('MIGRATION', 2, 'sessions', `Successfully migrated ${migratedTransformed.length} sessions`);
-            return { sessions: migratedTransformed, settings };
-          }
-        } catch (e) {
-          log('MIGRATION', 4, 'sessions', 'Failed to migrate sessions from JSON', { error: e.message });
-        }
-      }
-      
       const settings = db.getAllSettings();
       return { sessions: transformed, settings };
     }
@@ -2594,51 +2427,7 @@ async function loadProjectsFromStorage() {
     // Try SQLite first
     if (useSQLite && db) {
       const projects = db.getAllProjects();
-      
-      // ONLY migrate for internal database (backward compatibility)
-      const isCloudDatabase = db && db.isCloudDatabase;
-      
-      if (projects.length === 0 && !isCloudDatabase && fs.existsSync(projectsFile)) {
-        // Migrate from JSON if database is empty (internal DB only)
-        try {
-          const content = fs.readFileSync(projectsFile, 'utf-8');
-          const parsed = JSON.parse(content || '[]');
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            log('MIGRATION', 1, 'loadProjectsFromStorage', `Migrating ${parsed.length} projects from JSON to SQLite`);
-            db.transaction(() => {
-              for (const project of parsed) {
-                db.saveProject(project);
-                if (project.files && Array.isArray(project.files)) {
-                  for (const file of project.files) {
-                    db.saveProjectFile(project.id, file);
-                  }
-                }
-              }
-            });
-            // Reload from database after migration
-            return db.getAllProjects().map(p => {
-              const files = db.getProjectFiles(p.id);
-              return {
-                id: p.id,
-                name: p.name,
-                description: p.description,
-                created_at: new Date(p.created_at).toISOString(),
-                updated_at: new Date(p.updated_at).toISOString(),
-                isFavorite: p.is_favorite === 1,
-                files: files.map(f => ({
-                  name: f.name,
-                  type: f.type,
-                  size: f.size,
-                  content: Buffer.from(f.content).toString('base64')
-                }))
-              };
-            });
-          }
-        } catch (e) {
-          log('MIGRATION', 4, 'loadProjectsFromStorage', 'Failed to migrate projects from JSON', e);
-        }
-      }
-      
+
       // Return projects from SQLite
       return projects.map(p => {
         const files = db.getProjectFiles(p.id);

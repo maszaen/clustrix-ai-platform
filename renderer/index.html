@@ -1696,6 +1696,20 @@
     </div>
   </div>
 
+  <div id="browser-warning-modal" class="modal hidden">
+    <div class="modal-overlay" style="pointer-events: none;"></div>
+      <div class="modal-card" style="text-align: start; max-width: 450px;">
+        <div class="modal-header" style="border-bottom: 1px solid var(--border)">
+          <h2>Can't Run The Process</h2>
+        </div>
+        <div class="modal-body">
+          <p style="margin-top: 6px; color: var(--text-secondary);">
+            You are running the application inside the browser, this application requires Electron environment to function properly.
+          </p> 
+        </div>
+      </div>
+  </div>
+
   <div id="toast-container" style="position: fixed; bottom: 24px; right: 24px; z-index: 9999; pointer-events: none;"></div>
   <div id="monitoring-container"></div>
   <script>

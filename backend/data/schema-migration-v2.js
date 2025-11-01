@@ -9,7 +9,7 @@
  * - sequence (message order in session)
  */
 
-const { logWithContext } = require('../utils/logger');
+const { logWithContext } = require('../../utils/logger');
 
 function log(context, level, func, message, details = {}) {
   logWithContext(context, func, message, details);

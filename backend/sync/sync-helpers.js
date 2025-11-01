@@ -10,7 +10,7 @@
 
 const crypto = require('crypto');
 const os = require('os');
-const { logWithContext } = require('../utils/logger');
+const { logWithContext } = require('../../utils/logger');
 
 const log = (level, method, message, data = {}) => {
   logWithContext('SYNC-HELPERS', level, method, message, data);

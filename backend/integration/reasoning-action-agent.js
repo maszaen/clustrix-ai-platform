@@ -1,8 +1,8 @@
 
 
-const DesktopSearchEngine = require('./desktop-search-engine');
-const { log } = require('../utils/logger');
-const { optimizeMessages } = require('../utils/message-optimizer');
+const DesktopSearchEngine = require('../search/desktop-search-engine');
+const { log } = require('../../utils/logger');
+const { optimizeMessages } = require('../../utils/message-optimizer');
 
 // OPTIMIZATION: Centralized instruction template to deduplicate across all prompts
 // This reduces token waste from repeating 2,600+ character instruction block

@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { log } = require('../utils/logger');
+const { log } = require('../../utils/logger');
 
 /**
  * SyncManager

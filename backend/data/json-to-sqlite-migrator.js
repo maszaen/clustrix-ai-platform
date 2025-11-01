@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { logWithContext } = require('../utils/logger');
+const { logWithContext } = require('../../utils/logger');
 
 function log(context, level, func, message, details = {}) {
   logWithContext(context, func, message, details);

@@ -14,17 +14,16 @@ const { log, logWithContext, setLogFile, setDebug, rotateLogWithCheckpoint } = r
 const { optimizeMessages } = require('./utils/message-optimizer');
 const { PerformanceMonitor, MONITORING_ENABLED } = require('./utils/performance-monitor');
 
-const ClustrixLangChainService = require('./backend/langchain-service');
-const { MultiAgentOrchestrator } = require('./backend/langchain-agents');
-const { getBaseUrl, getApiKey, joinEndpoint, applyThinkingHints } = require('./backend/langchain-helpers');
-const { performWebSearch, scrapeUrls } = require('./backend/web-search');
-const DatabaseManager = require('./backend/database-manager');
-const JSONToSQLiteMigrator = require('./backend/json-to-sqlite-migrator');
-const SyncManager = require('./backend/sync-manager');
-const DirectoryMigrator = require('./backend/directory-migrator');
-const GitHubOAuthHelper = require('./backend/github-oauth-helper');
-const GitHubStorageService = require('./backend/github-storage-service');
-const SmartBackupService = require('./backend/smart-backup-service');
+const ClustrixLangChainService = require('./backend/integration/langchain-service');
+const { MultiAgentOrchestrator } = require('./backend/integration/langchain-agents');
+const { getBaseUrl, getApiKey, joinEndpoint, applyThinkingHints } = require('./backend/integration/langchain-helpers');
+const { performWebSearch, scrapeUrls } = require('./backend/search/web-search');
+const DatabaseManager = require('./backend/data/database-manager');
+const JSONToSQLiteMigrator = require('./backend/data/json-to-sqlite-migrator');
+const SyncManager = require('./backend/sync/sync-manager');
+const GitHubOAuthHelper = require('./backend/github/github-oauth-helper');
+const GitHubStorageService = require('./backend/github/github-storage-service');
+const SmartBackupService = require('./backend/sync/smart-backup-service');
 
 function createTimestampedBackup(filePath, reason = '') {
   try {
@@ -100,7 +99,6 @@ let agentOrchestrator = null;
 let db = null;
 let useSQLite = false;
 let syncManager = null;
-let directoryMigrator = null;
 let callbackServer = null;
 let performanceMonitor = null;
 
@@ -207,16 +205,9 @@ app.whenReady().then(async () => {
     log('CALLBACK', 3, 'server', 'Callback server error', { error: err.message });
   });
   
-  // Initialize SyncManager and run directory migration
+  // Initialize SyncManager
   syncManager = new SyncManager(app);
   syncManager.ensureDirectories();
-  
-  directoryMigrator = new DirectoryMigrator(app, syncManager);
-  const migrationResult = await directoryMigrator.runMigration();
-  
-  if (migrationResult.migrated) {
-    log('MIGRATION', 1, 'init', 'Directory migration completed', migrationResult);
-  }
   
   // MIGRATE: Move ai-model.conf.json from root to internal folder
   const oldConfigPath = path.join(app.getPath('userData'), 'ai-model.conf.json');
@@ -1761,7 +1752,7 @@ ipcMain.handle('sync:resolveConflicts', async (_evt, resolutions) => {
 
       // Mark as synced
       const finalDb = new (require('better-sqlite3'))(dbPath);
-      const { updateLastBackupTime } = require('./backend/sync-helpers');
+      const { updateLastBackupTime } = require('./backend/sync/sync-helpers');
       updateLastBackupTime(finalDb);
       smartBackup.markRecordsAsSynced(finalDb, modifiedChanges);
       finalDb.close();
@@ -3149,7 +3140,7 @@ function runStandardStreaming(event, payload) {
   // Check if Perplexity model - handle differently (no stream)
   const BASE_URL = getBaseUrl(provider, payload);
   const API_KEY = getApiKey(provider, payload);
-  const { isPerplexityModel } = require('./backend/langchain-helpers');
+  const { isPerplexityModel } = require('./backend/integration/langchain-helpers');
   const isPerplexity = isPerplexityModel({ baseUrl: BASE_URL, provider });
 
   if (isPerplexity) {
@@ -4146,7 +4137,7 @@ ipcMain.handle('chat:title', async (_evt, payload) => {
   let provider = String(payload?.provider || '').toLowerCase();
   
   // Check if main model is Perplexity - use fallback model for title generation
-  const { isPerplexityModel } = require('./backend/langchain-helpers');
+  const { isPerplexityModel } = require('./backend/integration/langchain-helpers');
   const isMainModelPerplexity = isPerplexityModel({ 
     baseUrl: payload?.baseUrl, 
     provider: payload?.provider 

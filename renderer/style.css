@@ -9342,7 +9342,6 @@ button:disabled .btn-icon {
   display: flex;
   flex-direction: row;
   gap: 7px;
-  animation: pulse-opacity 2s infinite;
 }
 
 .use-model span {
@@ -9357,11 +9356,11 @@ button:disabled .btn-icon {
   max-height: 0;
   overflow: hidden;
   transition: all 0.4s ease;
-  position: relative;
 }
 
 .models-container.expanded {
   max-height: 600px;
+  scroll-snap-type: y proximity;
   overflow-y: auto;
 }
 
@@ -9369,8 +9368,8 @@ button:disabled .btn-icon {
   content: "";
   position: absolute;
   left: 24px;
-  top: 4px;
-  bottom: 24px;
+  top: calc(0% + 64px);
+  bottom: calc(0% + 24px);
   width: 2px;
   background-color: var(--border);
   opacity: 1;

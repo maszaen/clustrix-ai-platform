@@ -1376,15 +1376,46 @@ ipcMain.handle('sync:syncNow', async () => {
         });
       }
 
-      log('sync:syncNow', 1, 'handleSync', 'Sync from GitHub completed (delta merge)', {
-        repo: githubStorage.repoName
+      // IMPORTANT: Upload merged database back to GitHub to sync local changes
+      // This ensures that deletions, additions, and modifications are saved to cloud
+      try {
+        await githubStorage.uploadDatabase(dbPath);
+        log('sync:syncNow', 1, 'handleSync', 'Merged database uploaded back to GitHub');
+      } catch (uploadErr) {
+        log('sync:syncNow', 2, 'handleSync', 'Failed to upload merged database', {
+          error: uploadErr.message
+        });
+        throw uploadErr;
+      }
+
+      // Upload metadata with sync timestamp
+      try {
+        const metadata = {
+          syncTime: new Date().toISOString(),
+          dbVersion: '1.0',
+          appVersion: app.getVersion ? app.getVersion() : '1.0',
+          strategy: 'delta-merge',
+          mergeStats: stats
+        };
+        await githubStorage.uploadMetadata(metadata);
+        log('sync:syncNow', 1, 'handleSync', 'Metadata uploaded to GitHub');
+      } catch (metadataErr) {
+        log('sync:syncNow', 2, 'handleSync', 'Failed to upload metadata (non-critical)', {
+          error: metadataErr.message
+        });
+      }
+
+      log('sync:syncNow', 1, 'handleSync', 'Sync from GitHub completed (delta merge + upload)', {
+        repo: githubStorage.repoName,
+        stats
       });
 
       return {
         success: true,
-        message: `Synced with GitHub (merged cloud changes): ${githubStorage.repoName}`,
+        message: `Synced with GitHub (merged ${cloudSessions.length + cloudMessages.length} cloud changes and uploaded local changes): ${githubStorage.repoName}`,
         repository: githubStorage.repoName,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        mergeStats: stats
       };
       
     } catch (err) {
@@ -1808,30 +1839,6 @@ ipcMain.handle('app:getProfilePhoto', async () => {
     return { success: true, dataUrl };
   } catch (e) {
     log('app:getProfilePhoto error', e);
-    return { success: false, error: e.message };
-  }
-});
-
-/**
- * app:getDefaultProfilePhoto
- * Get default profile photo (shown when not logged in)
- * File: userData/default-user-profile.jpg
- */
-ipcMain.handle('app:getDefaultProfilePhoto', async () => {
-  try {
-    const photoPath = path.join(app.getPath('userData'), 'default-user-profile.jpg');
-    
-    if (!fs.existsSync(photoPath)) {
-      return { success: false, error: 'Default profile photo not found' };
-    }
-    
-    const photoData = fs.readFileSync(photoPath);
-    const base64 = photoData.toString('base64');
-    const dataUrl = `data:image/jpeg;base64,${base64}`;
-    
-    return { success: true, dataUrl };
-  } catch (e) {
-    log('app:getDefaultProfilePhoto error', e);
     return { success: false, error: e.message };
   }
 });

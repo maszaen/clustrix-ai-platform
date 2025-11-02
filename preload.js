@@ -286,7 +286,6 @@ contextBridge.exposeInMainWorld('api', {
   app: {
     restart: () => ipcRenderer.invoke('app:restart'),
     getProfilePhoto: () => ipcRenderer.invoke('app:getProfilePhoto'),
-    getDefaultProfilePhoto: () => ipcRenderer.invoke('app:getDefaultProfilePhoto'),
   },
   monitoring: {
     getMetrics: () => ipcRenderer.invoke('monitoring:getMetrics'),

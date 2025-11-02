@@ -313,7 +313,7 @@ def main_menu():
     # Get API key from environment or input
     api_key = (
         os.environ.get("PERPLEXITY_API_KEY")
-        or "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"
+        or ""
     )
 
     if not api_key:

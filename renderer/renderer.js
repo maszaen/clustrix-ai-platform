@@ -704,6 +704,17 @@ const streamManager = {
   },
 };
 
+function findActiveStreamEntry(sessionId, messageIndex) {
+  if (!sessionId || messageIndex === undefined || messageIndex === null) return null;
+  const active = streamManager?.activeStreams || {};
+  for (const [streamId, stream] of Object.entries(active)) {
+    if (stream?.session?.id === sessionId && stream.messageIndex === messageIndex) {
+      return { streamId, stream };
+    }
+  }
+  return null;
+}
+
 function openQuickModelSwitch(event, screen) {
   const modelBtn = $(`#btn-model-switch-${screen}`);
   const modal = $("#quick-model-switch-modal");
@@ -9625,32 +9636,86 @@ function renderHistoryLazy() {
 
     const [originalRole, content, metadata] = messageData;
     let role = originalRole;
-    
+
     // Detect incomplete AI responses (empty content for last AI message)
-    const isIncompleteResponse = 
-      originalRole === "ai" && 
-      (content === "" || content === null || content === undefined) && 
+    const isIncompleteResponse =
+      originalRole === "ai" &&
+      (content === "" || content === null || content === undefined) &&
       actualIndex === totalMessages - 1;
-    
+
+    const streamEntry =
+      isIncompleteResponse && current
+        ? findActiveStreamEntry(current.id, actualIndex)
+        : null;
+    const isStreamingResume = !!(streamEntry && streamEntry.stream);
+
     if (isIncompleteResponse) {
-      role = "ai_incomplete";
+      role = isStreamingResume ? "ai" : "ai_incomplete";
     }
 
-    const node = addMessage(role, content, {
-      final: true, // Always final for incomplete responses
-      index: actualIndex,
-      metadata: metadata || {},
-    });
+    let node;
+    if (isStreamingResume) {
+      node = addMessage("ai", "", {
+        final: false,
+        index: actualIndex,
+        metadata: metadata || {},
+      });
+    } else {
+      node = addMessage(role, content, {
+        final: true, // Always final for historical render
+        index: actualIndex,
+        metadata: metadata || {},
+      });
+    }
     if (node) {
       node.dataset.index = String(actualIndex);
       node.dataset.lazyLoaded = "true";
-      createdNodes.push({ node, role, actualIndex, isIncompleteResponse });
+
+      if (isStreamingResume) {
+        node.classList.add("streaming-active");
+        if (streamEntry.streamId) {
+          node.dataset.streamId = streamEntry.streamId;
+        }
+
+        // Rebind active stream to the newly rendered node
+        streamEntry.stream.aiNode = node;
+        streamEntry.stream.offscreen = false;
+        streamEntry.stream.awaitingResume = false;
+        streamEntry.stream.lastActivity = Date.now();
+
+        // Show existing partial content or resume thinking indicator
+        const textDiv = node.querySelector(".message-text");
+        if (textDiv) {
+          const partial = (streamEntry.stream.fullResponse || "").trim();
+          if (partial) {
+            try {
+              textDiv.innerHTML = mdFallback(streamEntry.stream.fullResponse);
+              if (textDiv.querySelector("pre code")) highlightAllUnder(textDiv);
+            } catch (err) {
+              console.warn("Markdown fallback rendering error during stream restore:", err);
+              textDiv.innerHTML = mdFallback(streamEntry.stream.fullResponse);
+            }
+            renderMathInElement(textDiv);
+          } else {
+            textDiv.innerHTML = getThinkingMarkup();
+            scheduleThinkingText(node);
+          }
+        }
+      }
+
+      createdNodes.push({
+        node,
+        role,
+        actualIndex,
+        isIncompleteResponse: isIncompleteResponse && !isStreamingResume,
+        isStreamingResume,
+      });
     }
   }
 
   // Process all AI messages with thinking-text in parallel
-  for (const { node, role, actualIndex, isIncompleteResponse } of createdNodes) {
-    if (role === "ai" && !isIncompleteResponse) {
+  for (const { node, role, actualIndex, isIncompleteResponse, isStreamingResume } of createdNodes) {
+    if (role === "ai" && !isIncompleteResponse && !isStreamingResume) {
       // Add async hydration to batch processing
       processingPromises.push(hydrateThinkingIfAnyAsync(node, current, actualIndex));
       renderMathInElement(node);
@@ -10775,6 +10840,8 @@ function setCurrent(s) {
       );
       if (newNode) {
         stream.aiNode = newNode;
+        newNode.classList.add('streaming-active');
+        newNode.dataset.streamId = streamId;
         hydrateThinkingIfAnyAsync(newNode, current, stream.messageIndex);
         const contentDiv = newNode.querySelector(".message-text");
         if (contentDiv) {

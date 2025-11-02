@@ -15,7 +15,7 @@ function CallToAction() {
             Download Clustrix AI today and experience the future of AI desktop computing
           </p>
           <a 
-            href="https://drive.google.com/file/d/your-file-id/view" 
+            href="https://drive.google.com/file/d/127aKLjHeunvyEUeC80IcM2kICTac3gBY/view?usp=sharing" 
             target="_blank"
             rel="noopener noreferrer"
             className="btn-primary inline-flex items-center gap-2"

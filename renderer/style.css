@@ -8553,6 +8553,10 @@ button:disabled .btn-icon {
   line-height: 1.6;
 }
 
+.bli {
+  padding-right: 19px; 
+}
+
 .brain > .bli:not(:last-child):not(:first-child) {
   border-bottom: 1px solid var(--border);
 }

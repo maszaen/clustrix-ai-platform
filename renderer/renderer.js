@@ -1,5 +1,26 @@
-import { welcomeMessages, EXT_GROUPS, ICONS, filesUploadDark, filesUploadLight } from './utils/constants.mjs';
+import { welcomeMessages, filesUploadDark, filesUploadLight } from './utils/constants.mjs';
 import { monitoringUI } from './utils/monitoring-ui.mjs';
+import {
+  cacheSession,
+  clearSessionCache,
+  getCacheStats,
+  getCachedSession,
+  getSessionCacheSize,
+  invalidateSessionCache,
+  preloadFrequentSessions,
+  setSessionCacheLogger
+} from './cache/session-cache.mjs';
+import { escapeHtml, cleanLeadingWhitespace } from './markdown/markdown.mjs';
+import { getExtension, toExt, getFileIcon } from './files/file-utils.mjs';
+import { formatRelativeTime, nowISO, newSessionName } from './time/time-utils.mjs';
+import { generateSessionId } from './ids/id-utils.mjs';
+import { formatUserMessage } from './markdown/message-format.mjs';
+import {
+  customMarkdownFormat,
+  renderWithExistingFormatter
+} from './markdown/markdown.mjs';
+import { debounce, throttle } from './utils/timing.mjs';
+import { createHighlightedCode } from './markdown/highlight.mjs';
 
 let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",streamThrottling: "auto",language: "autodetect"},};
 let welcomeScreenStagedFiles = [];
@@ -37,231 +58,15 @@ let saveScheduled = false;
 // PERFORMANCE: Dirty session tracking for incremental saves
 const dirtySessionIds = new Set();
 
-// Smart Session Caching System
-const sessionCache = new Map();
-const MAX_CACHED_SESSIONS = 10; // Re-enabled for fast session switching
-const CACHE_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
-
 // CLEAR CACHE ON PAGE LOAD/REFRESH to prevent stale data
 window.addEventListener('DOMContentLoaded', () => {
-  sessionCache.clear();
-  log('CACHE', 1, 'clearCache', 'Session cache cleared on page load');
+  const clearedEntries = clearSessionCache();
+  log('CACHE', 1, 'clearCache', 'Session cache cleared on page load', { clearedEntries });
 });
 
 // Hover State Preservation System for Streaming
 const hoverStates = new WeakMap();
 const activeHoverElements = new Set();
-
-class SessionCacheEntry {
-  constructor(sessionId, renderedHTML, scrollPosition = 0, lazyState = null) {
-    this.sessionId = sessionId;
-    this.renderedHTML = renderedHTML;
-    this.scrollPosition = scrollPosition;
-    this.lazyState = lazyState; // Store lazy loading state
-    this.timestamp = Date.now();
-    this.accessCount = 1;
-    this.lastAccessed = Date.now();
-  }
-  
-  isExpired() {
-    return Date.now() - this.timestamp > CACHE_EXPIRY_MS;
-  }
-  
-  touch() {
-    this.lastAccessed = Date.now();
-    this.accessCount++;
-  }
-  
-  getAge() {
-    return Date.now() - this.timestamp;
-  }
-}
-
-function getCachedSession(sessionId) {
-  const entry = sessionCache.get(sessionId);
-  if (!entry || entry.isExpired()) {
-    sessionCache.delete(sessionId);
-    return null;
-  }
-  entry.touch();
-  log('CACHE', 1, 'getCachedSession', 'Cache hit', { 
-    sessionId, 
-    age: entry.getAge(),
-    accessCount: entry.accessCount 
-  });
-  return entry;
-}
-
-function cacheSession(sessionId, renderedHTML, scrollPosition = 0, lazyState = null) {
-  // Clean up expired entries
-  for (const [id, entry] of sessionCache.entries()) {
-    if (entry.isExpired()) {
-      sessionCache.delete(id);
-    }
-  }
-  
-  // Implement LRU eviction if cache is full
-  if (sessionCache.size >= MAX_CACHED_SESSIONS) {
-    let oldestEntry = null;
-    let oldestTime = Date.now();
-    
-    for (const [id, entry] of sessionCache.entries()) {
-      if (entry.lastAccessed < oldestTime) {
-        oldestTime = entry.lastAccessed;
-        oldestEntry = id;
-      }
-    }
-    
-    if (oldestEntry) {
-      sessionCache.delete(oldestEntry);
-      log('CACHE', 1, 'cacheSession', 'Evicted LRU entry', { evictedId: oldestEntry });
-    }
-  }
-  
-  const cacheEntry = new SessionCacheEntry(sessionId, renderedHTML, scrollPosition, lazyState);
-  sessionCache.set(sessionId, cacheEntry);
-  
-  log('CACHE', 1, 'cacheSession', 'Session cached', { 
-    sessionId, 
-    htmlLength: renderedHTML.length,
-    cacheSize: sessionCache.size,
-    hasLazyState: !!lazyState,
-    lazyState: lazyState ? {
-      loadedStartIndex: lazyState.loadedStartIndex,
-      isFullyLoaded: lazyState.isFullyLoaded,
-      totalMessages: lazyState.totalMessages
-    } : null
-  });
-}
-
-function invalidateSessionCache(sessionId) {
-  const deleted = sessionCache.delete(sessionId);
-  if (deleted) {
-    log('CACHE', 1, 'invalidateSessionCache', 'Cache invalidated', { sessionId });
-  }
-}
-
-function clearSessionCache() {
-  const size = sessionCache.size;
-  sessionCache.clear();
-  log('CACHE', 1, 'clearSessionCache', 'All cache cleared', { clearedEntries: size });
-}
-
-// Intelligent cache preloading for frequently accessed sessions
-function preloadFrequentSessions() {
-  if (!state.sessions || state.sessions.length === 0) return;
-  
-  // Find most recently accessed sessions
-  const recentSessions = state.sessions
-    .filter(s => s.messages && s.messages.length > 0)
-    .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))
-    .slice(0, 3); // Top 3 most recent
-  
-  recentSessions.forEach((session, index) => {
-    if (!sessionCache.has(session.id)) {
-      // Preload with slight delay to avoid blocking UI
-      setTimeout(() => {
-        log('CACHE', 1, 'preloadFrequentSessions', 'Background preloading session', { 
-          sessionId: session.id,
-          messageCount: session.messages.length 
-        });
-        // Could implement background rendering here if needed
-      }, index * 100);
-    }
-  });
-}
-
-// Cache statistics for debugging
-function getCacheStats() {
-  const stats = {
-    size: sessionCache.size,
-    maxSize: MAX_CACHED_SESSIONS,
-    entries: []
-  };
-  
-  for (const [id, entry] of sessionCache.entries()) {
-    stats.entries.push({
-      sessionId: id,
-      age: entry.getAge(),
-      accessCount: entry.accessCount,
-      htmlSize: entry.renderedHTML.length,
-      isExpired: entry.isExpired()
-    });
-  }
-  
-  stats.entries.sort((a, b) => b.accessCount - a.accessCount);
-  return stats;
-}
-
-// Utility functions
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-function getExtension(filename) {
-  return filename.split(".").pop().toUpperCase();
-}
-
-function toExt(input) {
-  if (!input) return "";
-  const s = String(input).trim();
-  const last = s.includes(".") ? s.split(".").pop() : s;
-  return last.toLowerCase();
-}
-
-function formatRelativeTime(dateString) {
-  if (!dateString) return "Unknown";
-  
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now - date;
-  
-  // Convert to different time units
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-  const diffWeeks = Math.floor(diffDays / 7);
-  const diffMonths = Math.floor(diffDays / 30);
-  const diffYears = Math.floor(diffDays / 365);
-  
-  if (diffYears > 0) {
-    return diffYears === 1 ? "1 year ago" : `${diffYears} years ago`;
-  } else if (diffMonths > 0) {
-    return diffMonths === 1 ? "1 month ago" : `${diffMonths} months ago`;
-  } else if (diffWeeks > 0) {
-    return diffWeeks === 1 ? "1 week ago" : `${diffWeeks} weeks ago`;
-  } else if (diffDays > 0) {
-    return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
-  } else if (diffHours > 0) {
-    return diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
-  } else if (diffMinutes > 0) {
-    return diffMinutes === 1 ? "1 minute ago" : `${diffMinutes} minutes ago`;
-  } else {
-    return "Just now";
-  }
-}
-
-function getFileIcon(nameOrExt) {
-  let ext = toExt(nameOrExt.replace(/^\./, ""));
-  let group = "unknown";
-
-  if (ext === "json") {
-    group = "json";
-  } else if (EXT_GROUPS.pdf.has(ext)) group = "pdf";
-  else if (EXT_GROUPS.spreadsheet.has(ext)) group = "spreadsheet";
-  else if (EXT_GROUPS.terminal.has(ext)) group = "terminal";
-  else if (EXT_GROUPS.text.has(ext)) group = "text";
-  else if (EXT_GROUPS.code.has(ext)) group = "code";
-
-  const html = ICONS[group].replace(
-    '<div class="file-icon"',
-    `<div class="file-icon" data-ext="${ext}" aria-label="${ext.toUpperCase()} file"`,
-  );
-  return html;
-}
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -854,12 +659,6 @@ function renderUploadedFiles() {
   });
 }
 
-function generateSessionId() {
-  const timestamp = Date.now().toString(36);
-  const randomStr = Math.random().toString(36).slice(2, 9);
-  return `${timestamp}-${randomStr}`;
-}
-
 function toggleGoogleCseInput() {
   const provider = $("#search-api-provider").value;
   const keyLabel = $("#search-api-key-label");
@@ -1422,33 +1221,7 @@ async function processSearchStatusQueue() {
   log("UI_SEARCH", 1, "processSearchStatusQueue", "Queue V3 finished.");
 }
 
-function nowISO() {
-  return new Date().toISOString();
-}
-
-function newSessionName() {
-  const d = new Date();
-  return `Untitled chat ${d.toTimeString().slice(0, 5)}`;
-}
-
-function formatUserMessage(content) {
-  if (!content) return "";
-  let html = content
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-
-  // Only support bold and italic formatting for user messages
-  html = html
-    .replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
-    .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>")
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    .replace(/__(.*?)__/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-    .replace(/_([^_]+)_/g, "<em>$1</em>");
-
-  return html.replace(/\n/g, "<br/>");
-}
+// Utility wrappers are imported from dedicated modules for modularity
 
 async function typewriterEffectChunked(
   element,
@@ -1866,15 +1639,6 @@ function createPerplexitySearchCards(update) {
   return container;
 }
 
-function cleanLeadingWhitespace(text) {
-  // log('CLEAN_WS', 2, 'cleanLeadingWhitespace', text)
-  if (!text || typeof text !== "string") return "";
-  return text.replace(
-    /^[\s\u200B\u200C\u200D\u2060\ufeff\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+/,
-    "",
-  );
-}
-
 // Autoscroll function specifically for thinking-body during streaming
 // DISABLED - No auto-scroll for thinking body, same as main chat
 function scrollThinkingToBottom(thinkingElement) {
@@ -1983,106 +1747,6 @@ async function updateThinkingUI(aiNode, content, session, messageIndex) {
   }
 }
 
-async function customMarkdownFormat(raw) {
-  if (raw == null) return "";
-  const cleaned = cleanLeadingWhitespace(String(raw));
-  
-  // Use the enhanced custom formatter from local_modules/custom-formatter/md.js
-  if (typeof md === 'function') {
-    try {
-      const result = md(cleaned);
-      let finalResult;
-      
-      // Check if it's a Promise
-      if (result && typeof result.then === 'function') {
-        finalResult = await result;
-      } else {
-        finalResult = result;
-      }
-      
-      // Clean up invisible/selectable content for thinking-text
-      finalResult = cleanInvisibleContent(finalResult);
-      
-      return finalResult;
-    } catch (error) {
-      console.warn('Custom formatter error:', error);
-      return renderWithExistingFormatter(raw);
-    }
-  }
-  
-  // Fallback to basic formatting if custom formatter not available
-  return renderWithExistingFormatter(raw);
-}
-
-function cleanInvisibleContent(html) {
-  if (!html) return html;
-  
-  // First pass: clean the HTML string directly
-  let cleanedHtml = html
-    .replace(/[\u200B-\u200D\uFEFF]/g, '') // Remove zero-width spaces
-    .replace(/\u00A0/g, ' ') // Replace non-breaking spaces with regular spaces
-    .replace(/\s+(\r?\n|\r)\s*/g, '') // Remove whitespace around line breaks
-    .replace(/(\r?\n|\r)+/g, '\n') // Normalize line breaks
-    .trim();
-  
-  // Create a temporary div to process the HTML
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = cleanedHtml;
-  
-  // Remove empty elements and whitespace-only text nodes
-  const walker = document.createTreeWalker(
-    tempDiv,
-    NodeFilter.SHOW_ALL,
-    {
-      acceptNode: function(node) {
-        // Remove empty elements (except br, hr, img)
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          const tagName = node.tagName.toLowerCase();
-          if (!['br', 'hr', 'img', 'input'].includes(tagName) && 
-              !node.textContent.trim() && 
-              node.children.length === 0) {
-            return NodeFilter.FILTER_ACCEPT;
-          }
-        }
-        // Remove text nodes that are only whitespace
-        else if (node.nodeType === Node.TEXT_NODE) {
-          if (/^\s*$/.test(node.nodeValue)) {
-            return NodeFilter.FILTER_ACCEPT;
-          }
-        }
-        return NodeFilter.FILTER_REJECT;
-      }
-    }
-  );
-  
-  const nodesToRemove = [];
-  let node;
-  while (node = walker.nextNode()) {
-    nodesToRemove.push(node);
-  }
-  
-  // Remove the problematic nodes
-  nodesToRemove.forEach(node => {
-    if (node.parentNode) {
-      node.parentNode.removeChild(node);
-    }
-  });
-  
-  // Final cleanup: normalize the resulting HTML
-  let finalHtml = tempDiv.innerHTML
-    .replace(/>\s+</g, (match) => {
-      // Keep whitespace around <br> tags to preserve line breaks
-      if (tempDiv.innerHTML.includes('<br>')) {
-        return match; // Don't remove whitespace if there are <br> tags
-      }
-      return '><'; // Otherwise remove whitespace between tags
-    })
-    .replace(/\s+/g, ' ') // Normalize multiple spaces
-    .trim();
-  
-  return finalHtml;
-}
-
 // Debug function to analyze thinking-text content
 function debugThinkingTextContent(element) {
   if (!element) return;
@@ -2107,59 +1771,6 @@ function debugThinkingTextContent(element) {
   if (invisibleChars) {
     console.log('Invisible characters found:', invisibleChars);
   }
-}
-
-function renderThinkingText(raw) {
-  if (raw == null) return "";
-  const cleaned = cleanLeadingWhitespace(String(raw));
-  
-  // For thinking text, we want more natural line break handling
-  // Single line breaks become <br>, double line breaks become paragraph breaks
-  const escapeHtml = (str) => {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  };
-  
-  // Handle basic markdown formatting while preserving natural line breaks
-  let formatted = escapeHtml(cleaned);
-  
-  // Handle bold and italic
-  formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
-  
-  // Handle inline code
-  formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
-  
-  // Handle line breaks: single \n becomes <br>, double \n\n becomes paragraph break
-  formatted = formatted.replace(/\n\n+/g, '</p><p>');
-  formatted = formatted.replace(/\n/g, '<br>');
-  
-  // Wrap in paragraph tags
-  formatted = '<p>' + formatted + '</p>';
-  
-  // Clean up empty paragraphs
-  formatted = formatted.replace(/<p>\s*<\/p>/g, '');
-  formatted = formatted.replace(/<p><\/p>/g, '');
-  
-  return formatted;
-}
-
-function renderWithExistingFormatter(raw) {
-  if (raw == null) return "";
-  const cleaned = cleanLeadingWhitespace(String(raw));
-  const escapeHtml = (str) => {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  };
-  return escapeHtml(cleaned).replace(/\r?\n/g, "<br/>");
 }
 
 const saveThinkingDebounced = (() => {
@@ -2217,17 +1828,6 @@ function loadAllDrafts() {
     });
     sessionDrafts.clear();
   }
-}
-
-// General debounce utility
-function debounce(fn, delay) {
-  let timer = null;
-  const debounced = (...args) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
-  };
-  debounced.cancel = () => clearTimeout(timer);
-  return debounced;
 }
 
 const saveDraftDebounced = (() => {
@@ -2305,71 +1905,6 @@ function saveCodeArtifact(
   saveArtifactsToFile();
 
   return artifact;
-}
-
-// Helper function to create syntax highlighted code HTML
-function createHighlightedCode(code, language) {
-  // Map common language names to Highlight.js language identifiers
-  const languageMap = {
-    javascript: "javascript",
-    js: "javascript",
-    typescript: "typescript",
-    ts: "typescript",
-    python: "python",
-    py: "python",
-    java: "java",
-    c: "c",
-    cpp: "cpp",
-    "c++": "cpp",
-    csharp: "csharp",
-    "c#": "csharp",
-    php: "php",
-    ruby: "ruby",
-    go: "go",
-    rust: "rust",
-    swift: "swift",
-    kotlin: "kotlin",
-    scala: "scala",
-    html: "xml",
-    markup: "xml",
-    css: "css",
-    scss: "scss",
-    less: "less",
-    json: "json",
-    xml: "xml",
-    yaml: "yaml",
-    yml: "yaml",
-    markdown: "markdown",
-    md: "markdown",
-    bash: "bash",
-    shell: "bash",
-    sh: "bash",
-    sql: "sql",
-    text: "plaintext",
-    plain: "plaintext",
-    plaintext: "plaintext",
-    mermaid: "mermaid"
-  };
-
-  const requestedLanguage = language?.toLowerCase();
-  const highlightLanguage = languageMap[requestedLanguage] || "plaintext";
-  const escapedCode = escapeHtml(code);
-
-  // Create the highlighted HTML structure
-  const tempDiv = document.createElement("div");
-  tempDiv.innerHTML = `<pre class="hljs"><code class="hljs language-${highlightLanguage}">${escapedCode}</code></pre>`;
-
-  // Apply syntax highlighting
-  const codeElement = tempDiv.querySelector("pre code");
-  if (codeElement && window.hljs && typeof window.hljs.highlightElement === "function") {
-    try {
-      window.hljs.highlightElement(codeElement);
-    } catch (error) {
-      // console.error("Highlight.js failed to highlight code:", error); // Disabled HLJS logs
-    }
-  }
-
-  return tempDiv.innerHTML;
 }
 
 function highlightAllUnder(container) {
@@ -2693,6 +2228,8 @@ function log(context, level, contextFunc, message, details = {}) {
     console.warn("Failed to send log to backend:", error);
   }
 }
+
+setSessionCacheLogger(log);
 
 function ensureTokenFields(session) {
   if (!session) return;
@@ -9992,19 +9529,6 @@ window.loadOlderMessages = async function () {
   }
 };
 
-// Throttle utility function
-function throttle(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
-}
-
 function renderSessions() {
   const ul = $("#session-list");
   if (!ul) return;
@@ -10923,7 +10447,7 @@ function setCurrent(s) {
     log("SESSION", 1, "setCurrent", "Session switch performance", {
       totalTime: `${totalSwitchTime.toFixed(2)}ms`,
       wasFromCache: !!getCachedSession(current.id),
-      cacheSize: sessionCache.size
+      cacheSize: getSessionCacheSize()
     });
   }, 100);
   
@@ -11100,7 +10624,7 @@ async function load() {
 
   // Preload frequently accessed sessions in background
   setTimeout(() => {
-    preloadFrequentSessions();
+    preloadFrequentSessions(state.sessions);
   }, 1000);
 
   // Setup hover state management for streaming
@@ -16221,8 +15745,10 @@ function initializeApp() {
 
   log("APP", 2, "initializeApp", "Initializing application.");
 
-  sessionCache.clear();
-  log('CACHE', 1, 'initializeApp', 'Session cache cleared on app initialization');
+  const clearedOnInit = clearSessionCache();
+  log('CACHE', 1, 'initializeApp', 'Session cache cleared on app initialization', {
+    clearedEntries: clearedOnInit
+  });
 
   initializeSmartScroll();
   initColumnReverseScrollDetection(); 
@@ -18349,8 +17875,12 @@ document.addEventListener('DOMContentLoaded', initPageHistory);
 
 window.DEBUG = {
   getCacheStats,
-  clearSessionCache,
-  preloadFrequentSessions,
+  clearSessionCache: () => {
+    const clearedEntries = clearSessionCache();
+    log('CACHE', 1, 'DEBUG.clearSessionCache', 'Manual cache clear triggered', { clearedEntries });
+    return clearedEntries;
+  },
+  preloadFrequentSessions: () => preloadFrequentSessions(state.sessions),
   invalidateSessionCache: (id) => invalidateSessionCache(id || (current && current.id)),
   
   // Performance profiling

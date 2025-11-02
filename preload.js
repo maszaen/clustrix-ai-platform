@@ -1,6 +1,5 @@
 const { contextBridge, ipcRenderer, shell } = require('electron');
 
-// Simple log function for preload (sends to main process)
 function log(tag, level, fn, msg, data) {
   ipcRenderer.send('log:write', {
     context: tag,
@@ -10,13 +9,12 @@ function log(tag, level, fn, msg, data) {
   });
 }
 
-// Inline thinking pattern parser (to avoid module loading issues in preload)
 function createThinkingParserState() {
   return {
     partialTag: '',
-    insideThinkingBlock: false, // Track if we're inside an unclosed thinking tag
-    currentBlockType: null,      // Which tag type: 'think', 'thinking', 'reasoning', etc.
-    hasSeenContent: false        // Track if we've seen any non-thinking content (disables parsing)
+    insideThinkingBlock: false, 
+    currentBlockType: null,     
+    hasSeenContent: false       
   };
 }
 
@@ -42,9 +40,7 @@ function parseThinkingPatterns(chunkText, state = {}) {
   let position = 0;
 
   while (position < fullText.length) {
-    // If we're INSIDE a thinking block, search for closing tag ANYWHERE
     if (insideThinkingBlock) {
-      // Define closing patterns based on block type
       let closeRegex;
       if (currentBlockType === 'think') {
         closeRegex = /<\/think>/i;
@@ -55,32 +51,27 @@ function parseThinkingPatterns(chunkText, state = {}) {
       } else if (currentBlockType === 'reasoning-prefix') {
         closeRegex = /\)\*/;
       } else {
-        // Invalid block type - exit thinking mode
         insideThinkingBlock = false;
         currentBlockType = null;
         continue;
       }
 
-      // Search for closing tag from current position
       const remainingText = fullText.substring(position);
       const match = remainingText.match(closeRegex);
       
       if (match && match.index !== undefined) {
-        // Found closing tag - send everything before it to thinking
         thinkingText += remainingText.substring(0, match.index);
         position += match.index + match[0].length;
         insideThinkingBlock = false;
         currentBlockType = null;
         continue;
       } else {
-        // No closing tag found - send ALL remaining to thinking
         thinkingText += remainingText;
         position = fullText.length;
         break;
       }
     }
 
-    // Not inside block - check if we're starting one (ONLY if we haven't seen content yet)
     if (!hasSeenContent) {
       const remainingText = fullText.substring(position);
       const trimmed = remainingText.trimStart();
@@ -90,17 +81,15 @@ function parseThinkingPatterns(chunkText, state = {}) {
         { regex: /^<thinking>/i, type: 'thinking', tagLen: 10 },
         { regex: /^<think>/i, type: 'think', tagLen: 7 },
         { regex: /^<reasoning>/i, type: 'reasoning', tagLen: 11 },
-        { regex: /^\*\(reasoning:\s*/i, type: 'reasoning-prefix', tagLen: null } // variable length
+        { regex: /^\*\(reasoning:\s*/i, type: 'reasoning-prefix', tagLen: null }
       ];
 
       let foundOpening = false;
       for (const { regex, type, tagLen } of openPatterns) {
         if (regex.test(trimmed)) {
-          // Opening tag found - enter thinking mode
           insideThinkingBlock = true;
           currentBlockType = type;
           
-          // Calculate tag length if not fixed
           let actualTagLen = tagLen;
           if (tagLen === null) {
             const match = trimmed.match(regex);
@@ -115,7 +104,6 @@ function parseThinkingPatterns(chunkText, state = {}) {
 
       if (foundOpening) continue;
 
-      // Check for incomplete opening tags at the end
       const incompletePatterns = [
         /^<thinking[^>]*$/i,
         /^<think[^>]*$/i,
@@ -126,7 +114,6 @@ function parseThinkingPatterns(chunkText, state = {}) {
       let foundIncomplete = false;
       for (const pattern of incompletePatterns) {
         if (pattern.test(trimmed)) {
-          // Incomplete tag - save for next chunk
           partialTag = trimmed;
           position = fullText.length;
           foundIncomplete = true;
@@ -137,7 +124,6 @@ function parseThinkingPatterns(chunkText, state = {}) {
       if (foundIncomplete) break;
     }
 
-    // Not a thinking tag - send remaining to cleaned content
     if (position < fullText.length) {
       hasSeenContent = true;
       cleanedContent += fullText.substring(position);
@@ -158,7 +144,6 @@ function parseThinkingPatterns(chunkText, state = {}) {
 function rid(){ return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`; }
 
 contextBridge.exposeInMainWorld('api', {
-  // Expose parser for testing
   _testParser: {
     parse: parseThinkingPatterns,
     createState: createThinkingParserState
@@ -169,7 +154,6 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on(channel, (event, ...args) => callback(...args));
     }
   },
-  // OAuth helper
   sendEmail: (email) => {
     ipcRenderer.send('oauth:submit-email', email);
   },
@@ -196,7 +180,6 @@ contextBridge.exposeInMainWorld('api', {
       const onEvent = isFn ? optionsOrCb : (typeof maybeCb === 'function' ? maybeCb : () => {});
       const options = isFn ? {} : (optionsOrCb || {});
 
-      // Create parser state for this streaming session
       const parserState = createThinkingParserState();
 
       let chunkCounter = 0;
@@ -205,14 +188,12 @@ contextBridge.exposeInMainWorld('api', {
           chunkCounter++;
           log('PARSER', 0, 'onChunk', `Chunk #${chunkCounter}`, { type: typeof t, value: typeof t === 'string' ? t.substring(0, 100) : t });
 
-          // If chunk is an object with 'think' property, it's already thinking content from backend
           if (typeof t === 'object' && t !== null && 'think' in t) {
             log('PARSER', 0, 'onChunk', 'Already thinking object, pass through');
             onEvent(t);
             return;
           }
 
-          // Parse the chunk for thinking patterns (REALTIME)
           const parsed = parseThinkingPatterns(t, parserState);
           log('PARSER', 0, 'onChunk', 'Parsed', {
             thinkLen: parsed.thinkingText.length,
@@ -221,26 +202,22 @@ contextBridge.exposeInMainWorld('api', {
             blockType: parsed.currentBlockType
           });
 
-          // Send thinking text if found (REALTIME - immediately stream to thinking section)
           if (parsed.thinkingText) {
             log('PARSER', 0, 'onChunk', 'Sending thinking REALTIME', { length: parsed.thinkingText.length });
             onEvent({ think: parsed.thinkingText });
           }
 
-          // Send cleaned content (only sent when NOT inside thinking block)
           if (parsed.cleanedContent) {
             log('PARSER', 0, 'onChunk', 'Sending content', { length: parsed.cleanedContent.length });
             onEvent(parsed.cleanedContent);
           }
 
-          // Update parser state for next chunk
           parserState.partialTag = parsed.partialTag || '';
           parserState.insideThinkingBlock = parsed.insideThinkingBlock;
           parserState.currentBlockType = parsed.currentBlockType;
           parserState.hasSeenContent = parsed.hasSeenContent;
         } catch (err) {
           log('PARSER', 3, 'onChunk', 'ERROR', { error: err.message });
-          // Fallback: send chunk as-is
           onEvent(t);
         }
       };

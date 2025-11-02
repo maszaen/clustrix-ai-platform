@@ -3020,9 +3020,13 @@ function renderMgmtProviders() {
       const mid = btn.dataset.useMid;
       
       const conf2 = state.settings.models || defaultModels();
+      const providerConfig = conf2.providers[prov] || { baseUrl: "", apiKey: "", models: [] };
+      
       conf2.active = {
         platform: prov,
         model: mid,
+        baseUrl: providerConfig.baseUrl || "",
+        apiKey: providerConfig.apiKey || "",
       };
       
       persistModels(conf2);
@@ -16568,21 +16572,11 @@ async function updateSidebarAccountButton() {
         log('UI', 1, 'updateSidebarAccountButton', 'Display name set to "Not logged in"');
       }
       
-      // Load default profile image from userData
+      // Load default profile image from public/images
       if (profilePic) {
-        window.api.app.getDefaultProfilePhoto().then(result => {
-          if (result.success && result.dataUrl) {
-            profilePic.src = result.dataUrl;
-            profilePic.style.display = 'block';
-            log('UI', 1, 'updateSidebarAccountButton', 'Default profile picture loaded');
-          } else {
-            profilePic.style.display = 'none';
-            log('UI', 2, 'updateSidebarAccountButton', 'Default profile picture not found', { error: result.error });
-          }
-        }).catch(err => {
-          profilePic.style.display = 'none';
-          log('UI', 2, 'updateSidebarAccountButton', 'Failed to load default profile picture', { error: err.message });
-        });
+        profilePic.src = '../public/images/user-profile.jpg';
+        profilePic.style.display = 'block';
+        log('UI', 1, 'updateSidebarAccountButton', 'Default profile picture loaded from public/images');
       }
       
       log('UI', 1, 'updateSidebarAccountButton', 'Sidebar updated with unauthenticated state');
@@ -16730,19 +16724,9 @@ async function updateAccountModalUI() {
       // Show "Not logged in" profile image in the modal
       const profilePic = document.getElementById('account-profile-pic');
       if (profilePic) {
-        window.api.app.getDefaultProfilePhoto().then(result => {
-          if (result.success && result.dataUrl) {
-            profilePic.src = result.dataUrl;
-            profilePic.style.display = 'block';
-            log('UI', 1, 'updateAccountModalUI', 'Default profile picture loaded in modal');
-          } else {
-            profilePic.style.display = 'none';
-            log('UI', 2, 'updateAccountModalUI', 'Default profile picture not found', { error: result.error });
-          }
-        }).catch(err => {
-          profilePic.style.display = 'none';
-          log('UI', 2, 'updateAccountModalUI', 'Failed to load default profile picture', { error: err.message });
-        });
+        profilePic.src = '../public/images/user-profile.jpg';
+        profilePic.style.display = 'block';
+        log('UI', 1, 'updateAccountModalUI', 'Default profile picture loaded in modal from public/images');
       }
       
       log('UI', 1, 'updateAccountModalUI', 'Account modal reset to "Not logged in" state');

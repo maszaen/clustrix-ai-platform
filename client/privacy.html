@@ -13,6 +13,9 @@
     <meta name="twitter:title" content="Privacy Policy - Clustrix AI">
     <meta name="twitter:description" content="Privacy Policy for Clustrix AI Platform - Open source AI desktop platform with local privacy and data control">
 
+    <link rel="icon" type="image/x-icon" href="./favicon.ico" />
+    <link rel="icon" type="image/png" href="./favicon.png" />
+
     <script src="https://resource.trickle.so/vendor_lib/unpkg/react@18/umd/react.production.min.js"></script>
     <script src="https://resource.trickle.so/vendor_lib/unpkg/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://resource.trickle.so/vendor_lib/unpkg/@babel/standalone/babel.min.js"></script>
@@ -23,16 +26,16 @@
     <style type="text/tailwindcss">
     @layer theme {
         :root {
-            --primary-color: #2c6dd6;
-            --secondary-color: #0e4bae;
-            --accent-blue: #1e90ff;
-            --bg-dark: #0a0a0f;
-            --bg-card: #1a1a24;
+            --primary-color: #4b2d85;
+            --secondary-color: #160c41;
+            --accent-blue: #6b4ba8;
+            --bg-dark: #0a0a0a;
+            --bg-card: #1b1c1d;
             --text-primary: #ffffff;
             --text-secondary: #94a3b8;
-            --gradient-start: #0e4bae;
-            --gradient-end: #2c6dd6;
-            --blur-dark-blue: #1e3a8a;
+            --gradient-start: #4b2d85;
+            --gradient-end: #160c41;
+            --blur-dark-blue: #2d1654;
         }
     }
 
@@ -111,13 +114,45 @@
             animation: gradient-shift 8s ease infinite;
         }
 
+        .privacy-container {
+            position: relative;
+        }
+
+        .privacy-container::before {
+            content: '';
+            position: absolute;
+            top: -400px;
+            left: 5%;
+            width: 700px;
+            height: 700px;
+            background: radial-gradient(circle, rgba(75, 45, 133, 0.4), transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            filter: blur(80px);
+            animation: breathe 8s ease-in-out infinite;
+        }
+
+        .privacy-container::after {
+            content: '';
+            position: absolute;
+            top: 300px;
+            right: 0%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(22, 12, 65, 0.4), transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            filter: blur(80px);
+            animation: breathe 8s ease-in-out infinite 2s;
+        }
+
         .btn-primary {
             background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
             padding: 0.875rem 2.5rem;
             border-radius: 1rem;
             font-weight: 600;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 4px 20px rgba(14, 75, 174, 0.3);
+            box-shadow: 0 4px 20px rgba(75, 45, 133, 0.3);
             position: relative;
             overflow: hidden;
         }
@@ -139,12 +174,12 @@
 
         .btn-primary:hover {
             transform: translateY(-3px) scale(1.02);
-            box-shadow: 0 12px 35px rgba(14, 75, 174, 0.5);
+            box-shadow: 0 12px 35px rgba(75, 45, 133, 0.5);
         }
 
         .btn-secondary {
             backdrop-filter: blur(10px);
-            background: rgba(14, 75, 174, 0.1);
+            background: rgba(75, 45, 133, 0.1);
             border: 2px solid var(--primary-color);
             padding: 0.875rem 2.5rem;
             border-radius: 1rem;
@@ -153,10 +188,10 @@
         }
 
         .btn-secondary:hover {
-            background: rgba(14, 75, 174, 0.2);
+            background: rgba(75, 45, 133, 0.2);
             border-color: var(--accent-blue);
             transform: translateY(-3px) scale(1.02);
-            box-shadow: 0 8px 25px rgba(14, 75, 174, 0.3);
+            box-shadow: 0 8px 25px rgba(75, 45, 133, 0.3);
         }
 
         .feature-card {
@@ -177,7 +212,7 @@
             left: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(circle, rgba(44, 109, 214, 0.1) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(75, 45, 133, 0.1) 0%, transparent 70%);
             opacity: 0;
             transition: opacity 0.4s ease;
         }
@@ -194,30 +229,95 @@
         }
 
         .privacy-section {
-            backdrop-filter: blur(20px);
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
-            border-left: 1px solid rgba(255, 255, 255, 0.15);
-            border-right: 1px solid rgba(255, 255, 255, 0.15);
+            background: transparent;
+            backdrop-filter: none;
+            border-radius: 0;
             padding: 2rem;
-            margin-bottom: 0;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: none;
+            border: none;
+            position: relative;
+            overflow: visible;
+            box-shadow: none;
+        }
+
+        .privacy-section::before {
+            display: none;
         }
 
         .privacy-section:first-child {
-            border-top: 1px solid rgba(255, 255, 255, 0.15);
-            border-top-left-radius: 1rem;
-            border-top-right-radius: 1rem;
+            margin-top: 0;
+            border-bottom: none;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+            padding-bottom: 2rem;
+            margin-bottom: 0;
         }
 
         .privacy-section:last-child {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-            border-bottom-left-radius: 1rem;
-            border-bottom-right-radius: 1rem;
+            margin-bottom: 0;
+            border-top-left-radius: 0;
+            border-top-right-radius: 0;
+            padding-top: 2rem;
+            box-shadow: none;
         }
 
-        .privacy-section:hover {
-            border-color: rgba(255, 255, 255, 0.15);
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
+        .privacy-section:not(:first-child) {
+            border-radius: 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+            box-shadow: none;
+        }
+
+        .privacy-section > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        ul {
+            list-style-type: disc;
+            list-style-position: inside;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+            line-height: 1.6;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin: 2rem 0;
+        }
+
+        .privacy-card-wrapper {
+            background: var(--bg-dark)/80;
+            backdrop-filter: blur(16px);
+            border-radius: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        .back-to-home {
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            padding: 1rem 1.5rem;
+            margin-bottom: 0;
+            transition: all 0.5s ease;
+            background: transparent;
+            border-bottom: 1px solid rgba(255, 255, 255, 0);
+        }
+
+        .back-to-home.scrolled {
+            background: var(--bg-dark)/80;
+            backdrop-filter: blur(40px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
     }
     </style>
@@ -227,17 +327,28 @@
     <script type="text/babel" src="components/Footer.js"></script>
     <script type="text/babel">
         function PrivacyPage() {
+            const [isScrolled, setIsScrolled] = React.useState(false);
+
+            React.useEffect(() => {
+                const handleScroll = () => {
+                    setIsScrolled(window.scrollY > 50);
+                };
+                window.addEventListener('scroll', handleScroll);
+                return () => window.removeEventListener('scroll', handleScroll);
+            }, []);
+
             return (
                 <div className="min-h-screen">
                     <main className="pt-0">
-                        <div className="max-w-4xl mx-auto px-6 py-20">
-                            <div className="mb-1 ml-5">
-                                <a href="index.html" className="text-white hover:text-gray-300 mb-8 inline-block text-lg">← Back to Home</a>
+                        <div className="max-w-4xl mx-auto px-6 py-20 privacy-container">
+                            <div className={`back-to-home ${isScrolled ? 'scrolled' : ''}`}>
+                                <a href="index.html" className="text-white hover:text-gray-300 inline-block text-lg">← Back to Home</a>
                             </div>
 
-                            <div className="space-y-0">
-                                <div className="privacy-section">
-                                    <h2 className="text-2xl font-bold mb-4 gradient-text">Introduction</h2>
+                            <div className="space-y-6">
+                                <div className="privacy-card-wrapper">
+                                    <div className="privacy-section">
+                                        <h2 className="text-2xl font-bold mb-4 gradient-text">Introduction</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed">
                                         At Clustrix AI Platform ("we", "our", or "the service"), we are committed to protecting your privacy while improving the platform. This Privacy Policy explains how we collect, use, protect, and share your information when you use our desktop application.
                                     </p>
@@ -250,6 +361,7 @@
                                         </p>
                                     </div>
                                 </div>
+
 
                                 <div className="privacy-section">
                                     <h2 className="text-2xl font-bold mb-4 gradient-text">1. Data Collection</h2>
@@ -269,12 +381,12 @@
                                             <strong className="text-green-100">What We DON'T Collect:</strong>
                                         </p>
                                         <ul className="text-green-200 space-y-1 ml-6 mt-2">
-                                            <li>❌ No location data</li>
-                                            <li>❌ No device identifiers (MAC address, IMEI, etc.)</li>
-                                            <li>❌ No personal information (name, email, etc.)</li>
-                                            <li>❌ No chat content or conversation history</li>
-                                            <li>❌ No API keys or sensitive credentials</li>
-                                            <li>❌ No file contents or uploaded documents</li>
+                                            <li>No location data</li>
+                                            <li>No device identifiers (MAC address, IMEI, etc.)</li>
+                                            <li>No personal information (name, email, etc.)</li>
+                                            <li>No chat content or conversation history</li>
+                                            <li>No API keys or sensitive credentials</li>
+                                            <li>No file contents or uploaded documents</li>
                                         </ul>
                                     </div>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mt-4">
@@ -303,6 +415,7 @@
                                         <li><strong className="text-white">GitHub Sync:</strong> Database backups and sync data (only if you enable cloud sync feature)</li>
                                     </ul>
                                 </div>
+
 
                                 <div className="privacy-section">
                                     <h2 className="text-2xl font-bold mb-4 gradient-text">2. Data Usage</h2>
@@ -334,6 +447,7 @@
                                     </div>
                                 </div>
 
+
                                 <div className="privacy-section">
                                     <h2 className="text-2xl font-bold mb-4 gradient-text">3. Data Security & Storage</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
@@ -356,6 +470,7 @@
                                     </p>
                                 </div>
 
+
                                 <div className="privacy-section">
                                     <h2 className="text-2xl font-bold mb-4 gradient-text">4. Your Rights & Control</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
@@ -377,6 +492,7 @@
                                     </div>
                                 </div>
 
+
                                 <div className="privacy-section">
                                     <h2 className="text-2xl font-bold mb-4 gradient-text">5. Third-Party Services</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed mb-4">
@@ -392,12 +508,14 @@
                                     </p>
                                 </div>
 
+
                                 <div className="privacy-section">
                                     <h2 className="text-2xl font-bold mb-4 gradient-text">6. Children's Privacy</h2>
                                     <p className="text-[var(--text-secondary)] leading-relaxed">
                                         Clustrix AI is not intended for use by children under 13 years of age. We do not knowingly collect data from children. If you are a parent or guardian and believe your child has used this application, please contact us.
                                     </p>
                                 </div>
+
 
                                 <div className="privacy-section">
                                     <h2 className="text-2xl font-bold mb-4 gradient-text">7. Policy Changes</h2>
@@ -413,6 +531,7 @@
                                         <strong className="text-white">Last Updated:</strong> October 24, 2025
                                     </p>
                                 </div>
+
 
                                 <div className="privacy-section">
                                     <h2 className="text-2xl font-bold mb-4 gradient-text">8. Contact & Support</h2>
@@ -430,6 +549,7 @@
                                         <p className="text-blue-200 leading-relaxed">
                                             <strong className="text-blue-100">Developer's Note:</strong> This platform has been my passion project for the past year, built entirely solo and shared freely with the community. The anonymous usage data helps me understand how people use Clustrix and where to focus improvements. I'm committed to transparency and user privacy - that's why the entire source code is open for anyone to review. Thank you for supporting open-source software!
                                         </p>
+                                    </div>
                                     </div>
                                 </div>
                             </div>

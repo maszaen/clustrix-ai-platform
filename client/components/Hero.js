@@ -26,7 +26,7 @@ function Hero() {
           </div>
           
           <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
-            <span className="gradient-text">Advanced AI</span>
+            <span className="gradient-text" data-text="Advanced AI">Advanced AI</span>
             <br />
             Desktop Platform
           </h1>

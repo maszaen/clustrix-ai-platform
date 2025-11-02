@@ -1,6 +1,6 @@
 require('./env.js');
 
-const { app, BrowserWindow, ipcMain, dialog, session, protocol, net, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, protocol, net, shell, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
@@ -100,6 +100,120 @@ let useSQLite = false;
 let syncManager = null;
 let callbackServer = null;
 let performanceMonitor = null;
+let mainWindow = null;
+let tray = null;
+const CLOSE_DELAY_MS = 60 * 1000;
+let pendingCloseRequest = false;
+let closeDelayTimeout = null;
+let finalizingCount = 0;
+let lastFinalizeCompletedAt = null;
+let isQuitScheduled = false;
+
+function clearCloseDelayTimer() {
+  if (closeDelayTimeout) {
+    clearTimeout(closeDelayTimeout);
+    closeDelayTimeout = null;
+  }
+}
+
+function restoreFromTray() {
+  if (!mainWindow) return;
+
+  try {
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.setSkipTaskbar(false);
+  } catch (err) {
+    log('APP', 2, 'restoreFromTray', 'Failed to restore window', { error: err.message });
+  }
+
+  pendingCloseRequest = false;
+  clearCloseDelayTimer();
+  lastFinalizeCompletedAt = null;
+}
+
+function ensureTray() {
+  if (tray) return;
+
+  try {
+    const iconPath = path.join(__dirname, 'public', 'images', 'favicon.ico');
+    tray = new Tray(iconPath);
+    tray.setToolTip('Clustrix AI');
+
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: 'Open Clustrix AI',
+        click: () => restoreFromTray()
+      },
+      { type: 'separator' },
+      {
+        label: 'Quit Now',
+        click: () => {
+          pendingCloseRequest = false;
+          clearCloseDelayTimer();
+          isQuitScheduled = true;
+          if (tray) {
+            tray.destroy();
+            tray = null;
+          }
+          app.quit();
+        }
+      }
+    ]);
+
+    tray.setContextMenu(contextMenu);
+    tray.on('click', restoreFromTray);
+    tray.on('double-click', restoreFromTray);
+  } catch (err) {
+    log('APP', 3, 'ensureTray', 'Failed to create system tray', { error: err.message });
+  }
+}
+
+function finalizeAppQuit() {
+  if (isQuitScheduled) {
+    return;
+  }
+
+  isQuitScheduled = true;
+  pendingCloseRequest = false;
+  clearCloseDelayTimer();
+
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+
+  app.quit();
+}
+
+function evaluateCloseReadiness() {
+  if (!pendingCloseRequest || !mainWindow) {
+    return;
+  }
+
+  if (activeStreams.size > 0 || finalizingCount > 0) {
+    return;
+  }
+
+  if (!lastFinalizeCompletedAt) {
+    finalizeAppQuit();
+    return;
+  }
+
+  const elapsed = Date.now() - lastFinalizeCompletedAt;
+  const remaining = CLOSE_DELAY_MS - elapsed;
+
+  if (remaining <= 0) {
+    finalizeAppQuit();
+    return;
+  }
+
+  clearCloseDelayTimer();
+  closeDelayTimeout = setTimeout(() => {
+    closeDelayTimeout = null;
+    evaluateCloseReadiness();
+  }, remaining);
+}
 
 app.whenReady().then(async () => {
   setLogFile(path.join(app.getPath('userData'), 'app.log'));
@@ -1873,6 +1987,61 @@ function createWindow(){
     }
   });
 
+  mainWindow = win;
+
+  win.webContents.on('before-input-event', (event, input) => {
+    if (
+      input.type === 'keyDown' &&
+      input.key &&
+      input.key.toLowerCase() === 'w' &&
+      (input.control || input.meta)
+    ) {
+      event.preventDefault();
+      win.close();
+    }
+  });
+
+  win.on('close', (event) => {
+    if (isQuitScheduled) {
+      return;
+    }
+
+    const hasActiveStream = activeStreams.size > 0;
+    const isFinalizingStreams = finalizingCount > 0;
+    const withinDelay = pendingCloseRequest && lastFinalizeCompletedAt
+      ? (Date.now() - lastFinalizeCompletedAt) < CLOSE_DELAY_MS
+      : false;
+
+    if (hasActiveStream || isFinalizingStreams || withinDelay) {
+      event.preventDefault();
+      pendingCloseRequest = true;
+      ensureTray();
+
+      try {
+        if (win.isVisible()) {
+          win.hide();
+        }
+        win.setSkipTaskbar(true);
+      } catch (err) {
+        log('APP', 2, 'windowCloseInterceptor', 'Failed to hide window', { error: err.message });
+      }
+
+      evaluateCloseReadiness();
+    }
+  });
+
+  win.on('show', () => {
+    try {
+      win.setSkipTaskbar(false);
+    } catch {}
+  });
+
+  win.on('closed', () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
+  });
+
   // win.webContents.openDevTools({ mode: 'detach' }); 
   
   let lastLogSignature = null;
@@ -2150,7 +2319,12 @@ app.whenReady().then(() => {
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
-app.on('window-all-closed', () => { 
+app.on('before-quit', () => {
+  isQuitScheduled = true;
+  pendingCloseRequest = false;
+  clearCloseDelayTimer();
+});
+app.on('window-all-closed', () => {
   // Close callback server before quitting
   if (callbackServer) {
     callbackServer.close(() => {
@@ -2810,6 +2984,19 @@ ipcMain.handle('files:open-dialog', async (event) => {
   return results;
 });
 const activeStreams = new Map();
+
+function trackActiveStream(reqId, metadata) {
+  activeStreams.set(reqId, metadata);
+  if (pendingCloseRequest) {
+    evaluateCloseReadiness();
+  }
+}
+
+function untrackActiveStream(reqId) {
+  if (activeStreams.delete(reqId) && pendingCloseRequest) {
+    evaluateCloseReadiness();
+  }
+}
 const tokenUsageTrackers = new Map();
 
 function initTokenTracker(reqId, sessionId, messageIndex) {
@@ -2948,6 +3135,26 @@ ipcMain.on('chat:stream-start', async (event, payload) => {
   }
 });
 
+ipcMain.on('stream:finalizing-start', () => {
+  finalizingCount += 1;
+  clearCloseDelayTimer();
+  if (pendingCloseRequest) {
+    evaluateCloseReadiness();
+  }
+});
+
+ipcMain.on('stream:finalizing-complete', () => {
+  if (finalizingCount > 0) {
+    finalizingCount -= 1;
+  }
+  if (finalizingCount === 0) {
+    lastFinalizeCompletedAt = Date.now();
+  }
+  if (pendingCloseRequest) {
+    evaluateCloseReadiness();
+  }
+});
+
 function runStandardStreaming(event, payload) {
   const reqId = payload.reqId;
   let messages = payload.messages || [];
@@ -2983,7 +3190,7 @@ function runStandardStreaming(event, payload) {
   async function handlePerplexityRequest() {
     try {
       const thinkStartTime = Date.now();
-      activeStreams.set(reqId, { startedAt: thinkStartTime, provider: 'perplexity' });
+      trackActiveStream(reqId, { startedAt: thinkStartTime, provider: 'perplexity' });
       
       const url = new URL(joinEndpoint(BASE_URL, 'chat/completions'));
       const bodyObj = { 
@@ -3012,7 +3219,7 @@ function runStandardStreaming(event, payload) {
               log('ERROR', 'handlePerplexityRequest', errorMsg, { reqId });
               event.sender.send(`chat:chunk-${reqId}`, { error: errorMsg });
               event.sender.send(`chat:done-${reqId}`);
-              activeStreams.delete(reqId);
+              untrackActiveStream(reqId);
               return reject(new Error(errorMsg));
             }
 
@@ -3097,7 +3304,7 @@ function runStandardStreaming(event, payload) {
             }
 
             event.sender.send(`chat:done-${reqId}`);
-            activeStreams.delete(reqId);
+              untrackActiveStream(reqId);
             resolve();
 
           } catch (parseError) {
@@ -3105,7 +3312,7 @@ function runStandardStreaming(event, payload) {
             log('ERROR', 'handlePerplexityRequest', errorMsg, { reqId });
             event.sender.send(`chat:chunk-${reqId}`, { error: errorMsg });
             event.sender.send(`chat:done-${reqId}`);
-            activeStreams.delete(reqId);
+            untrackActiveStream(reqId);
             reject(parseError);
           }
         });
@@ -3116,7 +3323,7 @@ function runStandardStreaming(event, payload) {
           log('ERROR', 'handlePerplexityRequest', errorMsg, { reqId });
           event.sender.send(`chat:chunk-${reqId}`, { error: errorMsg });
           event.sender.send(`chat:done-${reqId}`);
-          activeStreams.delete(reqId);
+          untrackActiveStream(reqId);
           reject(err);
         });
 
@@ -3129,7 +3336,7 @@ function runStandardStreaming(event, payload) {
       log('ERROR', 'handlePerplexityRequest', errorMsg, { reqId });
       event.sender.send(`chat:chunk-${reqId}`, { error: errorMsg });
       event.sender.send(`chat:done-${reqId}`);
-      activeStreams.delete(reqId);
+      untrackActiveStream(reqId);
       throw error;
     }
   }
@@ -3433,7 +3640,7 @@ function runStandardStreaming(event, payload) {
                   log('MAIN: RE+ACT streaming completed');
                   finalizeTokenUsage(reqId, event);
                   event.sender.send(`chat:done-${reqId}`);
-                  activeStreams.delete(reqId);
+                  untrackActiveStream(reqId);
                   return;
                 }              } catch (reactError) {
                 log('MAIN: RE+ACT processing failed for project session, falling back:', reactError.message);
@@ -3456,7 +3663,7 @@ function runStandardStreaming(event, payload) {
                 log('MAIN: Agent streaming completed');
                 finalizeTokenUsage(reqId, event);
                 event.sender.send(`chat:done-${reqId}`);
-                activeStreams.delete(reqId);
+                untrackActiveStream(reqId);
               }
             };
             sendChunk();
@@ -3571,7 +3778,7 @@ function runStandardStreaming(event, payload) {
 
             finalizeTokenUsage(reqId, event);
             event.sender.send(`chat:done-${reqId}`);
-            activeStreams.delete(reqId);
+            untrackActiveStream(reqId);
             return;
             
           } catch (reactError) {
@@ -3599,11 +3806,11 @@ function runStandardStreaming(event, payload) {
     function sendDone(){
       finalizeTokenUsage(reqId, event);
       event.sender.send(`chat:done-${reqId}`);
-      activeStreams.delete(reqId);
+      untrackActiveStream(reqId);
     }
     function sendErr(msg){
       event.sender.send(`chat:error-${reqId}`, msg);
-      activeStreams.delete(reqId);
+      untrackActiveStream(reqId);
       clearTokenUsage(reqId);
     }
 
@@ -3702,7 +3909,7 @@ function runStandardStreaming(event, payload) {
         });
         req.on('error', e => sendErr(e.message || String(e)));
         req.write(body); req.end();
-        activeStreams.set(reqId, req);
+        trackActiveStream(reqId, req);
       } catch (e) {
         sendErr(e.message || String(e));
       }
@@ -3944,7 +4151,7 @@ function runStandardStreaming(event, payload) {
       });
       req.on('error', e => sendErr(e.message || String(e)));
       req.write(body); req.end();
-      activeStreams.set(reqId, req);
+      trackActiveStream(reqId, req);
     }
   }
 }
@@ -3959,7 +4166,12 @@ ipcMain.on('chat:stream-cancel', (event, reqId) => {
 
   // Handle normal stream cancellation
   const r = activeStreams.get(reqId);
-  if (r){ try{ r.destroy(new Error('Cancelled')); }catch{} activeStreams.delete(reqId); }
+  if (r){
+    try {
+      r.destroy(new Error('Cancelled'));
+    } catch {}
+    untrackActiveStream(reqId);
+  }
   clearTokenUsage(reqId);
 });
 ipcMain.handle('chat:title', async (_evt, payload) => {

@@ -11648,19 +11648,19 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
   };
 
   const showThinking = () => {
-    const s = getState();
-    if (!s) return;
-    if (!s.aiNode || !document.contains(s.aiNode)) return;
-    let el = s.aiNode.querySelector(".inline-loader");
-    if (!el) {
-      el = document.createElement("div");
-      el.className = "inline-loader";
-      s.aiNode.appendChild(el);
-    }
-    if (el.dataset.state !== "thinking") {
-      el.innerHTML = `<span class="dot"></span><span class="dot"></span><span class="dot"></span>`;
-      el.dataset.state = "thinking";
-    }
+      const s = getState();
+      if (!s) return;
+      if (!s.aiNode || !document.contains(s.aiNode)) return;
+      let el = s.aiNode.querySelector(".inline-loader");
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "inline-loader";
+        s.aiNode.appendChild(el);
+      }
+      if (el.dataset.state !== "thinking") {
+        el.innerHTML = `<span class="dot"></span><span class="dot"></span><span class="dot"></span>`;
+        el.dataset.state = "thinking";
+      }
   };
 
   const hideLoader = () => {
@@ -11781,224 +11781,245 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     if (finalized) return;
     finalized = true;
 
-    const s = getState();
-    if (!s) return;
-    const { session: streamSession, aiNode, messageIndex } = s;
-
-    // Get the actual session from state.sessions to ensure we're working with the same object
-    const session = state.sessions.find(sess => sess.id === streamSession.id);
-    if (!session) return;
-
-    const existingMessageData = session.messages[messageIndex];
-    const modelInfo =
-      existingMessageData && Array.isArray(existingMessageData)
-        ? existingMessageData[2]
-        : null;
-    log("FINALIZE", 1, "finalize", "Preparing to save final message.", {
-      hasModelInfo: !!modelInfo,
-      modelInfo,
-    });
-
-    const display = trimEnd(fullResponse);
-    const hasContent = display.length > 0;
-    const hasEnd = END_RX.test(fullResponse) || sawEnd;
-
-    const isComplete = hasEnd || !interrupted;
-
-    // Collapse response spacer when response is complete
-    if (isComplete) {
-      collapseSpacer();
-    }
-
-    let finalMessageToSave = display;
-    if (interrupted) {
-      collapseSpacer();
-      const formattedError = formatErrorMessageForSaving(reason);
-      finalMessageToSave = hasContent
-        ? `${display}\n\n${formattedError}`
-        : formattedError;
-    }
-
-    if (finalMessageToSave || interrupted) {
-      // Check for pending web search data and apply it to modelInfo
-      const pendingPageCount = getAndClearPendingWebSearchData(session.id);
-      if (pendingPageCount !== null) {
-        modelInfo.webSearchPages = pendingPageCount;
-        console.log("Applied pending web search data to finalized message:", { sessionId: session.id, pageCount: pendingPageCount });
-      }
-      
-      // Include thinking data if exists
-      if (session._x_think && session._x_think[messageIndex]) {
-        modelInfo.thinkContent = session._x_think[messageIndex];
-      }
-      
-      // Include thinking updates if exists
-      if (session._x_think_updates && session._x_think_updates[messageIndex]) {
-        modelInfo.thinkingUpdate = session._x_think_updates[messageIndex];
-      }
-
-      session.messages[messageIndex] = ["ai", finalMessageToSave, modelInfo];
-      
-      // Track updated message for incremental save
-      if (!session._newMessages) {
-        session._newMessages = [];
-      }
-      session._newMessages.push([messageIndex, ["ai", finalMessageToSave, modelInfo]]);
-      
-      log(
-        "FINALIZE",
-        2,
-        "finalize",
-        "Final message saved to state with modelInfo.",
-        { content: finalMessageToSave.substring(0, 50) + "...", modelInfo },
-      );
-    } else if (interrupted) {
-      collapseSpacer();
-      
-      // Include thinking data if exists (for interrupted messages)
-      if (session._x_think && session._x_think[messageIndex]) {
-        modelInfo.thinkContent = session._x_think[messageIndex];
-      }
-      
-      // Include thinking updates if exists (for interrupted messages)
-      if (session._x_think_updates && session._x_think_updates[messageIndex]) {
-        modelInfo.thinkingUpdate = session._x_think_updates[messageIndex];
-      }
-      
-      session.messages[messageIndex] = [
-        "ai",
-        formatErrorMessageForSaving(reason),
-        modelInfo,
-      ];
-      
-      // Track updated message for incremental save
-      if (!session._newMessages) {
-        session._newMessages = [];
-      }
-      session._newMessages.push([messageIndex, ["ai", formatErrorMessageForSaving(reason), modelInfo]]);
-    }
-
-    if (aiNode) {
-      setNodeMetadata(aiNode, modelInfo || {});
-      if (
-        aiNode._thinkingEl &&
-        modelInfo &&
-        modelInfo.webSearchPages &&
-        modelInfo.webSearchPages > 0
-      ) {
-        updateThinkingToggleForWebSearch(aiNode, modelInfo.webSearchPages);
-      }
-    }
-
-    if (aiNode && document.contains(aiNode)) {
-      hideLoader();
-      const div = aiNode.querySelector(".message-text");
-      if (div) {
-        const thinkingContainer = div.querySelector('.thinking-wrap');
-        const thinkingText = session._x_think && session._x_think[messageIndex] ? session._x_think[messageIndex].text : '';
-        if (thinkingContainer && finalMessageToSave && finalMessageToSave.trim() === thinkingText.trim()) {
-          // Don't append duplicate thinking content
-        } else if (thinkingContainer && finalMessageToSave) {
-          // Append final content after thinking
-          const finalDiv = document.createElement('div');
-          finalDiv.className = 'final-ai-response';
-          md(finalMessageToSave).then(html => {
-            finalDiv.innerHTML = html;
-            div.appendChild(finalDiv);
-            if (div.querySelector("pre code")) highlightAllUnder(div);
-            attachCodeBlockListeners(finalDiv);
-            renderMathInElement(div);
-          }).catch(err => {
-            console.warn('Markdown finalization error:', err);
-            finalDiv.innerHTML = mdFallback(finalMessageToSave);
-            div.appendChild(finalDiv);
-            if (div.querySelector("pre code")) highlightAllUnder(div);
-            attachCodeBlockListeners(finalDiv);
-            renderMathInElement(div);
-          });
-        } else if (!thinkingContainer) {
-          md(finalMessageToSave || "").then(html => {
-            div.innerHTML = html;
-            if (div.querySelector("pre code")) highlightAllUnder(div);
-            attachCodeBlockListeners(div);
-            renderMathInElement(div);
-          }).catch(err => {
-            console.warn('Markdown finalization error:', err);
-            div.innerHTML = mdFallback(finalMessageToSave || "");
-            if (div.querySelector("pre code")) highlightAllUnder(div);
-            attachCodeBlockListeners(div);
-            renderMathInElement(div);
-          });
-        }
-      }
-
-      clearContinuePlaceholder(aiNode);
-
-      if (hasContent && !isComplete && !interrupted) {
-        renderContinuePlaceholder(aiNode, session, messageIndex, display, {
-          disabledMs: 1200,
-          interrupted: false,
-        });
-        restoreAiMessageAutoHeight();
-      }
-
-      renderAiFinalActions(aiNode, finalMessageToSave, messageIndex);
-    }
-
-    s.fullResponse = finalMessageToSave;
-    s.sawEnd = isComplete;
-    s.endSeen = isComplete;
-    cleanupStream();
-
-    // Remove streaming-active class from the specific AI message
-    if (aiNode) {
-      aiNode.classList.remove('streaming-active');
-      log("STREAM", 1, "finalize", "Removed streaming-active class from AI message", {});
-    }
-
-    // Reset streaming active flag for column-reverse autoscroll
-    isStreamingActive = false;
+    const notifyStart = window.api?.app?.notifyFinalizingStart;
+    const notifyComplete = window.api?.app?.notifyFinalizingComplete;
 
     try {
-      renderSessions?.();
-    } catch {}
-    try {
-      updateChatHeader?.();
-    } catch {}
-    
-    // Cancel any pending debounced saves before immediate save
-    try {
-      debouncedSave?.cancel?.();
-    } catch {}
-    
-    try {
-      await save?.();
-    } catch {}
-    
-    // Auto-cache session after streaming completes for instant restore
-    // CRITICAL: Only cache if this session is currently active to prevent caching wrong content
-    try {
-      if (session && session.id && current && current.id === session.id) {
-        const chatLog = $("#chat-log");
-        if (chatLog && chatLog.innerHTML.trim()) {
-          const scroller = getChatScroller();
-          const scrollPos = scroller ? scroller.scrollTop : 0;
-          cacheSession(session.id, chatLog.innerHTML, scrollPos, session._lazyState);
-          log("CACHE", 1, "finalize", "Auto-cached session after streaming completed");
-        }
-      } else if (session && session.id && (!current || current.id !== session.id)) {
-        log("CACHE", 1, "finalize", "Skipped caching - session not currently active", {
-          streamSessionId: session.id,
-          currentSessionId: current?.id
-        });
-      }
+      notifyStart?.();
     } catch (err) {
-      log("CACHE", 3, "finalize", "Failed to cache session after streaming", { error: err });
+      log("STREAM", 2, "finalize", "Failed to notify finalizing start", {
+        error: err?.message || String(err),
+      });
     }
 
-    // if (hasContent && (!session.name || /untitled/i.test(session.name))) {
-    //   try { generateAndSetTitle?.(session); } catch {}
-    // }
+    try {
+      const s = getState();
+      if (!s) return;
+      const { session: streamSession, aiNode, messageIndex } = s;
+
+      // Get the actual session from state.sessions to ensure we're working with the same object
+      const session = state.sessions.find(sess => sess.id === streamSession.id);
+      if (!session) return;
+
+      const existingMessageData = session.messages[messageIndex];
+      const modelInfo =
+        existingMessageData && Array.isArray(existingMessageData)
+          ? existingMessageData[2]
+          : null;
+      log("FINALIZE", 1, "finalize", "Preparing to save final message.", {
+        hasModelInfo: !!modelInfo,
+        modelInfo,
+      });
+
+      const display = trimEnd(fullResponse);
+      const hasContent = display.length > 0;
+      const hasEnd = END_RX.test(fullResponse) || sawEnd;
+
+      const isComplete = hasEnd || !interrupted;
+
+      // Collapse response spacer when response is complete
+      if (isComplete) {
+        collapseSpacer();
+      }
+
+      let finalMessageToSave = display;
+      if (interrupted) {
+        collapseSpacer();
+        const formattedError = formatErrorMessageForSaving(reason);
+        finalMessageToSave = hasContent
+          ? `${display}\n\n${formattedError}`
+          : formattedError;
+      }
+
+      if (finalMessageToSave || interrupted) {
+        // Check for pending web search data and apply it to modelInfo
+        const pendingPageCount = getAndClearPendingWebSearchData(session.id);
+        if (pendingPageCount !== null) {
+          modelInfo.webSearchPages = pendingPageCount;
+          console.log("Applied pending web search data to finalized message:", { sessionId: session.id, pageCount: pendingPageCount });
+        }
+      
+        // Include thinking data if exists
+        if (session._x_think && session._x_think[messageIndex]) {
+          modelInfo.thinkContent = session._x_think[messageIndex];
+        }
+      
+        // Include thinking updates if exists
+        if (session._x_think_updates && session._x_think_updates[messageIndex]) {
+          modelInfo.thinkingUpdate = session._x_think_updates[messageIndex];
+        }
+
+        session.messages[messageIndex] = ["ai", finalMessageToSave, modelInfo];
+      
+        // Track updated message for incremental save
+        if (!session._newMessages) {
+          session._newMessages = [];
+        }
+        session._newMessages.push([messageIndex, ["ai", finalMessageToSave, modelInfo]]);
+      
+        log(
+          "FINALIZE",
+          2,
+          "finalize",
+          "Final message saved to state with modelInfo.",
+          { content: finalMessageToSave.substring(0, 50) + "...", modelInfo },
+        );
+      } else if (interrupted) {
+        collapseSpacer();
+      
+        // Include thinking data if exists (for interrupted messages)
+        if (session._x_think && session._x_think[messageIndex]) {
+          modelInfo.thinkContent = session._x_think[messageIndex];
+        }
+      
+        // Include thinking updates if exists (for interrupted messages)
+        if (session._x_think_updates && session._x_think_updates[messageIndex]) {
+          modelInfo.thinkingUpdate = session._x_think_updates[messageIndex];
+        }
+      
+        session.messages[messageIndex] = [
+          "ai",
+          formatErrorMessageForSaving(reason),
+          modelInfo,
+        ];
+      
+        // Track updated message for incremental save
+        if (!session._newMessages) {
+          session._newMessages = [];
+        }
+        session._newMessages.push([messageIndex, ["ai", formatErrorMessageForSaving(reason), modelInfo]]);
+      }
+
+      if (aiNode) {
+        setNodeMetadata(aiNode, modelInfo || {});
+        if (
+          aiNode._thinkingEl &&
+          modelInfo &&
+          modelInfo.webSearchPages &&
+          modelInfo.webSearchPages > 0
+        ) {
+          updateThinkingToggleForWebSearch(aiNode, modelInfo.webSearchPages);
+        }
+      }
+
+      if (aiNode && document.contains(aiNode)) {
+        hideLoader();
+        const div = aiNode.querySelector(".message-text");
+        if (div) {
+          const thinkingContainer = div.querySelector('.thinking-wrap');
+          const thinkingText = session._x_think && session._x_think[messageIndex] ? session._x_think[messageIndex].text : '';
+          if (thinkingContainer && finalMessageToSave && finalMessageToSave.trim() === thinkingText.trim()) {
+            // Don't append duplicate thinking content
+          } else if (thinkingContainer && finalMessageToSave) {
+            // Append final content after thinking
+            const finalDiv = document.createElement('div');
+            finalDiv.className = 'final-ai-response';
+            md(finalMessageToSave).then(html => {
+              finalDiv.innerHTML = html;
+              div.appendChild(finalDiv);
+              if (div.querySelector("pre code")) highlightAllUnder(div);
+              attachCodeBlockListeners(finalDiv);
+              renderMathInElement(div);
+            }).catch(err => {
+              console.warn('Markdown finalization error:', err);
+              finalDiv.innerHTML = mdFallback(finalMessageToSave);
+              div.appendChild(finalDiv);
+              if (div.querySelector("pre code")) highlightAllUnder(div);
+              attachCodeBlockListeners(finalDiv);
+              renderMathInElement(div);
+            });
+          } else if (!thinkingContainer) {
+            md(finalMessageToSave || "").then(html => {
+              div.innerHTML = html;
+              if (div.querySelector("pre code")) highlightAllUnder(div);
+              attachCodeBlockListeners(div);
+              renderMathInElement(div);
+            }).catch(err => {
+              console.warn('Markdown finalization error:', err);
+              div.innerHTML = mdFallback(finalMessageToSave || "");
+              if (div.querySelector("pre code")) highlightAllUnder(div);
+              attachCodeBlockListeners(div);
+              renderMathInElement(div);
+            });
+          }
+        }
+
+        clearContinuePlaceholder(aiNode);
+
+        if (hasContent && !isComplete && !interrupted) {
+          renderContinuePlaceholder(aiNode, session, messageIndex, display, {
+            disabledMs: 1200,
+            interrupted: false,
+          });
+          restoreAiMessageAutoHeight();
+        }
+
+        renderAiFinalActions(aiNode, finalMessageToSave, messageIndex);
+      }
+
+      s.fullResponse = finalMessageToSave;
+      s.sawEnd = isComplete;
+      s.endSeen = isComplete;
+      cleanupStream();
+
+      // Remove streaming-active class from the specific AI message
+      if (aiNode) {
+        aiNode.classList.remove('streaming-active');
+        log("STREAM", 1, "finalize", "Removed streaming-active class from AI message", {});
+      }
+
+      // Reset streaming active flag for column-reverse autoscroll
+      isStreamingActive = false;
+
+      try {
+        renderSessions?.();
+      } catch {}
+      try {
+        updateChatHeader?.();
+      } catch {}
+    
+      // Cancel any pending debounced saves before immediate save
+      try {
+        debouncedSave?.cancel?.();
+      } catch {}
+    
+      try {
+        await save?.();
+      } catch {}
+    
+      // Auto-cache session after streaming completes for instant restore
+      // CRITICAL: Only cache if this session is currently active to prevent caching wrong content
+      try {
+        if (session && session.id && current && current.id === session.id) {
+          const chatLog = $("#chat-log");
+          if (chatLog && chatLog.innerHTML.trim()) {
+            const scroller = getChatScroller();
+            const scrollPos = scroller ? scroller.scrollTop : 0;
+            cacheSession(session.id, chatLog.innerHTML, scrollPos, session._lazyState);
+            log("CACHE", 1, "finalize", "Auto-cached session after streaming completed");
+          }
+        } else if (session && session.id && (!current || current.id !== session.id)) {
+          log("CACHE", 1, "finalize", "Skipped caching - session not currently active", {
+            streamSessionId: session.id,
+            currentSessionId: current?.id
+          });
+        }
+      } catch (err) {
+        log("CACHE", 3, "finalize", "Failed to cache session after streaming", { error: err });
+      }
+
+      // if (hasContent && (!session.name || /untitled/i.test(session.name))) {
+      //   try { generateAndSetTitle?.(session); } catch {}
+      // }
+    } finally {
+      try {
+        notifyComplete?.();
+      } catch (err) {
+        log("STREAM", 2, "finalize", "Failed to notify finalizing complete", {
+          error: err?.message || String(err),
+        });
+      }
+    }
   };
 
   showThinking();

@@ -38,7 +38,7 @@ function Hero() {
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
             <a 
-              href="https://drive.google.com/file/d/your-file-id/view" 
+              href="https://drive.google.com/file/d/127aKLjHeunvyEUeC80IcM2kICTac3gBY/view?usp=sharing" 
               target="_blank"
               rel="noopener noreferrer"
               className="btn-primary inline-flex items-center justify-center gap-2"

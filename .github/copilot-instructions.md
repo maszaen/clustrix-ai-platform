@@ -1,41 +1,62 @@
-# Clustrix AI – Codebase Or- `renderer/md.worker.js` uses custom markdown parser from `md.js` for all markdown processing.entation
+# Clustrix AI – Development Guide
 
-## High-Level Overview
-Clustrix is a desktop chat assistant built with Electron. The main process (`main.js`) boots logging, manages the application window, mediates IPC, and wires a LangChain-powered backend to the renderer UI. The renderer (assets under `renderer/`) handles session state, streaming UI, markdown rendering, artifacts management, and project workflows. A preload script (`preload.js`) exposes a hardened IPC bridge.
+Electron desktop AI chat. Main process handles IPC + backend services. Renderer manages UI state + streaming.
 
-## Main Process Responsibilities
-- Initializes structured logging to `${userData}/app.log` and respects the `CLUSTrix_DEBUG` flag (`utils/logger.js`).
-- Instantiates `ClustrixLangChainService` and `MultiAgentOrchestrator` to provide embeddings, file summarization, reasoning agents, and web search orchestration (`backend/langchain-service.js`, `backend/langchain-agents.js`).
-- Serves persistent data through IPC (`sessions:*`, `artifacts:*`, `projects:*`, `models:*`) and manages model configuration in `${userData}/database/internal or cloud/ai-model.conf.json`.
-- Streams chat completions via `chat:stream-start`, relaying chunk/done/error events back to the renderer, and handles auxiliary features like insult detection prompts, continue placeholders, and thinking-mode updates.
-- Supports file ingestion (Docx via Mammoth, spreadsheets via a bundled XLSX module) and exposes OS dialogs.
+## Development Guidelines
+- **Modular Development:** When developing new features/functions, ALWAYS create them in separate modular files or folders. NEVER add new features directly to main.js or renderer.js. Place backend features in `backend/` subdirectories, renderer features in `renderer/` subdirectories
+- **Logging:** Use `log(context, level, fn, msg, details)` from `utils/logger.js` instead of console.log for structured logging
+- **IPC Naming:** Follow `namespace:event` convention (examples: `chat:stream-start`, `sessions:load`, `sync:syncNow`)
+- **Module System:** Renderer uses ES modules (`.mjs` extension), backend uses CommonJS (`.js` with `require`)
+- **Context Isolation:** Never expose Node APIs directly to renderer process, always use preload.js bridge with contextBridge
+- **State Management:** Use `AppState` accessors from `renderer/state/app-state.mjs` instead of global variables for state consistency
+- **Error Handling:** Wrap all IPC handlers with try-catch blocks, log errors with proper context using logger utility
+- **Testing:** Write Jest tests for new modules with target of 80%+ code coverage
+- **Documentation:** Add JSDoc comments for all exported functions and complex logic blocks
 
-## Backend Services
-- `backend/langchain-service.js` supplies embeddings (OpenRouter when keys exist, otherwise TF-IDF style vectors), maintains a vector memory store, and runs local summarization/embedding fallbacks.
-- `backend/langchain-agents.js` orchestrates research flows: planning prompts, optional SerpAPI/Google search via `backend/web-search.js`, scraping, and synthesis.
-- Additional helpers include `desktop-search-engine.js` for local indexing, `file-summarizer.js` for structured summaries, `reasoning-action-agent.js` for RE+ACT style executions, and `local-embedding-engine.js` for offline embeddings.
+## File Structure Rules
+- **Renderer modules:** Place in `renderer/` directory with `.mjs` extension (ES modules)
+- **Backend services:** Organize in `backend/integration/`, `backend/data/`, `backend/sync/` by functional concern
+- **IPC handlers:** Keep modular by concern (separate files for sessions, artifacts, chat, models, sync handlers)
+- **Shared utilities:** Place in `utils/` directory for cross-process helper functions
+- **Security:** Never commit `.env` files or sensitive credentials to version control
 
-## Renderer & UX
-- `renderer/renderer.js` owns application state: multi-session chat history, drafts, project data, artifacts, selection modes, and markdown test sessions.
-- Handles streaming UI/UX (thinking logs, resume banners, autoscroll, spacers), attachment workflows, code artifact highlighting, and perfect-scrollbar styling.
-- Uses `renderer/data.js` for canned UI data, `renderer/style.css` for theming (dark/light), and `renderer/md.worker.js` for Markdown processing.
-- `public/` contains custom textarea scrollbar logic (`rolling/`), images, and static assets referenced by the renderer.
+## Code Analysis Tools
+- `checker/analyze.js` - AST-based code analysis for JavaScript files. Use: `node checker/analyze.js <file-path>` to extract functions, variables, and imports from any JS file
+- `checker/analyze-listener.js` - Event listener tracking with line-range support. Use: `node checker/analyze-listener.js <file-path> [start line] [end line]` to analyze event listeners in specific code ranges
+- `checker/list-directory.js` - Check project directory structure. Use: `node checker/list-directory.js <directory or null>` or omit directory argument to check project root
 
-## Third-Party Package Imports
-- Runtime packages are served through Electron custom protocols. `protocol.handle('pkg')` maps `pkg://<module>/...` requests to files under `node_modules`, so browser contexts can load libraries without breaking CSP (`main.js`).
-- MathJax is exposed via the `mjx://` protocol. Requests to `mjx://mathjax/...` resolve to `node_modules/mathjax`, and font lookups like `mathjax/mathjax-newcm-font` are rewritten to `@mathjax/…` so both the core and font packages work offline (`main.js`).
-- The renderer boots MathJax with `<script defer id="MathJax-script" src="mjx://startup.js"></script>` and a `MathJax.loader.paths` mapping that points both `mathjax` and `@mathjax` namespaces to the `mjx://` protocol (`renderer/index.html`). Fonts and other assets are pulled through the same handler.
-- `renderer/md.worker.js` dynamically pulls Markdown-It with `self.importScripts('../node_modules/markdown-it/dist/markdown-it.min.js')`, matching the renderer’s fallback `<script src="pkg://markdown-it/dist/markdown-it.min.js"></script>` when the worker is unavailable.
+## Storage
+Data location: `${userData}/database/` (Windows: `AppData\Roaming\clustrix\database\`)
+- **internal/clustrix.db** – Local SQLite database
+- **sync/{userId}/clustrix.db** – Cloud-synced database per user
+- **internal/ai-model.conf.json** – Model config (internal)
+- **sync/{userId}/ai-model.conf.json** – Model config (cloud per user)
 
-## IPC Bridge
-`preload.js` exposes a whitelisted `window.api` API: session/artifact/project persistence, chat streaming controls, model configuration, logging passthrough, window chrome commands, and shell helpers. Streaming callbacks receive chunk events and support cancellation.
+Root directory `${userData}/`:
+- **sync-config.json** – Sync mode + OAuth tokens
+- **app.log** – Structured logs
+- **html-previews/** – Temporary HTML previews
+- **current-profile-photo.jpg** – User avatar cache
 
-## Data & Storage Contracts
-- Persistent JSON stores (sessions, projects, artifacts, models) reside in `app.getPath('userData')`.
-- Uploaded files are tracked per session for summarization and agent context.
-- Vector memory is serialized to `vector_data.json`; session memory lives in `session_memory.json` when LangChain is enabled.
+## Architecture
+- **Main Process (main.js):** Window lifecycle, IPC routing, LangChain service initialization, database manager, stream finalization tracking
+- **Renderer (renderer.js + modules):** UI state management, session caching
+  - Extracted utilities: `state/`, `cache/`, `markdown/`, `time/`, `files/`, `ids/`, `utils/` modules
+  - Core: `core/md.js`, `core/md.worker.js`, `core/title-gen.js`
+- **Backend Services:** 
+  - `backend/integration/` – LangChain integration with embeddings (OpenRouter/TF-IDF fallback), multi-agent research orchestration (planning, web search, scraping, synthesis), RE+ACT reasoning engine, file summarization, local embedding engine
+  - `backend/data/` – SQLite database manager (sessions, messages, artifacts, projects with sync support and device tracking)
+  - `backend/sync/` – Sync orchestration (internal/cloud mode switching, directory management, conflict resolution, smart incremental backups)
+  - `backend/github/` – GitHub OAuth flow (browser-based authentication, token exchange, user profile fetching) + Gist storage service for encrypted cloud data
+  - `backend/search/` – Web search via SerpAPI/Google Custom Search (query execution, image search, result parsing) + local desktop file indexing
+  - `backend/debug/` – Testing utilities (mock AI responses with configurable scenarios, streaming chunk simulation with realistic delays)
 
-## Development Guardrails
-- Default scripts run through Electron Forge (`npm run start|dev|make`). Only run `npm run dev` when explicitly requested.
-- Prefer the structured `log()` utilities over `console.log` when instrumenting new code.
-- Maintain IPC channel naming conventions (`namespace:event`), ensure preload surface stays minimal, and respect context isolation.
+## IPC Pattern
+Channel naming follows `namespace:event` format:
+- **Data operations:** sessions:load, sessions:save, artifacts:load, artifacts:save, projects:load, projects:save, models:load, models:save
+- **Chat operations:** chat:stream, chat:titleSuggest
+- **Sync operations:** sync:getConfig, sync:switchMode, sync:syncNow, sync:logout
+- **Window operations:** window:minimize, window:maximize, window:close
+- **Monitoring:** monitoring:getMetrics, monitoring:start, monitoring:stop
+
+For changelog & version history: see `changelog/release-notes/` | Changelog instructions: `changelog/instruction.md`

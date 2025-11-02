@@ -573,24 +573,17 @@ function getModelConfigPath() {
   }
 }
 
-/**
- * Legacy wrapper for getDefaultModelConfig()
- * @deprecated Use getDefaultModelConfig() directly
- */
-function defaultModelsConf() {
-  return getDefaultModelConfig();
-}
 
 ipcMain.handle('models:load', async () => {
   try {
     const configPath = getModelConfigPath();
-    if (!fs.existsSync(configPath)) return defaultModelsConf();
+    if (!fs.existsSync(configPath)) return getDefaultModelConfig();
     const raw = fs.readFileSync(configPath, 'utf-8');
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : defaultModelsConf();
+    return parsed && typeof parsed === 'object' ? parsed : getDefaultModelConfig();
   } catch (e) {
     log('models:load error', e);
-    return defaultModelsConf();
+    return getDefaultModelConfig();
   }
 });
 
@@ -2334,7 +2327,6 @@ app.on('window-all-closed', () => {
   
   if (process.platform !== 'darwin') app.quit(); 
 });
-const dataFile = path.join(app.getPath('userData'), 'chat_data.json');
 
 ipcMain.handle('sessions:load', async () => {
   try {
@@ -2417,65 +2409,12 @@ ipcMain.handle('sessions:load', async () => {
       const settings = db.getAllSettings();
       return { sessions: transformed, settings };
     }
-    if (!fs.existsSync(dataFile)) {
-      return { sessions: [], settings: {} };
-    }
-
-    const raw = fs.readFileSync(dataFile, 'utf-8');
-    let line = 1;
-    let col = 1;
-    let foundInvalid = false;
-
-    for (let i = 0; i < raw.length; i++) {
-      const code = raw.charCodeAt(i);
-
-      if (code === 0x0a) {
-        line++;
-        col = 1;
-      } else {
-        col++;
-      }
-
-      if (code < 0x20 && ![0x09, 0x0a, 0x0d].includes(code)) {
-        const hex = "0x" + code.toString(16).padStart(2, "0");
-        const preview = raw
-          .slice(Math.max(0, i - 10), Math.min(raw.length, i + 10))
-          .replace(/\n/g, "\\n");
-        log(
-          `Control character ${hex} at position ${i} (row ${line}, col ${col}). Context: “…${preview}…”`
-        );
-        foundInvalid = true;
-      }
-    }
-
-    if (foundInvalid) {
-      app.quit();
-      return;
-    }
-
-    const parsed = JSON.parse(raw);
-
-    if (Array.isArray(parsed)) {
-      return { sessions: parsed, settings: { persona: {} } };
-    }
-    
-    if (parsed && typeof parsed === 'object') {
-      if (typeof parsed.settings?.persona === 'string') {
-        parsed.settings.persona = {
-          name: '',
-          work: '',
-          preferences: parsed.settings.persona
-        };
-      }
-      return parsed;
-    }
-    
-    return { sessions: [], settings: {} };
+    throw new Error('SQLite database not available');
   } catch (e) {
     console.error('Load error:', e.message);
     console.error(e.stack);
     log('load error', e);
-    return { sessions: [], settings: {} };
+    throw e;
   }
 });
 
@@ -2532,16 +2471,14 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
       });
       
       return true;
-    } else {
-      fs.writeFileSync(dataFile, JSON.stringify(data, null, 2), 'utf-8');
-      return true;
     }
+    
+    throw new Error('SQLite database not available');
   }catch(e){
     log('save error', e);
     return false;
   }
 });
-const artifactsFile = path.join(app.getPath('userData'), 'artifacts.json');
 
 ipcMain.handle('artifacts:load', async () => {
   try{
@@ -2561,11 +2498,11 @@ ipcMain.handle('artifacts:load', async () => {
         messageIndex: a.message_index
       }));
     }
-    // No fallback to JSON - SQLite only
-    return [];
+    
+    throw new Error('SQLite database not available');
   }catch(e){
     log('artifacts load error', e);
-    return [];
+    throw e;
   }
 });
 
@@ -2599,19 +2536,17 @@ ipcMain.handle('artifacts:save', async (_evt, artifacts) => {
       });
       return true;
     }
-    // No fallback to JSON - SQLite only
+    
     throw new Error('SQLite database not available');
   }catch(e){
     log('artifacts save error', e);
-    return false;
+    throw e;
   }
 });
-const projectsFile = path.join(app.getPath('userData'), 'projects.json');
 
-// HELPER: Centralized project loading logic with SQLite-first approach
+// HELPER: Centralized project loading logic with SQLite-only approach
 async function loadProjectsFromStorage() {
   try {
-    // Try SQLite first
     if (useSQLite && db) {
       const projects = db.getAllProjects();
 
@@ -2636,14 +2571,10 @@ async function loadProjectsFromStorage() {
       });
     }
     
-    // Fallback to JSON if SQLite not available
-    if (!fs.existsSync(projectsFile)) return [];
-    const content = fs.readFileSync(projectsFile, 'utf-8');
-    const parsed = JSON.parse(content || '[]');
-    return Array.isArray(parsed) ? parsed : [];
+    throw new Error('SQLite database not available');
   } catch (e) {
     log('PROJECT_LOAD', 4, 'loadProjectsFromStorage', 'Failed to load projects', e);
-    return [];
+    throw e;
   }
 }
 
@@ -2652,7 +2583,7 @@ ipcMain.handle('projects:load', async () => {
     return await loadProjectsFromStorage();
   } catch (e) {
     log('PROJECT_LOAD', 4, 'projects:load', 'Failed', e);
-    return [];
+    throw e;
   }
 });
 
@@ -2713,15 +2644,14 @@ ipcMain.handle('projects:save', async (_evt, projects) => {
       log('PROJECTS', 2, 'projects:save', 'Successfully saved all projects to SQLite');
       return true;
     }
-    fs.writeFileSync(projectsFile, JSON.stringify(projects, null, 2), 'utf-8');
-    log('PROJECTS', 2, 'projects:save', 'Successfully saved to JSON');
-    return true;
+    
+    throw new Error('SQLite database not available');
   }catch(e){
     log('PROJECTS', 4, 'projects:save', 'Failed to save projects', { 
       error: e.message,
       stack: e.stack
     });
-    return false;
+    throw e;
   }
 });
 

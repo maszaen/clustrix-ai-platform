@@ -1,17 +1,46 @@
-Changelog v32.0.5:
-- _Better parser_
-- _AI prompt recommendation every response_
-- _Web search include images for preview_
-- _Database optimization_
-- _Add cloud backup (using your github private repo)_
-- _Add mermaid flowchart preview in every mermaid codeblocks_
-- _Performance improvements, and removing redundant code_
-- _and other updates not mentioned..._
+Changelog v34.5.9: **Graceful Window Close & Stream Finalization**
 
-Changelog v32.3.5:
-- PDF upload support
-- Chat area UI overflow fix
-- Added "Learn More" menu with comprehensive guides and documentation
+**Window Management & Tray Icon:**
+- Custom Ctrl+W shortcut for window close with 60-second graceful shutdown
+- System tray icon support for minimized state management
+- Tray context menu with "Open Clustrix AI" and "Quit Now" options
+- Window restore functionality from tray (click or double-click)
+- Skip taskbar when minimized to tray
+
+**Stream Finalization Tracking:**
+- New IPC handlers: `stream:finalizing-start` and `stream:finalizing-complete`
+- Active stream tracking functions: `trackActiveStream()` and `untrackActiveStream()`
+- Proper cleanup flow with finalization counter to prevent premature app exit
+- Close request evaluation with timeout-based retry logic (60 seconds)
+
+**Renderer/Frontend Improvements:**
+- Stream finalization notifications from renderer to main process
+- Wrapped finalize function with try-finally for robust error handling
+- Proper error logging for finalization failures
+- Code formatting consistency improvements in stream handler
+
+**Backend Enhancements:**
+- `main.js`: Added Tray and Menu module imports from Electron
+- Stream cancellation now uses proper untracking mechanism
+- Enhanced close event handlers with active stream detection
+- Before-quit event handler for clean shutdown state
+
+**IPC Bridge Updates:**
+- `preload.js`: Exposed `notifyFinalizingStart()` and `notifyFinalizingComplete()`
+- Secure IPC surface expansion for stream lifecycle events
+
+**Code Quality:**
+- Improved error handling with structured try-catch-finally patterns
+- Better state management for pending close requests
+- Consistent logging across stream lifecycle events
+
+**Statistics:**
+- 3 files changed: `main.js`, `preload.js`, `renderer/renderer.js`
+- ~400 insertions (+), ~150 deletions (-)
+- 2 commits (Add custom close shortcut, Fix UI break during session switch)
+
+> **Status:** ✓ Production Ready | _Stability Release_
+
 
 Changelog v34.5.0: **Major Architecture Restructure & Perplexity Integration**
 
@@ -51,3 +80,20 @@ Changelog v34.5.0: **Major Architecture Restructure & Perplexity Integration**
 - 11 commits from baseline
 
 > **Status:** ✓ Production Ready | _Major Release_
+
+
+Changelog v32.3.5:
+- PDF upload support
+- Chat area UI overflow fix
+- Added "Learn More" menu with comprehensive guides and documentation
+
+
+Changelog v32.0.5:
+- _Better parser_
+- _AI prompt recommendation every response_
+- _Web search include images for preview_
+- _Database optimization_
+- _Add cloud backup (using your github private repo)_
+- _Add mermaid flowchart preview in every mermaid codeblocks_
+- _Performance improvements, and removing redundant code_
+- _and other updates not mentioned..._

@@ -2233,6 +2233,7 @@ input:checked + .slider:before {
 /* Empty States */
 .empty-state {
   text-align: center;
+  width: 100%;
   padding: 60px 20px;
   color: var(--text-secondary);
 }
@@ -9262,9 +9263,17 @@ button:disabled .btn-icon {
 .provider-title {
   text-transform: capitalize;
   font-weight: 500;
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
   font-size: 0.95em;
   color: var(--fg);
   transition: all 0.4s ease;
+}
+
+.provider-title svg {
+  color: var(--primary);
 }
 
 .provider-count {
@@ -9442,6 +9451,11 @@ button:disabled .btn-icon {
   visibility: visible;
 }
 
+.model-item.active::before {
+  background-color: var(--primary) !important;
+  opacity: 1;
+}
+
 .model-action-btn {
   padding: 6px;
   color: var(--icon);
@@ -9466,8 +9480,4 @@ button:disabled .btn-icon {
   background-color: var(--hover-bg);
   color: var(--fg);
   transform: scale(1.05);
-}
-
-.model-action-btn.active {
-  color: var(--primary);
 }

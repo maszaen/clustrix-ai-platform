@@ -1,0 +1,4716 @@
+[2025-11-02T00:27:17.587Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgoujye-yuv398x",
+  "htmlLength": 38294,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 2,
+    "isFullyLoaded": false,
+    "totalMessages": 8
+  }
+}
+[2025-11-02T00:27:17.593Z] UI updateSidebarAccountButton -> Profile picture loaded from local file {}
+[2025-11-02T00:27:17.597Z] UI updateAccountModalUI -> Sync config received {
+  "cloudUser": "94207123+maszaen@users.noreply.github.com",
+  "currentCloudUsername": "maszaen",
+  "profileUrl": "https://avatars.githubusercontent.com/u/94207123?v=4",
+  "currentMode": "cloud"
+}
+[2025-11-02T00:27:17.601Z] UI updateAccountModalUI -> Display name resolved {
+  "displayName": "maszaen",
+  "usedUsername": true,
+  "usedEmailFallback": false
+}
+[2025-11-02T00:27:17.605Z] UI updateAccountModalUI -> DOM updated {
+  "emailSet": "Last synced: 11/1/2025, 3:26:56 PM",
+  "nameSet": "Maszaen"
+}
+[2025-11-02T00:27:17.612Z] SYNC 1 loadSyncConfig Sync config loaded {
+  "currentMode": "cloud",
+  "currentCloudUser": "***"
+}
+[2025-11-02T00:27:17.616Z] sync:getActionHistory 1 getHistory History loaded {
+  "count": 1,
+  "user": "***"
+}
+[2025-11-02T00:27:17.631Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:17.644Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgoujye-yuv398x",
+  "htmlLength": 38546,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 2,
+    "isFullyLoaded": false,
+    "totalMessages": 8
+  }
+}
+[2025-11-02T00:27:17.648Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:17.653Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mhgoujye-yuv398x",
+  "age": 70,
+  "accessCount": 2
+}
+[2025-11-02T00:27:17.657Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "3547.50ms",
+  "wasFromCache": true,
+  "cacheSize": 1
+}
+[2025-11-02T00:27:17.665Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:17.669Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgoujye-yuv398x",
+  "htmlLength": 38546,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 2,
+    "isFullyLoaded": false,
+    "totalMessages": 8
+  }
+}
+[2025-11-02T00:27:17.672Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:17.676Z] CACHE preloadFrequentSessions -> Background preloading session {
+  "sessionId": "mhgowlkf-pn5h5yp",
+  "messageCount": 6
+}
+[2025-11-02T00:27:17.680Z] CACHE preloadFrequentSessions -> Background preloading session {
+  "sessionId": "mhgou6hf-0thy24m",
+  "messageCount": 2
+}
+[2025-11-02T00:27:17.683Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:17.687Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgoujye-yuv398x",
+  "htmlLength": 38546,
+  "cacheSize": 1,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 2,
+    "isFullyLoaded": false,
+    "totalMessages": 8
+  }
+}
+[2025-11-02T00:27:17.690Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:17.726Z] UI updateAccountModalUI -> Profile picture loaded from local file {}
+[2025-11-02T00:27:17.730Z] UI loadAndDisplayActionHistory -> Action history loaded from user file {
+  "count": 1
+}
+[2025-11-02T00:27:17.735Z] UI updateAccountModalUI -> Account modal updated {
+  "user": "94207123+maszaen@users.noreply.github.com",
+  "username": "maszaen",
+  "mode": "cloud"
+}
+[2025-11-02T00:27:18.057Z] UI load -> Loading overlay fade-out sequence started {}
+[2025-11-02T00:27:18.633Z] SYNC 1 loadSyncConfig Sync config loaded {
+  "currentMode": "cloud",
+  "currentCloudUser": "***"
+}
+[2025-11-02T00:27:21.476Z] UI event:new-chat-click -> New chat button clicked {}
+[2025-11-02T00:27:21.477Z] SAVE save -> Full save: 159 sessions {}
+[2025-11-02T00:27:21.767Z] WEBSEARCH toggle -> WebSearch chat button visibility changed {
+  "isProjectSession": null,
+  "visible": true,
+  "currentState": false
+}
+[2025-11-02T00:27:21.769Z] UI showWelcomeScreen -> Switched to Welcome Screen {
+  "currentSession": null
+}
+[2025-11-02T00:27:21.786Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:23.055Z] UI event:msg-central-keydown -> Enter pressed on welcome screen to start chat {
+  "key": "Enter",
+  "shift": false
+}
+[2025-11-02T00:27:23.057Z] SESSION createNewSession -> Creating new session object... {}
+[2025-11-02T00:27:23.059Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:23.594Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:23.597Z] SESSION createNewSession -> New session object created. {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "type": "regular",
+  "projectId": null
+}
+[2025-11-02T00:27:23.599Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:23.957Z] SESSIONSTATE setCurrent -> Session set as current and saved: Untitled (mhgz1vrr-gfhb892) {}
+[2025-11-02T00:27:23.959Z] SESSION renderHistory -> Rendering chat history {
+  "sessionName": null
+}
+[2025-11-02T00:27:23.961Z] SESSION renderHistoryLazy -> Lazy loading chat history {
+  "totalMessages": 0,
+  "initialLoad": 0
+}
+[2025-11-02T00:27:23.963Z] MIGRATION migrateThinkingPatterns -> Starting migration check {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "messageCount": 0,
+  "hasExistingThinkData": false
+}
+[2025-11-02T00:27:23.965Z] MIGRATION migrateThinkingPatterns -> Migration check completed {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "checkedMessages": 0,
+  "migratedCount": 0
+}
+[2025-11-02T00:27:24.009Z] SESSION setCurrent -> Successfully switch session {
+  "newCurrentSession": null
+}
+[2025-11-02T00:27:24.011Z] TITLE generateAndSetTitle -> Executed {}
+[2025-11-02T00:27:24.013Z] TITLE generateAndSetTitle -> Requesting title suggestion from model {
+  "userPrompt": "<think>\n1.  **Menganalisis Permintaan:** Pengguna meminta penjelasanmengenai CPUdan GPU, spesifik padakonteks *smartphone* (HP). Fokusnyaadalah perbedaan fungsi dan peran keduanya.\n2.  **Identifikasi Entitas Utama:**\n    * **CPU (Central Processing Unit):** \"Otak\" dariperangkat.\n  * **GPU (Graphics Processing Unit):** \"Otak\" khusus untuk urusan visual/grafis.\n3.  **Menentukan Perbedaan Kunci:**\n  * **CPU:** Ahli dalam tugas-tugas sekuensial (berurutan) dan kompleks. Punya beberapa inti (core) yang sangat kuat. Contoh tugas: Membuka aplikasi, menjalankan sistem operasi, kalkulasi umum.\n    * **GPU:** Ahli dalamtugas-tugas paralel (bersamaan) dan sederhana. Punya ribuan inti (core) yang lebih lemah. Contoh tugas: Merender jutaanpiksel di layar untuk game, memprosesvideo, membuat animasiUI *smooth*.\n4.  **Menyiapkan Analogi:** Analogi sederhana sangat membantu.\n    * **Analogi Restoran:** CPU adalah*Executive Chef* (Kepala Koki) yang mengelola beberapa pesanan rumit sekaligus. GPUadalah tim besar koki *plating* (penata saji) yang melakukan satu tugas sederhana (misal: menaruh hiasan) pada ratusan piring secara bersamaan.\n5. **KonteksSmartphone(HP):** Ini krusial. Di HP, CPU dan GPU tidak terpisah seperti diPC desktop. Keduanya terintegrasi dalam satu paket yang disebut **SoC (Systemon a Chip)**.Ini penting untuk efisiensi daya dan ruang.\n6.  **Menyusun Struktur Jawaban:**\n    * Salam pembuka yang ramah.\n    * Definisi singkat:CPU adalah \"Otak\" dan GPU adalah \"TenagaGrafis\".\n  * Penjelasan detail**CPU**: Fokus pada kecepatan, tugas umum, dan sistem operasi.\n    * Penjelasan detail**GPU**: Fokus pada visual, game, dan *parallel processing*.\n * Analogi (Chef vs Tim Plating) untuk memperjelas.\n    * Konteks **SoC** di HP:Menjelaskanbahwa keduanya bekerja bersama dalamsatu *chip*.\n    * Kesimpulan: CPUuntuk kecepatan umum, GPU untuk pengalaman visual (gaming, video, dll).\n</think>Halo! Tentu, saya bantu jelaskan perbedaan fundamental antara CPU dan GPU di HP Anda.\n\nSingkatnya: **CPU adalah Otak,GPU adalah Mata (atau Tenaga Grafis).**\n\nKeduanya sangat penting, tetapi dirancang untuk pekerjaan yang sangat berbeda.\n\n### 🧠 CPU (Central Processing Unit)\nAnggaplahCPU sebagai \"Otak Utama\" atau *Executive Chef* di restoran.\n\n* **Tugasnya:**Menjalankaninstruksi umum dan mengelola hampir semua hal di HP Anda.\n* **Contoh Pekerjaan:** Membuka aplikasi WhatsApp,memuat sistem operasi (Android/iOS), beralih antar aplikasi, atau menghitung data di spreadsheet.\n* **Cara Kerja:** CPU memiliki beberapa inti (core)yang sangat cepat dan pintar. Ia hebat dalam menangani 1 sampai 8 tugasyang kompleks secara berurutan atau bergantian dengan sangat cepat.\n\n###🎮 GPU (Graphics Processing Unit)\n\nAnggaplah GPUsebagai \"Tim Seniman\" atau *Tim KokiPlating* yang sangat besar.\n\n* **Tugasnya:** Spesialisasi dalam mengurussemua yang Anda lihatdi layar (visual dan grafis).\n* **Contoh Pekerjaan:** Merender grafis 3D dalam game (seperti *Genshin Impact*),memutar video 4K, atau bahkan membuat animasi *scrolling* di Instagram terasa mulus.\n* **Cara Kerja:** GPU tidak se-kompleksCPU, tetapi ia memiliki ribuan inti (core) yang lebih sederhana. Ini memungkinkannya melakukan ribuan perhitungan sederhana (seperti \"warna apa untuk pikselini?\") secara **bersamaan** (paralel).\n\n---\n\n### 💡 Keduanya di Dalam HP (SoC)\n\nDi *smartphone*,CPU dan GPU tidak berdirisendiri-sendiri seperti di PC desktop. Mereka disatukan dalam satu *chip* yang disebut **SoC (System on a Chip)**, bersama dengan komponen lain seperti modem 5G, ISP (pemroses gambarkamera), dan NPU (untuk AI).\n\n**Jadi, saat Andabermain game:**\n\n1.**CPU** akanmenangani logika game (misalnya, di mana musuh bergerak, fisika jatuhnya benda, atau *loading* level).\n2.  **GPU** akanmengambildata itu dan \"menggambar\" semuanyake layar Anda60 kali per detik (60fps)agar terlihat hidup danmulus.\n\n**Kesimpulan:**\n\n* Anda butuh **CPU yang cepat** agar HP terasa responsif, aplikasi terbuka instan, dan tidak *lemot*.* Anda butuh **GPU yang kuat** agar bisa bermain game beratdengan *frame rate* tinggi dan menikmati konten visual tanpa patah-patah.",
+  "model": "debugging",
+  "provider": "local",
+  "baseUrl": "https://api.z.ai/api/paas/v4/",
+  "isDebugSession": true
+}
+[2025-11-02T00:27:24.017Z] TITLE_GEN chat:title local title generation attempt 1/3 {
+  "model": "debugging",
+  "textPreview": "<think>\n1.  **Menganalisis Permintaan:** Pengguna "
+}
+[2025-11-02T00:27:24.032Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:24.365Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 6287,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:24.372Z] CACHE getCachedSession -> Cache hit {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "age": 39,
+  "accessCount": 2
+}
+[2025-11-02T00:27:24.374Z] SESSION setCurrent -> Session switch performance {
+  "totalTime": "443.50ms",
+  "wasFromCache": true,
+  "cacheSize": 2
+}
+[2025-11-02T00:27:24.395Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:24.400Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 6430,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:24.403Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:24.491Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:24.493Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 6430,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:24.495Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:24.497Z] STREAM createStreamHandler -> Stream handler created {
+  "streamId": "mhgz1vrr-gfhb892-1-2seangttwkl",
+  "isFirstInteraction": true
+}
+[2025-11-02T00:27:24.505Z] ROUTER chat:stream-start -> Web search nonaktif. Menjalankan chat standar. {}
+[2025-11-02T00:27:24.511Z] INFO runStandardStreaming Debug mode detected - routing to response debugger
+[2025-11-02T00:27:24.518Z] REQ chat:stream-start -> Request to AI using debugging model. {}
+[2025-11-02T00:27:24.520Z] STREAM chat:stream-start -> Added streaming-active class to current AI message {}
+[2025-11-02T00:27:24.522Z] PARSER onChunk -> Chunk #1 {
+  "type": "object",
+  "value": {
+    "think": "Processing your request."
+  }
+}
+[2025-11-02T00:27:24.524Z] PARSER onChunk -> Already thinking object, pass through
+[2025-11-02T00:27:24.525Z] THINKING ensureThinkingUI -> Created new thinking-wrap {}
+[2025-11-02T00:27:24.539Z] PARSER onChunk -> Chunk #2 {
+  "type": "object",
+  "value": {
+    "think": ".."
+  }
+}
+[2025-11-02T00:27:24.541Z] PARSER onChunk -> Already thinking object, pass through
+[2025-11-02T00:27:24.564Z] UI chat-update:THINKING_TIME -> Finalizing thinking UI with duration {
+  "messageIndex": 1,
+  "duration": 5
+}
+[2025-11-02T00:27:24.664Z] PARSER onChunk -> Chunk #3 {
+  "type": "string",
+  "value": "<think>\n1.  **"
+}
+[2025-11-02T00:27:24.666Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:24.668Z] PARSER onChunk -> Sending content {
+  "preview": "<think>\n1.  **"
+}
+[2025-11-02T00:27:24.717Z] PARSER onChunk -> Chunk #4 {
+  "type": "string",
+  "value": "Menganalis"
+}
+[2025-11-02T00:27:24.719Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:24.721Z] PARSER onChunk -> Sending content {
+  "preview": "Menganalis"
+}
+[2025-11-02T00:27:24.758Z] PARSER onChunk -> Chunk #5 {
+  "type": "string",
+  "value": "is Permint"
+}
+[2025-11-02T00:27:24.759Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:24.761Z] PARSER onChunk -> Sending content {
+  "preview": "is Permint"
+}
+[2025-11-02T00:27:24.803Z] PARSER onChunk -> Chunk #6 {
+  "type": "string",
+  "value": "aan:** Pengg"
+}
+[2025-11-02T00:27:24.805Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:24.807Z] PARSER onChunk -> Sending content {
+  "preview": "aan:** Pengg"
+}
+[2025-11-02T00:27:24.851Z] PARSER onChunk -> Chunk #7 {
+  "type": "string",
+  "value": "una meminta p"
+}
+[2025-11-02T00:27:24.853Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:24.855Z] PARSER onChunk -> Sending content {
+  "preview": "una meminta p"
+}
+[2025-11-02T00:27:24.874Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:25.221Z] PARSER onChunk -> Chunk #8 {
+  "type": "string",
+  "value": "enjelasanmenge"
+}
+[2025-11-02T00:27:25.222Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:25.223Z] PARSER onChunk -> Sending content {
+  "preview": "enjelasanmenge"
+}
+[2025-11-02T00:27:25.230Z] TITLE_RETRY chat:title local attempt 1/3 failed {
+  "error": "HTTP 401 Unauthorized — {\"error\":{\"code\":\"1001\",\"message\":\"Authorization Token Missing\"}}",
+  "willRetry": true
+}
+[2025-11-02T00:27:25.232Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:25.549Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:25.552Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 6971,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:25.555Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:25.556Z] PARSER onChunk -> Chunk #9 {
+  "type": "string",
+  "value": "nai CPUdan G"
+}
+[2025-11-02T00:27:25.558Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:25.559Z] PARSER onChunk -> Sending content {
+  "preview": "nai CPUdan G"
+}
+[2025-11-02T00:27:25.562Z] TITLE_GEN chat:title local title generation attempt 2/3 {
+  "model": "debugging",
+  "textPreview": "<think>\n1.  **Menganalisis Permintaan:** Pengguna "
+}
+[2025-11-02T00:27:25.565Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:25.569Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 6983,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:25.571Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:25.573Z] PARSER onChunk -> Chunk #10 {
+  "type": "string",
+  "value": "PU, spesif"
+}
+[2025-11-02T00:27:25.574Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:25.576Z] PARSER onChunk -> Sending content {
+  "preview": "PU, spesif"
+}
+[2025-11-02T00:27:25.604Z] PARSER onChunk -> Chunk #11 {
+  "type": "string",
+  "value": "ik padakontek"
+}
+[2025-11-02T00:27:25.605Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:25.606Z] PARSER onChunk -> Sending content {
+  "preview": "ik padakontek"
+}
+[2025-11-02T00:27:25.654Z] PARSER onChunk -> Chunk #12 {
+  "type": "string",
+  "value": "s *smartphon"
+}
+[2025-11-02T00:27:25.655Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:25.656Z] PARSER onChunk -> Sending content {
+  "preview": "s *smartphon"
+}
+[2025-11-02T00:27:25.685Z] TITLE_RETRY chat:title local attempt 2/3 failed {
+  "error": "HTTP 401 Unauthorized — {\"error\":{\"code\":\"1001\",\"message\":\"Authorization Token Missing\"}}",
+  "willRetry": true
+}
+[2025-11-02T00:27:25.704Z] PARSER onChunk -> Chunk #13 {
+  "type": "string",
+  "value": "e* (HP). Foku"
+}
+[2025-11-02T00:27:25.705Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:25.706Z] PARSER onChunk -> Sending content {
+  "preview": "e* (HP). Foku"
+}
+[2025-11-02T00:27:25.771Z] PARSER onChunk -> Chunk #14 {
+  "type": "string",
+  "value": "snyaadalah "
+}
+[2025-11-02T00:27:25.772Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:25.773Z] PARSER onChunk -> Sending content {
+  "preview": "snyaadalah "
+}
+[2025-11-02T00:27:25.821Z] PARSER onChunk -> Chunk #15 {
+  "type": "string",
+  "value": "perbedaan fung"
+}
+[2025-11-02T00:27:25.822Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:25.824Z] PARSER onChunk -> Sending content {
+  "preview": "perbedaan fung"
+}
+[2025-11-02T00:27:25.871Z] PARSER onChunk -> Chunk #16 {
+  "type": "string",
+  "value": "si dan peran k"
+}
+[2025-11-02T00:27:25.872Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:25.873Z] PARSER onChunk -> Sending content {
+  "preview": "si dan peran k"
+}
+[2025-11-02T00:27:25.901Z] TITLE_GEN chat:title local title generation attempt 3/3 {
+  "model": "debugging",
+  "textPreview": "<think>\n1.  **Menganalisis Permintaan:** Pengguna "
+}
+[2025-11-02T00:27:25.921Z] PARSER onChunk -> Chunk #17 {
+  "type": "string",
+  "value": "eduanya.\n2.  *"
+}
+[2025-11-02T00:27:25.922Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:25.923Z] PARSER onChunk -> Sending content {
+  "preview": "eduanya.\n2.  *"
+}
+[2025-11-02T00:27:25.979Z] PARSER onChunk -> Chunk #18 {
+  "type": "string",
+  "value": "*Identifikas"
+}
+[2025-11-02T00:27:25.980Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:25.981Z] PARSER onChunk -> Sending content {
+  "preview": "*Identifikas"
+}
+[2025-11-02T00:27:26.026Z] TITLE_RETRY chat:title local attempt 3/3 failed {
+  "error": "HTTP 401 Unauthorized — {\"error\":{\"code\":\"1001\",\"message\":\"Authorization Token Missing\"}}",
+  "willRetry": false
+}
+[2025-11-02T00:27:26.027Z] TITLE_FALLBACK chat:title All local attempts failed, throwing to renderer for SmartTitleGenerator {
+  "error": "HTTP 401 Unauthorized — {\"error\":{\"code\":\"1001\",\"message\":\"Authorization Token Missing\"}}"
+}
+[2025-11-02T00:27:26.031Z] PARSER onChunk -> Chunk #19 {
+  "type": "string",
+  "value": "i Entitas U"
+}
+[2025-11-02T00:27:26.033Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:26.035Z] PARSER onChunk -> Sending content {
+  "preview": "i Entitas U"
+}
+[2025-11-02T00:27:26.038Z] TITLE generateAndSetTitle -> Model title generation failed, falling back to local generation {
+  "error": "Error invoking remote method 'chat:title': Error: HTTP 401 Unauthorized — {\"error\":{\"code\":\"1001\",\"message\":\"Authorization Token Missing\"}}",
+  "userPromptLength": 4106,
+  "userPromptPreview": "<think>\n1.  **Menganalisis Permintaan:** Pengguna ...",
+  "isDebugSession": true
+}
+[2025-11-02T00:27:26.190Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:26.650Z] PARSER onChunk -> Chunk #20 {
+  "type": "string",
+  "value": "tama:**\n    "
+}
+[2025-11-02T00:27:26.653Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:26.655Z] PARSER onChunk -> Sending content {
+  "preview": "tama:**\n    "
+}
+[2025-11-02T00:27:26.658Z] PARSER onChunk -> Chunk #21 {
+  "type": "string",
+  "value": "* **CPU (Cen"
+}
+[2025-11-02T00:27:26.659Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:26.660Z] PARSER onChunk -> Sending content {
+  "preview": "* **CPU (Cen"
+}
+[2025-11-02T00:27:26.661Z] PARSER onChunk -> Chunk #22 {
+  "type": "string",
+  "value": "tral Proce"
+}
+[2025-11-02T00:27:26.663Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:26.665Z] PARSER onChunk -> Sending content {
+  "preview": "tral Proce"
+}
+[2025-11-02T00:27:26.670Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:26.672Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 7207,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:26.674Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:26.734Z] PARSER onChunk -> Chunk #23 {
+  "type": "string",
+  "value": "ssing Unit):**"
+}
+[2025-11-02T00:27:26.736Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:26.737Z] PARSER onChunk -> Sending content {
+  "preview": "ssing Unit):**"
+}
+[2025-11-02T00:27:26.765Z] PARSER onChunk -> Chunk #24 {
+  "type": "string",
+  "value": " \"Otak\" darip"
+}
+[2025-11-02T00:27:26.768Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:26.770Z] PARSER onChunk -> Sending content {
+  "preview": " \"Otak\" darip"
+}
+[2025-11-02T00:27:26.772Z] PARSER onChunk -> Chunk #25 {
+  "type": "string",
+  "value": "erangkat.\n  * "
+}
+[2025-11-02T00:27:26.774Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:26.777Z] PARSER onChunk -> Sending content {
+  "preview": "erangkat.\n  * "
+}
+[2025-11-02T00:27:26.788Z] PARSER onChunk -> Chunk #26 {
+  "type": "string",
+  "value": "**GPU (Graphi"
+}
+[2025-11-02T00:27:26.791Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:26.793Z] PARSER onChunk -> Sending content {
+  "preview": "**GPU (Graphi"
+}
+[2025-11-02T00:27:26.839Z] PARSER onChunk -> Chunk #27 {
+  "type": "string",
+  "value": "cs Process"
+}
+[2025-11-02T00:27:26.841Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:26.843Z] PARSER onChunk -> Sending content {
+  "preview": "cs Process"
+}
+[2025-11-02T00:27:26.845Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:27.269Z] PARSER onChunk -> Chunk #28 {
+  "type": "string",
+  "value": "ing Unit):**"
+}
+[2025-11-02T00:27:27.272Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:27.274Z] PARSER onChunk -> Sending content {
+  "preview": "ing Unit):**"
+}
+[2025-11-02T00:27:27.278Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:27.280Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 7320,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:27.282Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:27.286Z] PARSER onChunk -> Chunk #29 {
+  "type": "string",
+  "value": " \"Otak\" khusus"
+}
+[2025-11-02T00:27:27.288Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:27.289Z] PARSER onChunk -> Sending content {
+  "preview": " \"Otak\" khusus"
+}
+[2025-11-02T00:27:27.339Z] PARSER onChunk -> Chunk #30 {
+  "type": "string",
+  "value": " untuk uru"
+}
+[2025-11-02T00:27:27.341Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:27.343Z] PARSER onChunk -> Sending content {
+  "preview": " untuk uru"
+}
+[2025-11-02T00:27:27.388Z] PARSER onChunk -> Chunk #31 {
+  "type": "string",
+  "value": "san visual"
+}
+[2025-11-02T00:27:27.390Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:27.392Z] PARSER onChunk -> Sending content {
+  "preview": "san visual"
+}
+[2025-11-02T00:27:27.437Z] PARSER onChunk -> Chunk #32 {
+  "type": "string",
+  "value": "/grafis.\n3.  "
+}
+[2025-11-02T00:27:27.439Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:27.441Z] PARSER onChunk -> Sending content {
+  "preview": "/grafis.\n3.  "
+}
+[2025-11-02T00:27:27.485Z] PARSER onChunk -> Chunk #33 {
+  "type": "string",
+  "value": "**Menentukan"
+}
+[2025-11-02T00:27:27.487Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:27.489Z] PARSER onChunk -> Sending content {
+  "preview": "**Menentukan"
+}
+[2025-11-02T00:27:27.536Z] PARSER onChunk -> Chunk #34 {
+  "type": "string",
+  "value": " Perbedaan Kun"
+}
+[2025-11-02T00:27:27.538Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:27.540Z] PARSER onChunk -> Sending content {
+  "preview": " Perbedaan Kun"
+}
+[2025-11-02T00:27:27.587Z] PARSER onChunk -> Chunk #35 {
+  "type": "string",
+  "value": "ci:**\n  * **"
+}
+[2025-11-02T00:27:27.589Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:27.590Z] PARSER onChunk -> Sending content {
+  "preview": "ci:**\n  * **"
+}
+[2025-11-02T00:27:27.637Z] PARSER onChunk -> Chunk #36 {
+  "type": "string",
+  "value": "CPU:** Ahl"
+}
+[2025-11-02T00:27:27.639Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:27.640Z] PARSER onChunk -> Sending content {
+  "preview": "CPU:** Ahl"
+}
+[2025-11-02T00:27:27.690Z] PARSER onChunk -> Chunk #37 {
+  "type": "string",
+  "value": "i dalam tug"
+}
+[2025-11-02T00:27:27.692Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:27.693Z] PARSER onChunk -> Sending content {
+  "preview": "i dalam tug"
+}
+[2025-11-02T00:27:27.737Z] PARSER onChunk -> Chunk #38 {
+  "type": "string",
+  "value": "as-tugas seku"
+}
+[2025-11-02T00:27:27.740Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:27.742Z] PARSER onChunk -> Sending content {
+  "preview": "as-tugas seku"
+}
+[2025-11-02T00:27:27.786Z] PARSER onChunk -> Chunk #39 {
+  "type": "string",
+  "value": "ensial (beru"
+}
+[2025-11-02T00:27:27.789Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:27.791Z] PARSER onChunk -> Sending content {
+  "preview": "ensial (beru"
+}
+[2025-11-02T00:27:27.838Z] PARSER onChunk -> Chunk #40 {
+  "type": "string",
+  "value": "rutan) dan k"
+}
+[2025-11-02T00:27:27.840Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:27.842Z] PARSER onChunk -> Sending content {
+  "preview": "rutan) dan k"
+}
+[2025-11-02T00:27:27.892Z] PARSER onChunk -> Chunk #41 {
+  "type": "string",
+  "value": "ompleks. Pu"
+}
+[2025-11-02T00:27:27.894Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:27.895Z] PARSER onChunk -> Sending content {
+  "preview": "ompleks. Pu"
+}
+[2025-11-02T00:27:27.937Z] PARSER onChunk -> Chunk #42 {
+  "type": "string",
+  "value": "nya beberapa "
+}
+[2025-11-02T00:27:27.939Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:27.941Z] PARSER onChunk -> Sending content {
+  "preview": "nya beberapa "
+}
+[2025-11-02T00:27:27.987Z] PARSER onChunk -> Chunk #43 {
+  "type": "string",
+  "value": "inti (core) y"
+}
+[2025-11-02T00:27:27.990Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:27.991Z] PARSER onChunk -> Sending content {
+  "preview": "inti (core) y"
+}
+[2025-11-02T00:27:28.039Z] PARSER onChunk -> Chunk #44 {
+  "type": "string",
+  "value": "ang sangat"
+}
+[2025-11-02T00:27:28.041Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:28.043Z] PARSER onChunk -> Sending content {
+  "preview": "ang sangat"
+}
+[2025-11-02T00:27:28.090Z] PARSER onChunk -> Chunk #45 {
+  "type": "string",
+  "value": " kuat. Con"
+}
+[2025-11-02T00:27:28.092Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:28.094Z] PARSER onChunk -> Sending content {
+  "preview": " kuat. Con"
+}
+[2025-11-02T00:27:28.135Z] PARSER onChunk -> Chunk #46 {
+  "type": "string",
+  "value": "toh tugas: Mem"
+}
+[2025-11-02T00:27:28.137Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:28.139Z] PARSER onChunk -> Sending content {
+  "preview": "toh tugas: Mem"
+}
+[2025-11-02T00:27:28.186Z] PARSER onChunk -> Chunk #47 {
+  "type": "string",
+  "value": "buka aplik"
+}
+[2025-11-02T00:27:28.188Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:28.189Z] PARSER onChunk -> Sending content {
+  "preview": "buka aplik"
+}
+[2025-11-02T00:27:28.235Z] PARSER onChunk -> Chunk #48 {
+  "type": "string",
+  "value": "asi, menjal"
+}
+[2025-11-02T00:27:28.238Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:28.240Z] PARSER onChunk -> Sending content {
+  "preview": "asi, menjal"
+}
+[2025-11-02T00:27:28.287Z] PARSER onChunk -> Chunk #49 {
+  "type": "string",
+  "value": "ankan sistem "
+}
+[2025-11-02T00:27:28.288Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:28.290Z] PARSER onChunk -> Sending content {
+  "preview": "ankan sistem "
+}
+[2025-11-02T00:27:28.336Z] PARSER onChunk -> Chunk #50 {
+  "type": "string",
+  "value": "operasi, kalk"
+}
+[2025-11-02T00:27:28.338Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:28.340Z] PARSER onChunk -> Sending content {
+  "preview": "operasi, kalk"
+}
+[2025-11-02T00:27:28.386Z] PARSER onChunk -> Chunk #51 {
+  "type": "string",
+  "value": "ulasi umum.\n"
+}
+[2025-11-02T00:27:28.388Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:28.390Z] PARSER onChunk -> Sending content {
+  "preview": "ulasi umum.\n"
+}
+[2025-11-02T00:27:28.436Z] PARSER onChunk -> Chunk #52 {
+  "type": "string",
+  "value": "    * **GPU"
+}
+[2025-11-02T00:27:28.438Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:28.440Z] PARSER onChunk -> Sending content {
+  "preview": "    * **GPU"
+}
+[2025-11-02T00:27:28.442Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:28.841Z] PARSER onChunk -> Chunk #53 {
+  "type": "string",
+  "value": ":** Ahli da"
+}
+[2025-11-02T00:27:28.842Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:28.843Z] PARSER onChunk -> Sending content {
+  "preview": ":** Ahli da"
+}
+[2025-11-02T00:27:28.881Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:28.884Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 7737,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:28.886Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:28.887Z] PARSER onChunk -> Chunk #54 {
+  "type": "string",
+  "value": "lamtugas-tugas"
+}
+[2025-11-02T00:27:28.888Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:28.890Z] PARSER onChunk -> Sending content {
+  "preview": "lamtugas-tugas"
+}
+[2025-11-02T00:27:28.935Z] PARSER onChunk -> Chunk #55 {
+  "type": "string",
+  "value": " paralel ("
+}
+[2025-11-02T00:27:28.937Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:28.938Z] PARSER onChunk -> Sending content {
+  "preview": " paralel ("
+}
+[2025-11-02T00:27:28.985Z] PARSER onChunk -> Chunk #56 {
+  "type": "string",
+  "value": "bersamaan) da"
+}
+[2025-11-02T00:27:28.987Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:28.988Z] PARSER onChunk -> Sending content {
+  "preview": "bersamaan) da"
+}
+[2025-11-02T00:27:29.036Z] PARSER onChunk -> Chunk #57 {
+  "type": "string",
+  "value": "n sederhan"
+}
+[2025-11-02T00:27:29.038Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:29.040Z] PARSER onChunk -> Sending content {
+  "preview": "n sederhan"
+}
+[2025-11-02T00:27:29.085Z] PARSER onChunk -> Chunk #58 {
+  "type": "string",
+  "value": "a. Punya rib"
+}
+[2025-11-02T00:27:29.088Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:29.089Z] PARSER onChunk -> Sending content {
+  "preview": "a. Punya rib"
+}
+[2025-11-02T00:27:29.136Z] PARSER onChunk -> Chunk #59 {
+  "type": "string",
+  "value": "uan inti (c"
+}
+[2025-11-02T00:27:29.137Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:29.139Z] PARSER onChunk -> Sending content {
+  "preview": "uan inti (c"
+}
+[2025-11-02T00:27:29.187Z] PARSER onChunk -> Chunk #60 {
+  "type": "string",
+  "value": "ore) yang leb"
+}
+[2025-11-02T00:27:29.189Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:29.191Z] PARSER onChunk -> Sending content {
+  "preview": "ore) yang leb"
+}
+[2025-11-02T00:27:29.236Z] PARSER onChunk -> Chunk #61 {
+  "type": "string",
+  "value": "ih lemah. Cont"
+}
+[2025-11-02T00:27:29.238Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:29.240Z] PARSER onChunk -> Sending content {
+  "preview": "ih lemah. Cont"
+}
+[2025-11-02T00:27:29.286Z] PARSER onChunk -> Chunk #62 {
+  "type": "string",
+  "value": "oh tugas: Mere"
+}
+[2025-11-02T00:27:29.288Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:29.290Z] PARSER onChunk -> Sending content {
+  "preview": "oh tugas: Mere"
+}
+[2025-11-02T00:27:29.336Z] PARSER onChunk -> Chunk #63 {
+  "type": "string",
+  "value": "nder jutaa"
+}
+[2025-11-02T00:27:29.338Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:29.340Z] PARSER onChunk -> Sending content {
+  "preview": "nder jutaa"
+}
+[2025-11-02T00:27:29.386Z] PARSER onChunk -> Chunk #64 {
+  "type": "string",
+  "value": "npiksel di"
+}
+[2025-11-02T00:27:29.388Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:29.390Z] PARSER onChunk -> Sending content {
+  "preview": "npiksel di"
+}
+[2025-11-02T00:27:29.435Z] PARSER onChunk -> Chunk #65 {
+  "type": "string",
+  "value": " layar unt"
+}
+[2025-11-02T00:27:29.437Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:29.439Z] PARSER onChunk -> Sending content {
+  "preview": " layar unt"
+}
+[2025-11-02T00:27:29.485Z] PARSER onChunk -> Chunk #66 {
+  "type": "string",
+  "value": "uk game, mempr"
+}
+[2025-11-02T00:27:29.487Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:29.489Z] PARSER onChunk -> Sending content {
+  "preview": "uk game, mempr"
+}
+[2025-11-02T00:27:29.535Z] PARSER onChunk -> Chunk #67 {
+  "type": "string",
+  "value": "osesvideo, "
+}
+[2025-11-02T00:27:29.537Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:29.539Z] PARSER onChunk -> Sending content {
+  "preview": "osesvideo, "
+}
+[2025-11-02T00:27:29.586Z] PARSER onChunk -> Chunk #68 {
+  "type": "string",
+  "value": "membuat anim"
+}
+[2025-11-02T00:27:29.588Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:29.590Z] PARSER onChunk -> Sending content {
+  "preview": "membuat anim"
+}
+[2025-11-02T00:27:29.635Z] PARSER onChunk -> Chunk #69 {
+  "type": "string",
+  "value": "asiUI *smooth*"
+}
+[2025-11-02T00:27:29.637Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:29.639Z] PARSER onChunk -> Sending content {
+  "preview": "asiUI *smooth*"
+}
+[2025-11-02T00:27:29.685Z] PARSER onChunk -> Chunk #70 {
+  "type": "string",
+  "value": ".\n4.  **Menyi"
+}
+[2025-11-02T00:27:29.687Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:29.689Z] PARSER onChunk -> Sending content {
+  "preview": ".\n4.  **Menyi"
+}
+[2025-11-02T00:27:29.735Z] PARSER onChunk -> Chunk #71 {
+  "type": "string",
+  "value": "apkan Anal"
+}
+[2025-11-02T00:27:29.736Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:29.738Z] PARSER onChunk -> Sending content {
+  "preview": "apkan Anal"
+}
+[2025-11-02T00:27:29.785Z] PARSER onChunk -> Chunk #72 {
+  "type": "string",
+  "value": "ogi:** Ana"
+}
+[2025-11-02T00:27:29.787Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:29.788Z] PARSER onChunk -> Sending content {
+  "preview": "ogi:** Ana"
+}
+[2025-11-02T00:27:29.835Z] PARSER onChunk -> Chunk #73 {
+  "type": "string",
+  "value": "logi sederhan"
+}
+[2025-11-02T00:27:29.837Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:29.838Z] PARSER onChunk -> Sending content {
+  "preview": "logi sederhan"
+}
+[2025-11-02T00:27:29.885Z] PARSER onChunk -> Chunk #74 {
+  "type": "string",
+  "value": "a sangat me"
+}
+[2025-11-02T00:27:29.887Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:29.889Z] PARSER onChunk -> Sending content {
+  "preview": "a sangat me"
+}
+[2025-11-02T00:27:29.937Z] PARSER onChunk -> Chunk #75 {
+  "type": "string",
+  "value": "mbantu.\n   "
+}
+[2025-11-02T00:27:29.939Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:29.941Z] PARSER onChunk -> Sending content {
+  "preview": "mbantu.\n   "
+}
+[2025-11-02T00:27:29.986Z] PARSER onChunk -> Chunk #76 {
+  "type": "string",
+  "value": " * **Analo"
+}
+[2025-11-02T00:27:29.988Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:29.989Z] PARSER onChunk -> Sending content {
+  "preview": " * **Analo"
+}
+[2025-11-02T00:27:30.034Z] PARSER onChunk -> Chunk #77 {
+  "type": "string",
+  "value": "gi Restoran:"
+}
+[2025-11-02T00:27:30.036Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:30.037Z] PARSER onChunk -> Sending content {
+  "preview": "gi Restoran:"
+}
+[2025-11-02T00:27:30.039Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:30.408Z] PARSER onChunk -> Chunk #78 {
+  "type": "string",
+  "value": "** CPU adala"
+}
+[2025-11-02T00:27:30.409Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:30.410Z] PARSER onChunk -> Sending content {
+  "preview": "** CPU adala"
+}
+[2025-11-02T00:27:30.413Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:30.415Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 8110,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:30.418Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:30.420Z] PARSER onChunk -> Chunk #79 {
+  "type": "string",
+  "value": "h*Executiv"
+}
+[2025-11-02T00:27:30.421Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:30.423Z] PARSER onChunk -> Sending content {
+  "preview": "h*Executiv"
+}
+[2025-11-02T00:27:30.468Z] PARSER onChunk -> Chunk #80 {
+  "type": "string",
+  "value": "e Chef* (Kep"
+}
+[2025-11-02T00:27:30.470Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:30.472Z] PARSER onChunk -> Sending content {
+  "preview": "e Chef* (Kep"
+}
+[2025-11-02T00:27:30.519Z] PARSER onChunk -> Chunk #81 {
+  "type": "string",
+  "value": "ala Koki) "
+}
+[2025-11-02T00:27:30.521Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:30.522Z] PARSER onChunk -> Sending content {
+  "preview": "ala Koki) "
+}
+[2025-11-02T00:27:30.568Z] PARSER onChunk -> Chunk #82 {
+  "type": "string",
+  "value": "yang mengelola"
+}
+[2025-11-02T00:27:30.570Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:30.572Z] PARSER onChunk -> Sending content {
+  "preview": "yang mengelola"
+}
+[2025-11-02T00:27:30.618Z] PARSER onChunk -> Chunk #83 {
+  "type": "string",
+  "value": " beberapa pes"
+}
+[2025-11-02T00:27:30.620Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:30.622Z] PARSER onChunk -> Sending content {
+  "preview": " beberapa pes"
+}
+[2025-11-02T00:27:30.668Z] PARSER onChunk -> Chunk #84 {
+  "type": "string",
+  "value": "anan rumit s"
+}
+[2025-11-02T00:27:30.670Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:30.671Z] PARSER onChunk -> Sending content {
+  "preview": "anan rumit s"
+}
+[2025-11-02T00:27:30.718Z] PARSER onChunk -> Chunk #85 {
+  "type": "string",
+  "value": "ekaligus. GP"
+}
+[2025-11-02T00:27:30.719Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:30.721Z] PARSER onChunk -> Sending content {
+  "preview": "ekaligus. GP"
+}
+[2025-11-02T00:27:30.767Z] PARSER onChunk -> Chunk #86 {
+  "type": "string",
+  "value": "Uadalah tim be"
+}
+[2025-11-02T00:27:30.769Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:30.770Z] PARSER onChunk -> Sending content {
+  "preview": "Uadalah tim be"
+}
+[2025-11-02T00:27:30.818Z] PARSER onChunk -> Chunk #87 {
+  "type": "string",
+  "value": "sar koki *"
+}
+[2025-11-02T00:27:30.820Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:30.821Z] PARSER onChunk -> Sending content {
+  "preview": "sar koki *"
+}
+[2025-11-02T00:27:30.867Z] PARSER onChunk -> Chunk #88 {
+  "type": "string",
+  "value": "plating* (pen"
+}
+[2025-11-02T00:27:30.869Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:30.871Z] PARSER onChunk -> Sending content {
+  "preview": "plating* (pen"
+}
+[2025-11-02T00:27:30.918Z] PARSER onChunk -> Chunk #89 {
+  "type": "string",
+  "value": "ata saji) yan"
+}
+[2025-11-02T00:27:30.919Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:30.920Z] PARSER onChunk -> Sending content {
+  "preview": "ata saji) yan"
+}
+[2025-11-02T00:27:30.967Z] PARSER onChunk -> Chunk #90 {
+  "type": "string",
+  "value": "g melakukan s"
+}
+[2025-11-02T00:27:30.969Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:30.971Z] PARSER onChunk -> Sending content {
+  "preview": "g melakukan s"
+}
+[2025-11-02T00:27:31.017Z] PARSER onChunk -> Chunk #91 {
+  "type": "string",
+  "value": "atu tugas s"
+}
+[2025-11-02T00:27:31.019Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:31.020Z] PARSER onChunk -> Sending content {
+  "preview": "atu tugas s"
+}
+[2025-11-02T00:27:31.067Z] PARSER onChunk -> Chunk #92 {
+  "type": "string",
+  "value": "ederhana (m"
+}
+[2025-11-02T00:27:31.069Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:31.071Z] PARSER onChunk -> Sending content {
+  "preview": "ederhana (m"
+}
+[2025-11-02T00:27:31.117Z] PARSER onChunk -> Chunk #93 {
+  "type": "string",
+  "value": "isal: menar"
+}
+[2025-11-02T00:27:31.119Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:31.120Z] PARSER onChunk -> Sending content {
+  "preview": "isal: menar"
+}
+[2025-11-02T00:27:31.167Z] PARSER onChunk -> Chunk #94 {
+  "type": "string",
+  "value": "uh hiasan) pa"
+}
+[2025-11-02T00:27:31.169Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:31.171Z] PARSER onChunk -> Sending content {
+  "preview": "uh hiasan) pa"
+}
+[2025-11-02T00:27:31.217Z] PARSER onChunk -> Chunk #95 {
+  "type": "string",
+  "value": "da ratusan "
+}
+[2025-11-02T00:27:31.219Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:31.220Z] PARSER onChunk -> Sending content {
+  "preview": "da ratusan "
+}
+[2025-11-02T00:27:31.267Z] PARSER onChunk -> Chunk #96 {
+  "type": "string",
+  "value": "piring seca"
+}
+[2025-11-02T00:27:31.268Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:31.270Z] PARSER onChunk -> Sending content {
+  "preview": "piring seca"
+}
+[2025-11-02T00:27:31.317Z] PARSER onChunk -> Chunk #97 {
+  "type": "string",
+  "value": "ra bersama"
+}
+[2025-11-02T00:27:31.318Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:31.319Z] PARSER onChunk -> Sending content {
+  "preview": "ra bersama"
+}
+[2025-11-02T00:27:31.367Z] PARSER onChunk -> Chunk #98 {
+  "type": "string",
+  "value": "an.\n5. **Kon"
+}
+[2025-11-02T00:27:31.368Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:31.369Z] PARSER onChunk -> Sending content {
+  "preview": "an.\n5. **Kon"
+}
+[2025-11-02T00:27:31.418Z] PARSER onChunk -> Chunk #99 {
+  "type": "string",
+  "value": "teksSmartp"
+}
+[2025-11-02T00:27:31.420Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:31.422Z] PARSER onChunk -> Sending content {
+  "preview": "teksSmartp"
+}
+[2025-11-02T00:27:31.458Z] PARSER onChunk -> Chunk #100 {
+  "type": "string",
+  "value": "hone(HP):**"
+}
+[2025-11-02T00:27:31.460Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:31.462Z] PARSER onChunk -> Sending content {
+  "preview": "hone(HP):**"
+}
+[2025-11-02T00:27:31.517Z] PARSER onChunk -> Chunk #101 {
+  "type": "string",
+  "value": " Ini krusial."
+}
+[2025-11-02T00:27:31.518Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:31.520Z] PARSER onChunk -> Sending content {
+  "preview": " Ini krusial."
+}
+[2025-11-02T00:27:31.567Z] PARSER onChunk -> Chunk #102 {
+  "type": "string",
+  "value": " Di HP, CPU d"
+}
+[2025-11-02T00:27:31.568Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:31.570Z] PARSER onChunk -> Sending content {
+  "preview": " Di HP, CPU d"
+}
+[2025-11-02T00:27:31.571Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:31.916Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:31.918Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 8432,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:31.920Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:31.922Z] PARSER onChunk -> Chunk #103 {
+  "type": "string",
+  "value": "an GPU tid"
+}
+[2025-11-02T00:27:31.923Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:31.925Z] PARSER onChunk -> Sending content {
+  "preview": "an GPU tid"
+}
+[2025-11-02T00:27:31.968Z] PARSER onChunk -> Chunk #104 {
+  "type": "string",
+  "value": "ak terpisa"
+}
+[2025-11-02T00:27:31.969Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:31.970Z] PARSER onChunk -> Sending content {
+  "preview": "ak terpisa"
+}
+[2025-11-02T00:27:32.017Z] PARSER onChunk -> Chunk #105 {
+  "type": "string",
+  "value": "h seperti "
+}
+[2025-11-02T00:27:32.019Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:32.021Z] PARSER onChunk -> Sending content {
+  "preview": "h seperti "
+}
+[2025-11-02T00:27:32.067Z] PARSER onChunk -> Chunk #106 {
+  "type": "string",
+  "value": "diPC desktop."
+}
+[2025-11-02T00:27:32.069Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:32.070Z] PARSER onChunk -> Sending content {
+  "preview": "diPC desktop."
+}
+[2025-11-02T00:27:32.117Z] PARSER onChunk -> Chunk #107 {
+  "type": "string",
+  "value": " Keduanya "
+}
+[2025-11-02T00:27:32.119Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:32.120Z] PARSER onChunk -> Sending content {
+  "preview": " Keduanya "
+}
+[2025-11-02T00:27:32.168Z] PARSER onChunk -> Chunk #108 {
+  "type": "string",
+  "value": "terintegrasi"
+}
+[2025-11-02T00:27:32.169Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:32.170Z] PARSER onChunk -> Sending content {
+  "preview": "terintegrasi"
+}
+[2025-11-02T00:27:32.217Z] PARSER onChunk -> Chunk #109 {
+  "type": "string",
+  "value": " dalam sat"
+}
+[2025-11-02T00:27:32.219Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:32.220Z] PARSER onChunk -> Sending content {
+  "preview": " dalam sat"
+}
+[2025-11-02T00:27:32.267Z] PARSER onChunk -> Chunk #110 {
+  "type": "string",
+  "value": "u paket yang d"
+}
+[2025-11-02T00:27:32.269Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:32.273Z] PARSER onChunk -> Sending content {
+  "preview": "u paket yang d"
+}
+[2025-11-02T00:27:32.317Z] PARSER onChunk -> Chunk #111 {
+  "type": "string",
+  "value": "isebut **SoC "
+}
+[2025-11-02T00:27:32.318Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:32.320Z] PARSER onChunk -> Sending content {
+  "preview": "isebut **SoC "
+}
+[2025-11-02T00:27:32.368Z] PARSER onChunk -> Chunk #112 {
+  "type": "string",
+  "value": "(Systemon a "
+}
+[2025-11-02T00:27:32.369Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:32.370Z] PARSER onChunk -> Sending content {
+  "preview": "(Systemon a "
+}
+[2025-11-02T00:27:32.417Z] PARSER onChunk -> Chunk #113 {
+  "type": "string",
+  "value": "Chip)**.In"
+}
+[2025-11-02T00:27:32.419Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:32.421Z] PARSER onChunk -> Sending content {
+  "preview": "Chip)**.In"
+}
+[2025-11-02T00:27:32.467Z] PARSER onChunk -> Chunk #114 {
+  "type": "string",
+  "value": "i penting unt"
+}
+[2025-11-02T00:27:32.469Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:32.470Z] PARSER onChunk -> Sending content {
+  "preview": "i penting unt"
+}
+[2025-11-02T00:27:32.518Z] PARSER onChunk -> Chunk #115 {
+  "type": "string",
+  "value": "uk efisiensi d"
+}
+[2025-11-02T00:27:32.519Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:32.520Z] PARSER onChunk -> Sending content {
+  "preview": "uk efisiensi d"
+}
+[2025-11-02T00:27:32.568Z] PARSER onChunk -> Chunk #116 {
+  "type": "string",
+  "value": "aya dan ru"
+}
+[2025-11-02T00:27:32.570Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:32.571Z] PARSER onChunk -> Sending content {
+  "preview": "aya dan ru"
+}
+[2025-11-02T00:27:32.618Z] PARSER onChunk -> Chunk #117 {
+  "type": "string",
+  "value": "ang.\n6.  **Me"
+}
+[2025-11-02T00:27:32.619Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:32.621Z] PARSER onChunk -> Sending content {
+  "preview": "ang.\n6.  **Me"
+}
+[2025-11-02T00:27:32.667Z] PARSER onChunk -> Chunk #118 {
+  "type": "string",
+  "value": "nyusun Struk"
+}
+[2025-11-02T00:27:32.669Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:32.670Z] PARSER onChunk -> Sending content {
+  "preview": "nyusun Struk"
+}
+[2025-11-02T00:27:32.718Z] PARSER onChunk -> Chunk #119 {
+  "type": "string",
+  "value": "tur Jawaban"
+}
+[2025-11-02T00:27:32.720Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:32.721Z] PARSER onChunk -> Sending content {
+  "preview": "tur Jawaban"
+}
+[2025-11-02T00:27:32.768Z] PARSER onChunk -> Chunk #120 {
+  "type": "string",
+  "value": ":**\n    * "
+}
+[2025-11-02T00:27:32.769Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:32.770Z] PARSER onChunk -> Sending content {
+  "preview": ":**\n    * "
+}
+[2025-11-02T00:27:32.818Z] PARSER onChunk -> Chunk #121 {
+  "type": "string",
+  "value": "Salam pembuk"
+}
+[2025-11-02T00:27:32.819Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:32.821Z] PARSER onChunk -> Sending content {
+  "preview": "Salam pembuk"
+}
+[2025-11-02T00:27:32.867Z] PARSER onChunk -> Chunk #122 {
+  "type": "string",
+  "value": "a yang ramah.\n"
+}
+[2025-11-02T00:27:32.869Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:32.871Z] PARSER onChunk -> Sending content {
+  "preview": "a yang ramah.\n"
+}
+[2025-11-02T00:27:32.917Z] PARSER onChunk -> Chunk #123 {
+  "type": "string",
+  "value": "    * Defi"
+}
+[2025-11-02T00:27:32.919Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:32.920Z] PARSER onChunk -> Sending content {
+  "preview": "    * Defi"
+}
+[2025-11-02T00:27:32.967Z] PARSER onChunk -> Chunk #124 {
+  "type": "string",
+  "value": "nisi singkat"
+}
+[2025-11-02T00:27:32.968Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:32.970Z] PARSER onChunk -> Sending content {
+  "preview": "nisi singkat"
+}
+[2025-11-02T00:27:33.017Z] PARSER onChunk -> Chunk #125 {
+  "type": "string",
+  "value": ":CPU adalah \""
+}
+[2025-11-02T00:27:33.019Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:33.020Z] PARSER onChunk -> Sending content {
+  "preview": ":CPU adalah \""
+}
+[2025-11-02T00:27:33.066Z] PARSER onChunk -> Chunk #126 {
+  "type": "string",
+  "value": "Otak\" dan GPU"
+}
+[2025-11-02T00:27:33.069Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:33.070Z] PARSER onChunk -> Sending content {
+  "preview": "Otak\" dan GPU"
+}
+[2025-11-02T00:27:33.116Z] PARSER onChunk -> Chunk #127 {
+  "type": "string",
+  "value": " adalah \"Te"
+}
+[2025-11-02T00:27:33.118Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:33.119Z] PARSER onChunk -> Sending content {
+  "preview": " adalah \"Te"
+}
+[2025-11-02T00:27:33.120Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:33.442Z] PARSER onChunk -> Chunk #128 {
+  "type": "string",
+  "value": "nagaGrafis\""
+}
+[2025-11-02T00:27:33.443Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:33.444Z] PARSER onChunk -> Sending content {
+  "preview": "nagaGrafis\""
+}
+[2025-11-02T00:27:33.479Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:33.481Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 8816,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:33.483Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:33.484Z] PARSER onChunk -> Chunk #129 {
+  "type": "string",
+  "value": ".\n  * Penjelas"
+}
+[2025-11-02T00:27:33.485Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:33.487Z] PARSER onChunk -> Sending content {
+  "preview": ".\n  * Penjelas"
+}
+[2025-11-02T00:27:33.534Z] PARSER onChunk -> Chunk #130 {
+  "type": "string",
+  "value": "an detail**CPU"
+}
+[2025-11-02T00:27:33.536Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:33.538Z] PARSER onChunk -> Sending content {
+  "preview": "an detail**CPU"
+}
+[2025-11-02T00:27:33.583Z] PARSER onChunk -> Chunk #131 {
+  "type": "string",
+  "value": "**: Fokus pad"
+}
+[2025-11-02T00:27:33.585Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:33.586Z] PARSER onChunk -> Sending content {
+  "preview": "**: Fokus pad"
+}
+[2025-11-02T00:27:33.634Z] PARSER onChunk -> Chunk #132 {
+  "type": "string",
+  "value": "a kecepatan, "
+}
+[2025-11-02T00:27:33.635Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:33.637Z] PARSER onChunk -> Sending content {
+  "preview": "a kecepatan, "
+}
+[2025-11-02T00:27:33.684Z] PARSER onChunk -> Chunk #133 {
+  "type": "string",
+  "value": "tugas umum"
+}
+[2025-11-02T00:27:33.685Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:33.687Z] PARSER onChunk -> Sending content {
+  "preview": "tugas umum"
+}
+[2025-11-02T00:27:33.734Z] PARSER onChunk -> Chunk #134 {
+  "type": "string",
+  "value": ", dan sistem"
+}
+[2025-11-02T00:27:33.736Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:33.738Z] PARSER onChunk -> Sending content {
+  "preview": ", dan sistem"
+}
+[2025-11-02T00:27:33.784Z] PARSER onChunk -> Chunk #135 {
+  "type": "string",
+  "value": " operasi.\n"
+}
+[2025-11-02T00:27:33.786Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:33.788Z] PARSER onChunk -> Sending content {
+  "preview": " operasi.\n"
+}
+[2025-11-02T00:27:33.837Z] PARSER onChunk -> Chunk #136 {
+  "type": "string",
+  "value": "    * Penjela"
+}
+[2025-11-02T00:27:33.838Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:33.840Z] PARSER onChunk -> Sending content {
+  "preview": "    * Penjela"
+}
+[2025-11-02T00:27:33.883Z] PARSER onChunk -> Chunk #137 {
+  "type": "string",
+  "value": "san detail**G"
+}
+[2025-11-02T00:27:33.885Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:33.887Z] PARSER onChunk -> Sending content {
+  "preview": "san detail**G"
+}
+[2025-11-02T00:27:33.933Z] PARSER onChunk -> Chunk #138 {
+  "type": "string",
+  "value": "PU**: Fokus "
+}
+[2025-11-02T00:27:33.934Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:33.936Z] PARSER onChunk -> Sending content {
+  "preview": "PU**: Fokus "
+}
+[2025-11-02T00:27:33.979Z] PARSER onChunk -> Chunk #139 {
+  "type": "string",
+  "value": "pada visual"
+}
+[2025-11-02T00:27:33.981Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:33.983Z] PARSER onChunk -> Sending content {
+  "preview": "pada visual"
+}
+[2025-11-02T00:27:34.030Z] PARSER onChunk -> Chunk #140 {
+  "type": "string",
+  "value": ", game, dan"
+}
+[2025-11-02T00:27:34.032Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:34.033Z] PARSER onChunk -> Sending content {
+  "preview": ", game, dan"
+}
+[2025-11-02T00:27:34.080Z] PARSER onChunk -> Chunk #141 {
+  "type": "string",
+  "value": " *parallel pro"
+}
+[2025-11-02T00:27:34.081Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:34.082Z] PARSER onChunk -> Sending content {
+  "preview": " *parallel pro"
+}
+[2025-11-02T00:27:34.133Z] PARSER onChunk -> Chunk #142 {
+  "type": "string",
+  "value": "cessing*.\n * "
+}
+[2025-11-02T00:27:34.134Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:34.135Z] PARSER onChunk -> Sending content {
+  "preview": "cessing*.\n * "
+}
+[2025-11-02T00:27:34.179Z] PARSER onChunk -> Chunk #143 {
+  "type": "string",
+  "value": "Analogi (C"
+}
+[2025-11-02T00:27:34.181Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:34.182Z] PARSER onChunk -> Sending content {
+  "preview": "Analogi (C"
+}
+[2025-11-02T00:27:34.233Z] PARSER onChunk -> Chunk #144 {
+  "type": "string",
+  "value": "hef vs Tim"
+}
+[2025-11-02T00:27:34.235Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:34.237Z] PARSER onChunk -> Sending content {
+  "preview": "hef vs Tim"
+}
+[2025-11-02T00:27:34.286Z] PARSER onChunk -> Chunk #145 {
+  "type": "string",
+  "value": " Plating) un"
+}
+[2025-11-02T00:27:34.287Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:34.289Z] PARSER onChunk -> Sending content {
+  "preview": " Plating) un"
+}
+[2025-11-02T00:27:34.347Z] PARSER onChunk -> Chunk #146 {
+  "type": "string",
+  "value": "tuk memperj"
+}
+[2025-11-02T00:27:34.348Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:34.349Z] PARSER onChunk -> Sending content {
+  "preview": "tuk memperj"
+}
+[2025-11-02T00:27:34.397Z] PARSER onChunk -> Chunk #147 {
+  "type": "string",
+  "value": "elas.\n    * K"
+}
+[2025-11-02T00:27:34.398Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:34.400Z] PARSER onChunk -> Sending content {
+  "preview": "elas.\n    * K"
+}
+[2025-11-02T00:27:34.446Z] PARSER onChunk -> Chunk #148 {
+  "type": "string",
+  "value": "onteks **SoC*"
+}
+[2025-11-02T00:27:34.447Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:34.449Z] PARSER onChunk -> Sending content {
+  "preview": "onteks **SoC*"
+}
+[2025-11-02T00:27:34.499Z] PARSER onChunk -> Chunk #149 {
+  "type": "string",
+  "value": "* di HP:Me"
+}
+[2025-11-02T00:27:34.500Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:34.501Z] PARSER onChunk -> Sending content {
+  "preview": "* di HP:Me"
+}
+[2025-11-02T00:27:34.549Z] PARSER onChunk -> Chunk #150 {
+  "type": "string",
+  "value": "njelaskanbah"
+}
+[2025-11-02T00:27:34.551Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:34.553Z] PARSER onChunk -> Sending content {
+  "preview": "njelaskanbah"
+}
+[2025-11-02T00:27:34.596Z] PARSER onChunk -> Chunk #151 {
+  "type": "string",
+  "value": "wa keduanya b"
+}
+[2025-11-02T00:27:34.598Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:34.599Z] PARSER onChunk -> Sending content {
+  "preview": "wa keduanya b"
+}
+[2025-11-02T00:27:34.647Z] PARSER onChunk -> Chunk #152 {
+  "type": "string",
+  "value": "ekerja ber"
+}
+[2025-11-02T00:27:34.649Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:34.650Z] PARSER onChunk -> Sending content {
+  "preview": "ekerja ber"
+}
+[2025-11-02T00:27:34.651Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:34.954Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:34.966Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 9190,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:34.980Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:34.988Z] PARSER onChunk -> Chunk #153 {
+  "type": "string",
+  "value": "sama dalam"
+}
+[2025-11-02T00:27:34.989Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:34.991Z] PARSER onChunk -> Sending content {
+  "preview": "sama dalam"
+}
+[2025-11-02T00:27:35.002Z] PARSER onChunk -> Chunk #154 {
+  "type": "string",
+  "value": "satu *chip*"
+}
+[2025-11-02T00:27:35.003Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:35.004Z] PARSER onChunk -> Sending content {
+  "preview": "satu *chip*"
+}
+[2025-11-02T00:27:35.049Z] PARSER onChunk -> Chunk #155 {
+  "type": "string",
+  "value": ".\n    * Kesi"
+}
+[2025-11-02T00:27:35.050Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:35.052Z] PARSER onChunk -> Sending content {
+  "preview": ".\n    * Kesi"
+}
+[2025-11-02T00:27:35.099Z] PARSER onChunk -> Chunk #156 {
+  "type": "string",
+  "value": "mpulan: CP"
+}
+[2025-11-02T00:27:35.100Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:35.102Z] PARSER onChunk -> Sending content {
+  "preview": "mpulan: CP"
+}
+[2025-11-02T00:27:35.149Z] PARSER onChunk -> Chunk #157 {
+  "type": "string",
+  "value": "Uuntuk kec"
+}
+[2025-11-02T00:27:35.151Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:35.152Z] PARSER onChunk -> Sending content {
+  "preview": "Uuntuk kec"
+}
+[2025-11-02T00:27:35.199Z] PARSER onChunk -> Chunk #158 {
+  "type": "string",
+  "value": "epatan umum,"
+}
+[2025-11-02T00:27:35.200Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:35.201Z] PARSER onChunk -> Sending content {
+  "preview": "epatan umum,"
+}
+[2025-11-02T00:27:35.249Z] PARSER onChunk -> Chunk #159 {
+  "type": "string",
+  "value": " GPU untuk p"
+}
+[2025-11-02T00:27:35.250Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:35.251Z] PARSER onChunk -> Sending content {
+  "preview": " GPU untuk p"
+}
+[2025-11-02T00:27:35.299Z] PARSER onChunk -> Chunk #160 {
+  "type": "string",
+  "value": "engalaman v"
+}
+[2025-11-02T00:27:35.300Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:35.301Z] PARSER onChunk -> Sending content {
+  "preview": "engalaman v"
+}
+[2025-11-02T00:27:35.411Z] PARSER onChunk -> Chunk #161 {
+  "type": "string",
+  "value": "isual (gami"
+}
+[2025-11-02T00:27:35.416Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:35.424Z] PARSER onChunk -> Sending content {
+  "preview": "isual (gami"
+}
+[2025-11-02T00:27:35.433Z] PARSER onChunk -> Chunk #162 {
+  "type": "string",
+  "value": "ng, video, dll"
+}
+[2025-11-02T00:27:35.437Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:35.439Z] PARSER onChunk -> Sending content {
+  "preview": "ng, video, dll"
+}
+[2025-11-02T00:27:35.459Z] PARSER onChunk -> Chunk #163 {
+  "type": "string",
+  "value": ").\n</think>Hal"
+}
+[2025-11-02T00:27:35.460Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:35.461Z] PARSER onChunk -> Sending content {
+  "preview": ").\n</think>Hal"
+}
+[2025-11-02T00:27:35.515Z] PARSER onChunk -> Chunk #164 {
+  "type": "string",
+  "value": "o! Tentu, saya"
+}
+[2025-11-02T00:27:35.516Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:35.517Z] PARSER onChunk -> Sending content {
+  "preview": "o! Tentu, saya"
+}
+[2025-11-02T00:27:35.561Z] PARSER onChunk -> Chunk #165 {
+  "type": "string",
+  "value": " bantu jelaska"
+}
+[2025-11-02T00:27:35.563Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:35.566Z] PARSER onChunk -> Sending content {
+  "preview": " bantu jelaska"
+}
+[2025-11-02T00:27:35.615Z] PARSER onChunk -> Chunk #166 {
+  "type": "string",
+  "value": "n perbedaan f"
+}
+[2025-11-02T00:27:35.617Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:35.618Z] PARSER onChunk -> Sending content {
+  "preview": "n perbedaan f"
+}
+[2025-11-02T00:27:35.665Z] PARSER onChunk -> Chunk #167 {
+  "type": "string",
+  "value": "undamental ant"
+}
+[2025-11-02T00:27:35.667Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:35.668Z] PARSER onChunk -> Sending content {
+  "preview": "undamental ant"
+}
+[2025-11-02T00:27:35.716Z] PARSER onChunk -> Chunk #168 {
+  "type": "string",
+  "value": "ara CPU dan GP"
+}
+[2025-11-02T00:27:35.717Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:35.719Z] PARSER onChunk -> Sending content {
+  "preview": "ara CPU dan GP"
+}
+[2025-11-02T00:27:35.780Z] PARSER onChunk -> Chunk #169 {
+  "type": "string",
+  "value": "U di HP Anda."
+}
+[2025-11-02T00:27:35.781Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:35.782Z] PARSER onChunk -> Sending content {
+  "preview": "U di HP Anda."
+}
+[2025-11-02T00:27:35.832Z] PARSER onChunk -> Chunk #170 {
+  "type": "string",
+  "value": "\n\nSingkatnya"
+}
+[2025-11-02T00:27:35.833Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:35.835Z] PARSER onChunk -> Sending content {
+  "preview": "\n\nSingkatnya"
+}
+[2025-11-02T00:27:35.878Z] PARSER onChunk -> Chunk #171 {
+  "type": "string",
+  "value": ": **CPU adalah"
+}
+[2025-11-02T00:27:35.879Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:35.880Z] PARSER onChunk -> Sending content {
+  "preview": ": **CPU adalah"
+}
+[2025-11-02T00:27:35.932Z] PARSER onChunk -> Chunk #172 {
+  "type": "string",
+  "value": " Otak,GPU ad"
+}
+[2025-11-02T00:27:35.933Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:35.935Z] PARSER onChunk -> Sending content {
+  "preview": " Otak,GPU ad"
+}
+[2025-11-02T00:27:35.978Z] PARSER onChunk -> Chunk #173 {
+  "type": "string",
+  "value": "alah Mata (a"
+}
+[2025-11-02T00:27:35.979Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:35.980Z] PARSER onChunk -> Sending content {
+  "preview": "alah Mata (a"
+}
+[2025-11-02T00:27:36.030Z] PARSER onChunk -> Chunk #174 {
+  "type": "string",
+  "value": "tau Tenaga"
+}
+[2025-11-02T00:27:36.031Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:36.032Z] PARSER onChunk -> Sending content {
+  "preview": "tau Tenaga"
+}
+[2025-11-02T00:27:36.080Z] PARSER onChunk -> Chunk #175 {
+  "type": "string",
+  "value": " Grafis).**"
+}
+[2025-11-02T00:27:36.081Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:36.082Z] PARSER onChunk -> Sending content {
+  "preview": " Grafis).**"
+}
+[2025-11-02T00:27:36.129Z] PARSER onChunk -> Chunk #176 {
+  "type": "string",
+  "value": "\n\nKeduanya"
+}
+[2025-11-02T00:27:36.131Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:36.132Z] PARSER onChunk -> Sending content {
+  "preview": "\n\nKeduanya"
+}
+[2025-11-02T00:27:36.180Z] PARSER onChunk -> Chunk #177 {
+  "type": "string",
+  "value": " sangat pen"
+}
+[2025-11-02T00:27:36.181Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:36.182Z] PARSER onChunk -> Sending content {
+  "preview": " sangat pen"
+}
+[2025-11-02T00:27:36.184Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:36.442Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:36.444Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 9539,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:36.446Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:36.447Z] PARSER onChunk -> Chunk #178 {
+  "type": "string",
+  "value": "ting, teta"
+}
+[2025-11-02T00:27:36.448Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:36.450Z] PARSER onChunk -> Sending content {
+  "preview": "ting, teta"
+}
+[2025-11-02T00:27:36.498Z] PARSER onChunk -> Chunk #179 {
+  "type": "string",
+  "value": "pi dirancan"
+}
+[2025-11-02T00:27:36.500Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:36.501Z] PARSER onChunk -> Sending content {
+  "preview": "pi dirancan"
+}
+[2025-11-02T00:27:36.549Z] PARSER onChunk -> Chunk #180 {
+  "type": "string",
+  "value": "g untuk pe"
+}
+[2025-11-02T00:27:36.550Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:36.552Z] PARSER onChunk -> Sending content {
+  "preview": "g untuk pe"
+}
+[2025-11-02T00:27:36.599Z] PARSER onChunk -> Chunk #181 {
+  "type": "string",
+  "value": "kerjaan ya"
+}
+[2025-11-02T00:27:36.600Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:36.601Z] PARSER onChunk -> Sending content {
+  "preview": "kerjaan ya"
+}
+[2025-11-02T00:27:36.649Z] PARSER onChunk -> Chunk #182 {
+  "type": "string",
+  "value": "ng sangat ber"
+}
+[2025-11-02T00:27:36.650Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:36.651Z] PARSER onChunk -> Sending content {
+  "preview": "ng sangat ber"
+}
+[2025-11-02T00:27:36.699Z] PARSER onChunk -> Chunk #183 {
+  "type": "string",
+  "value": "beda.\n\n### 🧠"
+}
+[2025-11-02T00:27:36.700Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:36.701Z] PARSER onChunk -> Sending content {
+  "preview": "beda.\n\n### 🧠"
+}
+[2025-11-02T00:27:36.749Z] PARSER onChunk -> Chunk #184 {
+  "type": "string",
+  "value": " CPU (Centra"
+}
+[2025-11-02T00:27:36.750Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:36.751Z] PARSER onChunk -> Sending content {
+  "preview": " CPU (Centra"
+}
+[2025-11-02T00:27:36.796Z] PARSER onChunk -> Chunk #185 {
+  "type": "string",
+  "value": "l Processing "
+}
+[2025-11-02T00:27:36.797Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:36.798Z] PARSER onChunk -> Sending content {
+  "preview": "l Processing "
+}
+[2025-11-02T00:27:36.845Z] PARSER onChunk -> Chunk #186 {
+  "type": "string",
+  "value": "Unit)\nAngga"
+}
+[2025-11-02T00:27:36.847Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:36.848Z] PARSER onChunk -> Sending content {
+  "preview": "Unit)\nAngga"
+}
+[2025-11-02T00:27:36.896Z] PARSER onChunk -> Chunk #187 {
+  "type": "string",
+  "value": "plahCPU sebag"
+}
+[2025-11-02T00:27:36.897Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:36.898Z] PARSER onChunk -> Sending content {
+  "preview": "plahCPU sebag"
+}
+[2025-11-02T00:27:36.946Z] PARSER onChunk -> Chunk #188 {
+  "type": "string",
+  "value": "ai \"Otak Uta"
+}
+[2025-11-02T00:27:36.948Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:36.949Z] PARSER onChunk -> Sending content {
+  "preview": "ai \"Otak Uta"
+}
+[2025-11-02T00:27:36.999Z] PARSER onChunk -> Chunk #189 {
+  "type": "string",
+  "value": "ma\" atau *E"
+}
+[2025-11-02T00:27:37.000Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:37.000Z] PARSER onChunk -> Sending content {
+  "preview": "ma\" atau *E"
+}
+[2025-11-02T00:27:37.045Z] PARSER onChunk -> Chunk #190 {
+  "type": "string",
+  "value": "xecutive Ch"
+}
+[2025-11-02T00:27:37.046Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:37.048Z] PARSER onChunk -> Sending content {
+  "preview": "xecutive Ch"
+}
+[2025-11-02T00:27:37.095Z] PARSER onChunk -> Chunk #191 {
+  "type": "string",
+  "value": "ef* di restora"
+}
+[2025-11-02T00:27:37.096Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:37.097Z] PARSER onChunk -> Sending content {
+  "preview": "ef* di restora"
+}
+[2025-11-02T00:27:37.145Z] PARSER onChunk -> Chunk #192 {
+  "type": "string",
+  "value": "n.\n\n* **Tuga"
+}
+[2025-11-02T00:27:37.146Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:37.147Z] PARSER onChunk -> Sending content {
+  "preview": "n.\n\n* **Tuga"
+}
+[2025-11-02T00:27:37.195Z] PARSER onChunk -> Chunk #193 {
+  "type": "string",
+  "value": "snya:**Menj"
+}
+[2025-11-02T00:27:37.196Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:37.197Z] PARSER onChunk -> Sending content {
+  "preview": "snya:**Menj"
+}
+[2025-11-02T00:27:37.245Z] PARSER onChunk -> Chunk #194 {
+  "type": "string",
+  "value": "alankaninstru"
+}
+[2025-11-02T00:27:37.246Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:37.247Z] PARSER onChunk -> Sending content {
+  "preview": "alankaninstru"
+}
+[2025-11-02T00:27:37.296Z] PARSER onChunk -> Chunk #195 {
+  "type": "string",
+  "value": "ksi umum d"
+}
+[2025-11-02T00:27:37.297Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:37.297Z] PARSER onChunk -> Sending content {
+  "preview": "ksi umum d"
+}
+[2025-11-02T00:27:37.345Z] PARSER onChunk -> Chunk #196 {
+  "type": "string",
+  "value": "an mengelola "
+}
+[2025-11-02T00:27:37.346Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:37.347Z] PARSER onChunk -> Sending content {
+  "preview": "an mengelola "
+}
+[2025-11-02T00:27:37.395Z] PARSER onChunk -> Chunk #197 {
+  "type": "string",
+  "value": "hampir semua"
+}
+[2025-11-02T00:27:37.396Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:37.397Z] PARSER onChunk -> Sending content {
+  "preview": "hampir semua"
+}
+[2025-11-02T00:27:37.447Z] PARSER onChunk -> Chunk #198 {
+  "type": "string",
+  "value": " hal di HP "
+}
+[2025-11-02T00:27:37.448Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:37.449Z] PARSER onChunk -> Sending content {
+  "preview": " hal di HP "
+}
+[2025-11-02T00:27:37.494Z] PARSER onChunk -> Chunk #199 {
+  "type": "string",
+  "value": "Anda.\n* **C"
+}
+[2025-11-02T00:27:37.495Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:37.496Z] PARSER onChunk -> Sending content {
+  "preview": "Anda.\n* **C"
+}
+[2025-11-02T00:27:37.545Z] PARSER onChunk -> Chunk #200 {
+  "type": "string",
+  "value": "ontoh Peker"
+}
+[2025-11-02T00:27:37.547Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:37.548Z] PARSER onChunk -> Sending content {
+  "preview": "ontoh Peker"
+}
+[2025-11-02T00:27:37.596Z] PARSER onChunk -> Chunk #201 {
+  "type": "string",
+  "value": "jaan:** Membuk"
+}
+[2025-11-02T00:27:37.597Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:37.598Z] PARSER onChunk -> Sending content {
+  "preview": "jaan:** Membuk"
+}
+[2025-11-02T00:27:37.646Z] PARSER onChunk -> Chunk #202 {
+  "type": "string",
+  "value": "a aplikasi Wh"
+}
+[2025-11-02T00:27:37.646Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:37.647Z] PARSER onChunk -> Sending content {
+  "preview": "a aplikasi Wh"
+}
+[2025-11-02T00:27:37.648Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:37.890Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:37.892Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 9927,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:37.893Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:37.894Z] PARSER onChunk -> Chunk #203 {
+  "type": "string",
+  "value": "atsApp,memu"
+}
+[2025-11-02T00:27:37.895Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:37.896Z] PARSER onChunk -> Sending content {
+  "preview": "atsApp,memu"
+}
+[2025-11-02T00:27:37.945Z] PARSER onChunk -> Chunk #204 {
+  "type": "string",
+  "value": "at sistem "
+}
+[2025-11-02T00:27:37.946Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:37.948Z] PARSER onChunk -> Sending content {
+  "preview": "at sistem "
+}
+[2025-11-02T00:27:37.999Z] PARSER onChunk -> Chunk #205 {
+  "type": "string",
+  "value": "operasi (And"
+}
+[2025-11-02T00:27:38.000Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:38.001Z] PARSER onChunk -> Sending content {
+  "preview": "operasi (And"
+}
+[2025-11-02T00:27:38.045Z] PARSER onChunk -> Chunk #206 {
+  "type": "string",
+  "value": "roid/iOS), ber"
+}
+[2025-11-02T00:27:38.046Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:38.048Z] PARSER onChunk -> Sending content {
+  "preview": "roid/iOS), ber"
+}
+[2025-11-02T00:27:38.095Z] PARSER onChunk -> Chunk #207 {
+  "type": "string",
+  "value": "alih antar "
+}
+[2025-11-02T00:27:38.096Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:38.097Z] PARSER onChunk -> Sending content {
+  "preview": "alih antar "
+}
+[2025-11-02T00:27:38.146Z] PARSER onChunk -> Chunk #208 {
+  "type": "string",
+  "value": "aplikasi, ata"
+}
+[2025-11-02T00:27:38.146Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:38.147Z] PARSER onChunk -> Sending content {
+  "preview": "aplikasi, ata"
+}
+[2025-11-02T00:27:38.197Z] PARSER onChunk -> Chunk #209 {
+  "type": "string",
+  "value": "u menghitu"
+}
+[2025-11-02T00:27:38.198Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:38.199Z] PARSER onChunk -> Sending content {
+  "preview": "u menghitu"
+}
+[2025-11-02T00:27:38.243Z] PARSER onChunk -> Chunk #210 {
+  "type": "string",
+  "value": "ng data di"
+}
+[2025-11-02T00:27:38.244Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:38.245Z] PARSER onChunk -> Sending content {
+  "preview": "ng data di"
+}
+[2025-11-02T00:27:38.295Z] PARSER onChunk -> Chunk #211 {
+  "type": "string",
+  "value": " spreadsheet."
+}
+[2025-11-02T00:27:38.296Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:38.297Z] PARSER onChunk -> Sending content {
+  "preview": " spreadsheet."
+}
+[2025-11-02T00:27:38.347Z] PARSER onChunk -> Chunk #212 {
+  "type": "string",
+  "value": "\n* **Cara "
+}
+[2025-11-02T00:27:38.348Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:38.349Z] PARSER onChunk -> Sending content {
+  "preview": "\n* **Cara "
+}
+[2025-11-02T00:27:38.395Z] PARSER onChunk -> Chunk #213 {
+  "type": "string",
+  "value": "Kerja:** CPU "
+}
+[2025-11-02T00:27:38.396Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:38.397Z] PARSER onChunk -> Sending content {
+  "preview": "Kerja:** CPU "
+}
+[2025-11-02T00:27:38.446Z] PARSER onChunk -> Chunk #214 {
+  "type": "string",
+  "value": "memiliki bebe"
+}
+[2025-11-02T00:27:38.447Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:38.448Z] PARSER onChunk -> Sending content {
+  "preview": "memiliki bebe"
+}
+[2025-11-02T00:27:38.497Z] PARSER onChunk -> Chunk #215 {
+  "type": "string",
+  "value": "rapa inti (cor"
+}
+[2025-11-02T00:27:38.498Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:38.499Z] PARSER onChunk -> Sending content {
+  "preview": "rapa inti (cor"
+}
+[2025-11-02T00:27:38.544Z] PARSER onChunk -> Chunk #216 {
+  "type": "string",
+  "value": "e)yang sang"
+}
+[2025-11-02T00:27:38.545Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:38.546Z] PARSER onChunk -> Sending content {
+  "preview": "e)yang sang"
+}
+[2025-11-02T00:27:38.597Z] PARSER onChunk -> Chunk #217 {
+  "type": "string",
+  "value": "at cepat dan p"
+}
+[2025-11-02T00:27:38.598Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:38.599Z] PARSER onChunk -> Sending content {
+  "preview": "at cepat dan p"
+}
+[2025-11-02T00:27:38.645Z] PARSER onChunk -> Chunk #218 {
+  "type": "string",
+  "value": "intar. Ia he"
+}
+[2025-11-02T00:27:38.646Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:38.647Z] PARSER onChunk -> Sending content {
+  "preview": "intar. Ia he"
+}
+[2025-11-02T00:27:38.697Z] PARSER onChunk -> Chunk #219 {
+  "type": "string",
+  "value": "bat dalam mena"
+}
+[2025-11-02T00:27:38.698Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:38.699Z] PARSER onChunk -> Sending content {
+  "preview": "bat dalam mena"
+}
+[2025-11-02T00:27:38.743Z] PARSER onChunk -> Chunk #220 {
+  "type": "string",
+  "value": "ngani 1 sampa"
+}
+[2025-11-02T00:27:38.744Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:38.745Z] PARSER onChunk -> Sending content {
+  "preview": "ngani 1 sampa"
+}
+[2025-11-02T00:27:38.794Z] PARSER onChunk -> Chunk #221 {
+  "type": "string",
+  "value": "i 8 tugasy"
+}
+[2025-11-02T00:27:38.795Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:38.795Z] PARSER onChunk -> Sending content {
+  "preview": "i 8 tugasy"
+}
+[2025-11-02T00:27:38.846Z] PARSER onChunk -> Chunk #222 {
+  "type": "string",
+  "value": "ang kompleks "
+}
+[2025-11-02T00:27:38.847Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:38.847Z] PARSER onChunk -> Sending content {
+  "preview": "ang kompleks "
+}
+[2025-11-02T00:27:38.894Z] PARSER onChunk -> Chunk #223 {
+  "type": "string",
+  "value": "secara berur"
+}
+[2025-11-02T00:27:38.895Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:38.896Z] PARSER onChunk -> Sending content {
+  "preview": "secara berur"
+}
+[2025-11-02T00:27:38.945Z] PARSER onChunk -> Chunk #224 {
+  "type": "string",
+  "value": "utan atau b"
+}
+[2025-11-02T00:27:38.946Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:38.947Z] PARSER onChunk -> Sending content {
+  "preview": "utan atau b"
+}
+[2025-11-02T00:27:38.997Z] PARSER onChunk -> Chunk #225 {
+  "type": "string",
+  "value": "ergantian de"
+}
+[2025-11-02T00:27:38.998Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:38.999Z] PARSER onChunk -> Sending content {
+  "preview": "ergantian de"
+}
+[2025-11-02T00:27:39.045Z] PARSER onChunk -> Chunk #226 {
+  "type": "string",
+  "value": "ngan sangat c"
+}
+[2025-11-02T00:27:39.046Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:39.046Z] PARSER onChunk -> Sending content {
+  "preview": "ngan sangat c"
+}
+[2025-11-02T00:27:39.095Z] PARSER onChunk -> Chunk #227 {
+  "type": "string",
+  "value": "epat.\n\n###🎮 G"
+}
+[2025-11-02T00:27:39.096Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:39.097Z] PARSER onChunk -> Sending content {
+  "preview": "epat.\n\n###🎮 G"
+}
+[2025-11-02T00:27:39.098Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:39.292Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:39.293Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 10261,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:39.294Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:39.295Z] PARSER onChunk -> Chunk #228 {
+  "type": "string",
+  "value": "PU (Graphics"
+}
+[2025-11-02T00:27:39.296Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:39.297Z] PARSER onChunk -> Sending content {
+  "preview": "PU (Graphics"
+}
+[2025-11-02T00:27:39.345Z] PARSER onChunk -> Chunk #229 {
+  "type": "string",
+  "value": " Processing Un"
+}
+[2025-11-02T00:27:39.346Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:39.347Z] PARSER onChunk -> Sending content {
+  "preview": " Processing Un"
+}
+[2025-11-02T00:27:39.397Z] PARSER onChunk -> Chunk #230 {
+  "type": "string",
+  "value": "it)\n\nAngga"
+}
+[2025-11-02T00:27:39.398Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:39.399Z] PARSER onChunk -> Sending content {
+  "preview": "it)\n\nAngga"
+}
+[2025-11-02T00:27:39.447Z] PARSER onChunk -> Chunk #231 {
+  "type": "string",
+  "value": "plah GPUsebaga"
+}
+[2025-11-02T00:27:39.448Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:39.448Z] PARSER onChunk -> Sending content {
+  "preview": "plah GPUsebaga"
+}
+[2025-11-02T00:27:39.497Z] PARSER onChunk -> Chunk #232 {
+  "type": "string",
+  "value": "i \"Tim Senima"
+}
+[2025-11-02T00:27:39.498Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:39.498Z] PARSER onChunk -> Sending content {
+  "preview": "i \"Tim Senima"
+}
+[2025-11-02T00:27:39.547Z] PARSER onChunk -> Chunk #233 {
+  "type": "string",
+  "value": "n\" atau *T"
+}
+[2025-11-02T00:27:39.548Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:39.549Z] PARSER onChunk -> Sending content {
+  "preview": "n\" atau *T"
+}
+[2025-11-02T00:27:39.596Z] PARSER onChunk -> Chunk #234 {
+  "type": "string",
+  "value": "im KokiPlati"
+}
+[2025-11-02T00:27:39.597Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:39.598Z] PARSER onChunk -> Sending content {
+  "preview": "im KokiPlati"
+}
+[2025-11-02T00:27:39.646Z] PARSER onChunk -> Chunk #235 {
+  "type": "string",
+  "value": "ng* yang sang"
+}
+[2025-11-02T00:27:39.647Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:39.648Z] PARSER onChunk -> Sending content {
+  "preview": "ng* yang sang"
+}
+[2025-11-02T00:27:39.696Z] PARSER onChunk -> Chunk #236 {
+  "type": "string",
+  "value": "at besar.\n\n"
+}
+[2025-11-02T00:27:39.697Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:39.698Z] PARSER onChunk -> Sending content {
+  "preview": "at besar.\n\n"
+}
+[2025-11-02T00:27:39.746Z] PARSER onChunk -> Chunk #237 {
+  "type": "string",
+  "value": "* **Tugasny"
+}
+[2025-11-02T00:27:39.747Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:39.748Z] PARSER onChunk -> Sending content {
+  "preview": "* **Tugasny"
+}
+[2025-11-02T00:27:39.797Z] PARSER onChunk -> Chunk #238 {
+  "type": "string",
+  "value": "a:** Spesial"
+}
+[2025-11-02T00:27:39.797Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:39.798Z] PARSER onChunk -> Sending content {
+  "preview": "a:** Spesial"
+}
+[2025-11-02T00:27:39.847Z] PARSER onChunk -> Chunk #239 {
+  "type": "string",
+  "value": "isasi dalam me"
+}
+[2025-11-02T00:27:39.848Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:39.849Z] PARSER onChunk -> Sending content {
+  "preview": "isasi dalam me"
+}
+[2025-11-02T00:27:39.897Z] PARSER onChunk -> Chunk #240 {
+  "type": "string",
+  "value": "ngurussemu"
+}
+[2025-11-02T00:27:39.898Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:39.899Z] PARSER onChunk -> Sending content {
+  "preview": "ngurussemu"
+}
+[2025-11-02T00:27:39.947Z] PARSER onChunk -> Chunk #241 {
+  "type": "string",
+  "value": "a yang And"
+}
+[2025-11-02T00:27:39.948Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:39.948Z] PARSER onChunk -> Sending content {
+  "preview": "a yang And"
+}
+[2025-11-02T00:27:39.997Z] PARSER onChunk -> Chunk #242 {
+  "type": "string",
+  "value": "a lihatdi laya"
+}
+[2025-11-02T00:27:39.997Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:39.998Z] PARSER onChunk -> Sending content {
+  "preview": "a lihatdi laya"
+}
+[2025-11-02T00:27:40.047Z] PARSER onChunk -> Chunk #243 {
+  "type": "string",
+  "value": "r (visual dan"
+}
+[2025-11-02T00:27:40.048Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:40.048Z] PARSER onChunk -> Sending content {
+  "preview": "r (visual dan"
+}
+[2025-11-02T00:27:40.097Z] PARSER onChunk -> Chunk #244 {
+  "type": "string",
+  "value": " grafis).\n* **"
+}
+[2025-11-02T00:27:40.098Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:40.098Z] PARSER onChunk -> Sending content {
+  "preview": " grafis).\n* **"
+}
+[2025-11-02T00:27:40.146Z] PARSER onChunk -> Chunk #245 {
+  "type": "string",
+  "value": "Contoh Pekerj"
+}
+[2025-11-02T00:27:40.147Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:40.148Z] PARSER onChunk -> Sending content {
+  "preview": "Contoh Pekerj"
+}
+[2025-11-02T00:27:40.197Z] PARSER onChunk -> Chunk #246 {
+  "type": "string",
+  "value": "aan:** Merende"
+}
+[2025-11-02T00:27:40.198Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:40.198Z] PARSER onChunk -> Sending content {
+  "preview": "aan:** Merende"
+}
+[2025-11-02T00:27:40.246Z] PARSER onChunk -> Chunk #247 {
+  "type": "string",
+  "value": "r grafis 3"
+}
+[2025-11-02T00:27:40.247Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:40.248Z] PARSER onChunk -> Sending content {
+  "preview": "r grafis 3"
+}
+[2025-11-02T00:27:40.295Z] PARSER onChunk -> Chunk #248 {
+  "type": "string",
+  "value": "D dalam game "
+}
+[2025-11-02T00:27:40.296Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:40.297Z] PARSER onChunk -> Sending content {
+  "preview": "D dalam game "
+}
+[2025-11-02T00:27:40.347Z] PARSER onChunk -> Chunk #249 {
+  "type": "string",
+  "value": "(seperti *"
+}
+[2025-11-02T00:27:40.347Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:40.348Z] PARSER onChunk -> Sending content {
+  "preview": "(seperti *"
+}
+[2025-11-02T00:27:40.396Z] PARSER onChunk -> Chunk #250 {
+  "type": "string",
+  "value": "Genshin Impact"
+}
+[2025-11-02T00:27:40.397Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:40.398Z] PARSER onChunk -> Sending content {
+  "preview": "Genshin Impact"
+}
+[2025-11-02T00:27:40.446Z] PARSER onChunk -> Chunk #251 {
+  "type": "string",
+  "value": "*),memutar v"
+}
+[2025-11-02T00:27:40.447Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:40.448Z] PARSER onChunk -> Sending content {
+  "preview": "*),memutar v"
+}
+[2025-11-02T00:27:40.497Z] PARSER onChunk -> Chunk #252 {
+  "type": "string",
+  "value": "ideo 4K, atau"
+}
+[2025-11-02T00:27:40.497Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:40.498Z] PARSER onChunk -> Sending content {
+  "preview": "ideo 4K, atau"
+}
+[2025-11-02T00:27:40.499Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:40.693Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:40.695Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 10663,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:40.696Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:40.696Z] PARSER onChunk -> Chunk #253 {
+  "type": "string",
+  "value": " bahkan mem"
+}
+[2025-11-02T00:27:40.697Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:40.698Z] PARSER onChunk -> Sending content {
+  "preview": " bahkan mem"
+}
+[2025-11-02T00:27:40.747Z] PARSER onChunk -> Chunk #254 {
+  "type": "string",
+  "value": "buat animasi *"
+}
+[2025-11-02T00:27:40.747Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:40.748Z] PARSER onChunk -> Sending content {
+  "preview": "buat animasi *"
+}
+[2025-11-02T00:27:40.797Z] PARSER onChunk -> Chunk #255 {
+  "type": "string",
+  "value": "scrolling* di "
+}
+[2025-11-02T00:27:40.797Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:40.798Z] PARSER onChunk -> Sending content {
+  "preview": "scrolling* di "
+}
+[2025-11-02T00:27:40.847Z] PARSER onChunk -> Chunk #256 {
+  "type": "string",
+  "value": "Instagram tera"
+}
+[2025-11-02T00:27:40.847Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:40.848Z] PARSER onChunk -> Sending content {
+  "preview": "Instagram tera"
+}
+[2025-11-02T00:27:40.897Z] PARSER onChunk -> Chunk #257 {
+  "type": "string",
+  "value": "sa mulus.\n* "
+}
+[2025-11-02T00:27:40.897Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:40.898Z] PARSER onChunk -> Sending content {
+  "preview": "sa mulus.\n* "
+}
+[2025-11-02T00:27:40.946Z] PARSER onChunk -> Chunk #258 {
+  "type": "string",
+  "value": "**Cara Ker"
+}
+[2025-11-02T00:27:40.947Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:40.948Z] PARSER onChunk -> Sending content {
+  "preview": "**Cara Ker"
+}
+[2025-11-02T00:27:40.997Z] PARSER onChunk -> Chunk #259 {
+  "type": "string",
+  "value": "ja:** GPU tid"
+}
+[2025-11-02T00:27:40.997Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:40.998Z] PARSER onChunk -> Sending content {
+  "preview": "ja:** GPU tid"
+}
+[2025-11-02T00:27:41.047Z] PARSER onChunk -> Chunk #260 {
+  "type": "string",
+  "value": "ak se-kompl"
+}
+[2025-11-02T00:27:41.047Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:41.048Z] PARSER onChunk -> Sending content {
+  "preview": "ak se-kompl"
+}
+[2025-11-02T00:27:41.096Z] PARSER onChunk -> Chunk #261 {
+  "type": "string",
+  "value": "eksCPU, teta"
+}
+[2025-11-02T00:27:41.097Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:41.098Z] PARSER onChunk -> Sending content {
+  "preview": "eksCPU, teta"
+}
+[2025-11-02T00:27:41.146Z] PARSER onChunk -> Chunk #262 {
+  "type": "string",
+  "value": "pi ia memili"
+}
+[2025-11-02T00:27:41.147Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:41.148Z] PARSER onChunk -> Sending content {
+  "preview": "pi ia memili"
+}
+[2025-11-02T00:27:41.196Z] PARSER onChunk -> Chunk #263 {
+  "type": "string",
+  "value": "ki ribuan inti"
+}
+[2025-11-02T00:27:41.197Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:41.198Z] PARSER onChunk -> Sending content {
+  "preview": "ki ribuan inti"
+}
+[2025-11-02T00:27:41.246Z] PARSER onChunk -> Chunk #264 {
+  "type": "string",
+  "value": " (core) ya"
+}
+[2025-11-02T00:27:41.247Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:41.247Z] PARSER onChunk -> Sending content {
+  "preview": " (core) ya"
+}
+[2025-11-02T00:27:41.296Z] PARSER onChunk -> Chunk #265 {
+  "type": "string",
+  "value": "ng lebih sede"
+}
+[2025-11-02T00:27:41.297Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:41.297Z] PARSER onChunk -> Sending content {
+  "preview": "ng lebih sede"
+}
+[2025-11-02T00:27:41.346Z] PARSER onChunk -> Chunk #266 {
+  "type": "string",
+  "value": "rhana. Ini m"
+}
+[2025-11-02T00:27:41.346Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:41.348Z] PARSER onChunk -> Sending content {
+  "preview": "rhana. Ini m"
+}
+[2025-11-02T00:27:41.396Z] PARSER onChunk -> Chunk #267 {
+  "type": "string",
+  "value": "emungkinkann"
+}
+[2025-11-02T00:27:41.397Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:41.398Z] PARSER onChunk -> Sending content {
+  "preview": "emungkinkann"
+}
+[2025-11-02T00:27:41.446Z] PARSER onChunk -> Chunk #268 {
+  "type": "string",
+  "value": "ya melakukan"
+}
+[2025-11-02T00:27:41.447Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:41.448Z] PARSER onChunk -> Sending content {
+  "preview": "ya melakukan"
+}
+[2025-11-02T00:27:41.496Z] PARSER onChunk -> Chunk #269 {
+  "type": "string",
+  "value": " ribuan perhit"
+}
+[2025-11-02T00:27:41.497Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:41.498Z] PARSER onChunk -> Sending content {
+  "preview": " ribuan perhit"
+}
+[2025-11-02T00:27:41.546Z] PARSER onChunk -> Chunk #270 {
+  "type": "string",
+  "value": "ungan sederhan"
+}
+[2025-11-02T00:27:41.547Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:41.548Z] PARSER onChunk -> Sending content {
+  "preview": "ungan sederhan"
+}
+[2025-11-02T00:27:41.596Z] PARSER onChunk -> Chunk #271 {
+  "type": "string",
+  "value": "a (seperti "
+}
+[2025-11-02T00:27:41.597Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:41.597Z] PARSER onChunk -> Sending content {
+  "preview": "a (seperti "
+}
+[2025-11-02T00:27:41.645Z] PARSER onChunk -> Chunk #272 {
+  "type": "string",
+  "value": "\"warna apa un"
+}
+[2025-11-02T00:27:41.645Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:41.646Z] PARSER onChunk -> Sending content {
+  "preview": "\"warna apa un"
+}
+[2025-11-02T00:27:41.696Z] PARSER onChunk -> Chunk #273 {
+  "type": "string",
+  "value": "tuk pikselin"
+}
+[2025-11-02T00:27:41.697Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:41.698Z] PARSER onChunk -> Sending content {
+  "preview": "tuk pikselin"
+}
+[2025-11-02T00:27:41.747Z] PARSER onChunk -> Chunk #274 {
+  "type": "string",
+  "value": "i?\") secara *"
+}
+[2025-11-02T00:27:41.748Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:41.749Z] PARSER onChunk -> Sending content {
+  "preview": "i?\") secara *"
+}
+[2025-11-02T00:27:41.797Z] PARSER onChunk -> Chunk #275 {
+  "type": "string",
+  "value": "*bersamaan** "
+}
+[2025-11-02T00:27:41.798Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:41.799Z] PARSER onChunk -> Sending content {
+  "preview": "*bersamaan** "
+}
+[2025-11-02T00:27:41.846Z] PARSER onChunk -> Chunk #276 {
+  "type": "string",
+  "value": "(paralel).\n"
+}
+[2025-11-02T00:27:41.847Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:41.848Z] PARSER onChunk -> Sending content {
+  "preview": "(paralel).\n"
+}
+[2025-11-02T00:27:41.896Z] PARSER onChunk -> Chunk #277 {
+  "type": "string",
+  "value": "\n---\n\n### \ud83d"
+}
+[2025-11-02T00:27:41.897Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:41.898Z] PARSER onChunk -> Sending content {
+  "preview": "\n---\n\n### \ud83d"
+}
+[2025-11-02T00:27:41.898Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:42.110Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:42.112Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 11019,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:42.112Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:42.113Z] PARSER onChunk -> Chunk #278 {
+  "type": "string",
+  "value": "\udca1 Keduanya"
+}
+[2025-11-02T00:27:42.114Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:42.115Z] PARSER onChunk -> Sending content {
+  "preview": "\udca1 Keduanya"
+}
+[2025-11-02T00:27:42.163Z] PARSER onChunk -> Chunk #279 {
+  "type": "string",
+  "value": " di Dalam H"
+}
+[2025-11-02T00:27:42.164Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:42.165Z] PARSER onChunk -> Sending content {
+  "preview": " di Dalam H"
+}
+[2025-11-02T00:27:42.213Z] PARSER onChunk -> Chunk #280 {
+  "type": "string",
+  "value": "P (SoC)\n\nD"
+}
+[2025-11-02T00:27:42.214Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:42.214Z] PARSER onChunk -> Sending content {
+  "preview": "P (SoC)\n\nD"
+}
+[2025-11-02T00:27:42.263Z] PARSER onChunk -> Chunk #281 {
+  "type": "string",
+  "value": "i *smartph"
+}
+[2025-11-02T00:27:42.264Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:42.265Z] PARSER onChunk -> Sending content {
+  "preview": "i *smartph"
+}
+[2025-11-02T00:27:42.313Z] PARSER onChunk -> Chunk #282 {
+  "type": "string",
+  "value": "one*,CPU da"
+}
+[2025-11-02T00:27:42.314Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:42.315Z] PARSER onChunk -> Sending content {
+  "preview": "one*,CPU da"
+}
+[2025-11-02T00:27:42.363Z] PARSER onChunk -> Chunk #283 {
+  "type": "string",
+  "value": "n GPU tidak"
+}
+[2025-11-02T00:27:42.364Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:42.365Z] PARSER onChunk -> Sending content {
+  "preview": "n GPU tidak"
+}
+[2025-11-02T00:27:42.413Z] PARSER onChunk -> Chunk #284 {
+  "type": "string",
+  "value": " berdirisend"
+}
+[2025-11-02T00:27:42.414Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:42.415Z] PARSER onChunk -> Sending content {
+  "preview": " berdirisend"
+}
+[2025-11-02T00:27:42.463Z] PARSER onChunk -> Chunk #285 {
+  "type": "string",
+  "value": "iri-sendiri"
+}
+[2025-11-02T00:27:42.464Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:42.464Z] PARSER onChunk -> Sending content {
+  "preview": "iri-sendiri"
+}
+[2025-11-02T00:27:42.513Z] PARSER onChunk -> Chunk #286 {
+  "type": "string",
+  "value": " seperti di PC"
+}
+[2025-11-02T00:27:42.514Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:42.515Z] PARSER onChunk -> Sending content {
+  "preview": " seperti di PC"
+}
+[2025-11-02T00:27:42.563Z] PARSER onChunk -> Chunk #287 {
+  "type": "string",
+  "value": " desktop. M"
+}
+[2025-11-02T00:27:42.563Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:42.564Z] PARSER onChunk -> Sending content {
+  "preview": " desktop. M"
+}
+[2025-11-02T00:27:42.613Z] PARSER onChunk -> Chunk #288 {
+  "type": "string",
+  "value": "ereka disat"
+}
+[2025-11-02T00:27:42.614Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:42.614Z] PARSER onChunk -> Sending content {
+  "preview": "ereka disat"
+}
+[2025-11-02T00:27:42.663Z] PARSER onChunk -> Chunk #289 {
+  "type": "string",
+  "value": "ukan dalam s"
+}
+[2025-11-02T00:27:42.663Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:42.664Z] PARSER onChunk -> Sending content {
+  "preview": "ukan dalam s"
+}
+[2025-11-02T00:27:42.713Z] PARSER onChunk -> Chunk #290 {
+  "type": "string",
+  "value": "atu *chip* ya"
+}
+[2025-11-02T00:27:42.713Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:42.714Z] PARSER onChunk -> Sending content {
+  "preview": "atu *chip* ya"
+}
+[2025-11-02T00:27:42.762Z] PARSER onChunk -> Chunk #291 {
+  "type": "string",
+  "value": "ng disebut *"
+}
+[2025-11-02T00:27:42.763Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:42.764Z] PARSER onChunk -> Sending content {
+  "preview": "ng disebut *"
+}
+[2025-11-02T00:27:42.812Z] PARSER onChunk -> Chunk #292 {
+  "type": "string",
+  "value": "*SoC (Syst"
+}
+[2025-11-02T00:27:42.813Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:42.814Z] PARSER onChunk -> Sending content {
+  "preview": "*SoC (Syst"
+}
+[2025-11-02T00:27:42.863Z] PARSER onChunk -> Chunk #293 {
+  "type": "string",
+  "value": "em on a Chip)"
+}
+[2025-11-02T00:27:42.863Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:42.864Z] PARSER onChunk -> Sending content {
+  "preview": "em on a Chip)"
+}
+[2025-11-02T00:27:42.913Z] PARSER onChunk -> Chunk #294 {
+  "type": "string",
+  "value": "**, bersam"
+}
+[2025-11-02T00:27:42.913Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:42.914Z] PARSER onChunk -> Sending content {
+  "preview": "**, bersam"
+}
+[2025-11-02T00:27:42.963Z] PARSER onChunk -> Chunk #295 {
+  "type": "string",
+  "value": "a dengan kom"
+}
+[2025-11-02T00:27:42.963Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:42.964Z] PARSER onChunk -> Sending content {
+  "preview": "a dengan kom"
+}
+[2025-11-02T00:27:43.013Z] PARSER onChunk -> Chunk #296 {
+  "type": "string",
+  "value": "ponen lain sep"
+}
+[2025-11-02T00:27:43.014Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:43.015Z] PARSER onChunk -> Sending content {
+  "preview": "ponen lain sep"
+}
+[2025-11-02T00:27:43.063Z] PARSER onChunk -> Chunk #297 {
+  "type": "string",
+  "value": "erti modem 5G"
+}
+[2025-11-02T00:27:43.064Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:43.065Z] PARSER onChunk -> Sending content {
+  "preview": "erti modem 5G"
+}
+[2025-11-02T00:27:43.113Z] PARSER onChunk -> Chunk #298 {
+  "type": "string",
+  "value": ", ISP (pemrose"
+}
+[2025-11-02T00:27:43.113Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:43.114Z] PARSER onChunk -> Sending content {
+  "preview": ", ISP (pemrose"
+}
+[2025-11-02T00:27:43.162Z] PARSER onChunk -> Chunk #299 {
+  "type": "string",
+  "value": "s gambarka"
+}
+[2025-11-02T00:27:43.163Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:43.164Z] PARSER onChunk -> Sending content {
+  "preview": "s gambarka"
+}
+[2025-11-02T00:27:43.212Z] PARSER onChunk -> Chunk #300 {
+  "type": "string",
+  "value": "mera), dan NP"
+}
+[2025-11-02T00:27:43.213Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:43.214Z] PARSER onChunk -> Sending content {
+  "preview": "mera), dan NP"
+}
+[2025-11-02T00:27:43.263Z] PARSER onChunk -> Chunk #301 {
+  "type": "string",
+  "value": "U (untuk AI"
+}
+[2025-11-02T00:27:43.263Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:43.264Z] PARSER onChunk -> Sending content {
+  "preview": "U (untuk AI"
+}
+[2025-11-02T00:27:43.312Z] PARSER onChunk -> Chunk #302 {
+  "type": "string",
+  "value": ").\n\n**Jadi, sa"
+}
+[2025-11-02T00:27:43.313Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:43.314Z] PARSER onChunk -> Sending content {
+  "preview": ").\n\n**Jadi, sa"
+}
+[2025-11-02T00:27:43.315Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:43.507Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:43.508Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 11349,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:43.509Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:43.511Z] PARSER onChunk -> Chunk #303 {
+  "type": "string",
+  "value": "at Andaber"
+}
+[2025-11-02T00:27:43.511Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:43.512Z] PARSER onChunk -> Sending content {
+  "preview": "at Andaber"
+}
+[2025-11-02T00:27:43.562Z] PARSER onChunk -> Chunk #304 {
+  "type": "string",
+  "value": "main game:**\n"
+}
+[2025-11-02T00:27:43.563Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:43.564Z] PARSER onChunk -> Sending content {
+  "preview": "main game:**\n"
+}
+[2025-11-02T00:27:43.612Z] PARSER onChunk -> Chunk #305 {
+  "type": "string",
+  "value": "\n1.**CPU** a"
+}
+[2025-11-02T00:27:43.613Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:43.614Z] PARSER onChunk -> Sending content {
+  "preview": "\n1.**CPU** a"
+}
+[2025-11-02T00:27:43.662Z] PARSER onChunk -> Chunk #306 {
+  "type": "string",
+  "value": "kanmenangani"
+}
+[2025-11-02T00:27:43.663Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:43.664Z] PARSER onChunk -> Sending content {
+  "preview": "kanmenangani"
+}
+[2025-11-02T00:27:43.712Z] PARSER onChunk -> Chunk #307 {
+  "type": "string",
+  "value": " logika game "
+}
+[2025-11-02T00:27:43.713Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:43.714Z] PARSER onChunk -> Sending content {
+  "preview": " logika game "
+}
+[2025-11-02T00:27:43.762Z] PARSER onChunk -> Chunk #308 {
+  "type": "string",
+  "value": "(misalnya, di "
+}
+[2025-11-02T00:27:43.763Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:43.764Z] PARSER onChunk -> Sending content {
+  "preview": "(misalnya, di "
+}
+[2025-11-02T00:27:43.812Z] PARSER onChunk -> Chunk #309 {
+  "type": "string",
+  "value": "mana musuh ber"
+}
+[2025-11-02T00:27:43.813Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:43.813Z] PARSER onChunk -> Sending content {
+  "preview": "mana musuh ber"
+}
+[2025-11-02T00:27:43.862Z] PARSER onChunk -> Chunk #310 {
+  "type": "string",
+  "value": "gerak, fis"
+}
+[2025-11-02T00:27:43.863Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:43.863Z] PARSER onChunk -> Sending content {
+  "preview": "gerak, fis"
+}
+[2025-11-02T00:27:43.912Z] PARSER onChunk -> Chunk #311 {
+  "type": "string",
+  "value": "ika jatuhnya"
+}
+[2025-11-02T00:27:43.913Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:43.914Z] PARSER onChunk -> Sending content {
+  "preview": "ika jatuhnya"
+}
+[2025-11-02T00:27:43.962Z] PARSER onChunk -> Chunk #312 {
+  "type": "string",
+  "value": " benda, atau "
+}
+[2025-11-02T00:27:43.963Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:43.964Z] PARSER onChunk -> Sending content {
+  "preview": " benda, atau "
+}
+[2025-11-02T00:27:44.012Z] PARSER onChunk -> Chunk #313 {
+  "type": "string",
+  "value": "*loading* leve"
+}
+[2025-11-02T00:27:44.013Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:44.014Z] PARSER onChunk -> Sending content {
+  "preview": "*loading* leve"
+}
+[2025-11-02T00:27:44.062Z] PARSER onChunk -> Chunk #314 {
+  "type": "string",
+  "value": "l).\n2.  **GP"
+}
+[2025-11-02T00:27:44.063Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:44.064Z] PARSER onChunk -> Sending content {
+  "preview": "l).\n2.  **GP"
+}
+[2025-11-02T00:27:44.112Z] PARSER onChunk -> Chunk #315 {
+  "type": "string",
+  "value": "U** akanmenga"
+}
+[2025-11-02T00:27:44.113Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:44.114Z] PARSER onChunk -> Sending content {
+  "preview": "U** akanmenga"
+}
+[2025-11-02T00:27:44.161Z] PARSER onChunk -> Chunk #316 {
+  "type": "string",
+  "value": "mbildata itu"
+}
+[2025-11-02T00:27:44.162Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:44.163Z] PARSER onChunk -> Sending content {
+  "preview": "mbildata itu"
+}
+[2025-11-02T00:27:44.212Z] PARSER onChunk -> Chunk #317 {
+  "type": "string",
+  "value": " dan \"menggamb"
+}
+[2025-11-02T00:27:44.212Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:44.213Z] PARSER onChunk -> Sending content {
+  "preview": " dan \"menggamb"
+}
+[2025-11-02T00:27:44.262Z] PARSER onChunk -> Chunk #318 {
+  "type": "string",
+  "value": "ar\" semuanyak"
+}
+[2025-11-02T00:27:44.263Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:44.264Z] PARSER onChunk -> Sending content {
+  "preview": "ar\" semuanyak"
+}
+[2025-11-02T00:27:44.312Z] PARSER onChunk -> Chunk #319 {
+  "type": "string",
+  "value": "e layar And"
+}
+[2025-11-02T00:27:44.312Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:44.313Z] PARSER onChunk -> Sending content {
+  "preview": "e layar And"
+}
+[2025-11-02T00:27:44.361Z] PARSER onChunk -> Chunk #320 {
+  "type": "string",
+  "value": "a60 kali per d"
+}
+[2025-11-02T00:27:44.362Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:44.363Z] PARSER onChunk -> Sending content {
+  "preview": "a60 kali per d"
+}
+[2025-11-02T00:27:44.412Z] PARSER onChunk -> Chunk #321 {
+  "type": "string",
+  "value": "etik (60fps)ag"
+}
+[2025-11-02T00:27:44.412Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:44.413Z] PARSER onChunk -> Sending content {
+  "preview": "etik (60fps)ag"
+}
+[2025-11-02T00:27:44.462Z] PARSER onChunk -> Chunk #322 {
+  "type": "string",
+  "value": "ar terlihat h"
+}
+[2025-11-02T00:27:44.463Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:44.464Z] PARSER onChunk -> Sending content {
+  "preview": "ar terlihat h"
+}
+[2025-11-02T00:27:44.512Z] PARSER onChunk -> Chunk #323 {
+  "type": "string",
+  "value": "idup danmulu"
+}
+[2025-11-02T00:27:44.512Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:44.513Z] PARSER onChunk -> Sending content {
+  "preview": "idup danmulu"
+}
+[2025-11-02T00:27:44.562Z] PARSER onChunk -> Chunk #324 {
+  "type": "string",
+  "value": "s.\n\n**Kesimpu"
+}
+[2025-11-02T00:27:44.563Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:44.563Z] PARSER onChunk -> Sending content {
+  "preview": "s.\n\n**Kesimpu"
+}
+[2025-11-02T00:27:44.612Z] PARSER onChunk -> Chunk #325 {
+  "type": "string",
+  "value": "lan:**\n\n* Anda"
+}
+[2025-11-02T00:27:44.613Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:44.614Z] PARSER onChunk -> Sending content {
+  "preview": "lan:**\n\n* Anda"
+}
+[2025-11-02T00:27:44.662Z] PARSER onChunk -> Chunk #326 {
+  "type": "string",
+  "value": " butuh **CPU"
+}
+[2025-11-02T00:27:44.663Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:44.663Z] PARSER onChunk -> Sending content {
+  "preview": " butuh **CPU"
+}
+[2025-11-02T00:27:44.712Z] PARSER onChunk -> Chunk #327 {
+  "type": "string",
+  "value": " yang cepat**"
+}
+[2025-11-02T00:27:44.713Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:44.713Z] PARSER onChunk -> Sending content {
+  "preview": " yang cepat**"
+}
+[2025-11-02T00:27:44.714Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:44.904Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:44.906Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 11833,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:44.907Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:44.908Z] PARSER onChunk -> Chunk #328 {
+  "type": "string",
+  "value": " agar HP ter"
+}
+[2025-11-02T00:27:44.908Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:44.909Z] PARSER onChunk -> Sending content {
+  "preview": " agar HP ter"
+}
+[2025-11-02T00:27:44.946Z] PARSER onChunk -> Chunk #329 {
+  "type": "string",
+  "value": "asa responsif,"
+}
+[2025-11-02T00:27:44.947Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:44.948Z] PARSER onChunk -> Sending content {
+  "preview": "asa responsif,"
+}
+[2025-11-02T00:27:44.995Z] PARSER onChunk -> Chunk #330 {
+  "type": "string",
+  "value": " aplikasi ter"
+}
+[2025-11-02T00:27:44.996Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:44.996Z] PARSER onChunk -> Sending content {
+  "preview": " aplikasi ter"
+}
+[2025-11-02T00:27:45.045Z] PARSER onChunk -> Chunk #331 {
+  "type": "string",
+  "value": "buka instan, d"
+}
+[2025-11-02T00:27:45.045Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:45.046Z] PARSER onChunk -> Sending content {
+  "preview": "buka instan, d"
+}
+[2025-11-02T00:27:45.096Z] PARSER onChunk -> Chunk #332 {
+  "type": "string",
+  "value": "an tidak *lemo"
+}
+[2025-11-02T00:27:45.097Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:45.097Z] PARSER onChunk -> Sending content {
+  "preview": "an tidak *lemo"
+}
+[2025-11-02T00:27:45.145Z] PARSER onChunk -> Chunk #333 {
+  "type": "string",
+  "value": "t*.* Anda "
+}
+[2025-11-02T00:27:45.146Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:45.147Z] PARSER onChunk -> Sending content {
+  "preview": "t*.* Anda "
+}
+[2025-11-02T00:27:45.195Z] PARSER onChunk -> Chunk #334 {
+  "type": "string",
+  "value": "butuh **GPU "
+}
+[2025-11-02T00:27:45.195Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:45.196Z] PARSER onChunk -> Sending content {
+  "preview": "butuh **GPU "
+}
+[2025-11-02T00:27:45.244Z] PARSER onChunk -> Chunk #335 {
+  "type": "string",
+  "value": "yang kuat** ag"
+}
+[2025-11-02T00:27:45.245Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:45.246Z] PARSER onChunk -> Sending content {
+  "preview": "yang kuat** ag"
+}
+[2025-11-02T00:27:45.295Z] PARSER onChunk -> Chunk #336 {
+  "type": "string",
+  "value": "ar bisa berm"
+}
+[2025-11-02T00:27:45.296Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 12,
+  "partial": ""
+}
+[2025-11-02T00:27:45.297Z] PARSER onChunk -> Sending content {
+  "preview": "ar bisa berm"
+}
+[2025-11-02T00:27:45.345Z] PARSER onChunk -> Chunk #337 {
+  "type": "string",
+  "value": "ain game b"
+}
+[2025-11-02T00:27:45.346Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:45.346Z] PARSER onChunk -> Sending content {
+  "preview": "ain game b"
+}
+[2025-11-02T00:27:45.395Z] PARSER onChunk -> Chunk #338 {
+  "type": "string",
+  "value": "eratdengan "
+}
+[2025-11-02T00:27:45.396Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:45.396Z] PARSER onChunk -> Sending content {
+  "preview": "eratdengan "
+}
+[2025-11-02T00:27:45.445Z] PARSER onChunk -> Chunk #339 {
+  "type": "string",
+  "value": "*frame rate"
+}
+[2025-11-02T00:27:45.446Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:45.447Z] PARSER onChunk -> Sending content {
+  "preview": "*frame rate"
+}
+[2025-11-02T00:27:45.495Z] PARSER onChunk -> Chunk #340 {
+  "type": "string",
+  "value": "* tinggi da"
+}
+[2025-11-02T00:27:45.496Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 11,
+  "partial": ""
+}
+[2025-11-02T00:27:45.496Z] PARSER onChunk -> Sending content {
+  "preview": "* tinggi da"
+}
+[2025-11-02T00:27:45.545Z] PARSER onChunk -> Chunk #341 {
+  "type": "string",
+  "value": "n menikmati k"
+}
+[2025-11-02T00:27:45.546Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 13,
+  "partial": ""
+}
+[2025-11-02T00:27:45.546Z] PARSER onChunk -> Sending content {
+  "preview": "n menikmati k"
+}
+[2025-11-02T00:27:45.595Z] PARSER onChunk -> Chunk #342 {
+  "type": "string",
+  "value": "onten visu"
+}
+[2025-11-02T00:27:45.596Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 10,
+  "partial": ""
+}
+[2025-11-02T00:27:45.596Z] PARSER onChunk -> Sending content {
+  "preview": "onten visu"
+}
+[2025-11-02T00:27:45.645Z] PARSER onChunk -> Chunk #343 {
+  "type": "string",
+  "value": "al tanpa patah"
+}
+[2025-11-02T00:27:45.646Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 14,
+  "partial": ""
+}
+[2025-11-02T00:27:45.646Z] PARSER onChunk -> Sending content {
+  "preview": "al tanpa patah"
+}
+[2025-11-02T00:27:45.695Z] PARSER onChunk -> Chunk #344 {
+  "type": "string",
+  "value": "-patah."
+}
+[2025-11-02T00:27:45.695Z] PARSER onChunk -> Parsed {
+  "thinkLen": 0,
+  "contentLen": 7,
+  "partial": ""
+}
+[2025-11-02T00:27:45.696Z] PARSER onChunk -> Sending content {
+  "preview": "-patah."
+}
+[2025-11-02T00:27:45.746Z] STREAM finalize -> Finalizing stream {
+  "streamId": "mhgz1vrr-gfhb892-1-2seangttwkl",
+  "interrupted": false,
+  "sawEnd": false,
+  "hasContent": true
+}
+[2025-11-02T00:27:45.747Z] FINALIZE finalize -> Preparing to save final message. {
+  "hasModelInfo": true,
+  "modelInfo": {
+    "provider": "local",
+    "model": "debugging",
+    "label": "[DG] Debug",
+    "thinkContent": {
+      "duration": 5
+    }
+  }
+}
+[2025-11-02T00:27:45.748Z] FINALIZE finalize -> Final message saved to state with modelInfo. {
+  "content": "<think>\n1.  **Menganalisis Permintaan:** Pengguna ...",
+  "modelInfo": {
+    "provider": "local",
+    "model": "debugging",
+    "label": "[DG] Debug",
+    "thinkContent": {
+      "text": "Processing your request...",
+      "duration": 0.211
+    }
+  }
+}
+[2025-11-02T00:27:45.749Z] MARKDOWN md -> Using worker rendering {
+  "contentSize": 4106,
+  "hasComplexElements": true,
+  "reason": "heavy-content"
+}
+[2025-11-02T00:27:45.750Z] RENDER renderAiFinalActions -> Fetching modelInfo for index 1 directly from state. {
+  "hasModelInfo": true,
+  "modelInfo": {
+    "provider": "local",
+    "model": "debugging",
+    "label": "[DG] Debug",
+    "thinkContent": {
+      "text": "Processing your request...",
+      "duration": 0.211
+    }
+  }
+}
+[2025-11-02T00:27:45.751Z] STREAM finalize -> Removed streaming-active class from AI message {}
+[2025-11-02T00:27:45.792Z] SAVE save -> Full save: 160 sessions {}
+[2025-11-02T00:27:46.052Z] APP save -> Data saved successfully {
+  "wasIncremental": false
+}
+[2025-11-02T00:27:46.054Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 12980,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:46.055Z] CACHE save -> Auto-cached current session after save {}
+[2025-11-02T00:27:46.056Z] CACHE cacheSession -> Session cached {
+  "sessionId": "mhgz1vrr-gfhb892",
+  "htmlLength": 12980,
+  "cacheSize": 2,
+  "hasLazyState": true,
+  "lazyState": {
+    "loadedStartIndex": 0,
+    "isFullyLoaded": true,
+    "totalMessages": 0
+  }
+}
+[2025-11-02T00:27:46.056Z] CACHE finalize -> Auto-cached session after streaming completed {}

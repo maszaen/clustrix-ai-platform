@@ -1887,6 +1887,12 @@ function createWindow(){
     lastLogSignature = signature;
     logWithContext(context, func, message, details);
   });
+
+  // Forward parser logs from preload to renderer console
+  ipcMain.on('log-to-renderer', (event, logData) => {
+    const { tag, level, message, data } = logData;
+    event.sender.send('parser-log', { tag, level, message, data });
+  });
   
   ipcMain.on('window:minimize', () => win.minimize());
   ipcMain.on('window:maximize', () => {

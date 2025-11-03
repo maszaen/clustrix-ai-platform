@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-34.5.9-blue.svg)
+![Version](https://img.shields.io/badge/version-34.6.9-blue.svg)
 ![Electron](https://img.shields.io/badge/Electron-38.3.0-47848F.svg)
 ![Node](https://img.shields.io/badge/Node-%E2%89%A518.0.0-339933.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -129,7 +129,7 @@
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Starts
 
 ### Instalasi untuk End-Users (Recommended)
 
@@ -137,9 +137,9 @@
 
 1. Kunjungi [Releases Page](https://github.com/maszaen/clustrix-ai-platform/releases)
 2. Download versi terbaru untuk OS Anda:
-   - **Windows**: `Clustrix-Setup-34.5.9.exe`
-   - **macOS**: `Clustrix-34.5.9.dmg`
-   - **Linux**: `Clustrix-34.5.9.AppImage`
+   - **Windows**: `Clustrix-Setup-34.6.9.exe`
+   - **macOS**: `Clustrix-34.6.9.dmg`
+   - **Linux**: `Clustrix-34.6.9.AppImage`
 3. Install aplikasi:
    - **Windows**: Jalankan installer dan ikuti wizard instalasi
    - **macOS**: Buka DMG file dan drag Clustrix ke Applications folder

@@ -59,15 +59,19 @@ class DatabaseManager {
         project_id TEXT,
         is_project INTEGER DEFAULT 0,
         is_favorite INTEGER DEFAULT 0,
-        
+
         persona_name TEXT,
         persona_work TEXT,
         persona_prefs TEXT,
-        
+
         tokens_used INTEGER DEFAULT 0,
-        
+
         metadata TEXT,
-        
+        deleted INTEGER DEFAULT 0,
+        device_id TEXT,
+        synced_at INTEGER,
+        hash TEXT,
+
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL
       );
       
@@ -82,23 +86,28 @@ class DatabaseManager {
         content TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         message_index INTEGER NOT NULL,
-        
+
         model_id TEXT,
         model_label TEXT,
         provider TEXT,
         base_url TEXT,
-        
+
         think_mode TEXT,
         think_content TEXT,
         thinking_update TEXT,
-        
+
         web_search_enabled INTEGER DEFAULT 0,
         web_search_data TEXT,
-        
+
         files TEXT,
-        
+
         metadata TEXT,
-        
+        deleted INTEGER DEFAULT 0,
+        device_id TEXT,
+        synced_at INTEGER,
+        sequence INTEGER,
+        updated_at INTEGER,
+
         FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
       );
       
@@ -184,20 +193,34 @@ class DatabaseManager {
       );
     `);
     
-    // CRITICAL: Add instruction column for existing databases
-    // Without this, INSERT will fail on old databases
-    try {
-      const tableInfo = this.db.prepare("PRAGMA table_info(projects)").all();
-      const hasInstructionColumn = tableInfo.some(col => col.name === 'instruction');
-      
-      if (!hasInstructionColumn) {
-        console.log('[DATABASE] Adding instruction column to projects table (migration)');
-        this.db.exec("ALTER TABLE projects ADD COLUMN instruction TEXT");
-        console.log('[DATABASE] Successfully added instruction column');
+    const ensureColumn = (table, column, definition) => {
+      try {
+        const columns = this.db.prepare(`PRAGMA table_info(${table})`).all();
+        const hasColumn = columns.some(col => col.name === column);
+
+        if (!hasColumn) {
+          console.log(`[DATABASE] Adding ${column} column to ${table} table (migration)`);
+          this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+          console.log(`[DATABASE] Successfully added ${column} column to ${table}`);
+        }
+      } catch (migrationError) {
+        console.error(`[DATABASE] Failed adding ${column} to ${table}:`, migrationError.message);
       }
-    } catch (migrationError) {
-      console.error('[DATABASE] Migration failed:', migrationError.message);
-    }
+    };
+
+    // CRITICAL: Add missing columns for legacy databases
+    ensureColumn('projects', 'instruction', 'TEXT');
+
+    ensureColumn('sessions', 'deleted', 'INTEGER DEFAULT 0');
+    ensureColumn('sessions', 'device_id', 'TEXT');
+    ensureColumn('sessions', 'synced_at', 'INTEGER');
+    ensureColumn('sessions', 'hash', 'TEXT');
+
+    ensureColumn('messages', 'deleted', 'INTEGER DEFAULT 0');
+    ensureColumn('messages', 'device_id', 'TEXT');
+    ensureColumn('messages', 'synced_at', 'INTEGER');
+    ensureColumn('messages', 'sequence', 'INTEGER');
+    ensureColumn('messages', 'updated_at', 'INTEGER');
   }
   
   getAllSessions() {
@@ -238,8 +261,8 @@ class DatabaseManager {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO sessions 
       (id, name, type, created_at, updated_at, last_updated, project_id, 
-       is_project, is_favorite, persona_name, persona_work, persona_prefs, 
-       tokens_used, metadata, deleted, device_id, synced_at, hash)
+      is_project, is_favorite, persona_name, persona_work, persona_prefs, 
+      tokens_used, metadata, deleted, device_id, synced_at, hash)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
@@ -301,9 +324,9 @@ class DatabaseManager {
     const stmt = this.db.prepare(`
       INSERT INTO messages 
       (session_id, role, content, message_index, created_at, 
-       model_id, model_label, provider, base_url, think_mode, 
-       think_content, thinking_update, web_search_enabled, web_search_data, files, metadata,
-       deleted, device_id, synced_at, sequence, updated_at)
+      model_id, model_label, provider, base_url, think_mode, 
+      think_content, thinking_update, web_search_enabled, web_search_data, files, metadata,
+      deleted, device_id, synced_at, sequence, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
@@ -340,9 +363,9 @@ class DatabaseManager {
     const stmt = this.db.prepare(`
       INSERT INTO messages 
       (session_id, role, content, message_index, created_at, 
-       model_id, model_label, provider, base_url, think_mode, 
-       think_content, thinking_update, web_search_enabled, web_search_data, files, metadata,
-       deleted, device_id, synced_at, sequence, updated_at)
+      model_id, model_label, provider, base_url, think_mode, 
+      think_content, thinking_update, web_search_enabled, web_search_data, files, metadata,
+      deleted, device_id, synced_at, sequence, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     

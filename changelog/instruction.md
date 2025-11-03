@@ -1,32 +1,32 @@
 Changelog record instruction:
-- Cek local changes yg terbaru, lalu bandingkan dengan remote commit terbaru.
-- Semua changelog dicatat di release-notes dengan format konsisten.
-- Tambahkan versi +0.0.5, termasuk di package json.
-- Lalu commit dengan title yang sesuai.
-- Update /.github/copilot-instructions.md jika perlu (hanya jika ada informasi penting projek, atau update informasi project yang sudah usang)
-- notes: copilot-instructions.md hanya berisi instruction dan informasi projek singkat.
+- Record all changelogs in /changelog/release-notes/* with a consistent format.
+- Use `git diff HEAD` to check local changes that are not yet included in the latest changelog entry.
+- Increment the version number (e.g., +0.0.1, +0.1.0, or +1.0.0) depending on the scope and impact of the changes, and update the "version" field in package.json accordingly.
+- Commit the changelog and updated files with an appropriate title.
+- Update /.github/copilot-instructions.md if necessary (only when there are important project updates or outdated information).
+- Notes: copilot-instructions.md should contain only essential project information and instructions — not changelogs or historical updates.
 
 Format release-notes (example):
-Changelog v?.?.?: <**Changelog title**>
+Changelog v?.?.?: <**Changelog Title**>
 
-<**Changes section **>
-- <List all changes>
-- ...
+<**Changes Section**>
+- <List all major/minor changes>
+- <Optional additional notes>
 
-<**Another changes section**>
-- <List all changes>
+<**Another Section (if needed)**>
+- <List of specific module or service updates>
 - ...
 
 **Code Quality:**
-- Improved module organization with single-responsibility principle (example)
+- Improved module organization using the single-responsibility principle (example)
 - Better import management across renderer (example)
-- JSDoc documentation for all extracted modules (example)
-- Foundation for incremental refactoring (example)
+- Added JSDoc documentation for extracted modules (example)
+- Established foundation for incremental refactoring (example)
 
 **Statistics:**
-- 8 files changed, 9 files created (refactoring documentation) (example)
-- ~950 lines extracted to modular structure (example)
-- renderer.js reduced from 17,960 to ~17,000 lines (removed imports) (example)
+- 8 files modified, 9 files created (refactoring & documentation) (example)
+- ~950 lines extracted into modular structure (example)
+- renderer.js reduced from 17,960 → ~17,000 lines (import cleanup) (example)
 - Total refactoring plan: 10 phases over ~5 weeks (example)
 
-> **Status:** ✓ Production Ready or Checkpoint | _Major or Minor or Checkpoint Release_
+> **Status:** ✓ Production Ready | _Major / Minor / Checkpoint Release_

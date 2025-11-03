@@ -2,6 +2,7 @@
 
 Electron desktop AI chat. Main process handles IPC + backend services. Renderer manages UI state + streaming.
 
+
 ## Development Guidelines
 - **Modular Development:** When developing new features/functions, ALWAYS create them in separate modular files or folders. NEVER add new features directly to main.js or renderer.js. Place backend features in `backend/` subdirectories, renderer features in `renderer/` subdirectories
 - **Logging:** Use `log(context, level, fn, msg, details)` from `utils/logger.js` instead of console.log for structured logging
@@ -13,6 +14,19 @@ Electron desktop AI chat. Main process handles IPC + backend services. Renderer 
 - **Testing:** Write Jest tests for new modules with target of 80%+ code coverage
 - **Documentation:** Add JSDoc comments for all exported functions and complex logic blocks
 
+
+## Build, Test, and Development Commands
+- `npm run dev` (alias `npm start`) — fire up the desktop app with live reload; always run from the repo root.
+- `npm run make` — build signed installers through `electron-builder`, outputs to `out/`.
+
+
+## Code Analysis Tools
+- `checker/analyze.js` - AST-based code analysis for JavaScript files. Use: `node checker/analyze.js <file-path>` to extract functions, variables, and imports from any JS file
+- `checker/analyze-listener.js` - Event listener tracking with line-range support. Use: `node checker/analyze-listener.js <file-path> [start line] [end line]` to analyze event listeners in specific code ranges
+- `checker/list-directory.js` - Check project directory structure. Use: `node checker/list-directory.js <directory or null>` or omit directory argument to check project root
+- For all time changelog & version history: see `changelog/release-notes/` or you can see latest changelog by this command `node checker/changelog-check.js`
+
+
 ## File Structure Rules
 - **Renderer modules:** Place in `renderer/` directory with `.mjs` extension (ES modules)
 - **Backend services:** Organize in `backend/integration/`, `backend/data/`, `backend/sync/` by functional concern
@@ -20,10 +34,10 @@ Electron desktop AI chat. Main process handles IPC + backend services. Renderer 
 - **Shared utilities:** Place in `utils/` directory for cross-process helper functions
 - **Security:** Never commit `.env` files or sensitive credentials to version control
 
-## Code Analysis Tools
-- `checker/analyze.js` - AST-based code analysis for JavaScript files. Use: `node checker/analyze.js <file-path>` to extract functions, variables, and imports from any JS file
-- `checker/analyze-listener.js` - Event listener tracking with line-range support. Use: `node checker/analyze-listener.js <file-path> [start line] [end line]` to analyze event listeners in specific code ranges
-- `checker/list-directory.js` - Check project directory structure. Use: `node checker/list-directory.js <directory or null>` or omit directory argument to check project root
+
+## Coding Style & Naming Conventions
+Code uses CommonJS modules, 2-space indentation, semicolons, and `const` for imports. Favor `camelCase` for variables/functions, `PascalCase` for classes or services (`MultiAgentOrchestrator`, `DatabaseManager`), and prefix IPC channels (`agent:sync`, `search:web`) to avoid collisions. Reuse helpers from `utils/logger` rather than `console.log`, colocate feature flags near their handlers, and keep JSX-like fragments in renderer components small and memoized for performance. Run Prettier or ESLint locally only on touched lines to avoid noisy diffs.
+
 
 ## Storage
 Data location: `${userData}/database/` (Windows: `AppData\Roaming\clustrix\database\`)
@@ -34,9 +48,9 @@ Data location: `${userData}/database/` (Windows: `AppData\Roaming\clustrix\datab
 
 Root directory `${userData}/`:
 - **sync-config.json** – Sync mode + OAuth tokens
-- **app.log** – Structured logs
-- **html-previews/** – Temporary HTML previews
+- **app.log** – Application logging
 - **current-profile-photo.jpg** – User avatar cache
+
 
 ## Architecture
 - **Main Process (main.js):** Window lifecycle, IPC routing, LangChain service initialization, database manager, stream finalization tracking
@@ -51,6 +65,7 @@ Root directory `${userData}/`:
   - `backend/search/` – Web search via SerpAPI/Google Custom Search (query execution, image search, result parsing) + local desktop file indexing
   - `backend/debug/` – Testing utilities (mock AI responses with configurable scenarios, streaming chunk simulation with realistic delays)
 
+
 ## IPC Pattern
 Channel naming follows `namespace:event` format:
 - **Data operations:** sessions:load, sessions:save, artifacts:load, artifacts:save, projects:load, projects:save, models:load, models:save
@@ -58,5 +73,3 @@ Channel naming follows `namespace:event` format:
 - **Sync operations:** sync:getConfig, sync:switchMode, sync:syncNow, sync:logout
 - **Window operations:** window:minimize, window:maximize, window:close
 - **Monitoring:** monitoring:getMetrics, monitoring:start, monitoring:stop
-
-For changelog & version history: see `changelog/release-notes/` | Changelog instructions: `changelog/instruction.md`

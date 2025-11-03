@@ -4584,7 +4584,7 @@ blockquote blockquote blockquote blockquote::before {
 .message-text code {
   background: var(--surface-secondary);
   padding: 0px 6px;
-  color: var(--fg-muted);
+  color: var(--primary);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 14px;
@@ -8533,8 +8533,18 @@ button:disabled .btn-icon {
 
 .brain-title, .prompt-title {
   font-size: 16.8px;
-  font-weight: bold;
   margin-bottom: 10px;
+}
+
+.prompt-title {
+  display: flex;
+  flex-direction: row;
+  gap: 7px;
+  align-items: center;
+}
+
+.prompt-title svg {
+  margin-bottom: 3px;
 }
 
 .bli, .pli {

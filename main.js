@@ -2476,7 +2476,7 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
     throw new Error('SQLite database not available');
   }catch(e){
     log('save error', e);
-    return false;
+    throw new Error('SQLite database error');
   }
 });
 

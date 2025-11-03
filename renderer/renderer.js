@@ -5329,6 +5329,8 @@ function renderProjectSessions(project) {
   const sessionsToShow = projectSessions.slice(0, limit);
   const hasMoreSessions = limit < total;
 
+  const fragment = document.createDocumentFragment();
+
   sessionsToShow.forEach((session) => {
     const sessionItem = document.createElement("div");
     sessionItem.className = "project-session-item";
@@ -5380,7 +5382,7 @@ function renderProjectSessions(project) {
       </div>
     `;
 
-    sessionsList.appendChild(sessionItem);
+    fragment.appendChild(sessionItem);
   });
 
   // Add "Show More" button if there are more sessions
@@ -5393,8 +5395,10 @@ function renderProjectSessions(project) {
         <span>Show More (${total - limit} more)</span>
       </button>
     `;
-    sessionsList.appendChild(showMoreItem);
+    fragment.appendChild(showMoreItem);
   }
+
+  sessionsList.appendChild(fragment);
 }
 
 async function showInstructionModal() {
@@ -5482,6 +5486,28 @@ function renderProjectInstructions(project) {
   }
 }
 
+function getFileLineCount(file) {
+  if (!file) return 0;
+  if (typeof file.lineCount === "number") return file.lineCount;
+
+  const content = file.content || "";
+  const meta = file.__lineCountMeta;
+  if (meta && meta.length === content.length) {
+    return meta.count;
+  }
+
+  let count = 0;
+  if (content.length > 0) {
+    count = 1;
+    for (let i = 0; i < content.length; i++) {
+      if (content.charCodeAt(i) === 10) count++;
+    }
+  }
+
+  file.__lineCountMeta = { length: content.length, count };
+  return count;
+}
+
 function renderProjectFiles(project) {
   const filesList = document.getElementById("project-files-list");
   if (!filesList) return;
@@ -5503,10 +5529,12 @@ function renderProjectFiles(project) {
     return;
   }
 
+  const fragment = document.createDocumentFragment();
+
   project.files.forEach((file, index) => {
-    const lineCount = file.content ? file.content.split('\n').length : 0;
+    const lineCount = getFileLineCount(file);
     const extension = file.type || getExtension(file.name).toLowerCase();
-    
+
     const fileCard = document.createElement("div");
     fileCard.className = "file-card";
     fileCard.dataset.index = index; // Untuk view file
@@ -5523,22 +5551,39 @@ function renderProjectFiles(project) {
         <span class="file-type-tag">${escapeHtml(extension)}</span>
       </div>
     `;
-    
-    // Tambahkan listener untuk view
-    fileCard.addEventListener('click', (e) => {
-        if (!e.target.closest('.file-card-delete-btn')) {
-            viewProjectFile(index);
-        }
-    });
 
-    // Tambahkan listener untuk delete
-    fileCard.querySelector('.file-card-delete-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteProjectFile(index);
-    });
+    const deleteBtn = fileCard.querySelector(".file-card-delete-btn");
+    if (deleteBtn) {
+      deleteBtn.dataset.index = index;
+    }
 
-    filesList.appendChild(fileCard);
+    fragment.appendChild(fileCard);
   });
+
+  filesList.appendChild(fragment);
+
+  if (!filesList._hasDelegatedHandler) {
+    filesList.addEventListener("click", (e) => {
+      const deleteBtn = e.target.closest(".file-card-delete-btn");
+      if (deleteBtn) {
+        const idx = parseInt(deleteBtn.dataset.index, 10);
+        if (!Number.isNaN(idx)) {
+          e.stopPropagation();
+          deleteProjectFile(idx);
+        }
+        return;
+      }
+
+      const card = e.target.closest(".file-card");
+      if (card) {
+        const idx = parseInt(card.dataset.index, 10);
+        if (!Number.isNaN(idx)) {
+          viewProjectFile(idx);
+        }
+      }
+    });
+    filesList._hasDelegatedHandler = true;
+  }
 }
 
 function setupProjectsPageListeners() {
@@ -11164,6 +11209,117 @@ async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
 }
 
 // Stream Handling
+function ensureStreamingState(div) {
+  if (!div) return null;
+  if (!div._streamingState) {
+    div._streamingState = { lastHtml: "" };
+  }
+  return div._streamingState;
+}
+
+function syncAttributes(target, source) {
+  if (!target || !source || target.nodeType !== Node.ELEMENT_NODE || source.nodeType !== Node.ELEMENT_NODE) {
+    return;
+  }
+
+  const seen = new Set();
+  for (const attr of source.attributes) {
+    seen.add(attr.name);
+    if (target.getAttribute(attr.name) !== attr.value) {
+      target.setAttribute(attr.name, attr.value);
+    }
+  }
+
+  for (const attr of Array.from(target.attributes)) {
+    if (!seen.has(attr.name)) {
+      target.removeAttribute(attr.name);
+    }
+  }
+}
+
+function updateTextNodeIncremental(target, source) {
+  if (!target || !source || target.nodeType !== Node.TEXT_NODE || source.nodeType !== Node.TEXT_NODE) return;
+
+  const existing = target.data;
+  const incoming = source.data;
+
+  if (incoming.startsWith(existing)) {
+    const addition = incoming.slice(existing.length);
+    if (addition) target.appendData(addition);
+  } else {
+    target.data = incoming;
+  }
+}
+
+function reconcileStreamingChildren(parent, newChildren) {
+  if (!parent) return;
+
+  let current = parent.firstChild;
+  for (let i = 0; i < newChildren.length; i++) {
+    const fresh = newChildren[i];
+
+    if (!current) {
+      parent.appendChild(fresh.cloneNode(true));
+      current = parent.lastChild;
+    }
+
+    if (!current) continue;
+
+    if (current.nodeType !== fresh.nodeType) {
+      const replacement = fresh.cloneNode(true);
+      const next = current.nextSibling;
+      parent.replaceChild(replacement, current);
+      current = replacement.nextSibling || next;
+      continue;
+    }
+
+    if (current.nodeType === Node.TEXT_NODE) {
+      updateTextNodeIncremental(current, fresh);
+    } else if (current.nodeType === Node.ELEMENT_NODE) {
+      if (current.nodeName !== fresh.nodeName) {
+        const replacement = fresh.cloneNode(true);
+        const next = current.nextSibling;
+        parent.replaceChild(replacement, current);
+        current = replacement.nextSibling || next;
+        continue;
+      }
+      syncAttributes(current, fresh);
+      reconcileStreamingChildren(current, Array.from(fresh.childNodes));
+    } else {
+      if (current.nodeValue !== fresh.nodeValue) {
+        current.nodeValue = fresh.nodeValue;
+      }
+    }
+
+    current = current.nextSibling;
+  }
+
+  while (current) {
+    const next = current.nextSibling;
+    parent.removeChild(current);
+    current = next;
+  }
+}
+
+function updateStreamingHtml(div, html) {
+  if (!div) return;
+  const state = ensureStreamingState(div);
+  if (!state) return;
+  if (state.lastHtml === html) return;
+
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const newChildren = Array.from(template.content.childNodes);
+  reconcileStreamingChildren(div, newChildren);
+  state.lastHtml = html;
+}
+
+function clearStreamingState(div) {
+  if (div && div._streamingState) {
+    delete div._streamingState;
+  }
+}
+
 function createStreamHandler(streamId, text, isFirstInteraction = false) {
   log("STREAM", 2, "createStreamHandler", "Stream handler created", {
     streamId,
@@ -11179,6 +11335,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
   let lastRenderLength = 0;
   let renderTimeout = null;
   let isUsingWorker = false;
+  let lastThrottleMs = 50;
 
   const END_RX = /<!--\s*\[\/END\]\s*-->[\s]*$/;
   const trimEnd = (s) => s.replace(/\s*<!--\s*\[\/END\]\s*-->\s*$/, "");
@@ -11193,6 +11350,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       delete streamManager.activeStreams[streamId];
       for (const k in streamManager.byKey)
         if (streamManager.byKey[k] === streamId) delete streamManager.byKey[k];
+      const textDiv = st.aiNode?.querySelector?.(".message-text");
+      if (textDiv) {
+        cancelScheduledEnhancements(textDiv);
+        clearStreamingState(textDiv);
+      }
     }
     updateInputState?.();
   };
@@ -11219,6 +11381,48 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     if (!s.aiNode || !document.contains(s.aiNode)) return;
     const el = s.aiNode.querySelector(".inline-loader");
     if (el?.parentNode) el.parentNode.removeChild(el);
+  };
+
+  const cancelScheduledEnhancements = (div) => {
+    if (!div || !div._enhancementHandle) return;
+    if (
+      div._enhancementHandleType === "idle" &&
+      typeof window.cancelIdleCallback === "function"
+    ) {
+      window.cancelIdleCallback(div._enhancementHandle);
+    } else {
+      clearTimeout(div._enhancementHandle);
+    }
+    div._enhancementHandle = null;
+    div._enhancementHandleType = null;
+  };
+
+  const runEnhancementsNow = (div) => {
+    if (!div) return;
+    cancelScheduledEnhancements(div);
+    if (!div.isConnected) return;
+    if (div.querySelector("pre code")) highlightAllUnder(div);
+    renderMathInElement(div);
+  };
+
+  const scheduleEnhancements = (div, { immediate = false } = {}) => {
+    if (!div) return;
+    if (immediate) {
+      runEnhancementsNow(div);
+      return;
+    }
+    if (div._enhancementHandle) return;
+
+    if (typeof window.requestIdleCallback === "function") {
+      div._enhancementHandleType = "idle";
+      div._enhancementHandle = window.requestIdleCallback(
+        () => runEnhancementsNow(div),
+        { timeout: 500 },
+      );
+    } else {
+      div._enhancementHandleType = "timeout";
+      div._enhancementHandle = setTimeout(() => runEnhancementsNow(div), 120);
+    }
   };
 
   function clearContinuePlaceholder(aiNode) {
@@ -11460,6 +11664,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           const thinkingText = session._x_think && session._x_think[messageIndex] ? session._x_think[messageIndex].text : '';
           if (thinkingContainer && finalMessageToSave && finalMessageToSave.trim() === thinkingText.trim()) {
             // Don't append duplicate thinking content
+            scheduleEnhancements(div, { immediate: true });
           } else if (thinkingContainer && finalMessageToSave) {
             // Append final content after thinking
             const finalDiv = document.createElement('div');
@@ -11467,29 +11672,25 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
             md(finalMessageToSave).then(html => {
               finalDiv.innerHTML = html;
               div.appendChild(finalDiv);
-              if (div.querySelector("pre code")) highlightAllUnder(div);
               attachCodeBlockListeners(finalDiv);
-              renderMathInElement(div);
+              scheduleEnhancements(div, { immediate: true });
             }).catch(err => {
               console.warn('Markdown finalization error:', err);
               finalDiv.innerHTML = mdFallback(finalMessageToSave);
               div.appendChild(finalDiv);
-              if (div.querySelector("pre code")) highlightAllUnder(div);
               attachCodeBlockListeners(finalDiv);
-              renderMathInElement(div);
+              scheduleEnhancements(div, { immediate: true });
             });
           } else if (!thinkingContainer) {
             md(finalMessageToSave || "").then(html => {
               div.innerHTML = html;
-              if (div.querySelector("pre code")) highlightAllUnder(div);
               attachCodeBlockListeners(div);
-              renderMathInElement(div);
+              scheduleEnhancements(div, { immediate: true });
             }).catch(err => {
               console.warn('Markdown finalization error:', err);
               div.innerHTML = mdFallback(finalMessageToSave || "");
-              if (div.querySelector("pre code")) highlightAllUnder(div);
               attachCodeBlockListeners(div);
-              renderMathInElement(div);
+              scheduleEnhancements(div, { immediate: true });
             });
           }
         }
@@ -11666,7 +11867,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
             cancelThinkingText(s.aiNode);
           } else {
             // If no thinking container exists, clear normally
-            textDiv.innerHTML = "";
+            updateStreamingHtml(textDiv, "");
           }
         }
         hideLoader();
@@ -11681,16 +11882,16 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           const userSetting = state.settings.streamThrottling || "auto";
           if (userSetting === "none") {
             // Synchronous seeding for No Throttling
-            div.innerHTML = mdFallback(seed);
+            updateStreamingHtml(div, mdFallback(seed));
             div.__seededOnce = true;
           } else {
             // Async seeding for other settings
             md(seed).then(html => {
-              div.innerHTML = html;
+              updateStreamingHtml(div, html);
               div.__seededOnce = true;
             }).catch(err => {
               console.warn('Markdown seeding error:', err);
-              div.innerHTML = mdFallback(seed);
+              updateStreamingHtml(div, mdFallback(seed));
               div.__seededOnce = true;
             });
           }
@@ -11718,43 +11919,21 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         
         // FAST PATH for No Throttling - bypass all complex logic
         if (userSetting === "none") {
-          
+
           // Remove thinking container immediately if exists
           const thinkingContainer = div.querySelector('.thinking-container');
           if (thinkingContainer && display.trim().length > 0 && thinkingContainer.parentNode) {
             thinkingContainer.parentNode.removeChild(thinkingContainer);
           }
-          
-          // SMART RENDERING: Use incremental append for large chunks to prevent flashing
-          const newContent = display.substring(div._lastRenderedLength);
-          const isInitialRender = div._lastRenderedLength === 0;
-          const isSmallIncrement = newContent.length < 100;
-          
-          if (isInitialRender) {
-            // Initial render - parse markdown fully
-            const html = mdFallback(display);
-            div.innerHTML = html;
-          } else if (isSmallIncrement) {
-            // Small increment - full re-render (maintains markdown context)
-            const html = mdFallback(display);
-            div.innerHTML = html;
-          } else {
-            // Incremental append for large chunks (prevents flashing)
-            const html = mdFallback(newContent);
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = html;
-            while (tempDiv.firstChild) {
-              div.appendChild(tempDiv.firstChild);
-            }
-          }
-          
+
+          const html = mdFallback(display);
+          updateStreamingHtml(div, html);
           div._lastRenderedLength = display.length;
-          
-          if (div.querySelector("pre code")) highlightAllUnder(div);
-          renderMathInElement(div);
-          
+
+          scheduleEnhancements(div, { immediate: gotEnd });
+
           debouncedAIScrollToBottom();
-          
+
           if (gotEnd) finalize();
           return;
         }
@@ -11783,7 +11962,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           
           // Decision matrix for rendering strategy
           const shouldUseWorkerForStreaming = userSetting !== "none" && (
-            display.length > 3000 || 
+            display.length > 3000 ||
             (display.match(/```/g) || []).length > 3 ||
             /\$\$[\s\S]*?\$\$/.test(display)
           );
@@ -11848,78 +12027,37 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           
           lastRenderTime = now;
           lastRenderLength = display.length;
+          lastThrottleMs = throttleMs;
           
           if (isUsingWorker && !shouldUseWorkerForStreaming) {
             isUsingWorker = false;
           } else if (!isUsingWorker && shouldUseWorkerForStreaming) {
+            isUsingWorker = true;
           }
-          
+
           // Note: "none" throttling is handled by fast path above, this code only runs for other settings
-          {
-            // SMART RENDERING: Determine if we should append or replace
-            const newContent = display.substring(div._lastRenderedLength || 0);
-            const isInitialRender = (div._lastRenderedLength || 0) === 0;
-            const isSmallIncrement = newContent.length < 100;
-            const shouldFullRender = isInitialRender || isSmallIncrement || gotEnd;
-            
-            if (shouldFullRender) {
-              // Full re-render (for initial, small chunks, or final render)
-              md(display, { 
-                isStreaming: true,
-                forceWorker: shouldUseWorkerForStreaming,
-                forceSync: !shouldUseWorkerForStreaming && display.length < 1000
-              }).then(html => {
-                div.innerHTML = html;
-                div._lastRenderedLength = display.length;
-                if (div.querySelector("pre code")) highlightAllUnder(div);
-                renderMathInElement(div);
-                
-                requestAnimationFrame(() => {
-                  scrollToBottom({ fromAI: true });
-                });
-              }).catch(err => {
-                console.warn('Markdown rendering error:', err);
-                div.innerHTML = mdFallback(display);
-                div._lastRenderedLength = display.length;
-                if (div.querySelector("pre code")) highlightAllUnder(div);
-                renderMathInElement(div);
-                
-                requestAnimationFrame(() => {
-                  scrollToBottom({ fromAI: true });
-                });
-              });
-            } else {
-              // Incremental append for large chunks (prevents flashing)
-              md(newContent, { 
-                isStreaming: true,
-                forceSync: true
-              }).then(html => {
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = html;
-                while (tempDiv.firstChild) {
-                  div.appendChild(tempDiv.firstChild);
-                }
-                div._lastRenderedLength = display.length;
-                if (div.querySelector("pre code")) highlightAllUnder(div);
-                renderMathInElement(div);
-                
-                requestAnimationFrame(() => {
-                  scrollToBottom({ fromAI: true });
-                });
-              }).catch(err => {
-                console.warn('Markdown rendering error in append:', err);
-                // Fallback to full render on error
-                div.innerHTML = mdFallback(display);
-                div._lastRenderedLength = display.length;
-                if (div.querySelector("pre code")) highlightAllUnder(div);
-                renderMathInElement(div);
-                
-                requestAnimationFrame(() => {
-                  scrollToBottom({ fromAI: true });
-                });
-              });
-            }
-          }
+          md(display, {
+            isStreaming: true,
+            forceWorker: shouldUseWorkerForStreaming,
+            forceSync: !shouldUseWorkerForStreaming && display.length < 1000
+          }).then(html => {
+            updateStreamingHtml(div, html);
+            div._lastRenderedLength = display.length;
+            scheduleEnhancements(div, { immediate: gotEnd });
+
+            requestAnimationFrame(() => {
+              scrollToBottom({ fromAI: true });
+            });
+          }).catch(err => {
+            console.warn('Markdown rendering error:', err);
+            updateStreamingHtml(div, mdFallback(display));
+            div._lastRenderedLength = display.length;
+            scheduleEnhancements(div, { immediate: gotEnd });
+
+            requestAnimationFrame(() => {
+              scrollToBottom({ fromAI: true });
+            });
+          });
         };
         
         // Execute smart rendering
@@ -11934,8 +12072,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
             // No throttling - render immediately
             performSmartRender();
           } else {
-            // Use minimal delay for other settings
-            renderTimeout = setTimeout(performSmartRender, 1);
+            const delay = Math.max(16, lastThrottleMs || 0);
+            renderTimeout = setTimeout(performSmartRender, delay);
           }
         }
 

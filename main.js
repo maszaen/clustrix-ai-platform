@@ -24,6 +24,7 @@ const GitHubOAuthHelper = require('./backend/github/github-oauth-helper');
 const GitHubStorageService = require('./backend/github/github-storage-service');
 const SmartBackupService = require('./backend/sync/smart-backup-service');
 const { queryUsageStatistics, invalidateUsageStatisticsCache } = require('./backend/data/usage-statistics');
+const { queryBenchmarkStatistics, invalidateBenchmarkStatisticsCache } = require('./backend/data/benchmark-statistics');
 
 function createTimestampedBackup(filePath, reason = '') {
   try {
@@ -2717,6 +2718,28 @@ ipcMain.handle('usage:fetchStats', async (_evt, filters = {}) => {
   }
 });
 
+ipcMain.handle('benchmark:fetchStats', async (_evt, filters = {}) => {
+  try {
+    if (!useSQLite || !db) {
+      log('BENCHMARK_STATS', 1, 'benchmark:fetchStats', 'Initializing SQLite database for benchmark stats');
+      db = new DatabaseManager(app);
+      invalidateBenchmarkStatisticsCache();
+      useSQLite = true;
+    }
+
+    if (!useSQLite || !db) {
+      throw new Error('SQLite database not available');
+    }
+
+    return await queryBenchmarkStatistics(db, filters);
+  } catch (error) {
+    log('BENCHMARK_STATS', 4, 'benchmark:fetchStats', 'Failed to load benchmark statistics', {
+      error: error.message,
+    });
+    throw error;
+  }
+});
+
 // HTML Preview handlers
 ipcMain.handle('html-preview:create', async (_evt, htmlContent) => {
   const previewsDir = path.join(app.getPath('userData'), 'html-previews');
@@ -3000,6 +3023,8 @@ function initTokenTracker(reqId, sessionId, messageIndex) {
     completion_tokens: 0,
     total_tokens: 0,
     breakdown: [],
+    startTime: Date.now(), // Track start time for token speed calculation
+    endTime: null,
   });
 }
 
@@ -3066,12 +3091,17 @@ function recordTokenUsage(reqId, stage, rawUsage, meta = {}) {
   });
 
   invalidateUsageStatisticsCache();
+  invalidateBenchmarkStatisticsCache();
 }
 
 function finalizeTokenUsage(reqId, event) {
   if (!reqId) return;
   const tracker = tokenUsageTrackers.get(reqId);
   if (!tracker) return;
+
+  // Track end time for token speed calculation
+  tracker.endTime = Date.now();
+
   tokenUsageTrackers.delete(reqId);
 
   if (!event || tracker.messageIndex === undefined || tracker.messageIndex === null) {
@@ -3084,7 +3114,19 @@ function finalizeTokenUsage(reqId, event) {
     total_tokens: tracker.total_tokens,
     breakdown: tracker.breakdown,
   };
-  
+
+  // Calculate token speed (tokens per second)
+  if (tracker.startTime && tracker.endTime && tracker.completion_tokens > 0) {
+    const elapsedMs = tracker.endTime - tracker.startTime;
+    const elapsedSeconds = elapsedMs / 1000;
+
+    // Only calculate speed if elapsed time is at least 10ms to avoid division issues
+    if (elapsedSeconds > 0.01) {
+      usageData.token_speed = tracker.completion_tokens / elapsedSeconds;
+      usageData.response_time = elapsedMs;
+    }
+  }
+
   // Include cost if available (Perplexity)
   if (tracker.cost) {
     usageData.cost = tracker.cost;

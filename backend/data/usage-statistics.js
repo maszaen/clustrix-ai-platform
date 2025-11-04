@@ -195,6 +195,7 @@ async function queryUsageStatistics(dbManager, filters = {}) {
 
   const { startTs, endTs, startIso, endIso } = collectRange(filters);
   const providerFilter = filters.provider ? String(filters.provider) : null;
+  const modelFilter = filters.model ? String(filters.model) : null;
   const cacheKey = getCacheKey(startTs, endTs, providerFilter);
   const cached = getCachedResult(cacheKey);
   if (cached) {
@@ -231,6 +232,8 @@ async function queryUsageStatistics(dbManager, filters = {}) {
   const dailyTotals = new Map();
   const providerTotals = new Map();
   const modelTotals = new Map();
+  const modelSet = new Set();
+  const modelToProvider = new Map(); // Track which provider each model belongs to
   let totalTokens = 0;
   let skippedCount = 0;
 
@@ -264,6 +267,11 @@ async function queryUsageStatistics(dbManager, filters = {}) {
     const provider = (row.provider || metadata.provider || 'Unknown').trim() || 'Unknown';
     const model = (row.model_id || metadata.model || metadata.modelLabel || 'Unknown').trim() || 'Unknown';
 
+    // Skip if model filter is set and doesn't match
+    if (modelFilter && model !== modelFilter) {
+      continue;
+    }
+
     if (!dailyMap.has(dateKey)) {
       dailyMap.set(dateKey, new Map());
     }
@@ -278,6 +286,13 @@ async function queryUsageStatistics(dbManager, filters = {}) {
     providerTotals.set(provider, (providerTotals.get(provider) || 0) + tokens);
     modelTotals.set(model, (modelTotals.get(model) || 0) + tokens);
     providerSet.add(provider);
+    modelSet.add(model);
+    
+    // Track model-to-provider mapping
+    if (!modelToProvider.has(model)) {
+      modelToProvider.set(model, provider);
+    }
+    
     totalTokens += tokens;
   }
 
@@ -289,6 +304,8 @@ async function queryUsageStatistics(dbManager, filters = {}) {
     range: { start: startIso, end: endIso },
     entries,
     providers: Array.from(providerSet).sort((a, b) => a.localeCompare(b)),
+    models: Array.from(modelSet).sort((a, b) => a.localeCompare(b)),
+    modelToProvider: Object.fromEntries(modelToProvider), // Add model-to-provider mapping
     summary,
     dailyTotals: Object.fromEntries(Array.from(dailyTotals.entries()).sort()),
   };

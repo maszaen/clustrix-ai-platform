@@ -11212,29 +11212,39 @@ async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
 function ensureStreamingState(div) {
   if (!div) return null;
   if (!div._streamingState) {
-    div._streamingState = { lastHtml: "" };
+    div._streamingState = { lastHtml: "", lastText: "" };
   }
   return div._streamingState;
 }
 
 function syncAttributes(target, source) {
   if (!target || !source || target.nodeType !== Node.ELEMENT_NODE || source.nodeType !== Node.ELEMENT_NODE) {
-    return;
+    return true;
   }
 
   const seen = new Set();
   for (const attr of source.attributes) {
     seen.add(attr.name);
-    if (target.getAttribute(attr.name) !== attr.value) {
-      target.setAttribute(attr.name, attr.value);
+    try {
+      if (target.getAttribute(attr.name) !== attr.value) {
+        target.setAttribute(attr.name, attr.value);
+      }
+    } catch (error) {
+      return false;
     }
   }
 
   for (const attr of Array.from(target.attributes)) {
     if (!seen.has(attr.name)) {
-      target.removeAttribute(attr.name);
+      try {
+        target.removeAttribute(attr.name);
+      } catch (error) {
+        return false;
+      }
     }
   }
+
+  return true;
 }
 
 function updateTextNodeIncremental(target, source) {
@@ -11252,7 +11262,7 @@ function updateTextNodeIncremental(target, source) {
 }
 
 function reconcileStreamingChildren(parent, newChildren) {
-  if (!parent) return;
+  if (!parent) return true;
 
   let current = parent.firstChild;
   for (let i = 0; i < newChildren.length; i++) {
@@ -11283,8 +11293,14 @@ function reconcileStreamingChildren(parent, newChildren) {
         current = replacement.nextSibling || next;
         continue;
       }
-      syncAttributes(current, fresh);
-      reconcileStreamingChildren(current, Array.from(fresh.childNodes));
+
+      if (!syncAttributes(current, fresh)) {
+        return false;
+      }
+
+      if (!reconcileStreamingChildren(current, Array.from(fresh.childNodes))) {
+        return false;
+      }
     } else {
       if (current.nodeValue !== fresh.nodeValue) {
         current.nodeValue = fresh.nodeValue;
@@ -11299,19 +11315,58 @@ function reconcileStreamingChildren(parent, newChildren) {
     parent.removeChild(current);
     current = next;
   }
+
+  return true;
 }
 
 function updateStreamingHtml(div, html) {
   if (!div) return;
   const state = ensureStreamingState(div);
   if (!state) return;
-  if (state.lastHtml === html) return;
+
+  if (!html) {
+    if (div.firstChild) {
+      div.textContent = "";
+    }
+    state.lastHtml = "";
+    state.lastText = "";
+    return;
+  }
 
   const template = document.createElement('template');
   template.innerHTML = html;
   const newChildren = Array.from(template.content.childNodes);
-  reconcileStreamingChildren(div, newChildren);
+  const expectedText = template.content.textContent ?? "";
+
+  if (state.lastHtml === html && state.lastText === expectedText) {
+    return;
+  }
+
+  let reconciled = true;
+  try {
+    reconciled = reconcileStreamingChildren(div, newChildren);
+  } catch (error) {
+    reconciled = false;
+  }
+
+  if (!reconciled) {
+    div.innerHTML = html;
+    state.lastHtml = html;
+    state.lastText = div.textContent ?? "";
+    return;
+  }
+
+  const actualText = div.textContent ?? "";
+
+  if (actualText !== expectedText) {
+    div.innerHTML = html;
+    state.lastHtml = html;
+    state.lastText = div.textContent ?? "";
+    return;
+  }
+
   state.lastHtml = html;
+  state.lastText = actualText;
 }
 
 function clearStreamingState(div) {

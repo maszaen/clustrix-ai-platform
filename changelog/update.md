@@ -2,7 +2,7 @@ Changelog record instruction:
 - Record all changelogs in /changelog/release-notes/* with a consistent format.
 - Use `git diff HEAD` to check local changes that are not yet included in the latest changelog entry.
 - Increment the version number (e.g., +0.0.1, +0.1.0, or +1.0.0) depending on the scope and impact of the changes, and update the "version" field in package.json accordingly.
-- Commit the changelog and updated files with an appropriate title.
+- Do `git add -A`, and `git commit -m '<Commit the changelog and updated files with an appropriate title>'`.
 - Update /.github/copilot-instructions.md if necessary (only when there are important project updates or outdated information).
 - Notes: copilot-instructions.md should contain only essential project information and instructions — not changelogs or historical updates.
 

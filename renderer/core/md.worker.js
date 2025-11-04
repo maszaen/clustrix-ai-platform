@@ -581,7 +581,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       // Handle <try> dengan atau tanpa closing tag
       .replace(/<try>([\s\S]*?)(?:<\/try>|$)/gis, (match, content) => {
         const processedContent = content
-          .replace(/<try-title>(.*?)(?:<\/try-title>|$)/gi, '<div class="prompt-title">${SPARKLE} $1</div>')
+          .replace(/<try-title>(.*?)(?:<\/try-title>|$)/gi, `<div class="prompt-title">${SPARKLE} $1</div>`)
           .replace(/<li>(.*?)(?:<\/li>|$)/gi, '<span class="pli" data-text="$1"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-corner-down-right-icon lucide-corner-down-right"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></svg> $1</span>');
         return `<div class="prompt">${processedContent}</div>`;
       });
@@ -608,7 +608,7 @@ function parseInlineMarkdown(text, globalReferences = {}) {
   text = text.replace(/<try>(.*?)<\/try>/gis, '<div class="prompt">$1</div>');
 
   text = text.replace(/<clarify-title>(.*?)<\/clarify-title>/gi, '<div class="brain-title">$1</div>');
-  text = text.replace(/<try-title>(.*?)<\/try-title>/gi, '<div class="prompt-title">${SPARKLE} $1</div>');
+  text = text.replace(/<try-title>(.*?)<\/try-title>/gi, `<div class="prompt-title">${SPARKLE} $1</div>`);
   if (text.includes('<br>') && (text.includes('<br>•') || text.includes('<br>-'))) {
     const parts = text.split(/(<br\s*\/?>)/i);
     let listItems = [];

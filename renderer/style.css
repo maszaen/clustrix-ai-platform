@@ -8539,6 +8539,7 @@ button:disabled .btn-icon {
 .prompt-title {
   display: flex;
   flex-direction: row;
+  font-family: var(--font-ai-bold);
   gap: 7px;
   align-items: center;
 }

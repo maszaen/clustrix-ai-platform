@@ -805,7 +805,7 @@ function parseInlineMarkdown(text, globalReferences = {}) {
   text = text.replace(/<try>(.*?)<\/try>/gis, '<div class="prompt">$1</div>');
 
   text = text.replace(/<clarify-title>(.*?)<\/clarify-title>/gi, '<div class="brain-title">$1</div>');
-  text = text.replace(/<try-title>(.*?)<\/try-title>/gi, '<div class="prompt-title">${SPARKLE} $1</div>');
+  text = text.replace(/<try-title>(.*?)<\/try-title>/gi, `<div class="prompt-title">${SPARKLE} $1</div>`);
   if (text.includes('<br>') && (text.includes('<br>•') || text.includes('<br>-'))) {
     const parts = text.split(/(<br\s*\/?>)/i);
     let listItems = [];

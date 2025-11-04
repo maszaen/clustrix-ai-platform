@@ -201,17 +201,6 @@ async function queryUsageStatistics(dbManager, filters = {}) {
     return cached;
   }
 
-  // Debug logging
-  log('USAGE_STATS', 1, 'queryUsageStatistics', 'Query range', {
-    startTs,
-    endTs,
-    startIso,
-    endIso,
-    startDate: new Date(startTs).toISOString(),
-    endDate: new Date(endTs).toISOString(),
-    filters
-  });
-
   const params = [startTs, endTs];
   let baseQuery = `
     SELECT created_at, provider, model_id, metadata
@@ -238,98 +227,12 @@ async function queryUsageStatistics(dbManager, filters = {}) {
   const stmt = dbManager.db.prepare(baseQuery);
   const rows = stmt.all(...params);
 
-  // Debug: Check actual metadata structure from sample messages
-  const sampleMetadataStmt = dbManager.db.prepare(`
-    SELECT created_at, provider, model_id, metadata 
-    FROM messages 
-    WHERE deleted = 0 AND metadata IS NOT NULL AND metadata != ''
-    ORDER BY created_at DESC 
-    LIMIT 3
-  `);
-  const sampleRows = sampleMetadataStmt.all();
-  log('USAGE_STATS', 1, 'queryUsageStatistics', 'Sample metadata from database', {
-    samples: sampleRows.map(r => {
-      let parsed = null;
-      try {
-        parsed = JSON.parse(r.metadata);
-      } catch (e) {
-        parsed = 'PARSE_ERROR';
-      }
-      return {
-        created_at: r.created_at,
-        date: new Date(normalizeTimestamp(r.created_at)).toISOString(),
-        provider: r.provider,
-        model_id: r.model_id,
-        metadata: parsed
-      };
-    })
-  });
-
-  // Debug: Check ALL messages in database for comparison
-  const totalCountStmt = dbManager.db.prepare(`
-    SELECT COUNT(*) as total, MIN(created_at) as oldest, MAX(created_at) as newest
-    FROM messages 
-    WHERE deleted = 0
-  `);
-  const totalCount = totalCountStmt.get();
-  
-  const allMessagesStmt = dbManager.db.prepare(`
-    SELECT created_at, provider, model_id 
-    FROM messages 
-    WHERE deleted = 0 
-    ORDER BY created_at ASC
-    LIMIT 10
-  `);
-  const oldestMessages = allMessagesStmt.all();
-  
-  const newestStmt = dbManager.db.prepare(`
-    SELECT created_at, provider, model_id 
-    FROM messages 
-    WHERE deleted = 0 
-    ORDER BY created_at DESC 
-    LIMIT 10
-  `);
-  const newestMessages = newestStmt.all();
-  
-  log('USAGE_STATS', 1, 'queryUsageStatistics', 'Database statistics', {
-    totalMessages: totalCount.total,
-    oldestTimestamp: totalCount.oldest,
-    oldestDate: new Date(normalizeTimestamp(totalCount.oldest)).toISOString(),
-    newestTimestamp: totalCount.newest,
-    newestDate: new Date(normalizeTimestamp(totalCount.newest)).toISOString(),
-    oldest10: oldestMessages.map(m => ({
-      created_at: m.created_at,
-      date: new Date(normalizeTimestamp(m.created_at)).toISOString(),
-      provider: m.provider
-    })),
-    newest10: newestMessages.map(m => ({
-      created_at: m.created_at,
-      date: new Date(normalizeTimestamp(m.created_at)).toISOString(),
-      provider: m.provider
-    })),
-    queryStartTs: startTs,
-    queryEndTs: endTs
-  });
-
-  // Debug: Show query results
-  log('USAGE_STATS', 1, 'queryUsageStatistics', 'Query returned messages', {
-    rowCount: rows.length,
-    sampleTimestamps: rows.slice(0, 5).map(r => ({
-      created_at: r.created_at,
-      normalized: normalizeTimestamp(r.created_at),
-      date: new Date(normalizeTimestamp(r.created_at)).toISOString(),
-      provider: r.provider,
-      hasMetadata: !!r.metadata
-    }))
-  });
-
   const dailyMap = new Map();
   const dailyTotals = new Map();
   const providerTotals = new Map();
   const modelTotals = new Map();
   let totalTokens = 0;
   let skippedCount = 0;
-  let skippedSamples = [];
 
   for (const row of rows) {
     const createdAt = normalizeTimestamp(row.created_at);
@@ -349,33 +252,12 @@ async function queryUsageStatistics(dbManager, filters = {}) {
       usage.totalTokenCount ?? 
       usage.totalTokens ?? 
       usage.total ??
-      // Fallback: calculate from prompt + completion if total not available
       ((usage.prompt_tokens || usage.promptTokenCount || 0) + 
        (usage.completion_tokens || usage.candidatesTokenCount || 0))
     );
     
-    // Debug: Log token parsing
-    if (totalTokens === 0 && tokens > 0) {
-      log('USAGE_STATS', 1, 'queryUsageStatistics', 'First message with tokens', {
-        dateKey,
-        createdAt,
-        provider: row.provider,
-        tokens,
-        usage
-      });
-    }
-    
     if (tokens <= 0) {
       skippedCount++;
-      if (skippedSamples.length < 5) {
-        skippedSamples.push({
-          dateKey,
-          created_at: row.created_at,
-          provider: row.provider,
-          hasMetadata: !!row.metadata,
-          usage: usage
-        });
-      }
       continue;
     }
 
@@ -397,15 +279,6 @@ async function queryUsageStatistics(dbManager, filters = {}) {
     modelTotals.set(model, (modelTotals.get(model) || 0) + tokens);
     providerSet.add(provider);
     totalTokens += tokens;
-  }
-
-  // Log skipped messages
-  if (skippedCount > 0) {
-    log('USAGE_STATS', 2, 'queryUsageStatistics', 'Skipped messages without usage data', {
-      skippedCount,
-      processedCount: rows.length - skippedCount,
-      skippedSamples
-    });
   }
 
   const dayCount = Math.max(1, Math.floor((endTs - startTs) / DAY_MS) + 1);

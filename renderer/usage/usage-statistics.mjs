@@ -184,7 +184,7 @@ function formatSummaryItem(item) {
   if (!item || !item.name) {
     return '—';
   }
-  return `${item.name} • ${formatNumber(item.tokens)} tokens`;
+  return `${item.name} ${formatNumber(item.tokens)} tokens`;
 }
 
 function updateSummary(summarySection, summary) {

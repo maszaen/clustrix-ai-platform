@@ -2488,7 +2488,7 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
               // If message exists, skip it (don't overwrite timestamp)
             }
             if (insertedCount > 0 || skippedCount > 0) {
-              log('SAVE', 1, 'sessions:save', `Session ${session.id}: inserted ${insertedCount}, skipped ${skippedCount}`);
+              // log
             }
           }
           

@@ -244,7 +244,7 @@ async function queryBenchmarkStatistics(dbManager, filters = {}) {
   let baseQuery = `
     SELECT created_at, provider, model_id, metadata
     FROM messages
-    WHERE deleted = 0 AND role = 'assistant' AND created_at BETWEEN ? AND ?
+    WHERE deleted = 0 AND role = 'ai' AND created_at BETWEEN ? AND ?
   `;
   if (providerFilter) {
     baseQuery += ' AND provider = ?';
@@ -255,7 +255,7 @@ async function queryBenchmarkStatistics(dbManager, filters = {}) {
   const providerStmt = dbManager.db.prepare(`
     SELECT DISTINCT provider
     FROM messages
-    WHERE deleted = 0 AND role = 'assistant' AND created_at BETWEEN ? AND ?
+    WHERE deleted = 0 AND role = 'ai' AND created_at BETWEEN ? AND ?
   `);
   const providerRows = providerStmt.all(startTs, endTs);
   const providerSet = new Set();
@@ -265,6 +265,21 @@ async function queryBenchmarkStatistics(dbManager, filters = {}) {
 
   const stmt = dbManager.db.prepare(baseQuery);
   const rows = stmt.all(...params);
+
+  // Debug logging
+  console.log('BENCHMARK_QUERY: Found rows:', {
+    totalRows: rows.length,
+    startTs,
+    endTs,
+    providerFilter,
+    modelFilter,
+    firstRow: rows[0] ? {
+      created_at: rows[0].created_at,
+      provider: rows[0].provider,
+      model_id: rows[0].model_id,
+      hasMetadata: !!rows[0].metadata
+    } : null
+  });
 
   const dailyMap = new Map(); // dateKey -> provider -> model -> [speeds]
   const dailyStats = new Map(); // dateKey -> [speeds]
@@ -289,6 +304,19 @@ async function queryBenchmarkStatistics(dbManager, filters = {}) {
 
     const usage = metadata?.usage || {};
     const tokenSpeed = normalizeSpeed(usage.token_speed);
+
+    // Debug first few messages
+    if (totalMessageCount + skippedCount < 3) {
+      console.log('BENCHMARK_QUERY: Processing message:', {
+        row_index: totalMessageCount + skippedCount,
+        provider: row.provider,
+        model_id: row.model_id,
+        hasUsage: !!usage,
+        token_speed: usage.token_speed,
+        normalizedSpeed: tokenSpeed,
+        response_time: usage.response_time
+      });
+    }
 
     // Skip messages without token speed data
     if (tokenSpeed <= 0) {

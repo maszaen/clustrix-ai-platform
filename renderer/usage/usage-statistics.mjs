@@ -180,27 +180,89 @@ function updateProviderOptions(selectEl, providers, current) {
   }
 }
 
+function updateModelOptions(selectEl, models, current) {
+  if (!selectEl) return;
+  const unique = Array.from(new Set([...(models || [])].filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const options = ['all', ...unique];
+  const previousValue = current || selectEl.value || 'all';
+  selectEl.innerHTML = options
+    .map((value) => {
+      if (value === 'all') {
+        return '<option value="all">All models</option>';
+      }
+      const safeValue = value.replace(/"/g, '&quot;');
+      return `<option value="${safeValue}">${safeValue}</option>`;
+    })
+    .join('');
+  if (options.includes(previousValue)) {
+    selectEl.value = previousValue;
+  } else {
+    selectEl.value = 'all';
+  }
+}
+
 function formatSummaryItem(item) {
   if (!item || !item.name) {
     return '—';
   }
-  return `${item.name} ${formatNumber(item.tokens)} tokens`;
+  return item.name;
 }
 
-function updateSummary(summarySection, summary) {
+function formatTokens(tokens) {
+  return formatNumber(tokens);
+}
+
+function updateSummary(summarySection, summary, selectedProvider = 'all', selectedModel = 'all') {
   if (!summarySection) return;
   const totalEl = summarySection.querySelector('#usage-total-tokens');
   const modelEl = summarySection.querySelector('#usage-top-model');
+  const modelTokensEl = summarySection.querySelector('#usage-top-model-tokens');
   const providerEl = summarySection.querySelector('#usage-top-provider');
+  const providerTokensEl = summarySection.querySelector('#usage-top-provider-tokens');
+  const providerLabelEl = summarySection.querySelector('[data-label-provider]');
   const averageEl = summarySection.querySelector('#usage-average-daily');
 
   const total = Number(summary?.totalTokens) || 0;
   const average = Number(summary?.averageDailyTokens) || 0;
 
   if (totalEl) totalEl.textContent = formatNumber(total);
-  if (modelEl) modelEl.textContent = formatSummaryItem(summary?.mostUsedModel);
+  if (averageEl) averageEl.textContent = formatNumber(Math.round(average));
+  
+  // Update model card label and value
+  const summaryCards = summarySection.querySelectorAll('.usage-summary-card');
+  for (const card of summaryCards) {
+    const modelLabel = card.querySelector('.usage-summary-label');
+    const modelValue = card.querySelector('#usage-top-model');
+    if (modelLabel && modelValue) {
+      if (selectedModel && selectedModel !== 'all') {
+        modelLabel.textContent = 'Selected model';
+        // Update value to show selected model name
+        modelValue.textContent = selectedModel;
+      } else {
+        modelLabel.textContent = 'Most used model';
+        modelValue.textContent = formatSummaryItem(summary?.mostUsedModel);
+      }
+      break;
+    }
+  }
+  
+  if (modelTokensEl) modelTokensEl.textContent = formatTokens(summary?.mostUsedModel?.tokens || 0);
+  
   if (providerEl) providerEl.textContent = formatSummaryItem(summary?.mostUsedProvider);
-  if (averageEl) averageEl.textContent = `${formatNumber(average, average >= 100 ? 0 : 1)} tokens`;
+  if (providerTokensEl) providerTokensEl.textContent = formatTokens(summary?.mostUsedProvider?.tokens || 0);
+  
+  // Update provider card label
+  const providerCard = document.getElementById('usage-provider-card');
+  if (providerCard) {
+    const providerLabelSpan = providerCard.querySelector('.usage-summary-label');
+    if (providerLabelSpan) {
+      if (selectedProvider && selectedProvider !== 'all') {
+        providerLabelSpan.textContent = 'Selected provider';
+      } else {
+        providerLabelSpan.textContent = 'Most used provider';
+      }
+    }
+  }
 }
 
 function renderLegend(legendContainer, colorMap) {
@@ -228,7 +290,7 @@ function renderChart({
   legendContainer,
   tooltip,
   modalCard,
-}, entries, range) {
+}, entries, range, modelFilter = 'all') {
   if (!chartContainer || !barsContainer || !axisContainer || !yAxisContainer) {
     return;
   }
@@ -236,7 +298,13 @@ function renderChart({
   const endDate = range?.end ? new Date(range.end) : null;
   const dateSeries = startDate && endDate ? generateDateRange(startDate, endDate) : [];
 
-  const { grouped, colorMap, maxTokens } = normalizeEntries(entries);
+  // Filter entries by model if modelFilter is set
+  let filteredEntries = entries;
+  if (modelFilter && modelFilter !== 'all') {
+    filteredEntries = entries.filter(entry => entry.model === modelFilter);
+  }
+
+  const { grouped, colorMap, maxTokens } = normalizeEntries(filteredEntries);
   renderLegend(legendContainer, colorMap);
 
   if (dateSeries.length === 0) {
@@ -266,6 +334,9 @@ function renderChart({
   }
 
   const chartHeight = maxTick > 0 ? maxTick : 1;
+  
+  // Add 20% padding to chart height for better visibility
+  const adjustedChartHeight = chartHeight * 1.2;
 
   for (const dateKey of dateSeries) {
     const dayColumn = document.createElement('div');
@@ -276,21 +347,38 @@ function renderChart({
     const providerMap = grouped.get(dateKey);
     if (providerMap) {
       const providers = Array.from(providerMap.keys()).sort((a, b) => a.localeCompare(b));
+      
+      // Create separate provider groups (one group per provider)
       for (const provider of providers) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'usage-provider-wrapper';
-
+        const entries = providerMap.get(provider);
+        
+        // Sort entries by tokens (ASCENDING - smallest first for proper cumulative stacking)
+        // Smallest will be calculated first and appear on top with highest z-index
+        entries.sort((a, b) => a.tokens - b.tokens);
+        
+        // Calculate cumulative total for stacked bars
+        const totalTokens = entries.reduce((sum, e) => sum + e.tokens, 0);
+        let cumulativeTokens = 0;
+        
         const providerGroup = document.createElement('div');
         providerGroup.className = 'usage-provider-group';
 
-        for (const entry of providerMap.get(provider)) {
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i];
+          cumulativeTokens += entry.tokens;
+          
           const bar = document.createElement('div');
           bar.className = 'usage-bar';
-          const heightPercent = chartHeight > 0 ? (entry.tokens / chartHeight) * 100 : 0;
-          bar.style.height = `${Math.max(heightPercent, entry.tokens > 0 ? 2 : 0)}%`;
+          
+          // Height based on cumulative tokens with 20% extra vertical range
+          const heightPercent = adjustedChartHeight > 0 ? (cumulativeTokens / adjustedChartHeight) * 100 : 0;
+          bar.style.height = `${Math.max(heightPercent, cumulativeTokens > 0 ? 2 : 0)}%`;
+          
           bar.style.background = colorMap.get(entry.model) || getModelColor(entry.model);
+          bar.style.zIndex = entries.length - i; // Smallest bar on top (highest z-index)
+          
           bar.dataset.model = entry.model;
-          bar.dataset.provider = provider;
+          bar.dataset.provider = entry.provider;
           bar.dataset.tokens = entry.tokens;
           bar.dataset.date = entry.date;
 
@@ -307,13 +395,8 @@ function renderChart({
           providerGroup.appendChild(bar);
         }
 
-        const providerLabel = document.createElement('span');
-        providerLabel.className = 'usage-provider-label';
-        providerLabel.textContent = provider;
-
-        wrapper.appendChild(providerGroup);
-        wrapper.appendChild(providerLabel);
-        providerWrapper.appendChild(wrapper);
+        // Append provider group directly to provider groups wrapper
+        providerWrapper.appendChild(providerGroup);
       }
     } else {
       dayColumn.classList.add('usage-day-column--empty');
@@ -377,44 +460,6 @@ function computePreset(preset) {
   }
 }
 
-function exportCsv(data) {
-  if (!data || !Array.isArray(data.entries) || data.entries.length === 0) {
-    return;
-  }
-  const rows = [];
-  rows.push(['Summary']);
-  rows.push(['Total Tokens', data.summary ? data.summary.totalTokens : 0]);
-  rows.push(['Average Daily Tokens', data.summary ? data.summary.averageDailyTokens : 0]);
-  rows.push(['Most Used Model', data.summary?.mostUsedModel?.name || '', data.summary?.mostUsedModel?.tokens || '']);
-  rows.push(['Most Used Provider', data.summary?.mostUsedProvider?.name || '', data.summary?.mostUsedProvider?.tokens || '']);
-  rows.push([]);
-  rows.push(['Date', 'Provider', 'Model', 'Tokens']);
-  for (const entry of data.entries) {
-    rows.push([entry.date, entry.provider, entry.model, entry.tokens]);
-  }
-  const csvContent = rows
-    .map((row) => row
-      .map((cell) => {
-        const value = cell === null || cell === undefined ? '' : String(cell);
-        if (/[",\n]/.test(value)) {
-          return `"${value.replace(/"/g, '""')}"`;
-        }
-        return value;
-      })
-      .join(','))
-    .join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  const timestamp = formatInputDate(new Date()).replace(/-/g, '');
-  link.href = url;
-  link.download = `usage-statistics-${timestamp}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-}
-
 export function initializeUsageStatistics({ openModal, closeModal, closeDropdown, log }) {
   const modal = document.getElementById('usage-stats-modal');
   const modalCard = modal?.querySelector('.modal-card');
@@ -426,7 +471,6 @@ export function initializeUsageStatistics({ openModal, closeModal, closeDropdown
   const startInput = document.getElementById('usage-filter-start');
   const endInput = document.getElementById('usage-filter-end');
   const resetButton = document.getElementById('usage-filter-reset');
-  const exportButton = document.getElementById('usage-export-csv');
   const feedbackEl = document.getElementById('usage-feedback');
   const loadingEl = document.getElementById('usage-loading');
   const summaryEl = document.getElementById('usage-summary');
@@ -443,6 +487,7 @@ export function initializeUsageStatistics({ openModal, closeModal, closeDropdown
 
   const state = {
     provider: 'all',
+    model: 'all',
     rangePreset: 'last-30-days',
     startDate: '',
     endDate: '',
@@ -458,9 +503,6 @@ export function initializeUsageStatistics({ openModal, closeModal, closeDropdown
     }
 
     setLoadingState({ loadingEl, summaryEl, chartEl: chartContainer }, true);
-    if (exportButton) {
-      exportButton.disabled = true;
-    }
     clearFeedback(feedbackEl);
 
     const filters = {
@@ -470,13 +512,30 @@ export function initializeUsageStatistics({ openModal, closeModal, closeDropdown
     if (state.provider && state.provider !== 'all') {
       filters.provider = state.provider;
     }
+    if (state.model && state.model !== 'all') {
+      filters.model = state.model;
+    }
 
     try {
       const response = await window.api.usage.fetchStats(filters);
       lastResponse = response;
       updateProviderOptions(providerSelect, response.providers, state.provider);
       state.provider = providerSelect.value || 'all';
-      updateSummary(summaryEl, response.summary || {});
+      
+      // Always show model filter and populate with all models
+      const modelFilterWrapper = document.getElementById('usage-filter-model-wrapper');
+      const modelSelect = document.getElementById('usage-filter-model');
+      if (modelFilterWrapper && modelSelect) {
+        modelFilterWrapper.style.display = 'flex';
+        // Populate model options (all models or filtered by provider)
+        updateModelOptions(modelSelect, response.models || [], state.model);
+        state.model = modelSelect.value || 'all';
+      }
+      
+      // Store model-to-provider mapping for auto-switching
+      state.modelToProvider = response.modelToProvider || {};
+      
+      updateSummary(summaryEl, response.summary || {}, state.provider, state.model);
       summaryEl?.classList.remove('hidden');
       renderChart({
         chartContainer,
@@ -486,27 +545,18 @@ export function initializeUsageStatistics({ openModal, closeModal, closeDropdown
         legendContainer,
         tooltip,
         modalCard,
-      }, response.entries || [], response.range);
+      }, response.entries || [], response.range, state.model);
       chartContainer?.classList.remove('hidden');
 
       if (!response.entries || response.entries.length === 0) {
         showFeedback(feedbackEl, 'No usage data for the selected filters.', 'empty');
-        if (exportButton) {
-          exportButton.disabled = true;
-        }
       } else {
         clearFeedback(feedbackEl);
-        if (exportButton) {
-          exportButton.disabled = false;
-        }
       }
     } catch (error) {
       showFeedback(feedbackEl, 'Failed to load usage data. Please try again.', 'error');
       if (typeof log === 'function') {
         log('USAGE_STATS', 3, 'fetchStats', 'Failed to fetch usage statistics', { error: error.message });
-      }
-      if (exportButton) {
-        exportButton.disabled = true;
       }
     } finally {
       setLoadingState({ loadingEl, summaryEl, chartEl: chartContainer }, false);
@@ -555,7 +605,12 @@ export function initializeUsageStatistics({ openModal, closeModal, closeDropdown
 
   function resetFilters({ skipFetch = false } = {}) {
     state.provider = 'all';
+    state.model = 'all';
     providerSelect.value = 'all';
+    const modelSelect = document.getElementById('usage-filter-model');
+    if (modelSelect) {
+      modelSelect.value = 'all';
+    }
     applyPreset('last-30-days', { skipFetch: true });
     if (!skipFetch) {
       debouncedFetch();
@@ -597,8 +652,29 @@ export function initializeUsageStatistics({ openModal, closeModal, closeDropdown
 
   providerSelect.addEventListener('change', () => {
     state.provider = providerSelect.value || 'all';
+    // Reset model selection when provider changes
+    state.model = 'all';
     debouncedFetch();
   });
+
+  const modelSelect = document.getElementById('usage-filter-model');
+  if (modelSelect) {
+    modelSelect.addEventListener('change', () => {
+      const selectedModel = modelSelect.value || 'all';
+      state.model = selectedModel;
+      
+      // If model is selected and provider is 'all', auto-switch to model's provider
+      if (selectedModel !== 'all' && state.provider === 'all') {
+        const modelProvider = state.modelToProvider?.[selectedModel];
+        if (modelProvider) {
+          state.provider = modelProvider;
+          providerSelect.value = modelProvider;
+        }
+      }
+      
+      debouncedFetch();
+    });
+  }
 
   rangeSelect.addEventListener('change', () => {
     const value = rangeSelect.value || 'current-month';
@@ -610,11 +686,5 @@ export function initializeUsageStatistics({ openModal, closeModal, closeDropdown
 
   resetButton?.addEventListener('click', () => {
     resetFilters();
-  });
-
-  exportButton?.addEventListener('click', () => {
-    if (lastResponse && lastResponse.entries && lastResponse.entries.length > 0) {
-      exportCsv(lastResponse);
-    }
   });
 }

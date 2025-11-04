@@ -3,7 +3,7 @@
 **1. Check Existing Changelog**
 - Check package.json version first
 - Look for matching files in /changelog/release-notes/v*.md
-- **If changelog exists** with version > package.json: Use that (developer-written, skip git diff)
+- **If changelog exists** with version > package.json: Use that (developer-written, skip git diff) (e.g, in package json 1.0.0, but in changelog info is higher than package json, do `git diff HEAD`)
 - **If not**: Use `git diff HEAD` to check what changed locally, then write those changes into the new changelog.
 
 **2. Create/Update Changelog**

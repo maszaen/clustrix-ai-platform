@@ -1561,9 +1561,9 @@
       </div>
     </div>
   </div>
-  <div id="usage-stats-modal" class="modal hidden">
+  <div id="usage-stats-modal" class="modal hidden" style="padding: 10px var(--spacing-xl);">
     <div class="modal-overlay"></div>
-    <div class="modal-card usage-modal-card" style="max-width:960px;">
+    <div class="modal-card usage-modal-card" style="max-width: calc(100vw - 100px); max-height: calc(100vh - 100px);">
       <div class="modal-header">
         <h2>Usage Statistics</h2>
         <button id="close-usage-stats" class="close-btn" title="Close usage statistics">
@@ -1577,46 +1577,77 @@
       <div class="modal-body usage-modal-body">
         <div class="usage-filter-section">
           <div class="usage-filter-row">
-            <label for="usage-filter-provider">Provider</label>
-            <select id="usage-filter-provider"></select>
+            <div class="usage-filter-group">
+              <label for="usage-filter-provider">Provider</label>
+              <select id="usage-filter-provider"></select>
+            </div>
+            <div class="usage-filter-group" id="usage-filter-model-wrapper">
+              <label for="usage-filter-model">Model</label>
+              <select id="usage-filter-model"></select>
+            </div>
           </div>
-          <div class="usage-filter-row usage-date-row">
-            <label for="usage-filter-range">Range</label>
-            <select id="usage-filter-range">
-              <option value="current-month">This month</option>
-              <option value="last-7-days">Last 7 days</option>
-              <option value="last-30-days">Last 30 days</option>
-              <option value="custom">Custom range</option>
-            </select>
-            <div class="usage-date-inputs">
-              <input type="date" id="usage-filter-start" aria-label="Start date">
-              <span class="usage-date-separator">to</span>
-              <input type="date" id="usage-filter-end" aria-label="End date">
+          <div class="usage-filter-row">
+            <div class="usage-filter-group">
+              <label for="usage-filter-range">Range</label>
+              <select id="usage-filter-range">
+                <option value="current-month">This month</option>
+                <option value="last-7-days">Last 7 days</option>
+                <option value="last-30-days">Last 30 days</option>
+                <option value="custom">Custom range</option>
+              </select>
             </div>
-            <button id="usage-filter-reset" class="white-btn" type="button">Reset</button>
-            <div class="usage-filter-actions">
-              <button id="usage-export-csv" class="white-btn" type="button">Export CSV</button>
+            <div class="usage-filter-group">
+              <label for="usage-filter-start">Custom Range</label>
+              <div class="usage-date-inputs">
+                <input type="date" id="usage-filter-start" aria-label="Start date">
+                <span class="usage-date-separator">to</span>
+                <input type="date" id="usage-filter-end" aria-label="End date">
+              </div>
             </div>
+            <button id="usage-filter-reset" class="usage-filter-reset-btn" type="button" title="Reset filters">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36M20.49 15a9 9 0 0 1-14.85 3.36"></path>
+              </svg>
+            </button>
           </div>
         </div>
         <div id="usage-feedback" class="usage-feedback hidden" role="status"></div>
         <div id="usage-loading" class="usage-loading hidden">Loading usage statistics...</div>
         <div id="usage-summary" class="usage-summary hidden" aria-live="polite">
           <div class="usage-summary-card">
-            <span class="usage-summary-label">Total tokens</span>
-            <span class="usage-summary-value" id="usage-total-tokens">—</span>
+            <div class="usage-summary-item">
+              <span class="usage-summary-label">Total tokens</span>
+              <span class="usage-summary-value" id="usage-total-tokens">—</span>
+            </div>
+            <div class="usage-summary-divider"></div>
+            <div class="usage-summary-item">
+              <span class="usage-summary-label">Average daily usage</span>
+              <span class="usage-summary-value" id="usage-average-daily">—</span>
+            </div>
           </div>
           <div class="usage-summary-card">
-            <span class="usage-summary-label">Most used model</span>
-            <span class="usage-summary-value" id="usage-top-model">—</span>
+            <div class="usage-summary-item">
+              <span class="usage-summary-label">Most used model</span>
+              <span class="usage-summary-value" id="usage-top-model">—</span>
+            </div>
+            <div class="usage-summary-divider"></div>
+            <div class="usage-summary-item">
+              <span class="usage-summary-label">Total tokens</span>
+              <span class="usage-summary-value" id="usage-top-model-tokens">—</span>
+            </div>
           </div>
-          <div class="usage-summary-card">
-            <span class="usage-summary-label">Most used provider</span>
-            <span class="usage-summary-value" id="usage-top-provider">—</span>
-          </div>
-          <div class="usage-summary-card">
-            <span class="usage-summary-label">Average daily usage</span>
-            <span class="usage-summary-value" id="usage-average-daily">—</span>
+          <div class="usage-summary-card" id="usage-provider-card">
+            <div class="usage-summary-item">
+              <span class="usage-summary-label">Most used provider</span>
+              <span class="usage-summary-value" id="usage-top-provider">—</span>
+            </div>
+            <div class="usage-summary-divider"></div>
+            <div class="usage-summary-item">
+              <span class="usage-summary-label">Total tokens</span>
+              <span class="usage-summary-value" id="usage-top-provider-tokens">—</span>
+            </div>
           </div>
         </div>
         <div id="usage-chart-container" class="usage-chart-container hidden">

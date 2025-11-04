@@ -3124,6 +3124,16 @@ function finalizeTokenUsage(reqId, event) {
     if (elapsedSeconds > 0.01) {
       usageData.token_speed = tracker.completion_tokens / elapsedSeconds;
       usageData.response_time = elapsedMs;
+
+      try {
+        console.log('TOKEN_SPEED calculated:', {
+          completion_tokens: tracker.completion_tokens,
+          elapsed_ms: elapsedMs,
+          elapsed_seconds: elapsedSeconds.toFixed(2),
+          token_speed: usageData.token_speed.toFixed(2) + ' tokens/sec',
+          messageIndex: tracker.messageIndex
+        });
+      } catch (e) {}
     }
   }
 

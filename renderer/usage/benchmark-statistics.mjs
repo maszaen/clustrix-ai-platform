@@ -417,6 +417,31 @@ async function fetchAndRender(state) {
 
     const data = await window.api.benchmark.fetchStats(filters);
 
+    // Debug logging
+    log('Benchmark data received:', {
+      providers: data.providers,
+      models: data.models,
+      entriesCount: data.entries?.length,
+      totalMessages: data.summary?.totalMessages,
+      skippedCount: data.skippedCount
+    });
+
+    // Show message if no data available
+    if (data.summary.totalMessages === 0) {
+      chartContainer.innerHTML = `
+        <div style="padding: 40px; text-align: center; color: var(--fg-muted);">
+          <div style="font-size: 18px; margin-bottom: 12px;">No benchmark data available</div>
+          <div style="font-size: 14px;">
+            ${data.skippedCount > 0
+              ? `Found ${data.skippedCount} messages without token speed data. Send new AI messages to collect benchmark data.`
+              : 'Send some AI messages to start collecting token speed data.'}
+          </div>
+        </div>
+      `;
+      chartContainer.classList.remove('hidden');
+      return;
+    }
+
     // Update filter dropdowns
     updateProviderOptions(data.providers, state.provider);
     updateModelOptions(data.models, data.modelToProvider, state.provider, state.model);

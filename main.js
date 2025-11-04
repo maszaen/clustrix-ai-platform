@@ -3523,9 +3523,7 @@ function runStandardStreaming(event, payload) {
               log('MAIN: Using RE+ACT pattern for complex project query analysis...');
 
                 try {
-                  const modelInfo = { provider, model, apiKey: getApiKey(provider, payload), baseUrl };
-                  langchainService.reasoningAgent.initializeSession(sessionId, availableFiles || [], modelInfo);
-                  log(`MAIN: ReasoningAgent initialized for session ${sessionId} with ${availableFiles ? availableFiles.length : 0} files.`);
+                  // Send file previews to UI
                   if (availableFiles && availableFiles.length > 0) {
                     const projectFiles = availableFiles.map(f => ({
                       title: f.name,
@@ -3538,7 +3536,7 @@ function runStandardStreaming(event, payload) {
 
                   console.debug('MAIN: Sending REACT_START chat-update', { reqId: reqId, aiMessageIndex });
                   const hasInsultKeywords = detectInsultKeywords(lastMessage.content);
-                  
+
                   event.sender.send('chat-update', reactStartPayload);
 
                 const reactResult = await langchainService.processWithReasoningAction(
@@ -3723,7 +3721,8 @@ function runStandardStreaming(event, payload) {
               payload.searchApiConfig || null,
               null, // progressCallback
               hasInsultKeywords ? createInsultDetectionPrompt(currentMessage) : null,  // Only pass insult detection if keywords detected
-              session.messages || []  // Pass session messages for conversation context
+              session.messages || [],  // Pass session messages for conversation context
+              payload.language || 'autodetect'  // Pass language setting
             );
             
             log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);

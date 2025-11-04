@@ -30,3 +30,8 @@ Changelog v?.?.?: <**Changelog Title**>
 - Total refactoring plan: 10 phases over ~5 weeks (example)
 
 > **Status:** ✓ Production Ready | _Major / Minor / Checkpoint Release_
+
+Recommended commit messages:
+<v?.?.?>: <Changelog title>.\n
+- <min 1-4 detailed list of changes (summarized)>\n
+> **Status:** ✓ Production Ready | _Major / Minor / Checkpoint Release_

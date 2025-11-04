@@ -20,11 +20,13 @@ import {
   renderWithExistingFormatter
 } from './markdown/markdown.mjs';
 import { debounce, throttle } from './utils/timing.mjs';
+import { scheduleDeferredRender, cancelDeferredRender } from './utils/deferred-render.mjs';
 import { createHighlightedCode } from './markdown/highlight.mjs';
 
 let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",streamThrottling: "auto",language: "autodetect"},};
 let welcomeScreenStagedFiles = [];
 let projectMessageStagedFiles = [];
+const PROJECT_DETAIL_RENDER_KEY = 'project-detail:render';
 let current = null;
 let collapsed = false;
 let loadedSessionCount = 0;
@@ -5048,6 +5050,8 @@ function showProjectsListView() {
   const listView = document.getElementById("projects-list-view");
   const detailView = document.getElementById("project-detail-view");
 
+  cancelDeferredRender(PROJECT_DETAIL_RENDER_KEY);
+
   // Ensure projects page stays active when showing list view
   const chatArea = document.querySelector(".chat-area");
   if (chatArea && !chatArea.classList.contains("projects-active")) {
@@ -5091,6 +5095,8 @@ function showProjectDetailView(project) {
   const listView = document.getElementById("projects-list-view");
   const detailView = document.getElementById("project-detail-view");
 
+  cancelDeferredRender(PROJECT_DETAIL_RENDER_KEY);
+
   // Ensure projects page stays active when showing detail view
   const chatArea = document.querySelector(".chat-area");
   if (chatArea && !chatArea.classList.contains("projects-active")) {
@@ -5122,12 +5128,23 @@ function showProjectDetailView(project) {
 
   if (isDifferentProject) {
     projectMessageStagedFiles = [];
-    renderProjectMessageFiles();
+    const sessionsList = document.getElementById('project-sessions-list');
+    if (sessionsList) {
+      sessionsList.textContent = '';
+    }
+    const filesList = document.getElementById('project-files-list');
+    if (filesList) {
+      filesList.textContent = '';
+    }
+    const instructionText = document.getElementById('project-instruction-text');
+    if (instructionText) {
+      instructionText.remove();
+    }
 
-    const projectInput = document.getElementById("project-message-input");
+    const projectInput = document.getElementById('project-message-input');
     if (projectInput) {
-      projectInput.value = "";
-      projectInput.style.height = "auto";
+      projectInput.value = '';
+      projectInput.style.height = 'auto';
     }
   }
 
@@ -5143,10 +5160,16 @@ function showProjectDetailView(project) {
   updateProjectStarButton();
 
   // Render project content
-  renderProjectSessions(project);
-  renderProjectInstructions(project);
-  renderProjectFiles(project);
-  
+  scheduleDeferredRender(
+    PROJECT_DETAIL_RENDER_KEY,
+    () => {
+      renderProjectSessions(project);
+      renderProjectInstructions(project);
+      renderProjectFiles(project);
+    },
+    { frames: 2, timeout: 200 },
+  );
+
   // Auto focus project message input
   const projectInput = document.getElementById('project-message-input');
   if (projectInput) projectInput.focus();

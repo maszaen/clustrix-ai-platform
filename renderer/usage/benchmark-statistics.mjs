@@ -415,7 +415,7 @@ async function fetchAndRender(state) {
       }
     }
 
-    const data = await window.api.invoke('benchmark:fetchStats', filters);
+    const data = await window.api.benchmark.fetchStats(filters);
 
     // Update filter dropdowns
     updateProviderOptions(data.providers, state.provider);

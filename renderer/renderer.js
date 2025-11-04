@@ -16014,7 +16014,9 @@ function initializeApp() {
         log("UI", 2, "chat-update:TOKEN_USAGE", "Processing TOKEN_USAGE update", {
           messageIndex,
           sessionId: session.id,
-          data
+          data,
+          hasTokenSpeed: !!(data?.token_speed),
+          tokenSpeed: data?.token_speed
         });
 
         ensureTokenFields(session);
@@ -16053,7 +16055,9 @@ function initializeApp() {
             completion_tokens: completionTokens,
             total_tokens: totalTokens,
             breakdown,
-            cost: usageData.cost || null
+            cost: usageData.cost || null,
+            token_speed: usageData.token_speed || null,
+            response_time: usageData.response_time || null
           };
           messageEntry[2] = meta;
         }

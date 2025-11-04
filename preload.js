@@ -169,6 +169,9 @@ contextBridge.exposeInMainWorld('api', {
     load: () => ipcRenderer.invoke('projects:load'),
     save: (projects) => ipcRenderer.invoke('projects:save', projects),
   },
+  usage: {
+    fetchStats: (filters) => ipcRenderer.invoke('usage:fetchStats', filters),
+  },
   htmlPreview: {
     create: (htmlContent) => ipcRenderer.invoke('html-preview:create', htmlContent),
     delete: (previewId) => ipcRenderer.invoke('html-preview:delete', previewId),

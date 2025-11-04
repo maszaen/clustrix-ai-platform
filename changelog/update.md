@@ -1,37 +1,92 @@
-Changelog record instruction:
-- Record all changelogs in /changelog/release-notes/* with a consistent format.
-- Use `git diff HEAD` to check local changes that are not yet included in the latest changelog entry.
-- Increment the version number (e.g., +0.0.? or +0.?.0 or +?.0.0) depending on the scope and impact of the change (use semantic versioning), and update the "version" column in package.json accordingly.
-- Do `git add -A`, and `git commit -m '<Commit the changelog and updated files with an appropriate title>'`.
-- Update /.github/copilot-instructions.md if necessary (only when there are important project updates or outdated information).
-- Notes: copilot-instructions.md should contain only essential project information and instructions — not changelogs or historical updates.
+# **Changelog & Versioning Workflow**
 
-Format release-notes (example):
-Changelog v?.?.?: <**Changelog Title**>
+**1. Check Existing Changelog**
+- Check package.json version first
+- Look for matching files in /changelog/release-notes/v*.md
+- **If changelog exists** with version ≥ package.json: Use that (developer-written, skip git diff)
+- **If not**: Use `git diff HEAD` to check what changed locally, then write those changes into the new changelog.
 
-<**Changes Section**>
-- <List all major/minor changes>
-- <Optional additional notes>
+**2. Create/Update Changelog**
+- Create new file: /changelog/release-notes/v<new-version>.md
+- Follow the format below
+- Increment version using **semantic versioning**:
+  - **Major** (+?.0.0): Breaking changes, major refactors
+  - **Minor** (+0.?.0): New features, non-breaking updates
+  - **Patch** (+0.0.?): Bug fixes, small improvements
 
-<**Another Section (if needed)**>
-- <List of specific module or service updates>
-- ...
+**3. Update Files**
+- Update package.json → "version": "<new-version>"
+- Update /.github/copilot-instructions.md **only if**:
+  - Project structure changed significantly
+  - New critical conventions added
+  - Outdated information needs correction
+- **Note:** Keep copilot-instructions.md focused on current project state, NOT changelogs
 
-**Code Quality:**
-- Improved module organization using the single-responsibility principle (example)
-- Better import management across renderer (example)
-- Added JSDoc documentation for extracted modules (example)
-- Established foundation for incremental refactoring (example)
+**4. Commit Changes**
 
-**Statistics:**
-- 8 files modified, 9 files created (refactoring & documentation) (example)
-- ~950 lines extracted into modular structure (example)
-- renderer.js reduced from 17,960 → ~17,000 lines (import cleanup) (example)
-- Total refactoring plan: 10 phases over ~5 weeks (example)
+Command:
 
-> **Status:** ✓ Production Ready | _Major / Minor / Checkpoint Release_
+git add -A
 
-Recommended commit messages:
-<v?.?.?>: <Changelog title>.\n
-- <min 1-4 detailed list of changes (summarized)>\n
-> **Status:** ✓ Production Ready | _Major / Minor / Checkpoint Release_
+git commit -m "v<new-version>: <Changelog Title>
+
+- <Key change 1>
+- <Key change 2>
+- <Key change 3>
+
+> **Status:** ✓ Production Ready | Major/Minor/Patch Release"
+
+---
+
+### **Changelog Format Template**
+
+File: /changelog/release-notes/v<version>.md
+
+# Changelog v<version>: <Title>
+
+## <Primary Section Name>
+- <Change description with impact>
+- <Another change>
+
+## <Optional Secondary Section>
+- <Module-specific updates>
+- <Service updates>
+
+## Code Quality
+- <Refactoring improvements>
+- <Documentation additions>
+- <Architecture changes>
+
+## Statistics
+- X files modified, Y files created
+- ~Z lines refactored/added
+- <Key metric (e.g., bundle size reduction)>
+
+> **Status:** ✓ Production Ready | _Major / Minor / Patch Release_
+
+---
+
+### **Example Changelog**
+
+# Changelog v0.3.0: Modular Renderer Refactoring
+
+## Architecture
+- Extracted renderer logic into 9 single-responsibility modules
+- Improved import management across renderer pipeline
+- Established foundation for incremental refactoring (10-phase plan)
+
+## Documentation
+- Added JSDoc documentation for all extracted modules
+- Updated project structure in copilot-instructions.md
+
+## Code Quality
+- Applied single-responsibility principle to renderer
+- Better module organization and dependency management
+
+## Statistics
+- 8 files modified, 9 files created
+- ~950 lines extracted into modular structure
+- renderer.js reduced from 17,960 → ~17,000 lines
+- Total refactoring plan: 10 phases over ~5 weeks
+
+> **Status:** ✓ Production Ready | _Minor Release_

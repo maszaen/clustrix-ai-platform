@@ -110,8 +110,9 @@ class DatabaseManager {
 
         FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
       );
-      
+
       CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, message_index);
+      CREATE INDEX IF NOT EXISTS idx_messages_created_provider ON messages(created_at, provider);
       
       CREATE TABLE IF NOT EXISTS artifacts (
         id TEXT PRIMARY KEY,
@@ -259,11 +260,28 @@ class DatabaseManager {
     const hash = generateSessionHash(session, messages);
     
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO sessions 
+      INSERT INTO sessions 
       (id, name, type, created_at, updated_at, last_updated, project_id, 
       is_project, is_favorite, persona_name, persona_work, persona_prefs, 
       tokens_used, metadata, deleted, device_id, synced_at, hash)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        type = excluded.type,
+        updated_at = excluded.updated_at,
+        last_updated = excluded.last_updated,
+        project_id = excluded.project_id,
+        is_project = excluded.is_project,
+        is_favorite = excluded.is_favorite,
+        persona_name = excluded.persona_name,
+        persona_work = excluded.persona_work,
+        persona_prefs = excluded.persona_prefs,
+        tokens_used = excluded.tokens_used,
+        metadata = excluded.metadata,
+        deleted = excluded.deleted,
+        device_id = excluded.device_id,
+        synced_at = excluded.synced_at,
+        hash = excluded.hash
     `);
     
     const createdAt = session.created_at ? Date.parse(session.created_at) : Date.now();
@@ -314,6 +332,15 @@ class DatabaseManager {
     const deviceId = this._cachedDeviceId;
     const now = getCurrentTimestamp();
     
+    // Check if message already exists and get its original created_at
+    const existing = this.db.prepare(`
+      SELECT created_at FROM messages 
+      WHERE session_id = ? AND message_index = ?
+    `).get(sessionId, messageIndex);
+    
+    // Preserve original created_at if message exists, otherwise use now
+    const createdAt = existing ? existing.created_at : now;
+    
     // First, try to delete existing message at this index
     this.db.prepare(`
       DELETE FROM messages 
@@ -335,7 +362,7 @@ class DatabaseManager {
       role,
       content,
       messageIndex,
-      now,
+      createdAt,    // PRESERVE original created_at!
       metadata.model || null,
       metadata.modelLabel || null,
       metadata.provider || null,
@@ -355,10 +382,13 @@ class DatabaseManager {
     );
   }
   
-  addMessage(sessionId, role, content, metadata, messageIndex) {
+  addMessage(sessionId, role, content, metadata, messageIndex, createdAt = null) {
     // Use cached device ID (set once in constructor)
     const deviceId = this._cachedDeviceId;
     const now = getCurrentTimestamp();
+    
+    // Use provided createdAt if exists, otherwise use now
+    const messageCreatedAt = createdAt || now;
     
     const stmt = this.db.prepare(`
       INSERT INTO messages 
@@ -374,7 +404,7 @@ class DatabaseManager {
       role,
       content,
       messageIndex,
-      now,
+      messageCreatedAt,  // Use preserved or new timestamp
       metadata.model || null,
       metadata.modelLabel || null,
       metadata.provider || null,
@@ -398,6 +428,14 @@ class DatabaseManager {
     return this.db.prepare(`
       DELETE FROM messages WHERE session_id = ?
     `).run(sessionId);
+  }
+  
+  getMessagesForSession(sessionId) {
+    return this.db.prepare(`
+      SELECT message_index, created_at FROM messages 
+      WHERE session_id = ? 
+      ORDER BY message_index ASC
+    `).all(sessionId);
   }
   
   getAllArtifacts() {

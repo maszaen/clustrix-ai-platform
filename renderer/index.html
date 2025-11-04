@@ -265,6 +265,15 @@
               </svg>
               <span>Search API</span>
             </button>
+            <button id="open-usage-stats" class="menu-item">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bar-chart-3">
+                <path d="M3 3v18h18" />
+                <path d="M7 13h3v5H7z" />
+                <path d="M12 8h3v10h-3z" />
+                <path d="M17 5h3v13h-3z" />
+              </svg>
+              <span>Usage Statistics</span>
+            </button>
             <hr class="hr-custom-no-mar">
             <button id="open-persona-settings" class="menu-item">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings2-icon lucide-settings-2">
@@ -1550,6 +1559,78 @@
           <button id="mgmt-close" class="primary-btn">Close</button>
         </div>
       </div>
+    </div>
+  </div>
+  <div id="usage-stats-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-card usage-modal-card" style="max-width:960px;">
+      <div class="modal-header">
+        <h2>Usage Statistics</h2>
+        <button id="close-usage-stats" class="close-btn" title="Close usage statistics">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6 6 18" />
+            <path d="m6 6 12 12" />
+          </svg>
+        </button>
+      </div>
+      <hr />
+      <div class="modal-body usage-modal-body">
+        <div class="usage-filter-section">
+          <div class="usage-filter-row">
+            <label for="usage-filter-provider">Provider</label>
+            <select id="usage-filter-provider"></select>
+          </div>
+          <div class="usage-filter-row usage-date-row">
+            <label for="usage-filter-range">Range</label>
+            <select id="usage-filter-range">
+              <option value="current-month">This month</option>
+              <option value="last-7-days">Last 7 days</option>
+              <option value="last-30-days">Last 30 days</option>
+              <option value="custom">Custom range</option>
+            </select>
+            <div class="usage-date-inputs">
+              <input type="date" id="usage-filter-start" aria-label="Start date">
+              <span class="usage-date-separator">to</span>
+              <input type="date" id="usage-filter-end" aria-label="End date">
+            </div>
+            <button id="usage-filter-reset" class="white-btn" type="button">Reset</button>
+            <div class="usage-filter-actions">
+              <button id="usage-export-csv" class="white-btn" type="button">Export CSV</button>
+            </div>
+          </div>
+        </div>
+        <div id="usage-feedback" class="usage-feedback hidden" role="status"></div>
+        <div id="usage-loading" class="usage-loading hidden">Loading usage statistics...</div>
+        <div id="usage-summary" class="usage-summary hidden" aria-live="polite">
+          <div class="usage-summary-card">
+            <span class="usage-summary-label">Total tokens</span>
+            <span class="usage-summary-value" id="usage-total-tokens">—</span>
+          </div>
+          <div class="usage-summary-card">
+            <span class="usage-summary-label">Most used model</span>
+            <span class="usage-summary-value" id="usage-top-model">—</span>
+          </div>
+          <div class="usage-summary-card">
+            <span class="usage-summary-label">Most used provider</span>
+            <span class="usage-summary-value" id="usage-top-provider">—</span>
+          </div>
+          <div class="usage-summary-card">
+            <span class="usage-summary-label">Average daily usage</span>
+            <span class="usage-summary-value" id="usage-average-daily">—</span>
+          </div>
+        </div>
+        <div id="usage-chart-container" class="usage-chart-container hidden">
+          <div class="usage-chart-inner">
+            <div class="usage-y-axis" id="usage-y-axis"></div>
+            <div class="usage-chart-scroll">
+              <div class="usage-chart-bars" id="usage-bars"></div>
+              <div class="usage-x-axis" id="usage-x-axis"></div>
+            </div>
+          </div>
+          <div class="usage-legend" id="usage-legend"></div>
+        </div>
+      </div>
+      <div id="usage-tooltip" class="usage-tooltip hidden" role="presentation"></div>
     </div>
   </div>
   <div id="mini-modal" class="modal hidden">

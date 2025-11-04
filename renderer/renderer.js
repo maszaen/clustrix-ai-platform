@@ -22,6 +22,7 @@ import {
 import { debounce, throttle } from './utils/timing.mjs';
 import { scheduleDeferredRender, cancelDeferredRender } from './utils/deferred-render.mjs';
 import { createHighlightedCode } from './markdown/highlight.mjs';
+import { initializeUsageStatistics } from './usage/usage-statistics.mjs';
 
 let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",streamThrottling: "auto",language: "autodetect"},};
 let welcomeScreenStagedFiles = [];
@@ -16225,6 +16226,14 @@ function initializeApp() {
 }
 
 document.addEventListener("DOMContentLoaded", initializeApp);
+document.addEventListener('DOMContentLoaded', () => {
+  initializeUsageStatistics({
+    openModal: openModalWithAnimation,
+    closeModal: closeModalWithAnimation,
+    closeDropdown: closeDropdownWithAnimation,
+    log,
+  });
+});
 
 // ===== TOAST NOTIFICATION (In-app, no native dialogs) =====
 

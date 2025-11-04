@@ -23,6 +23,7 @@ const SyncManager = require('./backend/sync/sync-manager');
 const GitHubOAuthHelper = require('./backend/github/github-oauth-helper');
 const GitHubStorageService = require('./backend/github/github-storage-service');
 const SmartBackupService = require('./backend/sync/smart-backup-service');
+const { queryUsageStatistics, invalidateUsageStatisticsCache } = require('./backend/data/usage-statistics');
 
 function createTimestampedBackup(filePath, reason = '') {
   try {
@@ -374,12 +375,14 @@ app.whenReady().then(async () => {
   
   if (newDbExists) {
     db = new DatabaseManager(app, dbSourcePath === syncManager.getInternalDataPath() ? null : dbSourcePath);
+    invalidateUsageStatisticsCache();
     useSQLite = true;
     log('DATABASE', 1, 'init', 'Using SQLite database');
   } else {
     // Check old location for backward compatibility
     log('DATABASE', 2, 'init', 'Initializing SQLite database');
     db = new DatabaseManager(app, dbSourcePath === syncManager.getInternalDataPath() ? null : dbSourcePath);
+    invalidateUsageStatisticsCache();
     useSQLite = true;
   }
 });
@@ -2425,6 +2428,7 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
     if (!useSQLite || !db) {
       log('DATABASE', 1, 'sessions:save', 'Initializing SQLite database');
       db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
       useSQLite = true;
     }
     
@@ -2448,12 +2452,43 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
         for (const session of data.sessions) {
           db.saveSession(session);
           
-          // Always perform full save from session.messages to ensure all messages are saved
-          if (session.messages) {
-            db.deleteMessagesForSession(session.id);
+          // Get existing messages to check which ones already exist
+          const existingMessages = db.getMessagesForSession(session.id);
+          const existingIndices = new Set(existingMessages.map(m => m.message_index));
+          
+          // Only save NEW messages or messages that were explicitly marked as new
+          if (session._newMessages && session._newMessages.length > 0) {
+            // Save only new messages (incremental save)
+            for (const [messageIndex, messageData] of session._newMessages) {
+              const [role, content, metadata = {}, createdAt = null] = messageData;
+              
+              // Check if message already exists
+              if (!existingIndices.has(messageIndex)) {
+                // New message - insert with provided createdAt or current time
+                db.addMessage(session.id, role, content, metadata, messageIndex, createdAt);
+              } else {
+                // Existing message - update using upsert (preserves created_at)
+                db.upsertMessage(session.id, role, content, metadata, messageIndex);
+              }
+            }
+          } else if (session.messages && !data.isIncremental) {
+            // Full save - but only insert messages that don't exist yet
+            let insertedCount = 0;
+            let skippedCount = 0;
             for (let i = 0; i < session.messages.length; i++) {
-              const [role, content, metadata = {}] = session.messages[i];
-              db.addMessage(session.id, role, content, metadata, i);
+              const [role, content, metadata = {}, createdAt = null] = session.messages[i];
+              
+              if (!existingIndices.has(i)) {
+                // Message doesn't exist yet - insert it
+                db.addMessage(session.id, role, content, metadata, i, createdAt);
+                insertedCount++;
+              } else {
+                skippedCount++;
+              }
+              // If message exists, skip it (don't overwrite timestamp)
+            }
+            if (insertedCount > 0 || skippedCount > 0) {
+              log('SAVE', 1, 'sessions:save', `Session ${session.id}: inserted ${insertedCount}, skipped ${skippedCount}`);
             }
           }
           
@@ -2469,10 +2504,11 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
           }
         }
       });
-      
+
+      invalidateUsageStatisticsCache();
       return true;
     }
-    
+
     throw new Error('SQLite database not available');
   }catch(e){
     log('save error', e);
@@ -2512,6 +2548,7 @@ ipcMain.handle('artifacts:save', async (_evt, artifacts) => {
     if (!useSQLite || !db) {
       log('DATABASE', 1, 'artifacts:save', 'Initializing SQLite database');
       db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
       useSQLite = true;
     }
     
@@ -2534,6 +2571,7 @@ ipcMain.handle('artifacts:save', async (_evt, artifacts) => {
           db.saveArtifact(artifact);
         }
       });
+      invalidateUsageStatisticsCache();
       return true;
     }
     
@@ -2599,6 +2637,7 @@ ipcMain.handle('projects:save', async (_evt, projects) => {
     if (!useSQLite || !db) {
       log('DATABASE', 1, 'projects:save', 'Initializing SQLite database');
       db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
       useSQLite = true;
     }
     
@@ -2641,6 +2680,7 @@ ipcMain.handle('projects:save', async (_evt, projects) => {
           }
         }
       });
+      invalidateUsageStatisticsCache();
       log('PROJECTS', 2, 'projects:save', 'Successfully saved all projects to SQLite');
       return true;
     }
@@ -2652,6 +2692,28 @@ ipcMain.handle('projects:save', async (_evt, projects) => {
       stack: e.stack
     });
     throw e;
+  }
+});
+
+ipcMain.handle('usage:fetchStats', async (_evt, filters = {}) => {
+  try {
+    if (!useSQLite || !db) {
+      log('USAGE_STATS', 1, 'usage:fetchStats', 'Initializing SQLite database for usage stats');
+      db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
+      useSQLite = true;
+    }
+
+    if (!useSQLite || !db) {
+      throw new Error('SQLite database not available');
+    }
+
+    return await queryUsageStatistics(db, filters);
+  } catch (error) {
+    log('USAGE_STATS', 4, 'usage:fetchStats', 'Failed to load usage statistics', {
+      error: error.message,
+    });
+    throw error;
   }
 });
 
@@ -3002,6 +3064,8 @@ function recordTokenUsage(reqId, stage, rawUsage, meta = {}) {
     provider: meta.provider || null,
     model: meta.model || null,
   });
+
+  invalidateUsageStatisticsCache();
 }
 
 function finalizeTokenUsage(reqId, event) {

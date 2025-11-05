@@ -23,6 +23,7 @@ import { debounce, throttle } from './utils/timing.mjs';
 import { scheduleDeferredRender, cancelDeferredRender } from './utils/deferred-render.mjs';
 import { createHighlightedCode } from './markdown/highlight.mjs';
 import { initializeUsageStatistics } from './usage/usage-statistics.mjs';
+import { initializeBenchmarkStatistics } from './usage/benchmark-statistics.mjs';
 
 let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",streamThrottling: "auto",language: "autodetect"},};
 let welcomeScreenStagedFiles = [];
@@ -16013,7 +16014,9 @@ function initializeApp() {
         log("UI", 2, "chat-update:TOKEN_USAGE", "Processing TOKEN_USAGE update", {
           messageIndex,
           sessionId: session.id,
-          data
+          data,
+          hasTokenSpeed: !!(data?.token_speed),
+          tokenSpeed: data?.token_speed
         });
 
         ensureTokenFields(session);
@@ -16052,7 +16055,9 @@ function initializeApp() {
             completion_tokens: completionTokens,
             total_tokens: totalTokens,
             breakdown,
-            cost: usageData.cost || null
+            cost: usageData.cost || null,
+            token_speed: usageData.token_speed || null,
+            response_time: usageData.response_time || null
           };
           messageEntry[2] = meta;
         }
@@ -16228,6 +16233,12 @@ function initializeApp() {
 document.addEventListener("DOMContentLoaded", initializeApp);
 document.addEventListener('DOMContentLoaded', () => {
   initializeUsageStatistics({
+    openModal: openModalWithAnimation,
+    closeModal: closeModalWithAnimation,
+    closeDropdown: closeDropdownWithAnimation,
+    log,
+  });
+  initializeBenchmarkStatistics({
     openModal: openModalWithAnimation,
     closeModal: closeModalWithAnimation,
     closeDropdown: closeDropdownWithAnimation,

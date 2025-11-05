@@ -32,19 +32,35 @@ class DatabaseManager {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL');
     this.db.pragma('foreign_keys = ON');
-    
+
+    // OPTIMIZATION: Prepared statement cache
+    this.stmtCache = new Map();
+
     this.initSchema();
-    
-    
+
+
     // Cache device ID once per DatabaseManager instance
     // This prevents thousands of repeated calls to getDeviceId()
     this._cachedDeviceId = getDeviceId(this.db);
-    
-    log('DATABASE', 1, 'constructor', 'Database initialized', { 
+
+    log('DATABASE', 1, 'constructor', 'Database initialized', {
       path: dbPath,
       isCloudDatabase: this.isCloudDatabase,
       deviceId: this._cachedDeviceId
     });
+  }
+
+  // OPTIMIZATION: Get or create prepared statement
+  getStmt(key, sqlFactory) {
+    if (!this.stmtCache.has(key)) {
+      this.stmtCache.set(key, this.db.prepare(sqlFactory()));
+    }
+    return this.stmtCache.get(key);
+  }
+
+  // Clear statement cache (call when schema changes)
+  clearStmtCache() {
+    this.stmtCache.clear();
   }
   
   initSchema() {
@@ -78,6 +94,10 @@ class DatabaseManager {
       CREATE INDEX IF NOT EXISTS idx_sessions_updated ON sessions(updated_at DESC);
       CREATE INDEX IF NOT EXISTS idx_sessions_type ON sessions(type);
       CREATE INDEX IF NOT EXISTS idx_sessions_favorite ON sessions(is_favorite);
+
+      -- OPTIMIZATION: Composite indexes for hot queries
+      CREATE INDEX IF NOT EXISTS idx_sessions_deleted_type_updated ON sessions(deleted, type, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_sessions_deleted_favorite ON sessions(deleted, is_favorite, updated_at DESC);
       
       CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,6 +133,9 @@ class DatabaseManager {
 
       CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, message_index);
       CREATE INDEX IF NOT EXISTS idx_messages_created_provider ON messages(created_at, provider);
+
+      -- OPTIMIZATION: Composite index for filtered queries
+      CREATE INDEX IF NOT EXISTS idx_messages_session_deleted ON messages(session_id, deleted, message_index);
       
       CREATE TABLE IF NOT EXISTS artifacts (
         id TEXT PRIMARY KEY,
@@ -228,26 +251,37 @@ class DatabaseManager {
     // Check if 'deleted' column exists (added in migration V2)
     const columns = this.db.prepare(`PRAGMA table_info(sessions)`).all();
     const hasDeletedColumn = columns.some(col => col.name === 'deleted');
-    
+
     if (hasDeletedColumn) {
-      return this.db.prepare(`
-        SELECT * FROM sessions 
+      // OPTIMIZATION: Use prepared statement cache with specific columns
+      const stmt = this.getStmt('getAllSessions', () => `
+        SELECT id, name, type, created_at, updated_at, last_updated, project_id,
+               is_project, is_favorite, persona_name, persona_work, persona_prefs,
+               tokens_used, metadata
+        FROM sessions
         WHERE deleted = 0
         ORDER BY updated_at DESC
-      `).all();
+      `);
+      return stmt.all();
     } else {
       // Fallback for old schema (no deleted column)
-      return this.db.prepare(`
-        SELECT * FROM sessions 
+      const stmt = this.getStmt('getAllSessionsLegacy', () => `
+        SELECT id, name, type, created_at, updated_at, last_updated, project_id,
+               is_project, is_favorite, persona_name, persona_work, persona_prefs,
+               tokens_used, metadata
+        FROM sessions
         ORDER BY updated_at DESC
-      `).all();
+      `);
+      return stmt.all();
     }
   }
-  
+
   getSession(sessionId) {
-    return this.db.prepare(`
+    // OPTIMIZATION: Use prepared statement cache
+    const stmt = this.getStmt('getSession', () => `
       SELECT * FROM sessions WHERE id = ?
-    `).get(sessionId);
+    `);
+    return stmt.get(sessionId);
   }
   
   saveSession(session) {
@@ -319,44 +353,58 @@ class DatabaseManager {
   }
   
   getMessages(sessionId) {
-    return this.db.prepare(`
-      SELECT * FROM messages 
+    // OPTIMIZATION: Use prepared statement cache
+    const stmt = this.getStmt('getMessages', () => `
+      SELECT * FROM messages
       WHERE session_id = ? AND deleted = 0
       ORDER BY message_index ASC
-    `).all(sessionId);
+    `);
+    return stmt.all(sessionId);
   }
-  
+
   // UPSERT message (UPDATE if exists, INSERT if not)
+  // OPTIMIZATION: Fixed to use proper UPSERT instead of DELETE+INSERT
   upsertMessage(sessionId, role, content, metadata, messageIndex) {
     // Use cached device ID (set once in constructor)
     const deviceId = this._cachedDeviceId;
     const now = getCurrentTimestamp();
-    
+
     // Check if message already exists and get its original created_at
-    const existing = this.db.prepare(`
-      SELECT created_at FROM messages 
+    const checkStmt = this.getStmt('checkMessage', () => `
+      SELECT id, created_at FROM messages
       WHERE session_id = ? AND message_index = ?
-    `).get(sessionId, messageIndex);
-    
+    `);
+    const existing = checkStmt.get(sessionId, messageIndex);
+
     // Preserve original created_at if message exists, otherwise use now
     const createdAt = existing ? existing.created_at : now;
-    
-    // First, try to delete existing message at this index
-    this.db.prepare(`
-      DELETE FROM messages 
-      WHERE session_id = ? AND message_index = ?
-    `).run(sessionId, messageIndex);
-    
-    // Then insert the new message
-    const stmt = this.db.prepare(`
-      INSERT INTO messages 
-      (session_id, role, content, message_index, created_at, 
-      model_id, model_label, provider, base_url, think_mode, 
+
+    // OPTIMIZATION: Use proper UPSERT with ON CONFLICT
+    const stmt = this.getStmt('upsertMessage', () => `
+      INSERT INTO messages
+      (session_id, role, content, message_index, created_at,
+      model_id, model_label, provider, base_url, think_mode,
       think_content, thinking_update, web_search_enabled, web_search_data, files, metadata,
       deleted, device_id, synced_at, sequence, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        role = excluded.role,
+        content = excluded.content,
+        model_id = excluded.model_id,
+        model_label = excluded.model_label,
+        provider = excluded.provider,
+        base_url = excluded.base_url,
+        think_mode = excluded.think_mode,
+        think_content = excluded.think_content,
+        thinking_update = excluded.thinking_update,
+        web_search_enabled = excluded.web_search_enabled,
+        web_search_data = excluded.web_search_data,
+        files = excluded.files,
+        metadata = excluded.metadata,
+        updated_at = excluded.updated_at
+      WHERE id = ?
     `);
-    
+
     return stmt.run(
       sessionId,
       role,
@@ -378,7 +426,8 @@ class DatabaseManager {
       deviceId,     // device_id
       null,         // synced_at (null until synced)
       messageIndex, // sequence (same as message_index initially)
-      now           // updated_at
+      now,          // updated_at
+      existing ? existing.id : null  // id for ON CONFLICT
     );
   }
   

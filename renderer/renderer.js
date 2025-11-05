@@ -31,6 +31,18 @@ let projectMessageStagedFiles = [];
 const PROJECT_DETAIL_RENDER_KEY = 'project-detail:render';
 let current = null;
 let collapsed = false;
+
+// OPTIMIZATION: Render scheduling to batch updates
+let renderScheduled = false;
+function scheduleRender(renderFn) {
+  if (!renderScheduled) {
+    renderScheduled = true;
+    queueMicrotask(() => {
+      renderFn();
+      renderScheduled = false;
+    });
+  }
+}
 let loadedSessionCount = 0;
 let loadedChatPageCount = 0;
 let loadedProjectSessionCount = 0;
@@ -4009,9 +4021,11 @@ function setupChatsPageListeners() {
   });
 
   // Listener untuk search input
+  // OPTIMIZATION: Debounce search to avoid excessive re-renders
   const searchInput = document.getElementById("chats-search");
   if (searchInput && !searchInput._listenerAttached) {
-    searchInput.addEventListener("input", () => renderChatsPage());
+    const debouncedSearch = debounce(() => renderChatsPage(), 150);
+    searchInput.addEventListener("input", debouncedSearch);
     searchInput._listenerAttached = true;
   }
 }

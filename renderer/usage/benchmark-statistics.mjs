@@ -86,6 +86,8 @@ function renderSummary(summary) {
  */
 function renderLegend(models) {
   const legendEl = document.getElementById('benchmark-legend');
+  if (!legendEl) return; // Guard against null
+
   legendEl.innerHTML = '';
 
   const sortedModels = [...models].sort((a, b) => a.localeCompare(b));
@@ -107,6 +109,11 @@ function renderLegend(models) {
  */
 function renderChart(elements, entries, range, modelFilter = 'all') {
   const { chartContainer, canvas, yAxisContainer, xAxisContainer, legendContainer } = elements;
+
+  // Guard against null elements (modal might be closed)
+  if (!chartContainer || !canvas || !yAxisContainer || !xAxisContainer) {
+    return;
+  }
 
   // Group entries by date
   const dateMap = new Map();
@@ -306,6 +313,8 @@ function formatDateLabel(dateStr) {
  */
 function updateProviderOptions(providers, currentProvider) {
   const select = document.getElementById('benchmark-filter-provider');
+  if (!select) return; // Guard against null
+
   const currentValue = currentProvider || select.value;
 
   select.innerHTML = '<option value="all">All providers</option>';
@@ -328,7 +337,10 @@ function updateProviderOptions(providers, currentProvider) {
  */
 function updateModelOptions(models, modelToProvider, currentProvider, currentModel) {
   const select = document.getElementById('benchmark-filter-model');
+  if (!select) return; // Guard against null
+
   const group = select.parentElement;
+  if (!group) return; // Guard against null
 
   if (currentProvider === 'all') {
     group.style.display = 'none';
@@ -393,6 +405,11 @@ async function fetchAndRender(state) {
     const summaryEl = document.getElementById('benchmark-summary');
     const chartContainer = document.getElementById('benchmark-chart-container');
 
+    // Guard against null (modal might be closed)
+    if (!summaryEl || !chartContainer) {
+      return;
+    }
+
     summaryEl.classList.add('hidden');
     chartContainer.classList.add('hidden');
 
@@ -416,6 +433,11 @@ async function fetchAndRender(state) {
     }
 
     const data = await window.api.benchmark.fetchStats(filters);
+
+    // Check again after async operation (modal might be closed)
+    if (!document.getElementById('benchmark-chart-container')) {
+      return;
+    }
 
     // Debug logging
     log('Benchmark data received:', {
@@ -467,6 +489,12 @@ async function fetchAndRender(state) {
   } catch (error) {
     log('Error fetching benchmark data:', error);
     const chartContainer = document.getElementById('benchmark-chart-container');
+
+    // Guard against null (modal might be closed during error)
+    if (!chartContainer) {
+      return;
+    }
+
     chartContainer.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--error);">Failed to load benchmark data: ${error.message}</div>`;
     chartContainer.classList.remove('hidden');
   }

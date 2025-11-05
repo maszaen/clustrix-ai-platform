@@ -14993,10 +14993,62 @@ function setupEventListeners() {
     });
   }
 
+  // License key management
+  function getLicenseKey() {
+    return localStorage.getItem('clustrix_license_key') || '';
+  }
+
+  function setLicenseKey(key) {
+    localStorage.setItem('clustrix_license_key', key);
+  }
+
+  async function promptForLicenseKey() {
+    const key = prompt(
+      'Please enter your license key to check for updates:\n\n' +
+      'If you don\'t have a license key, please contact support.',
+      getLicenseKey()
+    );
+
+    if (!key) {
+      return null;
+    }
+
+    // Validate the license key
+    updateStatusMessage.textContent = 'Validating license key...';
+    try {
+      const result = await api.app.validateLicense(key.trim());
+      if (result.success && result.valid) {
+        setLicenseKey(key.trim());
+        await api.app.setLicenseKey(key.trim());
+        log("APP_VERSION", 1, "promptForLicenseKey", "License key validated successfully");
+        return key.trim();
+      } else {
+        alert('Invalid license key. Please check your key and try again.');
+        return null;
+      }
+    } catch (e) {
+      alert('Failed to validate license key: ' + e.message);
+      return null;
+    }
+  }
+
   // Check/Download/Install button handler
   if (checkUpdateBtn) {
     checkUpdateBtn.addEventListener('click', async () => {
       if (updateState === 'idle' || updateState === 'checked') {
+        // Check if license key exists
+        let licenseKey = getLicenseKey();
+        if (!licenseKey) {
+          licenseKey = await promptForLicenseKey();
+          if (!licenseKey) {
+            updateStatusMessage.textContent = 'License key required to check for updates';
+            return;
+          }
+        } else {
+          // Set license key for this session
+          await api.app.setLicenseKey(licenseKey);
+        }
+
         // Check for updates
         updateState = 'checking';
         updateBtnText.textContent = 'Checking...';
@@ -15012,7 +15064,15 @@ function setupEventListeners() {
           }
         } catch (e) {
           log("APP_VERSION", 3, "checkForUpdates", "Error checking for updates", { error: e.message });
-          updateStatusMessage.textContent = `Error: ${e.message}`;
+
+          // If license error, clear stored license and prompt again
+          if (e.message.includes('license') || e.message.includes('License')) {
+            localStorage.removeItem('clustrix_license_key');
+            updateStatusMessage.textContent = 'License validation failed. Please try again.';
+          } else {
+            updateStatusMessage.textContent = `Error: ${e.message}`;
+          }
+
           updateBtnText.textContent = 'Retry';
           checkUpdateBtn.disabled = false;
           updateState = 'idle';

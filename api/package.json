@@ -1,0 +1,9 @@
+{
+  "name": "clustrix-update-api",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Vercel serverless API for Clustrix auto-updater",
+  "dependencies": {
+    "mongodb": "^6.3.0"
+  }
+}

@@ -1,7 +1,7 @@
 require('./env.js');
 
 const { app, BrowserWindow, ipcMain, dialog, session, protocol, net, shell, Tray, Menu } = require('electron');
-const { autoUpdater } = require('electron-updater');
+const { CustomUpdater } = require('./utils/custom-updater');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
@@ -1973,39 +1973,32 @@ ipcMain.handle('app:restart', async () => {
 });
 
 /**
- * Auto-updater configuration
+ * Custom Auto-updater configuration
  */
-autoUpdater.logger = {
-  info: (msg) => log('AUTO_UPDATER', 1, 'info', msg),
-  warn: (msg) => log('AUTO_UPDATER', 2, 'warn', msg),
-  error: (msg) => log('AUTO_UPDATER', 3, 'error', msg),
-};
-
-// Configure auto-updater
-autoUpdater.autoDownload = false; // Manual download trigger
-autoUpdater.autoInstallOnAppQuit = false; // Manual install trigger
+const customUpdater = new CustomUpdater(process.env.UPDATE_API_URL || 'https://your-app.vercel.app/api');
 
 // Auto-updater event handlers
-autoUpdater.on('checking-for-update', () => {
-  log('AUTO_UPDATER', 1, 'checking-for-update', 'Checking for updates...');
+customUpdater.on('checking-for-update', () => {
+  log('CUSTOM_UPDATER', 1, 'checking-for-update', 'Checking for updates...');
   if (mainWindow) {
     mainWindow.webContents.send('updater:checking-for-update');
   }
 });
 
-autoUpdater.on('update-available', (info) => {
-  log('AUTO_UPDATER', 1, 'update-available', 'Update available', { version: info.version });
+customUpdater.on('update-available', (info) => {
+  log('CUSTOM_UPDATER', 1, 'update-available', 'Update available', { version: info.version });
   if (mainWindow) {
     mainWindow.webContents.send('updater:update-available', {
       version: info.version,
-      releaseDate: info.releaseDate,
       releaseNotes: info.releaseNotes,
+      size: info.size,
+      publishedAt: info.publishedAt,
     });
   }
 });
 
-autoUpdater.on('update-not-available', (info) => {
-  log('AUTO_UPDATER', 1, 'update-not-available', 'No updates available', { version: info.version });
+customUpdater.on('update-not-available', (info) => {
+  log('CUSTOM_UPDATER', 1, 'update-not-available', 'No updates available', { version: info.version });
   if (mainWindow) {
     mainWindow.webContents.send('updater:update-not-available', {
       version: info.version,
@@ -2013,8 +2006,8 @@ autoUpdater.on('update-not-available', (info) => {
   }
 });
 
-autoUpdater.on('error', (error) => {
-  log('AUTO_UPDATER', 3, 'error', 'Update error', { error: error.message });
+customUpdater.on('error', (error) => {
+  log('CUSTOM_UPDATER', 3, 'error', 'Update error', { error: error.message });
   if (mainWindow) {
     mainWindow.webContents.send('updater:error', {
       message: error.message,
@@ -2022,8 +2015,8 @@ autoUpdater.on('error', (error) => {
   }
 });
 
-autoUpdater.on('download-progress', (progressObj) => {
-  log('AUTO_UPDATER', 1, 'download-progress', 'Downloading update', {
+customUpdater.on('download-progress', (progressObj) => {
+  log('CUSTOM_UPDATER', 1, 'download-progress', 'Downloading update', {
     percent: progressObj.percent.toFixed(2),
     transferred: progressObj.transferred,
     total: progressObj.total,
@@ -2038,8 +2031,8 @@ autoUpdater.on('download-progress', (progressObj) => {
   }
 });
 
-autoUpdater.on('update-downloaded', (info) => {
-  log('AUTO_UPDATER', 1, 'update-downloaded', 'Update downloaded', { version: info.version });
+customUpdater.on('update-downloaded', (info) => {
+  log('CUSTOM_UPDATER', 1, 'update-downloaded', 'Update downloaded', { version: info.version });
   if (mainWindow) {
     mainWindow.webContents.send('updater:update-downloaded', {
       version: info.version,
@@ -2063,18 +2056,46 @@ ipcMain.handle('app:getVersion', async () => {
 });
 
 /**
+ * Set license key for updates
+ */
+ipcMain.handle('app:setLicenseKey', async (event, licenseKey) => {
+  try {
+    customUpdater.setLicenseKey(licenseKey);
+    log('CUSTOM_UPDATER', 1, 'setLicenseKey', 'License key set');
+    return { success: true };
+  } catch (e) {
+    log('CUSTOM_UPDATER', 3, 'setLicenseKey', 'Failed to set license key', { error: e.message });
+    return { success: false, error: e.message };
+  }
+});
+
+/**
+ * Validate license key
+ */
+ipcMain.handle('app:validateLicense', async (event, licenseKey) => {
+  try {
+    log('CUSTOM_UPDATER', 1, 'validateLicense', 'Validating license key');
+    const result = await customUpdater.validateLicense(licenseKey);
+    return result;
+  } catch (e) {
+    log('CUSTOM_UPDATER', 3, 'validateLicense', 'Failed to validate license', { error: e.message });
+    return { success: false, error: e.message };
+  }
+});
+
+/**
  * Check for updates
  */
 ipcMain.handle('app:checkForUpdates', async () => {
   try {
-    log('AUTO_UPDATER', 1, 'checkForUpdates', 'Checking for updates manually');
-    const result = await autoUpdater.checkForUpdates();
+    log('CUSTOM_UPDATER', 1, 'checkForUpdates', 'Checking for updates manually');
+    const result = await customUpdater.checkForUpdates();
     return {
       success: true,
       updateInfo: result?.updateInfo,
     };
   } catch (e) {
-    log('AUTO_UPDATER', 3, 'checkForUpdates', 'Failed to check for updates', { error: e.message });
+    log('CUSTOM_UPDATER', 3, 'checkForUpdates', 'Failed to check for updates', { error: e.message });
     return { success: false, error: e.message };
   }
 });
@@ -2084,11 +2105,11 @@ ipcMain.handle('app:checkForUpdates', async () => {
  */
 ipcMain.handle('app:downloadUpdate', async () => {
   try {
-    log('AUTO_UPDATER', 1, 'downloadUpdate', 'Starting update download');
-    await autoUpdater.downloadUpdate();
+    log('CUSTOM_UPDATER', 1, 'downloadUpdate', 'Starting update download');
+    await customUpdater.downloadUpdate();
     return { success: true };
   } catch (e) {
-    log('AUTO_UPDATER', 3, 'downloadUpdate', 'Failed to download update', { error: e.message });
+    log('CUSTOM_UPDATER', 3, 'downloadUpdate', 'Failed to download update', { error: e.message });
     return { success: false, error: e.message };
   }
 });
@@ -2098,12 +2119,12 @@ ipcMain.handle('app:downloadUpdate', async () => {
  */
 ipcMain.handle('app:installUpdate', async () => {
   try {
-    log('AUTO_UPDATER', 1, 'installUpdate', 'Installing update and restarting');
+    log('CUSTOM_UPDATER', 1, 'installUpdate', 'Installing update and restarting');
     // This will quit the app and install the update
-    autoUpdater.quitAndInstall(false, true);
+    customUpdater.quitAndInstall(false, true);
     return { success: true };
   } catch (e) {
-    log('AUTO_UPDATER', 3, 'installUpdate', 'Failed to install update', { error: e.message });
+    log('CUSTOM_UPDATER', 3, 'installUpdate', 'Failed to install update', { error: e.message });
     return { success: false, error: e.message };
   }
 });

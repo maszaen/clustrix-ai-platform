@@ -284,6 +284,8 @@ contextBridge.exposeInMainWorld('api', {
     notifyFinalizingStart: () => ipcRenderer.send('stream:finalizing-start'),
     notifyFinalizingComplete: () => ipcRenderer.send('stream:finalizing-complete'),
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
+    setLicenseKey: (licenseKey) => ipcRenderer.invoke('app:setLicenseKey', licenseKey),
+    validateLicense: (licenseKey) => ipcRenderer.invoke('app:validateLicense', licenseKey),
     checkForUpdates: () => ipcRenderer.invoke('app:checkForUpdates'),
     downloadUpdate: () => ipcRenderer.invoke('app:downloadUpdate'),
     installUpdate: () => ipcRenderer.invoke('app:installUpdate'),

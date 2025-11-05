@@ -123,9 +123,22 @@ function renderChart(elements, entries, range, modelFilter = 'all') {
   // Get all dates in range
   const dates = Array.from(dateMap.keys()).sort();
   if (dates.length === 0) {
-    chartContainer.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--fg-muted);">No benchmark data available for the selected filters.</div>';
+    // Show no data message without destroying chart structure
+    const noDataEl = document.getElementById('benchmark-no-data');
+    if (noDataEl) {
+      noDataEl.innerHTML = '<div>No benchmark data available for the selected filters.</div>';
+      noDataEl.classList.remove('hidden');
+    }
+    chartContainer.classList.add('hidden');
     return;
   }
+
+  // Hide no data message and show chart
+  const noDataEl = document.getElementById('benchmark-no-data');
+  if (noDataEl) {
+    noDataEl.classList.add('hidden');
+  }
+  chartContainer.classList.remove('hidden');
 
   // Calculate max speed for Y-axis
   let maxSpeed = 0;
@@ -428,18 +441,26 @@ async function fetchAndRender(state) {
 
     // Show message if no data available
     if (data.summary.totalMessages === 0) {
-      chartContainer.innerHTML = `
-        <div style="padding: 40px; text-align: center; color: var(--fg-muted);">
+      const noDataEl = document.getElementById('benchmark-no-data');
+      if (noDataEl) {
+        noDataEl.innerHTML = `
           <div style="font-size: 18px; margin-bottom: 12px;">No benchmark data available</div>
           <div style="font-size: 14px;">
             ${data.skippedCount > 0
               ? `Found ${data.skippedCount} messages without token speed data. Send new AI messages to collect benchmark data.`
               : 'Send some AI messages to start collecting token speed data.'}
           </div>
-        </div>
-      `;
-      chartContainer.classList.remove('hidden');
+        `;
+        noDataEl.classList.remove('hidden');
+      }
+      chartContainer.classList.add('hidden');
       return;
+    }
+
+    // Hide no data message
+    const noDataEl = document.getElementById('benchmark-no-data');
+    if (noDataEl) {
+      noDataEl.classList.add('hidden');
     }
 
     // Update filter dropdowns
@@ -467,8 +488,15 @@ async function fetchAndRender(state) {
   } catch (error) {
     log('Error fetching benchmark data:', error);
     const chartContainer = document.getElementById('benchmark-chart-container');
-    chartContainer.innerHTML = `<div style="padding: 40px; text-align: center; color: var(--error);">Failed to load benchmark data: ${error.message}</div>`;
-    chartContainer.classList.remove('hidden');
+    const noDataEl = document.getElementById('benchmark-no-data');
+
+    if (noDataEl) {
+      noDataEl.innerHTML = `<div style="color: var(--error);">Failed to load benchmark data: ${error.message}</div>`;
+      noDataEl.classList.remove('hidden');
+    }
+    if (chartContainer) {
+      chartContainer.classList.add('hidden');
+    }
   }
 }
 

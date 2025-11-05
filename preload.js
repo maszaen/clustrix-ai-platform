@@ -149,7 +149,7 @@ contextBridge.exposeInMainWorld('api', {
     createState: createThinkingParserState
   },
   on: (channel, callback) => {
-    const validChannels = ['chat-update', 'stats:update', 'search:status', 'chat:think-', 'monitoring:update', 'parser-log', 'updater:'];
+    const validChannels = ['chat-update', 'stats:update', 'search:status', 'chat:think-', 'monitoring:update', 'parser-log'];
     if (validChannels.some(valid => channel.startsWith(valid))) {
       ipcRenderer.on(channel, (event, ...args) => callback(...args));
     }
@@ -283,10 +283,6 @@ contextBridge.exposeInMainWorld('api', {
     getProfilePhoto: () => ipcRenderer.invoke('app:getProfilePhoto'),
     notifyFinalizingStart: () => ipcRenderer.send('stream:finalizing-start'),
     notifyFinalizingComplete: () => ipcRenderer.send('stream:finalizing-complete'),
-    getVersion: () => ipcRenderer.invoke('app:getVersion'),
-    checkForUpdates: () => ipcRenderer.invoke('app:checkForUpdates'),
-    downloadUpdate: () => ipcRenderer.invoke('app:downloadUpdate'),
-    installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
   },
   monitoring: {
     getMetrics: () => ipcRenderer.invoke('monitoring:getMetrics'),

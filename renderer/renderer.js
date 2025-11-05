@@ -267,7 +267,8 @@ function savePageState(pageState, sessionId = null) {
       delete state.settings.currentSession;
     }
 
-    save();
+    // PERFORMANCE: Use debounced save - no need for immediate save on page state change
+    debouncedSave();
 
   } catch (error) {
     log("PageState", 2, "savePageState", "Failed to save page state", {
@@ -6581,7 +6582,9 @@ async function handleProjectSend() {
   if (s.name === null) {
     generateAndSetTitle(s);
   }
-  await save();
+  // PERFORMANCE: No need to save here - will be saved at finalization
+  // Just mark session dirty for tracking
+  markSessionDirty(s.id);
   renderSessions();
 
   scheduleThinkingText(aiNode);
@@ -10776,6 +10779,12 @@ function clearDirtyTracking() {
 
 async function save() {
   try {
+    // PERFORMANCE: Skip save if streaming in current session (will be saved at finalization)
+    if (current && streamManager.isStreamingInSession(current)) {
+      log("SAVE", 1, "save", "Skipped save - streaming in progress, will save at finalization");
+      return;
+    }
+
     // PERFORMANCE: Incremental save - check if we have dirty sessions
     let dataToSave;
     const shouldUseIncremental = dirtySessionIds.size > 0 &&
@@ -10833,8 +10842,64 @@ async function save() {
   }
 }
 
-// Debounced save for frequent operations (500ms delay)
-const debouncedSave = debounce(save, 500);
+// Debounced save for frequent operations (2000ms delay to reduce spam)
+const debouncedSave = debounce(save, 2000);
+
+// PERFORMANCE: Stream-specific save - bypasses streaming check, only for finalization
+async function streamSave() {
+  try {
+    // PERFORMANCE: Always use incremental save for stream finalization
+    let dataToSave;
+    const shouldUseIncremental = dirtySessionIds.size > 0 &&
+                                  dirtySessionIds.size < state.sessions.length &&
+                                  !BROWSER_MODE;
+
+    if (shouldUseIncremental) {
+      const dirtySessions = state.sessions.filter(s => dirtySessionIds.has(s.id));
+      dataToSave = {
+        sessions: dirtySessions,
+        settings: state.settings,
+        isIncremental: true,
+        dirtyIds: Array.from(dirtySessionIds)
+      };
+      log("SAVE", 1, "streamSave", `Stream finalize: Incremental save ${dirtySessions.length}/${state.sessions.length} sessions`, {
+        dirtyIds: Array.from(dirtySessionIds)
+      });
+    } else {
+      dataToSave = { sessions: state.sessions, settings: state.settings };
+      log("SAVE", 1, "streamSave", `Stream finalize: Full save ${state.sessions.length} sessions`);
+    }
+
+    if (BROWSER_MODE) {
+      localStorage.setItem("clustrix-data", JSON.stringify({
+        sessions: state.sessions,
+        settings: state.settings
+      }));
+    } else {
+      await window.api.sessions.save(dataToSave);
+    }
+    
+    clearDirtyTracking();
+    
+    log("APP", 2, "streamSave", "Stream finalization save completed", {
+      wasIncremental: shouldUseIncremental
+    });
+
+    // Auto-cache after save
+    if (current && current.id) {
+      const chatLog = domCache.getChatLog();
+      if (chatLog && chatLog.innerHTML.trim()) {
+        const scroller = getChatScroller();
+        const scrollPos = scroller ? scroller.scrollTop : 0;
+        cacheSession(current.id, chatLog.innerHTML, scrollPos, current._lazyState);
+        log("CACHE", 1, "streamSave", "Auto-cached current session after stream save");
+      }
+    }
+  } catch (e) {
+    console.error("Stream save failed:", e);
+    log("APP", 4, "streamSave", "Failed to save data.", { error: e });
+  }
+}
 
 function updateInputState() {
   const isStreaming = streamManager.isStreamingInSession(current);
@@ -11001,7 +11066,10 @@ async function generateAndSetTitle(session) {
     const finalTitle = isDebugSession ? `[DG] ${title}` : title;
     session.name = finalTitle.slice(0, 70);
   }
-  await save();
+  
+  // PERFORMANCE: Use debounced save for title updates
+  markSessionDirty(session.id);
+  debouncedSave();
 
   if (session === current) {
     updateChatHeader({ animate: true });
@@ -11849,14 +11917,17 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         updateChatHeader?.();
       } catch {}
     
-      // Cancel any pending debounced saves before immediate save
-      try {
-        debouncedSave?.cancel?.();
-      } catch {}
+      // PERFORMANCE: Mark session as dirty before save
+      if (session && session.id) {
+        markSessionDirty(session.id);
+      }
     
+      // PERFORMANCE: Use streamSave for immediate finalization
       try {
-        await save?.();
-      } catch {}
+        await streamSave?.();
+      } catch (saveErr) {
+        log("FINALIZE", 3, "finalize", "Failed to save after finalization", { error: saveErr });
+      }
     
       // Auto-cache session after streaming completes for instant restore
       // CRITICAL: Only cache if this session is currently active to prevent caching wrong content
@@ -12444,7 +12515,11 @@ async function createNewSession(initialMessages = [], options = {}) {
   };
 
   state.sessions.unshift(s);
-  await save();
+  
+  // PERFORMANCE: Mark as dirty and use debounced save
+  markSessionDirty(s.id);
+  debouncedSave();
+  
   log("SESSION", 2, "createNewSession", "New session object created.", {
     sessionId: s.id,
     type: s.type,
@@ -12555,7 +12630,9 @@ async function send() {
   if (current.name === null) {
     generateAndSetTitle(current);
   }
-  await save();
+  
+  // PERFORMANCE: No need to save here - will be saved at finalization
+  markSessionDirty(current.id);
   renderSessions();
 
   scheduleThinkingText(aiNode);
@@ -12660,7 +12737,8 @@ async function sendFromWelcome() {
   }, 50);
 
   generateAndSetTitle(s);
-  await save();
+  // PERFORMANCE: Mark dirty and debounce save
+  markSessionDirty(s.id);
   renderSessions();
 
   scheduleThinkingText(aiNode);
@@ -12679,7 +12757,9 @@ async function regenerateFromIndex(aiIndex) {
   current.messages.length = aiIndex;
   current.last_updated = nowISO();
 
-  await save();
+  // PERFORMANCE: Mark dirty and debounce save
+  markSessionDirty(current.id);
+  debouncedSave();
 
   state.sessions.sort(
     (a, b) =>
@@ -12781,7 +12861,10 @@ async function regenerateFromCancelled(targetButton) {
   msgs.push({ role: "user", content: promptContent });
 
   current.messages[messageIndex] = ["ai", "", modelInfo];
-  await save();
+  
+  // PERFORMANCE: Mark dirty and debounce save
+  markSessionDirty(current.id);
+  debouncedSave();
 
   const newNode = addMessage("ai", "", { final: false, index: messageIndex });
   newNode.dataset.index = String(messageIndex);
@@ -12822,8 +12905,10 @@ async function regenerateFromIncomplete(targetButton) {
   msgs.push({ role: "user", content: promptContent });
 
   current.messages[messageIndex] = ["ai", "", modelInfo];
-  await save();
-
+  
+  // PERFORMANCE: Mark dirty and debounce save
+  markSessionDirty(current.id);
+  debouncedSave();
   const newNode = addMessage("ai", "", { final: false, index: messageIndex });
   newNode.dataset.index = String(messageIndex);
 
@@ -14991,7 +15076,7 @@ function setupEventListeners() {
       showProjects,
     });
     state.settings.showProjects = showProjects;
-    await save();
+    debouncedSave(); // PERFORMANCE: Use debounced save
     renderSessions(); // Re-render sessions to reflect the new settings
   });
 
@@ -15001,7 +15086,7 @@ function setupEventListeners() {
       showStarred,
     });
     state.settings.showStarred = showStarred;
-    await save();
+    debouncedSave(); // PERFORMANCE: Use debounced save
     renderSessions(); // Re-render sessions to reflect the new settings
   });
 
@@ -15031,7 +15116,7 @@ function setupEventListeners() {
     state.settings.persona = persona;
     state.settings.streamThrottling = streamThrottling;
     state.settings.language = language;
-    await save();
+    debouncedSave(); // PERFORMANCE: Use debounced save
     closeModalWithAnimation($("#settings-modal"));
   });
 
@@ -16120,7 +16205,8 @@ function initializeApp() {
         session._newMessages.push([messageIndex, session.messages[messageIndex]]);
 
         updateTokensUI(session);
-        debouncedSave();
+        // PERFORMANCE: Use streamSave for finalization, not debouncedSave
+        streamSave();
 
         if (current && session.id === current.id) {
           const node = bubbleNode;
@@ -16222,7 +16308,8 @@ function initializeApp() {
                 
                 // Update UI
                 finalizeThinkingUI(bubbleNode, duration);
-                debouncedSave();
+                // PERFORMANCE: Don't save during stream, only at finalization
+                // Save will be triggered by FINALIZE event
             }
         } catch (e) {
             console.error('Error handling THINKING_TIME update:', e);

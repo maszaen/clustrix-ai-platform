@@ -2461,12 +2461,13 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
           if (session._newMessages && session._newMessages.length > 0) {
             // Save only new messages (incremental save)
             for (const [messageIndex, messageData] of session._newMessages) {
-              const [role, content, metadata = {}, createdAt = null] = messageData;
+              // messageData is ["role", "content", {metadata}]
+              const [role, content, metadata = {}] = messageData;
               
               // Check if message already exists
               if (!existingIndices.has(messageIndex)) {
-                // New message - insert with provided createdAt or current time
-                db.addMessage(session.id, role, content, metadata, messageIndex, createdAt);
+                // New message - insert (created_at will be set by addMessage)
+                db.addMessage(session.id, role, content, metadata, messageIndex, null);
               } else {
                 // Existing message - update using upsert (preserves created_at)
                 db.upsertMessage(session.id, role, content, metadata, messageIndex);

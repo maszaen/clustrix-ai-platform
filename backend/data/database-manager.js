@@ -409,46 +409,34 @@ class DatabaseManager {
   }
 
   // UPSERT message (UPDATE if exists, INSERT if not)
-  // OPTIMIZATION: Fixed to use proper UPSERT instead of DELETE+INSERT
   upsertMessage(sessionId, role, content, metadata, messageIndex) {
     // Use cached device ID (set once in constructor)
     const deviceId = this._cachedDeviceId;
     const now = getCurrentTimestamp();
 
     // Check if message already exists and get its original created_at
-    const checkStmt = this.getStmt('checkMessage', () => `
-      SELECT id, created_at FROM messages
+    const existing = this.db.prepare(`
+      SELECT created_at FROM messages
       WHERE session_id = ? AND message_index = ?
-    `);
-    const existing = checkStmt.get(sessionId, messageIndex);
+    `).get(sessionId, messageIndex);
 
     // Preserve original created_at if message exists, otherwise use now
     const createdAt = existing ? existing.created_at : now;
 
-    // OPTIMIZATION: Use proper UPSERT with ON CONFLICT
-    const stmt = this.getStmt('upsertMessage', () => `
+    // First, try to delete existing message at this index
+    this.db.prepare(`
+      DELETE FROM messages
+      WHERE session_id = ? AND message_index = ?
+    `).run(sessionId, messageIndex);
+    
+    // Then insert the new message
+    const stmt = this.db.prepare(`
       INSERT INTO messages
       (session_id, role, content, message_index, created_at,
       model_id, model_label, provider, base_url, think_mode,
       think_content, thinking_update, web_search_enabled, web_search_data, files, metadata,
       deleted, device_id, synced_at, sequence, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        role = excluded.role,
-        content = excluded.content,
-        model_id = excluded.model_id,
-        model_label = excluded.model_label,
-        provider = excluded.provider,
-        base_url = excluded.base_url,
-        think_mode = excluded.think_mode,
-        think_content = excluded.think_content,
-        thinking_update = excluded.thinking_update,
-        web_search_enabled = excluded.web_search_enabled,
-        web_search_data = excluded.web_search_data,
-        files = excluded.files,
-        metadata = excluded.metadata,
-        updated_at = excluded.updated_at
-      WHERE id = ?
     `);
 
     return stmt.run(
@@ -472,8 +460,7 @@ class DatabaseManager {
       deviceId,     // device_id
       null,         // synced_at (null until synced)
       messageIndex, // sequence (same as message_index initially)
-      now,          // updated_at
-      existing ? existing.id : null  // id for ON CONFLICT
+      now           // updated_at
     );
   }
   

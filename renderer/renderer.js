@@ -43,6 +43,32 @@ function scheduleRender(renderFn) {
     });
   }
 }
+
+// OPTIMIZATION: DOM Update Batching
+class DOMBatchUpdater {
+  constructor() {
+    this.updates = [];
+    this.scheduled = false;
+  }
+
+  add(updateFn) {
+    this.updates.push(updateFn);
+    if (!this.scheduled) {
+      this.scheduled = true;
+      requestAnimationFrame(() => this.flush());
+    }
+  }
+
+  flush() {
+    // Apply all updates in a single batch
+    this.updates.forEach(fn => fn());
+    this.updates = [];
+    this.scheduled = false;
+  }
+}
+
+const domBatcher = new DOMBatchUpdater();
+
 let loadedSessionCount = 0;
 let loadedChatPageCount = 0;
 let loadedProjectSessionCount = 0;

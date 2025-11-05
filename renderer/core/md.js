@@ -1,3 +1,37 @@
+// OPTIMIZATION: LRU Cache for parsed markdown
+class LRUCache {
+  constructor(maxSize = 100) {
+    this.cache = new Map();
+    this.maxSize = maxSize;
+  }
+
+  get(key) {
+    if (!this.cache.has(key)) return null;
+    // Move to end (most recently used)
+    const value = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, value);
+    return value;
+  }
+
+  set(key, value) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      // Remove oldest (first item)
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+    this.cache.set(key, value);
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
+
+const markdownCache = new LRUCache(100);
+
 // HTML escape function
 function esc(text) {
   if (!text) return '';
@@ -32,6 +66,15 @@ const BROWSER_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none
 const EMAIL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mail-icon"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>';
 
 function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
+  // OPTIMIZATION: Check cache first (only for complete parses, not streaming)
+  if (!sharedCodeBlocks && !options.isThinkingText) {
+    const cacheKey = `${src.substring(0, 200)}-${src.length}`;
+    const cached = markdownCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
   const isThinkingText = options.isThinkingText || false;
   let sanitizedSrc = src.trimStart();
   const boldListFixRegex = /^(\s*)\*\*(\d+\.|[*-])\s+(.*?)\*\*/gm;
@@ -778,12 +821,18 @@ function processMarkdownFormatting(text, globalReferences = {}) {
   protectedTags.forEach((tag, i) => {
     html = html.replace(`@@TAG#${i}@@`, tag);
   });
-  
+
   // Restore all placeholders
   allPlaceholders.forEach((ph, i) => {
     html = html.replace(`@@PROTECTED#${i}@@`, ph);
   });
-  
+
+  // OPTIMIZATION: Cache the result (only for complete parses)
+  if (!sharedCodeBlocks && !options.isThinkingText) {
+    const cacheKey = `${src.substring(0, 200)}-${src.length}`;
+    markdownCache.set(cacheKey, html);
+  }
+
   return html;
 }
 

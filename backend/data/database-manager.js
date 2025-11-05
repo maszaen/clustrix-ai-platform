@@ -36,6 +36,12 @@ class DatabaseManager {
     // OPTIMIZATION: Prepared statement cache
     this.stmtCache = new Map();
 
+    // OPTIMIZATION: Write batching system
+    this.writeQueue = [];
+    this.flushTimeout = null;
+    this.maxBatchSize = 50;
+    this.batchDelay = 100; // ms
+
     this.initSchema();
 
 
@@ -61,6 +67,46 @@ class DatabaseManager {
   // Clear statement cache (call when schema changes)
   clearStmtCache() {
     this.stmtCache.clear();
+  }
+
+  // OPTIMIZATION: Queue a write operation for batching
+  queueWrite(operation) {
+    this.writeQueue.push(operation);
+
+    // Flush immediately if batch size reached
+    if (this.writeQueue.length >= this.maxBatchSize) {
+      this.flushWrites();
+    } else if (!this.flushTimeout) {
+      // Otherwise schedule flush after delay
+      this.flushTimeout = setTimeout(() => this.flushWrites(), this.batchDelay);
+    }
+  }
+
+  // OPTIMIZATION: Flush all queued writes in a single transaction
+  flushWrites() {
+    if (this.writeQueue.length === 0) return;
+
+    const writes = [...this.writeQueue];
+    this.writeQueue = [];
+    clearTimeout(this.flushTimeout);
+    this.flushTimeout = null;
+
+    // Execute all writes in single transaction
+    const transaction = this.db.transaction(() => {
+      writes.forEach(op => op());
+    });
+
+    try {
+      transaction();
+      log('DATABASE', 1, 'flushWrites', `Flushed ${writes.length} batched writes`);
+    } catch (error) {
+      log('DATABASE', 3, 'flushWrites', 'Error flushing writes', { error: error.message });
+    }
+  }
+
+  // Force immediate flush (call before app exit or critical operations)
+  forceFlush() {
+    this.flushWrites();
   }
   
   initSchema() {

@@ -172,6 +172,9 @@ contextBridge.exposeInMainWorld('api', {
   usage: {
     fetchStats: (filters) => ipcRenderer.invoke('usage:fetchStats', filters),
   },
+  benchmark: {
+    fetchStats: (filters) => ipcRenderer.invoke('benchmark:fetchStats', filters),
+  },
   htmlPreview: {
     create: (htmlContent) => ipcRenderer.invoke('html-preview:create', htmlContent),
     delete: (previewId) => ipcRenderer.invoke('html-preview:delete', previewId),

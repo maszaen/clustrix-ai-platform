@@ -192,29 +192,19 @@ contextBridge.exposeInMainWorld('api', {
       const onChunk = (_e, t) => {
         try {
           chunkCounter++;
-          log('PARSER', 0, 'onChunk', `Chunk #${chunkCounter}`, { type: typeof t, value: typeof t === 'string' ? t.substring(0, 100) : t });
 
           if (typeof t === 'object' && t !== null && 'think' in t) {
-            log('PARSER', 0, 'onChunk', 'Already thinking object, pass through');
             onEvent(t);
             return;
           }
 
           const parsed = parseThinkingPatterns(t, parserState);
-          log('PARSER', 0, 'onChunk', 'Parsed', {
-            thinkLen: parsed.thinkingText.length,
-            contentLen: parsed.cleanedContent.length,
-            insideBlock: parsed.insideThinkingBlock,
-            blockType: parsed.currentBlockType
-          });
-
+          
           if (parsed.thinkingText) {
-            log('PARSER', 0, 'onChunk', 'Sending thinking REALTIME', { length: parsed.thinkingText.length });
             onEvent({ think: parsed.thinkingText });
           }
 
           if (parsed.cleanedContent) {
-            log('PARSER', 0, 'onChunk', 'Sending content', { length: parsed.cleanedContent.length });
             onEvent(parsed.cleanedContent);
           }
 
@@ -223,7 +213,6 @@ contextBridge.exposeInMainWorld('api', {
           parserState.currentBlockType = parsed.currentBlockType;
           parserState.hasSeenContent = parsed.hasSeenContent;
         } catch (err) {
-          log('PARSER', 3, 'onChunk', 'ERROR', { error: err.message });
           onEvent(t);
         }
       };

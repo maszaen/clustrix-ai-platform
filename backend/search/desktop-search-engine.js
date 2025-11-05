@@ -976,7 +976,7 @@ class DesktopSearchEngine {
   }
 
   async executeSearchCommand(commandOrTool, providedParams = {}) {
-    const { log } = require('../utils/logger');
+    const { log } = require('../../utils/logger');
     const logHelper = { component: 'DESKTOP_SEARCH_ENGINE' };
     
     log(logHelper, 'DESKTOP_SEARCH_ENGINE', 'executeSearchCommand',

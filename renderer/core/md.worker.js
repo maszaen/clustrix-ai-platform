@@ -6,6 +6,36 @@
 
 /* global self */
 
+// LRU Cache for parsed markdown results (100 entries like md.js)
+class LRUCache {
+  constructor(maxSize = 100) {
+    this.cache = new Map();
+    this.maxSize = maxSize;
+  }
+
+  get(key) {
+    if (!this.cache.has(key)) return undefined;
+    const value = this.cache.get(key);
+    // Move to end (most recently used)
+    this.cache.delete(key);
+    this.cache.set(key, value);
+    return value;
+  }
+
+  set(key, value) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      // Remove oldest (first item)
+      const firstKey = this.cache.keys().next().value;
+      this.cache.delete(firstKey);
+    }
+    this.cache.set(key, value);
+  }
+}
+
+const markdownCache = new LRUCache(100);
+
 const MARKDOWN_LATEX_PLACEHOLDER_PREFIX = "¤LATEX_";
 let fullResponse = "";
 let markdownRendererInstance = null;
@@ -62,11 +92,72 @@ function normalizeLanguage(lang) {
   return lang.toLowerCase().replace(/[^\w+-]+/g, "");
 }
 
+// Pre-compiled regex patterns (optimization #2)
+const REGEX_PATTERNS = {
+  HEADING: /^(#+)\s+(.*)/,
+  HORIZONTAL_RULE: /^---+$/,
+  ORDERED_LIST: /^(\s*)(\d+)\.\s+(.*)/,
+  UNORDERED_LIST: /^(\s*)[*-]\s+(.*)/,
+  LIST_ITEM: /^(\s*)[*-]\s+/,
+  NUMBERED_ITEM: /^(\s*)\d+\.\s+/,
+  BLOCKQUOTE: /^\s*>\s?(.*)/,
+  BLOCKQUOTE_PREFIX: /^\s*>/,
+  TABLE_SEPARATOR: /[^|:-\s]/,
+  TASK_LIST: /^\[([ x])\]\s+(.*)/,
+  BOLD_LIST_FIX: /^(\s*)\*\*(\d+\.|[*-])\s+(.*?)\*\*/gm,
+  LATEX: /(\$\$[\s\S]*?\$\$|\\\(.*?\\\))/g,
+  CODEBLOCK: /```(\w*)\n?([\s\S]*?)(?:```|$)/g,
+  BLOCKQUOTE_MARKER: /^\s*>\s?/,
+  IMAGE_ONLY: /^!\[.*?\]\([^\s]+\)(\s*=\s*\d+x\d+)?$/,
+  NESTED_IMAGE_LINK: /^\[!\[.*?\]\([^)]+\)\]\([^)]+\)$/
+};
+
+// Helper to check if text needs markdown parsing (optimization #4)
+function needsMarkdownParsing(text) {
+  if (!text || text.length < 2) return false;
+  // Quick check: if no markdown characters, skip parsing
+  return /[*_~`\[\]<>]/.test(text);
+}
+
+// Optimized table cell parser (optimization #6)
+function splitAndTrimTableCells(line) {
+  const cells = [];
+  let current = '';
+  let inCell = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '|') {
+      if (inCell && current.trim()) {
+        cells.push(current.trim());
+      }
+      current = '';
+      inCell = true;
+    } else {
+      current += ch;
+    }
+  }
+
+  // Add last cell if exists
+  if (inCell && current.trim()) {
+    cells.push(current.trim());
+  }
+
+  return cells;
+}
+
 function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
+  // Cache check (optimization #1) - only for top-level calls
+  const isTopLevelCall = !sharedCodeBlocks;
+  if (isTopLevelCall && !options.isThinkingText) {
+    const cacheKey = `${src.substring(0, 200)}-${src.length}`;
+    const cached = markdownCache.get(cacheKey);
+    if (cached) return cached;
+  }
+
   const isThinkingText = options.isThinkingText || false;
   let sanitizedSrc = src.trimStart();
-  const boldListFixRegex = /^(\s*)\*\*(\d+\.|[*-])\s+(.*?)\*\*/gm;
-  sanitizedSrc = sanitizedSrc.replace(boldListFixRegex, "$1$2 **$3**");
+  sanitizedSrc = sanitizedSrc.replace(REGEX_PATTERNS.BOLD_LIST_FIX, "$1$2 **$3**");
   const normalizedSrc = sanitizedSrc.replace(/\u00A0/g, " ").replace(/\r\n/g, "\n");
 
   // Realtime render: tidak perlu trim, langsung render jika pattern valid
@@ -230,47 +321,55 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     });
   }
   const lines = processedSrc.split("\n");
-  let html = "";
+  const htmlParts = []; // StringBuilder pattern (optimization #3)
   const listStack = [];
   let paragraphBuffer = [];
   let imageBuffer = []; // Buffer for consecutive image-only lines
   let currentListItemEndPos = -1; // Track end position of current list item
   let lastLineWasCodeblock = false;
+
+  // Helper to get current HTML length for list tracking
+  const getHtmlLength = () => htmlParts.join('').length;
   
   const flushImageGroup = () => {
     if (imageBuffer.length > 0) {
       const totalImages = imageBuffer.length;
       const isCollapsible = totalImages > 1; // Only collapse if more than 1 image
-      
+
       // Calculate columns for the visible row (1-3 images)
       const visibleCount = Math.min(totalImages, 3);
-      
+
       if (isCollapsible) {
-        html += `<div class="md-image-group" data-total="${totalImages}" data-collapsed="true">`;
-        html += `<div class="md-image-group-header" onclick="toggleImageGroup(this)">`;
-        html += `<span class="image-count">${totalImages} image${totalImages > 1 ? 's' : ''}</span>`;
-        html += `<svg class="expand-icon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
-        html += `</div>`;
-        html += `<div class="md-image-group-content">${imageBuffer.join("")}</div>`;
-        html += `</div>`;
+        htmlParts.push(`<div class="md-image-group" data-total="${totalImages}" data-collapsed="true">`);
+        htmlParts.push(`<div class="md-image-group-header" onclick="toggleImageGroup(this)">`);
+        htmlParts.push(`<span class="image-count">${totalImages} image${totalImages > 1 ? 's' : ''}</span>`);
+        htmlParts.push(`<svg class="expand-icon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`);
+        htmlParts.push(`</div>`);
+        htmlParts.push(`<div class="md-image-group-content">${imageBuffer.join("")}</div>`);
+        htmlParts.push(`</div>`);
       } else {
         // Single image, no collapse
-        html += `<div class="md-image-group" data-total="1">${imageBuffer.join("")}</div>`;
+        htmlParts.push(`<div class="md-image-group" data-total="1">${imageBuffer.join("")}</div>`);
       }
-      
+
       imageBuffer = [];
     }
   };
   
   const flushParagraph = () => {
     if (paragraphBuffer.length > 0) {
-      html += `<p>${paragraphBuffer.join("<br>")}</p>`;
+      htmlParts.push(`<p>${paragraphBuffer.join("<br>")}</p>`);
       paragraphBuffer = [];
     }
   };
   const appendToCurrentListItem = content => {
     if (listStack.length > 0 && currentListItemEndPos !== -1) {
-      html = `${html.substring(0, currentListItemEndPos)}${content}${html.substring(currentListItemEndPos)}`;
+      const currentHtml = htmlParts.join('');
+      const before = currentHtml.substring(0, currentListItemEndPos);
+      const after = currentHtml.substring(currentListItemEndPos);
+      // Rebuild htmlParts with inserted content
+      htmlParts.length = 0;
+      htmlParts.push(before, content, after);
       currentListItemEndPos += content.length;
       return true;
     }
@@ -279,7 +378,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   const closeOpenBlocks = () => {
     flushImageGroup();
     flushParagraph();
-    while (listStack.length > 0) html += `</${listStack.pop().type}>`;
+    while (listStack.length > 0) htmlParts.push(`</${listStack.pop().type}>`);
     currentListItemEndPos = -1; // Reset when closing list blocks
   };
 
@@ -291,7 +390,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const nextLineTrimmed = nextLine.trim();
       const nextLineIndent = nextLine.length - nextLine.trimStart().length;
       const nextNextLine = lines[i + 2] ? lines[i + 2].trim() : "";
-      const upcomingTableSeparator = nextNextLine && nextNextLine.includes("|") && nextNextLine.includes("-") && !/[^|:-\s]/.test(nextNextLine);
+      const upcomingTableSeparator = nextNextLine && nextNextLine.includes("|") && nextNextLine.includes("-") && !REGEX_PATTERNS.TABLE_SEPARATOR.test(nextNextLine);
       const isUpcomingTableHeader = nextLineTrimmed && nextLineTrimmed.includes("|") && upcomingTableSeparator;
 
       // Check if we should continue the list with enhanced look-ahead
@@ -308,9 +407,13 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
           // Skip empty lines
           if (lookAheadTrimmed === "") continue;
 
+          // Cache regex results (optimization #5)
+          const ulMatch = REGEX_PATTERNS.LIST_ITEM.exec(lookAheadTrimmed);
+          const olMatch = REGEX_PATTERNS.NUMBERED_ITEM.exec(lookAheadTrimmed);
+
           // Continue list if next non-empty line is a list item at same or greater indent
-          if (lookAheadTrimmed.match(/^(\s*)[*-]\s+/) || lookAheadTrimmed.match(/^(\s*)\d+\.\s+/)) {
-            const nextListMatch = lookAheadTrimmed.match(/^(\s*)[*-]\s+/) || lookAheadTrimmed.match(/^(\s*)\d+\.\s+/);
+          if (ulMatch || olMatch) {
+            const nextListMatch = ulMatch || olMatch;
             const nextListIndent = nextListMatch[1].length;
             if (nextListIndent >= currentListIndent) {
               shouldContinueList = true;
@@ -318,8 +421,8 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
             }
           }
           // Continue list if next non-empty line is codeblock, blockquote, or table at proper indent
-          else if (lookAheadTrimmed.startsWith("__CODEBLOCK_") || lookAheadTrimmed.startsWith(">") || 
-                   (lookAheadTrimmed.includes("|") && !lookAheadTrimmed.match(/^(\s*)[*-]\s+/) && !lookAheadTrimmed.match(/^(\s*)\d+\.\s+/))) {
+          else if (lookAheadTrimmed.startsWith("__CODEBLOCK_") || lookAheadTrimmed.startsWith(">") ||
+                   (lookAheadTrimmed.includes("|") && !REGEX_PATTERNS.LIST_ITEM.test(lookAheadTrimmed) && !REGEX_PATTERNS.NUMBERED_ITEM.test(lookAheadTrimmed))) {
             // For nested content, allow same indent as list item (more flexible than strict +2)
             if (lookAheadIndent >= currentListIndent) {
               shouldContinueList = true;
@@ -335,51 +438,59 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         lastLineWasCodeblock = false;
         continue;
       }
-      
+
       // If we have pending images, don't close blocks yet (allow blank lines between images)
       if (imageBuffer.length > 0) {
         lastLineWasCodeblock = false;
         continue;
       }
-      
+
       closeOpenBlocks();
       lastLineWasCodeblock = false;
       continue;
     }
-    const hMatch = line.match(/^(#+)\s+(.*)/);
-    const hrMatch = /^---+$/.test(trimmedLine);
-    const olMatch = line.match(/^(\s*)(\d+)\.\s+(.*)/);
-    const ulMatch = line.match(/^(\s*)[*-]\s+(.*)/);
+    // Use pre-compiled patterns (optimization #2) and cache results (optimization #5)
+    const hMatch = REGEX_PATTERNS.HEADING.exec(line);
+    const hrMatch = REGEX_PATTERNS.HORIZONTAL_RULE.test(trimmedLine);
+    const olMatch = REGEX_PATTERNS.ORDERED_LIST.exec(line);
+    const ulMatch = REGEX_PATTERNS.UNORDERED_LIST.exec(line);
     const listMatch = olMatch || ulMatch;
     const codeMatch = trimmedLine.startsWith("__CODEBLOCK_");
     const nextLine = lines[i + 1] ? lines[i + 1].trim() : "";
     const isTableHeader = trimmedLine.includes("|") && !listMatch && !hMatch;
-    const bqMatch = line.match(/^\s*>\s?(.*)/);
-    const isNextLineSeparator = isTableHeader && nextLine.includes("|") && nextLine.includes("-") && !/[^|:-\s]/.test(nextLine);
+    const bqMatch = REGEX_PATTERNS.BLOCKQUOTE.exec(line);
+    const isNextLineSeparator = isTableHeader && nextLine.includes("|") && nextLine.includes("-") && !REGEX_PATTERNS.TABLE_SEPARATOR.test(nextLine);
     if (isTableHeader && isNextLineSeparator) {
-      let tableHtml = '<div class="table-container"><table>';
-      const headers = trimmedLine.split("|").map(h => h.trim()).filter(Boolean);
-      tableHtml += "<thead><tr>";
-      for (const header of headers) tableHtml += `<th>${parseInlineMarkdown(header, globalReferences)}</th>`;
-      tableHtml += "</tr></thead><tbody>";
+      const tableParts = ['<div class="table-container"><table>'];
+      // Use optimized cell parser (optimization #6)
+      const headers = splitAndTrimTableCells(trimmedLine);
+      tableParts.push("<thead><tr>");
+      // Skip parsing for simple text (optimization #4)
+      for (const header of headers) {
+        const parsed = needsMarkdownParsing(header) ? parseInlineMarkdown(header, globalReferences) : esc(header);
+        tableParts.push(`<th>${parsed}</th>`);
+      }
+      tableParts.push("</tr></thead><tbody>");
       let tableRowIndex = i + 2;
       while (tableRowIndex < lines.length && lines[tableRowIndex].trim().includes("|")) {
-        const cells = lines[tableRowIndex].trim().split("|").map(c => c.trim()).filter(Boolean);
-        tableHtml += "<tr>";
+        const cells = splitAndTrimTableCells(lines[tableRowIndex].trim());
+        tableParts.push("<tr>");
         for (let j = 0; j < headers.length; j++) {
           const cellContent = cells[j] || "";
-          tableHtml += `<td>${parseInlineMarkdown(cellContent, globalReferences)}</td>`;
+          const parsed = needsMarkdownParsing(cellContent) ? parseInlineMarkdown(cellContent, globalReferences) : esc(cellContent);
+          tableParts.push(`<td>${parsed}</td>`);
         }
-        tableHtml += "</tr>";
+        tableParts.push("</tr>");
         tableRowIndex++;
       }
-      tableHtml += "</tbody></table></div>";
+      tableParts.push("</tbody></table></div>");
+      const tableHtml = tableParts.join('');
       // For tables in lists, always append to current list item to maintain proper nesting
       if (listStack.length > 0) {
         appendToCurrentListItem(tableHtml);
       } else {
         closeOpenBlocks();
-        html += tableHtml;
+        htmlParts.push(tableHtml);
       }
       lastLineWasCodeblock = false;
       i = tableRowIndex - 1;
@@ -391,11 +502,11 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const type = olMatch ? "ol" : "ul";
       const number = olMatch ? parseInt(olMatch[2], 10) : null;
       let content = olMatch ? listMatch[3] : ulMatch[2];
-      
+
       // Handle task lists (- [ ] or - [x])
       let isTaskList = false;
       let isChecked = false;
-      const taskMatch = content.match(/^\[([ x])\]\s+(.*)/);
+      const taskMatch = REGEX_PATTERNS.TASK_LIST.exec(content);
       if (type === "ul" && taskMatch) {
         isTaskList = true;
         isChecked = taskMatch[1] === 'x';
@@ -405,30 +516,34 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       if (type === "ul" && lastList?.type === "ul" && lastList.implicit && indent < lastList.indent) indent = lastList.indent;
       else if (type === "ul" && lastList?.type === "ol" && indent <= lastList.indent) indent = lastList.indent + 2;
       while (listStack.length > 0 && (listStack[listStack.length - 1].indent > indent || (listStack[listStack.length - 1].indent === indent && listStack[listStack.length - 1].type !== type))) {
-        html += `</${listStack.pop().type}>`;
+        htmlParts.push(`</${listStack.pop().type}>`);
       }
       const currentLastList = listStack.length > 0 ? listStack[listStack.length - 1] : null;
       if (!currentLastList || indent > currentLastList.indent || type !== currentLastList.type) {
         if (currentLastList && indent > currentLastList.indent) {
-          const lastLiPos = html.lastIndexOf("</li>");
-          if (lastLiPos !== -1) html = html.substring(0, lastLiPos);
+          const currentHtml = htmlParts.join('');
+          const lastLiPos = currentHtml.lastIndexOf("</li>");
+          if (lastLiPos !== -1) {
+            htmlParts.length = 0;
+            htmlParts.push(currentHtml.substring(0, lastLiPos));
+          }
         }
         const isImplicit = type === "ul" && currentLastList?.type === "ol";
         const startAttr = type === "ol" && number > 1 ? ` start="${number}"` : "";
-        html += `<${type}${startAttr}>`;
+        htmlParts.push(`<${type}${startAttr}>`);
         listStack.push({ type, indent, implicit: isImplicit });
       }
       // Wrap text content with <p> for consistent styling
       const parsedContent = parseInlineMarkdown(content, globalReferences);
       if (isTaskList) {
         const checkboxHtml = `<input type="checkbox"${isChecked ? ' checked' : ''} disabled> `;
-        html += `<li><p>${checkboxHtml}${parsedContent}</p></li>`;
+        htmlParts.push(`<li><p>${checkboxHtml}${parsedContent}</p></li>`);
       } else {
-        html += `<li><p>${parsedContent}</p></li>`;
+        htmlParts.push(`<li><p>${parsedContent}</p></li>`);
       }
       // Track the end position of this list item for appending nested content
       // Position before "</p></li>" to insert nested content after the paragraph
-      currentListItemEndPos = html.length - 9; // Position before "</p></li>"
+      currentListItemEndPos = getHtmlLength() - 9; // Position before "</p></li>"
       lastLineWasCodeblock = false;
     } else if (bqMatch) {
       const bqBlockLines = [line];
@@ -504,7 +619,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         appendToCurrentListItem(blockquoteHtml);
       } else {
         closeOpenBlocks();
-        html += blockquoteHtml;
+        htmlParts.push(blockquoteHtml);
       }
       lastLineWasCodeblock = false;
     } else if (codeMatch) {
@@ -513,13 +628,13 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         appendToCurrentListItem(trimmedLine);
       } else {
         closeOpenBlocks();
-        html += trimmedLine;
+        htmlParts.push(trimmedLine);
       }
       lastLineWasCodeblock = true;
     } else if (hMatch || hrMatch) {
       closeOpenBlocks();
-      if (hMatch) html += `<h${hMatch[1].length}>${parseInlineMarkdown(hMatch[2], globalReferences)}</h${hMatch[1].length}>`;
-      else if (hrMatch) html += "<hr>";
+      if (hMatch) htmlParts.push(`<h${hMatch[1].length}>${parseInlineMarkdown(hMatch[2], globalReferences)}</h${hMatch[1].length}>`);
+      else if (hrMatch) htmlParts.push("<hr>");
       lastLineWasCodeblock = false;
     } else {
       if (listStack.length > 0) {
@@ -528,7 +643,11 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
           // Don't add <br> if previous line was a codeblock
           const prefix = lastLineWasCodeblock ? '' : '<br>';
           const textHtml = `${prefix}${parseInlineMarkdown(line.trim(), globalReferences)}`;
-          html = `${html.substring(0, currentListItemEndPos)}${textHtml}${html.substring(currentListItemEndPos)}`;
+          const currentHtml = htmlParts.join('');
+          const before = currentHtml.substring(0, currentListItemEndPos);
+          const after = currentHtml.substring(currentListItemEndPos);
+          htmlParts.length = 0;
+          htmlParts.push(before, textHtml, after);
           currentListItemEndPos += textHtml.length;
         }
       } else {
@@ -536,12 +655,12 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         if (trimmedLine.includes("XCONTAINERX")) {
           flushImageGroup();
           flushParagraph();
-          html += parseInlineMarkdown(line, globalReferences) + '\n';
+          htmlParts.push(parseInlineMarkdown(line, globalReferences), '\n');
         } else {
           // Check if this line is ONLY an image (no text before/after)
           // Include nested image+link: [![alt](img)](url) should also go to imageBuffer
-          const isNestedImageLink = /^\[!\[.*?\]\([^)]+\)\]\([^)]+\)$/.test(trimmedLine);
-          const isImageOnly = /^!\[.*?\]\([^\s]+\)(\s*=\s*\d+x\d+)?$/.test(trimmedLine);
+          const isNestedImageLink = REGEX_PATTERNS.NESTED_IMAGE_LINK.test(trimmedLine);
+          const isImageOnly = REGEX_PATTERNS.IMAGE_ONLY.test(trimmedLine);
 
           if (isImageOnly || isNestedImageLink) {
             // This is an image-only line or nested image+link
@@ -558,6 +677,9 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     }
   }
   closeOpenBlocks();
+
+  // Join all HTML parts (StringBuilder pattern)
+  let html = htmlParts.join('');
   
   // Restore LaTeX blocks FIRST (before processing other placeholders that might be wrapped in HTML)
   let finalHtml = html;
@@ -587,6 +709,13 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       });
     return acc.replace(`XCONTAINERX${i}XCONTAINERX`, processed);
   }, finalHtml);
+
+  // Store in cache if top-level call (optimization #1)
+  if (isTopLevelCall && !options.isThinkingText) {
+    const cacheKey = `${src.substring(0, 200)}-${src.length}`;
+    markdownCache.set(cacheKey, finalHtml);
+  }
+
   return finalHtml;
 }
 

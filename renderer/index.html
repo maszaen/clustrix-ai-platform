@@ -11,9 +11,11 @@
   <script>
     (function() {
       let finalTheme = 'dark';
+      let finalContrastColor = false;
       
       try {
         let savedTheme = localStorage.getItem('clustrix-theme');
+        let savedContrastColor = localStorage.getItem('clustrix-contrast-color');
         let webSearchEnabled = localStorage.getItem('clustrix-web-search');
         let currentPage = localStorage.getItem('clustrix-current-page');
         let currentSession = localStorage.getItem('clustrix-current-session');
@@ -29,6 +31,7 @@
           try {
             const data = JSON.parse(savedData);
             if (!savedTheme) savedTheme = data.settings?.theme;
+            if (savedContrastColor === null) savedContrastColor = data.settings?.contrastColor ? 'true' : 'false';
             if (webSearchEnabled === null) {
               webSearchEnabled = data.settings?.webSearchEnabled;
               console.log('[WEBSEARCH] Loaded from saved data:', webSearchEnabled);
@@ -40,7 +43,9 @@
         }
         
         const theme = savedTheme || 'dark';
+        const contrastColor = savedContrastColor === 'true';
         finalTheme = theme;
+        finalContrastColor = contrastColor;
         const webSearch = webSearchEnabled !== null ? webSearchEnabled === 'true' : false;
         const page = currentPage || 'welcome';
         
@@ -49,24 +54,39 @@
           parsed: webSearch
         });
         
+        // Determine theme class based on theme and contrastColor
+        let themeClass;
+        if (theme === 'dark') {
+          themeClass = contrastColor ? 'dark-theme-contrast' : 'dark-theme';
+        } else {
+          themeClass = contrastColor ? 'light-theme-contrast' : 'light-theme';
+        }
+        
         if (document.documentElement) {
-          document.documentElement.className = theme === 'dark' ? 'dark-theme' : 'light-theme';
+          document.documentElement.className = themeClass;
         } else {
           console.error('document.documentElement not available');
         }
         
         if (document.body) {
-          document.body.className = (theme === 'dark' ? 'dark-theme' : 'light-theme') + ' scrollable';
+          document.body.className = themeClass + ' scrollable';
         } else {
           document.addEventListener('DOMContentLoaded', () => {
             if (document.body) {
-              document.body.className = (finalTheme === 'dark' ? 'dark-theme' : 'light-theme') + ' scrollable';
+              let bodyThemeClass;
+              if (finalTheme === 'dark') {
+                bodyThemeClass = finalContrastColor ? 'dark-theme-contrast' : 'dark-theme';
+              } else {
+                bodyThemeClass = finalContrastColor ? 'light-theme-contrast' : 'light-theme';
+              }
+              document.body.className = bodyThemeClass + ' scrollable';
             }
           });
         }
         
         window.__PRELOADED_SETTINGS__ = {
           theme: theme,
+          contrastColor: contrastColor,
           webSearchEnabled: webSearch,
           currentPage: page,
           currentSession: currentSession
@@ -84,6 +104,7 @@
         }
         window.__PRELOADED_SETTINGS__ = {
           theme: 'dark',
+          contrastColor: false,
           webSearchEnabled: false,
           currentPage: 'welcome',
           currentSession: null
@@ -824,6 +845,13 @@
                   </svg> -->
                   <span>Dark Theme</span>
                 <input type="checkbox" id="theme-slider" class="toggle-input">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div class="toggle-item">
+              <label for="contrast-color-toggle" class="toggle-label">
+                <span>Contrast color</span>
+                <input type="checkbox" id="contrast-color-toggle" class="toggle-input">
                 <span class="toggle-slider"></span>
               </label>
             </div>

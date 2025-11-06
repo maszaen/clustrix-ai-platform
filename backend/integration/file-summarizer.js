@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const fsp = require('fs').promises;
 
 class FileSummarizer {
   constructor(langchainService) {
@@ -24,10 +25,25 @@ class FileSummarizer {
     }
   }
 
-  saveSummaryCache() {
+  async loadSummaryCacheAsync() {
+    try {
+      if (fs.existsSync(this.summaryFile)) {
+        const data = await fsp.readFile(this.summaryFile, 'utf-8');
+        const summaries = JSON.parse(data);
+        Object.entries(summaries).forEach(([key, value]) => {
+          this.summaryCache.set(key, value);
+        });
+        console.log(`Loaded ${this.summaryCache.size} file summaries from cache`);
+      }
+    } catch (error) {
+      console.error('Error loading summary cache:', error);
+    }
+  }
+
+  async saveSummaryCache() {
     try {
       const summaries = Object.fromEntries(this.summaryCache);
-      fs.writeFileSync(this.summaryFile, JSON.stringify(summaries, null, 2));
+      await fsp.writeFile(this.summaryFile, JSON.stringify(summaries, null, 2));
     } catch (error) {
       console.error('Error saving summary cache:', error);
     }

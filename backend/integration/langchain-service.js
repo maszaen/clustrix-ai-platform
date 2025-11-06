@@ -8,6 +8,7 @@ const { StringOutputParser } = require("@langchain/core/output_parsers");
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
+const fsp = require('fs').promises; // Add async file operations
 const FileSummarizer = require('./file-summarizer');
 const LocalEmbeddingEngine = require('./local-embedding-engine');
 const ReasoningActionAgent = require('./reasoning-action-agent');
@@ -42,21 +43,21 @@ class ClustrixLangChainService {
   }
 
   // Helper method to get correct config path based on sync mode
-  getModelConfigPath() {
+  async getModelConfigPath() {
     const syncConfigPath = path.join(this.app.getPath('userData'), 'sync-config.json');
     let currentMode = 'internal';
     let currentCloudUser = null;
-    
+
     if (fs.existsSync(syncConfigPath)) {
       try {
-        const syncConfig = JSON.parse(fs.readFileSync(syncConfigPath, 'utf8'));
+        const syncConfig = JSON.parse(await fsp.readFile(syncConfigPath, 'utf8'));
         currentMode = syncConfig.currentMode || 'internal';
         currentCloudUser = syncConfig.currentCloudUser;
       } catch (error) {
         console.error('Error reading sync-config.json:', error);
       }
     }
-    
+
     if (currentMode === 'cloud' && currentCloudUser) {
       return path.join(this.app.getPath('userData'), 'database', 'sync', currentCloudUser, 'ai-model.conf.json');
     } else {
@@ -67,16 +68,16 @@ class ClustrixLangChainService {
   async initialize() {
     try {
       console.log('Initializing LangChain service...');
-      
+
       // Check if we have any API key available
-      const configPath = this.getModelConfigPath();
+      const configPath = await this.getModelConfigPath();
       let hasApiKey = false;
       let availableProvider = null;
-      
+
       if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        const config = JSON.parse(await fsp.readFile(configPath, 'utf8'));
         const providers = config.providers || {};
-        
+
         // Check available providers with API keys
         for (const [name, provider] of Object.entries(providers)) {
           if (provider.apiKey && provider.apiKey.trim() !== '') {
@@ -87,23 +88,23 @@ class ClustrixLangChainService {
           }
         }
       }
-      
+
       if (!hasApiKey) {
         console.log('No API keys found, using simple text-based similarity');
         this.useSimpleEmbeddings();
         this.isInitialized = true;
         return;
       }
-      
+
       // Initialize embeddings based on available provider
       await this.initializeEmbeddings(availableProvider);
-      
+
       // Initialize vector store
       this.vectorStore = new MemoryVectorStore(this.embeddings);
-      
+
       // Load existing vector data if available
       await this.loadVectorData();
-      
+
       this.isInitialized = true;
       console.log('LangChain service initialized successfully');
     } catch (error) {
@@ -608,15 +609,15 @@ RULES:
 Decision:`;
 
       console.log(`Sending decision request to current AI provider...`);
-      
+
       // Get current active config to use SAME provider user is chatting with
-      const configPath = this.getModelConfigPath();
+      const configPath = await this.getModelConfigPath();
       if (!fs.existsSync(configPath)) {
         console.log(`Config file not found at ${configPath}, skipping RE+ACT`);
         return false;
       }
-      
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+      const config = JSON.parse(await fsp.readFile(configPath, 'utf8'));
       const activeProvider = config.active?.platform;
       const activeModel = config.active?.model;
       
@@ -1517,9 +1518,9 @@ Respond with ONLY a JSON object in this format:
   async saveSessionMemory(sessionId, memory) {
     try {
       let sessionMemories = {};
-      
+
       if (fs.existsSync(this.sessionMemoryFile)) {
-        const data = fs.readFileSync(this.sessionMemoryFile, 'utf-8');
+        const data = await fsp.readFile(this.sessionMemoryFile, 'utf-8');
         sessionMemories = JSON.parse(data);
       }
 
@@ -1529,7 +1530,7 @@ Respond with ONLY a JSON object in this format:
         lastUpdated: new Date().toISOString()
       };
 
-      fs.writeFileSync(this.sessionMemoryFile, JSON.stringify(sessionMemories, null, 2));
+      await fsp.writeFile(this.sessionMemoryFile, JSON.stringify(sessionMemories, null, 2));
     } catch (error) {
       console.error('Error saving session memory:', error);
     }
@@ -1538,10 +1539,10 @@ Respond with ONLY a JSON object in this format:
   async getSessionMemory(sessionId) {
     try {
       if (!fs.existsSync(this.sessionMemoryFile)) return {};
-      
-      const data = fs.readFileSync(this.sessionMemoryFile, 'utf-8');
+
+      const data = await fsp.readFile(this.sessionMemoryFile, 'utf-8');
       const sessionMemories = JSON.parse(data);
-      
+
       return sessionMemories[sessionId] || {};
     } catch (error) {
       console.error('Error loading session memory:', error);
@@ -1554,7 +1555,7 @@ Respond with ONLY a JSON object in this format:
   async saveVectorData() {
     try {
       console.log('LangChain: Saving vector store to disk...');
-      
+
       // Save the full vector store data including embeddings and metadata
       const vectorData = {
         lastSaved: new Date().toISOString(),
@@ -1574,8 +1575,8 @@ Respond with ONLY a JSON object in this format:
           vectorData.embeddings.push(vector.embedding);
         }
       }
-      
-      fs.writeFileSync(this.vectorDataFile, JSON.stringify(vectorData, null, 2));
+
+      await fsp.writeFile(this.vectorDataFile, JSON.stringify(vectorData, null, 2));
       console.log(`LangChain: Saved ${vectorData.documentsCount} documents with embeddings to ${this.vectorDataFile}`);
     } catch (error) {
       console.error('Error saving vector data:', error);
@@ -1586,15 +1587,15 @@ Respond with ONLY a JSON object in this format:
     try {
       if (fs.existsSync(this.vectorDataFile)) {
         console.log('📂 LangChain: Loading vector store from disk...');
-        const data = fs.readFileSync(this.vectorDataFile, 'utf-8');
+        const data = await fsp.readFile(this.vectorDataFile, 'utf-8');
         const vectorData = JSON.parse(data);
-        
+
         console.log(`Vector store info: ${vectorData.documentsCount} documents from ${vectorData.lastSaved}`);
-        
+
         // Restore documents and embeddings to vector store
         if (vectorData.documents && vectorData.embeddings && vectorData.documents.length > 0) {
           console.log(`LangChain: Restoring ${vectorData.documents.length} documents to vector store...`);
-          
+
           // Create new vector store with restored data
           const restoredVectors = [];
           for (let i = 0; i < vectorData.documents.length; i++) {
@@ -1604,17 +1605,17 @@ Respond with ONLY a JSON object in this format:
               metadata: vectorData.documents[i].metadata
             });
           }
-          
+
           // Recreate vector store with restored data
           this.vectorStore = await MemoryVectorStore.fromTexts(
             vectorData.documents.map(doc => doc.content),
             vectorData.documents.map(doc => doc.metadata),
             this.embeddings
           );
-          
+
           // Manually set the embeddings since we have them cached
           this.vectorStore.memoryVectors = restoredVectors;
-          
+
           console.log(`LangChain: Successfully restored ${restoredVectors.length} documents to vector store`);
         } else {
           console.log('LangChain: No documents to restore from vector store file');
@@ -1653,33 +1654,33 @@ Respond with ONLY a JSON object in this format:
 
   // ==================== UTILITY METHODS ====================
   
-  getAvailableProvider() {
+  async getAvailableProvider() {
     try {
-      const configPath = this.getModelConfigPath();
+      const configPath = await this.getModelConfigPath();
       if (!fs.existsSync(configPath)) {
         console.log(`Config file not found at ${configPath}`);
         return null;
       }
-      
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+      const config = JSON.parse(await fsp.readFile(configPath, 'utf8'));
       const providers = config.providers || {};
-      
+
       // Priority order: OpenRouter > Groq > Gemini > others
       const priority = ['openrouter', 'groq', 'gemini', 'zhipu', 'cerebras'];
-      
+
       for (const providerName of priority) {
         if (providers[providerName]?.apiKey && providers[providerName].apiKey.trim() !== '') {
           return { name: providerName, ...providers[providerName] };
         }
       }
-      
+
       // Check any other provider
       for (const [name, provider] of Object.entries(providers)) {
         if (provider.apiKey && provider.apiKey.trim() !== '') {
           return { name, ...provider };
         }
       }
-      
+
       return null;
     } catch (error) {
       console.error('Error getting available provider:', error);
@@ -1687,9 +1688,9 @@ Respond with ONLY a JSON object in this format:
     }
   }
 
-  getOpenAIKey() {
+  async getOpenAIKey() {
     // Legacy method - now uses getAvailableProvider
-    const provider = this.getAvailableProvider();
+    const provider = await this.getAvailableProvider();
     return provider?.apiKey || null;
   }
 }

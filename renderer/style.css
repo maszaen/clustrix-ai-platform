@@ -289,6 +289,80 @@ body.light-theme {
   --hljs-subst: #000;
 }
 
+body.light-theme-contrast {
+  --bck: #fafafa;
+  --bg: #FFFFFF; /* background paling belakang, base */
+  --bg-secondary: #E8F0FA; /* sidebar dan code bg - lebih kontras */
+  --bg-secondary-50: #e8f0fa80; 
+  --fg: #000000; /* font paling kontras - pure black */
+  --fg-muted: #3d4045; /* font redup - lebih gelap */
+  --fg-death: #5a5e63;
+  --surface: #FFFFFF; /* input chat */
+  --surface-secondary: #D9E7F7; /* bubble user - lebih kontras */
+  --border: #9BA1A6; /* HR atau separator - lebih gelap */
+  --border-light: #b8bec3; 
+  --border-input: #9BA1A6; 
+  --border-active: #6b7075;
+  --table-odd: #000;
+  --table-even: #000;
+  --input-bg: #E8F0FA; 
+  --primary: #0536a0; /* for accent like text - lebih gelap */
+  --primary-light: #B8D6FA; /* for session list - lebih saturated */
+  --primary-light-user: #b8d6fa9f;
+  --primary-light-hover: #a3c9f8;
+  --primary-light-tip: #b8d6fa9f; 
+  --accent: #0842c0;
+  --highlight-color: #ffd700;
+  --white-hover: #1a1a1a;
+  --bold: #1a1a1a;
+
+  --purple-sel: #4a0f5f;
+  --purple-sel-bg: #c79adec9;
+  
+  --hover-bg: #d5dce5; /* for lists or button hover - lebih kontras */
+  --hover-bg-secondary: #c5cdd9;
+  --shadow-color: rgba(0, 0, 0, 0.15); /* for shadow in input container - lebih gelap */
+  --icon: #2a2e32; /* icon or symbols - lebih gelap */
+  --icon-primary: #0536a0;
+  --link: #0536a0;
+  --link-hover: #032770;
+
+  --danger: #d01020;
+  --danger-hover: #d010203f;
+  --danger-light: #fad8dc;
+  --success: #1ea03d;
+  --warning: #f5a800;
+
+  /* dari hljs */
+  --hljs-base: #000000;
+  --hljs-comment: #6a737d; /* Abu-abu lebih gelap untuk komentar */
+  --hljs-punctuation: #24292e; /* Hitam untuk tanda baca */
+  --hljs-tag-property-constant: #d73a49; /* Merah lebih bold untuk tag, properti */
+  --hljs-number-boolean: #005cc5; /* Biru lebih bold untuk angka, boolean */
+  --hljs-string-selector-attr-name: #22863a; /* Hijau lebih gelap untuk string, selector */
+  --hljs-operator-entity-url-variable: #24292e; /* Hitam */
+  --hljs-function-classname-atrule: #b08800; /* Oranye/kuning lebih gelap untuk fungsi */
+  --hljs-keyword: #d73a49; /* Merah untuk keyword */
+  --hljs-name: #e36209;
+  --hljs-regex-important: #22863a; /* Hijau tua */
+  --hljs-css-string: #032f62; /* Biru gelap, agar kontras di CSS */
+
+  --hljs-bash-function: #6f42c1;
+  --hljs-json-property: #005cc5;
+  --hljs-yaml-key: #22863a;
+  --hljs-markdown-title: #24292e;
+  
+  /* Diff colors */
+  --hljs-diff-inserted: #22863a;
+  --hljs-diff-inserted-bg: #e6ffed;
+  --hljs-diff-deleted: #d73a49;
+  --hljs-diff-deleted-bg: #ffeef0;
+  
+  /* Highlight */
+  --hljs-highlight-bg: #ffe89d;
+  --hljs-subst: #000;
+}
+
 /* Dark Theme */
 body.dark-theme {
   --bck: #000;
@@ -359,6 +433,79 @@ body.dark-theme {
   /* Highlight */
   --hljs-highlight-bg: #3d2914;
   --hljs-subst: #fff;
+}
+
+/* Dark Theme - High Contrast Blue */
+/* Dark Theme - Claude Official */
+body.dark-theme-contrast {
+  --bck: oklch(0.24 0 0); /* sidebar background */
+  --bg: oklch(0.27 0 0); /* background paling belakang, base */
+  --bg-secondary: oklch(0.24 0 0); /* sidebar dan code bg */
+  --bg-secondary-50: oklch(0.24 0 0 / 0.48); 
+  --fg: oklch(0.98 0.01 93.48); /* font paling kontras */
+  --fg-muted: oklch(0.77 0.02 100.64); /* font di sidebar atau form */
+  --fg-death: oklch(0.67 0.01 93.53);
+  --surface: oklch(0.31 0 0); /* input chat */
+  --surface-secondary: oklch(0.33 0 0); /* bubble user */
+  --border: oklch(0.36 0.01 106.85); 
+  --border-light: oklch(0.31 0 0); 
+  --border-input: oklch(0.43 0.01 99.03); 
+  --border-active: oklch(0.59 0.17 252.92);
+  --input-bg: oklch(0.31 0 0); 
+  --primary: oklch(0.67 0.13 38.92); /* warna aksen warm/claude */
+  --primary-light: oklch(0.21 0.01 88.79); 
+  --primary-light-user: oklch(0.21 0.01 88.79); 
+  --primary-light-hover: oklch(0.24 0.01 88.79);
+  --primary-light-tip: oklch(0.21 0.01 88.79 / 0.49); 
+  --accent: oklch(0.67 0.13 38.92);
+  --highlight-color: oklch(0.85 0.15 95);
+  --white-hover: oklch(0.94 0 0);
+  --bold: oklch(0.99 0 0);
+
+  --purple-sel: oklch(0.67 0.13 38.92);
+  --purple-sel-bg: oklch(0.21 0.01 88.79 / 0.5);
+  
+  --hover-bg: oklch(0.22 0 0); 
+  --hover-bg-secondary: oklch(0.27 0 0);
+  --shadow-color: oklch(0.15 0 0 / 0.4); 
+  --icon: oklch(0.81 0.01 93.53); 
+  --link: oklch(0.67 0.13 38.92);
+  --link-hover: oklch(0.77 0.13 38.92);
+
+  --danger: oklch(0.64 0.21 25.39);
+  --danger-hover: oklch(0.64 0.21 25.39 / 0.24);
+  --danger-light: oklch(0.31 0.05 25.39);
+  --success: oklch(0.65 0.15 145);
+  --warning: oklch(0.75 0.15 85);
+
+  --hljs-base: oklch(0.81 0.01 93.53);
+  --hljs-comment: oklch(0.55 0.01 93.53);
+  --hljs-punctuation: oklch(0.77 0.02 100.64);
+  --hljs-tag-property-constant: oklch(0.75 0.15 85);
+  --hljs-number-boolean: oklch(0.72 0.15 45);
+  --hljs-string-selector-attr-name: oklch(0.70 0.13 150);
+  --hljs-operator-entity-url-variable: oklch(0.77 0.02 100.64);
+  --hljs-function-classname-atrule: oklch(0.67 0.13 38.92);
+  --hljs-keyword: oklch(0.75 0.12 290);
+  --hljs-name: oklch(0.72 0.15 25);
+  --hljs-regex-important: oklch(0.68 0.13 250);
+  --hljs-css-string: oklch(0.92 0 0);
+
+  /* Language specific */
+  --hljs-bash-function: oklch(0.75 0.12 290);
+  --hljs-json-property: oklch(0.68 0.13 250);
+  --hljs-yaml-key: oklch(0.70 0.13 150);
+  --hljs-markdown-title: oklch(0.67 0.13 38.92);
+  
+  /* Diff colors */
+  --hljs-diff-inserted: oklch(0.70 0.13 150);
+  --hljs-diff-inserted-bg: oklch(0.25 0.05 150);
+  --hljs-diff-deleted: oklch(0.72 0.15 25);
+  --hljs-diff-deleted-bg: oklch(0.25 0.05 25);
+  
+  /* Highlight */
+  --hljs-highlight-bg: oklch(0.35 0.08 65);
+  --hljs-subst: oklch(0.98 0.01 93.48);
 }
 
 :root {

@@ -6,6 +6,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const fsp = require('fs').promises;
 
 class LocalEmbeddingEngine {
   constructor(app) {
@@ -82,7 +83,7 @@ class LocalEmbeddingEngine {
   /**
    * Save index to disk
    */
-  saveIndex() {
+  async saveIndex() {
     try {
       // Convert documentIndex to serializable format
       const serializableDocumentIndex = Array.from(this.documentIndex.entries()).map(([fileName, docData]) => {
@@ -95,7 +96,7 @@ class LocalEmbeddingEngine {
           }
         ];
       });
-      
+
       const indexData = {
         vocabulary: Array.from(this.vocabulary.entries()),
         idfCache: Array.from(this.idfCache.entries()),
@@ -103,8 +104,8 @@ class LocalEmbeddingEngine {
         lastSaved: new Date().toISOString(),
         documentCount: this.documentIndex.size
       };
-      
-      fs.writeFileSync(this.indexFile, JSON.stringify(indexData, null, 2));
+
+      await fsp.writeFile(this.indexFile, JSON.stringify(indexData, null, 2));
       console.log(`Local Index: Saved ${this.documentIndex.size} documents to disk`);
     } catch (error) {
       console.error('Error saving local index:', error);

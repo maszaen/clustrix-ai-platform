@@ -25,7 +25,7 @@ import { createHighlightedCode } from './markdown/highlight.mjs';
 import { initializeUsageStatistics } from './usage/usage-statistics.mjs';
 import { initializeBenchmarkStatistics } from './usage/benchmark-statistics.mjs';
 
-let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",streamThrottling: "auto",language: "autodetect"},};
+let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",contrastColor: false,streamThrottling: "auto",language: "autodetect"},};
 let welcomeScreenStagedFiles = [];
 let projectMessageStagedFiles = [];
 const PROJECT_DETAIL_RENDER_KEY = 'project-detail:render';
@@ -4011,7 +4011,8 @@ function setupChatsPageListeners() {
   // Listener untuk search input
   const searchInput = document.getElementById("chats-search");
   if (searchInput && !searchInput._listenerAttached) {
-    searchInput.addEventListener("input", () => renderChatsPage());
+    const debouncedSearch = debounce(() => renderChatsPage(), 150);
+    searchInput.addEventListener("input", debouncedSearch);
     searchInput._listenerAttached = true;
   }
 }
@@ -10665,13 +10666,19 @@ async function load() {
 
   const preloadedSettings = window.__PRELOADED_SETTINGS__ || {};
   const themeToUse = preloadedSettings.theme || state.settings.theme || "dark";
+  const contrastColorToUse = preloadedSettings.contrastColor !== undefined
+    ? preloadedSettings.contrastColor
+    : (state.settings.contrastColor || false);
 
-  if (!preloadedSettings.theme || preloadedSettings.theme !== themeToUse) {
-    applyTheme(themeToUse);
+  if (!preloadedSettings.theme || preloadedSettings.theme !== themeToUse || preloadedSettings.contrastColor !== contrastColorToUse) {
+    applyTheme(themeToUse, contrastColorToUse);
   } else {
     state.settings.theme = themeToUse;
+    state.settings.contrastColor = contrastColorToUse;
     localStorage.setItem("clustrix-theme", themeToUse);
+    localStorage.setItem("clustrix-contrast-color", contrastColorToUse ? "true" : "false");
     $("#theme-slider").checked = themeToUse === "dark";
+    $("#contrast-color-toggle").checked = contrastColorToUse;
   }
 
   if (preloadedSettings.webSearchEnabled !== undefined) {
@@ -12831,21 +12838,30 @@ function deleteCurrentSession() {
 }
 
 // Theme and UI
-function applyTheme(theme) {
-  document.body.className =
-    theme === "dark" ? "dark-theme scrollable" : "light-theme scrollable";
-  document.documentElement.className =
-    theme === "dark" ? "dark-theme" : "light-theme";
+function applyTheme(theme, contrastColor = state.settings?.contrastColor || false) {
+  // Determine theme class based on theme and contrastColor
+  let themeClass;
+  if (theme === "dark") {
+    themeClass = contrastColor ? "dark-theme-contrast" : "dark-theme";
+  } else {
+    themeClass = contrastColor ? "light-theme-contrast" : "light-theme";
+  }
+
+  document.body.className = themeClass + " scrollable";
+  document.documentElement.className = themeClass;
   $("#theme-slider").checked = theme === "dark";
+  $("#contrast-color-toggle").checked = contrastColor;
   state.settings.theme = theme;
+  state.settings.contrastColor = contrastColor;
 
   // Save to localStorage immediately for instant loading on next refresh
   localStorage.setItem("clustrix-theme", theme);
+  localStorage.setItem("clustrix-contrast-color", contrastColor ? "true" : "false");
 }
 
 function toggleTheme() {
   const newTheme = state.settings.theme === "light" ? "dark" : "light";
-  applyTheme(newTheme);
+  applyTheme(newTheme, state.settings.contrastColor);
   save();
 }
 
@@ -14329,12 +14345,13 @@ function setupEventListeners() {
   // Accessibility Modal
   $("#open-accessibility-settings").addEventListener("click", () => {
     log("UI", 2, "event:open-accessibility-settings", "Opening Accessibility modal.");
-    
+
     // Load current settings
     $("#theme-slider").checked = localStorage.getItem('clustrix-theme') === 'dark';
+    $("#contrast-color-toggle").checked = localStorage.getItem('clustrix-contrast-color') === 'true';
     $("#show-projects-toggle").checked = state.settings.showProjects !== false;
     $("#show-starred-toggle").checked = state.settings.showStarred !== false;
-    
+
     openModalWithAnimation($("#accessibility-modal"));
     closeDropdownWithAnimation($("#settings-menu"));
 
@@ -15059,6 +15076,13 @@ function setupEventListeners() {
     toggleTheme();
   });
 
+  $("#contrast-color-toggle").addEventListener("change", (e) => {
+    log("UI", 0, "event:contrast-color-toggle-change", "Contrast color toggled");
+    const contrastEnabled = e.target.checked;
+    applyTheme(state.settings.theme, contrastEnabled);
+    save();
+  });
+
   $("#settings-modal .modal-overlay").addEventListener("click", () => {
     log(
       "UI",
@@ -15348,7 +15372,9 @@ function setupEventListeners() {
         // Render diagram
         try {
           const renderMermaid = (mermaidLib) => {
-            const currentTheme = document.body.classList.contains('dark-theme') ? 'dark' : 'base';
+            const bodyClasses = document.body.className;
+            const isDarkTheme = bodyClasses.includes('dark-theme');
+            const currentTheme = isDarkTheme ? 'dark' : 'base';
             
             if (!mermaidInitialized) {
               mermaidLib.initialize({ 

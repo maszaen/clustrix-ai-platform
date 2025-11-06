@@ -25,7 +25,7 @@ import { createHighlightedCode } from './markdown/highlight.mjs';
 import { initializeUsageStatistics } from './usage/usage-statistics.mjs';
 import { initializeBenchmarkStatistics } from './usage/benchmark-statistics.mjs';
 
-let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",contrastColor: false,streamThrottling: "auto",language: "autodetect"},};
+let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",contrastColor: false,streamThrottling: "auto",useWorker: true,language: "autodetect"},};
 let welcomeScreenStagedFiles = [];
 let projectMessageStagedFiles = [];
 const PROJECT_DETAIL_RENDER_KEY = 'project-detail:render';
@@ -8165,8 +8165,14 @@ async function md(src, options = {}) {
   
   // Decision matrix for processing strategy
   let useWorker = false;
-  
-  if (forceSync) {
+
+  // Check user setting first - override all other logic if disabled
+  const useWorkerEnabled = state.settings.useWorker !== false;
+
+  if (!useWorkerEnabled) {
+    // User disabled worker - force sync mode
+    useWorker = false;
+  } else if (forceSync) {
     useWorker = false;
   } else if (forceWorker) {
     useWorker = true;
@@ -10543,6 +10549,9 @@ async function load() {
   if (!state.settings.googleCseId) {
     state.settings.googleCseId = "";
   }
+  if (state.settings.useWorker === undefined) {
+    state.settings.useWorker = true; // Default to enabled
+  }
 
   // Load saved drafts
   loadAllDrafts();
@@ -12046,9 +12055,10 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           const userSetting = state.settings.streamThrottling || "auto";
           if (userSetting === "none") {
           }
-          
+
           // Decision matrix for rendering strategy
-          const shouldUseWorkerForStreaming = userSetting !== "none" && (
+          const useWorkerEnabled = state.settings.useWorker !== false;
+          const shouldUseWorkerForStreaming = useWorkerEnabled && userSetting !== "none" && (
             display.length > 3000 ||
             (display.match(/```/g) || []).length > 3 ||
             /\$\$[\s\S]*?\$\$/.test(display)
@@ -14351,6 +14361,7 @@ function setupEventListeners() {
     $("#contrast-color-toggle").checked = localStorage.getItem('clustrix-contrast-color') === 'true';
     $("#show-projects-toggle").checked = state.settings.showProjects !== false;
     $("#show-starred-toggle").checked = state.settings.showStarred !== false;
+    $("#use-worker-toggle").checked = state.settings.useWorker !== false;
 
     openModalWithAnimation($("#accessibility-modal"));
     closeDropdownWithAnimation($("#settings-menu"));
@@ -14980,6 +14991,21 @@ function setupEventListeners() {
     state.settings.showStarred = showStarred;
     await save();
     renderSessions(); // Re-render sessions to reflect the new settings
+  });
+
+  $("#use-worker-toggle").addEventListener("change", async (e) => {
+    const useWorker = e.target.checked;
+    log("SETTINGS", 2, "event:use-worker-toggle-change", "Use Worker toggle changed", {
+      useWorker,
+    });
+    state.settings.useWorker = useWorker;
+    await save();
+    showToast(
+      useWorker
+        ? "Worker thread enabled for heavy content"
+        : "Worker disabled - using main thread only",
+      "success"
+    );
   });
 
   $("#close-modal").addEventListener("click", () => {

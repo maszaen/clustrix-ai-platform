@@ -11827,11 +11827,13 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     lastRenderTime = Date.now();
     lastRenderLength = display.length;
 
-    const shouldUseWorkerForStreaming = (
-      display.length > 8000 ||
-      (display.match(/```/g) || []).length > 5 ||
-      /\$\$[\s\S]*?\$\$/.test(display)
-    );
+    // TEMPORARILY DISABLED FOR TESTING - isolate worker thread as cause of memory spike
+    const shouldUseWorkerForStreaming = false;
+    // const shouldUseWorkerForStreaming = (
+    //   display.length > 8000 ||
+    //   (display.match(/```/g) || []).length > 5 ||
+    //   /\$\$[\s\S]*?\$\$/.test(display)
+    // );
 
     if (shouldUseWorkerForStreaming) {
       isUsingWorker = true;

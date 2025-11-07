@@ -11,6 +11,7 @@ import {
   setSessionCacheLogger
 } from './cache/session-cache.mjs';
 import { escapeHtml, cleanLeadingWhitespace } from './markdown/markdown.mjs';
+import { clearMarkdownCache, getMarkdownCacheSize } from './core/md.js';
 import { getExtension, toExt, getFileIcon } from './files/file-utils.mjs';
 import { formatRelativeTime, nowISO, newSessionName } from './time/time-utils.mjs';
 import { generateSessionId } from './ids/id-utils.mjs';
@@ -65,7 +66,8 @@ const dirtySessionIds = new Set();
 // CLEAR CACHE ON PAGE LOAD/REFRESH to prevent stale data
 window.addEventListener('DOMContentLoaded', () => {
   const clearedEntries = clearSessionCache();
-  log('CACHE', 1, 'clearCache', 'Session cache cleared on page load', { clearedEntries });
+  performMemoryCleanup('page-load'); // MEMORY FIX: Comprehensive memory cleanup on page load
+  log('CACHE', 1, 'clearCache', 'Session cache and memory cleaned on page load', { clearedEntries });
 });
 
 // Hover State Preservation System for Streaming
@@ -109,6 +111,45 @@ const BROWSER_MODE = typeof window.api === "undefined";
 let markdownWorker = null;
 let workerMessageId = 0;
 const workerPromises = new Map();
+
+// MEMORY FIX: Comprehensive memory cleanup function
+function performMemoryCleanup(context = 'unknown') {
+  try {
+    // Clear markdown cache
+    clearMarkdownCache();
+
+    // Clear stale worker promises (older than 30 seconds)
+    const now = Date.now();
+    const staleThreshold = 30000; // 30 seconds
+    let clearedPromises = 0;
+
+    for (const [messageId, promiseData] of workerPromises.entries()) {
+      if (promiseData.timestamp && (now - promiseData.timestamp) > staleThreshold) {
+        workerPromises.delete(messageId);
+        clearedPromises++;
+      }
+    }
+
+    // Clear DOM cache to release references
+    domCache.invalidate();
+
+    log("MEMORY", 1, "performMemoryCleanup", "Memory cleanup performed", {
+      context,
+      clearedPromises,
+      markdownCacheSize: getMarkdownCacheSize(),
+      workerPromisesSize: workerPromises.size,
+      domCacheCleared: true
+    });
+  } catch (err) {
+    log("MEMORY", 3, "performMemoryCleanup", "Error during memory cleanup", { error: err.message });
+  }
+}
+
+// MEMORY FIX: Periodic memory cleanup to prevent accumulation
+// Run cleanup every 2 minutes to catch any memory leaks during long sessions
+setInterval(() => {
+  performMemoryCleanup('periodic');
+}, 120000); // 2 minutes
 
 function shouldNormalizeParagraphLists(html) {
   if (typeof html !== 'string' || !html) return false;
@@ -8213,7 +8254,7 @@ async function md(src, options = {}) {
     // Use worker for processing
     return new Promise((resolve) => {
       const messageId = ++workerMessageId;
-      workerPromises.set(messageId, { resolve });
+      workerPromises.set(messageId, { resolve, timestamp: Date.now() }); // MEMORY FIX: Add timestamp for cleanup
       
       markdownWorker.postMessage({
         type: 'init',
@@ -10385,6 +10426,10 @@ function setCurrent(s) {
   // Set session switching flag for optimized rendering and disable smooth scrolling
   window._isSessionSwitching = true;
   document.body.classList.add('session-switching');
+
+  // MEMORY FIX: Comprehensive memory cleanup on session switch
+  performMemoryCleanup('session-switch');
+
   current = s;
 
   if (current && current.id) {
@@ -11804,6 +11849,9 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       s.sawEnd = isComplete;
       s.endSeen = isComplete;
       cleanupStream();
+
+      // MEMORY FIX: Comprehensive memory cleanup after stream completes
+      performMemoryCleanup('stream-complete');
 
       // Remove streaming-active class from the specific AI message
       if (aiNode) {
@@ -16063,7 +16111,8 @@ function initializeApp() {
   log("APP", 2, "initializeApp", "Initializing application.");
 
   const clearedOnInit = clearSessionCache();
-  log('CACHE', 1, 'initializeApp', 'Session cache cleared on app initialization', {
+  performMemoryCleanup('app-init'); // MEMORY FIX: Comprehensive memory cleanup on app initialization
+  log('CACHE', 1, 'initializeApp', 'Session cache and memory cleaned on app initialization', {
     clearedEntries: clearedOnInit
   });
 
@@ -18217,6 +18266,31 @@ window.DEBUG = {
   },
   preloadFrequentSessions: () => preloadFrequentSessions(state.sessions),
   invalidateSessionCache: (id) => invalidateSessionCache(id || (current && current.id)),
+
+  // MEMORY FIX: Manual memory management tools
+  performMemoryCleanup: (context = 'manual') => {
+    performMemoryCleanup(context);
+    console.log('✅ Memory cleanup performed. Check logs for details.');
+  },
+  clearMarkdownCache: () => {
+    clearMarkdownCache();
+    console.log('✅ Markdown cache cleared');
+  },
+  getMarkdownCacheSize: () => {
+    const size = getMarkdownCacheSize();
+    console.log(`📊 Markdown cache size: ${size} items`);
+    return size;
+  },
+  getMemoryStats: () => {
+    const stats = {
+      markdownCacheSize: getMarkdownCacheSize(),
+      workerPromisesSize: workerPromises.size,
+      sessionCacheSize: getSessionCacheSize(),
+      sessionCacheStats: getCacheStats()
+    };
+    console.table(stats);
+    return stats;
+  },
   
   // Performance profiling
   profileSessionSwitch: (sessionId) => {

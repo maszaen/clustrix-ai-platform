@@ -32,6 +32,18 @@ class LRUCache {
 
 const markdownCache = new LRUCache(100);
 
+// Export cache management functions for memory optimization
+export function clearMarkdownCache() {
+  markdownCache.clear();
+  if (typeof window !== 'undefined' && window.DEBUG) {
+    console.log('[MEMORY] Markdown cache cleared');
+  }
+}
+
+export function getMarkdownCacheSize() {
+  return markdownCache.cache.size;
+}
+
 // HTML escape function
 function esc(text) {
   if (!text) return '';

@@ -247,22 +247,24 @@ function updateSummary(summarySection, summary, selectedProvider = 'all', select
   }
   
   if (modelTokensEl) modelTokensEl.textContent = formatTokens(summary?.mostUsedModel?.tokens || 0);
-  
-  if (providerEl) providerEl.textContent = formatSummaryItem(summary?.mostUsedProvider);
-  if (providerTokensEl) providerTokensEl.textContent = formatTokens(summary?.mostUsedProvider?.tokens || 0);
-  
-  // Update provider card label
+
+  // Update provider card label and value
   const providerCard = document.getElementById('usage-provider-card');
   if (providerCard) {
     const providerLabelSpan = providerCard.querySelector('.usage-summary-label');
     if (providerLabelSpan) {
       if (selectedProvider && selectedProvider !== 'all') {
         providerLabelSpan.textContent = 'Selected provider';
+        // Update value to show selected provider name
+        if (providerEl) providerEl.textContent = selectedProvider;
       } else {
         providerLabelSpan.textContent = 'Most used provider';
+        if (providerEl) providerEl.textContent = formatSummaryItem(summary?.mostUsedProvider);
       }
     }
   }
+
+  if (providerTokensEl) providerTokensEl.textContent = formatTokens(summary?.mostUsedProvider?.tokens || 0);
 }
 
 function renderLegend(legendContainer, colorMap) {

@@ -11827,10 +11827,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     // FIX: Adaptive throttling based on content size to prevent memory spike
     // Larger content = more DOM nodes = more expensive reconciliation
     const contentSize = display.length;
-    const minTimeBetweenRenders = contentSize < 2000 ? 50 :   // 0-2KB: Fast updates (50ms)
-                                   contentSize < 4000 ? 100 :  // 2-4KB: Moderate (100ms)
-                                   contentSize < 8000 ? 200 :  // 4-8KB: Slow down (200ms)
-                                   400;                        // 8KB+: Very throttled (400ms)
+    const minTimeBetweenRenders = contentSize < 1500 ? 40 :   // 0-1.5KB: Fast (40ms)
+                                   contentSize < 3000 ? 100 :  // 1.5-3KB: Moderate (100ms)
+                                   contentSize < 5000 ? 250 :  // 3-5KB: Slow (250ms)
+                                   contentSize < 8000 ? 500 :  // 5-8KB: Very slow (500ms)
+                                   800;                        // 8KB+: Extremely throttled (800ms)
 
     const timeSinceLastRender = Date.now() - lastRenderTime;
     if (!gotEnd && timeSinceLastRender < minTimeBetweenRenders) {
@@ -11858,9 +11859,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
     // FIX: More aggressive incremental parsing to avoid expensive DOM reconciliation
     // Especially important for large content where reconciliation is O(n*m)
-    const maxDeltaSize = contentSize < 4000 ? 500 :   // Small content: 500 char delta
-                         contentSize < 8000 ? 300 :   // Medium content: 300 char delta
-                         200;                          // Large content: 200 char delta (more frequent incrementals)
+    // For large content, we want MOST updates to be incremental, not full renders
+    const maxDeltaSize = contentSize < 3000 ? 600 :   // Small content: 600 char delta
+                         contentSize < 6000 ? 400 :   // Medium content: 400 char delta
+                         contentSize < 10000 ? 250 :  // Large content: 250 char delta
+                         150;                          // Very large content: 150 char delta (almost always incremental)
 
     const canUseIncrementalParsing = !gotEnd &&
       lastParsedContent.length > 0 &&
@@ -11870,14 +11873,22 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     if (canUseIncrementalParsing) {
       const deltaContent = display.substring(lastParsedContent.length);
       const deltaHtml = mdFallback(deltaContent);
-      const combinedHtml = lastParsedHtml + deltaHtml;
 
       if (renderToken !== latestRenderToken) return;
 
       lastParsedContent = display;
-      lastParsedHtml = combinedHtml;
+      lastParsedHtml += deltaHtml;
 
-      updateStreamingHtml(div, combinedHtml);
+      // TRUE incremental DOM update - parse and append ONLY the delta
+      const deltaTemplate = document.createElement('template');
+      deltaTemplate.innerHTML = deltaHtml;
+
+      // Append only new nodes without re-parsing entire tree
+      const deltaNodes = Array.from(deltaTemplate.content.childNodes);
+      for (const node of deltaNodes) {
+        div.appendChild(node.cloneNode(true));
+      }
+
       div._lastRenderedLength = display.length;
       scheduleEnhancements(div, { immediate: gotEnd });
       requestAnimationFrame(() => {
@@ -11891,9 +11902,10 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     fullRenderCounter++;
     // FIX: Less frequent full re-parse resets for large content
     // Allows incremental parsing to work longer, reducing expensive full reconciliations
-    const resetFrequency = contentSize < 4000 ? 20 :   // Small: reset every 20 renders
-                           contentSize < 8000 ? 30 :   // Medium: reset every 30 renders
-                           50;                          // Large: reset every 50 renders
+    const resetFrequency = contentSize < 3000 ? 15 :   // Small: reset every 15 renders
+                           contentSize < 6000 ? 40 :   // Medium: reset every 40 renders
+                           contentSize < 10000 ? 80 :  // Large: reset every 80 renders
+                           120;                         // Very large: reset every 120 renders
 
     if (gotEnd || fullRenderCounter % resetFrequency === 0) {
       lastParsedContent = "";

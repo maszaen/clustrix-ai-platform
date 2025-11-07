@@ -11828,8 +11828,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     lastRenderLength = display.length;
 
     const shouldUseWorkerForStreaming = (
-      display.length > 3000 ||
-      (display.match(/```/g) || []).length > 3 ||
+      display.length > 8000 ||
+      (display.match(/```/g) || []).length > 5 ||
       /\$\$[\s\S]*?\$\$/.test(display)
     );
 
@@ -11842,8 +11842,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     const canUseIncrementalParsing = !gotEnd &&
       lastParsedContent.length > 0 &&
       display.startsWith(lastParsedContent) &&
-      contentGrowth < 500 &&
-      !shouldUseWorkerForStreaming;
+      contentGrowth < 500;
 
     if (canUseIncrementalParsing) {
       const deltaContent = display.substring(lastParsedContent.length);
@@ -11867,7 +11866,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     }
 
     fullRenderCounter++;
-    if (gotEnd || fullRenderCounter % 10 === 0) {
+    if (gotEnd || fullRenderCounter % 20 === 0) {
       lastParsedContent = "";
       lastParsedHtml = "";
     }

@@ -11249,7 +11249,19 @@ async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
 function ensureStreamingState(div) {
   if (!div) return null;
   if (!div._streamingState) {
-    div._streamingState = { lastHtml: "", lastText: "" };
+    div._streamingState = {
+      lastHtml: "",
+      lastText: "",
+      codeStream: null,
+      deferEnhancements: false,
+    };
+  } else {
+    if (!Object.prototype.hasOwnProperty.call(div._streamingState, 'codeStream')) {
+      div._streamingState.codeStream = null;
+    }
+    if (!Object.prototype.hasOwnProperty.call(div._streamingState, 'deferEnhancements')) {
+      div._streamingState.deferEnhancements = false;
+    }
   }
   return div._streamingState;
 }
@@ -11408,7 +11420,10 @@ function updateStreamingHtml(div, html) {
 
 function clearStreamingState(div) {
   if (div && div._streamingState) {
-    delete div._streamingState;
+    div._streamingState.lastHtml = "";
+    div._streamingState.lastText = "";
+    div._streamingState.codeStream = null;
+    div._streamingState.deferEnhancements = false;
   }
 }
 
@@ -11425,9 +11440,16 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
   // Smart rendering throttling system
   let lastRenderTime = 0;
   let lastRenderLength = 0;
-  let renderTimeout = null;
   let isUsingWorker = false;
-  let lastThrottleMs = 50;
+
+  let lastParsedContent = "";
+  let lastParsedHtml = "";
+  let fullRenderCounter = 0;
+
+  let renderInFlight = false;
+  let pendingRender = null;
+  let latestRenderToken = 0;
+  let finalizeAfterToken = 0;
 
   const END_RX = /<!--\s*\[\/END\]\s*-->[\s]*$/;
   const trimEnd = (s) => s.replace(/\s*<!--\s*\[\/END\]\s*-->\s*$/, "");
@@ -11499,6 +11521,14 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
   const scheduleEnhancements = (div, { immediate = false } = {}) => {
     if (!div) return;
+    const streamingState = ensureStreamingState(div);
+    if (streamingState) {
+      if (immediate) {
+        streamingState.deferEnhancements = false;
+      } else if (streamingState.deferEnhancements) {
+        return;
+      }
+    }
     if (immediate) {
       runEnhancementsNow(div);
       return;
@@ -11516,6 +11546,371 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       div._enhancementHandle = setTimeout(() => runEnhancementsNow(div), 120);
     }
   };
+
+  const sanitizeLanguageLabel = (lang) => {
+    if (!lang || typeof lang !== "string") return "text";
+    const trimmed = lang.trim();
+    if (!trimmed) return "text";
+    return trimmed.slice(0, 40);
+  };
+
+  const detectStreamingCodeContext = (value) => {
+    if (!value || value.length < 6) return null;
+    let insideFence = false;
+    let language = "text";
+    let codeStart = -1;
+    let fenceIndex = -1;
+
+    for (let i = 0; i < value.length - 2; i++) {
+      if (value[i] === "`" && value[i + 1] === "`" && value[i + 2] === "`") {
+        let cursor = i + 3;
+        while (
+          cursor < value.length &&
+          value[cursor] !== "\n" &&
+          value[cursor] !== "\r"
+        ) {
+          cursor += 1;
+        }
+
+        if (!insideFence) {
+          insideFence = true;
+          fenceIndex = i;
+          const rawLanguage = value.slice(i + 3, cursor);
+          language = sanitizeLanguageLabel(rawLanguage);
+
+          if (cursor >= value.length) {
+            codeStart = -1;
+          } else {
+            if (value[cursor] === "\r" && value[cursor + 1] === "\n") {
+              cursor += 1;
+            }
+            codeStart = cursor + 1;
+          }
+        } else {
+          insideFence = false;
+          codeStart = -1;
+          fenceIndex = -1;
+          language = "text";
+        }
+
+        i = cursor;
+      }
+    }
+
+    if (!insideFence || codeStart === -1 || codeStart >= value.length || fenceIndex === -1) {
+      return null;
+    }
+
+    const codeLength = Math.max(0, value.length - codeStart);
+
+    return {
+      language,
+      codeStart,
+      fenceIndex,
+      codeLength,
+    };
+  };
+
+  const buildStreamingCodePlaceholder = (language) => {
+    const safeLabel = sanitizeLanguageLabel(language);
+    const safeAttr = escapeHtml(safeLabel.toLowerCase());
+    const safeDisplay = escapeHtml(safeLabel);
+    return `<div class="code-block-container streaming" data-streaming-code-block="true" data-language="${safeAttr}"><div class="code-block-header"><span class="language-name">${safeDisplay}</span><div class="code-block-actions"><span class="code-stream-indicator">Streaming…</span></div></div><pre class="code-stream-pre"><code data-streaming-code="true"></code></pre></div>`;
+  };
+
+  const renderStreamingCodeBlock = async (display, renderToken) => {
+    const context = detectStreamingCodeContext(display);
+    const s = getState();
+    const div = s?.aiNode?.querySelector?.(".message-text");
+    const streamingState = ensureStreamingState(div);
+
+    if (!context) {
+      if (streamingState && streamingState.codeStream) {
+        streamingState.codeStream = null;
+        streamingState.deferEnhancements = true;
+      }
+      return false;
+    }
+
+    if (!streamingState || !div) return true;
+
+    streamingState.deferEnhancements = true;
+
+    if (!streamingState.codeStream || streamingState.codeStream.codeStart !== context.codeStart) {
+      const prefixContent = display.slice(0, context.fenceIndex);
+      let prefixHtml = "";
+
+      if (prefixContent && prefixContent.trim()) {
+        try {
+          prefixHtml = await md(prefixContent, {
+            isStreaming: true,
+            forceSync: prefixContent.length < 1200,
+            forceWorker: prefixContent.length > 4000,
+          });
+        } catch (error) {
+          log(
+            "STREAM",
+            2,
+            "renderStreamingCodeBlock",
+            "Failed to render prefix for streaming code",
+            { error: error?.message || String(error) },
+          );
+          prefixHtml = mdFallback(prefixContent);
+        }
+
+        if (renderToken !== latestRenderToken) {
+          return true;
+        }
+      }
+
+      streamingState.codeStream = {
+        active: true,
+        codeStart: context.codeStart,
+        language: context.language,
+        prefixHtml,
+        lastCodeLength: 0,
+        fenceIndex: context.fenceIndex,
+        textNode: null,
+      };
+
+      const placeholderHtml = `${prefixHtml}${buildStreamingCodePlaceholder(context.language)}`;
+      cancelScheduledEnhancements(div);
+      updateStreamingHtml(div, placeholderHtml);
+      streamingState.lastHtml = placeholderHtml;
+      streamingState.lastText = div.textContent ?? "";
+    } else {
+      const streamInfo = streamingState.codeStream;
+      streamInfo.language = context.language;
+      const previousStart = streamInfo.codeStart;
+      streamInfo.codeStart = context.codeStart;
+      streamInfo.fenceIndex = context.fenceIndex;
+      streamInfo._previousStart = previousStart;
+    }
+
+    const codeContainer = div.querySelector('[data-streaming-code-block="true"]');
+    if (codeContainer) {
+      const safeLabel = sanitizeLanguageLabel(context.language);
+      codeContainer.dataset.language = safeLabel.toLowerCase();
+
+      const langNode = codeContainer.querySelector('.language-name');
+      if (langNode) {
+        langNode.textContent = safeLabel;
+      }
+
+      const codeEl = codeContainer.querySelector('code[data-streaming-code="true"]');
+      if (codeEl) {
+        const streamInfo = streamingState.codeStream;
+        const expectedStart = streamInfo.codeStart;
+        const previousStart = streamInfo._previousStart ?? expectedStart;
+        const currentLength =
+          typeof context.codeLength === "number"
+            ? context.codeLength
+            : Math.max(0, display.length - expectedStart);
+
+        if (!streamInfo.textNode || !codeEl.contains(streamInfo.textNode)) {
+          codeEl.textContent = "";
+          const initialContent = expectedStart >= 0 ? display.slice(expectedStart) : "";
+          const textNode = document.createTextNode(initialContent);
+          codeEl.appendChild(textNode);
+          streamInfo.textNode = textNode;
+          streamInfo.lastCodeLength = initialContent.length;
+        } else if (context.codeStart !== previousStart || currentLength < streamInfo.lastCodeLength) {
+          const replacement = context.codeStart >= 0 ? display.slice(context.codeStart) : "";
+          streamInfo.textNode.nodeValue = replacement;
+          streamInfo.lastCodeLength = replacement.length;
+        } else if (currentLength > streamInfo.lastCodeLength) {
+          const deltaStart = expectedStart + streamInfo.lastCodeLength;
+          const delta = display.slice(deltaStart);
+          if (delta) {
+            if (typeof streamInfo.textNode.appendData === "function") {
+              streamInfo.textNode.appendData(delta);
+            } else {
+              streamInfo.textNode.nodeValue += delta;
+            }
+            streamInfo.lastCodeLength += delta.length;
+          }
+        }
+      }
+    }
+
+    div._lastRenderedLength = display.length;
+    lastRenderLength = display.length;
+    lastParsedContent = "";
+    lastParsedHtml = "";
+
+    streamingState.lastText = div.textContent ?? "";
+
+    requestAnimationFrame(() => {
+      scrollToBottom({ fromAI: true });
+    });
+
+    return true;
+  };
+
+  const processPendingRender = () => {
+    if (!pendingRender) return;
+    const { display, gotEnd, token } = pendingRender;
+    pendingRender = null;
+    renderInFlight = true;
+
+    performSmartRender(display, gotEnd, token)
+      .catch((err) => {
+        log(
+          "STREAM",
+          2,
+          "performSmartRender",
+          "Streaming render error",
+          { error: err?.message || String(err) },
+        );
+      })
+      .finally(() => {
+        renderInFlight = false;
+        if (pendingRender) {
+          processPendingRender();
+        }
+      });
+  };
+
+  const scheduleSmartRender = (display, gotEnd) => {
+    const token = ++latestRenderToken;
+    pendingRender = { display, gotEnd, token };
+    if (gotEnd) {
+      finalizeAfterToken = token;
+    }
+    if (!renderInFlight) {
+      processPendingRender();
+    }
+  };
+
+  async function performSmartRender(display, gotEnd, renderToken) {
+    const s = getState();
+    if (!s) {
+      if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
+      return;
+    }
+
+    const aiNode = s.aiNode;
+    if (!aiNode || !document.contains(aiNode)) {
+      if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
+      return;
+    }
+
+    const div = aiNode.querySelector(".message-text");
+    if (!div) {
+      if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
+      return;
+    }
+
+    const handledByCodeStream = await renderStreamingCodeBlock(display, renderToken);
+    if (handledByCodeStream) {
+      if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
+      return;
+    }
+
+    const userSetting = state.settings.streamThrottling || "auto";
+    if (userSetting === "none") {
+      const html = mdFallback(display);
+      if (renderToken !== latestRenderToken) return;
+      updateStreamingHtml(div, html);
+      div._lastRenderedLength = display.length;
+      scheduleEnhancements(div, { immediate: gotEnd });
+      if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
+      return;
+    }
+
+    const contentGrowth = display.length - lastRenderLength;
+    if (contentGrowth === 0) {
+      if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
+      return;
+    }
+
+    lastRenderTime = Date.now();
+    lastRenderLength = display.length;
+
+    const shouldUseWorkerForStreaming = (
+      display.length > 3000 ||
+      (display.match(/```/g) || []).length > 3 ||
+      /\$\$[\s\S]*?\$\$/.test(display)
+    );
+
+    if (shouldUseWorkerForStreaming) {
+      isUsingWorker = true;
+    } else if (isUsingWorker && !shouldUseWorkerForStreaming) {
+      isUsingWorker = false;
+    }
+
+    const canUseIncrementalParsing = !gotEnd &&
+      lastParsedContent.length > 0 &&
+      display.startsWith(lastParsedContent) &&
+      contentGrowth < 500 &&
+      !shouldUseWorkerForStreaming;
+
+    if (canUseIncrementalParsing) {
+      const deltaContent = display.substring(lastParsedContent.length);
+      const deltaHtml = mdFallback(deltaContent);
+      const combinedHtml = lastParsedHtml + deltaHtml;
+
+      if (renderToken !== latestRenderToken) return;
+
+      lastParsedContent = display;
+      lastParsedHtml = combinedHtml;
+
+      updateStreamingHtml(div, combinedHtml);
+      div._lastRenderedLength = display.length;
+      scheduleEnhancements(div, { immediate: gotEnd });
+      requestAnimationFrame(() => {
+        scrollToBottom({ fromAI: true });
+      });
+
+      if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
+      return;
+    }
+
+    fullRenderCounter++;
+    if (gotEnd || fullRenderCounter % 10 === 0) {
+      lastParsedContent = "";
+      lastParsedHtml = "";
+    }
+
+    try {
+      const html = await md(display, {
+        isStreaming: true,
+        forceWorker: shouldUseWorkerForStreaming,
+        forceSync: !shouldUseWorkerForStreaming && display.length < 1000,
+      });
+
+      if (renderToken !== latestRenderToken) return;
+
+      lastParsedContent = display;
+      lastParsedHtml = html;
+
+      updateStreamingHtml(div, html);
+      div._lastRenderedLength = display.length;
+      scheduleEnhancements(div, { immediate: gotEnd });
+      requestAnimationFrame(() => {
+        scrollToBottom({ fromAI: true });
+      });
+    } catch (err) {
+      console.warn('Markdown rendering error:', err);
+      const fallbackHtml = mdFallback(display);
+
+      if (renderToken !== latestRenderToken) return;
+
+      lastParsedContent = display;
+      lastParsedHtml = fallbackHtml;
+
+      updateStreamingHtml(div, fallbackHtml);
+      div._lastRenderedLength = display.length;
+      scheduleEnhancements(div, { immediate: gotEnd });
+      requestAnimationFrame(() => {
+        scrollToBottom({ fromAI: true });
+      });
+    }
+
+    if (gotEnd && renderToken === finalizeAfterToken && !finalized) {
+      finalize();
+    }
+  }
 
   function clearContinuePlaceholder(aiNode) {
     if (!aiNode) return;
@@ -11900,9 +12295,6 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     }
     if (!token) return;
 
-    // Debug logging to trace token flow
-    const currentSetting = state.settings.streamThrottling || "auto";
-
     try {
       bumpToken(s.session, s.messageIndex);
     } catch {}
@@ -11999,21 +12391,15 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     if (s.aiNode && document.contains(s.aiNode)) {
       const div = s.aiNode.querySelector(".message-text");
       if (div) {
-        const prevHeight = div.scrollHeight;
-        const display = trimEnd(fullResponse);
-        
-        // PERFORMANCE: Track last rendered length for incremental updates
         if (!div._lastRenderedLength) {
           div._lastRenderedLength = 0;
         }
-        
-        const userSetting = state.settings.streamThrottling || "auto";
-        
-        // FAST PATH for No Throttling - bypass all complex logic
-        if (userSetting === "none") {
 
-          // Remove thinking container immediately if exists
-          const thinkingContainer = div.querySelector('.thinking-container');
+        const display = trimEnd(fullResponse);
+        const userSetting = state.settings.streamThrottling || "auto";
+        const thinkingContainer = div.querySelector('.thinking-container');
+
+        if (userSetting === "none") {
           if (thinkingContainer && display.trim().length > 0 && thinkingContainer.parentNode) {
             thinkingContainer.parentNode.removeChild(thinkingContainer);
           }
@@ -12021,149 +12407,33 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           const html = mdFallback(display);
           updateStreamingHtml(div, html);
           div._lastRenderedLength = display.length;
-
           scheduleEnhancements(div, { immediate: gotEnd });
-
           debouncedAIScrollToBottom();
 
-          if (gotEnd) finalize();
-          return;
+          if (gotEnd) {
+            finalize();
+          }
+        } else {
+          if (thinkingContainer && display.trim().length > 0) {
+            thinkingContainer.style.opacity = '0';
+            thinkingContainer.style.transition = 'opacity 0.3s ease-out';
+            setTimeout(() => {
+              if (thinkingContainer.parentNode) {
+                thinkingContainer.parentNode.removeChild(thinkingContainer);
+              }
+            }, 300);
+          }
+
+          scheduleSmartRender(display, gotEnd);
         }
-        
-        // For other settings (not "none"), handle thinking container with animation
-        const thinkingContainer = div.querySelector('.thinking-container');
-        if (thinkingContainer && display.trim().length > 0) {
-          thinkingContainer.style.opacity = '0';
-          thinkingContainer.style.transition = 'opacity 0.3s ease-out';
-          setTimeout(() => {
-            if (thinkingContainer.parentNode) {
-              thinkingContainer.parentNode.removeChild(thinkingContainer);
-            }
-          }, 300);
-        }
-        
-        // Smart rendering with incremental delta parsing optimization
-        let lastParsedContent = '';
-        let lastParsedHtml = '';
-        let fullRenderCounter = 0;
-
-        const performSmartRender = () => {
-          const now = Date.now();
-          const contentGrowth = display.length - lastRenderLength;
-
-          // NO THROTTLING - Always render for maximum responsiveness
-          // Decision matrix for rendering strategy
-          const shouldUseWorkerForStreaming = (
-            display.length > 3000 ||
-            (display.match(/```/g) || []).length > 3 ||
-            /\$\$[\s\S]*?\$\$/.test(display)
-          );
-
-          if (shouldUseWorkerForStreaming) {
-            isUsingWorker = true;
-          }
-
-          // Minimal skip logic: only skip if content hasn't grown and not final
-          if (contentGrowth === 0 && !gotEnd) {
-            return;
-          }
-
-          lastRenderTime = now;
-          lastRenderLength = display.length;
-
-          if (isUsingWorker && !shouldUseWorkerForStreaming) {
-            isUsingWorker = false;
-          } else if (!isUsingWorker && shouldUseWorkerForStreaming) {
-            isUsingWorker = true;
-          }
-
-          // INCREMENTAL PARSING OPTIMIZATION
-          // Strategy: Parse only the delta (new content) when possible
-          const canUseIncrementalParsing = !gotEnd &&
-                                           lastParsedContent.length > 0 &&
-                                           display.startsWith(lastParsedContent) &&
-                                           contentGrowth < 500 && // Small incremental updates
-                                           !shouldUseWorkerForStreaming; // Only for sync mode
-
-          if (canUseIncrementalParsing) {
-            // FAST PATH: Incremental delta parsing (O(delta) instead of O(n))
-            const deltaContent = display.substring(lastParsedContent.length);
-
-            // Parse only the new content
-            const deltaHtml = mdFallback(deltaContent);
-
-            // Append to existing HTML (simple concatenation)
-            const combinedHtml = lastParsedHtml + deltaHtml;
-
-            // Update state
-            lastParsedContent = display;
-            lastParsedHtml = combinedHtml;
-
-            // Render the combined HTML
-            updateStreamingHtml(div, combinedHtml);
-            div._lastRenderedLength = display.length;
-
-            requestAnimationFrame(() => {
-              scrollToBottom({ fromAI: true });
-            });
-
-          } else {
-            // FULL PARSE PATH: Use when content changed significantly or final render
-            fullRenderCounter++;
-
-            // Reset incremental state on full parse
-            if (gotEnd || fullRenderCounter % 10 === 0) {
-              lastParsedContent = '';
-              lastParsedHtml = '';
-            }
-
-            md(display, {
-              isStreaming: true,
-              forceWorker: shouldUseWorkerForStreaming,
-              forceSync: !shouldUseWorkerForStreaming && display.length < 1000
-            }).then(html => {
-              // Update incremental state after full parse
-              lastParsedContent = display;
-              lastParsedHtml = html;
-
-              updateStreamingHtml(div, html);
-              div._lastRenderedLength = display.length;
-              scheduleEnhancements(div, { immediate: gotEnd });
-
-              requestAnimationFrame(() => {
-                scrollToBottom({ fromAI: true });
-              });
-            }).catch(err => {
-              console.warn('Markdown rendering error:', err);
-              const fallbackHtml = mdFallback(display);
-
-              lastParsedContent = display;
-              lastParsedHtml = fallbackHtml;
-
-              updateStreamingHtml(div, fallbackHtml);
-              div._lastRenderedLength = display.length;
-              scheduleEnhancements(div, { immediate: gotEnd });
-
-              requestAnimationFrame(() => {
-                scrollToBottom({ fromAI: true });
-              });
-            });
-          }
-        };
-        
-        // Execute rendering immediately - no throttling
-        performSmartRender();
-
-        // Height checking moved inside the rendering promise to avoid race conditions
-        // The autoscroll is now handled directly in the .then() callback above
       }
+    } else if (gotEnd) {
+      finalize();
     }
 
     s.fullResponse = fullResponse;
     s.sawEnd = sawEnd;
     s.lastActivity = Date.now();
-
-    if (gotEnd) finalize();
   };
 }
 

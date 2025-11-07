@@ -10,12 +10,34 @@
   <link rel="stylesheet" href="./style.css" />
   <script>
     (function() {
+      const THEME_VARIANTS = {
+        dark: {
+          standard: 'dark-theme',
+          contrast: 'dark-theme-contrast',
+          terminal: 'dark-turqouse-theme'
+        },
+        light: {
+          standard: 'light-theme',
+          contrast: 'light-theme-contrast',
+          summer: 'light-turqoise-theme'
+        }
+      };
+      
       let finalTheme = 'dark';
-      let finalContrastColor = false;
+      let finalThemeVariant = 'standard';
       
       try {
         let savedTheme = localStorage.getItem('clustrix-theme');
-        let savedContrastColor = localStorage.getItem('clustrix-contrast-color');
+        let savedThemeVariant = localStorage.getItem('clustrix-theme-variant');
+        
+        // Migration: convert old contrastColor to themeVariant
+        const oldContrastColor = localStorage.getItem('clustrix-contrast-color');
+        if (oldContrastColor !== null && savedThemeVariant === null) {
+          savedThemeVariant = oldContrastColor === 'true' ? 'contrast' : 'standard';
+          localStorage.setItem('clustrix-theme-variant', savedThemeVariant);
+          localStorage.removeItem('clustrix-contrast-color');
+        }
+        
         let webSearchEnabled = localStorage.getItem('clustrix-web-search');
         let currentPage = localStorage.getItem('clustrix-current-page');
         let currentSession = localStorage.getItem('clustrix-current-session');
@@ -31,7 +53,11 @@
           try {
             const data = JSON.parse(savedData);
             if (!savedTheme) savedTheme = data.settings?.theme;
-            if (savedContrastColor === null) savedContrastColor = data.settings?.contrastColor ? 'true' : 'false';
+            if (!savedThemeVariant) {
+              // Try new property first, fallback to old contrastColor
+              savedThemeVariant = data.settings?.themeVariant || 
+                (data.settings?.contrastColor ? 'contrast' : 'standard');
+            }
             if (webSearchEnabled === null) {
               webSearchEnabled = data.settings?.webSearchEnabled;
               console.log('[WEBSEARCH] Loaded from saved data:', webSearchEnabled);
@@ -43,9 +69,9 @@
         }
         
         const theme = savedTheme || 'dark';
-        const contrastColor = savedContrastColor === 'true';
+        const themeVariant = savedThemeVariant || 'standard';
         finalTheme = theme;
-        finalContrastColor = contrastColor;
+        finalThemeVariant = themeVariant;
         const webSearch = webSearchEnabled !== null ? webSearchEnabled === 'true' : false;
         const page = currentPage || 'welcome';
         
@@ -54,13 +80,8 @@
           parsed: webSearch
         });
         
-        // Determine theme class based on theme and contrastColor
-        let themeClass;
-        if (theme === 'dark') {
-          themeClass = contrastColor ? 'dark-theme-contrast' : 'dark-theme';
-        } else {
-          themeClass = contrastColor ? 'light-theme-contrast' : 'light-theme';
-        }
+        // Determine theme class based on theme and variant
+        const themeClass = THEME_VARIANTS[theme]?.[themeVariant] || THEME_VARIANTS[theme]?.standard || 'dark-theme';
         
         if (document.documentElement) {
           document.documentElement.className = themeClass;
@@ -73,12 +94,8 @@
         } else {
           document.addEventListener('DOMContentLoaded', () => {
             if (document.body) {
-              let bodyThemeClass;
-              if (finalTheme === 'dark') {
-                bodyThemeClass = finalContrastColor ? 'dark-theme-contrast' : 'dark-theme';
-              } else {
-                bodyThemeClass = finalContrastColor ? 'light-theme-contrast' : 'light-theme';
-              }
+              const bodyThemeClass = THEME_VARIANTS[finalTheme]?.[finalThemeVariant] || 
+                THEME_VARIANTS[finalTheme]?.standard || 'dark-theme';
               document.body.className = bodyThemeClass + ' scrollable';
             }
           });
@@ -86,7 +103,7 @@
         
         window.__PRELOADED_SETTINGS__ = {
           theme: theme,
-          contrastColor: contrastColor,
+          themeVariant: themeVariant,
           webSearchEnabled: webSearch,
           currentPage: page,
           currentSession: currentSession
@@ -104,7 +121,7 @@
         }
         window.__PRELOADED_SETTINGS__ = {
           theme: 'dark',
-          contrastColor: false,
+          themeVariant: 'standard',
           webSearchEnabled: false,
           currentPage: 'welcome',
           currentSession: null
@@ -848,13 +865,17 @@
                 <span class="toggle-slider"></span>
               </label>
             </div>
-            <div class="toggle-item">
-              <label for="contrast-color-toggle" class="toggle-label">
-                <span>Contrast color</span>
-                <input type="checkbox" id="contrast-color-toggle" class="toggle-input">
-                <span class="toggle-slider"></span>
-              </label>
+            <div class="form-group" style="margin-bottom: 2px !important;">
+              <label for="theme-variant-select" style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--fg-muted);">Theme Variant</label>
+              <select id="theme-variant-select" style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-input); background: var(--input-bg); color: var(--fg); font-family: var(--font-sans); font-size: 14px; cursor: pointer;">
+                <!-- Options will be populated dynamically by JavaScript -->
+              </select>
             </div>
+            <div class="form-group">
+            <p class="help-text" style="margin-top: 0px !important; padding-bottom: 9px !important; margin-bottom: 2px !important; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text-secondary);">
+              Choose between different theme variants: Standard for default appearance, Contrast for higher visibility, and themed variants like Terminal (dark turquoise) or Summer (light turquoise) for specific aesthetics.
+            </p>
+          </div>
             <div class="toggle-item">
               <label for="show-projects-toggle" class="toggle-label">
                 <span>Show project sessions</span>
@@ -869,20 +890,8 @@
                 <span class="toggle-slider"></span>
               </label>
             </div>
-            <div class="toggle-item">
-              <label for="use-worker-toggle" class="toggle-label">
-                <span>Use Worker Thread</span>
-                <input type="checkbox" id="use-worker-toggle" class="toggle-input" checked>
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
           </div>
-          <div class="form-group">
-            <p class="help-text" style="margin-top: 8px; font-size: 13px; color: var(--text-secondary);">
-              Worker thread parses markdown in the background for heavy content (>3KB, code blocks, LaTeX).
-              Disable to test pure main thread performance.
-            </p>
-          </div>
+          
         </div>
       </div>
       <div class="modal-actions">
@@ -919,19 +928,6 @@
         <div class="form-group">
           <label for="persona-prefs">What personal preferences should AI consider?</label>
           <textarea id="persona-prefs" spellcheck="false" autocorrect="off" rows="4" placeholder="e.g., Provide concise answers, use technical terms..."></textarea>
-        </div>
-
-        <div class="form-group">
-          <label for="stream-throttling">Stream Throttling</label>
-          <select id="stream-throttling" class="select-input">
-            <option value="auto">Auto (Adaptive based on content)</option>
-            <option value="none">No Throttling (0ms - Maximum Speed)</option>
-            <option value="high">High Performance (10ms)</option>
-            <option value="medium">Medium (50ms)</option>
-            <option value="low">Low (100ms)</option>
-            <option value="minimal">Minimal (150ms)</option>
-          </select>
-          <p class="help-text">Controls how fast AI responses appear during streaming. Higher performance is faster token display but more CPU usage.</p>
         </div>
 
         <div class="form-group">

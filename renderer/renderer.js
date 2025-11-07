@@ -1911,13 +1911,41 @@ function saveCodeArtifact(
   return artifact;
 }
 
-function highlightAllUnder(container) {
+function highlightAllUnder(container, options = {}) {
+  const { isIncremental = false, deltaNodes = null } = options;
+
   if (!container || !window.hljs || typeof window.hljs.highlightElement !== "function") {
     return;
   }
 
-  const codeBlocks = container.querySelectorAll("pre code");
+  let codeBlocks;
+
+  // CRITICAL FIX: Only query NEW code blocks during incremental updates
+  // This prevents querySelectorAll on the entire 30-60KB document on every render
+  if (isIncremental && deltaNodes && deltaNodes.length > 0) {
+    codeBlocks = [];
+    for (const node of deltaNodes) {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        // Check if the node itself is a PRE element with CODE
+        if (node.tagName === 'PRE') {
+          const code = node.querySelector('code');
+          if (code) codeBlocks.push(code);
+        } else {
+          // Query within the delta node
+          const codes = node.querySelectorAll("pre code");
+          codeBlocks.push(...codes);
+        }
+      }
+    }
+  } else {
+    // Full query only on finalization or first render
+    codeBlocks = Array.from(container.querySelectorAll("pre code"));
+  }
+
   codeBlocks.forEach((codeBlock) => {
+    // Skip if already highlighted (double-check to prevent re-highlighting)
+    if (codeBlock.dataset.highlighted === 'yes') return;
+
     if (!codeBlock.classList.contains("hljs")) {
       codeBlock.classList.add("hljs");
     }
@@ -1928,6 +1956,7 @@ function highlightAllUnder(container) {
 
     try {
       window.hljs.highlightElement(codeBlock);
+      codeBlock.dataset.highlighted = 'yes';  // Mark as highlighted
     } catch (error) {
       // console.error("Highlight.js failed to highlight code:", error); // Disabled HLJS logs
     }
@@ -8135,15 +8164,36 @@ function transformSourceFootnotes(container) {
   });
 }
 
-async function renderMathInElement(element) {
-  if (window.MathJax && typeof window.MathJax.typesetPromise === "function") {
-    try {
-      await window.MathJax.typesetPromise([element]);
-    } catch (e) {
-      log("MATHJAX", 4, "renderMathInElement", "Gagal merender LaTeX", {
-        error: e,
+async function renderMathInElement(element, options = {}) {
+  const { isIncremental = false, deltaNodes = null } = options;
+
+  if (!window.MathJax || typeof window.MathJax.typesetPromise !== "function") {
+    return;
+  }
+
+  try {
+    // CRITICAL FIX: Only typeset NEW content during incremental updates
+    // This prevents re-scanning the entire 30-60KB document on every render
+    if (isIncremental && deltaNodes && deltaNodes.length > 0) {
+      // Filter delta nodes that might contain math
+      const nodesToTypeset = deltaNodes.filter(node => {
+        if (node.nodeType !== Node.ELEMENT_NODE) return false;
+        // Check if node or its children contain math markers
+        const text = node.textContent || '';
+        return text.includes('$') || text.includes('\\(') || text.includes('\\[') || node.querySelector('.math');
       });
+
+      if (nodesToTypeset.length > 0) {
+        await window.MathJax.typesetPromise(nodesToTypeset);
+      }
+    } else {
+      // Full typeset only on finalization or first render
+      await window.MathJax.typesetPromise([element]);
     }
+  } catch (e) {
+    log("MATHJAX", 4, "renderMathInElement", "Gagal merender LaTeX", {
+      error: e,
+    });
   }
 }
 
@@ -11511,15 +11561,19 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     div._enhancementHandleType = null;
   };
 
-  const runEnhancementsNow = (div) => {
+  const runEnhancementsNow = (div, options = {}) => {
     if (!div) return;
     cancelScheduledEnhancements(div);
     if (!div.isConnected) return;
-    if (div.querySelector("pre code")) highlightAllUnder(div);
-    renderMathInElement(div);
+
+    // Pass incremental options to enhancement functions
+    if (div.querySelector("pre code")) highlightAllUnder(div, options);
+    renderMathInElement(div, options);
   };
 
-  const scheduleEnhancements = (div, { immediate = false } = {}) => {
+  const scheduleEnhancements = (div, options = {}) => {
+    const { immediate = false, isIncremental = false, deltaNodes = null } = options;
+
     if (!div) return;
     const streamingState = ensureStreamingState(div);
     if (streamingState) {
@@ -11529,8 +11583,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         return;
       }
     }
+
+    const enhancementOptions = { isIncremental, deltaNodes };
+
     if (immediate) {
-      runEnhancementsNow(div);
+      runEnhancementsNow(div, enhancementOptions);
       return;
     }
     if (div._enhancementHandle) return;
@@ -11538,12 +11595,12 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     if (typeof window.requestIdleCallback === "function") {
       div._enhancementHandleType = "idle";
       div._enhancementHandle = window.requestIdleCallback(
-        () => runEnhancementsNow(div),
+        () => runEnhancementsNow(div, enhancementOptions),
         { timeout: 500 },
       );
     } else {
       div._enhancementHandleType = "timeout";
-      div._enhancementHandle = setTimeout(() => runEnhancementsNow(div), 120);
+      div._enhancementHandle = setTimeout(() => runEnhancementsNow(div, enhancementOptions), 120);
     }
   };
 
@@ -11824,22 +11881,6 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       return;
     }
 
-    // FIX: Adaptive throttling based on content size to prevent memory spike
-    // Larger content = more DOM nodes = more expensive reconciliation
-    const contentSize = display.length;
-    const minTimeBetweenRenders = contentSize < 1500 ? 40 :   // 0-1.5KB: Fast (40ms)
-                                   contentSize < 3000 ? 100 :  // 1.5-3KB: Moderate (100ms)
-                                   contentSize < 5000 ? 250 :  // 3-5KB: Slow (250ms)
-                                   contentSize < 8000 ? 500 :  // 5-8KB: Very slow (500ms)
-                                   800;                        // 8KB+: Extremely throttled (800ms)
-
-    const timeSinceLastRender = Date.now() - lastRenderTime;
-    if (!gotEnd && timeSinceLastRender < minTimeBetweenRenders) {
-      // Skip this render, wait for next token
-      if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
-      return;
-    }
-
     lastRenderTime = Date.now();
     lastRenderLength = display.length;
 
@@ -11857,18 +11898,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       isUsingWorker = false;
     }
 
-    // FIX: More aggressive incremental parsing to avoid expensive DOM reconciliation
-    // Especially important for large content where reconciliation is O(n*m)
-    // For large content, we want MOST updates to be incremental, not full renders
-    const maxDeltaSize = contentSize < 3000 ? 600 :   // Small content: 600 char delta
-                         contentSize < 6000 ? 400 :   // Medium content: 400 char delta
-                         contentSize < 10000 ? 250 :  // Large content: 250 char delta
-                         150;                          // Very large content: 150 char delta (almost always incremental)
-
+    // FIX: Prefer incremental parsing to avoid expensive full reconciliation
     const canUseIncrementalParsing = !gotEnd &&
       lastParsedContent.length > 0 &&
       display.startsWith(lastParsedContent) &&
-      contentGrowth < maxDeltaSize;
+      contentGrowth < 500;
 
     if (canUseIncrementalParsing) {
       const deltaContent = display.substring(lastParsedContent.length);
@@ -11885,12 +11919,22 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
       // Append only new nodes without re-parsing entire tree
       const deltaNodes = Array.from(deltaTemplate.content.childNodes);
+      const appendedNodes = [];
       for (const node of deltaNodes) {
-        div.appendChild(node.cloneNode(true));
+        const clonedNode = node.cloneNode(true);
+        div.appendChild(clonedNode);
+        appendedNodes.push(clonedNode);  // Track appended nodes for incremental enhancements
       }
 
       div._lastRenderedLength = display.length;
-      scheduleEnhancements(div, { immediate: gotEnd });
+
+      // CRITICAL FIX: Pass delta nodes to enhancement system for incremental processing
+      scheduleEnhancements(div, {
+        immediate: gotEnd,
+        isIncremental: !gotEnd,  // Only incremental if not finalizing
+        deltaNodes: appendedNodes  // Pass the actual appended DOM nodes
+      });
+
       requestAnimationFrame(() => {
         scrollToBottom({ fromAI: true });
       });
@@ -11900,14 +11944,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     }
 
     fullRenderCounter++;
-    // FIX: Less frequent full re-parse resets for large content
-    // Allows incremental parsing to work longer, reducing expensive full reconciliations
-    const resetFrequency = contentSize < 3000 ? 15 :   // Small: reset every 15 renders
-                           contentSize < 6000 ? 40 :   // Medium: reset every 40 renders
-                           contentSize < 10000 ? 80 :  // Large: reset every 80 renders
-                           120;                         // Very large: reset every 120 renders
-
-    if (gotEnd || fullRenderCounter % resetFrequency === 0) {
+    // Reset incremental state periodically to prevent drift
+    if (gotEnd || fullRenderCounter % 20 === 0) {
       lastParsedContent = "";
       lastParsedHtml = "";
     }

@@ -3,7 +3,8 @@
     "allow": [
       "Bash(node:*)",
       "Read(//h/**)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

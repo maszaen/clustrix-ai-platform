@@ -66,6 +66,24 @@ const dirtySessionIds = new Set();
 window.addEventListener('DOMContentLoaded', () => {
   const clearedEntries = clearSessionCache();
   log('CACHE', 1, 'clearCache', 'Session cache cleared on page load', { clearedEntries });
+
+  // MEMORY FIX: Periodic cleanup every 5 minutes when idle
+  setInterval(() => {
+    // Only cleanup if not streaming
+    if (!streamManager.isStreaming()) {
+      // Clear all message-text streaming states
+      const allMessageTexts = document.querySelectorAll('.message-text');
+      allMessageTexts.forEach(div => {
+        if (div._streamingState && div._streamingState.lastHtml) {
+          const htmlSize = div._streamingState.lastHtml.length;
+          if (htmlSize > 100000) { // Only clear if > 100KB
+            clearStreamingState(div);
+            log('MEMORY', 1, 'periodicCleanup', 'Cleared large streaming state', { htmlSize });
+          }
+        }
+      });
+    }
+  }, 5 * 60 * 1000); // Every 5 minutes
 });
 
 // Hover State Preservation System for Streaming
@@ -1918,6 +1936,11 @@ function highlightAllUnder(container) {
 
   const codeBlocks = container.querySelectorAll("pre code");
   codeBlocks.forEach((codeBlock) => {
+    // MEMORY OPTIMIZATION: Skip if already highlighted to prevent re-highlighting leak
+    if (codeBlock.dataset.highlighted === "true") {
+      return;
+    }
+
     if (!codeBlock.classList.contains("hljs")) {
       codeBlock.classList.add("hljs");
     }
@@ -1928,6 +1951,8 @@ function highlightAllUnder(container) {
 
     try {
       window.hljs.highlightElement(codeBlock);
+      // Mark as highlighted to prevent re-processing
+      codeBlock.dataset.highlighted = "true";
     } catch (error) {
       // console.error("Highlight.js failed to highlight code:", error); // Disabled HLJS logs
     }
@@ -7854,6 +7879,10 @@ function attachCodeBlockListeners(container) {
   const saveIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>`;
 
   copyButtons.forEach((btn) => {
+    // MEMORY FIX: Prevent duplicate listener attachment
+    if (btn.dataset.copyBound === "true") return;
+    btn.dataset.copyBound = "true";
+
     btn.addEventListener("click", () => {
       const container = btn.closest(".code-block-container");
       const codeElement = container.querySelector("code");
@@ -8238,6 +8267,9 @@ async function md(src, options = {}) {
 }
 
 // Fallback synchronous markdown processing using enhanced md.js formatter
+// MEMORY OPTIMIZATION: Reuse temp div for parsing
+let _mdFallbackTempDiv = null;
+
 function mdFallback(src) {
   if (!src) return "";
 
@@ -8245,8 +8277,12 @@ function mdFallback(src) {
   if (typeof enhancedMarkdownParse === 'function') {
     try {
       const html = enhancedMarkdownParse(src, { isThinkingText: false });
-      
-      const tempDiv = document.createElement("div");
+
+      // MEMORY OPTIMIZATION: Reuse temp div
+      if (!_mdFallbackTempDiv) {
+        _mdFallbackTempDiv = document.createElement("div");
+      }
+      const tempDiv = _mdFallbackTempDiv;
       tempDiv.innerHTML = html;
 
       // Add p-has-li class to p tags before ul/ol
@@ -8256,14 +8292,19 @@ function mdFallback(src) {
 
       // Apply post-processing
       transformSourceFootnotes(tempDiv);
-      
+
       // Highlight code blocks if present
       if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
       attachCodeBlockListeners(tempDiv);
 
       setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
-      
-      return tempDiv.innerHTML;
+
+      const result = tempDiv.innerHTML;
+
+      // MEMORY OPTIMIZATION: Clear div content after use to prevent memory accumulation
+      tempDiv.innerHTML = "";
+
+      return result;
     } catch (error) {
       log('MARKDOWN', 0, 'mdFallback', 'Error using enhancedMarkdownParse, falling back to basic renderer', { error: error.message });
       // Fall through to basic fallback below
@@ -8317,7 +8358,11 @@ function mdFallback(src) {
     return `<div class="table-container">${processedTable}</div>`;
   });
 
-  const tempDiv = document.createElement("div");
+  // MEMORY OPTIMIZATION: Reuse temp div for fallback path too
+  if (!_mdFallbackTempDiv) {
+    _mdFallbackTempDiv = document.createElement("div");
+  }
+  const tempDiv = _mdFallbackTempDiv;
   tempDiv.innerHTML = html;
 
   transformSourceFootnotes(tempDiv);
@@ -8328,7 +8373,12 @@ function mdFallback(src) {
 
   setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
 
-  return tempDiv.innerHTML;
+  const result = tempDiv.innerHTML;
+
+  // MEMORY OPTIMIZATION: Clear div content after use
+  tempDiv.innerHTML = "";
+
+  return result;
 }
 
 async function updateCodeBlocksWithArtifactInfo(container = document) {
@@ -10363,7 +10413,7 @@ function setCurrent(s) {
     if (msgInput) {
       saveDraftForSession(current.id, msgInput.value);
     }
-    
+
     // Cache current session before switching ONLY if not streaming in this session
     // If streaming, the finalize will handle caching when stream completes
     const isStreamingInCurrentSession = streamManager.isStreamingInSession(current);
@@ -11370,7 +11420,11 @@ function updateStreamingHtml(div, html) {
     return;
   }
 
-  const template = document.createElement('template');
+  // MEMORY OPTIMIZATION: Reuse template element to reduce GC pressure
+  if (!div._templateCache) {
+    div._templateCache = document.createElement('template');
+  }
+  const template = div._templateCache;
   template.innerHTML = html;
   const newChildren = Array.from(template.content.childNodes);
   const expectedText = template.content.textContent ?? "";
@@ -11407,8 +11461,19 @@ function updateStreamingHtml(div, html) {
 }
 
 function clearStreamingState(div) {
-  if (div && div._streamingState) {
+  if (!div) return;
+
+  // MEMORY FIX: Clear state properties before deleting object
+  if (div._streamingState) {
+    div._streamingState.lastHtml = "";
+    div._streamingState.lastText = "";
     delete div._streamingState;
+  }
+
+  // MEMORY FIX: Clear template cache
+  if (div._templateCache) {
+    div._templateCache.innerHTML = "";
+    delete div._templateCache;
   }
 }
 
@@ -11854,6 +11919,12 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       // if (hasContent && (!session.name || /untitled/i.test(session.name))) {
       //   try { generateAndSetTitle?.(session); } catch {}
       // }
+
+      // MEMORY FIX: Force cleanup of large variables
+      fullResponse = null;
+      lastParsedContent = null;
+      lastParsedHtml = null;
+
     } finally {
       try {
         notifyComplete?.();
@@ -12051,16 +12122,27 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           const now = Date.now();
           const contentGrowth = display.length - lastRenderLength;
 
-          // NO THROTTLING - Always render for maximum responsiveness
           // Decision matrix for rendering strategy
+          const codeBlockCount = (display.match(/```/g) || []).length;
+          const hasLatex = /\$\$[\s\S]*?\$\$/.test(display);
           const shouldUseWorkerForStreaming = (
             display.length > 3000 ||
-            (display.match(/```/g) || []).length > 3 ||
-            /\$\$[\s\S]*?\$\$/.test(display)
+            codeBlockCount > 3 ||
+            hasLatex
           );
 
-          if (shouldUseWorkerForStreaming) {
+          if (shouldUseWorkerForStreaming && !isUsingWorker) {
             isUsingWorker = true;
+            log("STREAM", 1, "performSmartRender", "Switching to worker", {
+              contentSize: display.length,
+              codeBlockCount,
+              hasLatex
+            });
+          } else if (!shouldUseWorkerForStreaming && isUsingWorker) {
+            isUsingWorker = false;
+            log("STREAM", 1, "performSmartRender", "Switching to sync", {
+              contentSize: display.length
+            });
           }
 
           // Minimal skip logic: only skip if content hasn't grown and not final
@@ -12079,10 +12161,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
           // INCREMENTAL PARSING OPTIMIZATION
           // Strategy: Parse only the delta (new content) when possible
+          // MEMORY OPTIMIZATION: Increased threshold from 500 to 2000 for better incremental parsing
           const canUseIncrementalParsing = !gotEnd &&
                                            lastParsedContent.length > 0 &&
                                            display.startsWith(lastParsedContent) &&
-                                           contentGrowth < 500 && // Small incremental updates
+                                           contentGrowth < 2000 && // Increased threshold for more incremental updates
                                            !shouldUseWorkerForStreaming; // Only for sync mode
 
           if (canUseIncrementalParsing) {

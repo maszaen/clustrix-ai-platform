@@ -135,6 +135,20 @@ function performMemoryCleanup(context = 'unknown') {
     // Clear DOM cache to release references
     domCache.invalidate();
 
+    // MEMORY FIX: Clear streaming template to release memory
+    if (typeof streamingTemplate !== 'undefined' && streamingTemplate) {
+      streamingTemplate.innerHTML = '';
+    }
+
+    // MEMORY FIX: Force garbage collection hint (if available in dev tools)
+    if (context === 'stream-complete' && window.gc && typeof window.gc === 'function') {
+      try {
+        window.gc();
+      } catch (e) {
+        // gc not available, ignore
+      }
+    }
+
     const markdownCacheSize = typeof window.getMarkdownCacheSize === 'function'
       ? window.getMarkdownCacheSize()
       : 'N/A';
@@ -144,7 +158,8 @@ function performMemoryCleanup(context = 'unknown') {
       clearedPromises,
       markdownCacheSize,
       workerPromisesSize: workerPromises.size,
-      domCacheCleared: true
+      domCacheCleared: true,
+      templateCleared: true
     });
   } catch (err) {
     log("MEMORY", 3, "performMemoryCleanup", "Error during memory cleanup", { error: err.message });
@@ -1965,6 +1980,11 @@ function highlightAllUnder(container) {
 
   const codeBlocks = container.querySelectorAll("pre code");
   codeBlocks.forEach((codeBlock) => {
+    // MEMORY FIX: Check if already highlighted to prevent re-highlighting and memory leak
+    if (codeBlock.dataset.highlighted === "yes") {
+      return;  // Skip already highlighted blocks
+    }
+
     if (!codeBlock.classList.contains("hljs")) {
       codeBlock.classList.add("hljs");
     }
@@ -1975,6 +1995,7 @@ function highlightAllUnder(container) {
 
     try {
       window.hljs.highlightElement(codeBlock);
+      codeBlock.dataset.highlighted = "yes";  // Mark as highlighted
     } catch (error) {
       // console.error("Highlight.js failed to highlight code:", error); // Disabled HLJS logs
     }
@@ -8223,10 +8244,12 @@ async function md(src, options = {}) {
     useWorker = false; // Always use sync for session switching to prevent layout shifts
   } else if (isStreaming) {
     // Streaming: progressive adoption - start sync, move to worker for heavy content
-    useWorker = contentSize > 3000 || hasLotsOfCode || hasComplexElements;
+    // MEMORY FIX: Lowered from 3000 to 1500 to prevent main thread blocking
+    useWorker = contentSize > 1500 || hasLotsOfCode || hasComplexElements;
   } else {
     // General case: worker for heavy content
-    useWorker = contentSize > 2000 || hasLotsOfCode || hasComplexElements;
+    // MEMORY FIX: Lowered from 2000 to 1500 for consistency
+    useWorker = contentSize > 1500 || hasLotsOfCode || hasComplexElements;
   }
   
   // Execute based on strategy
@@ -11297,10 +11320,29 @@ async function hydrateThinkingIfAnyAsync(aiNode, session, messageIndex) {
 }
 
 // Stream Handling
+// MEMORY FIX: Simple hash function to avoid storing full HTML strings
+function simpleHash(str) {
+  if (!str) return 0;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return hash;
+}
+
+// MEMORY FIX: Reuse single template element to prevent memory leak
+const streamingTemplate = document.createElement('template');
+
 function ensureStreamingState(div) {
   if (!div) return null;
   if (!div._streamingState) {
-    div._streamingState = { lastHtml: "", lastText: "" };
+    // MEMORY FIX: Store only hash instead of full HTML to prevent memory leak
+    div._streamingState = {
+      lastHtmlHash: 0,  // Use hash instead of full HTML string
+      lastTextHash: 0   // Use hash instead of full text string
+    };
   }
   return div._streamingState;
 }
@@ -11416,17 +11458,22 @@ function updateStreamingHtml(div, html) {
     if (div.firstChild) {
       div.textContent = "";
     }
-    state.lastHtml = "";
-    state.lastText = "";
+    state.lastHtmlHash = 0;
+    state.lastTextHash = 0;
     return;
   }
 
-  const template = document.createElement('template');
-  template.innerHTML = html;
-  const newChildren = Array.from(template.content.childNodes);
-  const expectedText = template.content.textContent ?? "";
+  // MEMORY FIX: Use hash comparison instead of storing full HTML string
+  const htmlHash = simpleHash(html);
 
-  if (state.lastHtml === html && state.lastText === expectedText) {
+  // MEMORY FIX: Reuse template instead of creating new one every time
+  streamingTemplate.innerHTML = html;
+  const newChildren = Array.from(streamingTemplate.content.childNodes);
+  const expectedText = streamingTemplate.content.textContent ?? "";
+  const expectedTextHash = simpleHash(expectedText);
+
+  // Check if content unchanged using hash
+  if (state.lastHtmlHash === htmlHash && state.lastTextHash === expectedTextHash) {
     return;
   }
 
@@ -11439,22 +11486,23 @@ function updateStreamingHtml(div, html) {
 
   if (!reconciled) {
     div.innerHTML = html;
-    state.lastHtml = html;
-    state.lastText = div.textContent ?? "";
+    state.lastHtmlHash = htmlHash;
+    state.lastTextHash = simpleHash(div.textContent ?? "");
     return;
   }
 
   const actualText = div.textContent ?? "";
+  const actualTextHash = simpleHash(actualText);
 
-  if (actualText !== expectedText) {
+  if (actualTextHash !== expectedTextHash) {
     div.innerHTML = html;
-    state.lastHtml = html;
-    state.lastText = div.textContent ?? "";
+    state.lastHtmlHash = htmlHash;
+    state.lastTextHash = simpleHash(div.textContent ?? "");
     return;
   }
 
-  state.lastHtml = html;
-  state.lastText = actualText;
+  state.lastHtmlHash = htmlHash;
+  state.lastTextHash = actualTextHash;
 }
 
 function clearStreamingState(div) {
@@ -12107,9 +12155,10 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
           // NO THROTTLING - Always render for maximum responsiveness
           // Decision matrix for rendering strategy
+          // MEMORY FIX: Use worker earlier to prevent main thread blocking (1500 instead of 3000)
           const shouldUseWorkerForStreaming = (
-            display.length > 3000 ||
-            (display.match(/```/g) || []).length > 3 ||
+            display.length > 1500 ||  // Lowered from 3000 to prevent main thread blocking
+            (display.match(/```/g) || []).length > 2 ||  // Lowered from 3 to 2
             /\$\$[\s\S]*?\$\$/.test(display)
           );
 
@@ -12133,10 +12182,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
           // INCREMENTAL PARSING OPTIMIZATION
           // Strategy: Parse only the delta (new content) when possible
+          // MEMORY FIX: Increased threshold from 500 to 2000 chars for better incremental parsing
           const canUseIncrementalParsing = !gotEnd &&
                                            lastParsedContent.length > 0 &&
                                            display.startsWith(lastParsedContent) &&
-                                           contentGrowth < 500 && // Small incremental updates
+                                           contentGrowth < 2000 && // Increased from 500 to 2000
                                            !shouldUseWorkerForStreaming; // Only for sync mode
 
           if (canUseIncrementalParsing) {
@@ -12174,7 +12224,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
             md(display, {
               isStreaming: true,
               forceWorker: shouldUseWorkerForStreaming,
-              forceSync: !shouldUseWorkerForStreaming && display.length < 1000
+              forceSync: !shouldUseWorkerForStreaming && display.length < 500  // MEMORY FIX: Lowered from 1000 to 500
             }).then(html => {
               // Update incremental state after full parse
               lastParsedContent = display;

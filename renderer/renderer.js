@@ -11824,6 +11824,21 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       return;
     }
 
+    // FIX: Adaptive throttling based on content size to prevent memory spike
+    // Larger content = more DOM nodes = more expensive reconciliation
+    const contentSize = display.length;
+    const minTimeBetweenRenders = contentSize < 2000 ? 50 :   // 0-2KB: Fast updates (50ms)
+                                   contentSize < 4000 ? 100 :  // 2-4KB: Moderate (100ms)
+                                   contentSize < 8000 ? 200 :  // 4-8KB: Slow down (200ms)
+                                   400;                        // 8KB+: Very throttled (400ms)
+
+    const timeSinceLastRender = Date.now() - lastRenderTime;
+    if (!gotEnd && timeSinceLastRender < minTimeBetweenRenders) {
+      // Skip this render, wait for next token
+      if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
+      return;
+    }
+
     lastRenderTime = Date.now();
     lastRenderLength = display.length;
 
@@ -11841,10 +11856,16 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       isUsingWorker = false;
     }
 
+    // FIX: More aggressive incremental parsing to avoid expensive DOM reconciliation
+    // Especially important for large content where reconciliation is O(n*m)
+    const maxDeltaSize = contentSize < 4000 ? 500 :   // Small content: 500 char delta
+                         contentSize < 8000 ? 300 :   // Medium content: 300 char delta
+                         200;                          // Large content: 200 char delta (more frequent incrementals)
+
     const canUseIncrementalParsing = !gotEnd &&
       lastParsedContent.length > 0 &&
       display.startsWith(lastParsedContent) &&
-      contentGrowth < 500;
+      contentGrowth < maxDeltaSize;
 
     if (canUseIncrementalParsing) {
       const deltaContent = display.substring(lastParsedContent.length);
@@ -11868,7 +11889,13 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     }
 
     fullRenderCounter++;
-    if (gotEnd || fullRenderCounter % 20 === 0) {
+    // FIX: Less frequent full re-parse resets for large content
+    // Allows incremental parsing to work longer, reducing expensive full reconciliations
+    const resetFrequency = contentSize < 4000 ? 20 :   // Small: reset every 20 renders
+                           contentSize < 8000 ? 30 :   // Medium: reset every 30 renders
+                           50;                          // Large: reset every 50 renders
+
+    if (gotEnd || fullRenderCounter % resetFrequency === 0) {
       lastParsedContent = "";
       lastParsedHtml = "";
     }

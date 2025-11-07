@@ -25,7 +25,7 @@ import { createHighlightedCode } from './markdown/highlight.mjs';
 import { initializeUsageStatistics } from './usage/usage-statistics.mjs';
 import { initializeBenchmarkStatistics } from './usage/benchmark-statistics.mjs';
 
-let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",contrastColor: false,streamThrottling: "auto",useWorker: true,language: "autodetect"},};
+let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",themeVariant: "standard",language: "autodetect"},};
 let welcomeScreenStagedFiles = [];
 let projectMessageStagedFiles = [];
 const PROJECT_DETAIL_RENDER_KEY = 'project-detail:render';
@@ -8166,13 +8166,8 @@ async function md(src, options = {}) {
   // Decision matrix for processing strategy
   let useWorker = false;
 
-  // Check user setting first - override all other logic if disabled
-  const useWorkerEnabled = state.settings.useWorker !== false;
-
-  if (!useWorkerEnabled) {
-    // User disabled worker - force sync mode
-    useWorker = false;
-  } else if (forceSync) {
+  // Smart worker decision - fully automatic based on content
+  if (forceSync) {
     useWorker = false;
   } else if (forceWorker) {
     useWorker = true;
@@ -10319,7 +10314,7 @@ function setCurrent(s) {
 
   const switchStartTime = performance.now();
   
-  if (window.innerWidth <= 768) {
+  if (window.innerWidth <= 998) {
     closeMobileSidebar();
   }
 
@@ -10549,9 +10544,7 @@ async function load() {
   if (!state.settings.googleCseId) {
     state.settings.googleCseId = "";
   }
-  if (state.settings.useWorker === undefined) {
-    state.settings.useWorker = true; // Default to enabled
-  }
+  // Worker thread is now automatic - no user setting needed
 
   // Load saved drafts
   loadAllDrafts();
@@ -10675,19 +10668,19 @@ async function load() {
 
   const preloadedSettings = window.__PRELOADED_SETTINGS__ || {};
   const themeToUse = preloadedSettings.theme || state.settings.theme || "dark";
-  const contrastColorToUse = preloadedSettings.contrastColor !== undefined
-    ? preloadedSettings.contrastColor
-    : (state.settings.contrastColor || false);
+  const themeVariantToUse = preloadedSettings.themeVariant !== undefined
+    ? preloadedSettings.themeVariant
+    : (state.settings.themeVariant || 'standard');
 
-  if (!preloadedSettings.theme || preloadedSettings.theme !== themeToUse || preloadedSettings.contrastColor !== contrastColorToUse) {
-    applyTheme(themeToUse, contrastColorToUse);
+  if (!preloadedSettings.theme || preloadedSettings.theme !== themeToUse || preloadedSettings.themeVariant !== themeVariantToUse) {
+    applyTheme(themeToUse, themeVariantToUse);
   } else {
     state.settings.theme = themeToUse;
-    state.settings.contrastColor = contrastColorToUse;
+    state.settings.themeVariant = themeVariantToUse;
     localStorage.setItem("clustrix-theme", themeToUse);
-    localStorage.setItem("clustrix-contrast-color", contrastColorToUse ? "true" : "false");
+    localStorage.setItem("clustrix-theme-variant", themeVariantToUse);
     $("#theme-slider").checked = themeToUse === "dark";
-    $("#contrast-color-toggle").checked = contrastColorToUse;
+    updateThemeVariantSelect(themeToUse, themeVariantToUse);
   }
 
   if (preloadedSettings.webSearchEnabled !== undefined) {
@@ -12046,133 +12039,117 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           }, 300);
         }
         
-        // Smart throttled rendering with progressive worker adoption
+        // Smart rendering with incremental delta parsing optimization
+        let lastParsedContent = '';
+        let lastParsedHtml = '';
+        let fullRenderCounter = 0;
+
         const performSmartRender = () => {
           const now = Date.now();
           const contentGrowth = display.length - lastRenderLength;
-          const timeSinceLastRender = now - lastRenderTime;
-          
-          const userSetting = state.settings.streamThrottling || "auto";
-          if (userSetting === "none") {
-          }
 
+          // NO THROTTLING - Always render for maximum responsiveness
           // Decision matrix for rendering strategy
-          const useWorkerEnabled = state.settings.useWorker !== false;
-          const shouldUseWorkerForStreaming = useWorkerEnabled && userSetting !== "none" && (
+          const shouldUseWorkerForStreaming = (
             display.length > 3000 ||
             (display.match(/```/g) || []).length > 3 ||
             /\$\$[\s\S]*?\$\$/.test(display)
           );
-          
-          // Get user's throttling preference
-          const getThrottleMs = () => {
-            switch (userSetting) {
-              case "none":
-                return 0; // No throttling - maximum speed
-              case "high":
-                return 10; // High performance
-              case "medium":
-                return 50; // Medium performance
-              case "low":
-                return 100; // Low performance
-              case "minimal":
-                return 150; // Minimal performance
-              case "auto":
-              default:
-                // Auto-adaptive based on content
-                if (shouldUseWorkerForStreaming) {
-                  return 150; // Slower for worker processing
-                } else if (display.length > 1500) {
-                  return 100; // Medium throttle for medium content
-                } else {
-                  return 50; // Base throttle
-                }
-            }
-          };
 
-          // Adaptive throttling based on user setting and content
-          let throttleMs = getThrottleMs();
           if (shouldUseWorkerForStreaming) {
             isUsingWorker = true;
           }
-          
-          // Adjust content growth threshold based on user setting
-          const getContentGrowthThreshold = () => {
-            switch (userSetting) {
-              case "none":
-                return 1; // Minimal threshold - render every single character
-              case "high":
-                return 10; // Lower threshold for faster updates
-              case "medium":
-                return 30; // Medium threshold
-              case "low":
-                return 50; // Higher threshold
-              case "minimal":
-                return 80; // Highest threshold
-              case "auto":
-              default:
-                return 50; // Default threshold
-            }
-          };
 
-          const contentGrowthThreshold = getContentGrowthThreshold();
-          
-          // Skip render if throttling and no significant change (but never skip for "none" setting)
-          if (userSetting !== "none" && timeSinceLastRender < throttleMs && contentGrowth < contentGrowthThreshold && !gotEnd) {
+          // Minimal skip logic: only skip if content hasn't grown and not final
+          if (contentGrowth === 0 && !gotEnd) {
             return;
           }
-          
+
           lastRenderTime = now;
           lastRenderLength = display.length;
-          lastThrottleMs = throttleMs;
-          
+
           if (isUsingWorker && !shouldUseWorkerForStreaming) {
             isUsingWorker = false;
           } else if (!isUsingWorker && shouldUseWorkerForStreaming) {
             isUsingWorker = true;
           }
 
-          // Note: "none" throttling is handled by fast path above, this code only runs for other settings
-          md(display, {
-            isStreaming: true,
-            forceWorker: shouldUseWorkerForStreaming,
-            forceSync: !shouldUseWorkerForStreaming && display.length < 1000
-          }).then(html => {
-            updateStreamingHtml(div, html);
+          // INCREMENTAL PARSING OPTIMIZATION
+          // Strategy: Parse only the delta (new content) when possible
+          const canUseIncrementalParsing = !gotEnd &&
+                                           lastParsedContent.length > 0 &&
+                                           display.startsWith(lastParsedContent) &&
+                                           contentGrowth < 500 && // Small incremental updates
+                                           !shouldUseWorkerForStreaming; // Only for sync mode
+
+          if (canUseIncrementalParsing) {
+            // FAST PATH: Incremental delta parsing (O(delta) instead of O(n))
+            const deltaContent = display.substring(lastParsedContent.length);
+
+            // Parse only the new content
+            const deltaHtml = mdFallback(deltaContent);
+
+            // Append to existing HTML (simple concatenation)
+            const combinedHtml = lastParsedHtml + deltaHtml;
+
+            // Update state
+            lastParsedContent = display;
+            lastParsedHtml = combinedHtml;
+
+            // Render the combined HTML
+            updateStreamingHtml(div, combinedHtml);
             div._lastRenderedLength = display.length;
-            scheduleEnhancements(div, { immediate: gotEnd });
 
             requestAnimationFrame(() => {
               scrollToBottom({ fromAI: true });
             });
-          }).catch(err => {
-            console.warn('Markdown rendering error:', err);
-            updateStreamingHtml(div, mdFallback(display));
-            div._lastRenderedLength = display.length;
-            scheduleEnhancements(div, { immediate: gotEnd });
 
-            requestAnimationFrame(() => {
-              scrollToBottom({ fromAI: true });
+          } else {
+            // FULL PARSE PATH: Use when content changed significantly or final render
+            fullRenderCounter++;
+
+            // Reset incremental state on full parse
+            if (gotEnd || fullRenderCounter % 10 === 0) {
+              lastParsedContent = '';
+              lastParsedHtml = '';
+            }
+
+            md(display, {
+              isStreaming: true,
+              forceWorker: shouldUseWorkerForStreaming,
+              forceSync: !shouldUseWorkerForStreaming && display.length < 1000
+            }).then(html => {
+              // Update incremental state after full parse
+              lastParsedContent = display;
+              lastParsedHtml = html;
+
+              updateStreamingHtml(div, html);
+              div._lastRenderedLength = display.length;
+              scheduleEnhancements(div, { immediate: gotEnd });
+
+              requestAnimationFrame(() => {
+                scrollToBottom({ fromAI: true });
+              });
+            }).catch(err => {
+              console.warn('Markdown rendering error:', err);
+              const fallbackHtml = mdFallback(display);
+
+              lastParsedContent = display;
+              lastParsedHtml = fallbackHtml;
+
+              updateStreamingHtml(div, fallbackHtml);
+              div._lastRenderedLength = display.length;
+              scheduleEnhancements(div, { immediate: gotEnd });
+
+              requestAnimationFrame(() => {
+                scrollToBottom({ fromAI: true });
+              });
             });
-          });
+          }
         };
         
-        // Execute smart rendering
-        if (gotEnd) {
-          // Final render - no throttling
-          clearTimeout(renderTimeout);
-          performSmartRender();
-        } else {
-          // Throttled streaming render based on user setting
-          clearTimeout(renderTimeout);
-          if (userSetting === "none") {
-            // No throttling - render immediately
-            performSmartRender();
-          } else {
-            const delay = Math.max(16, lastThrottleMs || 0);
-            renderTimeout = setTimeout(performSmartRender, delay);
-          }
-        }
+        // Execute rendering immediately - no throttling
+        performSmartRender();
 
         // Height checking moved inside the rendering promise to avoid race conditions
         // The autoscroll is now handled directly in the .then() callback above
@@ -12848,30 +12825,77 @@ function deleteCurrentSession() {
 }
 
 // Theme and UI
-function applyTheme(theme, contrastColor = state.settings?.contrastColor || false) {
-  // Determine theme class based on theme and contrastColor
-  let themeClass;
-  if (theme === "dark") {
-    themeClass = contrastColor ? "dark-theme-contrast" : "dark-theme";
-  } else {
-    themeClass = contrastColor ? "light-theme-contrast" : "light-theme";
+const THEME_VARIANTS = {
+  dark: {
+    standard: 'dark-theme',
+    contrast: 'dark-theme-contrast',
+    terminal: 'dark-turqouse-theme'
+  },
+  light: {
+    standard: 'light-theme',
+    contrast: 'light-theme-contrast',
+    summer: 'light-turqoise-theme'
   }
+};
+
+const THEME_VARIANT_LABELS = {
+  dark: {
+    standard: 'Standard',
+    contrast: 'Summer',
+    terminal: 'Turqoise'
+  },
+  light: {
+    standard: 'Standard',
+    contrast: 'High Contrast',
+    summer: 'Turqoise'
+  }
+};
+
+function applyTheme(theme, themeVariant = state.settings?.themeVariant || 'standard') {
+  // Determine theme class based on theme and variant
+  const themeClass = THEME_VARIANTS[theme]?.[themeVariant] || THEME_VARIANTS[theme]?.standard || 'dark-theme';
 
   document.body.className = themeClass + " scrollable";
   document.documentElement.className = themeClass;
   $("#theme-slider").checked = theme === "dark";
-  $("#contrast-color-toggle").checked = contrastColor;
+  
+  // Update theme variant select
+  updateThemeVariantSelect(theme, themeVariant);
+  
   state.settings.theme = theme;
-  state.settings.contrastColor = contrastColor;
+  state.settings.themeVariant = themeVariant;
 
   // Save to localStorage immediately for instant loading on next refresh
   localStorage.setItem("clustrix-theme", theme);
-  localStorage.setItem("clustrix-contrast-color", contrastColor ? "true" : "false");
+  localStorage.setItem("clustrix-theme-variant", themeVariant);
+}
+
+function updateThemeVariantSelect(theme, selectedVariant) {
+  const select = $("#theme-variant-select");
+  if (!select) return;
+  
+  // Clear existing options
+  select.innerHTML = '';
+  
+  // Populate options based on current theme
+  const variants = THEME_VARIANTS[theme];
+  const labels = THEME_VARIANT_LABELS[theme];
+  
+  for (const [key, className] of Object.entries(variants)) {
+    const option = document.createElement('option');
+    option.value = key;
+    option.textContent = labels[key];
+    if (key === selectedVariant) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  }
 }
 
 function toggleTheme() {
   const newTheme = state.settings.theme === "light" ? "dark" : "light";
-  applyTheme(newTheme, state.settings.contrastColor);
+  // When switching themes, use 'standard' variant by default
+  applyTheme(newTheme, 'standard');
   save();
 }
 
@@ -13138,7 +13162,7 @@ function handleSidebarToggle() {
   const openedBtn = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 group-hover:scale-80 transition scale-100 text-text-300" aria-hidden="true"><path d="M16.5 4C17.3284 4 18 4.67157 18 5.5V14.5C18 15.3284 17.3284 16 16.5 16H3.5C2.67157 16 2 15.3284 2 14.5V5.5C2 4.67157 2.67157 4 3.5 4H16.5ZM7 15H16.5C16.7761 15 17 14.7761 17 14.5V5.5C17 5.22386 16.7761 5 16.5 5H7V15ZM3.5 5C3.22386 5 3 5.22386 3 5.5V14.5C3 14.7761 3.22386 15 3.5 15H6V5H3.5Z"></path></svg>`;
   const closedBtn = `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0 !opacity-100 !scale-100 opacity-0 scale-75 absolute inset-0 group-hover:scale-100 group-hover:opacity-100 transition-all text-text-200" aria-hidden="true"><path d="M3.5 3C3.77614 3 4 3.22386 4 3.5V16.5L3.99023 16.6006C3.94371 16.8286 3.74171 17 3.5 17C3.25829 17 3.05629 16.8286 3.00977 16.6006L3 16.5V3.5C3 3.22386 3.22386 3 3.5 3ZM11.2471 5.06836C11.4476 4.95058 11.7104 4.98547 11.8721 5.16504C12.0338 5.34471 12.0407 5.60979 11.9023 5.79688L11.835 5.87207L7.80371 9.5H16.5C16.7761 9.5 17 9.72386 17 10C17 10.2761 16.7761 10.5 16.5 10.5H7.80371L11.835 14.1279C12.0402 14.3127 12.0568 14.6297 11.8721 14.835C11.6873 15.0402 11.3703 15.0568 11.165 14.8721L6.16504 10.3721L6.09473 10.2939C6.03333 10.2093 6 10.1063 6 10C6 9.85828 6.05972 9.72275 6.16504 9.62793L11.165 5.12793L11.2471 5.06836Z"></path></svg>`;
 
-  if (window.innerWidth <= 768) {
+  if (window.innerWidth <= 998) {
     const sidebar = $("#sidebar");
     const isOpening = !sidebar.classList.contains("open");
 
@@ -13214,11 +13238,11 @@ function handleSidebarToggle() {
 }
 
 function setupResponsiveHandlers() {
-  let isMobile = window.innerWidth <= 768;
+  let isMobile = window.innerWidth <= 998;
   let desktopCollapsedState = collapsed; // Track desktop sidebar state
   
   window.addEventListener("resize", () => {
-    const stillMobile = window.innerWidth <= 768;
+    const stillMobile = window.innerWidth <= 998;
     
     if (isMobile !== stillMobile) {
       isMobile = stillMobile;
@@ -14316,7 +14340,7 @@ function setupEventListeners() {
     closeDropdownWithAnimation($("#settings-menu"));
 
     // Close mobile sidebar when opening search API settings
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 998) {
       closeMobileSidebar();
     }
   });
@@ -14357,17 +14381,19 @@ function setupEventListeners() {
     log("UI", 2, "event:open-accessibility-settings", "Opening Accessibility modal.");
 
     // Load current settings
-    $("#theme-slider").checked = localStorage.getItem('clustrix-theme') === 'dark';
-    $("#contrast-color-toggle").checked = localStorage.getItem('clustrix-contrast-color') === 'true';
+    const currentTheme = localStorage.getItem('clustrix-theme') || state.settings.theme || 'dark';
+    const currentVariant = localStorage.getItem('clustrix-theme-variant') || state.settings.themeVariant || 'standard';
+    
+    $("#theme-slider").checked = currentTheme === 'dark';
+    updateThemeVariantSelect(currentTheme, currentVariant);
     $("#show-projects-toggle").checked = state.settings.showProjects !== false;
     $("#show-starred-toggle").checked = state.settings.showStarred !== false;
-    $("#use-worker-toggle").checked = state.settings.useWorker !== false;
 
     openModalWithAnimation($("#accessibility-modal"));
     closeDropdownWithAnimation($("#settings-menu"));
 
     // Close mobile sidebar when opening accessibility settings
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 998) {
       closeMobileSidebar();
     }
   });
@@ -14428,7 +14454,7 @@ function setupEventListeners() {
     closeModalWithAnimation($("#quick-model-switch-modal"));
 
     // Close mobile sidebar when opening model management
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 998) {
       closeMobileSidebar();
     }
   });
@@ -14445,7 +14471,7 @@ function setupEventListeners() {
     const notePrev = $("#model-note-preview");
 
     // Close mobile sidebar when opening model switcher
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 998) {
       closeMobileSidebar();
     }
 
@@ -14674,7 +14700,7 @@ function setupEventListeners() {
     closeModalWithAnimation($("#quick-model-switch-modal"));
 
     // Close mobile sidebar when creating new chat
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 998) {
       closeMobileSidebar();
     }
 
@@ -14685,7 +14711,7 @@ function setupEventListeners() {
     log("UI", 0, "event:chats-page-click", "Chats page button clicked");
 
     // Close mobile sidebar when switching to chats page
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 998) {
       closeMobileSidebar();
     }
 
@@ -14696,7 +14722,7 @@ function setupEventListeners() {
     log("UI", 0, "event:projects-page-click", "Projects page button clicked");
 
     // Close mobile sidebar when switching to projects page
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 998) {
       closeMobileSidebar();
     }
 
@@ -14712,7 +14738,7 @@ function setupEventListeners() {
     log("UI", 0, "event:projects-page-click", "Projects page button clicked");
 
     // Close mobile sidebar when switching to projects page
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 998) {
       closeMobileSidebar();
     }
 
@@ -14747,28 +14773,26 @@ function setupEventListeners() {
     const { name, work, prefs } = state.settings.persona;
     const showProjects = state.settings.showProjects !== undefined ? state.settings.showProjects : false;
     const showStarred = state.settings.showStarred !== undefined ? state.settings.showStarred : true;
-    const streamThrottling = state.settings.streamThrottling || "auto";
     const language = state.settings.language || "autodetect";
     log(
       "UI",
       0,
       "event:open-persona-settings-click",
       "Persona settings modal opened",
-      { hasName: !!name, hasWork: !!work, hasPrefs: !!prefs, showProjects, showStarred, streamThrottling, language },
+      { hasName: !!name, hasWork: !!work, hasPrefs: !!prefs, showProjects, showStarred, language },
     );
     $("#persona-name").value = name || "";
     $("#persona-work").value = work || "";
     $("#persona-prefs").value = prefs || "";
     $("#show-projects-toggle").checked = showProjects;
     $("#show-starred-toggle").checked = showStarred;
-    $("#stream-throttling").value = streamThrottling;
     $("#language-select").value = language;
     openModalWithAnimation($("#settings-modal"));
     closeDropdownWithAnimation($("#settings-menu"));
     closeModalWithAnimation($("#quick-model-switch-modal"));
 
     // Close mobile sidebar when opening persona settings
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 998) {
       closeMobileSidebar();
     }
   }
@@ -14777,7 +14801,7 @@ function setupEventListeners() {
     log("UI", 0, "event:artifacts-page-click", "Artifacts page button clicked");
 
     // Close mobile sidebar when switching to artifacts page
-    if (window.innerWidth <= 768) {
+    if (window.innerWidth <= 998) {
       closeMobileSidebar();
     }
 
@@ -14993,20 +15017,7 @@ function setupEventListeners() {
     renderSessions(); // Re-render sessions to reflect the new settings
   });
 
-  $("#use-worker-toggle").addEventListener("change", async (e) => {
-    const useWorker = e.target.checked;
-    log("SETTINGS", 2, "event:use-worker-toggle-change", "Use Worker toggle changed", {
-      useWorker,
-    });
-    state.settings.useWorker = useWorker;
-    await save();
-    showToast(
-      useWorker
-        ? "Worker thread enabled for heavy content"
-        : "Worker disabled - using main thread only",
-      "success"
-    );
-  });
+  // Worker thread decision is now fully automatic based on content
 
   $("#close-modal").addEventListener("click", () => {
     closeModalWithAnimation($("#settings-modal"));
@@ -15022,17 +15033,14 @@ function setupEventListeners() {
       work: $("#persona-work").value.trim(),
       prefs: $("#persona-prefs").value.trim(),
     };
-    const streamThrottling = $("#stream-throttling").value;
     const language = $("#language-select").value;
     log("SETTINGS", 2, "event:save-settings-click", "Saving persona settings", {
       hasName: !!persona.name,
       hasWork: !!persona.work,
       hasPrefs: !!persona.prefs,
-      streamThrottling,
       language,
     });
     state.settings.persona = persona;
-    state.settings.streamThrottling = streamThrottling;
     state.settings.language = language;
     await save();
     closeModalWithAnimation($("#settings-modal"));
@@ -15102,10 +15110,12 @@ function setupEventListeners() {
     toggleTheme();
   });
 
-  $("#contrast-color-toggle").addEventListener("change", (e) => {
-    log("UI", 0, "event:contrast-color-toggle-change", "Contrast color toggled");
-    const contrastEnabled = e.target.checked;
-    applyTheme(state.settings.theme, contrastEnabled);
+  $("#theme-variant-select").addEventListener("change", (e) => {
+    log("UI", 0, "event:theme-variant-select-change", "Theme variant changed", {
+      variant: e.target.value
+    });
+    const selectedVariant = e.target.value;
+    applyTheme(state.settings.theme, selectedVariant);
     save();
   });
 

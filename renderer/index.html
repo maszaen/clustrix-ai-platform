@@ -7,24 +7,42 @@
   <link rel="icon" type="image/x-icon" href="../public/images/favicon.ico" />
   
   <!-- <link rel="stylesheet" href="./style.min.css" /> -->
+  <link rel="stylesheet" href="./themes.css" />
   <link rel="stylesheet" href="./style.css" />
   <script>
     (function() {
       const THEME_VARIANTS = {
         dark: {
           standard: 'dark-theme',
-          contrast: 'dark-theme-contrast',
-          terminal: 'dark-turqouse-theme'
+          highContrast: 'dark-high-contrast-theme',
+          contrast: 'dark-contrast-theme',
+          turqoise: 'dark-turqoise-theme',
+          summer: 'dark-summer-theme',
+          sakura: 'dark-sakura-theme',
+          neon: 'dark-neon-theme',
+          lavender: 'dark-lavender-theme',
+          rosegold: 'dark-rosegold-theme',
+          ocean: 'dark-ocean-theme',
+          sunset: 'dark-sunset-theme',
+          emerald: 'dark-emerald-theme'
         },
         light: {
           standard: 'light-theme',
           contrast: 'light-theme-contrast',
-          summer: 'light-turqoise-theme'
+          github: 'github-light-theme',
+          summer: 'light-turqoise-theme',
+          blossom: 'light-blossom-theme',
+          sky: 'light-sky-theme',
+          lilac: 'light-lilac-theme',
+          peach: 'light-peach-theme',
+          mint: 'light-mint-theme',
+          coral: 'light-coral-theme',
+          ice: 'light-ice-theme'
         }
       };
       
       let finalTheme = 'dark';
-      let finalThemeVariant = 'standard';
+      let finalThemeVariant = 'contrast';
       
       try {
         let savedTheme = localStorage.getItem('clustrix-theme');
@@ -1729,7 +1747,7 @@
             </div>
             <div class="benchmark-filter-group">
               <label for="benchmark-filter-model">Model</label>
-              <select id="benchmark-filter-model" style="display: none;">
+              <select id="benchmark-filter-model">
                 <option value="all">All models</option>
               </select>
             </div>

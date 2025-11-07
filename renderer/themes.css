@@ -1,0 +1,1619 @@
+/* Dark Theme */
+body.dark-theme {
+  --bck: #000;
+  --bg: #1b1c1d; /* done: background paling belakang, base */
+  --bg-secondary: #282A2C; /* done, sidebar dan code bg */
+  --bg-secondary-50: #282a2c7a; /* done, sidebar dan code bg */
+  --fg: #FCFCFC; /* done: font paling kontras */
+  --fg-muted: #BDC1C6; /* done: font di sidebar atau form */
+  --fg-death: #8f9296ff;
+  --surface: #1f1f1f; /* done: input chat */
+  --surface-secondary: #333537; /* done: bubble user */
+  --border: #4a5050; /* done */
+  --border-light: #3c4141ff; /* done */
+  --border-input: #4a5050; /* done */
+  --border-active: #797979ff;
+  --input-bg: #282A2D; /* done */
+  --primary: #D3E3FD; /* done */
+  --primary-light: #1f3760; /* done */
+  --primary-light-user: #1f3760; 
+  --primary-light-hover: #28489fff;
+  --primary-light-tip: #1f37607d; 
+  --accent: #0e4baeff;
+  --highlight-color: #ffeb3b;
+  --white-hover: #f0f0f0ff;
+  --bold: #ebebebff;
+
+  --purple-sel: #d2a5faff;
+  --purple-sel-bg: #562086a9;
+  
+  --hover-bg: #323537; /* done */
+  --hover-bg-secondary: #3d4043ff;
+  --shadow-color: rgba(0, 0, 0, 0.3); /* done */
+  --icon: #C4C7C5; /* done */
+  --link: #D3E3FD;
+  --link-hover: #f3f8ffff;
+
+  --danger: #e81123;
+  --danger-hover: #c230253e;
+  --danger-light: #3d1a00;
+  --success: #57e112ff;
+  --warning: #f8e44aff;
+
+  --hljs-base: #a2a9b0;
+  --hljs-comment: #80868b;
+  --hljs-punctuation: #a2a9b0;
+  --hljs-tag-property-constant: #fdd663;
+  --hljs-number-boolean: #fa903e;
+  --hljs-string-selector-attr-name: #81c995;
+  --hljs-operator-entity-url-variable: #a2a9b0;
+  --hljs-function-classname-atrule: #fdd663;
+  --hljs-keyword: #c58af9;
+  --hljs-name: #f28b82;
+  --hljs-regex-important: #8ab4f8;
+  --hljs-css-string: #f8f8f2;
+
+  /* Language specific */
+  --hljs-bash-function: #bb9af7;
+  --hljs-json-property: #7aa2f7;
+  --hljs-yaml-key: #9ece6a;
+  --hljs-markdown-title: #c0caf5;
+  
+  /* Diff colors */
+  --hljs-diff-inserted: #9ece6a;
+  --hljs-diff-inserted-bg: #1a2332;
+  --hljs-diff-deleted: #f7768e;
+  --hljs-diff-deleted-bg: #2d1b20;
+  
+  /* Highlight */
+  --hljs-highlight-bg: #3d2914;
+  --hljs-subst: #fff;
+}
+
+/* Dark Theme - High Contrast */
+body.dark-contrast-theme {
+  --bck: #000;
+  --bg: #161718; /* digelapin dari #1b1c1d */
+  --bg-secondary: #1f2123; /* digelapin dari #282A2C, NO OPACITY */
+  --bg-secondary-50: #1f21237a; /* adjusted, keep transparent */
+  --fg: #FFFFFF; /* diterangin dari #FCFCFC */
+  --fg-muted: #C8CCD1; /* diterangin dari #BDC1C6 */
+  --fg-death: #7a7e82; /* digelapin dikit */
+  --surface: #1a1a1a; /* digelapin dari #1f1f1f */
+  --surface-secondary: #3a3c3e; /* diterangin dari #333537 */
+  --border: #555b5b; /* diterangin dari #4a5050 */
+  --border-light: #313737; /* digelapin dari #3c4141 */
+  --border-input: #555b5b; /* match border */
+  --border-active: #868686; /* diterangin dari #797979 */
+  --input-bg: #1f2124; /* digelakin dari #282A2D, NO OPACITY */
+  --primary: #E0EDFF; /* diterangin dari #D3E3FD */
+  --primary-light: #1a2f55; /* digelapin dari #1f3760 */
+  --primary-light-user: #1a2f55;
+  --primary-light-hover: #2d5aaf; /* diterangin dari #28489f */
+  --primary-light-tip: #1a2f5570; /* keep transparent */
+  --accent: #0d4299; /* digelapin dari #0e4bae */
+  --highlight-color: #fff44f; /* diterangin dikit */
+  --white-hover: #f5f5f5; /* diterangin dari #f0f0f0 */
+  --bold: #f5f5f5; /* diterangin dari #ebebeb */
+
+  --purple-sel: #ddb3ff; /* diterangin dari #d2a5fa */
+  --purple-sel-bg: #4a1770b3; /* keep transparent, darker */
+  
+  --hover-bg: #393c3e; /* diterangin dari #323537 */
+  --hover-bg-secondary: #454a4d; /* diterangin dari #3d4043 */
+  --shadow-color: rgba(0, 0, 0, 0.4); /* increase intensity */
+  --icon: #CED1CF; /* diterangin dari #C4C7C5 */
+  --link: #E0EDFF; /* match primary */
+  --link-hover: #FFFFFF; /* full white pas hover */
+
+  --danger: #f01929; /* diterangin dikit */
+  --danger-hover: #d1302a45; /* keep transparent */
+  --danger-light: #331600; /* digelapin dari #3d1a00 */
+  --success: #62f018; /* diterangin dari #57e112 */
+  --warning: #fae956; /* diterangin dari #f8e44a */
+
+  --hljs-base: #adb4bb;
+  --hljs-comment: #757b80;
+  --hljs-punctuation: #adb4bb;
+  --hljs-tag-property-constant: #ffe070;
+  --hljs-number-boolean: #ffa04d;
+  --hljs-string-selector-attr-name: #8dd4a1;
+  --hljs-operator-entity-url-variable: #adb4bb;
+  --hljs-function-classname-atrule: #ffe070;
+  --hljs-keyword: #d299ff;
+  --hljs-name: #ff968f;
+  --hljs-regex-important: #96c0ff;
+  --hljs-css-string: #ffffff;
+
+  --hljs-bash-function: #c5a7ff;
+  --hljs-json-property: #85afff;
+  --hljs-yaml-key: #a8d977;
+  --hljs-markdown-title: #cdd7ff;
+  
+  --hljs-diff-inserted: #a8d977;
+  --hljs-diff-inserted-bg: #141f28;
+  --hljs-diff-deleted: #ff8597;
+  --hljs-diff-deleted-bg: #241519;
+  
+  --hljs-highlight-bg: #442f18;
+  --hljs-subst: #fff;
+}
+
+body.dark-high-contrast-theme {
+  --bck: #000;
+  --bg: #0a0a0a; /* super gelap dari #1b1c1d */
+  --bg-secondary: #151617; /* gelap banget dari #282A2C */
+  --bg-secondary-50: #1516177a; /* keep transparent */
+  --fg: #FFFFFF; /* pure white dari #FCFCFC */
+  --fg-muted: #D5D9DE; /* lebih terang dari #BDC1C6 */
+  --fg-death: #6a6e72; /* lebih gelap dari #8f9296 */
+  --surface: #121212; /* gelap dari #1f1f1f */
+  --surface-secondary: #454749; /* terang dari #333537 */
+  --border: #606868; /* terang dari #4a5050 */
+  --border-light: #252b2b; /* gelap dari #3c4141 */
+  --border-input: #606868; /* match border */
+  --border-active: #9a9a9a; /* terang dari #797979 */
+  --input-bg: #151719; /* gelap dari #282A2D */
+  --primary: #EDF6FF; /* super terang dari #D3E3FD */
+  --primary-light: #142847; /* gelap dari #1f3760 */
+  --primary-light-user: #142847;
+  --primary-light-hover: #3366cc; /* terang dari #28489f */
+  --primary-light-tip: #14284760; /* keep transparent */
+  --accent: #0a3a8a; /* gelap dari #0e4bae */
+  --highlight-color: #ffff66; /* super terang */
+  --white-hover: #ffffff; /* pure white dari #f0f0f0 */
+  --bold: #ffffff; /* pure white dari #ebebeb */
+
+  --purple-sel: #e8c4ff; /* super terang dari #d2a5fa */
+  --purple-sel-bg: #3d1460cc; /* lebih gelap + opacity */
+  
+  --hover-bg: #42454880; /* terang dari #323537 */
+  --hover-bg-secondary: #525659; /* terang dari #3d4043 */
+  --shadow-color: rgba(0, 0, 0, 0.6); /* super dark shadow */
+  --icon: #E0E3E1; /* terang dari #C4C7C5 */
+  --link: #EDF6FF; /* match primary */
+  --link-hover: #FFFFFF; /* pure white */
+
+  --danger: #ff1a2e; /* super terang dari #e81123 */
+  --danger-hover: #e6353a50; /* keep transparent */
+  --danger-light: #2a1400; /* gelap dari #3d1a00 */
+  --success: #6fff1a; /* super terang dari #57e112 */
+  --warning: #ffed5c; /* terang dari #f8e44a */
+
+  --hljs-base: #bac1c8; /* terang dari #a2a9b0 */
+  --hljs-comment: #676d72; /* gelap dari #80868b */
+  --hljs-punctuation: #bac1c8;
+  --hljs-tag-property-constant: #ffe680; /* terang dari #fdd663 */
+  --hljs-number-boolean: #ffad5c; /* terang dari #fa903e */
+  --hljs-string-selector-attr-name: #99e0ad; /* terang dari #81c995 */
+  --hljs-operator-entity-url-variable: #bac1c8;
+  --hljs-function-classname-atrule: #ffe680;
+  --hljs-keyword: #dda6ff; /* terang dari #c58af9 */
+  --hljs-name: #ffa39c; /* terang dari #f28b82 */
+  --hljs-regex-important: #a3ccff; /* terang dari #8ab4f8 */
+  --hljs-css-string: #ffffff; /* pure white */
+
+  /* Language specific */
+  --hljs-bash-function: #d4b3ff; /* terang dari #bb9af7 */
+  --hljs-json-property: #91b8ff; /* terang dari #7aa2f7 */
+  --hljs-yaml-key: #b5e085; /* terang dari #9ece6a */
+  --hljs-markdown-title: #dae4ff; /* terang dari #c0caf5 */
+  
+  /* Diff colors */
+  --hljs-diff-inserted: #b5e085; /* match yaml */
+  --hljs-diff-inserted-bg: #0d1620; /* super gelap dari #1a2332 */
+  --hljs-diff-deleted: #ff99a6; /* terang dari #f7768e */
+  --hljs-diff-deleted-bg: #1f0e13; /* super gelap dari #2d1b20 */
+  
+  /* Highlight */
+  --hljs-highlight-bg: #52381a; /* terang dari #3d2914 */
+  --hljs-subst: #fff;
+}
+
+/* Dark Theme - Atom One Dark */
+body.dark-turqoise-theme {
+  --bck: #0a0a0a;
+  --bg: #0a0a0a; /* pure black background */
+  --bg-secondary: #141414; /* sidebar dan code bg - slightly lighter */
+  --bg-secondary-50: #1414147a; 
+  --fg: #f5f5f5; /* font paling kontras */
+  --fg-muted: #a8a8a8; /* font di sidebar atau form */
+  --fg-death: #787878;
+  --surface: #161616; /* input chat */
+  --surface-secondary: #1f1f1f; /* bubble user */
+  --border: #2f2f2f; 
+  --border-light: #242424; 
+  --border-input: #2f2f2f; 
+  --border-active: #454545;
+  --input-bg: #161616; 
+  --primary: #3bb9c9; /* teal/cyan accent perplexity */
+  --primary-light: #244045; 
+  --primary-light-user: #244045; 
+  --primary-light-hover: #2f5055;
+  --primary-light-tip: #2440457d; 
+  --accent: #3bb9c9;
+  --highlight-color: #3bb9c9;
+  --white-hover: #e0e0e0;
+  --bold: #ffffff;
+
+  --purple-sel: #a78bfa;
+  --purple-sel-bg: #5b21b680;
+  
+  --hover-bg: #1f1f1f; 
+  --hover-bg-secondary: #2a2a2a;
+  --shadow-color: rgba(0, 0, 0, 0.8); 
+  --icon: #9b9b9b; 
+  --link: #3bb9c9;
+  --link-hover: #4dd4e5;
+
+  --danger: #ff5c5c;
+  --danger-hover: #ff5c5c3e;
+  --danger-light: #3d1a1a;
+  --success: #00d4aa;
+  --warning: #ffb020;
+
+  --hljs-base: #e5e5e5;
+  --hljs-comment: #6b7280;
+  --hljs-punctuation: #d1d5db;
+  --hljs-tag-property-constant: #fbbf24;
+  --hljs-number-boolean: #a78bfa;
+  --hljs-string-selector-attr-name: #34d399;
+  --hljs-operator-entity-url-variable: #d1d5db;
+  --hljs-function-classname-atrule: #60a5fa;
+  --hljs-keyword: #f472b6;
+  --hljs-name: #fb923c;
+  --hljs-regex-important: #3bb9c9;
+  --hljs-css-string: #e5e5e5;
+
+  /* Language specific */
+  --hljs-bash-function: #c084fc;
+  --hljs-json-property: #60a5fa;
+  --hljs-yaml-key: #34d399;
+  --hljs-markdown-title: #e5e5e5;
+  
+  /* Diff colors */
+  --hljs-diff-inserted: #34d399;
+  --hljs-diff-inserted-bg: #064e3b;
+  --hljs-diff-deleted: #fb923c;
+  --hljs-diff-deleted-bg: #431407;
+  
+  /* Highlight */
+  --hljs-highlight-bg: #2a4a52;
+  --hljs-subst: #ffffff;
+}
+
+/* Dark Theme - Claude Official */
+body.dark-summer-theme {
+  --bck: oklch(0.24 0 0); /* sidebar background */
+  --bg: oklch(0.27 0 0); /* background paling belakang, base */
+  --bg-secondary: oklch(0.24 0 0); /* sidebar dan code bg */
+  --bg-secondary-50: oklch(0.24 0 0 / 0.48); 
+  --fg: oklch(0.98 0.01 93.48); /* font paling kontras */
+  --fg-muted: oklch(0.77 0.02 100.64); /* font di sidebar atau form */
+  --fg-death: oklch(0.67 0.01 93.53);
+  --surface: oklch(0.31 0 0); /* input chat */
+  --surface-secondary: oklch(0.33 0 0); /* bubble user */
+  --border: oklch(0.36 0.01 106.85); 
+  --border-light: oklch(0.31 0 0); 
+  --border-input: oklch(0.43 0.01 99.03); 
+  --border-active: oklch(0.59 0.17 252.92);
+  --input-bg: oklch(0.31 0 0); 
+  --primary: oklch(0.67 0.13 38.92); /* warna aksen warm/claude */
+  --primary-light: oklch(0.21 0.01 88.79); 
+  --primary-light-user: oklch(0.21 0.01 88.79); 
+  --primary-light-hover: oklch(0.24 0.01 88.79);
+  --primary-light-tip: oklch(0.21 0.01 88.79 / 0.49); 
+  --accent: oklch(0.67 0.13 38.92);
+  --highlight-color: oklch(0.85 0.15 95);
+  --white-hover: oklch(0.94 0 0);
+  --bold: oklch(0.99 0 0);
+
+  --purple-sel: oklch(0.67 0.13 38.92);
+  --purple-sel-bg: oklch(0.21 0.01 88.79 / 0.5);
+  
+  --hover-bg: oklch(0.22 0 0); 
+  --hover-bg-secondary: oklch(0.27 0 0);
+  --shadow-color: oklch(0.15 0 0 / 0.4); 
+  --icon: oklch(0.81 0.01 93.53); 
+  --link: oklch(0.67 0.13 38.92);
+  --link-hover: oklch(0.77 0.13 38.92);
+
+  --danger: oklch(0.64 0.21 25.39);
+  --danger-hover: oklch(0.64 0.21 25.39 / 0.24);
+  --danger-light: oklch(0.31 0.05 25.39);
+  --success: oklch(0.65 0.15 145);
+  --warning: oklch(0.75 0.15 85);
+
+  --hljs-base: oklch(0.81 0.01 93.53);
+  --hljs-comment: oklch(0.55 0.01 93.53);
+  --hljs-punctuation: oklch(0.77 0.02 100.64);
+  --hljs-tag-property-constant: oklch(0.75 0.15 85);
+  --hljs-number-boolean: oklch(0.72 0.15 45);
+  --hljs-string-selector-attr-name: oklch(0.70 0.13 150);
+  --hljs-operator-entity-url-variable: oklch(0.77 0.02 100.64);
+  --hljs-function-classname-atrule: oklch(0.67 0.13 38.92);
+  --hljs-keyword: oklch(0.75 0.12 290);
+  --hljs-name: oklch(0.72 0.15 25);
+  --hljs-regex-important: oklch(0.68 0.13 250);
+  --hljs-css-string: oklch(0.92 0 0);
+
+  /* Language specific */
+  --hljs-bash-function: oklch(0.75 0.12 290);
+  --hljs-json-property: oklch(0.68 0.13 250);
+  --hljs-yaml-key: oklch(0.70 0.13 150);
+  --hljs-markdown-title: oklch(0.67 0.13 38.92);
+  
+  /* Diff colors */
+  --hljs-diff-inserted: oklch(0.70 0.13 150);
+  --hljs-diff-inserted-bg: oklch(0.25 0.05 150);
+  --hljs-diff-deleted: oklch(0.72 0.15 25);
+  --hljs-diff-deleted-bg: oklch(0.25 0.05 25);
+  
+  /* Highlight */
+  --hljs-highlight-bg: oklch(0.35 0.08 65);
+  --hljs-subst: oklch(0.98 0.01 93.48);
+}
+
+/* Dark Theme - Sakura (Pink Professional) */
+body.dark-sakura-theme {
+  --bck: #0a0a0a;
+  --bg: #0d0a0b; /* pure black with subtle pink tint */
+  --bg-secondary: #141214; /* sidebar dan code bg */
+  --bg-secondary-50: #1412147a;
+  --fg: #f5f5f5; /* high contrast white */
+  --fg-muted: #a8a8a8; /* neutral muted */
+  --fg-death: #787878;
+  --surface: #161416; /* input chat */
+  --surface-secondary: #1f1d1f; /* bubble user */
+  --border: #2f2f2f;
+  --border-light: #242424;
+  --border-input: #2f2f2f;
+  --border-active: #797979ff; /* neutral gray */
+  --input-bg: #161416;
+  --primary: #ec4899; /* vibrant pink */
+  --primary-light: #2d1b24;
+  --primary-light-user: #2d1b24;
+  --primary-light-hover: #3d2530;
+  --primary-light-tip: #2d1b247d;
+  --accent: #ec4899;
+  --highlight-color: #ec4899;
+  --white-hover: #e0e0e0;
+  --bold: #ffffff;
+
+  --purple-sel: #ec4899;
+  --purple-sel-bg: #ec489933;
+
+  --hover-bg: #1f1d1f;
+  --hover-bg-secondary: #2a2629;
+  --shadow-color: rgba(0, 0, 0, 0.8);
+  --icon: #9b9b9b;
+  --link: #ec4899;
+  --link-hover: #f472b6;
+
+  --danger: #ff5c5c;
+  --danger-hover: #ff5c5c3e;
+  --danger-light: #3d1a1a;
+  --success: #00d4aa;
+  --warning: #ffb020;
+
+  --hljs-base: #e5e5e5;
+  --hljs-comment: #6b7280;
+  --hljs-punctuation: #d1d5db;
+  --hljs-tag-property-constant: #fbbf24;
+  --hljs-number-boolean: #a78bfa;
+  --hljs-string-selector-attr-name: #34d399;
+  --hljs-operator-entity-url-variable: #d1d5db;
+  --hljs-function-classname-atrule: #ec4899;
+  --hljs-keyword: #f472b6;
+  --hljs-name: #fb923c;
+  --hljs-regex-important: #ec4899;
+  --hljs-css-string: #e5e5e5;
+
+  --hljs-bash-function: #c084fc;
+  --hljs-json-property: #ec4899;
+  --hljs-yaml-key: #34d399;
+  --hljs-markdown-title: #e5e5e5;
+
+  --hljs-diff-inserted: #34d399;
+  --hljs-diff-inserted-bg: #064e3b;
+  --hljs-diff-deleted: #fb923c;
+  --hljs-diff-deleted-bg: #431407;
+
+  --hljs-highlight-bg: #3d2530;
+  --hljs-subst: #ffffff;
+}
+
+/* Dark Theme - Neon (Cyan Futuristic) */
+body.dark-neon-theme {
+  --bck: #0a0a0a;
+  --bg: #0a0b0c; /* pure black with subtle cyan tint */
+  --bg-secondary: #121314;
+  --bg-secondary-50: #1213147a;
+  --fg: #f5f5f5;
+  --fg-muted: #a8a8a8;
+  --fg-death: #787878;
+  --surface: #141516;
+  --surface-secondary: #1d1f20;
+  --border: #2f2f2f;
+  --border-light: #242424;
+  --border-input: #2f2f2f;
+  --border-active: #797979ff; /* neutral gray */
+  --input-bg: #141516;
+  --primary: #06b6d4; /* neon cyan */
+  --primary-light: #1a3438;
+  --primary-light-user: #1a3438;
+  --primary-light-hover: #1f4449;
+  --primary-light-tip: #1a34387d;
+  --accent: #06b6d4;
+  --highlight-color: #06b6d4;
+  --white-hover: #e0e0e0;
+  --bold: #ffffff;
+
+  --purple-sel: #06b6d4;
+  --purple-sel-bg: #06b6d433;
+
+  --hover-bg: #1d1f20;
+  --hover-bg-secondary: #272a2b;
+  --shadow-color: rgba(0, 0, 0, 0.8);
+  --icon: #9b9b9b;
+  --link: #06b6d4;
+  --link-hover: #22d3ee;
+
+  --danger: #ff5c5c;
+  --danger-hover: #ff5c5c3e;
+  --danger-light: #3d1a1a;
+  --success: #00d4aa;
+  --warning: #ffb020;
+
+  --hljs-base: #e5e5e5;
+  --hljs-comment: #6b7280;
+  --hljs-punctuation: #d1d5db;
+  --hljs-tag-property-constant: #fbbf24;
+  --hljs-number-boolean: #a78bfa;
+  --hljs-string-selector-attr-name: #34d399;
+  --hljs-operator-entity-url-variable: #d1d5db;
+  --hljs-function-classname-atrule: #06b6d4;
+  --hljs-keyword: #22d3ee;
+  --hljs-name: #fb923c;
+  --hljs-regex-important: #06b6d4;
+  --hljs-css-string: #e5e5e5;
+
+  --hljs-bash-function: #22d3ee;
+  --hljs-json-property: #06b6d4;
+  --hljs-yaml-key: #34d399;
+  --hljs-markdown-title: #e5e5e5;
+
+  --hljs-diff-inserted: #34d399;
+  --hljs-diff-inserted-bg: #064e3b;
+  --hljs-diff-deleted: #fb923c;
+  --hljs-diff-deleted-bg: #431407;
+
+  --hljs-highlight-bg: #1f4449;
+  --hljs-subst: #ffffff;
+}
+
+/* Dark Theme - Lavender */
+body.dark-lavender-theme {
+  --bck: #0a0a0a;
+  --bg: #0a0a0d; /* pure black with subtle purple tint */
+  --bg-secondary: #121214; /* sidebar dan code bg */
+  --bg-secondary-50: #1212147a;
+  --fg: #f5f5f5; /* high contrast white */
+  --fg-muted: #a8a8a8; /* neutral muted */
+  --fg-death: #787878;
+  --surface: #141416; /* input chat */
+  --surface-secondary: #1d1d20; /* bubble user */
+  --border: #2f2f2f;
+  --border-light: #242424;
+  --border-input: #2f2f2f;
+  --border-active: #797979ff; /* neutral gray */
+  --input-bg: #141416;
+  --primary: #a78bfa; /* vibrant lavender */
+  --primary-light: #2a1d3a;
+  --primary-light-user: #2a1d3a;
+  --primary-light-hover: #352549;
+  --primary-light-tip: #2a1d3a7d;
+  --accent: #a78bfa;
+  --highlight-color: #a78bfa;
+  --white-hover: #e0e0e0;
+  --bold: #ffffff;
+
+  --purple-sel: #a78bfa;
+  --purple-sel-bg: #a78bfa33;
+
+  --hover-bg: #1d1d20;
+  --hover-bg-secondary: #272729;
+  --shadow-color: rgba(0, 0, 0, 0.8);
+  --icon: #9b9b9b;
+  --link: #a78bfa;
+  --link-hover: #c4b5fd;
+
+  --danger: #ff5c5c;
+  --danger-hover: #ff5c5c3e;
+  --danger-light: #3d1a1a;
+  --success: #00d4aa;
+  --warning: #ffb020;
+
+  --hljs-base: #e5e5e5;
+  --hljs-comment: #6b7280;
+  --hljs-punctuation: #d1d5db;
+  --hljs-tag-property-constant: #fbbf24;
+  --hljs-number-boolean: #a78bfa;
+  --hljs-string-selector-attr-name: #34d399;
+  --hljs-operator-entity-url-variable: #d1d5db;
+  --hljs-function-classname-atrule: #a78bfa;
+  --hljs-keyword: #c4b5fd;
+  --hljs-name: #fb923c;
+  --hljs-regex-important: #a78bfa;
+  --hljs-css-string: #e5e5e5;
+
+  --hljs-bash-function: #c4b5fd;
+  --hljs-json-property: #a78bfa;
+  --hljs-yaml-key: #34d399;
+  --hljs-markdown-title: #e5e5e5;
+
+  --hljs-diff-inserted: #34d399;
+  --hljs-diff-inserted-bg: #064e3b;
+  --hljs-diff-deleted: #fb923c;
+  --hljs-diff-deleted-bg: #431407;
+
+  --hljs-highlight-bg: #352549;
+  --hljs-subst: #ffffff;
+}
+
+/* Dark Theme - Rose Gold */
+body.dark-rosegold-theme {
+  --bck: #0a0a0a;
+  --bg: #0a0a0b; /* pure black with subtle rose tint */
+  --bg-secondary: #121213; /* sidebar dan code bg */
+  --bg-secondary-50: #1212137a;
+  --fg: #f5f5f5; /* high contrast white */
+  --fg-muted: #a8a8a8; /* neutral muted */
+  --fg-death: #787878;
+  --surface: #141415; /* input chat */
+  --surface-secondary: #1d1d1e; /* bubble user */
+  --border: #2f2f2f;
+  --border-light: #242424;
+  --border-input: #2f2f2f;
+  --border-active: #797979ff; /* neutral gray */
+  --input-bg: #141415;
+  --primary: #f4a460; /* vibrant rose gold */
+  --primary-light: #3a2518;
+  --primary-light-user: #3a2518;
+  --primary-light-hover: #4a2f1e;
+  --primary-light-tip: #3a25187d;
+  --accent: #f4a460;
+  --highlight-color: #f4a460;
+  --white-hover: #e0e0e0;
+  --bold: #ffffff;
+
+  --purple-sel: #f4a460;
+  --purple-sel-bg: #f4a46033;
+
+  --hover-bg: #1d1d1e;
+  --hover-bg-secondary: #272728;
+  --shadow-color: rgba(0, 0, 0, 0.8);
+  --icon: #9b9b9b;
+  --link: #f4a460;
+  --link-hover: #f8c89d;
+
+  --danger: #ff5c5c;
+  --danger-hover: #ff5c5c3e;
+  --danger-light: #3d1a1a;
+  --success: #00d4aa;
+  --warning: #ffb020;
+
+  --hljs-base: #e5e5e5;
+  --hljs-comment: #6b7280;
+  --hljs-punctuation: #d1d5db;
+  --hljs-tag-property-constant: #fbbf24;
+  --hljs-number-boolean: #a78bfa;
+  --hljs-string-selector-attr-name: #34d399;
+  --hljs-operator-entity-url-variable: #d1d5db;
+  --hljs-function-classname-atrule: #f4a460;
+  --hljs-keyword: #f8c89d;
+  --hljs-name: #fb923c;
+  --hljs-regex-important: #f4a460;
+  --hljs-css-string: #e5e5e5;
+
+  --hljs-bash-function: #c084fc;
+  --hljs-json-property: #f4a460;
+  --hljs-yaml-key: #34d399;
+  --hljs-markdown-title: #e5e5e5;
+
+  --hljs-diff-inserted: #34d399;
+  --hljs-diff-inserted-bg: #064e3b;
+  --hljs-diff-deleted: #fb923c;
+  --hljs-diff-deleted-bg: #431407;
+
+  --hljs-highlight-bg: #4a2f1e;
+  --hljs-subst: #ffffff;
+}
+
+/* Dark Theme - Ocean */
+body.dark-ocean-theme {
+  --bck: #0a0a0a;
+  --bg: #0a0a0c; /* pure black with subtle blue tint */
+  --bg-secondary: #121314; /* sidebar dan code bg */
+  --bg-secondary-50: #1213147a;
+  --fg: #f5f5f5; /* high contrast white */
+  --fg-muted: #a8a8a8; /* neutral muted */
+  --fg-death: #787878;
+  --surface: #141516; /* input chat */
+  --surface-secondary: #1d1f20; /* bubble user */
+  --border: #2f2f2f;
+  --border-light: #242424;
+  --border-input: #2f2f2f;
+  --border-active: #797979ff; /* neutral gray */
+  --input-bg: #141516;
+  --primary: #3b82f6; /* vibrant ocean blue */
+  --primary-light: #1a2d44;
+  --primary-light-user: #1a2d44;
+  --primary-light-hover: #1f3a5f;
+  --primary-light-tip: #1a2d447d;
+  --accent: #3b82f6;
+  --highlight-color: #3b82f6;
+  --white-hover: #e0e0e0;
+  --bold: #ffffff;
+
+  --purple-sel: #3b82f6;
+  --purple-sel-bg: #3b82f633;
+
+  --hover-bg: #1d1f20;
+  --hover-bg-secondary: #272a2b;
+  --shadow-color: rgba(0, 0, 0, 0.8);
+  --icon: #9b9b9b;
+  --link: #3b82f6;
+  --link-hover: #60a5fa;
+
+  --danger: #ff5c5c;
+  --danger-hover: #ff5c5c3e;
+  --danger-light: #3d1a1a;
+  --success: #00d4aa;
+  --warning: #ffb020;
+
+  --hljs-base: #e5e5e5;
+  --hljs-comment: #6b7280;
+  --hljs-punctuation: #d1d5db;
+  --hljs-tag-property-constant: #fbbf24;
+  --hljs-number-boolean: #a78bfa;
+  --hljs-string-selector-attr-name: #34d399;
+  --hljs-operator-entity-url-variable: #d1d5db;
+  --hljs-function-classname-atrule: #3b82f6;
+  --hljs-keyword: #60a5fa;
+  --hljs-name: #fb923c;
+  --hljs-regex-important: #3b82f6;
+  --hljs-css-string: #e5e5e5;
+
+  --hljs-bash-function: #c084fc;
+  --hljs-json-property: #3b82f6;
+  --hljs-yaml-key: #34d399;
+  --hljs-markdown-title: #e5e5e5;
+
+  --hljs-diff-inserted: #34d399;
+  --hljs-diff-inserted-bg: #064e3b;
+  --hljs-diff-deleted: #fb923c;
+  --hljs-diff-deleted-bg: #431407;
+
+  --hljs-highlight-bg: #1f3a5f;
+  --hljs-subst: #ffffff;
+}
+
+/* Dark Theme - Sunset */
+body.dark-sunset-theme {
+  --bck: #0a0a0a;
+  --bg: #0c0a0a; /* pure black with subtle orange tint */
+  --bg-secondary: #141212; /* sidebar dan code bg */
+  --bg-secondary-50: #1412127a;
+  --fg: #f5f5f5; /* high contrast white */
+  --fg-muted: #a8a8a8; /* neutral muted */
+  --fg-death: #787878;
+  --surface: #161414; /* input chat */
+  --surface-secondary: #1f1d1d; /* bubble user */
+  --border: #2f2f2f;
+  --border-light: #242424;
+  --border-input: #2f2f2f;
+  --border-active: #797979ff; /* neutral gray */
+  --input-bg: #161414;
+  --primary: #fb923c; /* vibrant sunset orange */
+  --primary-light: #3a2110;
+  --primary-light-user: #3a2110;
+  --primary-light-hover: #4a2815;
+  --primary-light-tip: #3a21107d;
+  --accent: #fb923c;
+  --highlight-color: #fb923c;
+  --white-hover: #e0e0e0;
+  --bold: #ffffff;
+
+  --purple-sel: #fb923c;
+  --purple-sel-bg: #fb923c33;
+
+  --hover-bg: #1f1d1d;
+  --hover-bg-secondary: #292727;
+  --shadow-color: rgba(0, 0, 0, 0.8);
+  --icon: #9b9b9b;
+  --link: #fb923c;
+  --link-hover: #fdba74;
+
+  --danger: #ff5c5c;
+  --danger-hover: #ff5c5c3e;
+  --danger-light: #3d1a1a;
+  --success: #00d4aa;
+  --warning: #ffb020;
+
+  --hljs-base: #e5e5e5;
+  --hljs-comment: #6b7280;
+  --hljs-punctuation: #d1d5db;
+  --hljs-tag-property-constant: #fbbf24;
+  --hljs-number-boolean: #a78bfa;
+  --hljs-string-selector-attr-name: #34d399;
+  --hljs-operator-entity-url-variable: #d1d5db;
+  --hljs-function-classname-atrule: #fb923c;
+  --hljs-keyword: #fdba74;
+  --hljs-name: #fbbf24;
+  --hljs-regex-important: #fb923c;
+  --hljs-css-string: #e5e5e5;
+
+  --hljs-bash-function: #c084fc;
+  --hljs-json-property: #fb923c;
+  --hljs-yaml-key: #34d399;
+  --hljs-markdown-title: #e5e5e5;
+
+  --hljs-diff-inserted: #34d399;
+  --hljs-diff-inserted-bg: #064e3b;
+  --hljs-diff-deleted: #fbbf24;
+  --hljs-diff-deleted-bg: #431407;
+
+  --hljs-highlight-bg: #4a2815;
+  --hljs-subst: #ffffff;
+}
+
+/* Dark Theme - Emerald */
+body.dark-emerald-theme {
+  --bck: #0a0a0a;
+  --bg: #0a0b0a; /* pure black with subtle green tint */
+  --bg-secondary: #121413; /* sidebar dan code bg */
+  --bg-secondary-50: #1214137a;
+  --fg: #f5f5f5; /* high contrast white */
+  --fg-muted: #a8a8a8; /* neutral muted */
+  --fg-death: #787878;
+  --surface: #141615; /* input chat */
+  --surface-secondary: #1d201e; /* bubble user */
+  --border: #2f2f2f;
+  --border-light: #242424;
+  --border-input: #2f2f2f;
+  --border-active: #797979ff; /* neutral gray */
+  --input-bg: #141615;
+  --primary: #10b981; /* vibrant emerald */
+  --primary-light: #1a3d2f;
+  --primary-light-user: #1a3d2f;
+  --primary-light-hover: #1f4d3a;
+  --primary-light-tip: #1a3d2f7d;
+  --accent: #10b981;
+  --highlight-color: #10b981;
+  --white-hover: #e0e0e0;
+  --bold: #ffffff;
+
+  --purple-sel: #10b981;
+  --purple-sel-bg: #10b98133;
+
+  --hover-bg: #1d201e;
+  --hover-bg-secondary: #272a28;
+  --shadow-color: rgba(0, 0, 0, 0.8);
+  --icon: #9b9b9b;
+  --link: #10b981;
+  --link-hover: #34d399;
+
+  --danger: #ff5c5c;
+  --danger-hover: #ff5c5c3e;
+  --danger-light: #3d1a1a;
+  --success: #00d4aa;
+  --warning: #ffb020;
+
+  --hljs-base: #e5e5e5;
+  --hljs-comment: #6b7280;
+  --hljs-punctuation: #d1d5db;
+  --hljs-tag-property-constant: #fbbf24;
+  --hljs-number-boolean: #a78bfa;
+  --hljs-string-selector-attr-name: #34d399;
+  --hljs-operator-entity-url-variable: #d1d5db;
+  --hljs-function-classname-atrule: #10b981;
+  --hljs-keyword: #34d399;
+  --hljs-name: #fb923c;
+  --hljs-regex-important: #10b981;
+  --hljs-css-string: #e5e5e5;
+
+  --hljs-bash-function: #c084fc;
+  --hljs-json-property: #10b981;
+  --hljs-yaml-key: #34d399;
+  --hljs-markdown-title: #e5e5e5;
+
+  --hljs-diff-inserted: #34d399;
+  --hljs-diff-inserted-bg: #064e3b;
+  --hljs-diff-deleted: #fb923c;
+  --hljs-diff-deleted-bg: #431407;
+
+  --hljs-highlight-bg: #1f4d3a;
+  --hljs-subst: #ffffff;
+}
+
+/* ================================ */
+/* LIGHT THEME VARIANTS - VIBING PROFESSIONAL */
+/* ================================ */
+body.light-theme {
+  --bck: #00000008;
+  --bg: #FFFFFF; /* done: background paling belakang, base */
+  --bg-secondary: #F0F4F9; /* done, sidebar dan code bg */
+  --bg-secondary-50: #f0f4f980; /* done, sidebar dan code bg */
+  --fg: #1f1f1f; /* done: font paling kontras */
+  --fg-muted: #575B60; /* done: font redup, di sidebar, dan di form */
+  --fg-death: #53575bff;
+  --surface: #FFFFFF; /* done: input chat */
+  --surface-secondary: #E9EEF6; /* done: bubble user */
+  --border: #C4C7C5; /* done: HR atau separator */
+  --border-light: #d9dadaff; /* done: for button */
+  --border-input: #c4c7c5; /* done: border input container */
+  --border-active: #9c9c9cff;
+  --table-odd: #000;
+  --table-even: #000;
+  --input-bg: #F0F5F9; /* done: search input or other */
+  --primary: #0842a0; /* done: for accent like text */
+  --primary-light: #D3E3FD; /* done: for session list */
+  --primary-light-user: #d3e3fd7f;
+  --primary-light-hover: #c5dafbff;
+  --primary-light-tip: #d3e3fd7f; 
+  --accent: #1752afff;
+  --highlight-color: #ffeb3b;
+  --white-hover: #363636ff;
+  --bold: #4f4f4fff;
+
+  --purple-sel: #59186fff;;
+  --purple-sel-bg: #d9adeab3;;
+  
+  --hover-bg: #e4e8ed; /* done; for lists or button hover */
+  --hover-bg-secondary: #dadee3ff;
+  --shadow-color: rgba(255, 255, 255, 0.15); /* for shadow in input container */
+  --icon: #444746; /* done: icon or symbols */
+  --icon-primary: #0842a0;
+  --link: #0842a0;
+  --link-hover: #1e3a8a;
+
+  --danger: #e81123;
+  --danger-hover: #c230253f;
+  --danger-light: #fce8e6;
+  --success: #25bd4dff;
+  --warning: #fbbc04;
+
+  /* dari hljs */
+  --hljs-base: #1f1f1f;
+  --hljs-comment: #a0a1a7; /* Abu-abu untuk komentar */
+  --hljs-punctuation: #383a42; /* Hitam lembut untuk tanda baca */
+  --hljs-tag-property-constant: #e45649; /* Merah untuk tag, properti */
+  --hljs-number-boolean: #a626a4; /* Ungu untuk angka, boolean */
+  --hljs-string-selector-attr-name: #50a14f; /* Hijau untuk string, selector */
+  --hljs-operator-entity-url-variable: #383a42; /* Hitam lembut */
+  --hljs-function-classname-atrule: #c18401; /* Oranye/kuning tua untuk fungsi */
+  --hljs-keyword: #a626a4; /* Biru untuk keyword */
+  --hljs-name: #f28b82;
+  --hljs-regex-important: #50a14f; /* Hijau tua */
+  --hljs-css-string: #a626a4; /* Ungu, agar kontras di CSS */
+
+  --hljs-bash-function: #795da3;
+  --hljs-json-property: #032f62;
+  --hljs-yaml-key: #22863a;
+  --hljs-markdown-title: #24292e;
+  
+  /* Diff colors */
+  --hljs-diff-inserted: #22863a;
+  --hljs-diff-inserted-bg: #f0fff4;
+  --hljs-diff-deleted: #d73a49;
+  --hljs-diff-deleted-bg: #ffeef0;
+  
+  /* Highlight */
+  --hljs-highlight-bg: #fff3cd;
+  --hljs-subst: #000;
+}
+
+body.light-theme-contrast {
+  --bck: #fafafa;
+  --bg: #FFFFFF; /* background paling belakang, base */
+  --bg-secondary: #E8F0FA; /* sidebar dan code bg - lebih kontras */
+  --bg-secondary-50: #e8f0fa80; 
+  --fg: #000000; /* font paling kontras - pure black */
+  --fg-muted: #3d4045; /* font redup - lebih gelap */
+  --fg-death: #5a5e63;
+  --surface: #FFFFFF; /* input chat */
+  --surface-secondary: #D9E7F7; /* bubble user - lebih kontras */
+  --border: #9BA1A6; /* HR atau separator - lebih gelap */
+  --border-light: #b8bec3; 
+  --border-input: #9BA1A6; 
+  --border-active: #6b7075;
+  --table-odd: #000;
+  --table-even: #000;
+  --input-bg: #E8F0FA; 
+  --primary: #0536a0; /* for accent like text - lebih gelap */
+  --primary-light: #B8D6FA; /* for session list - lebih saturated */
+  --primary-light-user: #b8d6fa9f;
+  --primary-light-hover: #a3c9f8;
+  --primary-light-tip: #b8d6fa9f; 
+  --accent: #0842c0;
+  --highlight-color: #ffd700;
+  --white-hover: #1a1a1a;
+  --bold: #1a1a1a;
+
+  --purple-sel: #4a0f5f;
+  --purple-sel-bg: #c79adec9;
+  
+  --hover-bg: #d5dce5; /* for lists or button hover - lebih kontras */
+  --hover-bg-secondary: #c5cdd9;
+  --shadow-color: rgba(0, 0, 0, 0.15); /* for shadow in input container - lebih gelap */
+  --icon: #2a2e32; /* icon or symbols - lebih gelap */
+  --icon-primary: #0536a0;
+  --link: #0536a0;
+  --link-hover: #032770;
+
+  --danger: #d01020;
+  --danger-hover: #d010203f;
+  --danger-light: #fad8dc;
+  --success: #1ea03d;
+  --warning: #f5a800;
+
+  /* dari hljs */
+  --hljs-base: #000000;
+  --hljs-comment: #6a737d; /* Abu-abu lebih gelap untuk komentar */
+  --hljs-punctuation: #24292e; /* Hitam untuk tanda baca */
+  --hljs-tag-property-constant: #d73a49; /* Merah lebih bold untuk tag, properti */
+  --hljs-number-boolean: #005cc5; /* Biru lebih bold untuk angka, boolean */
+  --hljs-string-selector-attr-name: #22863a; /* Hijau lebih gelap untuk string, selector */
+  --hljs-operator-entity-url-variable: #24292e; /* Hitam */
+  --hljs-function-classname-atrule: #b08800; /* Oranye/kuning lebih gelap untuk fungsi */
+  --hljs-keyword: #d73a49; /* Merah untuk keyword */
+  --hljs-name: #e36209;
+  --hljs-regex-important: #22863a; /* Hijau tua */
+  --hljs-css-string: #032f62; /* Biru gelap, agar kontras di CSS */
+
+  --hljs-bash-function: #6f42c1;
+  --hljs-json-property: #005cc5;
+  --hljs-yaml-key: #22863a;
+  --hljs-markdown-title: #24292e;
+  
+  /* Diff colors */
+  --hljs-diff-inserted: #22863a;
+  --hljs-diff-inserted-bg: #e6ffed;
+  --hljs-diff-deleted: #d73a49;
+  --hljs-diff-deleted-bg: #ffeef0;
+  
+  /* Highlight */
+  --hljs-highlight-bg: #ffe89d;
+  --hljs-subst: #000;
+}
+
+body.github-light-theme {
+  --bck: #ffffff;
+  --bg: #ffffff; /* base background putih */
+  --bg-secondary: #f6f8fa; /* sidebar abu muda */
+  --bg-secondary-50: #f6f8fa80; /* transparent version */
+  --fg: #1f2328; /* text hitam keabuan */
+  --fg-muted: #636c76; /* text secondary */
+  --fg-death: #8c959f;
+  --surface: #ffffff; /* input chat */
+  --surface-secondary: #ddf4ff; /* bubble user biru muda */
+  --border: #d1d9e0; /* border standar */
+  --border-light: #e5e9ed; /* border tipis */
+  --border-input: #d1d9e0;
+  --border-active: #0969da;
+  --input-bg: #f6f8fa; /* input background */
+  --primary: #0969da; /* biru GitHub */
+  --primary-light: #ddf4ff; /* biru muda */
+  --primary-light-user: #ddf4ff;
+  --primary-light-hover: #b6e3ff;
+  --primary-light-tip: #ddf4ff80;
+  --accent: #0550ae; /* biru darker */
+  --highlight-color: #fff8c5;
+  --white-hover: #f3f4f6;
+  --bold: #1f2328;
+
+  --purple-sel: #8250df;
+  --purple-sel-bg: #fbefff;
+  
+  --hover-bg: #f3f4f6; /* hover abu muda */
+  --hover-bg-secondary: #e7e9ec;
+  --shadow-color: rgba(31, 35, 40, 0.12);
+  --icon: #636c76;
+  --link: #0969da;
+  --link-hover: #0550ae;
+
+  --danger: #d1242f;
+  --danger-hover: #ffebe9;
+  --danger-light: #ffebe9;
+  --success: #1a7f37;
+  --warning: #bf8700;
+
+  /* Syntax highlighting - GitHub style */
+  --hljs-base: #1f2328;
+  --hljs-comment: #6e7781;
+  --hljs-punctuation: #1f2328;
+  --hljs-tag-property-constant: #0550ae;
+  --hljs-number-boolean: #0a3069;
+  --hljs-string-selector-attr-name: #0a3069;
+  --hljs-operator-entity-url-variable: #953800;
+  --hljs-function-classname-atrule: #8250df;
+  --hljs-keyword: #cf222e;
+  --hljs-name: #116329;
+  --hljs-regex-important: #0550ae;
+  --hljs-css-string: #0a3069;
+
+  /* Language specific */
+  --hljs-bash-function: #8250df;
+  --hljs-json-property: #0550ae;
+  --hljs-yaml-key: #116329;
+  --hljs-markdown-title: #1f2328;
+  
+  /* Diff colors */
+  --hljs-diff-inserted: #116329;
+  --hljs-diff-inserted-bg: #dafbe1;
+  --hljs-diff-deleted: #82071e;
+  --hljs-diff-deleted-bg: #ffebe9;
+  
+  /* Highlight */
+  --hljs-highlight-bg: #fff8c5;
+  --hljs-subst: #1f2328;
+}
+
+/* Light Theme - Summer */
+body.light-turqoise-theme {
+  --bck: #fafafa;
+  --bg: #FFFFFF; /* pure white background */
+  --bg-secondary: #F5F5F5; /* sidebar dan code bg */
+  --bg-secondary-50: #f5f5f580; 
+  --fg: #0a0a0a; /* font paling kontras */
+  --fg-muted: #525252; /* font di sidebar atau form */
+  --fg-death: #737373;
+  --surface: #FFFFFF; /* input chat */
+  --surface-secondary: #F0F0F0; /* bubble user */
+  --border: #D4D4D4; 
+  --border-light: #E5E5E5; 
+  --border-input: #D4D4D4; 
+  --border-active: #A3A3A3;
+  --table-odd: #000;
+  --table-even: #000;
+  --input-bg: #F5F5F5; 
+  --primary: #0e7490; /* teal/cyan accent perplexity */
+  --primary-light: #CFFAFE; 
+  --primary-light-user: #CFFAFE9f;
+  --primary-light-hover: #A5F3FC;
+  --primary-light-tip: #CFFAFE9f; 
+  --accent: #0e7490;
+  --highlight-color: #0e7490;
+  --white-hover: #1a1a1a;
+  --bold: #0a0a0a;
+
+  --purple-sel: #7c3aed;
+  --purple-sel-bg: #ddd6fec9;
+  
+  --hover-bg: #E8E8E8; 
+  --hover-bg-secondary: #DADADA;
+  --shadow-color: rgba(0, 0, 0, 0.08); 
+  --icon: #525252; 
+  --icon-primary: #0e7490;
+  --link: #0e7490;
+  --link-hover: #0c5f7a;
+
+  --danger: #dc2626;
+  --danger-hover: #dc26263f;
+  --danger-light: #fee2e2;
+  --success: #059669;
+  --warning: #d97706;
+
+  /* dari hljs */
+  --hljs-base: #0a0a0a;
+  --hljs-comment: #737373; 
+  --hljs-punctuation: #262626; 
+  --hljs-tag-property-constant: #d97706; 
+  --hljs-number-boolean: #7c3aed; 
+  --hljs-string-selector-attr-name: #059669; 
+  --hljs-operator-entity-url-variable: #262626; 
+  --hljs-function-classname-atrule: #2563eb; 
+  --hljs-keyword: #db2777; 
+  --hljs-name: #ea580c;
+  --hljs-regex-important: #0e7490; 
+  --hljs-css-string: #0a0a0a; 
+
+  --hljs-bash-function: #9333ea;
+  --hljs-json-property: #2563eb;
+  --hljs-yaml-key: #059669;
+  --hljs-markdown-title: #0a0a0a;
+  
+  /* Diff colors */
+  --hljs-diff-inserted: #059669;
+  --hljs-diff-inserted-bg: #d1fae5;
+  --hljs-diff-deleted: #dc2626;
+  --hljs-diff-deleted-bg: #fee2e2;
+  
+  /* Highlight */
+  --hljs-highlight-bg: #fef3c7;
+  --hljs-subst: #0a0a0a;
+}
+
+/* Light Theme - Blossom */
+body.light-blossom-theme {
+  --bck: #fafafa;
+  --bg: #fffffd; /* near white with subtle pink tint */
+  --bg-secondary: #f5f0f3; /* sidebar dan code bg */
+  --bg-secondary-50: #f5f0f380;
+  --fg: #1f1f1f; /* high contrast black */
+  --fg-muted: #575B60; /* neutral muted */
+  --fg-death: #53575bff;
+  --surface: #FFFFFF; /* input chat */
+  --surface-secondary: #f0e8ed; /* bubble user */
+  --border: #C4C7C5;
+  --border-light: #d9dadaff;
+  --border-input: #C4C7C5;
+  --border-active: #9c9c9cff; /* darker neutral gray */
+  --input-bg: #f5f0f3;
+  --primary: #db2777; /* vibrant blossom pink */
+  --primary-light: #fce7f3;
+  --primary-light-user: #fce7f37f;
+  --primary-light-hover: #fbcfe8;
+  --primary-light-tip: #fce7f37f;
+  --accent: #db2777;
+  --highlight-color: #ffeb3b;
+  --white-hover: #363636ff;
+  --bold: #4f4f4fff;
+
+  --purple-sel: #db2777;
+  --purple-sel-bg: #fce7f3a9;
+
+  --hover-bg: #f0e8ed;
+  --hover-bg-secondary: #e8dfe5;
+  --shadow-color: rgba(255, 255, 255, 0.15);
+  --icon: #444746;
+  --link: #db2777;
+  --link-hover: #be185d;
+
+  --danger: #e81123;
+  --danger-hover: #c230253f;
+  --danger-light: #fce8e6;
+  --success: #25bd4dff;
+  --warning: #fbbc04;
+
+  --hljs-base: #1f1f1f;
+  --hljs-comment: #a0a1a7;
+  --hljs-punctuation: #383a42;
+  --hljs-tag-property-constant: #e45649;
+  --hljs-number-boolean: #a626a4;
+  --hljs-string-selector-attr-name: #50a14f;
+  --hljs-operator-entity-url-variable: #383a42;
+  --hljs-function-classname-atrule: #db2777;
+  --hljs-keyword: #a626a4;
+  --hljs-name: #db2777;
+  --hljs-regex-important: #50a14f;
+  --hljs-css-string: #a626a4;
+
+  --hljs-bash-function: #795da3;
+  --hljs-json-property: #db2777;
+  --hljs-yaml-key: #22863a;
+  --hljs-markdown-title: #24292e;
+
+  --hljs-diff-inserted: #22863a;
+  --hljs-diff-inserted-bg: #f0fff4;
+  --hljs-diff-deleted: #d73a49;
+  --hljs-diff-deleted-bg: #ffeef0;
+
+  --hljs-highlight-bg: #fff3cd;
+  --hljs-subst: #000;
+}
+
+/* Light Theme - Sky */
+body.light-sky-theme {
+  --bck: #fafafa;
+  --bg: #fffffb; /* near white with subtle sky blue tint */
+  --bg-secondary: #f0f4f9; /* sidebar dan code bg */
+  --bg-secondary-50: #f0f4f980;
+  --fg: #1f1f1f; /* high contrast black */
+  --fg-muted: #575B60; /* neutral muted */
+  --fg-death: #53575bff;
+  --surface: #FFFFFF; /* input chat */
+  --surface-secondary: #e8f1f8; /* bubble user */
+  --border: #C4C7C5;
+  --border-light: #d9dadaff;
+  --border-input: #C4C7C5;
+  --border-active: #9c9c9cff; /* darker neutral gray */
+  --input-bg: #f0f4f9;
+  --primary: #0284c7; /* vibrant sky blue */
+  --primary-light: #e0f2fe;
+  --primary-light-user: #e0f2fe7f;
+  --primary-light-hover: #bae6fd;
+  --primary-light-tip: #e0f2fe7f;
+  --accent: #0284c7;
+  --highlight-color: #ffeb3b;
+  --white-hover: #363636ff;
+  --bold: #4f4f4fff;
+
+  --purple-sel: #0284c7;
+  --purple-sel-bg: #e0f2fea9;
+
+  --hover-bg: #e8f1f8;
+  --hover-bg-secondary: #d9e8f4;
+  --shadow-color: rgba(255, 255, 255, 0.15);
+  --icon: #444746;
+  --link: #0284c7;
+  --link-hover: #075985;
+
+  --danger: #e81123;
+  --danger-hover: #c230253f;
+  --danger-light: #fce8e6;
+  --success: #25bd4dff;
+  --warning: #fbbc04;
+
+  --hljs-base: #1f1f1f;
+  --hljs-comment: #a0a1a7;
+  --hljs-punctuation: #383a42;
+  --hljs-tag-property-constant: #e45649;
+  --hljs-number-boolean: #a626a4;
+  --hljs-string-selector-attr-name: #50a14f;
+  --hljs-operator-entity-url-variable: #383a42;
+  --hljs-function-classname-atrule: #0284c7;
+  --hljs-keyword: #a626a4;
+  --hljs-name: #0284c7;
+  --hljs-regex-important: #50a14f;
+  --hljs-css-string: #a626a4;
+
+  --hljs-bash-function: #795da3;
+  --hljs-json-property: #0284c7;
+  --hljs-yaml-key: #22863a;
+  --hljs-markdown-title: #24292e;
+
+  --hljs-diff-inserted: #22863a;
+  --hljs-diff-inserted-bg: #f0fff4;
+  --hljs-diff-deleted: #d73a49;
+  --hljs-diff-deleted-bg: #ffeef0;
+
+  --hljs-highlight-bg: #fff3cd;
+  --hljs-subst: #000;
+}
+
+/* Light Theme - Lilac */
+body.light-lilac-theme {
+  --bck: #fafafa;
+  --bg: #fffffb; /* near white with subtle purple tint */
+  --bg-secondary: #f3f0f6; /* sidebar dan code bg */
+  --bg-secondary-50: #f3f0f680;
+  --fg: #1f1f1f; /* high contrast black */
+  --fg-muted: #575B60; /* neutral muted */
+  --fg-death: #53575bff;
+  --surface: #FFFFFF; /* input chat */
+  --surface-secondary: #eee8f3; /* bubble user */
+  --border: #C4C7C5;
+  --border-light: #d9dadaff;
+  --border-input: #C4C7C5;
+  --border-active: #9c9c9cff; /* darker neutral gray */
+  --input-bg: #f3f0f6;
+  --primary: #7c3aed; /* vibrant lilac purple */
+  --primary-light: #f3e8ff;
+  --primary-light-user: #f3e8ff7f;
+  --primary-light-hover: #e9d5ff;
+  --primary-light-tip: #f3e8ff7f;
+  --accent: #7c3aed;
+  --highlight-color: #ffeb3b;
+  --white-hover: #363636ff;
+  --bold: #4f4f4fff;
+
+  --purple-sel: #7c3aed;
+  --purple-sel-bg: #f3e8ffa9;
+
+  --hover-bg: #eee8f3;
+  --hover-bg-secondary: #e5def0;
+  --shadow-color: rgba(255, 255, 255, 0.15);
+  --icon: #444746;
+  --link: #7c3aed;
+  --link-hover: #6d28d9;
+
+  --danger: #e81123;
+  --danger-hover: #c230253f;
+  --danger-light: #fce8e6;
+  --success: #25bd4dff;
+  --warning: #fbbc04;
+
+  --hljs-base: #1f1f1f;
+  --hljs-comment: #a0a1a7;
+  --hljs-punctuation: #383a42;
+  --hljs-tag-property-constant: #e45649;
+  --hljs-number-boolean: #a626a4;
+  --hljs-string-selector-attr-name: #50a14f;
+  --hljs-operator-entity-url-variable: #383a42;
+  --hljs-function-classname-atrule: #7c3aed;
+  --hljs-keyword: #a626a4;
+  --hljs-name: #7c3aed;
+  --hljs-regex-important: #50a14f;
+  --hljs-css-string: #a626a4;
+
+  --hljs-bash-function: #795da3;
+  --hljs-json-property: #7c3aed;
+  --hljs-yaml-key: #22863a;
+  --hljs-markdown-title: #24292e;
+
+  --hljs-diff-inserted: #22863a;
+  --hljs-diff-inserted-bg: #f0fff4;
+  --hljs-diff-deleted: #d73a49;
+  --hljs-diff-deleted-bg: #ffeef0;
+
+  --hljs-highlight-bg: #fff3cd;
+  --hljs-subst: #000;
+}
+
+/* Light Theme - Peach */
+body.light-peach-theme {
+  --bck: #fafafa;
+  --bg: #fffffe; /* near white with subtle peach tint */
+  --bg-secondary: #f8f2ef; /* sidebar dan code bg */
+  --bg-secondary-50: #f8f2ef80;
+  --fg: #1f1f1f; /* high contrast black */
+  --fg-muted: #575B60; /* neutral muted */
+  --fg-death: #53575bff;
+  --surface: #FFFFFF; /* input chat */
+  --surface-secondary: #f3ebe7; /* bubble user */
+  --border: #C4C7C5;
+  --border-light: #d9dadaff;
+  --border-input: #C4C7C5;
+  --border-active: #9c9c9cff; /* darker neutral gray */
+  --input-bg: #f8f2ef;
+  --primary: #ea580c; /* vibrant peach orange */
+  --primary-light: #ffedd5;
+  --primary-light-user: #ffedd57f;
+  --primary-light-hover: #fed7aa;
+  --primary-light-tip: #ffedd57f;
+  --accent: #ea580c;
+  --highlight-color: #ffeb3b;
+  --white-hover: #363636ff;
+  --bold: #4f4f4fff;
+
+  --purple-sel: #ea580c;
+  --purple-sel-bg: #ffedd5a9;
+
+  --hover-bg: #f3ebe7;
+  --hover-bg-secondary: #ebe1dc;
+  --shadow-color: rgba(255, 255, 255, 0.15);
+  --icon: #444746;
+  --link: #ea580c;
+  --link-hover: #c2410c;
+
+  --danger: #e81123;
+  --danger-hover: #c230253f;
+  --danger-light: #fce8e6;
+  --success: #25bd4dff;
+  --warning: #fbbc04;
+
+  --hljs-base: #1f1f1f;
+  --hljs-comment: #a0a1a7;
+  --hljs-punctuation: #383a42;
+  --hljs-tag-property-constant: #e45649;
+  --hljs-number-boolean: #a626a4;
+  --hljs-string-selector-attr-name: #50a14f;
+  --hljs-operator-entity-url-variable: #383a42;
+  --hljs-function-classname-atrule: #ea580c;
+  --hljs-keyword: #a626a4;
+  --hljs-name: #ea580c;
+  --hljs-regex-important: #50a14f;
+  --hljs-css-string: #a626a4;
+
+  --hljs-bash-function: #795da3;
+  --hljs-json-property: #ea580c;
+  --hljs-yaml-key: #22863a;
+  --hljs-markdown-title: #24292e;
+
+  --hljs-diff-inserted: #22863a;
+  --hljs-diff-inserted-bg: #f0fff4;
+  --hljs-diff-deleted: #d73a49;
+  --hljs-diff-deleted-bg: #ffeef0;
+
+  --hljs-highlight-bg: #fff3cd;
+  --hljs-subst: #000;
+}
+
+/* Light Theme - Mint */
+body.light-mint-theme {
+  --bck: #fafafa;
+  --bg: #fbfffb; /* near white with subtle mint tint */
+  --bg-secondary: #eff8f2; /* sidebar dan code bg */
+  --bg-secondary-50: #eff8f280;
+  --fg: #1f1f1f; /* high contrast black */
+  --fg-muted: #575B60; /* neutral muted */
+  --fg-death: #53575bff;
+  --surface: #FFFFFF; /* input chat */
+  --surface-secondary: #e7f3eb; /* bubble user */
+  --border: #C4C7C5;
+  --border-light: #d9dadaff;
+  --border-input: #C4C7C5;
+  --border-active: #9c9c9cff; /* darker neutral gray */
+  --input-bg: #eff8f2;
+  --primary: #16a34a; /* vibrant mint green */
+  --primary-light: #dcfce7;
+  --primary-light-user: #dcfce77f;
+  --primary-light-hover: #bbf7d0;
+  --primary-light-tip: #dcfce77f;
+  --accent: #16a34a;
+  --highlight-color: #ffeb3b;
+  --white-hover: #363636ff;
+  --bold: #4f4f4fff;
+
+  --purple-sel: #16a34a;
+  --purple-sel-bg: #dcfce7a9;
+
+  --hover-bg: #e7f3eb;
+  --hover-bg-secondary: #ddebe3;
+  --shadow-color: rgba(255, 255, 255, 0.15);
+  --icon: #444746;
+  --link: #16a34a;
+  --link-hover: #15803d;
+
+  --danger: #e81123;
+  --danger-hover: #c230253f;
+  --danger-light: #fce8e6;
+  --success: #25bd4dff;
+  --warning: #fbbc04;
+
+  --hljs-base: #1f1f1f;
+  --hljs-comment: #a0a1a7;
+  --hljs-punctuation: #383a42;
+  --hljs-tag-property-constant: #e45649;
+  --hljs-number-boolean: #a626a4;
+  --hljs-string-selector-attr-name: #50a14f;
+  --hljs-operator-entity-url-variable: #383a42;
+  --hljs-function-classname-atrule: #16a34a;
+  --hljs-keyword: #a626a4;
+  --hljs-name: #16a34a;
+  --hljs-regex-important: #50a14f;
+  --hljs-css-string: #a626a4;
+
+  --hljs-bash-function: #795da3;
+  --hljs-json-property: #16a34a;
+  --hljs-yaml-key: #22863a;
+  --hljs-markdown-title: #24292e;
+
+  --hljs-diff-inserted: #22863a;
+  --hljs-diff-inserted-bg: #f0fff4;
+  --hljs-diff-deleted: #d73a49;
+  --hljs-diff-deleted-bg: #ffeef0;
+
+  --hljs-highlight-bg: #fff3cd;
+  --hljs-subst: #000;
+}
+
+/* Light Theme - Coral */
+body.light-coral-theme {
+  --bck: #fafafa;
+  --bg: #fffdfd; /* near white with subtle coral tint */
+  --bg-secondary: #f8eff1; /* sidebar dan code bg */
+  --bg-secondary-50: #f8eff180;
+  --fg: #1f1f1f; /* high contrast black */
+  --fg-muted: #575B60; /* neutral muted */
+  --fg-death: #53575bff;
+  --surface: #FFFFFF; /* input chat */
+  --surface-secondary: #f3e7ea; /* bubble user */
+  --border: #C4C7C5;
+  --border-light: #d9dadaff;
+  --border-input: #C4C7C5;
+  --border-active: #9c9c9cff; /* darker neutral gray */
+  --input-bg: #f8eff1;
+  --primary: #e11d48; /* vibrant coral */
+  --primary-light: #ffe4e6;
+  --primary-light-user: #ffe4e67f;
+  --primary-light-hover: #fecdd3;
+  --primary-light-tip: #ffe4e67f;
+  --accent: #e11d48;
+  --highlight-color: #ffeb3b;
+  --white-hover: #363636ff;
+  --bold: #4f4f4fff;
+
+  --purple-sel: #e11d48;
+  --purple-sel-bg: #ffe4e6a9;
+
+  --hover-bg: #f3e7ea;
+  --hover-bg-secondary: #ebdee2;
+  --shadow-color: rgba(255, 255, 255, 0.15);
+  --icon: #444746;
+  --link: #e11d48;
+  --link-hover: #be123c;
+
+  --danger: #e81123;
+  --danger-hover: #c230253f;
+  --danger-light: #fce8e6;
+  --success: #25bd4dff;
+  --warning: #fbbc04;
+
+  --hljs-base: #1f1f1f;
+  --hljs-comment: #a0a1a7;
+  --hljs-punctuation: #383a42;
+  --hljs-tag-property-constant: #e45649;
+  --hljs-number-boolean: #a626a4;
+  --hljs-string-selector-attr-name: #50a14f;
+  --hljs-operator-entity-url-variable: #383a42;
+  --hljs-function-classname-atrule: #e11d48;
+  --hljs-keyword: #a626a4;
+  --hljs-name: #e11d48;
+  --hljs-regex-important: #50a14f;
+  --hljs-css-string: #a626a4;
+
+  --hljs-bash-function: #795da3;
+  --hljs-json-property: #e11d48;
+  --hljs-yaml-key: #22863a;
+  --hljs-markdown-title: #24292e;
+
+  --hljs-diff-inserted: #22863a;
+  --hljs-diff-inserted-bg: #f0fff4;
+  --hljs-diff-deleted: #d73a49;
+  --hljs-diff-deleted-bg: #ffeef0;
+
+  --hljs-highlight-bg: #fff3cd;
+  --hljs-subst: #000;
+}
+
+/* Light Theme - Ice */
+body.light-ice-theme {
+  --bck: #fafafa;
+  --bg: #fbfffe; /* near white with subtle teal tint */
+  --bg-secondary: #eff8f7; /* sidebar dan code bg */
+  --bg-secondary-50: #eff8f780;
+  --fg: #1f1f1f; /* high contrast black */
+  --fg-muted: #575B60; /* neutral muted */
+  --fg-death: #53575bff;
+  --surface: #FFFFFF; /* input chat */
+  --surface-secondary: #e7f3f2; /* bubble user */
+  --border: #C4C7C5;
+  --border-light: #d9dadaff;
+  --border-input: #C4C7C5;
+  --border-active: #9c9c9cff; /* darker neutral gray */
+  --input-bg: #eff8f7;
+  --primary: #0d9488; /* vibrant ice teal */
+  --primary-light: #ccfbf1;
+  --primary-light-user: #ccfbf17f;
+  --primary-light-hover: #99f6e4;
+  --primary-light-tip: #ccfbf17f;
+  --accent: #0d9488;
+  --highlight-color: #ffeb3b;
+  --white-hover: #363636ff;
+  --bold: #4f4f4fff;
+
+  --purple-sel: #0d9488;
+  --purple-sel-bg: #ccfbf1a9;
+
+  --hover-bg: #e7f3f2;
+  --hover-bg-secondary: #ddebe9;
+  --shadow-color: rgba(255, 255, 255, 0.15);
+  --icon: #444746;
+  --link: #0d9488;
+  --link-hover: #0f766e;
+
+  --danger: #e81123;
+  --danger-hover: #c230253f;
+  --danger-light: #fce8e6;
+  --success: #25bd4dff;
+  --warning: #fbbc04;
+
+  --hljs-base: #1f1f1f;
+  --hljs-comment: #a0a1a7;
+  --hljs-punctuation: #383a42;
+  --hljs-tag-property-constant: #e45649;
+  --hljs-number-boolean: #a626a4;
+  --hljs-string-selector-attr-name: #50a14f;
+  --hljs-operator-entity-url-variable: #383a42;
+  --hljs-function-classname-atrule: #0d9488;
+  --hljs-keyword: #a626a4;
+  --hljs-name: #0d9488;
+  --hljs-regex-important: #50a14f;
+  --hljs-css-string: #a626a4;
+
+  --hljs-bash-function: #795da3;
+  --hljs-json-property: #0d9488;
+  --hljs-yaml-key: #22863a;
+  --hljs-markdown-title: #24292e;
+
+  --hljs-diff-inserted: #22863a;
+  --hljs-diff-inserted-bg: #f0fff4;
+  --hljs-diff-deleted: #d73a49;
+  --hljs-diff-deleted-bg: #ffeef0;
+
+  --hljs-highlight-bg: #fff3cd;
+  --hljs-subst: #000;
+}

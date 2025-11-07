@@ -214,447 +214,6 @@ select {
               visibility 0.2s ease-out;
 }
 
-body.light-theme {
-  --bck: #00000008;
-  --bg: #FFFFFF; /* done: background paling belakang, base */
-  --bg-secondary: #F0F4F9; /* done, sidebar dan code bg */
-  --bg-secondary-50: #f0f4f980; /* done, sidebar dan code bg */
-  --fg: #1f1f1f; /* done: font paling kontras */
-  --fg-muted: #575B60; /* done: font redup, di sidebar, dan di form */
-  --fg-death: #53575bff;
-  --surface: #FFFFFF; /* done: input chat */
-  --surface-secondary: #E9EEF6; /* done: bubble user */
-  --border: #C4C7C5; /* done: HR atau separator */
-  --border-light: #d9dadaff; /* done: for button */
-  --border-input: #c4c7c5; /* done: border input container */
-  --border-active: #9c9c9cff;
-  --table-odd: #000;
-  --table-even: #000;
-  --input-bg: #F0F5F9; /* done: search input or other */
-  --primary: #0842a0; /* done: for accent like text */
-  --primary-light: #D3E3FD; /* done: for session list */
-  --primary-light-user: #d3e3fd7f;
-  --primary-light-hover: #c5dafbff;
-  --primary-light-tip: #d3e3fd7f; 
-  --accent: #1752afff;
-  --highlight-color: #ffeb3b;
-  --white-hover: #363636ff;
-  --bold: #4f4f4fff;
-
-  --purple-sel: #59186fff;;
-  --purple-sel-bg: #d9adeab3;;
-  
-  --hover-bg: #e4e8ed; /* done; for lists or button hover */
-  --hover-bg-secondary: #dadee3ff;
-  --shadow-color: rgba(255, 255, 255, 0.15); /* for shadow in input container */
-  --icon: #444746; /* done: icon or symbols */
-  --icon-primary: #0842a0;
-  --link: #0842a0;
-  --link-hover: #1e3a8a;
-
-  --danger: #e81123;
-  --danger-hover: #c230253f;
-  --danger-light: #fce8e6;
-  --success: #25bd4dff;
-  --warning: #fbbc04;
-
-  /* dari hljs */
-  --hljs-base: #1f1f1f;
-  --hljs-comment: #a0a1a7; /* Abu-abu untuk komentar */
-  --hljs-punctuation: #383a42; /* Hitam lembut untuk tanda baca */
-  --hljs-tag-property-constant: #e45649; /* Merah untuk tag, properti */
-  --hljs-number-boolean: #a626a4; /* Ungu untuk angka, boolean */
-  --hljs-string-selector-attr-name: #50a14f; /* Hijau untuk string, selector */
-  --hljs-operator-entity-url-variable: #383a42; /* Hitam lembut */
-  --hljs-function-classname-atrule: #c18401; /* Oranye/kuning tua untuk fungsi */
-  --hljs-keyword: #a626a4; /* Biru untuk keyword */
-  --hljs-name: #f28b82;
-  --hljs-regex-important: #50a14f; /* Hijau tua */
-  --hljs-css-string: #a626a4; /* Ungu, agar kontras di CSS */
-
-  --hljs-bash-function: #795da3;
-  --hljs-json-property: #032f62;
-  --hljs-yaml-key: #22863a;
-  --hljs-markdown-title: #24292e;
-  
-  /* Diff colors */
-  --hljs-diff-inserted: #22863a;
-  --hljs-diff-inserted-bg: #f0fff4;
-  --hljs-diff-deleted: #d73a49;
-  --hljs-diff-deleted-bg: #ffeef0;
-  
-  /* Highlight */
-  --hljs-highlight-bg: #fff3cd;
-  --hljs-subst: #000;
-}
-
-body.light-theme-contrast {
-  --bck: #fafafa;
-  --bg: #FFFFFF; /* background paling belakang, base */
-  --bg-secondary: #E8F0FA; /* sidebar dan code bg - lebih kontras */
-  --bg-secondary-50: #e8f0fa80; 
-  --fg: #000000; /* font paling kontras - pure black */
-  --fg-muted: #3d4045; /* font redup - lebih gelap */
-  --fg-death: #5a5e63;
-  --surface: #FFFFFF; /* input chat */
-  --surface-secondary: #D9E7F7; /* bubble user - lebih kontras */
-  --border: #9BA1A6; /* HR atau separator - lebih gelap */
-  --border-light: #b8bec3; 
-  --border-input: #9BA1A6; 
-  --border-active: #6b7075;
-  --table-odd: #000;
-  --table-even: #000;
-  --input-bg: #E8F0FA; 
-  --primary: #0536a0; /* for accent like text - lebih gelap */
-  --primary-light: #B8D6FA; /* for session list - lebih saturated */
-  --primary-light-user: #b8d6fa9f;
-  --primary-light-hover: #a3c9f8;
-  --primary-light-tip: #b8d6fa9f; 
-  --accent: #0842c0;
-  --highlight-color: #ffd700;
-  --white-hover: #1a1a1a;
-  --bold: #1a1a1a;
-
-  --purple-sel: #4a0f5f;
-  --purple-sel-bg: #c79adec9;
-  
-  --hover-bg: #d5dce5; /* for lists or button hover - lebih kontras */
-  --hover-bg-secondary: #c5cdd9;
-  --shadow-color: rgba(0, 0, 0, 0.15); /* for shadow in input container - lebih gelap */
-  --icon: #2a2e32; /* icon or symbols - lebih gelap */
-  --icon-primary: #0536a0;
-  --link: #0536a0;
-  --link-hover: #032770;
-
-  --danger: #d01020;
-  --danger-hover: #d010203f;
-  --danger-light: #fad8dc;
-  --success: #1ea03d;
-  --warning: #f5a800;
-
-  /* dari hljs */
-  --hljs-base: #000000;
-  --hljs-comment: #6a737d; /* Abu-abu lebih gelap untuk komentar */
-  --hljs-punctuation: #24292e; /* Hitam untuk tanda baca */
-  --hljs-tag-property-constant: #d73a49; /* Merah lebih bold untuk tag, properti */
-  --hljs-number-boolean: #005cc5; /* Biru lebih bold untuk angka, boolean */
-  --hljs-string-selector-attr-name: #22863a; /* Hijau lebih gelap untuk string, selector */
-  --hljs-operator-entity-url-variable: #24292e; /* Hitam */
-  --hljs-function-classname-atrule: #b08800; /* Oranye/kuning lebih gelap untuk fungsi */
-  --hljs-keyword: #d73a49; /* Merah untuk keyword */
-  --hljs-name: #e36209;
-  --hljs-regex-important: #22863a; /* Hijau tua */
-  --hljs-css-string: #032f62; /* Biru gelap, agar kontras di CSS */
-
-  --hljs-bash-function: #6f42c1;
-  --hljs-json-property: #005cc5;
-  --hljs-yaml-key: #22863a;
-  --hljs-markdown-title: #24292e;
-  
-  /* Diff colors */
-  --hljs-diff-inserted: #22863a;
-  --hljs-diff-inserted-bg: #e6ffed;
-  --hljs-diff-deleted: #d73a49;
-  --hljs-diff-deleted-bg: #ffeef0;
-  
-  /* Highlight */
-  --hljs-highlight-bg: #ffe89d;
-  --hljs-subst: #000;
-}
-
-/* Light Theme - Summer */
-body.light-turqoise-theme {
-  --bck: #fafafa;
-  --bg: #FFFFFF; /* pure white background */
-  --bg-secondary: #F5F5F5; /* sidebar dan code bg */
-  --bg-secondary-50: #f5f5f580; 
-  --fg: #0a0a0a; /* font paling kontras */
-  --fg-muted: #525252; /* font di sidebar atau form */
-  --fg-death: #737373;
-  --surface: #FFFFFF; /* input chat */
-  --surface-secondary: #F0F0F0; /* bubble user */
-  --border: #D4D4D4; 
-  --border-light: #E5E5E5; 
-  --border-input: #D4D4D4; 
-  --border-active: #A3A3A3;
-  --table-odd: #000;
-  --table-even: #000;
-  --input-bg: #F5F5F5; 
-  --primary: #0e7490; /* teal/cyan accent perplexity */
-  --primary-light: #CFFAFE; 
-  --primary-light-user: #CFFAFE9f;
-  --primary-light-hover: #A5F3FC;
-  --primary-light-tip: #CFFAFE9f; 
-  --accent: #0e7490;
-  --highlight-color: #0e7490;
-  --white-hover: #1a1a1a;
-  --bold: #0a0a0a;
-
-  --purple-sel: #7c3aed;
-  --purple-sel-bg: #ddd6fec9;
-  
-  --hover-bg: #E8E8E8; 
-  --hover-bg-secondary: #DADADA;
-  --shadow-color: rgba(0, 0, 0, 0.08); 
-  --icon: #525252; 
-  --icon-primary: #0e7490;
-  --link: #0e7490;
-  --link-hover: #0c5f7a;
-
-  --danger: #dc2626;
-  --danger-hover: #dc26263f;
-  --danger-light: #fee2e2;
-  --success: #059669;
-  --warning: #d97706;
-
-  /* dari hljs */
-  --hljs-base: #0a0a0a;
-  --hljs-comment: #737373; 
-  --hljs-punctuation: #262626; 
-  --hljs-tag-property-constant: #d97706; 
-  --hljs-number-boolean: #7c3aed; 
-  --hljs-string-selector-attr-name: #059669; 
-  --hljs-operator-entity-url-variable: #262626; 
-  --hljs-function-classname-atrule: #2563eb; 
-  --hljs-keyword: #db2777; 
-  --hljs-name: #ea580c;
-  --hljs-regex-important: #0e7490; 
-  --hljs-css-string: #0a0a0a; 
-
-  --hljs-bash-function: #9333ea;
-  --hljs-json-property: #2563eb;
-  --hljs-yaml-key: #059669;
-  --hljs-markdown-title: #0a0a0a;
-  
-  /* Diff colors */
-  --hljs-diff-inserted: #059669;
-  --hljs-diff-inserted-bg: #d1fae5;
-  --hljs-diff-deleted: #dc2626;
-  --hljs-diff-deleted-bg: #fee2e2;
-  
-  /* Highlight */
-  --hljs-highlight-bg: #fef3c7;
-  --hljs-subst: #0a0a0a;
-}
-
-/* Dark Theme */
-body.dark-theme {
-  --bck: #000;
-  --bg: #1b1c1d; /* done: background paling belakang, base */
-  --bg-secondary: #282A2C; /* done, sidebar dan code bg */
-  --bg-secondary-50: #282a2c7a; /* done, sidebar dan code bg */
-  --fg: #FCFCFC; /* done: font paling kontras */
-  --fg-muted: #BDC1C6; /* done: font di sidebar atau form */
-  --fg-death: #8f9296ff;
-  --surface: #1f1f1f; /* done: input chat */
-  --surface-secondary: #333537; /* done: bubble user */
-  --border: #4a5050; /* done */
-  --border-light: #3c4141ff; /* done */
-  --border-input: #4a5050; /* done */
-  --border-active: #797979ff;
-  --input-bg: #282A2D; /* done */
-  --primary: #D3E3FD; /* done */
-  --primary-light: #1f3760; /* done */
-  --primary-light-user: #1f3760; 
-  --primary-light-hover: #28489fff;
-  --primary-light-tip: #1f37607d; 
-  --accent: #0e4baeff;
-  --highlight-color: #ffeb3b;
-  --white-hover: #f0f0f0ff;
-  --bold: #ebebebff;
-
-  --purple-sel: #d2a5faff;
-  --purple-sel-bg: #562086a9;
-  
-  --hover-bg: #323537; /* done */
-  --hover-bg-secondary: #3d4043ff;
-  --shadow-color: rgba(0, 0, 0, 0.3); /* done */
-  --icon: #C4C7C5; /* done */
-  --link: #D3E3FD;
-  --link-hover: #f3f8ffff;
-
-  --danger: #e81123;
-  --danger-hover: #c230253e;
-  --danger-light: #3d1a00;
-  --success: #57e112ff;
-  --warning: #f8e44aff;
-
-  --hljs-base: #a2a9b0;
-  --hljs-comment: #80868b;
-  --hljs-punctuation: #a2a9b0;
-  --hljs-tag-property-constant: #fdd663;
-  --hljs-number-boolean: #fa903e;
-  --hljs-string-selector-attr-name: #81c995;
-  --hljs-operator-entity-url-variable: #a2a9b0;
-  --hljs-function-classname-atrule: #fdd663;
-  --hljs-keyword: #c58af9;
-  --hljs-name: #f28b82;
-  --hljs-regex-important: #8ab4f8;
-  --hljs-css-string: #f8f8f2;
-
-  /* Language specific */
-  --hljs-bash-function: #bb9af7;
-  --hljs-json-property: #7aa2f7;
-  --hljs-yaml-key: #9ece6a;
-  --hljs-markdown-title: #c0caf5;
-  
-  /* Diff colors */
-  --hljs-diff-inserted: #9ece6a;
-  --hljs-diff-inserted-bg: #1a2332;
-  --hljs-diff-deleted: #f7768e;
-  --hljs-diff-deleted-bg: #2d1b20;
-  
-  /* Highlight */
-  --hljs-highlight-bg: #3d2914;
-  --hljs-subst: #fff;
-}
-
-/* Dark Theme - High Contrast Blue */
-/* Dark Theme - Claude Official */
-body.dark-theme-contrast {
-  --bck: oklch(0.24 0 0); /* sidebar background */
-  --bg: oklch(0.27 0 0); /* background paling belakang, base */
-  --bg-secondary: oklch(0.24 0 0); /* sidebar dan code bg */
-  --bg-secondary-50: oklch(0.24 0 0 / 0.48); 
-  --fg: oklch(0.98 0.01 93.48); /* font paling kontras */
-  --fg-muted: oklch(0.77 0.02 100.64); /* font di sidebar atau form */
-  --fg-death: oklch(0.67 0.01 93.53);
-  --surface: oklch(0.31 0 0); /* input chat */
-  --surface-secondary: oklch(0.33 0 0); /* bubble user */
-  --border: oklch(0.36 0.01 106.85); 
-  --border-light: oklch(0.31 0 0); 
-  --border-input: oklch(0.43 0.01 99.03); 
-  --border-active: oklch(0.59 0.17 252.92);
-  --input-bg: oklch(0.31 0 0); 
-  --primary: oklch(0.67 0.13 38.92); /* warna aksen warm/claude */
-  --primary-light: oklch(0.21 0.01 88.79); 
-  --primary-light-user: oklch(0.21 0.01 88.79); 
-  --primary-light-hover: oklch(0.24 0.01 88.79);
-  --primary-light-tip: oklch(0.21 0.01 88.79 / 0.49); 
-  --accent: oklch(0.67 0.13 38.92);
-  --highlight-color: oklch(0.85 0.15 95);
-  --white-hover: oklch(0.94 0 0);
-  --bold: oklch(0.99 0 0);
-
-  --purple-sel: oklch(0.67 0.13 38.92);
-  --purple-sel-bg: oklch(0.21 0.01 88.79 / 0.5);
-  
-  --hover-bg: oklch(0.22 0 0); 
-  --hover-bg-secondary: oklch(0.27 0 0);
-  --shadow-color: oklch(0.15 0 0 / 0.4); 
-  --icon: oklch(0.81 0.01 93.53); 
-  --link: oklch(0.67 0.13 38.92);
-  --link-hover: oklch(0.77 0.13 38.92);
-
-  --danger: oklch(0.64 0.21 25.39);
-  --danger-hover: oklch(0.64 0.21 25.39 / 0.24);
-  --danger-light: oklch(0.31 0.05 25.39);
-  --success: oklch(0.65 0.15 145);
-  --warning: oklch(0.75 0.15 85);
-
-  --hljs-base: oklch(0.81 0.01 93.53);
-  --hljs-comment: oklch(0.55 0.01 93.53);
-  --hljs-punctuation: oklch(0.77 0.02 100.64);
-  --hljs-tag-property-constant: oklch(0.75 0.15 85);
-  --hljs-number-boolean: oklch(0.72 0.15 45);
-  --hljs-string-selector-attr-name: oklch(0.70 0.13 150);
-  --hljs-operator-entity-url-variable: oklch(0.77 0.02 100.64);
-  --hljs-function-classname-atrule: oklch(0.67 0.13 38.92);
-  --hljs-keyword: oklch(0.75 0.12 290);
-  --hljs-name: oklch(0.72 0.15 25);
-  --hljs-regex-important: oklch(0.68 0.13 250);
-  --hljs-css-string: oklch(0.92 0 0);
-
-  /* Language specific */
-  --hljs-bash-function: oklch(0.75 0.12 290);
-  --hljs-json-property: oklch(0.68 0.13 250);
-  --hljs-yaml-key: oklch(0.70 0.13 150);
-  --hljs-markdown-title: oklch(0.67 0.13 38.92);
-  
-  /* Diff colors */
-  --hljs-diff-inserted: oklch(0.70 0.13 150);
-  --hljs-diff-inserted-bg: oklch(0.25 0.05 150);
-  --hljs-diff-deleted: oklch(0.72 0.15 25);
-  --hljs-diff-deleted-bg: oklch(0.25 0.05 25);
-  
-  /* Highlight */
-  --hljs-highlight-bg: oklch(0.35 0.08 65);
-  --hljs-subst: oklch(0.98 0.01 93.48);
-}
-
-/* Dark Theme - Terminal Hacker */
-/* Dark Theme - Atom One Dark */
-body.dark-turqouse-theme {
-  --bck: #0a0a0a;
-  --bg: #0a0a0a; /* pure black background */
-  --bg-secondary: #141414; /* sidebar dan code bg - slightly lighter */
-  --bg-secondary-50: #1414147a; 
-  --fg: #f5f5f5; /* font paling kontras */
-  --fg-muted: #a8a8a8; /* font di sidebar atau form */
-  --fg-death: #787878;
-  --surface: #161616; /* input chat */
-  --surface-secondary: #1f1f1f; /* bubble user */
-  --border: #2f2f2f; 
-  --border-light: #242424; 
-  --border-input: #2f2f2f; 
-  --border-active: #454545;
-  --input-bg: #161616; 
-  --primary: #3bb9c9; /* teal/cyan accent perplexity */
-  --primary-light: #244045; 
-  --primary-light-user: #244045; 
-  --primary-light-hover: #2f5055;
-  --primary-light-tip: #2440457d; 
-  --accent: #3bb9c9;
-  --highlight-color: #3bb9c9;
-  --white-hover: #e0e0e0;
-  --bold: #ffffff;
-
-  --purple-sel: #a78bfa;
-  --purple-sel-bg: #5b21b680;
-  
-  --hover-bg: #1f1f1f; 
-  --hover-bg-secondary: #2a2a2a;
-  --shadow-color: rgba(0, 0, 0, 0.8); 
-  --icon: #9b9b9b; 
-  --link: #3bb9c9;
-  --link-hover: #4dd4e5;
-
-  --danger: #ff5c5c;
-  --danger-hover: #ff5c5c3e;
-  --danger-light: #3d1a1a;
-  --success: #00d4aa;
-  --warning: #ffb020;
-
-  --hljs-base: #e5e5e5;
-  --hljs-comment: #6b7280;
-  --hljs-punctuation: #d1d5db;
-  --hljs-tag-property-constant: #fbbf24;
-  --hljs-number-boolean: #a78bfa;
-  --hljs-string-selector-attr-name: #34d399;
-  --hljs-operator-entity-url-variable: #d1d5db;
-  --hljs-function-classname-atrule: #60a5fa;
-  --hljs-keyword: #f472b6;
-  --hljs-name: #fb923c;
-  --hljs-regex-important: #3bb9c9;
-  --hljs-css-string: #e5e5e5;
-
-  /* Language specific */
-  --hljs-bash-function: #c084fc;
-  --hljs-json-property: #60a5fa;
-  --hljs-yaml-key: #34d399;
-  --hljs-markdown-title: #e5e5e5;
-  
-  /* Diff colors */
-  --hljs-diff-inserted: #34d399;
-  --hljs-diff-inserted-bg: #064e3b;
-  --hljs-diff-deleted: #fb923c;
-  --hljs-diff-deleted-bg: #431407;
-  
-  /* Highlight */
-  --hljs-highlight-bg: #2a4a52;
-  --hljs-subst: #ffffff;
-}
-
 :root {
   --scrollbar-size: 2px;
   --scrollbar-thumb: var(--border-input, #8181811f);
@@ -3406,22 +2965,22 @@ input:checked + .slider:before {
   margin: 0 auto;
   flex: 1;
   width: 100%;
-  max-width: 800px;
+  max-width: 725px;
   transition: opacity 0.4s ease-in-out;
 }
 
 .chat-log-container {
   flex: 1;
   position: relative;
-  overflow-y: auto;
-  padding: var(--spacing-xs) var(--spacing-xl) var(--spacing-2xl) var(--spacing-xl);
+  overflow-y: scroll; /* Always show scrollbar to prevent UI shift */
+  padding: var(--spacing-xs) 11px var(--spacing-2xl) var(--spacing-xl); /* Right padding reduced from 20px to 12px */
   background: var(--bg);
   scroll-behavior: smooth;
-  
+
   /* EXPERIMENTAL: Column-reverse for natural bottom-scrolling */
   display: flex;
   flex-direction: column-reverse;
-  
+
   /* Optimize rendering for column-reverse to prevent layout shift */
   will-change: scroll-position;
   contain: paint layout style;
@@ -3681,7 +3240,7 @@ input:checked + .slider:before {
   align-items: center;
   flex-direction: column;
   min-width: 0;
-  max-width: 785px;
+  max-width: 725px;
   justify-content: center;
   margin: 0 auto;
   border: 1px solid var(--border-light)
@@ -5241,10 +4800,6 @@ blockquote blockquote blockquote blockquote::before {
     grid-template-columns: 260px 1fr;
   }
   
-  #chat-log {
-    padding: var(--spacing-lg) var(--spacing-lg) 0;
-  }
-  
   .message.user .message-row {
     max-width: 80%;
   }
@@ -5263,9 +4818,6 @@ blockquote blockquote blockquote blockquote::before {
     max-width: 100%;
   }
   
-  #chat-log {
-    padding: var(--spacing-xl) var(--spacing-2xl) 0;
-  }
   
   #input-area {
     padding: 0 var(--spacing-lg) var(--spacing-lg) var(--spacing-lg);
@@ -6023,7 +5575,7 @@ a:focus-visible {
 }
 
 .message.ai .thinking-body.expanded {
-  max-height: 500px;
+  max-height: 350px;
   overflow: auto;
   margin-top: 8px;
   padding: var(--spacing-xl) 0 var(--spacing-2xl) 0;
@@ -8883,7 +8435,7 @@ button:disabled .btn-icon {
 
 /* Prompt Container - Next Actions */
 .prompt {
-  margin: 20px 0;
+  margin: 20px 0 7px 0;
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -9804,6 +9356,7 @@ button:disabled .btn-icon {
 .usage-modal-body {
   display: flex;
   flex-direction: column;
+  padding-bottom: 18px;
   gap: 16px;
 }
 
@@ -10588,3 +10141,4 @@ button:disabled .btn-icon {
     align-self: flex-start;
   }
 }
+

@@ -11,7 +11,7 @@ import {
   setSessionCacheLogger
 } from './cache/session-cache.mjs';
 import { escapeHtml, cleanLeadingWhitespace } from './markdown/markdown.mjs';
-import { clearMarkdownCache, getMarkdownCacheSize } from './core/md.js';
+// MEMORY FIX: clearMarkdownCache and getMarkdownCacheSize are available globally from md.js (window.xxx)
 import { getExtension, toExt, getFileIcon } from './files/file-utils.mjs';
 import { formatRelativeTime, nowISO, newSessionName } from './time/time-utils.mjs';
 import { generateSessionId } from './ids/id-utils.mjs';
@@ -115,8 +115,10 @@ const workerPromises = new Map();
 // MEMORY FIX: Comprehensive memory cleanup function
 function performMemoryCleanup(context = 'unknown') {
   try {
-    // Clear markdown cache
-    clearMarkdownCache();
+    // Clear markdown cache (from md.js global functions)
+    if (typeof window.clearMarkdownCache === 'function') {
+      window.clearMarkdownCache();
+    }
 
     // Clear stale worker promises (older than 30 seconds)
     const now = Date.now();
@@ -133,10 +135,14 @@ function performMemoryCleanup(context = 'unknown') {
     // Clear DOM cache to release references
     domCache.invalidate();
 
+    const markdownCacheSize = typeof window.getMarkdownCacheSize === 'function'
+      ? window.getMarkdownCacheSize()
+      : 'N/A';
+
     log("MEMORY", 1, "performMemoryCleanup", "Memory cleanup performed", {
       context,
       clearedPromises,
-      markdownCacheSize: getMarkdownCacheSize(),
+      markdownCacheSize,
       workerPromisesSize: workerPromises.size,
       domCacheCleared: true
     });
@@ -18273,17 +18279,29 @@ window.DEBUG = {
     console.log('✅ Memory cleanup performed. Check logs for details.');
   },
   clearMarkdownCache: () => {
-    clearMarkdownCache();
-    console.log('✅ Markdown cache cleared');
+    if (typeof window.clearMarkdownCache === 'function') {
+      window.clearMarkdownCache();
+      console.log('✅ Markdown cache cleared');
+    } else {
+      console.warn('⚠️ clearMarkdownCache not available (md.js not loaded yet)');
+    }
   },
   getMarkdownCacheSize: () => {
-    const size = getMarkdownCacheSize();
-    console.log(`📊 Markdown cache size: ${size} items`);
-    return size;
+    if (typeof window.getMarkdownCacheSize === 'function') {
+      const size = window.getMarkdownCacheSize();
+      console.log(`📊 Markdown cache size: ${size} items`);
+      return size;
+    } else {
+      console.warn('⚠️ getMarkdownCacheSize not available (md.js not loaded yet)');
+      return 'N/A';
+    }
   },
   getMemoryStats: () => {
+    const markdownCacheSize = typeof window.getMarkdownCacheSize === 'function'
+      ? window.getMarkdownCacheSize()
+      : 'N/A';
     const stats = {
-      markdownCacheSize: getMarkdownCacheSize(),
+      markdownCacheSize,
       workerPromisesSize: workerPromises.size,
       sessionCacheSize: getSessionCacheSize(),
       sessionCacheStats: getCacheStats()

@@ -15,11 +15,11 @@ if (!fs.existsSync(targetFile)) {
   process.exit(1);
 }
 
-console.log(`\n🔍 Analyzing event listeners in: ${targetFile}`);
+console.log(`\nAnalyzing event listeners in: ${targetFile}`);
 if (startLine && endLine) {
-  console.log(`📍 Focusing on lines ${startLine}-${endLine}\n`);
+  console.log(`Focusing on lines ${startLine}-${endLine}\n`);
 } else {
-  console.log(`📍 Analyzing entire file\n`);
+  console.log(`Analyzing entire file\n`);
 }
 
 // Read file
@@ -42,14 +42,14 @@ const targetCode = targetLines.join('\n');
 const listenerMatches = targetCode.match(/addEventListener\(['"](\w+)['"]/g);
 
 if (!listenerMatches || listenerMatches.length === 0) {
-  console.log('⚠️  No event listeners found in the specified range');
+  console.log('No event listeners found in the specified range');
   process.exit(0);
 }
 
-console.log(`✅ Found ${listenerMatches.length} event listeners\n`);
+console.log(`Found ${listenerMatches.length} event listeners\n`);
 
 // Count event types
-console.log('📊 EVENT TYPES DISTRIBUTION:\n');
+console.log('EVENT TYPES DISTRIBUTION:\n');
 const eventTypes = {};
 listenerMatches.forEach(l => {
   const type = l.match(/['"](\w+)['"]/)[1];
@@ -165,7 +165,7 @@ events.forEach(e => {
 });
 
 // Print grouped results
-console.log('\n🎯 EVENT LISTENERS GROUPED BY FEATURE:\n');
+console.log('\nEVENT LISTENERS GROUPED BY FEATURE:\n');
 Object.entries(groups)
   .sort((a, b) => b[1].length - a[1].length)
   .forEach(([prefix, items]) => {
@@ -183,7 +183,7 @@ Object.entries(groups)
   });
 
 // Statistics
-console.log('\n📈 STATISTICS:\n');
+console.log('\nSTATISTICS:\n');
 console.log(`  Total listeners: ${events.length}`);
 console.log(`  Unique elements: ${new Set(events.map(e => e.element)).size}`);
 console.log(`  Event types: ${Object.keys(eventTypes).length}`);
@@ -226,4 +226,4 @@ const report = {
 
 fs.writeFileSync(outputFile, JSON.stringify(report, null, 2));
 
-console.log(`\n✅ Full report saved to: ${outputFile}`);
+console.log(`\nFull report saved to: ${outputFile}`);

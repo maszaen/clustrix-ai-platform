@@ -13258,13 +13258,15 @@ function deleteSession(sessionToDelete) {
   // Invalidate cache untuk session yang dihapus
   if (sessionToDelete.id) {
     invalidateSessionCache(sessionToDelete.id);
+    dirtySessionIds.delete(sessionToDelete.id);
   }
   
+  const wasCurrent = current === sessionToDelete;
   state.sessions = state.sessions.filter((s) => s !== sessionToDelete);
-  if (current === sessionToDelete) showWelcomeScreen();
+  if (wasCurrent) showWelcomeScreen();
   else renderSessions();
-  clearDirtyTracking(); // Force full save untuk ensure backend dapat update yang benar
-  save();
+
+  return save({ forceFull: true, reason: "delete-session" });
 }
 
 function deleteCurrentSession() {
@@ -18677,7 +18679,7 @@ window.DEBUG = {
       setCurrent(targetSession);
       setTimeout(() => {
         const endTime = performance.now();
-        console.log(`✅ Session switch took ${(endTime - startTime).toFixed(2)}ms`);
+        console.log(`Session switch took ${(endTime - startTime).toFixed(2)}ms`);
         console.log('Cache stats:', getCacheStats());
       }, 150);
     } else {
@@ -18690,11 +18692,11 @@ window.DEBUG = {
     let totalTime = 0;
     let switchCount = 0;
     
-    console.log(`🚀 Profiling ${sessions.length} session switches...`);
+    console.log(`Profiling ${sessions.length} session switches...`);
     
     function switchNext(index) {
       if (index >= sessions.length) {
-        console.log(`📊 Average switch time: ${(totalTime / switchCount).toFixed(2)}ms`);
+        console.log(`Average switch time: ${(totalTime / switchCount).toFixed(2)}ms`);
         console.log('Final cache stats:', getCacheStats());
         return;
       }

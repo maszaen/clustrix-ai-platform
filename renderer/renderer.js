@@ -131,67 +131,6 @@ const BROWSER_MODE = typeof window.api === "undefined";
 // Streaming renders only need structural markup; skip expensive artifact hydration hooks
 const STREAMING_FALLBACK_OPTIONS = { skipArtifactHydration: true };
 
-// Markdown Worker Management
-let markdownWorker = null;
-let workerMessageId = 0;
-const workerPromises = new Map();
-
-function shouldNormalizeParagraphLists(html) {
-  if (typeof html !== 'string' || !html) return false;
-  if (html.includes('p-has-li')) return true;
-  return /<\/p>\s*<(?:ul|ol)(?=\b|>)/i.test(html);
-}
-
-function normalizeParagraphListHtml(html) {
-  if (!shouldNormalizeParagraphLists(html)) {
-    return html || '';
-  }
-  if (typeof addPHasListClass !== 'function' || typeof document === 'undefined') {
-    return html || '';
-  }
-  try {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html || '';
-    addPHasListClass(tempDiv);
-    return tempDiv.innerHTML;
-  } catch (err) {
-    log('MARKDOWN', 2, 'normalizeParagraphListHtml', 'Failed to normalize paragraph/list spacing', { error: err.message });
-    return html || '';
-  }
-}
-
-function initMarkdownWorker() {
-  if (markdownWorker) return;
-  
-  try {
-    markdownWorker = new Worker('./core/md.worker.js');
-    
-    markdownWorker.onmessage = function(event) {
-      const { type, html, streamId, messageId } = event.data || {};
-      
-      if (messageId && workerPromises.has(messageId)) {
-        const { resolve } = workerPromises.get(messageId);
-        workerPromises.delete(messageId);
-        const normalizedHtml = normalizeParagraphListHtml(html || '');
-        resolve(normalizedHtml);
-      }
-    };
-    
-    markdownWorker.onerror = function(error) {
-      markdownWorker = null;
-    };
-    
-    markdownWorker.onmessageerror = function(error) {
-      markdownWorker = null;
-    };
-    
-    log('WORKER', 1, 'initMarkdownWorker', 'Markdown worker initialized successfully');
-  } catch (error) {
-    log('WORKER', 3, 'initMarkdownWorker', 'Failed to initialize markdown worker', { error: error.message });
-    markdownWorker = null;
-  }
-}
-
 const LOGGING = true;
 
 function getFilesForDisplay(session, context = 'form') {
@@ -8249,94 +8188,30 @@ async function renderMathInElement(element, options = {}) {
   }
 }
 
-// Smart hybrid markdown processing with layout shift prevention
+// Smart markdown processing with layout shift prevention (synchronous only)
 async function md(src, options = {}) {
   if (!src) return "";
-  
-  const { 
-    forceSync = false,           // Force synchronous for critical UX
-    forceWorker = false,         // Force worker for heavy content
-    isStreaming = false,         // Is this for streaming content?
-    isSessionSwitch = false      // Is this for session switching?
+
+  const {
+    forceSync = false,
+    isStreaming = false,
+    isSessionSwitch = false,
   } = options;
-  
-  // Smart content analysis for processing strategy
+
   const contentSize = src.length;
   const hasComplexElements = /```[\s\S]*?```|<[^>]+>|\$\$[\s\S]*?\$\$|\|.*\|.*\|/.test(src);
   const hasLotsOfCode = (src.match(/```/g) || []).length > 4;
-  
-  // Decision matrix for processing strategy
-  let useWorker = false;
 
-  // Smart worker decision - fully automatic based on content
-  if (forceSync) {
-    useWorker = false;
-  } else if (forceWorker) {
-    useWorker = true;
-  } else if (isSessionSwitch) {
-    // Session switching: strongly prefer sync for instant UX
-    useWorker = false; // Always use sync for session switching to prevent layout shifts
-  } else if (isStreaming) {
-    // Streaming: progressive adoption - start sync, move to worker for heavy content
-    useWorker = contentSize > 3000 || hasLotsOfCode || hasComplexElements;
-  } else {
-    // General case: worker for heavy content
-    useWorker = contentSize > 2000 || hasLotsOfCode || hasComplexElements;
-  }
-  
-  // Execute based on strategy
-  if (!useWorker) {
-    log('MARKDOWN', 1, 'md', 'Using sync rendering', {
-      contentSize,
-      reason: forceSync ? 'forced' : (isSessionSwitch ? 'session-switch' : 'light-content')
-    });
-    return mdFallback(src, { skipArtifactHydration: isStreaming });
-  }
-  
-  try {
-    // Initialize worker if not already done
-    if (!markdownWorker) {
-      initMarkdownWorker();
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-    
-    // If worker failed, fallback to sync
-    if (!markdownWorker) {
-      log('MARKDOWN', 2, 'md', 'Worker unavailable, fallback to sync');
-      return mdFallback(src, { skipArtifactHydration: isStreaming });
-    }
-    
-    log('MARKDOWN', 1, 'md', 'Using worker rendering', { 
-      contentSize, 
-      hasComplexElements,
-      reason: forceWorker ? 'forced' : 'heavy-content'
-    });
-    
-    // Use worker for processing
-    return new Promise((resolve) => {
-      const messageId = ++workerMessageId;
-      workerPromises.set(messageId, { resolve });
-      
-      markdownWorker.postMessage({
-        type: 'init',
-        payload: src,
-        streamId: `sync-${messageId}`,
-        messageId
-      });
-      
-      // Faster timeout for better UX
-      setTimeout(() => {
-        if (workerPromises.has(messageId)) {
-          workerPromises.delete(messageId);
-          log('MARKDOWN', 2, 'md', 'Worker timeout, fallback to sync');
-          resolve(mdFallback(src, { skipArtifactHydration: isStreaming }));
-        }
-      }, 800); // Even faster for better UX
-    });
-  } catch (error) {
-    log('MARKDOWN', 3, 'md', 'Worker error, fallback to sync', { error: error.message });
-    return mdFallback(src, { skipArtifactHydration: isStreaming });
-  }
+  log("MARKDOWN", 1, "md", "Rendering markdown synchronously", {
+    contentSize,
+    hasComplexElements,
+    hasLotsOfCode,
+    forceSync,
+    isStreaming,
+    isSessionSwitch,
+  });
+
+  return mdFallback(src, { skipArtifactHydration: isStreaming });
 }
 
 // Fallback synchronous markdown processing using enhanced md.js formatter
@@ -13167,6 +13042,13 @@ async function sendFromWelcome() {
   });
 
   const aiMessageIndex = s.messages.length - 1;
+
+  if (!s._newMessages) {
+    s._newMessages = [];
+  }
+  s._newMessages.push([0, ["user", userTextForUI, { files: filesToAttach }]]);
+  s._newMessages.push([aiMessageIndex, ["ai", "", modelInfo]]);
+
   const aiNode = addMessage("ai", "", {
     final: false,
     index: aiMessageIndex,
@@ -16892,13 +16774,7 @@ function initializeApp() {
     }
     
     streamManager.shutdownGracefully();
-    if (markdownWorker) {
-      markdownWorker.terminate();
-      markdownWorker = null;
-    }
   });
-  
-  initMarkdownWorker();
   
   load();
 }

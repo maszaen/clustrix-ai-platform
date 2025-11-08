@@ -61,6 +61,29 @@ let saveScheduled = false;
 
 // PERFORMANCE: Dirty session tracking for incremental saves
 const dirtySessionIds = new Set();
+const lastSavedSessionTimestamps = new Map();
+let lastSavedSettingsSignature = null;
+
+function computeSessionTimestamp(session) {
+  if (!session || typeof session !== "object") return "";
+  return (
+    session.last_updated ||
+    session.updated_at ||
+    session.created_at ||
+    ""
+  );
+}
+
+function computeSettingsSignature(settings = state.settings) {
+  try {
+    return JSON.stringify(settings || {});
+  } catch (err) {
+    log("SAVE", 3, "computeSettingsSignature", "Failed to compute settings signature", {
+      error: err?.message || err,
+    });
+    return null;
+  }
+}
 
 // CLEAR CACHE ON PAGE LOAD/REFRESH to prevent stale data
 window.addEventListener('DOMContentLoaded', () => {
@@ -104,6 +127,9 @@ const domCache = {
 const THINKING_TIMER = new WeakMap();
 const SESSIONS_PER_PAGE = 70;
 const BROWSER_MODE = typeof window.api === "undefined";
+
+// Streaming renders only need structural markup; skip expensive artifact hydration hooks
+const STREAMING_FALLBACK_OPTIONS = { skipArtifactHydration: true };
 
 // Markdown Worker Management
 let markdownWorker = null;
@@ -503,12 +529,22 @@ const streamManager = {
 
   shutdownGracefully() {
     if (!this.isStreaming()) return;
+    const impactedSessions = new Set();
     for (const streamId in this.activeStreams) {
       const stream = this.activeStreams[streamId];
       stream.controller?.cancel();
+      if (stream?.session?.id) {
+        impactedSessions.add(stream.session.id);
+      }
     }
     this.activeStreams = {};
-    save();
+    if (impactedSessions.size > 0) {
+      saveSessions(Array.from(impactedSessions), {
+        reason: "shutdownGracefully",
+      });
+    } else {
+      save({ reason: "shutdownGracefully" });
+    }
     updateInputState();
   },
 };
@@ -656,7 +692,11 @@ function renderUploadedFiles() {
       e.stopPropagation();
       current.uploadedFiles.splice(actualIndex, 1);
       renderUploadedFiles();
-      save();
+      if (current?.id) {
+        saveSession(current.id, { reason: "remove-uploaded-file" });
+      } else {
+        save({ reason: "remove-uploaded-file" });
+      }
     });
 
     container.appendChild(pill);
@@ -1783,7 +1823,11 @@ const saveThinkingDebounced = (() => {
     clearTimeout(t);
     t = setTimeout(() => {
       try {
-        save();
+        if (current?.id) {
+          saveSession(current.id, { reason: "thinking-update" });
+        } else {
+          save({ reason: "thinking-update" });
+        }
       } catch {}
     }, 200);
   };
@@ -2296,7 +2340,9 @@ function bumpToken(session, messageIndex) {
   }
   updateTokensUI(session);
   try {
-    if (typeof save === "function" && session.tokens_used % 25 === 0) save();
+    if (typeof save === "function" && session.tokens_used % 25 === 0) {
+      saveSession(session.id, { reason: "token-threshold" });
+    }
   } catch {}
 }
 
@@ -3402,7 +3448,7 @@ function toggleFavorite(sessionId) {
   // Don't update last_updated when favoriting/unfavoriting
   // The favorite logic moves it to top without changing timestamp
 
-  save();
+  saveSession(session.id, { reason: "favorite-toggle" });
   renderChatsPage();
 
   // Also update sidebar if visible
@@ -3451,8 +3497,7 @@ function startRename(sessionId) {
       if (session) {
         session.name = input.value.trim();
         session.last_updated = new Date().toISOString();
-        markSessionDirty(session.id); // PERFORMANCE: Mark for incremental save
-        save();
+        saveSession(session.id, { reason: "rename-chat" });
         renderChatsPage();
 
         // Update sidebar if visible
@@ -3528,7 +3573,7 @@ function startSidebarRename(sessionId) {
     ) {
       session.name = input.value.trim();
       session.last_updated = new Date().toISOString();
-      save();
+      saveSession(session.id, { reason: "rename-sidebar" });
       renderSessions(); // Refresh sidebar
       renderChatsPage(); // Refresh main page if visible
     } else {
@@ -5906,7 +5951,7 @@ function setupProjectsPageListeners() {
         const session = state.sessions.find((s) => s.id === menuSessionId);
         if (session) {
           session.isFavorite = !session.isFavorite;
-          save();
+          saveSession(session.id, { reason: "favorite-session-menu" });
           if (currentProject) {
             renderProjectSessions(currentProject); // Refresh to update star text
           }
@@ -6571,7 +6616,7 @@ async function handleProjectSend() {
   if (s.name === null) {
     generateAndSetTitle(s);
   }
-  await save();
+  await saveSession(s.id, { reason: "project-send" });
   renderSessions();
 
   scheduleThinkingText(aiNode);
@@ -7876,43 +7921,50 @@ function handleSaveButtonClick(event) {
 }
 
 function attachCodeBlockListeners(container) {
+  if (!container) return;
+
   const copyButtons = container.querySelectorAll(".copy-code-btn");
-  const saveButtons = container.querySelectorAll(".save-code-btn");
   const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
   const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
-  const saveIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></svg>`;
 
   copyButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const container = btn.closest(".code-block-container");
-      const codeElement = container.querySelector("code");
-      if (codeElement) {
-        navigator.clipboard
-          .writeText(codeElement.textContent)
-          .then(() => {
-            const originalText = btn.querySelector("span").textContent;
-            btn.innerHTML = `${checkIconSVG} <span>Copied!</span>`;
-            btn.classList.add("copied");
-            setTimeout(() => {
-              btn.innerHTML = `${copyIconSVG} <span>${originalText}</span>`;
-              btn.classList.remove("copied");
-            }, 2000);
-          })
-          .catch((err) => {
-            btn.querySelector("span").textContent = "Failed!";
-            log(
-              "UI",
-              4,
-              "attachCodeBlockListeners",
-              "Failed to copy text to clipboard",
-              { error: err },
-            );
-          });
-      }
+    if (btn.dataset.copyBound === "true") return;
+    btn.dataset.copyBound = "true";
+
+    btn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const block = btn.closest(".code-block-container");
+      const codeElement = block?.querySelector("code");
+      if (!codeElement) return;
+
+      navigator.clipboard
+        .writeText(codeElement.textContent)
+        .then(() => {
+          const span = btn.querySelector("span");
+          const originalText = span ? span.textContent : "Copy";
+          btn.innerHTML = `${checkIconSVG} <span>Copied!</span>`;
+          btn.classList.add("copied");
+          setTimeout(() => {
+            btn.innerHTML = `${copyIconSVG}${originalText ? ` <span>${originalText}</span>` : ""}`;
+            btn.classList.remove("copied");
+          }, 2000);
+        })
+        .catch((err) => {
+          const span = btn.querySelector("span");
+          if (span) span.textContent = "Failed!";
+          log(
+            "UI",
+            4,
+            "attachCodeBlockListeners",
+            "Failed to copy text to clipboard",
+            { error: err },
+          );
+        });
     });
   });
 
-  // Attach listeners for custom tags
   const pliButtons = container.querySelectorAll(".pli");
   pliButtons.forEach((btn) => {
     if (btn.dataset.pliBound === "true") return;
@@ -8234,11 +8286,11 @@ async function md(src, options = {}) {
   
   // Execute based on strategy
   if (!useWorker) {
-    log('MARKDOWN', 1, 'md', 'Using sync rendering', { 
-      contentSize, 
+    log('MARKDOWN', 1, 'md', 'Using sync rendering', {
+      contentSize,
       reason: forceSync ? 'forced' : (isSessionSwitch ? 'session-switch' : 'light-content')
     });
-    return mdFallback(src);
+    return mdFallback(src, { skipArtifactHydration: isStreaming });
   }
   
   try {
@@ -8251,7 +8303,7 @@ async function md(src, options = {}) {
     // If worker failed, fallback to sync
     if (!markdownWorker) {
       log('MARKDOWN', 2, 'md', 'Worker unavailable, fallback to sync');
-      return mdFallback(src);
+      return mdFallback(src, { skipArtifactHydration: isStreaming });
     }
     
     log('MARKDOWN', 1, 'md', 'Using worker rendering', { 
@@ -8277,19 +8329,20 @@ async function md(src, options = {}) {
         if (workerPromises.has(messageId)) {
           workerPromises.delete(messageId);
           log('MARKDOWN', 2, 'md', 'Worker timeout, fallback to sync');
-          resolve(mdFallback(src));
+          resolve(mdFallback(src, { skipArtifactHydration: isStreaming }));
         }
       }, 800); // Even faster for better UX
     });
   } catch (error) {
     log('MARKDOWN', 3, 'md', 'Worker error, fallback to sync', { error: error.message });
-    return mdFallback(src);
+    return mdFallback(src, { skipArtifactHydration: isStreaming });
   }
 }
 
 // Fallback synchronous markdown processing using enhanced md.js formatter
-function mdFallback(src) {
+function mdFallback(src, options = {}) {
   if (!src) return "";
+  const { skipArtifactHydration = false } = options || {};
 
   // Check if enhancedMarkdownParse is available (loaded from md.js)
   if (typeof enhancedMarkdownParse === 'function') {
@@ -8309,9 +8362,10 @@ function mdFallback(src) {
       
       // Highlight code blocks if present
       if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
-      attachCodeBlockListeners(tempDiv);
 
-      setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
+      if (!skipArtifactHydration) {
+        setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
+      }
       
       return tempDiv.innerHTML;
     } catch (error) {
@@ -8374,9 +8428,10 @@ function mdFallback(src) {
   ensureBreakSeparatedLists(tempDiv);
 
   if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
-  attachCodeBlockListeners(tempDiv);
 
-  setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
+  if (!skipArtifactHydration) {
+    setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
+  }
 
   return tempDiv.innerHTML;
 }
@@ -9295,7 +9350,11 @@ function renderHistoryLazy() {
   if (migrationCount > 0) {
     log("SESSION", 1, "renderHistoryLazy", `Migrated ${migrationCount} messages with thinking content`);
     // Save session after migration (fire and forget - non-blocking)
-    save().catch(err => {
+    const targetSessionId = current?.id;
+    const saverPromise = targetSessionId
+      ? saveSession(targetSessionId, { reason: "thinking-migration" })
+      : save({ reason: "thinking-migration" });
+    saverPromise?.catch?.(err => {
       log("SESSION", 3, "renderHistoryLazy", "Failed to save after migration", { error: err.message });
     });
   }
@@ -9377,11 +9436,11 @@ function renderHistoryLazy() {
           const partial = (streamEntry.stream.fullResponse || "").trim();
           if (partial) {
             try {
-              textDiv.innerHTML = mdFallback(streamEntry.stream.fullResponse);
+              textDiv.innerHTML = mdFallback(streamEntry.stream.fullResponse, STREAMING_FALLBACK_OPTIONS);
               if (textDiv.querySelector("pre code")) highlightAllUnder(textDiv);
             } catch (err) {
               console.warn("Markdown fallback rendering error during stream restore:", err);
-              textDiv.innerHTML = mdFallback(streamEntry.stream.fullResponse);
+              textDiv.innerHTML = mdFallback(streamEntry.stream.fullResponse, STREAMING_FALLBACK_OPTIONS);
             }
             renderMathInElement(textDiv);
           } else {
@@ -10533,7 +10592,7 @@ function setCurrent(s) {
               renderMathInElement(contentDiv);
             }).catch(err => {
               console.warn('Markdown rendering error in stream restore:', err);
-              contentDiv.innerHTML = mdFallback(stream.fullResponse);
+              contentDiv.innerHTML = mdFallback(stream.fullResponse, STREAMING_FALLBACK_OPTIONS);
               if (contentDiv.querySelector("pre code"))
                 highlightAllUnder(contentDiv);
               renderMathInElement(contentDiv);
@@ -10796,50 +10855,133 @@ function clearDirtyTracking() {
   saveScheduled = false;
 }
 
-async function save() {
-  try {
-    // PERFORMANCE: Incremental save - check if we have dirty sessions
-    let dataToSave;
-    const shouldUseIncremental = dirtySessionIds.size > 0 &&
-                                  dirtySessionIds.size < state.sessions.length &&
-                                  !BROWSER_MODE; // Full save in browser mode for simplicity
+function saveSession(sessionId, options = {}) {
+  if (sessionId) {
+    markSessionDirty(sessionId);
+  }
+  return save(options);
+}
 
-    if (shouldUseIncremental) {
-      // INCREMENTAL: Only save dirty sessions + settings
-      const dirtySessions = state.sessions.filter(s => dirtySessionIds.has(s.id));
+function saveSessions(sessionIds, options = {}) {
+  if (!sessionIds) {
+    return save(options);
+  }
+
+  const ids = Array.isArray(sessionIds) ? sessionIds : [sessionIds];
+  ids.filter(Boolean).forEach((id) => markSessionDirty(id));
+  return save(options);
+}
+
+async function save(options = {}) {
+  try {
+    const { forceFull = false, reason } = options || {};
+    const dirtyCount = dirtySessionIds.size;
+    const settingsSignature = computeSettingsSignature();
+    const settingsChanged = settingsSignature !== lastSavedSettingsSignature;
+    const hasDirtySessions = dirtyCount > 0;
+    const shouldPersistSettingsOnly = !forceFull && !hasDirtySessions && settingsChanged;
+
+    if (!forceFull && !hasDirtySessions && !settingsChanged) {
+      log("SAVE", 0, "save", "Skipped save: no dirty sessions or settings", {
+        reason,
+      });
+      return;
+    }
+
+    let dataToSave;
+    let usedIncremental = false;
+    let sessionsIncluded = [];
+
+    if (
+      forceFull ||
+      BROWSER_MODE ||
+      (hasDirtySessions && dirtyCount >= state.sessions.length)
+    ) {
+      dataToSave = { sessions: state.sessions, settings: state.settings };
+      log(
+        "SAVE",
+        1,
+        "save",
+        `Full save: ${state.sessions.length} sessions`,
+        {
+          reason,
+          forceFull,
+          dirtyCount,
+        },
+      );
+    } else if (shouldPersistSettingsOnly) {
       dataToSave = {
-        sessions: dirtySessions,
+        sessions: [],
         settings: state.settings,
         isIncremental: true,
-        dirtyIds: Array.from(dirtySessionIds)
+        dirtyIds: [],
       };
-      log("SAVE", 1, "save", `Incremental save: ${dirtySessions.length}/${state.sessions.length} sessions`, {
-        dirtyIds: Array.from(dirtySessionIds)
-      });
+      usedIncremental = true;
+      log("SAVE", 1, "save", "Incremental save: settings only", { reason });
     } else {
-      // FULL SAVE: Save all sessions (fallback or initial save)
-      dataToSave = { sessions: state.sessions, settings: state.settings };
-      log("SAVE", 1, "save", `Full save: ${state.sessions.length} sessions`);
+      sessionsIncluded = state.sessions.filter((s) => dirtySessionIds.has(s.id));
+      dataToSave = {
+        sessions: sessionsIncluded,
+        settings: settingsChanged ? state.settings : undefined,
+        isIncremental: true,
+        dirtyIds: Array.from(dirtySessionIds),
+      };
+      usedIncremental = true;
+      log(
+        "SAVE",
+        1,
+        "save",
+        `Incremental save: ${sessionsIncluded.length}/${state.sessions.length} sessions`,
+        {
+          dirtyIds: Array.from(dirtySessionIds),
+          reason,
+        },
+      );
     }
 
     if (BROWSER_MODE) {
-      // In browser mode, always do full save to localStorage
-      localStorage.setItem("clustrix-data", JSON.stringify({
-        sessions: state.sessions,
-        settings: state.settings
-      }));
+      localStorage.setItem(
+        "clustrix-data",
+        JSON.stringify({
+          sessions: state.sessions,
+          settings: state.settings,
+        }),
+      );
     } else {
       await window.api.sessions.save(dataToSave);
     }
-    
-    // Clear dirty tracking after successful save
+
+    const treatAsFull =
+      forceFull || BROWSER_MODE || !usedIncremental || shouldPersistSettingsOnly;
+    if (treatAsFull) {
+      lastSavedSessionTimestamps.clear();
+      state.sessions.forEach((session) => {
+        lastSavedSessionTimestamps.set(
+          session.id,
+          computeSessionTimestamp(session),
+        );
+      });
+    } else {
+      sessionsIncluded.forEach((session) => {
+        lastSavedSessionTimestamps.set(
+          session.id,
+          computeSessionTimestamp(session),
+        );
+      });
+    }
+
+    if (settingsSignature !== null && (settingsChanged || treatAsFull)) {
+      lastSavedSettingsSignature = settingsSignature;
+    }
+
     clearDirtyTracking();
-    
+
     log("APP", 2, "save", "Data saved successfully", {
-      wasIncremental: shouldUseIncremental
+      wasIncremental: usedIncremental && !treatAsFull,
+      dirtyCount,
+      reason,
     });
-    
-    // Auto-cache current session after save for consistency
+
     if (current && current.id) {
       const chatLog = domCache.getChatLog();
       if (chatLog && chatLog.innerHTML.trim()) {
@@ -11023,7 +11165,7 @@ async function generateAndSetTitle(session) {
     const finalTitle = isDebugSession ? `[DG] ${title}` : title;
     session.name = finalTitle.slice(0, 70);
   }
-  await save();
+    await saveSession(session.id, { reason: "title-generated" });
 
   if (session === current) {
     updateChatHeader({ animate: true });
@@ -11418,6 +11560,30 @@ function reconcileStreamingChildren(parent, newChildren) {
   return true;
 }
 
+function countNodeDescendants(node) {
+  if (!node) return 0;
+
+  let count = 1;
+  const childNodes = node.childNodes || [];
+  for (let i = 0; i < childNodes.length; i += 1) {
+    count += countNodeDescendants(childNodes[i]);
+  }
+
+  return count;
+}
+
+function measureNodeBudget(root) {
+  if (!root || !root.childNodes) return 0;
+
+  let total = 0;
+  const childNodes = root.childNodes;
+  for (let i = 0; i < childNodes.length; i += 1) {
+    total += countNodeDescendants(childNodes[i]);
+  }
+
+  return total;
+}
+
 function updateStreamingHtml(div, html) {
   if (!div) return;
   const state = ensureStreamingState(div);
@@ -11500,6 +11666,12 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
   let pendingRender = null;
   let latestRenderToken = 0;
   let finalizeAfterToken = 0;
+
+  const MAX_INCREMENTAL_UPDATES = 40;
+  const MAX_INCREMENTAL_NODE_BUDGET = 1200;
+
+  let incrementalUpdateCount = 0;
+  let incrementalNodeBudget = 0;
 
   const END_RX = /<!--\s*\[\/END\]\s*-->[\s]*$/;
   const trimEnd = (s) => s.replace(/\s*<!--\s*\[\/END\]\s*-->\s*$/, "");
@@ -11712,7 +11884,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
             "Failed to render prefix for streaming code",
             { error: error?.message || String(error) },
           );
-          prefixHtml = mdFallback(prefixContent);
+          prefixHtml = mdFallback(prefixContent, STREAMING_FALLBACK_OPTIONS);
         }
 
         if (renderToken !== latestRenderToken) {
@@ -11858,6 +12030,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       return;
     }
 
+    const streamingState = ensureStreamingState(div);
+
     const handledByCodeStream = await renderStreamingCodeBlock(display, renderToken);
     if (handledByCodeStream) {
       if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
@@ -11866,11 +12040,13 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
     const userSetting = state.settings.streamThrottling || "auto";
     if (userSetting === "none") {
-      const html = mdFallback(display);
+      const html = mdFallback(display, STREAMING_FALLBACK_OPTIONS);
       if (renderToken !== latestRenderToken) return;
       updateStreamingHtml(div, html);
       div._lastRenderedLength = display.length;
       scheduleEnhancements(div, { immediate: gotEnd });
+      incrementalUpdateCount = 0;
+      incrementalNodeBudget = measureNodeBudget(div);
       if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
       return;
     }
@@ -11899,48 +12075,64 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     }
 
     // FIX: Prefer incremental parsing to avoid expensive full reconciliation
-    const canUseIncrementalParsing = !gotEnd &&
+    const baseIncrementalEligible = !gotEnd &&
       lastParsedContent.length > 0 &&
       display.startsWith(lastParsedContent) &&
-      contentGrowth < 500;
+      contentGrowth < 500 &&
+      incrementalUpdateCount < MAX_INCREMENTAL_UPDATES &&
+      incrementalNodeBudget < MAX_INCREMENTAL_NODE_BUDGET;
 
-    if (canUseIncrementalParsing) {
+    if (baseIncrementalEligible) {
       const deltaContent = display.substring(lastParsedContent.length);
-      const deltaHtml = mdFallback(deltaContent);
+      const deltaHtml = mdFallback(deltaContent, STREAMING_FALLBACK_OPTIONS);
 
       if (renderToken !== latestRenderToken) return;
 
-      lastParsedContent = display;
-      lastParsedHtml += deltaHtml;
-
-      // TRUE incremental DOM update - parse and append ONLY the delta
       const deltaTemplate = document.createElement('template');
       deltaTemplate.innerHTML = deltaHtml;
 
-      // Append only new nodes without re-parsing entire tree
       const deltaNodes = Array.from(deltaTemplate.content.childNodes);
-      const appendedNodes = [];
-      for (const node of deltaNodes) {
-        const clonedNode = node.cloneNode(true);
-        div.appendChild(clonedNode);
-        appendedNodes.push(clonedNode);  // Track appended nodes for incremental enhancements
+      if (deltaNodes.length > 0) {
+        const deltaNodeCost = deltaNodes.reduce(
+          (sum, node) => sum + countNodeDescendants(node),
+          0,
+        );
+        const predictedNodeBudget = incrementalNodeBudget + deltaNodeCost;
+        const nextIncrementalCount = incrementalUpdateCount + 1;
+
+        if (
+          nextIncrementalCount <= MAX_INCREMENTAL_UPDATES &&
+          predictedNodeBudget <= MAX_INCREMENTAL_NODE_BUDGET
+        ) {
+          const nextHtml = mdFallback(display, STREAMING_FALLBACK_OPTIONS);
+          if (renderToken !== latestRenderToken) return;
+
+          lastParsedContent = display;
+          lastParsedHtml = nextHtml;
+
+          updateStreamingHtml(div, nextHtml);
+
+          incrementalUpdateCount = nextIncrementalCount;
+          incrementalNodeBudget = measureNodeBudget(div);
+
+          div._lastRenderedLength = display.length;
+
+          scheduleEnhancements(div, {
+            immediate: gotEnd,
+            isIncremental: !gotEnd,
+            deltaNodes,
+          });
+
+          streamingState.lastText = div.textContent ?? "";
+
+          requestAnimationFrame(() => {
+            scrollToBottom({ fromAI: true });
+          });
+
+          if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
+          return;
+        }
       }
-
-      div._lastRenderedLength = display.length;
-
-      // CRITICAL FIX: Pass delta nodes to enhancement system for incremental processing
-      scheduleEnhancements(div, {
-        immediate: gotEnd,
-        isIncremental: !gotEnd,  // Only incremental if not finalizing
-        deltaNodes: appendedNodes  // Pass the actual appended DOM nodes
-      });
-
-      requestAnimationFrame(() => {
-        scrollToBottom({ fromAI: true });
-      });
-
-      if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
-      return;
     }
 
     fullRenderCounter++;
@@ -11961,8 +12153,10 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
       lastParsedContent = display;
       lastParsedHtml = html;
-
+      incrementalUpdateCount = 0;
       updateStreamingHtml(div, html);
+      incrementalNodeBudget = measureNodeBudget(div);
+
       div._lastRenderedLength = display.length;
       scheduleEnhancements(div, { immediate: gotEnd });
       requestAnimationFrame(() => {
@@ -11970,14 +12164,16 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       });
     } catch (err) {
       console.warn('Markdown rendering error:', err);
-      const fallbackHtml = mdFallback(display);
+      const fallbackHtml = mdFallback(display, STREAMING_FALLBACK_OPTIONS);
 
       if (renderToken !== latestRenderToken) return;
 
       lastParsedContent = display;
       lastParsedHtml = fallbackHtml;
-
+      incrementalUpdateCount = 0;
       updateStreamingHtml(div, fallbackHtml);
+      incrementalNodeBudget = measureNodeBudget(div);
+
       div._lastRenderedLength = display.length;
       scheduleEnhancements(div, { immediate: gotEnd });
       requestAnimationFrame(() => {
@@ -12230,32 +12426,58 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           if (thinkingContainer && finalMessageToSave && finalMessageToSave.trim() === thinkingText.trim()) {
             // Don't append duplicate thinking content
             scheduleEnhancements(div, { immediate: true });
+            clearStreamingState(div);
+            incrementalUpdateCount = 0;
+            incrementalNodeBudget = measureNodeBudget(div);
           } else if (thinkingContainer && finalMessageToSave) {
             // Append final content after thinking
             const finalDiv = document.createElement('div');
             finalDiv.className = 'final-ai-response';
+
+            // Ensure we are not piling up incremental DOM from the stream phase.
+            // Keep the thinking container in place but remove any previously streamed nodes
+            // so we do not duplicate the full response when appending the finalized markup.
+            const children = Array.from(div.childNodes);
+            for (const node of children) {
+              if (node === thinkingContainer) continue;
+              if (thinkingContainer.contains(node)) continue;
+              node.remove();
+            }
+
             md(finalMessageToSave).then(html => {
               finalDiv.innerHTML = html;
               div.appendChild(finalDiv);
               attachCodeBlockListeners(finalDiv);
               scheduleEnhancements(div, { immediate: true });
+              clearStreamingState(div);
+              incrementalUpdateCount = 0;
+              incrementalNodeBudget = measureNodeBudget(div);
             }).catch(err => {
               console.warn('Markdown finalization error:', err);
               finalDiv.innerHTML = mdFallback(finalMessageToSave);
               div.appendChild(finalDiv);
               attachCodeBlockListeners(finalDiv);
               scheduleEnhancements(div, { immediate: true });
+              clearStreamingState(div);
+              incrementalUpdateCount = 0;
+              incrementalNodeBudget = measureNodeBudget(div);
             });
           } else if (!thinkingContainer) {
             md(finalMessageToSave || "").then(html => {
               div.innerHTML = html;
               attachCodeBlockListeners(div);
               scheduleEnhancements(div, { immediate: true });
+              clearStreamingState(div);
+              incrementalUpdateCount = 0;
+              incrementalNodeBudget = measureNodeBudget(div);
             }).catch(err => {
               console.warn('Markdown finalization error:', err);
               div.innerHTML = mdFallback(finalMessageToSave || "");
               attachCodeBlockListeners(div);
               scheduleEnhancements(div, { immediate: true });
+              clearStreamingState(div);
+              incrementalUpdateCount = 0;
+              incrementalNodeBudget = measureNodeBudget(div);
             });
           }
         }
@@ -12444,7 +12666,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           const userSetting = state.settings.streamThrottling || "auto";
           if (userSetting === "none") {
             // Synchronous seeding for No Throttling
-            updateStreamingHtml(div, mdFallback(seed));
+            updateStreamingHtml(div, mdFallback(seed, STREAMING_FALLBACK_OPTIONS));
             div.__seededOnce = true;
           } else {
             // Async seeding for other settings
@@ -12453,7 +12675,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
               div.__seededOnce = true;
             }).catch(err => {
               console.warn('Markdown seeding error:', err);
-              updateStreamingHtml(div, mdFallback(seed));
+              updateStreamingHtml(div, mdFallback(seed, STREAMING_FALLBACK_OPTIONS));
               div.__seededOnce = true;
             });
           }
@@ -12482,7 +12704,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
             thinkingContainer.parentNode.removeChild(thinkingContainer);
           }
 
-          const html = mdFallback(display);
+          const html = mdFallback(display, STREAMING_FALLBACK_OPTIONS);
           updateStreamingHtml(div, html);
           div._lastRenderedLength = display.length;
           scheduleEnhancements(div, { immediate: gotEnd });
@@ -12749,7 +12971,7 @@ async function createNewSession(initialMessages = [], options = {}) {
   };
 
   state.sessions.unshift(s);
-  await save();
+  await saveSession(s.id, { reason: "create-session" });
   log("SESSION", 2, "createNewSession", "New session object created.", {
     sessionId: s.id,
     type: s.type,
@@ -12860,7 +13082,11 @@ async function send() {
   if (current.name === null) {
     generateAndSetTitle(current);
   }
-  await save();
+  if (current?.id) {
+    await saveSession(current.id, { reason: "send-message" });
+  } else {
+    await save({ reason: "send-message" });
+  }
   renderSessions();
 
   scheduleThinkingText(aiNode);
@@ -12965,7 +13191,7 @@ async function sendFromWelcome() {
   }, 50);
 
   generateAndSetTitle(s);
-  await save();
+  await saveSession(s.id, { reason: "welcome-send" });
   renderSessions();
 
   scheduleThinkingText(aiNode);
@@ -12984,7 +13210,7 @@ async function regenerateFromIndex(aiIndex) {
   current.messages.length = aiIndex;
   current.last_updated = nowISO();
 
-  await save();
+  await saveSession(current.id, { reason: "regenerate-truncate" });
 
   state.sessions.sort(
     (a, b) =>
@@ -13086,7 +13312,7 @@ async function regenerateFromCancelled(targetButton) {
   msgs.push({ role: "user", content: promptContent });
 
   current.messages[messageIndex] = ["ai", "", modelInfo];
-  await save();
+  await saveSession(current.id, { reason: "regenerate-from-cancelled" });
 
   const newNode = addMessage("ai", "", { final: false, index: messageIndex });
   newNode.dataset.index = String(messageIndex);
@@ -13127,7 +13353,7 @@ async function regenerateFromIncomplete(targetButton) {
   msgs.push({ role: "user", content: promptContent });
 
   current.messages[messageIndex] = ["ai", "", modelInfo];
-  await save();
+  await saveSession(current.id, { reason: "regenerate-from-incomplete" });
 
   const newNode = addMessage("ai", "", { final: false, index: messageIndex });
   newNode.dataset.index = String(messageIndex);
@@ -15427,7 +15653,7 @@ function setupEventListeners() {
     });
     state.settings.persona = persona;
     state.settings.language = language;
-    await save();
+    await save({ reason: "settings:persona-update" });
     closeModalWithAnimation($("#settings-modal"));
   });
 
@@ -15449,7 +15675,7 @@ function setupEventListeners() {
       state.sessions = [];
       current = null;
       clearDirtyTracking(); // Force full save untuk ensure backend dapat update yang benar
-      await save();
+  await save({ forceFull: true, reason: "settings:delete-all-sessions" });
       closeModalWithAnimation($("#settings-modal"));
       closeModalWithAnimation($("#quick-model-switch-modal"));
       showWelcomeScreen();
@@ -15475,7 +15701,7 @@ function setupEventListeners() {
       "clustrix-web-search",
       state.settings.webSearchEnabled.toString(),
     );
-    save();
+    save({ reason: "settings:web-search-toggle" });
 
     $$('[id^="btn-web-search-"]').forEach((b) =>
       b.classList.toggle("toggled", state.settings.webSearchEnabled),
@@ -15585,7 +15811,7 @@ function setupEventListeners() {
             renderMathInElement(div);
           }).catch(err => {
             console.warn('Markdown rendering error in interrupt handler:', err);
-            div.innerHTML = mdFallback(content);
+            div.innerHTML = mdFallback(content, STREAMING_FALLBACK_OPTIONS);
             if (div.querySelector("pre code")) highlightAllUnder(div);
             attachCodeBlockListeners(div);
             renderMathInElement(div);

@@ -56,7 +56,7 @@ Root directory `${userData}/`:
 - **Main Process (main.js):** Window lifecycle, IPC routing, LangChain service initialization, database manager, stream finalization tracking
 - **Renderer (renderer.js + modules):** UI state management, session caching
   - Extracted utilities: `state/`, `cache/`, `markdown/`, `time/`, `files/`, `ids/`, `utils/` modules
-  - Core: `core/md.js`, `core/md.worker.js`, `core/title-gen.js`
+  - Core: `core/md.js`, `core/title-gen.js`
 - **Backend Services:** 
   - `backend/integration/` – LangChain integration with embeddings (OpenRouter/TF-IDF fallback), multi-agent research orchestration (planning, web search, scraping, synthesis), RE+ACT reasoning engine, file summarization, local embedding engine
   - `backend/data/` – SQLite database manager (sessions, messages, artifacts, projects with sync support and device tracking)

@@ -399,7 +399,6 @@ Clustrix-AI-Platform/
 │   ├── index.html               # Main UI template
 │   ├── style.css                # Styling & themes
 │   ├── md.js                    # Markdown parser
-│   ├── md.worker.js             # Markdown worker thread
 │   └── core/
 │       └── title-gen.js         # Title generation logic
 ├── backend/

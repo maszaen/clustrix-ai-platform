@@ -2,7 +2,7 @@
 
 ## 📊 Executive Summary
 
-Aplikasi menggunakan dual-mode markdown parsing dengan smart throttling system. UI terasa lancar karena scroll dan animasi berjalan smooth, tapi response terasa "berat" dengan jeda periodik karena kombinasi dari throttling strategy, worker communication overhead, dan adaptive rendering decisions.
+Aplikasi sebelumnya menggunakan dual-mode markdown parsing dengan smart throttling system. Setelah penghapusan worker (Nov 2025), seluruh parsing kembali sinkron via main thread sehingga beban koordinasi menurun, tetapi biaya string processing tetap perlu dijaga.
 
 ---
 
@@ -10,33 +10,14 @@ Aplikasi menggunakan dual-mode markdown parsing dengan smart throttling system. 
 
 ### File Utama
 - **`renderer/core/md.js`** - Main parser (synchronous, main thread)
-- **`renderer/core/md.worker.js`** - Worker parser (asynchronous, background thread)
 
-### Kapan md.worker.js Digunakan?
+> Catatan: `renderer/core/md.worker.js` dihapus pada November 2025 karena overhead serialisasi + penjadwalan worker lebih besar dibandingkan benefitnya untuk kasus streaming realtime. Analisis lama tentang jalur worker disimpan di bagian historis dokumen ini.
 
-Worker diaktifkan saat kondisi berikut terpenuhi (renderer.js:12051-12055):
+### Strategi Pemilihan Parser (Saat Ini)
 
-```javascript
-const shouldUseWorkerForStreaming = userSetting !== "none" && (
-  display.length > 3000 ||              // Content > 3KB
-  (display.match(/```/g) || []).length > 3 ||  // > 3 code blocks
-  /\$\$[\s\S]*?\$\$/.test(display)      // Ada LaTeX content
-);
-```
-
-**Trigger Conditions:**
-- ✅ Content lebih dari **3000 karakter**
-- ✅ Lebih dari **3 code blocks** (```)
-- ✅ Ada **LaTeX** content ($$...$$)
-- ✅ Setting throttling **bukan "none"**
-
-### Kapan md.js Digunakan?
-
-Main parser (synchronous) digunakan untuk:
-- ❌ Content pendek (< 3000 chars)
-- ❌ Content sederhana tanpa banyak code blocks
-- ❌ Setting throttling = `"none"`
-- ❌ Final render setelah streaming selesai
+- Semua render menggunakan `md.js` secara sinkron.
+- Opsional flag `forceSync`, `isStreaming`, dan `isSessionSwitch` masih diteruskan dari renderer untuk logging, tetapi tidak lagi mengubah jalur eksekusi.
+- Optimalisasi utama yang tersisa: cache LRU (`markdownCache`) dan opsi `skipArtifactHydration` ketika dipakai selama streaming.
 
 ---
 
@@ -442,13 +423,13 @@ User merasakan "jeda setiap beberapa detik" karena:
 
 ### Main Files
 - `renderer/core/md.js` - Main markdown parser
-- `renderer/core/md.worker.js` - Worker parser
-- `renderer/renderer.js:137-167` - Worker initialization
+- (Histori) `renderer/core/md.worker.js` - Worker parser, dihapus Nov 2025
+- `renderer/renderer.js:135-215` - Markdown normalization helpers & logging
 - `renderer/renderer.js:12040-12177` - Throttling logic
 - `renderer/renderer.js:12180-12400` - Stream management
 
 ### Key Functions
-- `initMarkdownWorker()` - Initialize worker
+- (Histori) `initMarkdownWorker()` - Initialize worker, dihapus Nov 2025
 - `performSmartRender()` - Throttled render logic
 - `startStream()` - Start streaming response
 - `enhancedMarkdownParse()` - Core parser function

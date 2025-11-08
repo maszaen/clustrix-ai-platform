@@ -267,19 +267,19 @@ async function queryBenchmarkStatistics(dbManager, filters = {}) {
   const rows = stmt.all(...params);
 
   // Debug logging
-  console.log('BENCHMARK_QUERY: Found rows:', {
-    totalRows: rows.length,
-    startTs,
-    endTs,
-    providerFilter,
-    modelFilter,
-    firstRow: rows[0] ? {
-      created_at: rows[0].created_at,
-      provider: rows[0].provider,
-      model_id: rows[0].model_id,
-      hasMetadata: !!rows[0].metadata
-    } : null
-  });
+  // console.log('BENCHMARK_QUERY: Found rows:', {
+  //   totalRows: rows.length,
+  //   startTs,
+  //   endTs,
+  //   providerFilter,
+  //   modelFilter,
+  //   firstRow: rows[0] ? {
+  //     created_at: rows[0].created_at,
+  //     provider: rows[0].provider,
+  //     model_id: rows[0].model_id,
+  //     hasMetadata: !!rows[0].metadata
+  //   } : null
+  // });
 
   const dailyMap = new Map(); // dateKey -> provider -> model -> [speeds]
   const dailyStats = new Map(); // dateKey -> [speeds]

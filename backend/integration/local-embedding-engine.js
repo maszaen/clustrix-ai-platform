@@ -265,7 +265,7 @@ class LocalEmbeddingEngine {
     console.log(`Local Search: Searching for "${query.slice(0, 50)}..."`);
     
     if (this.documentIndex.size === 0) {
-      console.log('📭 Local Search: No documents in index');
+      console.log('Local Search: No documents in index');
       return [];
     }
     
@@ -374,7 +374,7 @@ class LocalEmbeddingEngine {
 
     if (removedCount > 0) {
       this.idfCache.clear(); // Invalidate IDF cache
-      console.log(`🧹 Local Index: Cleared ${removedCount} documents for session ${sessionId}`);
+      console.log(`Local Index: Cleared ${removedCount} documents for session ${sessionId}`);
     }
 
     return removedCount;

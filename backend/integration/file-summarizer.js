@@ -463,7 +463,7 @@ class FileSummarizer {
     }
 
     if (!this.shouldSummarize(content, fileName)) {
-      console.log(`📄 File ${fileName} doesn't need summarization`);
+      console.log(`File ${fileName} doesn't need summarization`);
       return {
         content: content,
         originalSize: content.length,
@@ -474,7 +474,7 @@ class FileSummarizer {
       };
     }
 
-    console.log(`🔄 Creating smart local summary for ${fileName}...`);
+    console.log(`Creating smart local summary for ${fileName}...`);
     const summary = this.createSmartSummary(content, fileName);
     
     this.summaryCache.set(cacheKey, summary);

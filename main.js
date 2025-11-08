@@ -2444,7 +2444,7 @@ ipcMain.handle('sessions:save', async (_evt, data) => {
             if (!currentSessionIds.has(existingSession.id)) {
               // Delete session yang tidak ada di data baru
               db.deleteSession(existingSession.id);
-              console.log(`[SAVE] Deleted session ${existingSession.id} (not in new data)`);
+              console.log(`[SAVE] Deleted ${existingSession.id}`);
             }
           }
         }
@@ -3126,13 +3126,7 @@ function finalizeTokenUsage(reqId, event) {
       usageData.response_time = elapsedMs;
 
       try {
-        console.log('TOKEN_SPEED calculated:', {
-          completion_tokens: tracker.completion_tokens,
-          elapsed_ms: elapsedMs,
-          elapsed_seconds: elapsedSeconds.toFixed(2),
-          token_speed: usageData.token_speed.toFixed(2) + ' tokens/sec',
-          messageIndex: tracker.messageIndex
-        });
+        // no log
       } catch (e) {}
     }
   }

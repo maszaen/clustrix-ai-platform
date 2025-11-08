@@ -4015,11 +4015,59 @@ function runStandardStreaming(event, payload) {
         headers
       };
 
+      const STREAM_AGGREGATE_THRESHOLD = 640;
+      const STREAM_AGGREGATE_INTERVAL_MS = 35;
+      let pendingContentChunk = '';
+      let pendingFlushTimer = null;
+
+      const clearPendingFlushTimer = () => {
+        if (pendingFlushTimer) {
+          clearTimeout(pendingFlushTimer);
+          pendingFlushTimer = null;
+        }
+      };
+
+      const flushPendingContent = (force = false) => {
+        if (!pendingContentChunk) {
+          if (force) {
+            clearPendingFlushTimer();
+          }
+          return;
+        }
+        event.sender.send(`chat:chunk-${reqId}`, pendingContentChunk);
+        pendingContentChunk = '';
+        clearPendingFlushTimer();
+      };
+
+      const enqueueContentChunk = (chunk, { immediate = false } = {}) => {
+        if (!chunk) return;
+        pendingContentChunk += chunk;
+        if (immediate || pendingContentChunk.length >= STREAM_AGGREGATE_THRESHOLD) {
+          flushPendingContent(true);
+          return;
+        }
+        if (!pendingFlushTimer) {
+          pendingFlushTimer = setTimeout(() => {
+            pendingFlushTimer = null;
+            flushPendingContent(true);
+          }, STREAM_AGGREGATE_INTERVAL_MS);
+        }
+      };
+
+      const disposeContentAggregator = () => {
+        clearPendingFlushTimer();
+        pendingContentChunk = '';
+      };
+
       const req = https.request(opts, (res) => {
         if (res.statusCode < 200 || res.statusCode >= 300){
           let err = '';
           res.on('data', d => err += d.toString('utf-8'));
-          res.on('end', () => sendErr(`HTTP ${res.statusCode} ${res.statusMessage} — ${err.slice(0,200)}`));
+          res.on('end', () => {
+            flushPendingContent(true);
+            disposeContentAggregator();
+            sendErr(`HTTP ${res.statusCode} ${res.statusMessage} — ${err.slice(0,200)}`);
+          });
           return;
         }
 
@@ -4097,6 +4145,9 @@ function runStandardStreaming(event, payload) {
         let inInternalReasoning = false;
         let reasoningBuffer = '';
 
+        const INTERNAL_REASONING_START = '*(Internal Reasoning:';
+        const INTERNAL_REASONING_END = ')*';
+
         res.on('data', (chunk) => {
           buffer += chunk;
 
@@ -4114,7 +4165,11 @@ function runStandardStreaming(event, payload) {
               const m = ln.match(/^\s*data:\s?(.*)$/);
               if (m) dataLines.push(m[1]);
             }
-            if (isDone) continue;
+            if (isDone) {
+              flushPendingContent(true);
+              disposeContentAggregator();
+              continue;
+            }
             if (!dataLines.length) continue;
 
             const payload = dataLines.join('\n');
@@ -4131,55 +4186,61 @@ function runStandardStreaming(event, payload) {
                 '';
 
               if (Array.isArray(rdelta)) rdelta = rdelta.map(p => (p?.text ?? p)).join('');
-              if (rdelta) event.sender.send(`chat:chunk-${reqId}`, { think: rdelta });
+              if (rdelta) {
+                flushPendingContent(true);
+                event.sender.send(`chat:chunk-${reqId}`, { think: rdelta });
+              }
 
               let delta =
                 j?.choices?.[0]?.delta?.content ??
                 j?.delta?.content ??
                 j?.content ?? '';
 
+              if (Array.isArray(delta)) {
+                delta = delta.map(part => (typeof part === 'string' ? part : (part?.text ?? ''))).join('');
+              } else if (delta && typeof delta !== 'string') {
+                delta = String(delta);
+              }
+
               if (delta) {
-                // Accumulate content to detect *(Internal Reasoning: ...)* pattern
                 contentBuffer += delta;
-                
-                // Check if we're starting Internal Reasoning pattern
-                if (!inInternalReasoning && contentBuffer.includes('*(Internal Reasoning:')) {
-                  inInternalReasoning = true;
-                  const beforeReasoning = contentBuffer.split('*(Internal Reasoning:')[0];
-                  if (beforeReasoning) {
-                    event.sender.send(`chat:chunk-${reqId}`, beforeReasoning);
-                  }
-                  reasoningBuffer = '';
-                  contentBuffer = contentBuffer.substring(beforeReasoning.length + '*(Internal Reasoning:'.length);
-                }
-                
-                // If inside Internal Reasoning, accumulate it
-                if (inInternalReasoning) {
-                  if (contentBuffer.includes(')*')) {
-                    const endIndex = contentBuffer.indexOf(')*');
-                    reasoningBuffer += contentBuffer.substring(0, endIndex);
-                    // Send accumulated reasoning as thinking
-                    if (reasoningBuffer.trim()) {
-                      event.sender.send(`chat:chunk-${reqId}`, { think: reasoningBuffer.trim() });
-                    }
-                    reasoningBuffer = '';
-                    // Continue with content after the closing )*
-                    contentBuffer = contentBuffer.substring(endIndex + 2);
-                    inInternalReasoning = false;
-                    reasoningBuffer = '';
-                    // Send remaining content
-                    if (contentBuffer) {
-                      event.sender.send(`chat:chunk-${reqId}`, contentBuffer);
+
+                processingLoop: while (contentBuffer) {
+                  if (inInternalReasoning) {
+                    const endIndex = contentBuffer.indexOf(INTERNAL_REASONING_END);
+                    if (endIndex === -1) {
+                      reasoningBuffer += contentBuffer;
                       contentBuffer = '';
+                      break processingLoop;
                     }
-                  } else {
-                    reasoningBuffer += contentBuffer;
-                    contentBuffer = '';
+
+                    reasoningBuffer += contentBuffer.slice(0, endIndex);
+                    flushPendingContent(true);
+                    const trimmedReasoning = reasoningBuffer.trim();
+                    if (trimmedReasoning) {
+                      event.sender.send(`chat:chunk-${reqId}`, { think: trimmedReasoning });
+                    }
+                    reasoningBuffer = '';
+                    contentBuffer = contentBuffer.slice(endIndex + INTERNAL_REASONING_END.length);
+                    inInternalReasoning = false;
+                    continue processingLoop;
                   }
-                  } else {
-                  // Normal content, send it
-                  event.sender.send(`chat:chunk-${reqId}`, delta);
-                  contentBuffer = '';
+
+                  const startIndex = contentBuffer.indexOf(INTERNAL_REASONING_START);
+                  if (startIndex === -1) {
+                    enqueueContentChunk(contentBuffer);
+                    contentBuffer = '';
+                    break processingLoop;
+                  }
+
+                  const beforeReasoning = contentBuffer.slice(0, startIndex);
+                  if (beforeReasoning) {
+                    enqueueContentChunk(beforeReasoning, { immediate: true });
+                  }
+
+                  contentBuffer = contentBuffer.slice(startIndex + INTERNAL_REASONING_START.length);
+                  inInternalReasoning = true;
+                  reasoningBuffer = '';
                 }
               }
 
@@ -4193,9 +4254,33 @@ function runStandardStreaming(event, payload) {
           }
         });
 
-        res.on('end', sendDone);
+        res.on('end', () => {
+          if (contentBuffer) {
+            if (inInternalReasoning) {
+              reasoningBuffer += contentBuffer;
+              const trimmedReasoning = reasoningBuffer.trim();
+              if (trimmedReasoning) {
+                flushPendingContent(true);
+                event.sender.send(`chat:chunk-${reqId}`, { think: trimmedReasoning });
+              }
+            } else {
+              enqueueContentChunk(contentBuffer, { immediate: true });
+            }
+            contentBuffer = '';
+            reasoningBuffer = '';
+            inInternalReasoning = false;
+          }
+
+          flushPendingContent(true);
+          disposeContentAggregator();
+          sendDone();
+        });
       });
-      req.on('error', e => sendErr(e.message || String(e)));
+      req.on('error', e => {
+        flushPendingContent(true);
+        disposeContentAggregator();
+        sendErr(e.message || String(e));
+      });
       req.write(body); req.end();
       trackActiveStream(reqId, req);
     }

@@ -68,12 +68,12 @@ class DesktopSearchEngine {
             
             if (!decodedHasBinary && decodedWordCount > 5 && hasIndonesianChars && decodedContent.length > cleanContent.length * 0.6) {
               processedContent = decodedContent;
-              console.log(`✅ Base64 decoded ${file.name}: ${cleanContent.length} → ${decodedContent.length} chars, ${decodedWordCount} words`);
+              console.log(`Base64 decoded ${file.name}: ${cleanContent.length} → ${decodedContent.length} chars, ${decodedWordCount} words`);
             } else {
-              console.log(`❌ Base64 decode validation failed for ${file.name}: binary=${decodedHasBinary}, words=${decodedWordCount}, ratio=${(decodedContent.length / cleanContent.length).toFixed(2)}`);
+              console.log(`Base64 decode validation failed for ${file.name}: binary=${decodedHasBinary}, words=${decodedWordCount}, ratio=${(decodedContent.length / cleanContent.length).toFixed(2)}`);
             }
           } catch (decodeError) {
-            console.log(`❌ Base64 decode failed for ${file.name}: ${decodeError.message}`);
+            console.log(`Base64 decode failed for ${file.name}: ${decodeError.message}`);
           }
         } else {
           console.log(`Not base64 for ${file.name}, skipping decode`);

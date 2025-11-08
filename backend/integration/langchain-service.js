@@ -1586,7 +1586,7 @@ Respond with ONLY a JSON object in this format:
   async loadVectorData() {
     try {
       if (fs.existsSync(this.vectorDataFile)) {
-        console.log('📂 LangChain: Loading vector store from disk...');
+        console.log('LangChain: Loading vector store from disk...');
         const data = await fsp.readFile(this.vectorDataFile, 'utf-8');
         const vectorData = JSON.parse(data);
 

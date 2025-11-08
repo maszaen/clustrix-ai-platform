@@ -4,6 +4,9 @@ const path = require('path');
 let logFilePath = path.join(process.cwd(), 'app.log');
 let debugEnabled = false;
 
+// DISABLE LOGGER COMPLETELY - Uncomment this line to disable all logging
+const DISABLE_LOGGER = true;
+
 const SESSION_MARKER = '========================================';
 const SESSION_START_PREFIX = 'SESSION START:';
 
@@ -45,6 +48,9 @@ function normalizePart(part) {
 }
 
 function log(...parts) {
+  // DISABLE LOGGER COMPLETELY - Uncomment the next line to disable all logging
+  if (DISABLE_LOGGER) return;
+  
   if (!debugEnabled || parts.length === 0) {
     return;
   }

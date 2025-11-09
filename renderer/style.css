@@ -1721,7 +1721,7 @@ input:checked + .slider:before {
   padding-top: 30px;
 }
 
-#back-to-projects-btn {
+#back-to-projects-btn, #back-to-codes-btn {
   display: flex;
   flex-direction: row;
   gap: 10px;
@@ -2199,7 +2199,7 @@ input:checked + .slider:before {
 }
 
 /* Project Modal Content Displays */
-#edit-instruction-btn, #project-upload-btn {
+#edit-instruction-btn, #project-upload-btn, #edit-code-instruction-btn, #code-workspace-btn {
   background: transparent;
   border: 1px solid transparent;
   padding: var(--spacing-xs);
@@ -2214,7 +2214,7 @@ input:checked + .slider:before {
   width: 30px;
 }
 
-#edit-instruction-btn:hover, #project-upload-btn:hover {
+#edit-instruction-btn:hover, #project-upload-btn:hover, #edit-code-instruction-btn:hover, #code-workspace-btn:hover {
   background: var(--hover-bg);
 }
 

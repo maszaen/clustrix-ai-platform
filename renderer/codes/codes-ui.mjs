@@ -1139,28 +1139,26 @@ function showCodesInputModal({
       <div class="modal-card" style="max-width: 520px;">
         <div class="modal-header">
           <h2>${escapeHtml(title)}</h2>
-          <button class="close-btn" type="button" aria-label="Close">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+          <button class="close-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
             </svg>
           </button>
         </div>
-        <form class="modal-form">
-          <div class="modal-body">
-            ${description ? `<p class="modal-description">${escapeHtml(description)}</p>` : ''}
-            <div class="form-group">
-              ${multiline
-                ? `<textarea class="codes-modal-input" rows="6" placeholder="${escapeHtml(placeholder)}" ${allowEmpty ? '' : 'required'}>${escapeHtml(defaultValue)}</textarea>`
-                : `<input class="codes-modal-input" type="text" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(defaultValue)}" ${allowEmpty ? '' : 'required'} />`
-              }
-              ${hasBrowseButton ? `<button class="secondary-btn modal-browse-btn" type="button" style="margin-top: 10px;">Browse</button>` : ''}
-            </div>
+        <div class="modal-body">
+          ${description ? `<p class="modal-description">${escapeHtml(description)}</p>` : ''}
+          <div class="form-group">
+            ${multiline
+              ? `<textarea rows="6" placeholder="${escapeHtml(placeholder)}">${escapeHtml(defaultValue)}</textarea>`
+              : `<input type="text" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(defaultValue)}" />`
+            }
+            ${hasBrowseButton ? `<button class="secondary-btn modal-browse-btn" type="button" style="margin-top: 10px;">Browse</button>` : ''}
           </div>
-          <div class="modal-footer">
-            <button class="secondary-btn" data-action="cancel" type="button">Cancel</button>
-            <button class="primary-btn" data-action="confirm" type="submit">${escapeHtml(confirmLabel)}</button>
+          <div class="form-actions">
+            <button class="primary-btn" data-action="cancel">Cancel</button>
+            <button class="primary-btn" data-action="confirm">${escapeHtml(confirmLabel)}</button>
           </div>
-        </form>
+        </div>
       </div>
     `;
 
@@ -1170,8 +1168,8 @@ function showCodesInputModal({
     const overlay = modal.querySelector('.modal-overlay');
     const closeBtn = modal.querySelector('.close-btn');
     const cancelBtn = modal.querySelector('[data-action="cancel"]');
-    const form = modal.querySelector('.modal-form');
-    const inputEl = modal.querySelector('.codes-modal-input');
+    const confirmBtn = modal.querySelector('[data-action="confirm"]');
+    const inputEl = modal.querySelector('.form-group input, .form-group textarea');
     const browseBtn = modal.querySelector('.modal-browse-btn');
 
     // Browse button handler
@@ -1199,9 +1197,6 @@ function showCodesInputModal({
       const trimmed = (inputEl.value || '').trim();
 
       if (!allowEmpty && !trimmed) {
-        inputEl.setCustomValidity('Please enter a value.');
-        inputEl.reportValidity();
-        inputEl.setCustomValidity('');
         inputEl.focus();
         return;
       }
@@ -1211,21 +1206,14 @@ function showCodesInputModal({
 
     overlay?.addEventListener('click', () => close(null));
     closeBtn?.addEventListener('click', () => close(null));
-    cancelBtn?.addEventListener('click', (event) => {
-      event.preventDefault();
-      close(null);
-    });
-
-    form?.addEventListener('submit', (event) => {
-      event.preventDefault();
-      submit();
-    });
+    cancelBtn?.addEventListener('click', () => close(null));
+    confirmBtn?.addEventListener('click', () => submit());
 
     modal.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         event.preventDefault();
         close(null);
-      } else if (multiline && event.key === 'Enter' && event.ctrlKey) {
+      } else if (event.key === 'Enter' && (!multiline || event.ctrlKey)) {
         event.preventDefault();
         submit();
       }
@@ -1247,31 +1235,29 @@ function showNewCodeModal() {
     const modal = createModalContainer();
     modal.innerHTML = `
       <div class="modal-overlay"></div>
-      <div class="modal-card" style="max-width: 560px;">
+      <div class="modal-card" style="max-width: 500px;">
         <div class="modal-header">
           <h2>Create Code Workspace</h2>
-          <button class="close-btn" type="button" aria-label="Close">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+          <button class="close-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
             </svg>
           </button>
         </div>
-        <form class="modal-form">
-          <div class="modal-body">
-            <div class="form-group">
-              <label for="codes-new-name">Name</label>
-              <input id="codes-new-name" class="codes-modal-input" type="text" placeholder="New workspace name" required />
-            </div>
-            <div class="form-group">
-              <label for="codes-new-description">Description</label>
-              <textarea id="codes-new-description" rows="3" placeholder="Optional description..."></textarea>
-            </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="codes-new-name">Name</label>
+            <input id="codes-new-name" type="text" placeholder="New workspace name" />
           </div>
-          <div class="modal-footer">
-            <button class="secondary-btn" data-action="cancel" type="button">Cancel</button>
-            <button class="primary-btn" data-action="confirm" type="submit">Create</button>
+          <div class="form-group">
+            <label for="codes-new-description">Description (Optional)</label>
+            <textarea id="codes-new-description" placeholder="Describe your workspace..." rows="3"></textarea>
           </div>
-        </form>
+          <div class="form-actions">
+            <button id="cancel-code-btn" class="primary-btn">Cancel</button>
+            <button id="create-code-btn" class="primary-btn">Create Workspace</button>
+          </div>
+        </div>
       </div>
     `;
 
@@ -1280,10 +1266,12 @@ function showNewCodeModal() {
     const close = buildModalCloseHandler(modal, resolve);
     const overlay = modal.querySelector('.modal-overlay');
     const closeBtn = modal.querySelector('.close-btn');
-    const cancelBtn = modal.querySelector('[data-action="cancel"]');
-    const form = modal.querySelector('.modal-form');
+    const cancelBtn = modal.querySelector('#cancel-code-btn');
+    const confirmBtn = modal.querySelector('#create-code-btn');
     const nameInput = modal.querySelector('#codes-new-name');
     const descriptionInput = modal.querySelector('#codes-new-description');
+
+    if (nameInput) nameInput.focus();
 
     const submit = () => {
       if (!(nameInput instanceof HTMLInputElement)) {
@@ -1295,9 +1283,6 @@ function showNewCodeModal() {
       const trimmedName = rawName.trim();
 
       if (!trimmedName) {
-        nameInput.setCustomValidity('Please enter a workspace name.');
-        nameInput.reportValidity();
-        nameInput.setCustomValidity('');
         nameInput.focus();
         return;
       }
@@ -1312,43 +1297,26 @@ function showNewCodeModal() {
       });
     };
 
-    overlay?.addEventListener('click', () => close(null));
-    closeBtn?.addEventListener('click', () => close(null));
-    cancelBtn?.addEventListener('click', (event) => {
-      event.preventDefault();
-      close(null);
-    });
+    modal.addEventListener('click', (e) => {
+      if (
+        e.target.closest('.close-btn') ||
+        e.target.closest('#cancel-code-btn') ||
+        e.target === overlay
+      ) {
+        close(null);
+      }
 
-    form?.addEventListener('submit', (event) => {
-      event.preventDefault();
-      submit();
+      if (e.target.closest('#create-code-btn')) {
+        submit();
+      }
     });
 
     modal.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         event.preventDefault();
         close(null);
-      } else if (event.key === 'Enter' && event.ctrlKey && document.activeElement === descriptionInput) {
-        event.preventDefault();
-        submit();
       }
     });
-
-    if (nameInput instanceof HTMLInputElement) {
-      nameInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey) {
-          event.preventDefault();
-          submit();
-        }
-      });
-    }
-
-    setTimeout(() => {
-      if (nameInput instanceof HTMLInputElement) {
-        nameInput.focus();
-        nameInput.select();
-      }
-    }, 0);
   });
 }
 

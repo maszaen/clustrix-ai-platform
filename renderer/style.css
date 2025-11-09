@@ -3426,7 +3426,7 @@ textarea::-webkit-scrollbar {
   border-color: var(--primary);
 }
 
-#msg, #msg-central, #project-message-input {
+#msg, #msg-central, #project-message-input, #code-message-input {
   flex: 1;
   padding: var(--spacing-sm) var(--spacing-md);
   border: none;
@@ -3482,7 +3482,7 @@ textarea::-webkit-scrollbar {
   /* border: 1px solid black; */
 }
 
-#msg::placeholder, #msg-central::placeholder, #project-message-input::placeholder {
+#msg::placeholder, #msg-central::placeholder, #project-message-input::placeholder, #code-message-input::placeholder {
   color: var(--fg-muted);
 }
 

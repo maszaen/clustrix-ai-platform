@@ -11094,7 +11094,7 @@ function updateInputState() {
   // Update project title indicator
   const projectIndicator = $("#project-title-indicator");
   const projectTitleText = projectIndicator?.querySelector(".project-title-text");
-  
+
   if (current && (current.type === "project" || current.isProject) && current.projectId) {
     // Find the project name
     const project = projectsData?.find(p => p.id === current.projectId);
@@ -11104,6 +11104,21 @@ function updateInputState() {
     }
   } else if (projectIndicator) {
     projectIndicator.style.display = "none";
+  }
+
+  // Update code title indicator
+  const codeIndicator = $("#code-title-indicator");
+  const codeTitleText = codeIndicator?.querySelector(".code-title-text");
+
+  if (current && current.type === "code" && current.codeId) {
+    // Find the code workspace name
+    const code = codesData?.find(c => c.id === current.codeId);
+    if (code && codeIndicator && codeTitleText) {
+      codeTitleText.textContent = `${code.name || "Code Workspace"}`;
+      codeIndicator.style.display = "flex";
+    }
+  } else if (codeIndicator) {
+    codeIndicator.style.display = "none";
   }
 }
 
@@ -15009,8 +15024,19 @@ function setupEventListeners() {
     setTimeout(() => {
       showProjectDetailView(project)
     }, 100);
-    
-  })
+  });
+
+  $("#code-title-indicator").addEventListener("click", () => {
+    const codeId = current.codeId;
+    const code = codesData.find(c => c.id === codeId);
+    log("STATE_CODE", 2, "Code workspace state information", code);
+    showCodesPage();
+    setTimeout(() => {
+      if (code) {
+        showCodeDetail(code.id);
+      }
+    }, 100);
+  });
 
   $("#refresh-btn").addEventListener("click", async () => {
     log("UI", 0, "event:refresh-btn", "Refresh button clicked");

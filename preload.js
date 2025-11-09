@@ -169,6 +169,12 @@ contextBridge.exposeInMainWorld('api', {
     load: () => ipcRenderer.invoke('projects:load'),
     save: (projects) => ipcRenderer.invoke('projects:save', projects),
   },
+  codes: {
+    selectWorkspace: () => ipcRenderer.invoke('codes:select-workspace'),
+    inspectWorkspace: (folderPath) => ipcRenderer.invoke('codes:inspect-workspace', folderPath),
+    executeCommand: (payload) => ipcRenderer.invoke('codes:execute-command', payload),
+    shutdownTerminal: (sessionId) => ipcRenderer.invoke('codes:shutdown-terminal', sessionId),
+  },
   usage: {
     fetchStats: (filters) => ipcRenderer.invoke('usage:fetchStats', filters),
   },

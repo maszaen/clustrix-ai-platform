@@ -287,6 +287,19 @@ class DatabaseManager {
     const createdAt = session.created_at ? Date.parse(session.created_at) : Date.now();
     const updatedAt = getCurrentTimestamp();
     
+    const metadataPayload = {
+      canvases: session.canvases || {},
+      tokens_by_message: session.tokens_by_message || {},
+    };
+
+    if (session.metadata && typeof session.metadata === 'object') {
+      Object.assign(metadataPayload, session.metadata);
+    }
+
+    if (session.code) {
+      metadataPayload.code = session.code;
+    }
+
     return stmt.run(
       session.id,
       session.name,
@@ -301,10 +314,7 @@ class DatabaseManager {
       session.persona?.work || '',
       session.persona?.prefs || '',
       session.tokens_used || 0,
-      JSON.stringify({
-        canvases: session.canvases || {},
-        tokens_by_message: session.tokens_by_message || {}
-      }),
+      JSON.stringify(metadataPayload),
       0,           // deleted (not deleted)
       deviceId,    // device_id
       null,        // synced_at (null until synced)

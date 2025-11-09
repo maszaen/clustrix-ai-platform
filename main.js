@@ -18,6 +18,7 @@ const ClustrixLangChainService = require('./backend/integration/langchain-servic
 const { MultiAgentOrchestrator } = require('./backend/integration/langchain-agents');
 const { getBaseUrl, getApiKey, joinEndpoint, applyThinkingHints } = require('./backend/integration/langchain-helpers');
 const { performWebSearch, scrapeUrls } = require('./backend/search/web-search');
+const powerShellManager = require('./backend/integration/powershell-manager');
 const DatabaseManager = require('./backend/data/database-manager');
 const SyncManager = require('./backend/sync/sync-manager');
 const GitHubOAuthHelper = require('./backend/github/github-oauth-helper');
@@ -2320,6 +2321,7 @@ app.on('before-quit', () => {
   isQuitScheduled = true;
   pendingCloseRequest = false;
   clearCloseDelayTimer();
+  powerShellManager.shutdownAll();
 });
 app.on('window-all-closed', () => {
   // Close callback server before quitting
@@ -2328,8 +2330,10 @@ app.on('window-all-closed', () => {
       log('CALLBACK', 1, 'server', 'Callback server closed');
     });
   }
-  
-  if (process.platform !== 'darwin') app.quit(); 
+
+  powerShellManager.shutdownAll();
+
+  if (process.platform !== 'darwin') app.quit();
 });
 
 ipcMain.handle('sessions:load', async () => {
@@ -2383,6 +2387,8 @@ ipcMain.handle('sessions:load', async () => {
           tokens_used: session.tokens_used || 0,
           tokens_by_message: metadata.tokens_by_message || {},
           canvases: metadata.canvases || {},
+          code: metadata.code || null,
+          metadata,
           _x_think: Object.keys(_x_think).length > 0 ? _x_think : undefined,
           _x_think_updates: Object.keys(_x_think_updates).length > 0 ? _x_think_updates : undefined,
           messages: messages.map(m => {
@@ -2762,14 +2768,87 @@ ipcMain.handle('html-preview:create', async (_evt, htmlContent) => {
 ipcMain.handle('html-preview:delete', async (_evt, previewId) => {
   const previewsDir = path.join(app.getPath('userData'), 'html-previews');
   const filePath = path.join(previewsDir, `${previewId}.html`);
-  
+
   // Delete file if exists
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   }
-  
+
   return true;
 });
+
+const IGNORED_WORKSPACE_DIRS = new Set([
+  'node_modules',
+  '.git',
+  '.svn',
+  '.hg',
+  '.next',
+  '.vercel',
+  'dist',
+  'build',
+  'out',
+  'coverage',
+]);
+
+async function summarizeWorkspace(rootPath) {
+  let fileCount = 0;
+  let folderCount = 0;
+  const stack = [rootPath];
+  const MAX_ITEMS = 5000;
+
+  while (stack.length > 0 && fileCount + folderCount < MAX_ITEMS) {
+    const current = stack.pop();
+    let entries;
+    try {
+      entries = await fsp.readdir(current, { withFileTypes: true });
+    } catch (err) {
+      log('CODES', 3, 'summarizeWorkspace', 'Failed to read directory', {
+        path: current,
+        error: err.message,
+      });
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (fileCount + folderCount >= MAX_ITEMS) break;
+      if (entry.isSymbolicLink()) continue;
+      if (IGNORED_WORKSPACE_DIRS.has(entry.name)) continue;
+
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        folderCount += 1;
+        stack.push(fullPath);
+      } else if (entry.isFile()) {
+        fileCount += 1;
+      }
+    }
+  }
+
+  return { fileCount, folderCount, truncated: fileCount + folderCount >= MAX_ITEMS };
+}
+
+async function inspectWorkspace(folderPath) {
+  try {
+    const stats = await fsp.stat(folderPath);
+    if (!stats.isDirectory()) {
+      throw new Error('Path is not a directory');
+    }
+
+    const summary = await summarizeWorkspace(folderPath);
+    return {
+      path: folderPath,
+      name: path.basename(folderPath),
+      summary,
+      lastModified: stats.mtimeMs,
+    };
+  } catch (err) {
+    log('CODES', 4, 'inspectWorkspace', 'Failed to inspect workspace', {
+      path: folderPath,
+      error: err.message,
+    });
+    throw err;
+  }
+}
 
 ipcMain.handle('files:open-dialog', async (event) => {
   logHelper('FILE_DIALOG', 'ipc:handle', 'Received request to open file dialog.');
@@ -2997,6 +3076,65 @@ ipcMain.handle('files:open-dialog', async (event) => {
   }
   logHelper('FILE_DIALOG', 'ipc:handle', 'Processing complete. Sending results to renderer.', { resultCount: results.length });
   return results;
+});
+
+ipcMain.handle('codes:select-workspace', async (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) {
+    return null;
+  }
+
+  const { canceled, filePaths } = await dialog.showOpenDialog(window, {
+    title: 'Select Code Workspace',
+    properties: ['openDirectory'],
+    buttonLabel: 'Select Folder',
+  });
+
+  if (canceled || !filePaths || filePaths.length === 0) {
+    return null;
+  }
+
+  const folderPath = filePaths[0];
+  try {
+    const workspace = await inspectWorkspace(folderPath);
+    return workspace;
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('codes:inspect-workspace', async (_event, folderPath) => {
+  if (!folderPath) return null;
+  try {
+    return await inspectWorkspace(folderPath);
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('codes:execute-command', async (_event, payload) => {
+  const { sessionId, command, workspacePath } = payload || {};
+  if (!sessionId) {
+    throw new Error('sessionId is required for codes:execute-command');
+  }
+
+  try {
+    const result = await powerShellManager.executeCommand(sessionId, command || '', workspacePath);
+    return { success: true, ...result };
+  } catch (err) {
+    log('CODES', 4, 'codes:execute-command', 'Command execution failed', {
+      sessionId,
+      error: err.message,
+    });
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('codes:shutdown-terminal', async (_event, sessionId) => {
+  if (sessionId) {
+    powerShellManager.shutdownTerminal(sessionId);
+  }
+  return true;
 });
 const activeStreams = new Map();
 

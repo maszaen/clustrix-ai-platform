@@ -24,11 +24,19 @@ import { scheduleDeferredRender, cancelDeferredRender } from './utils/deferred-r
 import { createHighlightedCode } from './markdown/highlight.mjs';
 import { initializeUsageStatistics } from './usage/usage-statistics.mjs';
 import { initializeBenchmarkStatistics } from './usage/benchmark-statistics.mjs';
+import {
+  buildCodeAgentMessages,
+  isHighImpactCommand,
+  parseCodeAgentResponse,
+  summarizeCommandOutput,
+  truncateText,
+} from './codes/agent-helpers.mjs';
 
 let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",themeVariant: "standard",language: "autodetect"},};
 let welcomeScreenStagedFiles = [];
 let projectMessageStagedFiles = [];
 const PROJECT_DETAIL_RENDER_KEY = 'project-detail:render';
+const CODE_DETAIL_RENDER_KEY = 'code-detail:render';
 let current = null;
 let collapsed = false;
 let loadedSessionCount = 0;
@@ -39,6 +47,7 @@ let searchStatusQueue = [];
 let isProcessingQueue = false;
 let sessionDrafts = new Map();
 let projectsDocumentListener = null;
+let codesDocumentListener = null;
 let codeArtifacts = [];
 let isChatsSelectMode = false;
 let selectedChatIds = new Set();
@@ -47,6 +56,12 @@ let selectedProjectIds = new Set();
 let justSentMessage = false;
 let currentProject = null;
 let projectsData = [];
+let currentCode = null;
+let codesData = [];
+let isCodesSelectMode = false;
+let selectedCodeIds = new Set();
+let isCodeAgentRunning = false;
+let activeCodeStream = null;
 let mermaidInitialized = false;
 let previousWebSearchState = null; // Track websearch state before entering project
 let confirmationModal = null;
@@ -217,7 +232,7 @@ function loadPageState() {
       savedPage = state.settings.currentPage;
     }
 
-    const validPages = ["welcome", "chats", "artifacts", "chat", "projects"];
+    const validPages = ["welcome", "chats", "artifacts", "chat", "projects", "codes"];
     if (savedPage && validPages.includes(savedPage)) {
       currentPageState = savedPage;
 
@@ -298,6 +313,26 @@ function restoreLastActivePage() {
       break;
     case "projects":
       showProjectsPage();
+      break;
+    case "codes":
+      showCodesPage();
+      try {
+        const preloadedSettings = window.__PRELOADED_SETTINGS__;
+        const savedSessionId =
+          preloadedSettings?.currentSession ||
+          localStorage.getItem("clustrix-current-session") ||
+          state.settings?.currentSession;
+        if (savedSessionId) {
+          const codeSession = state.sessions.find(
+            (s) => s.id === savedSessionId && s.type === 'code',
+          );
+          if (codeSession) {
+            showCodeDetailView(codeSession);
+          }
+        }
+      } catch (err) {
+        log('CODES', 3, 'restoreLastActivePage', 'Failed to restore code detail view', { error: err?.message });
+      }
       break;
     case "welcome":
     default:
@@ -2259,6 +2294,79 @@ function ensureTokenFields(session) {
   if (!Array.isArray(session.uploadedFiles)) {
     session.uploadedFiles = [];
   }
+  if (session.type === 'code') {
+    normalizeCodeSession(session);
+  }
+}
+
+function normalizeCodeCommandEntry(entry) {
+  const normalized = {
+    id: entry?.id || `${generateSessionId()}-cmd`,
+    command: entry?.command || '',
+    output: entry?.output || '',
+    error: entry?.error || '',
+    summary: entry?.summary || '',
+    answer: entry?.answer || '',
+    iteration: typeof entry?.iteration === 'number' ? entry.iteration : null,
+    status: entry?.status === 'failed'
+      ? 'failed'
+      : entry?.status === 'cancelled'
+        ? 'cancelled'
+        : entry?.status === 'pending'
+          ? 'pending'
+          : 'success',
+    timestamp: typeof entry?.timestamp === 'number' ? entry.timestamp : Date.now(),
+  };
+  return normalized;
+}
+
+function normalizeCodeSession(session) {
+  if (!session || session.type !== 'code') return;
+  if (!session.code || typeof session.code !== 'object') {
+    session.code = {};
+  }
+  const code = session.code;
+  if (!Array.isArray(code.commandHistory)) {
+    code.commandHistory = [];
+  }
+  code.commandHistory = code.commandHistory.map(normalizeCodeCommandEntry);
+  if (!Array.isArray(code.commandHistory)) {
+    code.commandHistory = [];
+  }
+  if (code.workspacePath && !code.workspaceName) {
+    const parts = code.workspacePath.split(/[/\\]/).filter(Boolean);
+    code.workspaceName = parts[parts.length - 1] || code.workspacePath;
+  }
+  if (!code.workspaceName) {
+    code.workspaceName = code.workspacePath ? code.workspacePath : 'Untitled workspace';
+  }
+  if (!code.workspaceSummary) {
+    code.workspaceSummary = null;
+  }
+  if (!code.summary) {
+    code.summary = null;
+  }
+  if (!code.originalRequest && Array.isArray(session.messages)) {
+    const firstUser = session.messages.find((m) => Array.isArray(m) && m[0] === 'user' && typeof m[1] === 'string');
+    if (firstUser) {
+      code.originalRequest = firstUser[1];
+    }
+  }
+  if (typeof code.iteration !== 'number') {
+    code.iteration = code.commandHistory.length;
+  }
+  if (!code.lastRunAt) {
+    code.lastRunAt = null;
+  }
+  if (!session.metadata || typeof session.metadata !== 'object') {
+    session.metadata = {};
+  }
+  session.metadata.code = code;
+}
+
+function refreshCodesData() {
+  codesData = state.sessions.filter((session) => session.type === 'code');
+  codesData.forEach(normalizeCodeSession);
 }
 
 function updateTokensUI(session) {
@@ -3083,18 +3191,23 @@ function updateModelHeader() {
 
 function showWelcomeScreen() {
   current = null;
+  currentCode = null;
   welcomeScreenStagedFiles = [];
   renderWelcomeScreenFiles();
 
   $(".chat-area").classList.remove("chats-active");
   $(".chat-area").classList.remove("artifacts-active");
+  $(".chat-area").classList.remove("codes-active");
   $(".chat-area").classList.remove("projects-active");
+  $(".chat-area").classList.remove("codes-active");
   $(".chat-area").classList.add("welcome-active");
 
   // Clear active button states
   document.getElementById("chats-btn")?.classList.remove("active");
   document.getElementById("artifact-btn")?.classList.remove("active");
+  document.getElementById("codes-btn")?.classList.remove("active");
   document.getElementById("projects-btn")?.classList.remove("active");
+  document.getElementById("codes-btn")?.classList.remove("active");
 
   // Save page state
   savePageState("welcome");
@@ -3159,16 +3272,19 @@ function showWelcomeScreen() {
 
 function showChatsPage() {
   current = null;
+  currentCode = null;
   isChatsSelectMode = false;
   selectedChatIds.clear();
 
   $(".chat-area").classList.remove("welcome-active");
   $(".chat-area").classList.remove("artifacts-active");
   $(".chat-area").classList.remove("projects-active");
+  $(".chat-area").classList.remove("codes-active");
   $(".chat-area").classList.add("chats-active");
   document.getElementById("chats-btn")?.classList.add("active");
   document.getElementById("artifact-btn")?.classList.remove("active");
   document.getElementById("projects-btn")?.classList.remove("active");
+  document.getElementById("codes-btn")?.classList.remove("active");
 
   // Save page state
   savePageState("chats");
@@ -4049,30 +4165,37 @@ function filterChats(searchTerm) {
 function restoreNormalView() {
   $(".chat-area").classList.remove("chats-active");
   $(".chat-area").classList.remove("artifacts-active");
+  $(".chat-area").classList.remove("codes-active");
 
   document.getElementById("chats-btn")?.classList.remove("active");
   document.getElementById("artifact-btn")?.classList.remove("active");
+  document.getElementById("codes-btn")?.classList.remove("active");
 
   const sessionId = current && current.id ? current.id : null;
   savePageState("chat", sessionId);
 
   const welcomeScreen = document.getElementById("welcome-screen");
   if (welcomeScreen) welcomeScreen.style.display = "";
+
+  currentCode = null;
 }
 
 let artifactsListenersAdded = false;
 
 function showArtifactsPage() {
   current = null;
+  currentCode = null;
 
   $(".chat-area").classList.remove("welcome-active");
   $(".chat-area").classList.remove("chats-active");
   $(".chat-area").classList.remove("projects-active");
+  $(".chat-area").classList.remove("codes-active");
   $(".chat-area").classList.add("artifacts-active");
 
   document.getElementById("artifact-btn")?.classList.add("active");
   document.getElementById("chats-btn")?.classList.remove("active");
   document.getElementById("projects-btn")?.classList.remove("active");
+  document.getElementById("codes-btn")?.classList.remove("active");
 
   savePageState("artifacts");
   
@@ -5010,17 +5133,20 @@ function viewInChatFromArtifact(sessionId, messageIndex, artifactId = null) {
 // Projects state management
 function showProjectsPage() {
   current = null;
+  currentCode = null;
   isProjectsSelectMode = false;
   selectedProjectIds.clear();
 
   $(".chat-area").classList.remove("welcome-active");
   $(".chat-area").classList.remove("chats-active");
   $(".chat-area").classList.remove("artifacts-active");
+  $(".chat-area").classList.remove("codes-active");
   $(".chat-area").classList.add("projects-active");
 
   document.getElementById("projects-btn")?.classList.add("active");
   document.getElementById("chats-btn")?.classList.remove("active");
   document.getElementById("artifact-btn")?.classList.remove("active");
+  document.getElementById("codes-btn")?.classList.remove("active");
 
   savePageState("projects");
   
@@ -7170,6 +7296,1007 @@ async function deleteProject(project) {
 }
 
 // End of Projects functionality
+// ========================================
+
+// ========================================
+// CODES PAGE FUNCTIONALITY
+// ========================================
+
+const MAX_CODE_ITERATIONS = 20;
+
+function showCodesPage() {
+  current = null;
+  currentCode = null;
+  isCodesSelectMode = false;
+  selectedCodeIds.clear();
+
+  const chatArea = $(".chat-area");
+  if (chatArea) {
+    chatArea.classList.remove("welcome-active", "chats-active", "artifacts-active", "projects-active");
+    chatArea.classList.add("codes-active");
+  }
+
+  document.getElementById("codes-btn")?.classList.add("active");
+  document.getElementById("projects-btn")?.classList.remove("active");
+  document.getElementById("chats-btn")?.classList.remove("active");
+  document.getElementById("artifact-btn")?.classList.remove("active");
+
+  savePageState("codes");
+
+  if (typeof pushPageHistory === 'function') {
+    pushPageHistory({ page: 'codes-list' });
+  }
+
+  const welcomeScreen = document.getElementById("welcome-screen");
+  if (welcomeScreen) welcomeScreen.style.display = "none";
+
+  const projectDetailView = document.getElementById('project-detail-view');
+  if (projectDetailView && projectDetailView.classList.contains('active')) {
+    projectDetailView.classList.remove('active');
+    projectDetailView.classList.add('closing');
+    setTimeout(() => {
+      projectDetailView.classList.remove('closing');
+      projectDetailView.style.display = 'none';
+    }, 300);
+  }
+
+  showCodesListView();
+  renderCodesPage();
+  renderSessions();
+  updateInputState();
+
+  const searchInput = document.getElementById('codes-search');
+  if (searchInput) searchInput.focus();
+
+  log("CODES", 2, "showCodesPage", "Switched to Codes Page");
+}
+
+function showCodesListView() {
+  const codesPage = document.getElementById("codes-page");
+  if (!codesPage) return;
+
+  const detailView = document.getElementById("code-detail-view");
+  cancelDeferredRender(CODE_DETAIL_RENDER_KEY);
+
+  const header = codesPage.querySelector('.chats-header');
+  const search = codesPage.querySelector('.chats-search-container');
+  const controls = document.getElementById('codes-controls-container');
+  const list = document.getElementById('codes-list');
+
+  if (header) header.style.display = "flex";
+  if (search) search.style.display = "flex";
+  if (controls) controls.style.display = "flex";
+  if (list) list.style.display = "flex";
+
+  if (detailView) {
+    detailView.classList.remove("active");
+    detailView.classList.remove("closing");
+    detailView.style.display = "none";
+  }
+
+  currentCode = null;
+  const input = document.getElementById('code-message-input');
+  if (input) {
+    input.value = "";
+    input.style.height = "auto";
+  }
+
+  savePageState('codes');
+}
+
+function showCodeDetailView(codeSession) {
+  if (!codeSession) return;
+
+  normalizeCodeSession(codeSession);
+  currentCode = codeSession;
+
+  const codesPage = document.getElementById("codes-page");
+  const detailView = document.getElementById("code-detail-view");
+  const header = codesPage?.querySelector('.chats-header');
+  const search = codesPage?.querySelector('.chats-search-container');
+  const controls = document.getElementById('codes-controls-container');
+  const list = document.getElementById('codes-list');
+
+  if (header) header.style.display = "none";
+  if (search) search.style.display = "none";
+  if (controls) controls.style.display = "none";
+  if (list) list.style.display = "none";
+
+  if (detailView) {
+    detailView.style.display = "flex";
+    requestAnimationFrame(() => detailView.classList.add("active"));
+  }
+
+  if (typeof pushPageHistory === 'function') {
+    pushPageHistory({ page: 'code-detail', codeId: codeSession.id });
+  }
+
+  savePageState('codes', codeSession.id);
+
+  scheduleDeferredRender(
+    CODE_DETAIL_RENDER_KEY,
+    () => {
+      renderCodeDetail(codeSession);
+    },
+    { frames: 2, timeout: 200 },
+  );
+}
+
+function renderCodesPage() {
+  const codesList = document.getElementById("codes-list");
+  if (!codesList) return;
+
+  refreshCodesData();
+
+  const searchValue = (document.getElementById('codes-search')?.value || '').toLowerCase();
+  let sessions = [...codesData];
+
+  if (searchValue) {
+    sessions = sessions.filter((session) => {
+      const name = (session.name || '').toLowerCase();
+      const request = (session.code?.originalRequest || '').toLowerCase();
+      return name.includes(searchValue) || request.includes(searchValue);
+    });
+  }
+
+  sessions.sort((a, b) => {
+    if (a.isFavorite && !b.isFavorite) return -1;
+    if (!a.isFavorite && b.isFavorite) return 1;
+    const da = new Date(a.last_updated || a.created_at || 0).getTime();
+    const db = new Date(b.last_updated || b.created_at || 0).getTime();
+    return db - da;
+  });
+
+  const infoBar = document.getElementById('codes-info-bar');
+  const actionBar = document.getElementById('codes-select-action-bar');
+  const totalCountEl = document.getElementById('codes-total-count');
+  const selectedCountEl = document.getElementById('codes-selected-count');
+  const deleteBtn = document.getElementById('codes-delete-selected-btn');
+
+  if (isCodesSelectMode) {
+    if (infoBar) infoBar.style.display = "none";
+    if (actionBar) actionBar.style.display = "flex";
+    if (selectedCountEl) selectedCountEl.textContent = `${selectedCodeIds.size} selected`;
+    if (deleteBtn) deleteBtn.disabled = selectedCodeIds.size === 0;
+  } else {
+    if (infoBar) infoBar.style.display = "flex";
+    if (actionBar) actionBar.style.display = "none";
+    if (totalCountEl) totalCountEl.textContent = `${sessions.length} code sessions`;
+  }
+
+  codesList.innerHTML = "";
+
+  if (sessions.length === 0 && isCodesSelectMode) {
+    isCodesSelectMode = false;
+    selectedCodeIds.clear();
+    if (infoBar) infoBar.style.display = 'flex';
+    if (actionBar) actionBar.style.display = 'none';
+  }
+
+  if (sessions.length === 0 && !isCodesSelectMode) {
+    codesList.innerHTML = `
+      <div class="empty-state">
+        <p>No code sessions yet. Create one to start debugging with PowerShell.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  sessions.forEach((session) => {
+    fragment.appendChild(createCodeListItem(session));
+  });
+
+  codesList.appendChild(fragment);
+
+  const selectAllCheckbox = document.getElementById('codes-select-all-checkbox');
+  if (selectAllCheckbox) {
+    const visibleIds = sessions.map((session) => session.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedCodeIds.has(id));
+    selectAllCheckbox.checked = isCodesSelectMode && allSelected;
+  }
+}
+
+function createCodeListItem(session) {
+  const item = document.createElement('div');
+  item.className = 'project-item code-item';
+  item.dataset.codeId = session.id;
+
+  const isSelected = selectedCodeIds.has(session.id);
+  if (isCodesSelectMode) {
+    item.classList.add('select-mode');
+  }
+  if (isSelected) {
+    item.classList.add('selected');
+  }
+
+  const formattedDate = formatRelativeTime(session.last_updated || session.created_at);
+  const requestPreview = session.code?.originalRequest
+    ? session.code.originalRequest.slice(0, 120) + (session.code.originalRequest.length > 120 ? '…' : '')
+    : 'No prompt recorded yet';
+  const workspaceName = session.code?.workspaceName || 'No folder selected';
+  const checkboxHTML = `
+    <div class="project-item-checkbox-wrapper">
+      <input type="checkbox" class="project-item-checkbox code-item-checkbox" data-code-id="${session.id}" ${isSelected ? 'checked' : ''}>
+    </div>
+  `;
+
+  const starClass = session.isFavorite ? 'code-star-btn starred' : 'code-star-btn';
+
+  item.innerHTML = `
+    ${checkboxHTML}
+    <div class="project-item-content">
+      <div class="project-item-header">
+        <h3 class="project-item-title">${escapeHtml(session.name || 'Untitled Code Session')}</h3>
+        <span class="project-item-date">Updated ${formattedDate}</span>
+      </div>
+      <p class="project-description">${escapeHtml(requestPreview)}</p>
+      <p class="project-description" style="opacity:0.8;">Workspace: ${escapeHtml(workspaceName)}</p>
+    </div>
+    <div class="project-item-actions">
+      <button class="${starClass}" title="Star code session" data-code-id="${session.id}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+      </button>
+      <div class="code-menu-container">
+        <button class="code-menu-btn" data-code-id="${session.id}" title="Code session options">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="5" cy="12" r="2"/>
+            <circle cx="12" cy="12" r="2"/>
+            <circle cx="19" cy="12" r="2"/>
+          </svg>
+        </button>
+        <div class="code-menu-dropdown" data-code-id="${session.id}">
+          <div class="code-menu-item" data-action="open">Open</div>
+          <div class="code-menu-item" data-action="rename">Rename</div>
+          <div class="code-menu-item" data-action="select-workspace">Select Folder</div>
+          <div class="code-menu-item code-menu-item-danger" data-action="delete">Delete</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return item;
+}
+
+function renderCodeDetail(session) {
+  if (!session) return;
+  const titleEl = document.getElementById('code-detail-title');
+  const pathEl = document.getElementById('code-detail-path');
+  const starBtn = document.querySelector('.code-title-actions .code-star-btn');
+  const input = document.getElementById('code-message-input');
+
+  if (titleEl) titleEl.textContent = session.name || 'Untitled Code Session';
+  if (pathEl) pathEl.textContent = session.code?.workspacePath || 'No folder selected';
+  if (starBtn) {
+    if (session.isFavorite) starBtn.classList.add('starred');
+    else starBtn.classList.remove('starred');
+  }
+  if (input && !isCodeAgentRunning) {
+    input.value = '';
+    input.style.height = 'auto';
+    input.focus();
+  }
+
+  updateCodeWorkspaceCard(session);
+  renderCodeCommandHistory(session);
+}
+
+function updateCodeWorkspaceCard(session) {
+  const card = document.getElementById('code-workspace-card');
+  if (!card) return;
+
+  const summary = session.code?.workspaceSummary;
+  const name = session.code?.workspaceName;
+  const path = session.code?.workspacePath;
+
+  if (!path) {
+    card.classList.add('empty');
+    card.innerHTML = '<p>No folder selected.</p>';
+    return;
+  }
+
+  card.classList.remove('empty');
+  const folders = summary?.folderCount ?? 0;
+  const files = summary?.fileCount ?? 0;
+  const truncated = summary?.truncated ? '<span>Some items hidden for performance.</span>' : '';
+  card.innerHTML = `
+    <strong>${escapeHtml(name || path)}</strong>
+    <div class="code-workspace-meta">
+      <span>${folders} folders</span>
+      <span>${files} files</span>
+      ${truncated}
+    </div>
+  `;
+}
+
+function renderCodeCommandHistory(session) {
+  const historyEl = document.getElementById('code-command-history');
+  if (!historyEl) return;
+
+  const history = Array.isArray(session.code?.commandHistory)
+    ? [...session.code.commandHistory]
+    : [];
+
+  history.sort((a, b) => a.timestamp - b.timestamp);
+
+  if (history.length === 0) {
+    historyEl.innerHTML = '<p class="muted">No commands executed yet.</p>';
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  history.forEach((entry, idx) => {
+    const item = document.createElement('div');
+    const statusClass = entry.status === 'failed'
+      ? 'code-command-entry failed'
+      : entry.status === 'cancelled'
+        ? 'code-command-entry cancelled'
+        : 'code-command-entry';
+    item.className = statusClass;
+
+    const iteration = entry.iteration ?? idx + 1;
+    const relTime = formatRelativeTime(new Date(entry.timestamp).toISOString());
+    const answerHtml = entry.answer
+      ? `<div class="code-command-answer">${escapeHtml(entry.answer).replace(/\n/g, '<br>')}</div>`
+      : '';
+    const commandHtml = entry.command
+      ? `<div class="code-command-output"><strong>Command</strong><pre>${escapeHtml(entry.command)}</pre></div>`
+      : '';
+    const outputText = entry.error ? entry.error : entry.output;
+    const outputLabel = entry.error ? 'Error Output' : 'Output';
+    const outputHtml = outputText
+      ? `<div class="code-command-output"><strong>${outputLabel}</strong><pre>${escapeHtml(outputText)}</pre></div>`
+      : '';
+
+    item.innerHTML = `
+      <div class="code-command-header">
+        <span>Iteration #${iteration}</span>
+        <span>${relTime}</span>
+      </div>
+      ${answerHtml}
+      ${commandHtml}
+      ${outputHtml}
+    `;
+
+    fragment.appendChild(item);
+  });
+
+  historyEl.innerHTML = '';
+  historyEl.appendChild(fragment);
+}
+
+function toggleCodeFavorite(session) {
+  if (!session) return;
+  session.isFavorite = !session.isFavorite;
+  session.last_updated = nowISO();
+  markSessionDirty(session.id);
+  saveSession(session.id, { reason: 'code-favorite' });
+  renderCodesPage();
+  if (currentCode && currentCode.id === session.id) {
+    renderCodeDetail(currentCode);
+  }
+}
+
+function startCodeDetailRename(session) {
+  if (!session) return;
+  const titleElement = document.getElementById('code-detail-title');
+  if (!titleElement) return;
+
+  const originalName = session.name || 'Untitled Code Session';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = originalName;
+  input.className = 'project-detail-rename-input';
+  input.style.cssText = `
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-size: inherit;
+    font-weight: inherit;
+    padding: 4px 8px;
+    border-radius: 4px;
+    width: 100%;
+  `;
+
+  const parent = titleElement.parentNode;
+  parent.replaceChild(input, titleElement);
+  input.focus();
+  input.select();
+
+  const finishRename = async (saveChange = false) => {
+    if (saveChange && input.value.trim() && input.value.trim() !== originalName) {
+      session.name = input.value.trim();
+      session.last_updated = nowISO();
+      markSessionDirty(session.id);
+      await saveSession(session.id, { reason: 'code-rename' });
+    }
+
+    const newTitle = document.createElement('h2');
+    newTitle.id = 'code-detail-title';
+    newTitle.textContent = session.name || 'Untitled Code Session';
+    parent.replaceChild(newTitle, input);
+    renderCodesPage();
+  };
+
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      finishRename(true);
+    } else if (event.key === 'Escape') {
+      finishRename(false);
+    }
+  });
+
+  input.addEventListener('blur', () => finishRename(true));
+}
+
+async function selectCodeWorkspace(session) {
+  if (!session || BROWSER_MODE) return;
+  try {
+    const workspace = await window.api.codes.selectWorkspace();
+    if (!workspace || workspace.error) {
+      if (workspace?.error) {
+        log('CODES', 3, 'selectWorkspace', 'Workspace selection error', { error: workspace.error });
+      }
+      return;
+    }
+
+    session.code = session.code || {};
+    session.code.workspacePath = workspace.path;
+    session.code.workspaceName = workspace.name;
+    session.code.workspaceSummary = workspace.summary || null;
+    session.last_updated = nowISO();
+    markSessionDirty(session.id);
+    await saveSession(session.id, { reason: 'code-workspace' });
+    renderCodesPage();
+    if (currentCode && currentCode.id === session.id) {
+      renderCodeDetail(currentCode);
+    }
+  } catch (error) {
+    log('CODES', 4, 'selectWorkspace', 'Failed to select workspace', { error: error.message });
+  }
+}
+
+async function confirmHighImpactCommand(command) {
+  if (!command) return true;
+  return new Promise((resolve) => {
+    let handled = false;
+    const safeResolve = (value) => {
+      if (handled) return;
+      handled = true;
+      resolve(value);
+    };
+    showConfirmationModal({
+      title: 'Execute sensitive command?',
+      message: `The assistant wants to run:<br><pre>${escapeHtml(command)}</pre><br>This command might modify files. Continue?`,
+      confirmText: 'Run command',
+      cancelText: 'Cancel',
+      confirmVariant: 'danger',
+      onConfirm: () => safeResolve(true),
+      onError: () => safeResolve(false),
+      closeOnSuccess: true,
+    });
+    if (confirmationCancelBtn) {
+      confirmationCancelBtn.addEventListener('click', () => safeResolve(false), { once: true });
+    }
+    if (confirmationCloseBtn) {
+      confirmationCloseBtn.addEventListener('click', () => safeResolve(false), { once: true });
+    }
+  });
+}
+
+async function requestCodeAgentResponse(messages) {
+  if (BROWSER_MODE) {
+    throw new Error('Coding agent is not available in browser preview mode.');
+  }
+
+  const act = state.settings?.models?.active || {};
+
+  return new Promise((resolve, reject) => {
+    let buffer = '';
+    let resolved = false;
+
+    try {
+      activeCodeStream = window.api.chat.stream(
+        messages,
+        act.model || 'glm-4.5-flash',
+        {
+          provider: act.platform || 'openrouter',
+          baseUrl: act.baseUrl,
+          apiKey: act.apiKey,
+          thinkMode: act.thinkMode || 'off',
+          webSearchEnabled: false,
+          language: state.settings.language || 'autodetect',
+        },
+        (chunk) => {
+          if (chunk === null) {
+            if (!resolved) {
+              resolved = true;
+              resolve(buffer);
+            }
+            return;
+          }
+
+        if (!chunk) return;
+
+        if (typeof chunk === 'object') {
+          if (chunk.error && !resolved) {
+            try {
+              activeCodeStream?.cancel?.();
+            } catch (e) {}
+            resolved = true;
+            reject(new Error(chunk.error));
+          }
+          return;
+        }
+
+          buffer += chunk;
+        },
+      );
+    } catch (error) {
+      resolved = true;
+      reject(error);
+    }
+  }).finally(() => {
+    activeCodeStream = null;
+  });
+}
+
+async function executeCodeCommand(session, command) {
+  if (BROWSER_MODE) {
+    return { success: false, error: 'Command execution is disabled in browser preview mode.' };
+  }
+
+  try {
+    const result = await window.api.codes.executeCommand({
+      sessionId: session.id,
+      command,
+      workspacePath: session.code?.workspacePath || undefined,
+    });
+    return result;
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function setCodeSendButtonState(isRunning) {
+  const sendBtn = document.getElementById('code-send-btn');
+  if (!sendBtn) return;
+  if (isRunning) {
+    sendBtn.disabled = true;
+    sendBtn.classList.add('interrupt');
+    sendBtn.innerHTML = `
+      <svg class="btn-spinner" style="animation: spin 1s linear infinite;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+      </svg>
+    `;
+  } else {
+    sendBtn.disabled = false;
+    sendBtn.classList.remove('interrupt');
+    sendBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-icon lucide-arrow-up">
+        <path d="m5 12 7-7 7 7" />
+        <path d="M12 19V5" />
+      </svg>
+    `;
+  }
+}
+
+async function ensureCodeSession(promptText = '') {
+  if (currentCode) return currentCode;
+
+  const session = await createNewSession([], { type: 'code', originalRequest: promptText });
+  normalizeCodeSession(session);
+  session.name = promptText ? truncateText(promptText, 60) : 'New Code Session';
+  session.code.originalRequest = promptText;
+  session.last_updated = nowISO();
+  markSessionDirty(session.id);
+  await saveSession(session.id, { reason: 'code-create' });
+  refreshCodesData();
+  renderCodesPage();
+  currentCode = session;
+  return session;
+}
+
+async function handleCodeSend() {
+  if (isCodeAgentRunning) return;
+  const input = document.getElementById('code-message-input');
+  if (!input) return;
+
+  const promptText = (input.value || '').trim();
+  if (!promptText && (!currentCode || !currentCode.code?.commandHistory?.length)) return;
+
+  const session = await ensureCodeSession(promptText);
+  if (!session) return;
+
+  if (!session.code.originalRequest) {
+    session.code.originalRequest = promptText;
+  }
+
+  isCodeAgentRunning = true;
+  setCodeSendButtonState(true);
+  input.value = '';
+  input.style.height = 'auto';
+
+  let iteration = 0;
+  let lastEntry = null;
+  let continueLoop = true;
+  let lastPrompt = promptText;
+
+  while (continueLoop && iteration < MAX_CODE_ITERATIONS) {
+    try {
+      const messages = buildCodeAgentMessages(session, lastPrompt, lastEntry);
+      const rawResponse = await requestCodeAgentResponse(messages);
+      const parsed = parseCodeAgentResponse(rawResponse);
+
+      const entry = normalizeCodeCommandEntry({
+        id: `${generateSessionId()}-cmd`,
+        iteration: session.code.iteration + 1,
+        answer: parsed.answer,
+        command: parsed.command,
+        output: '',
+        error: '',
+        summary: parsed.answer ? truncateText(parsed.answer, 200) : '',
+        status: parsed.command ? 'pending' : 'success',
+        timestamp: Date.now(),
+      });
+
+      session.code.commandHistory.push(entry);
+      session.code.iteration = (session.code.iteration || 0) + 1;
+      session.code.lastRunAt = nowISO();
+      session.last_updated = nowISO();
+      lastEntry = entry;
+
+      renderCodeCommandHistory(session);
+      renderCodesPage();
+      markSessionDirty(session.id);
+      await saveSession(session.id, { reason: 'code-agent-answer' });
+
+      if (!parsed.command) {
+        continueLoop = false;
+        break;
+      }
+
+      if (isHighImpactCommand(parsed.command)) {
+        const confirmed = await confirmHighImpactCommand(parsed.command);
+        if (!confirmed) {
+          entry.status = 'cancelled';
+          entry.summary = 'Command cancelled by user.';
+          renderCodeCommandHistory(session);
+          markSessionDirty(session.id);
+          await saveSession(session.id, { reason: 'code-command-cancel' });
+          break;
+        }
+      }
+
+      const execution = await executeCodeCommand(session, parsed.command);
+      entry.output = execution.output || '';
+      entry.error = execution.error || '';
+      entry.status = execution.success === false || execution.error ? 'failed' : 'success';
+      entry.summary = summarizeCommandOutput(entry.output, entry.error);
+      session.last_updated = nowISO();
+      renderCodeCommandHistory(session);
+      renderCodesPage();
+      markSessionDirty(session.id);
+      await saveSession(session.id, { reason: 'code-command' });
+
+      if (parsed.end) {
+        continueLoop = false;
+      }
+
+      lastPrompt = session.code.originalRequest || promptText;
+      iteration += 1;
+    } catch (error) {
+      log('CODES', 4, 'handleCodeSend', 'Code agent iteration failed', { error: error.message });
+      const errorEntry = normalizeCodeCommandEntry({
+        id: `${generateSessionId()}-cmd`,
+        iteration: session.code.iteration + 1,
+        answer: 'Terjadi kesalahan saat meminta jawaban dari model.',
+        command: '',
+        output: '',
+        error: error.message || 'Unknown error',
+        summary: error.message || 'Error',
+        status: 'failed',
+        timestamp: Date.now(),
+      });
+      session.code.commandHistory.push(errorEntry);
+      session.code.iteration = (session.code.iteration || 0) + 1;
+      session.last_updated = nowISO();
+      renderCodeCommandHistory(session);
+      markSessionDirty(session.id);
+      await saveSession(session.id, { reason: 'code-agent-error' });
+      break;
+    }
+  }
+
+  isCodeAgentRunning = false;
+  setCodeSendButtonState(false);
+  renderCodesPage();
+}
+
+async function deleteCodeSessions(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return;
+  await Promise.all(
+    ids.map((id) => {
+      const session = state.sessions.find((s) => s.id === id);
+      if (session) {
+        return deleteSession(session);
+      }
+      return Promise.resolve();
+    }),
+  );
+  refreshCodesData();
+  renderCodesPage();
+}
+
+function setupCodesPageListeners() {
+  const codesPage = document.getElementById('codes-page');
+  if (!codesPage) return;
+
+  const searchInput = document.getElementById('codes-search');
+  if (searchInput && !searchInput._codesListenerAttached) {
+    searchInput.addEventListener('input', () => renderCodesPage());
+    searchInput._codesListenerAttached = true;
+  }
+
+  const newCodeBtn = document.getElementById('new-code-btn');
+  if (newCodeBtn && !newCodeBtn._codesListenerAttached) {
+    newCodeBtn.addEventListener('click', async () => {
+      const session = await ensureCodeSession('');
+      showCodeDetailView(session);
+    });
+    newCodeBtn._codesListenerAttached = true;
+  }
+
+  const backBtn = document.getElementById('back-to-codes-btn');
+  if (backBtn && !backBtn._codesListenerAttached) {
+    backBtn.addEventListener('click', () => {
+      showCodesListView();
+      renderCodesPage();
+    });
+    backBtn._codesListenerAttached = true;
+  }
+
+  const selectWorkspaceBtn = document.getElementById('code-select-workspace-btn');
+  if (selectWorkspaceBtn && !selectWorkspaceBtn._codesListenerAttached) {
+    selectWorkspaceBtn.addEventListener('click', () => {
+      if (currentCode) selectCodeWorkspace(currentCode);
+    });
+    selectWorkspaceBtn._codesListenerAttached = true;
+  }
+
+  const sendBtn = document.getElementById('code-send-btn');
+  if (sendBtn && !sendBtn._codesListenerAttached) {
+    sendBtn.addEventListener('click', () => handleCodeSend());
+    sendBtn._codesListenerAttached = true;
+  }
+
+  const detailStarBtn = document.querySelector('.code-title-actions .code-star-btn');
+  if (detailStarBtn && !detailStarBtn._codesListenerAttached) {
+    detailStarBtn.addEventListener('click', () => {
+      if (currentCode) {
+        toggleCodeFavorite(currentCode);
+        renderCodeDetail(currentCode);
+      }
+    });
+    detailStarBtn._codesListenerAttached = true;
+  }
+
+  const input = document.getElementById('code-message-input');
+  if (input && !input._codesListenerAttached) {
+    input.addEventListener('keydown', (event) => {
+      if ((event.key === 'Enter' && (event.ctrlKey || event.metaKey))) {
+        event.preventDefault();
+        handleCodeSend();
+      }
+    });
+    input._codesListenerAttached = true;
+  }
+
+  if (codesPage._listener) {
+    codesPage.removeEventListener('click', codesPage._listener);
+  }
+
+  const pageListener = (event) => {
+    const target = event.target;
+    const codeId = target.closest('.code-item, .code-menu-btn, .code-menu-dropdown')?.dataset.codeId;
+
+    if (target.closest('#codes-select-btn')) {
+      isCodesSelectMode = true;
+      selectedCodeIds.clear();
+      renderCodesPage();
+      return;
+    }
+
+    if (target.closest('#codes-select-close-btn')) {
+      isCodesSelectMode = false;
+      selectedCodeIds.clear();
+      const selectAll = document.getElementById('codes-select-all-checkbox');
+      if (selectAll) selectAll.checked = false;
+      renderCodesPage();
+      return;
+    }
+
+    if (isCodesSelectMode && target.closest('#codes-delete-selected-btn')) {
+      if (selectedCodeIds.size === 0) return;
+      showConfirmationModal({
+        title: 'Delete selected code sessions?',
+        message: `Delete ${selectedCodeIds.size} code sessions permanently?`,
+        confirmText: 'Delete',
+        confirmVariant: 'danger',
+        onConfirm: () => {
+          deleteCodeSessions(Array.from(selectedCodeIds));
+          isCodesSelectMode = false;
+          selectedCodeIds.clear();
+          const selectAll = document.getElementById('codes-select-all-checkbox');
+          if (selectAll) selectAll.checked = false;
+        },
+      });
+      return;
+    }
+
+    if (target.closest('#codes-select-all-checkbox')) {
+      const checkbox = target.closest('#codes-select-all-checkbox');
+      const isChecked = checkbox.checked;
+      if (isChecked) {
+        document.querySelectorAll('#codes-list .code-item').forEach((item) => {
+          selectedCodeIds.add(item.dataset.codeId);
+        });
+        isCodesSelectMode = true;
+      } else {
+        selectedCodeIds.clear();
+        isCodesSelectMode = false;
+      }
+      renderCodesPage();
+      return;
+    }
+
+    if (target.closest('.code-item-checkbox')) {
+      event.stopPropagation();
+      const checkbox = target.closest('.code-item-checkbox');
+      const id = checkbox.dataset.codeId;
+      if (checkbox.checked) {
+        selectedCodeIds.add(id);
+        isCodesSelectMode = true;
+      } else {
+        selectedCodeIds.delete(id);
+        if (selectedCodeIds.size === 0) isCodesSelectMode = false;
+      }
+      renderCodesPage();
+      return;
+    }
+
+    if (target.closest('.code-menu-btn')) {
+      event.stopPropagation();
+      const container = target.closest('.code-menu-container');
+      const dropdown = container.querySelector('.code-menu-dropdown');
+      const button = container.querySelector('.code-menu-btn');
+
+      document.querySelectorAll('.code-menu-dropdown.persistent-open').forEach((menu) => {
+        if (menu !== dropdown) {
+          menu.classList.remove('persistent-open');
+          const btn = menu.parentElement.querySelector('.code-menu-btn');
+          if (btn) btn.classList.remove('persistent-active');
+        }
+      });
+
+      const isOpen = dropdown.classList.contains('persistent-open');
+      if (isOpen) {
+        dropdown.classList.remove('persistent-open');
+        button.classList.remove('persistent-active');
+      } else {
+        dropdown.classList.add('persistent-open');
+        button.classList.add('persistent-active');
+      }
+      return;
+    }
+
+    if (target.closest('.code-menu-item')) {
+      event.stopPropagation();
+      const menuItem = target.closest('.code-menu-item');
+      const action = menuItem.dataset.action;
+      const dropdown = menuItem.closest('.code-menu-dropdown');
+      dropdown.classList.remove('persistent-open');
+      const button = dropdown.parentElement.querySelector('.code-menu-btn');
+      if (button) button.classList.remove('persistent-active');
+
+      const session = state.sessions.find((s) => s.id === dropdown.dataset.codeId);
+      if (!session) return;
+
+      if (action === 'open') {
+        showCodeDetailView(session);
+      } else if (action === 'rename') {
+        showCodeDetailView(session);
+        startCodeDetailRename(session);
+      } else if (action === 'select-workspace') {
+        showCodeDetailView(session);
+        selectCodeWorkspace(session);
+      } else if (action === 'delete') {
+        showConfirmationModal({
+          title: 'Delete code session?',
+          message: `Delete "${escapeHtml(session.name || 'Untitled Code Session')}"?`,
+          confirmText: 'Delete',
+          confirmVariant: 'danger',
+          onConfirm: () => deleteCodeSessions([session.id]),
+        });
+      }
+      return;
+    }
+
+    if (target.closest('.code-star-btn')) {
+      event.stopPropagation();
+      if (codeId) {
+        const session = state.sessions.find((s) => s.id === codeId);
+        if (session) toggleCodeFavorite(session);
+      }
+      return;
+    }
+
+    if (codeId && !isCodesSelectMode) {
+      if (!target.closest('.project-item-actions')) {
+        const session = state.sessions.find((s) => s.id === codeId);
+        if (session) showCodeDetailView(session);
+      }
+      return;
+    }
+  };
+
+  codesPage.addEventListener('click', pageListener);
+  codesPage._listener = pageListener;
+
+  if (codesDocumentListener) {
+    document.removeEventListener('click', codesDocumentListener);
+  }
+
+  codesDocumentListener = (event) => {
+    if (!event.target.closest('.code-menu-container')) {
+      document.querySelectorAll('.code-menu-dropdown.persistent-open').forEach((menu) => {
+        menu.classList.remove('persistent-open');
+        const btn = menu.parentElement.querySelector('.code-menu-btn');
+        if (btn) btn.classList.remove('persistent-active');
+      });
+    }
+
+    if (event.target.closest('.code-title-menu-btn')) {
+      event.stopPropagation();
+      const btn = event.target.closest('.code-title-menu-btn');
+      const dropdown = btn.parentElement.querySelector('.code-title-menu-dropdown');
+      dropdown.classList.toggle('persistent-open');
+      btn.classList.toggle('persistent-active');
+      return;
+    }
+
+    if (event.target.closest('.code-title-menu-item')) {
+      event.stopPropagation();
+      const item = event.target.closest('.code-title-menu-item');
+      const action = item.dataset.action;
+      const dropdown = item.closest('.code-title-menu-dropdown');
+      dropdown.classList.remove('persistent-open');
+      const btn = dropdown.parentElement.querySelector('.code-title-menu-btn');
+      if (btn) btn.classList.remove('persistent-active');
+
+      if (!currentCode) return;
+      if (action === 'rename') {
+        startCodeDetailRename(currentCode);
+      } else if (action === 'select-workspace') {
+        selectCodeWorkspace(currentCode);
+      } else if (action === 'delete') {
+        showConfirmationModal({
+          title: 'Delete code session?',
+          message: `Delete "${escapeHtml(currentCode.name || 'Untitled Code Session')}"?`,
+          confirmText: 'Delete',
+          confirmVariant: 'danger',
+          onConfirm: () => deleteCodeSessions([currentCode.id]),
+        });
+      }
+    }
+  };
+
+  document.addEventListener('click', codesDocumentListener);
+}
+
+// End of Codes functionality
 // ========================================
 
 function scheduleThinkingText(
@@ -9604,7 +10731,9 @@ function renderSessions() {
     renderSessions._lastFilter = filterValue;
   }
 
-  let sessions = Array.isArray(state.sessions) ? state.sessions.slice() : [];
+  let sessions = Array.isArray(state.sessions)
+    ? state.sessions.filter((s) => s.type !== 'code')
+    : [];
 
   sessions.sort((a, b) => {
     // Only prioritize starred sessions if showStarred is enabled
@@ -10573,6 +11702,8 @@ async function load() {
           });
         }
       });
+
+      refreshCodesData();
       
       // Migration: Clean up web search info from existing AI messages - remove prepended text since we now use UI indicator
       state.sessions.forEach((session) => {
@@ -12841,11 +13972,27 @@ async function createNewSession(initialMessages = [], options = {}) {
 
     // Project-specific properties
     projectId: options.projectId || null,
-    type: options.type || "regular", // 'regular' or 'project'
+    type: options.type || "regular", // 'regular', 'project', or 'code'
     isProject: options.type === "project" || false,
   };
 
   state.sessions.unshift(s);
+
+  if (options.type === 'code') {
+    s.code = {
+      iteration: 0,
+      commandHistory: [],
+      workspacePath: options.workspacePath || null,
+      workspaceName: options.workspaceName || null,
+      workspaceSummary: options.workspaceSummary || null,
+      originalRequest: options.originalRequest || null,
+      summary: null,
+      lastRunAt: null,
+    };
+    normalizeCodeSession(s);
+    refreshCodesData();
+  }
+
   await saveSession(s.id, { reason: "create-session" });
   log("SESSION", 2, "createNewSession", "New session object created.", {
     sessionId: s.id,
@@ -13265,6 +14412,17 @@ function deleteSession(sessionToDelete) {
   state.sessions = state.sessions.filter((s) => s !== sessionToDelete);
   if (wasCurrent) showWelcomeScreen();
   else renderSessions();
+
+  if (sessionToDelete.type === 'code') {
+    if (currentCode && currentCode.id === sessionToDelete.id) {
+      currentCode = null;
+      showCodesListView();
+    }
+    refreshCodesData();
+    if (document.querySelector('.chat-area')?.classList.contains('codes-active')) {
+      renderCodesPage();
+    }
+  }
 
   return save({ forceFull: true, reason: "delete-session" });
 }
@@ -14476,6 +15634,7 @@ function setupEventListeners() {
   let projectsListenersAdded = false;
   if (!projectsListenersAdded) {
     setupProjectsPageListeners();
+    setupCodesPageListeners();
     projectsListenersAdded = true;
   }
   document.addEventListener("keydown", (e) => {
@@ -15228,6 +16387,18 @@ function setupEventListeners() {
       showProjectsPage();
     }
   });
+
+  const codesBtn = document.getElementById('codes-btn');
+  if (codesBtn && !codesBtn._codesListenerAttached) {
+    codesBtn.addEventListener('click', () => {
+      log('UI', 0, 'event:codes-page-click', 'Codes page button clicked');
+      if (window.innerWidth <= 998) {
+        closeMobileSidebar();
+      }
+      showCodesPage();
+    });
+    codesBtn._codesListenerAttached = true;
+  }
 
   $("#announcement-btn").addEventListener("click", () => {
     log("UI", 0, "event:projects-page-click", "Projects page button clicked");

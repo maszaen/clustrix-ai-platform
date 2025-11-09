@@ -144,9 +144,9 @@ class DatabaseManager {
         is_favorite INTEGER DEFAULT 0,
         metadata TEXT
       );
-      
+
       CREATE INDEX IF NOT EXISTS idx_projects_created ON projects(created_at DESC);
-      
+
       CREATE TABLE IF NOT EXISTS project_files (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         project_id TEXT NOT NULL,
@@ -156,11 +156,26 @@ class DatabaseManager {
         content BLOB NOT NULL,
         created_at INTEGER NOT NULL,
         metadata TEXT,
-        
+
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
       );
-      
+
       CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project_id);
+
+      CREATE TABLE IF NOT EXISTS codes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        instruction TEXT,
+        workspace_path TEXT,
+        workspace_metadata TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        is_favorite INTEGER DEFAULT 0,
+        metadata TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_codes_created ON codes(created_at DESC);
       
       CREATE TABLE IF NOT EXISTS drafts (
         id TEXT PRIMARY KEY,
@@ -216,6 +231,13 @@ class DatabaseManager {
     ensureColumn('sessions', 'device_id', 'TEXT');
     ensureColumn('sessions', 'synced_at', 'INTEGER');
     ensureColumn('sessions', 'hash', 'TEXT');
+    ensureColumn('sessions', 'code_id', 'TEXT');
+
+  ensureColumn('codes', 'instruction', 'TEXT');
+  ensureColumn('codes', 'workspace_path', 'TEXT');
+  ensureColumn('codes', 'workspace_metadata', 'TEXT');
+  ensureColumn('codes', 'is_favorite', 'INTEGER DEFAULT 0');
+  ensureColumn('codes', 'metadata', 'TEXT');
 
     ensureColumn('messages', 'deleted', 'INTEGER DEFAULT 0');
     ensureColumn('messages', 'device_id', 'TEXT');
@@ -261,16 +283,17 @@ class DatabaseManager {
     
     const stmt = this.db.prepare(`
       INSERT INTO sessions 
-      (id, name, type, created_at, updated_at, last_updated, project_id, 
-      is_project, is_favorite, persona_name, persona_work, persona_prefs, 
+      (id, name, type, created_at, updated_at, last_updated, project_id,
+      code_id, is_project, is_favorite, persona_name, persona_work, persona_prefs,
       tokens_used, metadata, deleted, device_id, synced_at, hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         type = excluded.type,
         updated_at = excluded.updated_at,
         last_updated = excluded.last_updated,
         project_id = excluded.project_id,
+        code_id = excluded.code_id,
         is_project = excluded.is_project,
         is_favorite = excluded.is_favorite,
         persona_name = excluded.persona_name,
@@ -295,6 +318,7 @@ class DatabaseManager {
       updatedAt,
       session.last_updated || new Date(updatedAt).toISOString(),
       session.projectId || null,
+      session.codeId || null,
       session.isProject ? 1 : 0,
       session.isFavorite ? 1 : 0,
       session.persona?.name || '',
@@ -534,11 +558,11 @@ class DatabaseManager {
   
   getProjectFiles(projectId) {
     return this.db.prepare(`
-      SELECT * FROM project_files 
+      SELECT * FROM project_files
       WHERE project_id = ?
     `).all(projectId);
   }
-  
+
   saveProjectFile(projectId, file) {
     const stmt = this.db.prepare(`
       INSERT INTO project_files 
@@ -565,6 +589,52 @@ class DatabaseManager {
     return this.db.prepare(`
       DELETE FROM project_files WHERE project_id = ?
     `).run(projectId);
+  }
+
+  getAllCodes() {
+    return this.db.prepare(`
+      SELECT * FROM codes
+      ORDER BY created_at DESC
+    `).all();
+  }
+
+  getCode(codeId) {
+    return this.db.prepare(`
+      SELECT * FROM codes WHERE id = ?
+    `).get(codeId);
+  }
+
+  saveCode(code) {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO codes
+      (id, name, description, instruction, workspace_path, workspace_metadata,
+       created_at, updated_at, is_favorite, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const createdAt = code.created_at ? Date.parse(code.created_at) : Date.now();
+    const updatedAt = code.updated_at || code.last_updated
+      ? Date.parse(code.updated_at || code.last_updated)
+      : Date.now();
+
+    return stmt.run(
+      code.id,
+      code.name,
+      code.description || '',
+      code.instruction || '',
+      code.workspacePath || '',
+      JSON.stringify(code.workspaceMetadata || {}),
+      createdAt,
+      updatedAt,
+      code.isFavorite ? 1 : 0,
+      JSON.stringify(code.metadata || {})
+    );
+  }
+
+  deleteCode(codeId) {
+    return this.db.prepare(`
+      DELETE FROM codes WHERE id = ?
+    `).run(codeId);
   }
   
   getSetting(key) {

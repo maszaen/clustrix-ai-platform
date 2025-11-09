@@ -25,6 +25,7 @@ const GitHubStorageService = require('./backend/github/github-storage-service');
 const SmartBackupService = require('./backend/sync/smart-backup-service');
 const { queryUsageStatistics, invalidateUsageStatisticsCache } = require('./backend/data/usage-statistics');
 const { queryBenchmarkStatistics, invalidateBenchmarkStatisticsCache } = require('./backend/data/benchmark-statistics');
+const { initializeCodeAgent, processCodeRequest } = require('./backend/codes/code-agent');
 
 function createTimestampedBackup(filePath, reason = '') {
   try {
@@ -110,6 +111,27 @@ let closeDelayTimeout = null;
 let finalizingCount = 0;
 let lastFinalizeCompletedAt = null;
 let isQuitScheduled = false;
+
+initializeCodeAgent({
+  log,
+  getCodeById: (codeId) => {
+    if (!codeId) return null;
+    try {
+      if (!useSQLite || !db) {
+        db = new DatabaseManager(app);
+        invalidateUsageStatisticsCache();
+        useSQLite = true;
+      }
+      return db.getCode(codeId);
+    } catch (error) {
+      log('CODES', 3, 'getCodeById', 'Failed to read code workspace', {
+        codeId,
+        error: error?.message || error,
+      });
+      return null;
+    }
+  },
+});
 
 function clearCloseDelayTimer() {
   if (closeDelayTimeout) {
@@ -2373,6 +2395,7 @@ ipcMain.handle('sessions:load', async () => {
           created_at: session.last_updated,
           last_updated: session.last_updated,
           projectId: session.project_id,
+          codeId: session.code_id,
           isProject: session.is_project === 1,
           isFavorite: session.is_favorite === 1,
           persona: {
@@ -2693,6 +2716,127 @@ ipcMain.handle('projects:save', async (_evt, projects) => {
       stack: e.stack
     });
     throw e;
+  }
+});
+
+async function loadCodesFromStorage() {
+  try {
+    if (useSQLite && db) {
+      const codes = db.getAllCodes();
+
+      return codes.map(code => {
+        let workspaceMetadata = {};
+        try {
+          workspaceMetadata = code.workspace_metadata ? JSON.parse(code.workspace_metadata) : {};
+        } catch (err) {
+          workspaceMetadata = {};
+        }
+
+        let metadata = {};
+        try {
+          metadata = code.metadata ? JSON.parse(code.metadata) : {};
+        } catch (err) {
+          metadata = {};
+        }
+
+        return {
+          id: code.id,
+          name: code.name,
+          description: code.description,
+          instruction: code.instruction || '',
+          workspacePath: code.workspace_path || '',
+          workspaceMetadata,
+          created_at: new Date(code.created_at).toISOString(),
+          updated_at: new Date(code.updated_at).toISOString(),
+          isFavorite: code.is_favorite === 1,
+          metadata
+        };
+      });
+    }
+
+    throw new Error('SQLite database not available');
+  } catch (error) {
+    log('CODE_LOAD', 4, 'loadCodesFromStorage', 'Failed to load codes', error);
+    throw error;
+  }
+}
+
+ipcMain.handle('codes:load', async () => {
+  try {
+    return await loadCodesFromStorage();
+  } catch (error) {
+    log('CODE_LOAD', 4, 'codes:load', 'Failed', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('codes:save', async (_evt, codes) => {
+  try {
+    if (!useSQLite || !db) {
+      db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
+      useSQLite = true;
+    }
+
+    if (useSQLite && db) {
+      db.transaction(() => {
+        const newCodeIds = new Set(codes.map(code => code.id));
+        const existingCodes = db.getAllCodes();
+
+        for (const existing of existingCodes) {
+          if (!newCodeIds.has(existing.id)) {
+            db.deleteCode(existing.id);
+          }
+        }
+
+        for (const code of codes) {
+          db.saveCode(code);
+        }
+      });
+    }
+  } catch (error) {
+    log('CODE_SAVE', 4, 'codes:save', 'Failed to save codes', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('codes:chat', async (_event, payload = {}) => {
+  try {
+    if (!useSQLite || !db) {
+      db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
+      useSQLite = true;
+    }
+
+    const sessionId = payload.sessionId || payload.session?.id;
+    const userPrompt = payload.userPrompt;
+    if (!sessionId) {
+      throw new Error('Session ID is required for code chat processing.');
+    }
+    if (!userPrompt || typeof userPrompt !== 'string') {
+      throw new Error('User prompt is required for code chat processing.');
+    }
+
+    const provider = (payload.provider || 'openrouter').toLowerCase();
+    const model = payload.model || 'glm-4.5-flash';
+    const baseUrl = payload.baseUrl || getBaseUrl(provider, payload);
+    const apiKey = payload.apiKey || getApiKey(provider, payload);
+    const codeId = payload.codeId || payload.session?.codeId || null;
+
+    return await processCodeRequest({
+      sessionId,
+      userPrompt,
+      provider,
+      model,
+      baseUrl,
+      apiKey,
+      codeId,
+    });
+  } catch (error) {
+    log('CODES', 4, 'codes:chat', 'Failed to process code agent request', {
+      error: error?.message || error,
+    });
+    throw error;
   }
 });
 

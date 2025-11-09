@@ -25,12 +25,21 @@ import { scheduleDeferredRender, cancelDeferredRender } from './utils/deferred-r
 import { createHighlightedCode } from './markdown/highlight.mjs';
 import { initializeUsageStatistics } from './usage/usage-statistics.mjs';
 import { initializeBenchmarkStatistics } from './usage/benchmark-statistics.mjs';
+import {
+  initializeCodesFeature,
+  handleSessionsUpdate as updateCodeSessions,
+  showCodesPage as triggerCodesPage,
+  getCodesState,
+  openCodeDetail,
+} from './codes/codes-ui.mjs';
+import { runCodeChatStream } from './codes/code-chat.mjs';
 
 let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",themeVariant: "standard",language: "autodetect"},};
 let welcomeScreenStagedFiles = [];
 let projectMessageStagedFiles = [];
 const PROJECT_DETAIL_RENDER_KEY = 'project-detail:render';
 let current = null;
+let sidebarActiveSessionOverride;
 let collapsed = false;
 let loadedSessionCount = 0;
 let loadedChatPageCount = 0;
@@ -218,7 +227,7 @@ function loadPageState() {
       savedPage = state.settings.currentPage;
     }
 
-    const validPages = ["welcome", "chats", "artifacts", "chat", "projects"];
+    const validPages = ["welcome", "chats", "artifacts", "chat", "projects", "codes"];
     if (savedPage && validPages.includes(savedPage)) {
       currentPageState = savedPage;
 
@@ -299,6 +308,9 @@ function restoreLastActivePage() {
       break;
     case "projects":
       showProjectsPage();
+      break;
+    case "codes":
+      triggerCodesPage();
       break;
     case "welcome":
     default:
@@ -3090,12 +3102,14 @@ function showWelcomeScreen() {
   $(".chat-area").classList.remove("chats-active");
   $(".chat-area").classList.remove("artifacts-active");
   $(".chat-area").classList.remove("projects-active");
+  $(".chat-area").classList.remove("codes-active");
   $(".chat-area").classList.add("welcome-active");
 
   // Clear active button states
   document.getElementById("chats-btn")?.classList.remove("active");
   document.getElementById("artifact-btn")?.classList.remove("active");
   document.getElementById("projects-btn")?.classList.remove("active");
+  document.getElementById("codes-btn")?.classList.remove("active");
 
   // Save page state
   savePageState("welcome");
@@ -3166,10 +3180,12 @@ function showChatsPage() {
   $(".chat-area").classList.remove("welcome-active");
   $(".chat-area").classList.remove("artifacts-active");
   $(".chat-area").classList.remove("projects-active");
+  $(".chat-area").classList.remove("codes-active");
   $(".chat-area").classList.add("chats-active");
   document.getElementById("chats-btn")?.classList.add("active");
   document.getElementById("artifact-btn")?.classList.remove("active");
   document.getElementById("projects-btn")?.classList.remove("active");
+  document.getElementById("codes-btn")?.classList.remove("active");
 
   // Save page state
   savePageState("chats");
@@ -3537,9 +3553,19 @@ function startSidebarRename(sessionId) {
 }
 
 // Helper function to create session list items for sidebar
+function getSidebarActiveSessionId() {
+  if (sidebarActiveSessionOverride !== undefined) {
+    return sidebarActiveSessionOverride;
+  }
+  return current && current.id ? current.id : null;
+}
+
 function createSessionListItem(s) {
   const li = document.createElement("li");
-  li.className = s === current ? "active" : "";
+  const activeSessionId = getSidebarActiveSessionId();
+  if (activeSessionId && s.id === activeSessionId) {
+    li.classList.add("active");
+  }
   if (s.isFavorite) {
     li.classList.add("favorite");
   }
@@ -3655,9 +3681,12 @@ function createSessionListItem(s) {
       setCurrent(s);
 
       // If we're currently on projects page, switch to chat interface
-      const chatArea = document.querySelector(".chat-area");
-      const projectDetailView = document.querySelector(".project-detail-view");
-      if (chatArea && chatArea.classList.contains("projects-active")) {
+        const chatArea = document.querySelector(".chat-area");
+        const projectDetailView = document.getElementById("project-detail-view");
+      if (
+        chatArea &&
+        (chatArea.classList.contains("projects-active") || chatArea.classList.contains("codes-active"))
+      ) {
         log("UI", 1, "session-click", "Switching from projects to chat", {
           sessionId: s.id,
         });
@@ -3666,8 +3695,20 @@ function createSessionListItem(s) {
         chatArea.classList.remove("welcome-active");
         chatArea.classList.remove("chats-active");
         chatArea.classList.remove("artifacts-active");
-        projectDetailView.classList.remove("active");
+        if (projectDetailView) {
+          projectDetailView.classList.remove("active");
+        }
         chatArea.classList.remove("projects-active");
+        chatArea.classList.remove("codes-active");
+
+        document.getElementById("projects-btn")?.classList.remove("active");
+        document.getElementById("codes-btn")?.classList.remove("active");
+
+        const codeDetailView = document.getElementById('code-detail-view');
+        if (codeDetailView) {
+          codeDetailView.classList.remove('active');
+          codeDetailView.style.display = 'none';
+        }
         
 
         // Update page state
@@ -4050,9 +4091,13 @@ function filterChats(searchTerm) {
 function restoreNormalView() {
   $(".chat-area").classList.remove("chats-active");
   $(".chat-area").classList.remove("artifacts-active");
+  $(".chat-area").classList.remove("projects-active");
+  $(".chat-area").classList.remove("codes-active");
 
   document.getElementById("chats-btn")?.classList.remove("active");
   document.getElementById("artifact-btn")?.classList.remove("active");
+  document.getElementById("projects-btn")?.classList.remove("active");
+  document.getElementById("codes-btn")?.classList.remove("active");
 
   const sessionId = current && current.id ? current.id : null;
   savePageState("chat", sessionId);
@@ -4069,11 +4114,13 @@ function showArtifactsPage() {
   $(".chat-area").classList.remove("welcome-active");
   $(".chat-area").classList.remove("chats-active");
   $(".chat-area").classList.remove("projects-active");
+  $(".chat-area").classList.remove("codes-active");
   $(".chat-area").classList.add("artifacts-active");
 
   document.getElementById("artifact-btn")?.classList.add("active");
   document.getElementById("chats-btn")?.classList.remove("active");
   document.getElementById("projects-btn")?.classList.remove("active");
+  document.getElementById("codes-btn")?.classList.remove("active");
 
   savePageState("artifacts");
   
@@ -5017,11 +5064,13 @@ function showProjectsPage() {
   $(".chat-area").classList.remove("welcome-active");
   $(".chat-area").classList.remove("chats-active");
   $(".chat-area").classList.remove("artifacts-active");
+  $(".chat-area").classList.remove("codes-active");
   $(".chat-area").classList.add("projects-active");
 
   document.getElementById("projects-btn")?.classList.add("active");
   document.getElementById("chats-btn")?.classList.remove("active");
   document.getElementById("artifact-btn")?.classList.remove("active");
+  document.getElementById("codes-btn")?.classList.remove("active");
 
   savePageState("projects");
   
@@ -6523,13 +6572,14 @@ async function handleProjectSend() {
   setCurrent(s); // Ini akan set `current = s` dan memicu renderHistory (yang akan kita timpa)
 
   // 5a. Penanganan Transisi UI (Wawasan brilian dari Anda)
-  const chatArea = document.querySelector(".chat-area");
-  const projectDetailView = document.querySelector(".project-detail-view");
-  if (chatArea) {
-    chatArea.classList.remove("welcome-active", "chats-active", "artifacts-active", "projects-active");
-    if(projectDetailView) projectDetailView.classList.remove("active");
-  }
-  document.getElementById("projects-btn")?.classList.remove("active");
+    const chatArea = document.querySelector(".chat-area");
+    const projectDetailView = document.getElementById("project-detail-view");
+    if (chatArea) {
+      chatArea.classList.remove("welcome-active", "chats-active", "artifacts-active", "projects-active", "codes-active");
+      if(projectDetailView) projectDetailView.classList.remove("active");
+    }
+    document.getElementById("projects-btn")?.classList.remove("active");
+    document.getElementById("codes-btn")?.classList.remove("active");
 
   clearLog();
   addMessage("user", originalText, {
@@ -9631,6 +9681,8 @@ function renderSessions() {
     });
   }
 
+  updateCodeSessions(state.sessions);
+
   const total = sessions.length;
   const pageSize = SESSIONS_PER_PAGE;
   const limit = Math.min(
@@ -9895,6 +9947,11 @@ function updateActiveSessionState(newActiveSession) {
       });
     }
   }
+}
+
+function clearActiveSessionHighlight() {
+  sidebarActiveSessionOverride = null;
+  updateActiveSessionState(null);
 }
 
 function updateChatHeader({ animate = false } = {}) {
@@ -10296,7 +10353,7 @@ function setupUserMessageExpandCollapse(messageNode) {
 }
 
 function setCurrent(s) {
-  if (current === s) {
+  if (current === s && sidebarActiveSessionOverride === undefined) {
     return;
   }
 
@@ -10371,6 +10428,7 @@ function setCurrent(s) {
   window._isSessionSwitching = true;
   document.body.classList.add('session-switching');
   current = s;
+  sidebarActiveSessionOverride = undefined;
 
   if (current && current.id) {
     savePageState("chat", current.id);
@@ -10409,17 +10467,21 @@ function setCurrent(s) {
     }
   }
 
-  const chatArea = document.querySelector(".chat-area");
-  const projectDetailView = document.querySelector(".project-detail-view");
-  chatArea.classList.remove("welcome-active");
-  chatArea.classList.remove("chats-active");
-  chatArea.classList.remove("artifacts-active");
-  chatArea.classList.remove("projects-active");
-  projectDetailView.classList.remove("active");
+    const chatArea = document.querySelector(".chat-area");
+    const projectDetailView = document.getElementById("project-detail-view");
+    chatArea.classList.remove("welcome-active");
+    chatArea.classList.remove("chats-active");
+    chatArea.classList.remove("artifacts-active");
+    chatArea.classList.remove("projects-active");
+    chatArea.classList.remove("codes-active");
+    if (projectDetailView) {
+      projectDetailView.classList.remove("active");
+    }
 
-  document.getElementById("chats-btn")?.classList.remove("active");
-  document.getElementById("artifact-btn")?.classList.remove("active");
-  document.getElementById("projects-btn")?.classList.remove("active");
+    document.getElementById("chats-btn")?.classList.remove("active");
+    document.getElementById("artifact-btn")?.classList.remove("active");
+    document.getElementById("projects-btn")?.classList.remove("active");
+    document.getElementById("codes-btn")?.classList.remove("active");
 
   const welcomeScreen = document.getElementById("welcome-screen");
   if (welcomeScreen) welcomeScreen.style.display = "";
@@ -10564,6 +10626,7 @@ async function load() {
       : await window.api.sessions.load();
     if (data) {
       state.sessions = data.sessions || [];
+      updateCodeSessions(state.sessions);
       state.settings = { ...state.settings, ...(data.settings || {}) };
       state.sessions.forEach(ensureTokenFields);
       state.sessions.forEach((s) => {
@@ -12638,6 +12701,59 @@ async function startStream(
   const act = state.settings?.models?.active || {};
   const thinkMode = act.thinkMode || "off";
 
+  if (session?.type === 'code' || session?.codeId) {
+    const modelOptions = {
+      provider: act.platform || act.provider || 'openrouter',
+      model: act.model || 'glm-4.5-flash',
+      baseUrl: act.baseUrl,
+      apiKey: act.apiKey,
+    };
+
+    isStreamingActive = true;
+    if (aiNode) {
+      aiNode.classList.add('streaming-active');
+    }
+
+    streamManager.startStream(streamId, {
+      controller: { cancel() {} },
+      aiNode,
+      session,
+      messageIndex: aiMessageIndex,
+      messages,
+      contextPrompt: text,
+      fullResponse: initialFullResponse,
+      startedAt: Date.now(),
+      thinkStartTime: Date.now(),
+    });
+
+    try {
+      const result = await runCodeChatStream({
+        session,
+        userPrompt: text,
+        modelOptions,
+        handler,
+      });
+
+      const messageMeta = session.messages?.[aiMessageIndex]?.[2];
+      if (messageMeta && typeof messageMeta === 'object') {
+        if (result?.usage) {
+          messageMeta.usage = result.usage;
+        }
+        if (modelOptions.provider) {
+          messageMeta.provider = modelOptions.provider;
+        }
+        if (modelOptions.model) {
+          messageMeta.model = modelOptions.model;
+        }
+      }
+
+      handler(null);
+    } catch (error) {
+      handler({ error: error?.message || String(error) });
+    }
+    return;
+  }
+
   try { console.debug('RENDERER: starting chat.stream', { sessionId: session.id, webSearchEnabled: state.settings.webSearchEnabled, model: act.model, provider: act.platform }); } catch (e) {}
 
   const controller = window.api.chat.stream(
@@ -12842,11 +12958,14 @@ async function createNewSession(initialMessages = [], options = {}) {
 
     // Project-specific properties
     projectId: options.projectId || null,
+    codeId: options.codeId || null,
     type: options.type || "regular", // 'regular' or 'project'
     isProject: options.type === "project" || false,
+    isCode: options.type === "code" || false,
   };
 
   state.sessions.unshift(s);
+  updateCodeSessions(state.sessions);
   await saveSession(s.id, { reason: "create-session" });
   log("SESSION", 2, "createNewSession", "New session object created.", {
     sessionId: s.id,
@@ -13264,6 +13383,7 @@ function deleteSession(sessionToDelete) {
   
   const wasCurrent = current === sessionToDelete;
   state.sessions = state.sessions.filter((s) => s !== sessionToDelete);
+  updateCodeSessions(state.sessions);
   if (wasCurrent) showWelcomeScreen();
   else renderSessions();
 
@@ -15246,6 +15366,16 @@ function setupEventListeners() {
     }
   });
 
+  $("#codes-btn").addEventListener("click", () => {
+    log("UI", 0, "event:codes-page-click", "Codes page button clicked");
+
+    if (window.innerWidth <= 998) {
+      closeMobileSidebar();
+    }
+
+    triggerCodesPage();
+  });
+
   function handleSettingsClick(e) {
     e.stopPropagation();
     const settingsMenu = $("#settings-menu");
@@ -16527,8 +16657,31 @@ function initializeApp() {
   });
 
   initializeSmartScroll();
-  initColumnReverseScrollDetection(); 
-  initScrollToBottomButton(); 
+  initColumnReverseScrollDetection();
+  initScrollToBottomButton();
+
+  initializeCodesFeature({
+    log,
+    savePageState,
+    setCurrentSession: (session) => {
+      if (session) {
+        setCurrent(session);
+      } else {
+        restoreNormalView();
+        clearActiveSessionHighlight();
+      }
+    },
+    createNewSession,
+    focusSession: (sessionId) => {
+      if (!sessionId) return;
+      const session = state.sessions.find((s) => s.id === sessionId);
+      if (session) {
+        setCurrent(session);
+      }
+    },
+    pushPageHistory,
+    closeMobileSidebar,
+  });
 
   setTimeout(() => {
     const scroller = getChatScroller();
@@ -18515,6 +18668,13 @@ function getCurrentPageState() {
     } else {
       return { page: 'projects-list' };
     }
+  } else if (chatArea.classList.contains('codes-active')) {
+    const codeDetailView = document.getElementById('code-detail-view');
+    const { currentCode } = getCodesState();
+    if (codeDetailView && codeDetailView.classList.contains('active') && currentCode) {
+      return { page: 'code-detail', codeId: currentCode.id };
+    }
+    return { page: 'codes-list' };
   } else if (chatArea.classList.contains('welcome-active')) {
     return { page: 'welcome' };
   } else if (current && current.id) {
@@ -18624,7 +18784,18 @@ function navigateToState(pageState) {
         }
       }
       break;
-      
+
+    case 'codes-list':
+      triggerCodesPage();
+      break;
+
+    case 'code-detail':
+      triggerCodesPage();
+      if (pageState.codeId) {
+        openCodeDetail(pageState.codeId);
+      }
+      break;
+
     case 'chat':
       // Navigate to chat session
       if (sessionId) {

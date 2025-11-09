@@ -1010,23 +1010,6 @@ function ensureListeners() {
   document.getElementById('code-workspace-btn')?.addEventListener('click', async () => {
     if (!STATE.currentCode) return;
 
-    // Try to use file browser if available
-    if (window.api?.selectDirectory) {
-      try {
-        const result = await window.api.selectDirectory();
-        if (result && result.filePaths && result.filePaths.length > 0) {
-          STATE.currentCode.workspacePath = result.filePaths[0];
-          STATE.currentCode.updated_at = nowISO();
-          renderCodeWorkspace(STATE.currentCode);
-          saveCodes();
-          return;
-        }
-      } catch (error) {
-        log('CODES', 3, 'code-workspace-btn', 'Failed to open directory selector', { error: error?.message });
-      }
-    }
-
-    // Fallback to manual input
     const existing = STATE.currentCode.workspacePath || '';
     const value = await showCodesInputModal({
       title: 'Workspace Directory',
@@ -1036,6 +1019,7 @@ function ensureListeners() {
       confirmLabel: 'Save Path',
       multiline: false,
       allowEmpty: true,
+      hasBrowseButton: true,
     });
     if (value === null) return;
     STATE.currentCode.workspacePath = value.trim();
@@ -1151,6 +1135,7 @@ function showCodesInputModal({
   multiline = false,
   confirmLabel = 'Save',
   allowEmpty = false,
+  hasBrowseButton = false,
 }) {
   return new Promise((resolve) => {
     const modal = createModalContainer();
@@ -1173,6 +1158,7 @@ function showCodesInputModal({
                 ? `<textarea class="codes-modal-input" rows="6" placeholder="${escapeHtml(placeholder)}" ${allowEmpty ? '' : 'required'}>${escapeHtml(defaultValue)}</textarea>`
                 : `<input class="codes-modal-input" type="text" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(defaultValue)}" ${allowEmpty ? '' : 'required'} />`
               }
+              ${hasBrowseButton ? `<button class="secondary-btn modal-browse-btn" type="button" style="margin-top: 10px;">Browse</button>` : ''}
             </div>
           </div>
           <div class="modal-footer">
@@ -1191,6 +1177,23 @@ function showCodesInputModal({
     const cancelBtn = modal.querySelector('[data-action="cancel"]');
     const form = modal.querySelector('.modal-form');
     const inputEl = modal.querySelector('.codes-modal-input');
+    const browseBtn = modal.querySelector('.modal-browse-btn');
+
+    // Browse button handler
+    if (browseBtn && window.api?.selectDirectory) {
+      browseBtn.addEventListener('click', async () => {
+        try {
+          const result = await window.api.selectDirectory();
+          if (result && result.filePaths && result.filePaths.length > 0) {
+            if (inputEl) {
+              inputEl.value = result.filePaths[0];
+            }
+          }
+        } catch (error) {
+          deps.log?.('CODES', 3, 'modal-browse-btn', 'Failed to open directory selector', { error: error?.message });
+        }
+      });
+    }
 
     const submit = () => {
       if (!inputEl) {

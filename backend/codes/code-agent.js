@@ -10,6 +10,7 @@ const MAX_OUTPUT_LINES = 100;
 const MAX_OUTPUT_LENGTH = 8000;
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const HISTORY_SUMMARY_LENGTH = 160;
+const COMMAND_EXECUTION_TIMEOUT_MS = 30 * 1000; // 30 seconds max for command execution
 
 const PROMPT_FIRST = `You are a PowerShell-based coding assistant helping user fix bugs in code files or any problem.
 
@@ -24,50 +25,103 @@ Command: {last_command}
 Output: 
 {last_output}
 
-=== DECISION TREE ===
-Ask yourself:
-1. Did the last command give useful information?
-2. Do I need more context before acting?
-3. Should I fix something now?
-4. Are all bugs fixed? Should I verify?
-5. Is the task complete?
+=== POWERSHELL COMMAND ARSENAL ===
+You have full access to PowerShell commands. Here are some useful patterns (but feel free to use ANY PowerShell command):
 
-Based on answers:
-- If need more info → <cmd> to gather data
-- If ready to fix → <cmd> to edit file
-- If need verification → <cmd> to run code
+**File Navigation & Exploration:**
+- Get-ChildItem / ls / dir - list files/folders
+- Get-Content <file> - read entire file
+- Get-Content <file> -Head 20 - read first N lines
+- Get-Content <file> -Tail 20 - read last N lines
+- Get-Content <file> | Select-Object -First 50 -Skip 100 - read specific line range
+- Test-Path <path> - check if file/folder exists
+- Get-Location / pwd - show current directory
 
-=== IMPORTANT RULES ===
-1. ALWAYS analyze the command output before next action
-2. Don't repeat the same command twice
-3. Only Powershell commands are supported, don't give other commands such as answering or asking the user in the <cmd> tag, only Powershell commands in the <cmd> tag.
-3. If stuck or unsure, ask Zaeni for clarification
-4. Keep track of what you've fixed to avoid duplicates
-5. When editing, be precise with line numbers (remember 0-indexed)
-6. After fixing bugs, ALWAYS verify by running the code
-7. If command fails, explain why and try alternative approach
-8. if the user prompt just asking, if no need searches or bug fixing, just use tag <answer> to answer the user question.
+**Search & Pattern Matching:**
+- Select-String "pattern" <file> - search in file (like grep)
+- Select-String "pattern" <file> -Context 2,2 - show 2 lines before/after match
+- Get-ChildItem -Recurse -Filter "*.js" - find files by pattern
+- Get-Content <file> | Select-String "pattern" -AllMatches
+- (Get-Content <file>).Count - count total lines
 
-=== WORKFLOW GUIDELINES ===
-Bug fixing flow:
-1. Search/grep to find issues
-2. Check context around issues
-3. Fix issues one by one
-4. Verify each fix if critical
-6. You can use commands as freely as possible, such as search, delete lines, replace lines, search for the required context.
-5. Run final code to ensure everything works
-6. Summarize what was fixed
-7. Don't forget, commands must always be inside the <cmd> tag.
+**File Editing:**
+- (Get-Content <file>) -replace "old", "new" | Set-Content <file> - replace text
+- (Get-Content <file>) | Where-Object {$_ -notmatch "pattern"} | Set-Content <file> - remove lines
+- $content = Get-Content <file>; $content[10] = "new line"; $content | Set-Content <file> - edit specific line
+- Add-Content <file> "new line" - append to file
+- Set-Content <file> "content" - overwrite entire file
+- $lines = Get-Content <file>; $lines[5..10] - extract line range
+
+**Code Execution:**
+- python <file>.py - run Python script
+- node <file>.js - run Node.js script
+- npm test - run tests
+- python -m pytest - run pytest
+
+**Smart Debugging:**
+- python -c "import ast; ast.parse(open('file.py').read())" - validate Python syntax
+- node --check <file>.js - validate JS syntax
+- Get-Content <file> | Select-String "TODO|FIXME|BUG" - find code comments
+
+**Multi-line Commands (use semicolons or newlines):**
+- $var = Get-Content file.txt; $var -replace "old","new" | Set-Content file.txt
+- Multiple commands in sequence are totally fine!
+
+=== THINKING APPROACH ===
+Before each action, ask yourself:
+1. **Understanding**: Do I fully understand the problem from the output?
+2. **Context**: Do I have enough context about the code structure?
+3. **Strategy**: What's the most efficient way to fix this?
+4. **Verification**: How will I verify the fix works?
+
+Then decide:
+- **Need info?** → Use search, grep, file reading, listing
+- **Ready to fix?** → Use replace, edit, or multi-step modifications
+- **Need to verify?** → Run the code/tests
+- **Stuck?** → Ask Zaeni for clarification
+- **Done?** → Summarize and add <!END>
+
+=== CORE PRINCIPLES ===
+1. **Be Creative**: Use ANY PowerShell command that helps - don't limit yourself to basic commands
+2. **Be Precise**: When editing, understand the exact location and context
+3. **Be Efficient**: Combine commands when it makes sense (e.g., read + filter + count)
+4. **Be Adaptive**: If one approach fails, try a different command/strategy
+5. **Think First**: Analyze command output before rushing to next action
+6. **One Command Rule**: Don't repeat the exact same command - if it failed, modify your approach
+7. **Only PowerShell**: <cmd> tag MUST contain only valid PowerShell commands, never natural language
+
+=== WORKFLOW PATTERNS ===
+
+**Pattern 1: Explore → Understand → Fix → Verify**
+First run: ls → find relevant files
+Next: Get-Content → see the code
+Then: fix with replace/edit
+Finally: run to verify
+
+**Pattern 2: Search-Driven Fixing**
+First: Select-String to find all occurrences
+Context: Get lines around matches
+Fix: Targeted replacements
+Verify: Search again to confirm
+
+**Pattern 3: Multi-Step Edits**
+Read file into variable → modify → write back
+Useful for complex transformations
 
 === RESPONSE FORMAT ===
-Your response should be exactly like this:
+Always respond in this exact format:
 
 <answer>
-Your answer, like "baik zaen, saya akan coba cek dlu main.py" or "baik, kita akan cek dlu di direktori ini ada apa saja"
+Brief explanation in casual Indonesian (e.g., "oke zaen, gue bakal cek dulu file main.py nya ya" or "nemu bug di line 45, gue fix sekarang")
 </answer>
 <cmd>
-Next PowerShell command (optional - only if needed)
-</cmd>`;
+Your PowerShell command here (optional - only if you need to execute something)
+</cmd>
+
+**Important**: 
+- If just answering a question (no file operations needed) → only use <answer>, no <cmd>
+- If you're done fixing → add <!END> after your tags
+- Never put explanations/questions inside <cmd> - only valid PowerShell commands!`;
 
 const PROMPT_SUBSEQUENT = `You are a PowerShell-based coding assistant helping user fix bugs in code files or any problem.
 
@@ -82,57 +136,90 @@ Command: {last_command}
 Output: 
 {last_output}
 
-=== DECISION TREE ===
-Ask yourself:
-1. Did the last command give useful information?
-2. Do I need more context before acting?
-3. Should I fix something now?
-4. Are all bugs fixed? Should I verify?
-5. Is the task complete?
+=== POWERSHELL COMMAND ARSENAL ===
+You have full access to PowerShell commands. Common patterns:
 
-Based on answers:
-- If need more info → <cmd> to gather data
-- If ready to fix → <cmd> to edit file
-- If need verification → <cmd> to run code
-- If done → <answer> only (no <cmd>)
+**File Navigation & Exploration:**
+- Get-ChildItem / ls / dir - list files/folders
+- Get-Content <file> (-Head N / -Tail N / | Select-Object -First N -Skip M)
+- Test-Path, Get-Location
 
-=== IMPORTANT RULES ===
-1. ALWAYS analyze the command output before next action
-2. Don't repeat the same command twice
-3. Only Powershell commands are supported, don't give other commands such as answering or asking the user in the <cmd> tag, only Powershell commands in the <cmd> tag.
-3. If stuck or unsure, ask Zaeni for clarification
-4. Keep track of what you've fixed to avoid duplicates
-5. When editing, be precise with line numbers (remember 0-indexed)
-6. After fixing bugs, ALWAYS verify by running the code
-7. If command fails, explain why and try alternative approach
-8. if the user prompt just asking, if no need searches or bug fixing, just use tag <answer> to answer the user question.
+**Search & Pattern Matching:**
+- Select-String "pattern" <file> (-Context X,Y for surrounding lines)
+- Get-ChildItem -Recurse -Filter "*.ext"
+- (Get-Content <file>).Count
 
-=== WORKFLOW GUIDELINES ===
-Bug fixing flow:
-1. Search/grep to find issues
-2. Check context around issues
-3. Fix issues one by one
-4. Verify each fix if critical
-6. You can use commands as freely as possible, such as search, delete lines, replace lines, search for the required context.
-5. Run final code to ensure everything works
-6. Summarize what was fixed
-7. Don't forget, commands must always be inside the <cmd> tag.
+**File Editing (be creative!):**
+- (Get-Content <file>) -replace "old", "new" | Set-Content <file>
+- (Get-Content <file>) | Where-Object {$_ -notmatch "pattern"} | Set-Content <file>
+- $content = Get-Content <file>; $content[10] = "new"; $content | Set-Content <file>
+- Multi-line edits with variables
+
+**Code Execution:**
+- python <file>.py, node <file>.js, npm test, pytest
+
+**Smart Debugging:**
+- python -c "import ast; ast.parse(...)" - syntax check
+- node --check <file> - JS validation
+- Select-String for TODO/FIXME/BUG comments
+
+=== STRATEGIC THINKING ===
+Analyze the last output carefully:
+1. **What did I learn?** - Extract key information from command output
+2. **What's next?** - Determine if I need more info, ready to fix, or need verification
+3. **Alternative approach?** - If stuck, what's a different way to tackle this?
+4. **Progress check?** - Am I moving forward or repeating myself?
+
+Decision paths:
+- **Need more context** → Search, read files, check structure
+- **Ready to fix** → Apply edits (replace, modify lines, multi-step)
+- **Need verification** → Run code/tests
+- **Task complete** → Summarize + <!END>
+- **Uncertain** → Ask Zaeni
+
+=== CORE PRINCIPLES ===
+1. **Creativity First**: Use ANY PowerShell command - don't be rigid
+2. **Context Awareness**: Always consider the full picture before acting
+3. **Adaptive Strategy**: Failed command? Try a different approach immediately
+4. **No Repetition**: Never run the exact same command twice
+5. **Precision in Edits**: Know exactly what you're changing and why
+6. **Verify Critical Changes**: Run code after important fixes
+7. **Only PowerShell**: <cmd> must contain valid PowerShell only, no explanations
+
+=== PROBLEM-SOLVING WORKFLOW ===
+
+**For Bug Fixes:**
+1. Search/grep to locate issue → 2. Read context → 3. Fix precisely → 4. Verify if critical
+
+**For Code Exploration:**
+1. List directory → 2. Identify relevant files → 3. Read selectively → 4. Summarize findings
+
+**For Multi-file Changes:**
+1. Find all affected files → 2. Fix one by one → 3. Track what's done → 4. Final verification
+
+**When Stuck:**
+- Try a different search pattern
+- Read more context
+- Break problem into smaller steps
+- Ask Zaeni for clarification
 
 === RESPONSE FORMAT ===
-Your response should be exactly like this:
+Always use this exact structure:
 
 <internal>
-If there is a last command, summarize the output of the last command into an internal tag.
-<internal>
+[Internal reasoning: Quickly summarize what the last command revealed and what you'll do next]
+</internal>
 <answer>
-Your answer, like "baik zaen, saya akan coba cek dlu main.py" or "baik, kita akan cek dlu di direktori ini ada apa saja"
+[Brief casual Indonesian response to user, like "oke udah ketemu bugnya di line 23, gue fix ya" or "file udah di-scan, gue cek yang error"]
 </answer>
 <cmd>
-Next PowerShell command (optional - only if needed)
+[Your PowerShell command - ONLY if you need to execute something. Omit this tag if done.]
 </cmd>
 
-=== ADDITIONAL FORMAT FOR STOPPING ===
-If the bug fix is complete, or you need to confirm with the user, or there is something you want to convey that causes you to stop the loop, simply add the <!END> tag at the end of your response.`;
+**Stop Signal:**
+When task is complete, or you need user confirmation, or you're truly stuck → add <!END> at the end
+
+**Remember**: <cmd> contains ONLY executable PowerShell commands, never explanations or questions!`;
 
 let deps = {
   log: () => {},
@@ -289,6 +376,19 @@ function isHighImpactCommand(command = '') {
 }
 
 function formatIterationOutput({ answer, command, output, exitCode, blocked }) {
+  // Return structured object instead of combined string
+  // This allows separate delivery of response+command vs output
+  return {
+    answer: answer || null,
+    command: command || null,
+    output: output || null,
+    exitCode,
+    blocked: !!blocked,
+  };
+}
+
+function formatResponseAndCommand({ answer, command }) {
+  // Format response and command together (sent BEFORE execution)
   const sections = [];
   if (answer) {
     sections.push(answer);
@@ -296,15 +396,20 @@ function formatIterationOutput({ answer, command, output, exitCode, blocked }) {
   if (command) {
     sections.push('```powershell\n' + command.trim() + '\n```');
   }
+  return sections.length > 0 ? sections.join('\n\n') : null;
+}
+
+function formatOutput({ output, exitCode, blocked }) {
+  // Format output only (sent AFTER execution)
   if (output) {
     const exitLine = Number.isFinite(exitCode)
       ? `\n# Exit Code: ${exitCode}`
       : '';
-    sections.push('```text\n' + output.trim() + exitLine + '\n```');
+    return '```text\n' + output.trim() + exitLine + '\n```';
   } else if (blocked) {
-    sections.push('```text\nCommand blocked by safety policy.\n```');
+    return '```text\nCommand blocked by safety policy.\n```';
   }
-  return sections.join('\n\n');
+  return null;
 }
 
 function mergeUsage(target, usage) {
@@ -482,7 +587,20 @@ async function executeCommand(state, command) {
 
   try {
     const terminal = ensurePowerShellSession(state, state.workspacePath);
-    const result = await terminal.run(command);
+    
+    // Create timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error('Command execution timeout'));
+      }, COMMAND_EXECUTION_TIMEOUT_MS);
+    });
+
+    // Race between command execution and timeout
+    const result = await Promise.race([
+      terminal.run(command),
+      timeoutPromise,
+    ]);
+
     const combinedOutput = [result.stdout, result.stderr].filter(Boolean).join('\n');
     return {
       output: combinedOutput || 'Command completed with no output.',
@@ -491,6 +609,28 @@ async function executeCommand(state, command) {
       executed: true,
     };
   } catch (error) {
+    const isTimeout = error?.message === 'Command execution timeout';
+    
+    if (isTimeout) {
+      // Terminal execution failed or timeout - dispose and reset terminal
+      try {
+        state.terminal?.dispose();
+        state.terminal = null;
+      } catch (disposeError) {
+        log('CODES', 2, 'executeCommand', 'Failed to dispose terminal after timeout', {
+          error: disposeError?.message,
+        });
+      }
+
+      return {
+        output: 'Terminal execution failed or timeout, please try again with different command',
+        exitCode: 124, // Standard timeout exit code
+        blocked: false,
+        executed: false,
+        isTimeout: true,
+      };
+    }
+
     return {
       output: `Failed to execute command: ${error?.message || error}`,
       exitCode: 1,
@@ -557,7 +697,31 @@ async function processCodeRequest({
 
     usage = mergeUsage(usage, iterationUsage);
 
-    const { output, exitCode, blocked } = await executeCommand(state, parsed.command);
+    // STEP 1: Send response + command BEFORE executing
+    const responseCommandChunk = formatResponseAndCommand({
+      answer: parsed.answer || 'No response provided.',
+      command: parsed.command,
+    });
+    
+    if (responseCommandChunk && typeof onChunk === 'function') {
+      try {
+        chunks.push(responseCommandChunk);
+        onChunk(responseCommandChunk, {
+          iteration,
+          type: 'response-command',
+          done: false,
+        });
+      } catch (error) {
+        log('CODES', 2, 'processCodeRequest', 'Failed to deliver response-command chunk', {
+          error: error?.message || error,
+          iteration,
+          sessionId,
+        });
+      }
+    }
+
+    // STEP 2: Execute command
+    const { output, exitCode, blocked, isTimeout } = await executeCommand(state, parsed.command);
     const historyEntry = {
       command: parsed.command || '[no command]',
       output,
@@ -572,29 +736,38 @@ async function processCodeRequest({
       }
     }
 
-    const formatted = formatIterationOutput({
-      answer: parsed.answer || 'No response provided.',
-      command: parsed.command,
-      output: truncateOutput(output),
-      exitCode,
-      blocked,
-    });
-    if (formatted) {
-      chunks.push(formatted);
-      if (typeof onChunk === 'function') {
+    // STEP 3: Send output AFTER executing (but NOT if timeout - keep error in history for AI only)
+    if (!isTimeout) {
+      const outputChunk = formatOutput({
+        output: truncateOutput(output),
+        exitCode,
+        blocked,
+      });
+      
+      if (outputChunk && typeof onChunk === 'function') {
         try {
-          onChunk(formatted, {
+          chunks.push(outputChunk);
+          onChunk(outputChunk, {
             iteration,
+            type: 'output',
             done: !parsed.command || parsed.done,
           });
         } catch (error) {
-          log('CODES', 2, 'processCodeRequest', 'Failed to deliver chunk to streamer', {
+          log('CODES', 2, 'processCodeRequest', 'Failed to deliver output chunk', {
             error: error?.message || error,
             iteration,
             sessionId,
           });
         }
       }
+    } else {
+      // Timeout occurred - error is already in commandHistory, don't send to renderer
+      log('CODES', 1, 'processCodeRequest', 'Command execution timeout - error stored in history for AI to read', {
+        iteration,
+        sessionId,
+        command: parsed.command,
+      });
+      break;
     }
 
     if (!parsed.command || parsed.done) {

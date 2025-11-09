@@ -2853,6 +2853,11 @@ input:checked + .slider:before {
 
 #chat-title {
   font-weight: bold;
+  display: block;
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-show {
@@ -2872,6 +2877,7 @@ input:checked + .slider:before {
 .title-info:has(#chat-title) {
   justify-content: center;
   width: 53.34%;
+  max-width: 53.35%;
   font-family: var(--font-ai-bold);
 }
 
@@ -4638,7 +4644,7 @@ blockquote blockquote blockquote blockquote::before {
   }
   
   #chat-title, #model-title {
-    max-width: 200px;
+    max-width: 99%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

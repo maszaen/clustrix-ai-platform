@@ -716,6 +716,26 @@
         <div id="codes-controls-container" class="chats-controls-container">
           <div id="codes-info-bar" class="chats-info-bar">
             <span id="codes-total-count">...</span>
+            <button id="codes-select-btn" class="link-btn">Select</button>
+          </div>
+          <div id="codes-select-action-bar" class="chats-select-action-bar" style="display: none;">
+            <div class="selection-group">
+              <input type="checkbox" id="codes-select-all-checkbox" />
+              <label for="codes-select-all-checkbox" id="codes-selected-count">0 selected</label>
+            </div>
+            <div class="action-group">
+              <button id="codes-delete-selected-btn" class="icon-btn danger" title="Delete Selected" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </button>
+              <button id="codes-select-close-btn" class="icon-btn" title="Cancel Selection">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M15.1465 4.14642C15.3418 3.95121 15.6583 3.95118 15.8536 4.14642C16.0487 4.34168 16.0488 4.65822 15.8536 4.85346L10.7071 9.99997L15.8536 15.1465C16.0487 15.3417 16.0488 15.6583 15.8536 15.8535C15.6828 16.0244 15.4187 16.0461 15.2247 15.918L15.1465 15.8535L10 10.707L4.85352 15.8535C4.65827 16.0486 4.34168 16.0486 4.14648 15.8535C3.95129 15.6583 3.95142 15.3418 4.14648 15.1465L9.293 9.99997L4.14648 4.85346C3.95142 4.65818 3.95129 4.34162 4.14648 4.14642C4.34168 3.95128 4.65825 3.95138 4.85352 4.14642L10 9.29294L15.1465 4.14642Z"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
         <div id="codes-list" class="chats-list"></div>
@@ -728,13 +748,40 @@
               <p>All codes</p>
             </button>
           </div>
-          <div class="project-detail-container code-detail-container">
+          <div class="project-detail-container">
             <div class="project-left-column">
               <div class="project-detail-header">
                 <div class="project-title-container">
                   <h2 id="code-detail-title">Code Workspace</h2>
                   <div class="project-title-actions">
-                    <button class="code-star-btn" title="Star code workspace">
+                    <div class="project-title-menu-container">
+                      <button class="project-title-menu-btn code-title-menu-btn" title="Code workspace options">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          <circle cx="5" cy="12" r="2"/>
+                          <circle cx="12" cy="12" r="2"/>
+                          <circle cx="19" cy="12" r="2"/>
+                        </svg>
+                      </button>
+                      <div class="project-title-menu-dropdown code-title-menu-dropdown">
+                        <div class="project-title-menu-item" data-action="rename">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                          </svg>
+                          <span>Rename</span>
+                        </div>
+                        <div class="project-title-menu-item" data-action="edit-description">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-pen-line-icon lucide-file-pen-line"><path d="m18.226 5.226-2.52-2.52A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.351"/><path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><path d="M8 18h1"/></svg>
+                          <span>Description</span>
+                        </div>
+                        <div class="project-title-menu-item project-title-menu-item-danger" data-action="delete">
+                          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M6 2l-2 2h12l-2-2H6zM4 6v10c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6H4zm2 2h8v8H6V8z"/>
+                          </svg>
+                          <span>Delete</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button class="project-star-btn code-star-btn" title="Star code workspace">
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                       </svg>
@@ -743,51 +790,68 @@
                 </div>
                 <p id="code-detail-desc"></p>
               </div>
-              <div class="code-instruction-card project-instructions">
-                <div class="project-card-header">
-                  <h3>Instructions</h3>
-                  <button id="code-edit-instruction-btn" title="Add/Edit Instruction">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0" aria-hidden="true"><path d="M9.72821 2.87934C10.0318 2.10869 10.9028 1.72933 11.6735 2.03266L14.4655 3.13226C15.2363 3.43593 15.6145 4.30697 15.3112 5.07758L11.3903 15.0307C11.2954 15.2717 11.1394 15.4835 10.9391 15.6459L10.8513 15.7123L7.7077 17.8979C7.29581 18.1843 6.73463 17.9917 6.57294 17.5356L6.54657 17.4409L5.737 13.6987C5.67447 13.4092 5.69977 13.107 5.80829 12.8315L9.72821 2.87934ZM6.73798 13.1987C6.70201 13.2903 6.69385 13.3906 6.71454 13.4868L7.44501 16.8627L10.28 14.892L10.3376 14.8452C10.3909 14.7949 10.4325 14.7332 10.4597 14.6645L13.0974 7.96723L9.37567 6.50141L6.73798 13.1987ZM11.3073 2.96332C11.0504 2.86217 10.7601 2.98864 10.6589 3.24555L9.74188 5.57074L13.4636 7.03754L14.3806 4.71137C14.4817 4.45445 14.3552 4.16413 14.0983 4.06293L11.3073 2.96332Z"></path></svg>
-                  </button>
+              <div class="input-container-parent">
+                <span id="code-message" class="file-upload-container"></span>
+                <div class="input-container" id="code-input-container">
+                  <textarea id="code-message-input" spellcheck="false" autocorrect="off" rows="1" placeholder="Ask anything" rows="1"></textarea>
                 </div>
-                <div id="code-instruction-text" class="project-instruction-text"></div>
-              </div>
-              <div class="code-workspace-card project-files">
-                <div class="project-card-header">
-                  <h3>Workspace</h3>
-                  <button id="code-workspace-btn" title="Select Workspace">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M10 3C10.2761 3 10.5 3.22386 10.5 3.5V9.5H16.5L16.6006 9.50977C16.8286 9.55629 17 9.75829 17 10C17 10.2417 16.8286 10.4437 16.6006 10.4902L16.5 10.5H10.5V16.5C10.5 16.7761 10.2761 17 10 17C9.72386 17 9.5 16.7761 9.5 16.5V10.5H3.5C3.22386 10.5 3 10.2761 3 10C3 9.72386 3.22386 9.5 3.5 9.5H9.5V3.5C9.5 3.22386 9.72386 3 10 3Z"></path>
-                    </svg>
-                  </button>
-                </div>
-                <div id="code-workspace-summary" class="code-workspace-summary"></div>
-              </div>
-              <div class="code-sessions project-sessions">
-                <div class="project-card-header">
-                  <h3>Code Sessions</h3>
-                </div>
-                <div class="code-session-composer input-container-parent">
-                  <div class="input-container">
-                    <textarea id="code-session-input" spellcheck="false" autocorrect="off" rows="1" placeholder="Ask about this workspace or start a new coding run..."></textarea>
+                <div class="row-between pad-l-sm">
+                  <div class="row-gap w-50">
+
+                    <span class="input-container-btn" data-upload-context="code-message" style="cursor: pointer" title="Upload external files">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-fading-plus-icon lucide-circle-fading-plus"><path d="M12 2a10 10 0 0 1 7.38 16.75"/><path d="M12 8v8"/><path d="M16 12H8"/><path d="M2.5 8.875a10 10 0 0 0-.5 3"/><path d="M2.83 16a10 10 0 0 0 2.43 3.4"/><path d="M4.636 5.235a10 10 0 0 1 .891-.857"/><path d="M8.644 21.42a10 10 0 0 0 7.631-.38"/></svg>
+                      <p>Upload Files</p>
+                    </span>
                   </div>
-                  <div class="row-between pad-l-sm">
-                    <div class="row-gap w-50"></div>
-                    <div class="row-gap w-50">
-                      <button id="code-session-send-btn" class="send-button" title="Send message (Ctrl + Enter)">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-icon lucide-arrow-up">
-                          <path d="m5 12 7-7 7 7" />
-                          <path d="M12 19V5" />
-                        </svg>
-                      </button>
-                    </div>
+                  <div class="row-gap w-50">
+                    <span id="btn-model-switch-code" class="input-container-btn" style="cursor: pointer">
+                      <p>Switch Model</p>
+                      <svg viewBox="0 0 24 24">
+                        <path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" />
+                      </svg>
+                    </span>
+                    <button id="code-send-btn" class="send-button" title="Send message (Ctrl + Enter)">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-icon lucide-arrow-up">
+                        <path d="m5 12 7-7 7 7" />
+                        <path d="M12 19V5" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
-                <div id="code-sessions-list" class="project-sessions-list"></div>
               </div>
+
+            <!-- Code Sessions List -->
+            <div class="project-sessions">
+              <div id="code-sessions-list" class="project-sessions-list"></div>
+            </div>
+          </div>
+          <div class="project-right-column">
+            <div class="project-instructions">
+              <div class="project-card-header">
+                <h3>Instructions</h3>
+                <button id="edit-code-instruction-btn" title="Add/Edit Instruction">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0" aria-hidden="true"><path d="M9.72821 2.87934C10.0318 2.10869 10.9028 1.72933 11.6735 2.03266L14.4655 3.13226C15.236 3.43593 15.6145 4.30697 15.3112 5.07758L11.3903 15.0307C11.2954 15.2717 11.1394 15.4835 10.9391 15.6459L10.8513 15.7123L7.7077 17.8979C7.29581 18.1843 6.73463 17.9917 6.57294 17.5356L6.54657 17.4409L5.737 13.6987C5.67447 13.4092 5.69977 13.107 5.80829 12.8315L9.72821 2.87934ZM6.73798 13.1987C6.70201 13.2903 6.69385 13.3906 6.71454 13.4868L7.44501 16.8627L10.28 14.892L10.3376 14.8452C10.3909 14.7949 10.4325 14.7332 10.4597 14.6645L13.0974 7.96723L9.37567 6.50141L6.73798 13.1987ZM11.3073 2.96332C11.0504 2.86217 10.7601 2.98864 10.6589 3.24555L9.74188 5.57074L13.4636 7.03754L14.3806 4.71137C14.4817 4.45445 14.3552 4.16413 14.0983 4.06293L11.3073 2.96332Z"></path></svg>
+                </button>
+              </div>
+            </div>
+            <!-- Code Workspace -->
+            <div class="project-files">
+              <div class="project-card-header">
+                <h3>Workspace</h3>
+                <button id="code-workspace-btn" title="Select Workspace">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 3C10.2761 3 10.5 3.22386 10.5 3.5V9.5H16.5L16.6006 9.50977C16.8286 9.55629 17 9.75829 17 10C17 10.2417 16.8286 10.4437 16.6006 10.4902L16.5 10.5H10.5V16.5C10.5 16.7761 10.2761 17 10 17C9.72386 17 9.5 16.7761 9.5 16.5V10.5H3.5C3.22386 10.5 3 10.2761 3 10C3 9.72386 3.22386 9.5 3.5 9.5H9.5V3.5C9.5 3.22386 9.72386 3 10 3Z"></path>
+                  </svg>
+                </button>
+              </div>
+
+              <div id="code-workspace-list" class="project-files-grid">
+                </div>
             </div>
           </div>
         </div>
+
+    </div>
       </div>
       <!-- Chats Page -->
       <div id="chats-page" class="chats-page">

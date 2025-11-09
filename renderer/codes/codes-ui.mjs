@@ -5,9 +5,12 @@ const STATE = {
   codes: [],
   currentCode: null,
   sessions: [],
+  isSelectMode: false,
+  selectedCodeIds: new Set(),
 };
 
 let isComposerSubmitting = false;
+let codeMessageStagedFiles = [];
 
 let deps = {
   log: () => {},
@@ -37,11 +40,11 @@ function getCodeDetailView() {
 }
 
 function getCodeComposerInput() {
-  return document.getElementById('code-session-input');
+  return document.getElementById('code-message-input');
 }
 
 function getCodeComposerSendButton() {
-  return document.getElementById('code-session-send-btn');
+  return document.getElementById('code-send-btn');
 }
 
 function resizeCodeComposer(input = getCodeComposerInput()) {
@@ -123,12 +126,135 @@ function updateInfoBar() {
   infoEl.textContent = total === 0 ? 'No code workspaces yet' : `${total} code workspace${total === 1 ? '' : 's'}`;
 }
 
+function renderCodeMessageFiles() {
+  const container = document.getElementById('code-message');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  for (const file of codeMessageStagedFiles) {
+    const fileItem = document.createElement('div');
+    fileItem.className = 'file-upload-item';
+    fileItem.innerHTML = `
+      <div class="file-upload-item-info">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+          <polyline points="13 2 13 9 20 9" />
+        </svg>
+        <span>${escapeHtml(file.name)}</span>
+      </div>
+      <button class="file-upload-item-remove" data-file-index="${codeMessageStagedFiles.indexOf(file)}" title="Remove file">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+        </svg>
+      </button>
+    `;
+
+    const removeBtn = fileItem.querySelector('.file-upload-item-remove');
+    removeBtn?.addEventListener('click', () => {
+      const index = parseInt(removeBtn.dataset.fileIndex);
+      codeMessageStagedFiles.splice(index, 1);
+      renderCodeMessageFiles();
+    });
+
+    container.appendChild(fileItem);
+  }
+}
+
+async function startCodeDetailRename(code) {
+  const value = await showCodesInputModal({
+    title: 'Rename Code Workspace',
+    description: 'Enter a new name for this code workspace.',
+    defaultValue: code.name || '',
+    placeholder: 'Code workspace name',
+    confirmLabel: 'Rename',
+  });
+
+  if (value === null || value === code.name) return;
+
+  code.name = value;
+  code.updated_at = nowISO();
+
+  const titleEl = document.getElementById('code-detail-title');
+  if (titleEl) titleEl.textContent = value || 'Untitled code workspace';
+
+  await saveCodes();
+}
+
+async function startCodeDetailEditDescription(code) {
+  const value = await showCodesInputModal({
+    title: 'Edit Description',
+    description: 'Update the description for this code workspace.',
+    defaultValue: code.description || '',
+    placeholder: 'Description...',
+    multiline: true,
+    confirmLabel: 'Save',
+    allowEmpty: true,
+  });
+
+  if (value === null) return;
+
+  code.description = value;
+  code.updated_at = nowISO();
+
+  const descEl = document.getElementById('code-detail-desc');
+  if (descEl) descEl.textContent = value || 'No description available';
+
+  await saveCodes();
+}
+
+async function deleteCode(code) {
+  const confirmDelete = confirm(
+    `Are you sure you want to delete "${code.name || 'Untitled code workspace'}"? This action cannot be undone.`
+  );
+
+  if (!confirmDelete) return;
+
+  const index = STATE.codes.findIndex(c => c.id === code.id);
+  if (index !== -1) {
+    STATE.codes.splice(index, 1);
+    await saveCodes();
+
+    if (STATE.currentCode?.id === code.id) {
+      showCodesListView();
+    }
+
+    renderCodesList();
+  }
+}
+
+function updateCodeStarButton() {
+  const detailView = getCodeDetailView();
+  const starBtn = detailView?.querySelector('.code-star-btn');
+
+  if (starBtn && STATE.currentCode) {
+    starBtn.classList.toggle('active', !!STATE.currentCode.isFavorite);
+  }
+}
+
 function renderCodesList() {
   const list = getCodesListElement();
   if (!list) return;
 
+  const infoBar = document.getElementById('codes-info-bar');
+  const actionBar = document.getElementById('codes-select-action-bar');
+  const selectedCountEl = document.getElementById('codes-selected-count');
+  const deleteBtn = document.getElementById('codes-delete-selected-btn');
+
+  if (STATE.isSelectMode) {
+    infoBar.style.display = 'none';
+    actionBar.style.display = 'flex';
+    selectedCountEl.textContent = `${STATE.selectedCodeIds.size} selected`;
+    if (deleteBtn) {
+      deleteBtn.disabled = STATE.selectedCodeIds.size === 0;
+    }
+  } else {
+    infoBar.style.display = 'flex';
+    actionBar.style.display = 'none';
+  }
+
   const searchValue = (document.getElementById('codes-search')?.value || '').trim().toLowerCase();
-  const filtered = STATE.codes.filter(code => {
+  let filtered = STATE.codes.filter(code => {
     if (!searchValue) return true;
     return (
       code.name?.toLowerCase().includes(searchValue) ||
@@ -136,9 +262,18 @@ function renderCodesList() {
     );
   });
 
+  // Sort: favorites first, then by updated_at
+  filtered.sort((a, b) => {
+    if (a.isFavorite && !b.isFavorite) return -1;
+    if (!a.isFavorite && b.isFavorite) return 1;
+    const dateA = new Date(a.updated_at || a.created_at || 0).getTime();
+    const dateB = new Date(b.updated_at || b.created_at || 0).getTime();
+    return dateB - dateA;
+  });
+
   list.innerHTML = '';
 
-  if (filtered.length === 0) {
+  if (filtered.length === 0 && !STATE.isSelectMode) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
     empty.innerHTML = `
@@ -157,15 +292,29 @@ function renderCodesList() {
     const item = document.createElement('div');
     item.className = 'project-item code-item';
     item.dataset.codeId = code.id;
+
+    if (STATE.isSelectMode) {
+      item.classList.add('select-mode');
+    }
+
+    const isSelected = STATE.selectedCodeIds.has(code.id);
+
     item.innerHTML = `
+      ${STATE.isSelectMode ? `
+        <div class="chat-item-checkbox-container">
+          <input type="checkbox" class="chat-item-checkbox" ${isSelected ? 'checked' : ''} />
+        </div>
+      ` : ''}
       <div class="project-item-content">
         <div class="project-item-header">
           <h3>${escapeHtml(code.name || 'Untitled code workspace')}</h3>
-          <button class="code-item-open" title="Open workspace" data-code-id="${code.id}">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="m9 18 6-6-6-6" />
-            </svg>
-          </button>
+          ${!STATE.isSelectMode ? `
+            <button class="code-item-open" title="Open workspace" data-code-id="${code.id}">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </button>
+          ` : ''}
         </div>
         <p class="project-item-description">${escapeHtml(code.description || 'No description')}</p>
         <div class="project-item-meta">
@@ -176,11 +325,25 @@ function renderCodesList() {
     `;
 
     item.addEventListener('click', (event) => {
-      const target = event.target;
-      if (target.closest('.code-item-open')) {
-        event.preventDefault();
+      if (STATE.isSelectMode) {
+        if (STATE.selectedCodeIds.has(code.id)) {
+          STATE.selectedCodeIds.delete(code.id);
+        } else {
+          STATE.selectedCodeIds.add(code.id);
+        }
+
+        if (STATE.selectedCodeIds.size === 0) {
+          STATE.isSelectMode = false;
+        }
+
+        renderCodesList();
+      } else {
+        const target = event.target;
+        if (target.closest('.code-item-open')) {
+          event.preventDefault();
+        }
+        showCodeDetail(code.id);
       }
-      showCodeDetail(code.id);
     });
 
     fragment.appendChild(item);
@@ -210,10 +373,12 @@ function showCodesListView() {
   }
   const hadActiveCode = !!STATE.currentCode;
   STATE.currentCode = null;
+  codeMessageStagedFiles = [];
+  renderCodeMessageFiles();
   resetCodeComposer();
   const composerSendBtn = getCodeComposerSendButton();
   if (composerSendBtn) {
-    composerSendBtn.disabled = true;
+    composerSendBtn.disabled = false;
   }
 
   if (hadActiveCode) {
@@ -222,54 +387,79 @@ function showCodesListView() {
 }
 
 function renderCodeInstruction(code) {
-  const container = document.getElementById('code-instruction-text');
+  const container = document.querySelector('#code-detail-view .project-instructions');
   if (!container) return;
 
-  container.textContent = '';
+  // Remove existing instruction text if any
+  const existingText = container.querySelector('.project-instruction-text');
+  if (existingText) {
+    existingText.remove();
+  }
+
+  // Create new instruction text element
+  const instructionDiv = document.createElement('div');
+  instructionDiv.className = 'project-instruction-text';
+  instructionDiv.id = 'code-instruction-text';
+
   if (code.instruction) {
     const text = document.createElement('p');
     text.innerHTML = escapeHtml(code.instruction).replace(/\n/g, '<br/>');
-    container.appendChild(text);
+    instructionDiv.appendChild(text);
   } else {
     const hint = document.createElement('p');
     hint.className = 'empty-hint';
     hint.textContent = 'No instruction yet. Provide guidance for this workspace to shape the coding agent.';
-    container.appendChild(hint);
+    instructionDiv.appendChild(hint);
   }
+
+  container.appendChild(instructionDiv);
 }
 
 function renderCodeWorkspace(code) {
-  const summary = document.getElementById('code-workspace-summary');
-  if (!summary) return;
+  const container = document.getElementById('code-workspace-list');
+  if (!container) return;
 
-  summary.innerHTML = '';
+  container.innerHTML = '';
 
   if (!code.workspacePath) {
     const empty = document.createElement('div');
     empty.className = 'empty-hint';
     empty.textContent = 'No workspace selected. Choose a local project folder to enable context-aware coding.';
-    summary.appendChild(empty);
+    container.appendChild(empty);
     return;
   }
 
-  const pathEl = document.createElement('div');
-  pathEl.className = 'workspace-path';
-  pathEl.textContent = code.workspacePath;
+  const workspaceItem = document.createElement('div');
+  workspaceItem.className = 'project-file-item';
+  workspaceItem.innerHTML = `
+    <div class="project-file-info">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M20 7h-4v-.5a3.5 3.5 0 0 0-7 0V7H5c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2Z"/>
+        <path d="M9 7V6.5A2.5 2.5 0 0 1 11.5 4h1a2.5 2.5 0 0 1 2.5 2.5V7"/>
+      </svg>
+      <div class="project-file-text">
+        <p class="project-file-name">${escapeHtml(code.workspacePath.split(/[\\/]/).pop() || code.workspacePath)}</p>
+        <p class="project-file-size">${escapeHtml(code.workspacePath)}</p>
+      </div>
+    </div>
+  `;
 
-  const meta = document.createElement('div');
-  meta.className = 'workspace-meta';
+  container.appendChild(workspaceItem);
+
   const stats = code.workspaceMetadata || {};
   const folders = stats.folderCount ?? stats.folders ?? 0;
   const files = stats.fileCount ?? stats.files ?? 0;
   const ignored = stats.ignored ?? 0;
-  const parts = [];
-  if (files) parts.push(`${files} files`);
-  if (folders) parts.push(`${folders} folders`);
-  if (ignored) parts.push(`${ignored} ignored`);
-  meta.textContent = parts.length > 0 ? parts.join(' • ') : 'Workspace metadata not available';
-
-  summary.appendChild(pathEl);
-  summary.appendChild(meta);
+  if (files || folders) {
+    const meta = document.createElement('p');
+    meta.className = 'project-file-meta';
+    const parts = [];
+    if (files) parts.push(`${files} files`);
+    if (folders) parts.push(`${folders} folders`);
+    if (ignored) parts.push(`${ignored} ignored`);
+    meta.textContent = parts.join(' • ');
+    container.appendChild(meta);
+  }
 }
 
 function renderCodeSessions(code) {
@@ -337,12 +527,9 @@ function renderCodeDetail(code) {
   if (titleEl) titleEl.textContent = code.name || 'Untitled code workspace';
   if (descEl) descEl.textContent = code.description || 'No description available';
 
-  const starBtn = detailView?.querySelector('.code-star-btn');
-  if (starBtn) {
-    starBtn.classList.toggle('active', !!code.isFavorite);
-    starBtn.dataset.codeId = code.id;
-  }
+  updateCodeStarButton();
 
+  renderCodeMessageFiles();
   renderCodeInstruction(code);
   renderCodeWorkspace(code);
   renderCodeSessions(code);
@@ -381,6 +568,10 @@ function activateCodesPage() {
 
   deps.setCurrentSession?.(null);
 
+  // Reset select mode
+  STATE.isSelectMode = false;
+  STATE.selectedCodeIds.clear();
+
   const chatArea = document.querySelector('.chat-area');
   if (chatArea) {
     chatArea.classList.remove('welcome-active', 'chats-active', 'artifacts-active', 'projects-active');
@@ -397,7 +588,7 @@ function activateCodesPage() {
 
   const chatTitle = document.getElementById('chat-title');
   if (chatTitle) {
-    chatTitle.textContent = 'Codes';
+    chatTitle.textContent = 'Your Code Workspaces';
     chatTitle.title = 'Manage your code workspaces';
   }
   const logoEl = document.getElementById('clustrix-logo');
@@ -431,6 +622,73 @@ function activateCodesPage() {
 }
 
 function ensureListeners() {
+  // Add global click handler for menus and dropdowns
+  document.addEventListener('click', (e) => {
+    const target = e.target;
+
+    // Close code title menu when clicking outside
+    if (!target.closest('.project-title-menu-container')) {
+      document.querySelectorAll('.code-title-menu-dropdown.persistent-open').forEach((menu) => {
+        menu.classList.remove('persistent-open');
+        const menuButton = menu.parentElement?.querySelector('.code-title-menu-btn');
+        if (menuButton) menuButton.classList.remove('persistent-active');
+      });
+    }
+
+    // Handle code title menu button clicks
+    if (target.closest('.code-title-menu-btn')) {
+      e.stopPropagation();
+      const menuContainer = target.closest('.project-title-menu-container');
+      const menuButton = menuContainer?.querySelector('.code-title-menu-btn');
+      const dropdown = menuContainer?.querySelector('.code-title-menu-dropdown');
+
+      if (dropdown && menuButton) {
+        // Close all other persistent-open menus
+        document.querySelectorAll('.code-title-menu-dropdown.persistent-open').forEach((menu) => {
+          if (menu !== dropdown) {
+            menu.classList.remove('persistent-open');
+            const otherButton = menu.parentElement?.querySelector('.code-title-menu-btn');
+            if (otherButton) otherButton.classList.remove('persistent-active');
+          }
+        });
+
+        // Toggle current menu's persistent state
+        const isOpen = dropdown.classList.contains('persistent-open');
+        if (isOpen) {
+          dropdown.classList.remove('persistent-open');
+          menuButton.classList.remove('persistent-active');
+        } else {
+          dropdown.classList.add('persistent-open');
+          menuButton.classList.add('persistent-active');
+        }
+      }
+      return;
+    }
+
+    // Handle code title menu item clicks
+    if (target.closest('.code-title-menu-dropdown .project-title-menu-item')) {
+      e.stopPropagation();
+      const menuItem = target.closest('.project-title-menu-item');
+      const action = menuItem?.dataset.action;
+      const dropdown = target.closest('.code-title-menu-dropdown');
+
+      // Close menu
+      if (dropdown) {
+        dropdown.classList.remove('persistent-open');
+        const menuButton = dropdown.parentElement?.querySelector('.code-title-menu-btn');
+        if (menuButton) menuButton.classList.remove('persistent-active');
+      }
+
+      if (action === 'rename' && STATE.currentCode) {
+        startCodeDetailRename(STATE.currentCode);
+      } else if (action === 'edit-description' && STATE.currentCode) {
+        startCodeDetailEditDescription(STATE.currentCode);
+      } else if (action === 'delete' && STATE.currentCode) {
+        deleteCode(STATE.currentCode);
+      }
+    }
+  });
+
   document.getElementById('new-code-btn')?.addEventListener('click', async () => {
     await promptNewCode();
   });
@@ -443,7 +701,57 @@ function ensureListeners() {
     showCodesListView();
   });
 
-  document.getElementById('code-edit-instruction-btn')?.addEventListener('click', async () => {
+  // Select mode buttons
+  document.getElementById('codes-select-btn')?.addEventListener('click', () => {
+    STATE.isSelectMode = true;
+    renderCodesList();
+  });
+
+  document.getElementById('codes-select-close-btn')?.addEventListener('click', () => {
+    STATE.isSelectMode = false;
+    STATE.selectedCodeIds.clear();
+    renderCodesList();
+  });
+
+  document.getElementById('codes-delete-selected-btn')?.addEventListener('click', async () => {
+    if (STATE.selectedCodeIds.size === 0) return;
+
+    const confirmDelete = confirm(
+      `Are you sure you want to delete ${STATE.selectedCodeIds.size} code workspace${STATE.selectedCodeIds.size === 1 ? '' : 's'}? This action cannot be undone.`
+    );
+
+    if (confirmDelete) {
+      const idsToDelete = Array.from(STATE.selectedCodeIds);
+      STATE.codes = STATE.codes.filter((c) => !idsToDelete.includes(c.id));
+      await saveCodes();
+      STATE.isSelectMode = false;
+      STATE.selectedCodeIds.clear();
+
+      const selectAllCheckbox = document.getElementById('codes-select-all-checkbox');
+      if (selectAllCheckbox) selectAllCheckbox.checked = false;
+
+      renderCodesList();
+    }
+  });
+
+  document.getElementById('codes-select-all-checkbox')?.addEventListener('change', (e) => {
+    const isChecked = e.target.checked;
+    const visibleCodeIds = Array.from(
+      document.querySelectorAll('.code-item')
+    ).map((item) => item.dataset.codeId);
+
+    if (isChecked) {
+      visibleCodeIds.forEach((id) => STATE.selectedCodeIds.add(id));
+      STATE.isSelectMode = true;
+    } else {
+      STATE.selectedCodeIds.clear();
+      STATE.isSelectMode = false;
+    }
+
+    renderCodesList();
+  });
+
+  document.getElementById('edit-code-instruction-btn')?.addEventListener('click', async () => {
     if (!STATE.currentCode) return;
     const existing = STATE.currentCode.instruction || '';
     const value = await showCodesInputModal({
@@ -453,6 +761,7 @@ function ensureListeners() {
       placeholder: 'Explain goals, coding standards, or workflows...',
       multiline: true,
       confirmLabel: 'Save Instruction',
+      allowEmpty: true,
     });
     if (value === null) return;
     STATE.currentCode.instruction = value.trim();
@@ -507,7 +816,7 @@ function ensureListeners() {
   starBtn?.addEventListener('click', () => {
     if (!STATE.currentCode) return;
     STATE.currentCode.isFavorite = !STATE.currentCode.isFavorite;
-    starBtn.classList.toggle('active', STATE.currentCode.isFavorite);
+    updateCodeStarButton();
     STATE.currentCode.updated_at = nowISO();
     saveCodes();
     renderCodesList();

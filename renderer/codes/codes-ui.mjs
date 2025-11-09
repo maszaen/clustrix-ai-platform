@@ -1150,8 +1150,8 @@ function showCodesInputModal({
             ${description ? `<p class="modal-description">${escapeHtml(description)}</p>` : ''}
             <div class="form-group">
               ${multiline
-                ? `<textarea class="codes-modal-input" rows="6" placeholder="${escapeHtml(placeholder)}" ${allowEmpty ? '' : 'required'}>${escapeHtml(defaultValue)}</textarea>`
-                : `<input class="codes-modal-input" type="text" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(defaultValue)}" ${allowEmpty ? '' : 'required'} />`
+                ? `<textarea rows="6" placeholder="${escapeHtml(placeholder)}" ${allowEmpty ? '' : 'required'}>${escapeHtml(defaultValue)}</textarea>`
+                : `<input type="text" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(defaultValue)}" ${allowEmpty ? '' : 'required'} />`
               }
               ${hasBrowseButton ? `<button class="secondary-btn modal-browse-btn" type="button" style="margin-top: 10px;">Browse</button>` : ''}
             </div>
@@ -1171,7 +1171,7 @@ function showCodesInputModal({
     const closeBtn = modal.querySelector('.close-btn');
     const cancelBtn = modal.querySelector('[data-action="cancel"]');
     const form = modal.querySelector('.modal-form');
-    const inputEl = modal.querySelector('.codes-modal-input');
+    const inputEl = modal.querySelector('.form-group input, .form-group textarea');
     const browseBtn = modal.querySelector('.modal-browse-btn');
 
     // Browse button handler
@@ -1260,7 +1260,7 @@ function showNewCodeModal() {
           <div class="modal-body">
             <div class="form-group">
               <label for="codes-new-name">Name</label>
-              <input id="codes-new-name" class="codes-modal-input" type="text" placeholder="New workspace name" required />
+              <input id="codes-new-name" type="text" placeholder="New workspace name" required />
             </div>
             <div class="form-group">
               <label for="codes-new-description">Description</label>

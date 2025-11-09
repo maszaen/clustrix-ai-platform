@@ -31,6 +31,8 @@ import {
   showCodesPage as triggerCodesPage,
   getCodesState,
   openCodeDetail,
+  getCodeMessageStagedFiles,
+  renderCodeMessageFiles,
 } from './codes/codes-ui.mjs';
 import { runCodeChatStream } from './codes/code-chat.mjs';
 
@@ -3082,8 +3084,9 @@ function updateModelHeader() {
   const welcomeBtn = $("#btn-model-switch-welcome");
   const chatBtn = $("#btn-model-switch-chat");
   const projectBtn = $("#btn-model-switch-project");
+  const codeBtn = $("#btn-model-switch-code");
 
-  [welcomeBtn, chatBtn, projectBtn].forEach((modelBtn) => {
+  [welcomeBtn, chatBtn, projectBtn, codeBtn].forEach((modelBtn) => {
     if (modelBtn) {
       const p = modelBtn.querySelector("p");
       if (p) p.textContent = title || "";
@@ -14818,7 +14821,7 @@ function setupEventListeners() {
     });
   }
 
-  ["welcome", "chat", "project"].forEach((screen) => {
+  ["welcome", "chat", "project", "code"].forEach((screen) => {
     const searchBtn = $(`#btn-web-search-${screen}`);
     if (searchBtn)
       searchBtn.addEventListener("click", () => {
@@ -14910,6 +14913,35 @@ function setupEventListeners() {
             {
               projectId: currentProject.id,
               stagedCount: projectMessageStagedFiles.length,
+            },
+          );
+          return;
+        }
+
+        if (context === "code-message") {
+          const codeState = getCodesState();
+          if (!codeState.currentCode) {
+            log(
+              "CODES",
+              3,
+              "upload:code-message",
+              "Cannot attach files without an active code workspace.",
+            );
+            return;
+          }
+
+          const codeMessageStagedFiles = getCodeMessageStagedFiles();
+          codeMessageStagedFiles.push(...validFiles);
+          renderCodeMessageFiles();
+
+          log(
+            "CODES",
+            1,
+            "upload:code-message",
+            `Added ${validFiles.length} file(s) to code message staging area.`,
+            {
+              codeId: codeState.currentCode.id,
+              stagedCount: codeMessageStagedFiles.length,
             },
           );
           return;

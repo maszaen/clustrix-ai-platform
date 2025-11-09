@@ -20,6 +20,8 @@ const { getBaseUrl, getApiKey, joinEndpoint, applyThinkingHints } = require('./b
 const { performWebSearch, scrapeUrls } = require('./backend/search/web-search');
 const DatabaseManager = require('./backend/data/database-manager');
 const SyncManager = require('./backend/sync/sync-manager');
+const PowerShellTerminalManager = require('./backend/integration/powershell-terminal-manager');
+const CodingAgentService = require('./backend/integration/coding-agent-service');
 const GitHubOAuthHelper = require('./backend/github/github-oauth-helper');
 const GitHubStorageService = require('./backend/github/github-storage-service');
 const SmartBackupService = require('./backend/sync/smart-backup-service');
@@ -102,6 +104,8 @@ let useSQLite = false;
 let syncManager = null;
 let callbackServer = null;
 let performanceMonitor = null;
+let terminalManager = null;
+let codingAgentService = null;
 let mainWindow = null;
 let tray = null;
 const CLOSE_DELAY_MS = 60 * 1000;
@@ -385,6 +389,13 @@ app.whenReady().then(async () => {
     db = new DatabaseManager(app, dbSourcePath === syncManager.getInternalDataPath() ? null : dbSourcePath);
     invalidateUsageStatisticsCache();
     useSQLite = true;
+  }
+
+  // Initialize Terminal Manager and Coding Agent Service
+  if (db) {
+    terminalManager = new PowerShellTerminalManager(db);
+    codingAgentService = new CodingAgentService(db, terminalManager, langchainService);
+    log('Terminal Manager and Coding Agent Service initialized');
   }
 });
 
@@ -2693,6 +2704,169 @@ ipcMain.handle('projects:save', async (_evt, projects) => {
       stack: e.stack
     });
     throw e;
+  }
+});
+
+// =====================
+// Codes IPC Handlers
+// =====================
+
+ipcMain.handle('codes:load', async () => {
+  try {
+    if (!useSQLite || !db) {
+      db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
+      useSQLite = true;
+    }
+
+    const codes = db.getCodes();
+    log('CODES', 1, 'codes:load', 'Loaded codes', { count: codes.length });
+    return codes;
+  } catch (e) {
+    log('CODES', 4, 'codes:load', 'Failed to load codes', { error: e.message });
+    throw e;
+  }
+});
+
+ipcMain.handle('codes:save', async (_evt, code) => {
+  try {
+    if (!useSQLite || !db) {
+      db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
+      useSQLite = true;
+    }
+
+    db.saveCode(code);
+    log('CODES', 1, 'codes:save', 'Saved code', { id: code.id, name: code.name });
+    return true;
+  } catch (e) {
+    log('CODES', 4, 'codes:save', 'Failed to save code', { error: e.message });
+    throw e;
+  }
+});
+
+ipcMain.handle('codes:delete', async (_evt, codeId) => {
+  try {
+    if (!useSQLite || !db) {
+      throw new Error('Database not initialized');
+    }
+
+    // Close terminal if exists
+    const terminal = db.getCodeTerminal(codeId);
+    if (terminal && terminalManager) {
+      await terminalManager.closeTerminal(terminal.id);
+    }
+
+    db.deleteCode(codeId);
+    log('CODES', 1, 'codes:delete', 'Deleted code', { codeId });
+    return true;
+  } catch (e) {
+    log('CODES', 4, 'codes:delete', 'Failed to delete code', { error: e.message });
+    throw e;
+  }
+});
+
+ipcMain.handle('codes:get-iterations', async (_evt, codeId) => {
+  try {
+    if (!useSQLite || !db) {
+      throw new Error('Database not initialized');
+    }
+
+    const iterations = db.getCodeIterations(codeId);
+    log('CODES', 1, 'codes:get-iterations', 'Loaded iterations', { codeId, count: iterations.length });
+    return iterations;
+  } catch (e) {
+    log('CODES', 4, 'codes:get-iterations', 'Failed to load iterations', { error: e.message });
+    throw e;
+  }
+});
+
+ipcMain.on('codes:stream-start', async (event, payload) => {
+  try {
+    const { codeId, message, reqId } = payload;
+
+    log('CODES', 1, 'codes:stream-start', 'Starting coding session', { codeId, reqId });
+
+    if (!codingAgentService) {
+      throw new Error('Coding agent service not initialized');
+    }
+
+    // Progress callback to send updates to renderer
+    const progressCallback = (update) => {
+      event.sender.send('codes:progress', {
+        reqId,
+        codeId,
+        ...update
+      });
+    };
+
+    // Start coding session
+    const result = await codingAgentService.startCodingSession(
+      codeId,
+      message,
+      progressCallback
+    );
+
+    // Send completion
+    event.sender.send(`codes:done-${reqId}`, {
+      codeId,
+      result
+    });
+
+    log('CODES', 1, 'codes:stream-start', 'Coding session completed', {
+      codeId,
+      reqId,
+      complete: result.complete,
+      needsApproval: result.needsApproval
+    });
+
+  } catch (error) {
+    log('CODES', 4, 'codes:stream-start', 'Error in coding session', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    event.sender.send(`codes:error-${payload.reqId}`, {
+      error: error.message
+    });
+  }
+});
+
+ipcMain.handle('codes:approve-command', async (_evt, { codeId, iterationNumber, command }) => {
+  try {
+    log('CODES', 1, 'codes:approve-command', 'Approving command', { codeId, iterationNumber });
+
+    if (!codingAgentService || !terminalManager) {
+      throw new Error('Coding services not initialized');
+    }
+
+    const terminal = terminalManager.getTerminalForCode(codeId);
+    if (!terminal) {
+      throw new Error('Terminal not found for code session');
+    }
+
+    const progressCallback = (update) => {
+      // Send progress updates (can be handled if needed)
+      log('CODES', 1, 'approve-command-progress', 'Progress update', update);
+    };
+
+    const result = await codingAgentService.approveAndExecuteCommand(
+      codeId,
+      iterationNumber,
+      command,
+      terminal.terminalId,
+      progressCallback
+    );
+
+    log('CODES', 1, 'codes:approve-command', 'Command approved and executed', { codeId, iterationNumber });
+    return result;
+
+  } catch (error) {
+    log('CODES', 4, 'codes:approve-command', 'Error approving command', {
+      error: error.message,
+      stack: error.stack
+    });
+    throw error;
   }
 });
 

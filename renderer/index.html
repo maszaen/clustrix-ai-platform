@@ -694,6 +694,172 @@
     
       </div>
       </div>
+      <!-- Codes Page -->
+      <div id="codes-page" class="codes-page">
+        <div class="chats-header">
+          <h2>Your Coding Sessions</h2>
+          <button id="new-code-btn" class="white-btn" title="New Coding Session">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 5v14m-7-7h14" />
+            </svg>
+            <span>New Session</span>
+          </button>
+        </div>
+        <div class="chats-search-container">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input id="codes-search" placeholder="Search your coding sessions..." />
+          </div>
+        </div>
+        <div id="codes-controls-container" class="chats-controls-container">
+          <div id="codes-info-bar" class="chats-info-bar">
+            <span id="codes-total-count">...</span>
+            <button id="codes-select-btn" class="link-btn">Select</button>
+          </div>
+          <div id="codes-select-action-bar" class="chats-select-action-bar" style="display: none;">
+            <div class="selection-group">
+              <input type="checkbox" id="codes-select-all-checkbox" />
+              <label for="codes-select-all-checkbox" id="codes-selected-count">0 selected</label>
+            </div>
+            <div class="action-group">
+              <button id="codes-delete-selected-btn" class="icon-btn danger" title="Delete Selected" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </button>
+              <button id="codes-select-close-btn" class="icon-btn" title="Cancel Selection">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M15.1465 4.14642C15.3418 3.95121 15.6583 3.95118 15.8536 4.14642C16.0487 4.34168 16.0488 4.65822 15.8536 4.85346L10.7071 9.99997L15.8536 15.1465C16.0487 15.3417 16.0488 15.6583 15.8536 15.8535C15.6828 16.0244 15.4187 16.0461 15.2247 15.918L15.1465 15.8535L10 10.707L4.85352 15.8535C4.65827 16.0486 4.34168 16.0486 4.14648 15.8535C3.95129 15.6583 3.95142 15.3418 4.14648 15.1465L9.293 9.99997L4.14648 4.85346C3.95142 4.65818 3.95129 4.34162 4.14648 4.14642C4.34168 3.95128 4.65825 3.95138 4.85352 4.14642L10 9.29294L15.1465 4.14642Z"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="codes-list" class="chats-list"></div>
+        <!-- Code Detail View -->
+        <div id="code-detail-view" class="project-detail-view" style="display: none;">
+            <!-- Code Detail Container (Flex Row) -->
+            <div class="project-back-btn">
+              <button id="back-to-codes-btn" title="Back to Coding Sessions">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M19 12H5m7-7-7 7 7 7" />
+                </svg>
+                <p>All sessions</p>
+              </button>
+            </div>
+            <div class="project-detail-container">
+              <div class="project-left-column">
+                <div class="project-detail-header">
+                  <div class="project-title-container">
+                    <h2 id="code-detail-title">Coding Session</h2>
+                    <div class="project-title-actions">
+                      <div class="project-title-menu-container">
+                        <button class="code-title-menu-btn" title="Session options">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="5" cy="12" r="2"/>
+                            <circle cx="12" cy="12" r="2"/>
+                            <circle cx="19" cy="12" r="2"/>
+                          </svg>
+                        </button>
+                        <div class="code-title-menu-dropdown">
+                          <div class="code-title-menu-item" data-action="rename">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                            </svg>
+                            <span>Rename</span>
+                          </div>
+                          <div class="code-title-menu-item code-title-menu-item-danger" data-action="delete">
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M6 2l-2 2h12l-2-2H6zM4 6v10c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6H4zm2 2h8v8H6V8z"/>
+                            </svg>
+                            <span>Delete</span>
+                          </div>
+                        </div>
+                      </div>
+                      <button class="code-star-btn" title="Star session">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <p id="code-detail-desc"></p>
+                </div>
+                <div class="input-container-parent">
+                  <div class="input-container" id="code-central-input-container">
+                    <textarea id="code-message-input" spellcheck="false" autocorrect="off" rows="1" placeholder="Ask coding assistant..." rows="1"></textarea>
+                  </div>
+                  <div class="row-between pad-l-sm">
+                    <div class="row-gap w-50">
+                      <span id="code-terminal-status" class="input-container-btn" style="cursor: default" title="Terminal status">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                          <polyline points="4 17 10 11 4 5"></polyline>
+                          <line x1="12" y1="19" x2="20" y2="19"></line>
+                        </svg>
+                        <p id="code-terminal-status-text">Ready</p>
+                      </span>
+                    </div>
+                    <div class="row-gap w-50">
+                      <span id="btn-model-switch-code" class="input-container-btn" style="cursor: pointer">
+                        <p>Switch Model</p>
+                        <svg viewBox="0 0 24 24">
+                          <path d="M6 9l6 6 6-6" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" />
+                        </svg>
+                      </span>
+                      <button id="code-send-btn" class="send-button" title="Send message (Ctrl + Enter)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-icon lucide-arrow-up">
+                          <path d="m5 12 7-7 7 7" />
+                          <path d="M12 19V5" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+              <!-- Code Iterations List -->
+              <div class="project-sessions">
+                <div id="code-iterations-list" class="project-sessions-list"></div>
+              </div>
+            </div>
+            <div class="project-right-column">
+              <div class="project-instructions">
+                <div class="project-card-header">
+                  <h3>Command History</h3>
+                  <button id="clear-history-btn" title="Clear History">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
+                </div>
+                <div id="code-command-history" class="project-instructions-list"></div>
+              </div>
+              <!-- Workspace Folder -->
+              <div class="project-files">
+                <div class="project-card-header">
+                  <h3>Workspace</h3>
+                  <button id="code-attach-folder-btn" title="Attach Folder">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M2 4a2 2 0 0 1 2-2h4.586a1 1 0 0 1 .707.293l1.414 1.414A1 1 0 0 0 11.414 4H16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4z"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <div id="code-workspace-info" class="project-files-grid">
+                  <div style="padding: 1rem; text-align: center; color: var(--text-secondary);">
+                    <p>No workspace attached</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+      </div>
+      </div>
       <!-- Chats Page -->
       <div id="chats-page" class="chats-page">
         <div class="chats-header">

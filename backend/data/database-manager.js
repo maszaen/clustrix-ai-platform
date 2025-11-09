@@ -161,7 +161,56 @@ class DatabaseManager {
       );
       
       CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project_id);
-      
+
+      CREATE TABLE IF NOT EXISTS codes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        workspace_path TEXT,
+        workspace_name TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        is_favorite INTEGER DEFAULT 0,
+        metadata TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_codes_created ON codes(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS code_terminals (
+        id TEXT PRIMARY KEY,
+        code_id TEXT NOT NULL,
+        pid INTEGER,
+        shell_type TEXT DEFAULT 'powershell',
+        created_at INTEGER NOT NULL,
+        last_active_at INTEGER NOT NULL,
+        status TEXT DEFAULT 'active',
+
+        FOREIGN KEY (code_id) REFERENCES codes(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_code_terminals_code ON code_terminals(code_id);
+      CREATE INDEX IF NOT EXISTS idx_code_terminals_status ON code_terminals(status);
+
+      CREATE TABLE IF NOT EXISTS code_iterations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code_id TEXT NOT NULL,
+        iteration_number INTEGER NOT NULL,
+        user_message TEXT,
+        ai_internal TEXT,
+        ai_answer TEXT,
+        command TEXT,
+        command_output TEXT,
+        is_validated INTEGER DEFAULT 0,
+        validation_result TEXT,
+        is_final INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL,
+
+        FOREIGN KEY (code_id) REFERENCES codes(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_code_iterations_code ON code_iterations(code_id);
+      CREATE INDEX IF NOT EXISTS idx_code_iterations_number ON code_iterations(code_id, iteration_number);
+
       CREATE TABLE IF NOT EXISTS drafts (
         id TEXT PRIMARY KEY,
         content TEXT NOT NULL,
@@ -566,7 +615,144 @@ class DatabaseManager {
       DELETE FROM project_files WHERE project_id = ?
     `).run(projectId);
   }
-  
+
+  // =====================
+  // Codes Methods
+  // =====================
+
+  getCodes() {
+    return this.db.prepare(`
+      SELECT * FROM codes
+      ORDER BY updated_at DESC
+    `).all();
+  }
+
+  getCodeById(id) {
+    return this.db.prepare(`
+      SELECT * FROM codes WHERE id = ?
+    `).get(id);
+  }
+
+  saveCode(code) {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO codes
+      (id, name, description, workspace_path, workspace_name, created_at, updated_at, is_favorite, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const createdAt = code.created_at ? Date.parse(code.created_at) : Date.now();
+    const updatedAt = code.updated_at || code.last_updated ? Date.parse(code.updated_at || code.last_updated) : Date.now();
+
+    return stmt.run(
+      code.id,
+      code.name,
+      code.description || '',
+      code.workspace_path || null,
+      code.workspace_name || null,
+      createdAt,
+      updatedAt,
+      code.isFavorite ? 1 : 0,
+      JSON.stringify(code.metadata || {})
+    );
+  }
+
+  deleteCode(codeId) {
+    return this.db.prepare(`
+      DELETE FROM codes WHERE id = ?
+    `).run(codeId);
+  }
+
+  // Code Iterations
+  saveCodeIteration(iteration) {
+    const stmt = this.db.prepare(`
+      INSERT INTO code_iterations
+      (code_id, iteration_number, user_message, ai_internal, ai_answer, command, command_output, is_validated, validation_result, is_final, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    return stmt.run(
+      iteration.code_id,
+      iteration.iteration_number,
+      iteration.user_message || null,
+      iteration.ai_internal || null,
+      iteration.ai_answer || null,
+      iteration.command || null,
+      iteration.command_output || null,
+      iteration.is_validated ? 1 : 0,
+      iteration.validation_result || null,
+      iteration.is_final ? 1 : 0,
+      Date.now()
+    );
+  }
+
+  getCodeIterations(codeId) {
+    return this.db.prepare(`
+      SELECT * FROM code_iterations
+      WHERE code_id = ?
+      ORDER BY iteration_number ASC
+    `).all(codeId);
+  }
+
+  getLastIteration(codeId) {
+    return this.db.prepare(`
+      SELECT * FROM code_iterations
+      WHERE code_id = ?
+      ORDER BY iteration_number DESC
+      LIMIT 1
+    `).get(codeId);
+  }
+
+  // Terminal Management
+  saveCodeTerminal(terminal) {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO code_terminals
+      (id, code_id, pid, shell_type, created_at, last_active_at, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    return stmt.run(
+      terminal.id,
+      terminal.code_id,
+      terminal.pid || null,
+      terminal.shell_type || 'powershell',
+      terminal.created_at || Date.now(),
+      terminal.last_active_at || Date.now(),
+      terminal.status || 'active'
+    );
+  }
+
+  getCodeTerminal(codeId) {
+    return this.db.prepare(`
+      SELECT * FROM code_terminals
+      WHERE code_id = ? AND status = 'active'
+      LIMIT 1
+    `).get(codeId);
+  }
+
+  updateTerminalActivity(terminalId) {
+    return this.db.prepare(`
+      UPDATE code_terminals
+      SET last_active_at = ?
+      WHERE id = ?
+    `).run(Date.now(), terminalId);
+  }
+
+  closeTerminal(terminalId) {
+    return this.db.prepare(`
+      UPDATE code_terminals
+      SET status = 'closed'
+      WHERE id = ?
+    `).run(terminalId);
+  }
+
+  getInactiveTerminals(minutesIdle = 30) {
+    const threshold = Date.now() - (minutesIdle * 60 * 1000);
+    return this.db.prepare(`
+      SELECT * FROM code_terminals
+      WHERE status = 'active' AND last_active_at < ?
+    `).all(threshold);
+  }
+
   getSetting(key) {
     const row = this.db.prepare(`
       SELECT value FROM settings WHERE key = ?

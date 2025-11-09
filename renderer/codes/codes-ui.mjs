@@ -161,6 +161,24 @@ function renderCodeMessageFiles() {
   }
 }
 
+async function startCodeRename(code) {
+  const value = await showCodesInputModal({
+    title: 'Rename Code Workspace',
+    description: 'Enter a new name for this code workspace.',
+    defaultValue: code.name || '',
+    placeholder: 'Code workspace name',
+    confirmLabel: 'Rename',
+  });
+
+  if (value === null || value === code.name) return;
+
+  code.name = value;
+  code.updated_at = nowISO();
+
+  await saveCodes();
+  renderCodesList();
+}
+
 async function startCodeDetailRename(code) {
   const value = await showCodesInputModal({
     title: 'Rename Code Workspace',
@@ -179,6 +197,7 @@ async function startCodeDetailRename(code) {
   if (titleEl) titleEl.textContent = value || 'Untitled code workspace';
 
   await saveCodes();
+  renderCodesList();
 }
 
 async function startCodeDetailEditDescription(code) {
@@ -293,58 +312,66 @@ function renderCodesList() {
     item.className = 'project-item code-item';
     item.dataset.codeId = code.id;
 
+    const isSelected = STATE.selectedCodeIds.has(code.id);
+
     if (STATE.isSelectMode) {
       item.classList.add('select-mode');
     }
 
-    const isSelected = STATE.selectedCodeIds.has(code.id);
+    if (isSelected) {
+      item.classList.add('selected');
+    }
 
-    item.innerHTML = `
-      ${STATE.isSelectMode ? `
-        <div class="chat-item-checkbox-container">
-          <input type="checkbox" class="chat-item-checkbox" ${isSelected ? 'checked' : ''} />
-        </div>
-      ` : ''}
-      <div class="project-item-content">
-        <div class="project-item-header">
-          <h3>${escapeHtml(code.name || 'Untitled code workspace')}</h3>
-          ${!STATE.isSelectMode ? `
-            <button class="code-item-open" title="Open workspace" data-code-id="${code.id}">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </button>
-          ` : ''}
-        </div>
-        <p class="project-item-description">${escapeHtml(code.description || 'No description')}</p>
-        <div class="project-item-meta">
-          <span>Updated ${formatRelativeTime(code.updated_at || code.last_updated || code.created_at || nowISO())}</span>
-          ${code.workspacePath ? `<span class="project-item-meta-pill">${escapeHtml(code.workspacePath)}</span>` : ''}
-        </div>
+    const formattedDate = formatRelativeTime(code.updated_at || code.last_updated || code.created_at || nowISO());
+
+    const checkboxHTML = `
+      <div class="project-item-checkbox-wrapper">
+        <input type="checkbox" class="project-item-checkbox" data-code-id="${code.id}" ${isSelected ? 'checked' : ''}>
       </div>
     `;
 
-    item.addEventListener('click', (event) => {
-      if (STATE.isSelectMode) {
-        if (STATE.selectedCodeIds.has(code.id)) {
-          STATE.selectedCodeIds.delete(code.id);
-        } else {
-          STATE.selectedCodeIds.add(code.id);
-        }
+    item.innerHTML = `
+      ${checkboxHTML}
+      <div class="project-item-content">
+        <div class="project-item-header">
+          <h3 class="project-item-title">${escapeHtml(code.name || 'Untitled code workspace')}</h3>
+          <span class="project-item-date">Last updated ${formattedDate}</span>
+        </div>
 
-        if (STATE.selectedCodeIds.size === 0) {
-          STATE.isSelectMode = false;
-        }
-
-        renderCodesList();
-      } else {
-        const target = event.target;
-        if (target.closest('.code-item-open')) {
-          event.preventDefault();
-        }
-        showCodeDetail(code.id);
-      }
-    });
+        ${code.description ? `<p class="project-description">${escapeHtml(code.description)}</p>` : `<p class="project-description">No description available</p>`}
+      </div>
+      <div class="project-item-actions">
+        <div class="project-menu-container">
+          <button class="project-menu-btn" data-code-id="${code.id}" title="Code workspace options">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="12" r="2"/>
+              <circle cx="12" cy="12" r="2"/>
+              <circle cx="19" cy="12" r="2"/>
+            </svg>
+          </button>
+          <div class="project-menu-dropdown code-menu-dropdown" data-code-id="${code.id}">
+            <div class="project-menu-item" data-action="open">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+              <span>Open Code Workspace</span>
+            </div>
+            <div class="project-menu-item" data-action="rename">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+              </svg>
+              <span>Rename</span>
+            </div>
+            <div class="project-menu-item project-menu-item-danger" data-action="delete">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M6 2l-2 2h12l-2-2H6zM4 6v10c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6H4zm2 2h8v8H6V8z"/>
+              </svg>
+              <span>Delete</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
 
     fragment.appendChild(item);
   }
@@ -626,16 +653,74 @@ function ensureListeners() {
   document.addEventListener('click', (e) => {
     const target = e.target;
 
-    // Close code title menu when clicking outside
-    if (!target.closest('.project-title-menu-container')) {
-      document.querySelectorAll('.code-title-menu-dropdown.persistent-open').forEach((menu) => {
+    // Handle code card menu button clicks
+    if (target.closest('.code-item .project-menu-btn')) {
+      e.stopPropagation();
+      const menuContainer = target.closest('.project-menu-container');
+      const menuButton = menuContainer?.querySelector('.project-menu-btn');
+      const dropdown = menuContainer?.querySelector('.code-menu-dropdown');
+
+      if (dropdown && menuButton) {
+        // Close all other persistent-open menus
+        document.querySelectorAll('.code-menu-dropdown.persistent-open').forEach((menu) => {
+          if (menu !== dropdown) {
+            menu.classList.remove('persistent-open');
+            const otherButton = menu.parentElement?.querySelector('.project-menu-btn');
+            if (otherButton) otherButton.classList.remove('persistent-active');
+          }
+        });
+
+        // Toggle current menu's persistent state
+        const isOpen = dropdown.classList.contains('persistent-open');
+        if (isOpen) {
+          dropdown.classList.remove('persistent-open');
+          menuButton.classList.remove('persistent-active');
+        } else {
+          dropdown.classList.add('persistent-open');
+          menuButton.classList.add('persistent-active');
+        }
+      }
+      return;
+    }
+
+    // Handle code card menu item clicks
+    if (target.closest('.code-menu-dropdown .project-menu-item')) {
+      e.stopPropagation();
+      const menuItem = target.closest('.project-menu-item');
+      const action = menuItem?.dataset.action;
+      const dropdown = target.closest('.code-menu-dropdown');
+      const codeId = dropdown?.dataset.codeId;
+
+      // Close menu
+      if (dropdown) {
+        dropdown.classList.remove('persistent-open');
+        const menuButton = dropdown.parentElement?.querySelector('.project-menu-btn');
+        if (menuButton) menuButton.classList.remove('persistent-active');
+      }
+
+      const code = STATE.codes.find(c => c.id === codeId);
+      if (!code) return;
+
+      if (action === 'open') {
+        showCodeDetail(codeId);
+      } else if (action === 'rename') {
+        startCodeRename(code);
+      } else if (action === 'delete') {
+        deleteCode(code);
+      }
+      return;
+    }
+
+    // Close code card menus when clicking outside
+    if (!target.closest('.project-menu-container')) {
+      document.querySelectorAll('.code-menu-dropdown.persistent-open').forEach((menu) => {
         menu.classList.remove('persistent-open');
-        const menuButton = menu.parentElement?.querySelector('.code-title-menu-btn');
+        const menuButton = menu.parentElement?.querySelector('.project-menu-btn');
         if (menuButton) menuButton.classList.remove('persistent-active');
       });
     }
 
-    // Handle code title menu button clicks
+    // Handle code title menu button clicks (in detail view)
     if (target.closest('.code-title-menu-btn')) {
       e.stopPropagation();
       const menuContainer = target.closest('.project-title-menu-container');
@@ -665,7 +750,7 @@ function ensureListeners() {
       return;
     }
 
-    // Handle code title menu item clicks
+    // Handle code title menu item clicks (in detail view)
     if (target.closest('.code-title-menu-dropdown .project-title-menu-item')) {
       e.stopPropagation();
       const menuItem = target.closest('.project-title-menu-item');
@@ -685,6 +770,46 @@ function ensureListeners() {
         startCodeDetailEditDescription(STATE.currentCode);
       } else if (action === 'delete' && STATE.currentCode) {
         deleteCode(STATE.currentCode);
+      }
+    }
+
+    // Close code title menu when clicking outside
+    if (!target.closest('.project-title-menu-container')) {
+      document.querySelectorAll('.code-title-menu-dropdown.persistent-open').forEach((menu) => {
+        menu.classList.remove('persistent-open');
+        const menuButton = menu.parentElement?.querySelector('.code-title-menu-btn');
+        if (menuButton) menuButton.classList.remove('persistent-active');
+      });
+    }
+
+    // Handle clicks on code item cards
+    if (target.closest('.code-item')) {
+      const item = target.closest('.code-item');
+      const codeId = item?.dataset.codeId;
+
+      // Skip if clicking on checkbox, menu button, or menu dropdown
+      if (target.closest('.project-item-checkbox-wrapper') ||
+          target.closest('.project-menu-btn') ||
+          target.closest('.code-menu-dropdown')) {
+        return;
+      }
+
+      if (STATE.isSelectMode && codeId) {
+        // In select mode, toggle selection
+        if (STATE.selectedCodeIds.has(codeId)) {
+          STATE.selectedCodeIds.delete(codeId);
+        } else {
+          STATE.selectedCodeIds.add(codeId);
+        }
+
+        if (STATE.selectedCodeIds.size === 0) {
+          STATE.isSelectMode = false;
+        }
+
+        renderCodesList();
+      } else if (codeId) {
+        // In normal mode, open code detail
+        showCodeDetail(codeId);
       }
     }
   });
@@ -772,10 +897,28 @@ function ensureListeners() {
 
   document.getElementById('code-workspace-btn')?.addEventListener('click', async () => {
     if (!STATE.currentCode) return;
+
+    // Try to use file browser if available
+    if (window.api?.selectDirectory) {
+      try {
+        const result = await window.api.selectDirectory();
+        if (result && result.filePaths && result.filePaths.length > 0) {
+          STATE.currentCode.workspacePath = result.filePaths[0];
+          STATE.currentCode.updated_at = nowISO();
+          renderCodeWorkspace(STATE.currentCode);
+          saveCodes();
+          return;
+        }
+      } catch (error) {
+        log('CODES', 3, 'code-workspace-btn', 'Failed to open directory selector', { error: error?.message });
+      }
+    }
+
+    // Fallback to manual input
     const existing = STATE.currentCode.workspacePath || '';
     const value = await showCodesInputModal({
       title: 'Workspace Directory',
-      description: 'Select or paste the local folder that contains this project to enable context-aware assistance.',
+      description: 'Enter the local folder path that contains this project to enable context-aware assistance.',
       defaultValue: existing,
       placeholder: 'C:/Users/you/projects/acme-app',
       confirmLabel: 'Save Path',

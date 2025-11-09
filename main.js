@@ -3238,6 +3238,25 @@ ipcMain.handle('files:open-dialog', async (event) => {
   logHelper('FILE_DIALOG', 'ipc:handle', 'Processing complete. Sending results to renderer.', { resultCount: results.length });
   return results;
 });
+
+ipcMain.handle('files:select-directory', async (event) => {
+  logHelper('FILE_DIALOG', 'ipc:handle', 'Received request to select directory.');
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window) {
+    logHelper('FILE_DIALOG', 'ipc:handle', 'FATAL: Could not get window reference.');
+    return { canceled: true, filePaths: [] };
+  }
+
+  const { canceled, filePaths } = await dialog.showOpenDialog(window, {
+    title: 'Select Workspace Directory',
+    buttonLabel: 'Select',
+    properties: ['openDirectory']
+  });
+
+  logHelper('FILE_DIALOG', 'ipc:handle', `Directory selection closed. Canceled: ${canceled}`, { filePaths });
+  return { canceled, filePaths };
+});
+
 const activeStreams = new Map();
 
 function trackActiveStream(reqId, metadata) {

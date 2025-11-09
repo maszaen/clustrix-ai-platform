@@ -1180,17 +1180,17 @@ function showCodesInputModal({
     const browseBtn = modal.querySelector('.modal-browse-btn');
 
     // Browse button handler
-    if (browseBtn && window.api?.selectDirectory) {
+    if (browseBtn && window.api?.files?.selectDirectory) {
       browseBtn.addEventListener('click', async () => {
         try {
-          const result = await window.api.selectDirectory();
-          if (result && result.filePaths && result.filePaths.length > 0) {
+          const result = await window.api.files.selectDirectory();
+          if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
             if (inputEl) {
               inputEl.value = result.filePaths[0];
             }
           }
         } catch (error) {
-          deps.log?.('CODES', 3, 'modal-browse-btn', 'Failed to open directory selector', { error: error?.message });
+          log('CODES', 3, 'modal-browse-btn', 'Failed to open directory selector', { error: error?.message });
         }
       });
     }

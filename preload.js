@@ -316,6 +316,7 @@ contextBridge.exposeInMainWorld('api', {
   },
   files: {
     openDialogAndRead: () => ipcRenderer.invoke('files:open-dialog'),
+    selectDirectory: () => ipcRenderer.invoke('files:select-directory'),
   },
   models: {
     load: () => ipcRenderer.invoke('models:load'),

@@ -2851,7 +2851,7 @@ input:checked + .slider:before {
   min-width: 40px;
 }
 
-.project-title-text {
+.project-title-text, .code-title-text {
   padding-top: 5px;
 }
 
@@ -5415,6 +5415,19 @@ a:focus-visible {
 :where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
 :where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
   background: var(--bg);
+}
+
+/* Codes Session: Custom codeblock styling */
+.message.codes-session .code-block-header {
+  display: none !important;
+}
+
+.message.codes-session .code-block-container pre[class*=language-],
+.message.codes-session .code-block-container pre.hljs {
+  max-height: 329px;
+  overflow-y: auto;
+  border-top: none !important;
+  border-radius: var(--radius-lg);
 }
 
 .language-name {

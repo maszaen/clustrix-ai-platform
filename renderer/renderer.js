@@ -59,6 +59,7 @@ let selectedProjectIds = new Set();
 let justSentMessage = false;
 let currentProject = null;
 let projectsData = [];
+let codesData = [];
 let mermaidInitialized = false;
 let previousWebSearchState = null; // Track websearch state before entering project
 let confirmationModal = null;
@@ -6516,6 +6517,25 @@ async function loadProjectsData() {
   }
 }
 
+async function loadCodesData() {
+  try {
+    const codesState = getCodesState?.();
+    if (codesState && codesState.codes) {
+      codesData = codesState.codes;
+    } else {
+      codesData = [];
+    }
+    log("CODES", 2, "loadCodesData", "Codes data loaded", {
+      count: codesData.length,
+    });
+  } catch (error) {
+    log("CODES", 4, "loadCodesData", "Error loading codes", {
+      error: error.message,
+    });
+    codesData = [];
+  }
+}
+
 async function toggleProjectFavorite(project) {
   project.isFavorite = !project.isFavorite;
   await saveProjectsData();
@@ -8801,7 +8821,9 @@ function buildMessagesForCode(session, codeOverride = null) {
   const { currentCode: codesModuleCurrent } = getCodesState?.() || {};
   const code = codeOverride && codeOverride.id ? codeOverride : codesModuleCurrent;
 
-  let systemPrompt = personaSystem();
+  // Code sessions use dedicated backend agent - don't add personaSystem
+  // The code agent has its own comprehensive system prompts
+  let systemPrompt = '';
 
   if (code) {
     const sections = [];
@@ -8835,13 +8857,19 @@ function buildMessagesForCode(session, codeOverride = null) {
     }
 
     if (sections.length > 0) {
-      systemPrompt += '\n\n=== CODE WORKSPACE CONTEXT ===\n';
+      if (systemPrompt) {
+        systemPrompt += '\n\n=== CODE WORKSPACE CONTEXT ===\n';
+      } else {
+        systemPrompt = '=== CODE WORKSPACE CONTEXT ===\n';
+      }
       systemPrompt += sections.map(text => `- ${text}`).join('\n');
       systemPrompt += '\n=== END CODE WORKSPACE CONTEXT ===\n';
     }
   }
 
-  const msgs = [{ role: 'system', content: systemPrompt }];
+  // Code sessions should only have user/assistant messages, no system prompt in msgs array
+  // The code backend handles system prompts internally
+  const msgs = [];
   const messageList = Array.isArray(session?.messages) ? session.messages : [];
 
   for (const messageData of messageList) {
@@ -9048,6 +9076,16 @@ function renderHistory() {
 function hydrateInteractiveElements() {
   const copyIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
   const checkIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+  
+  // Inject codes-session class to all messages if current session is code session
+  if (current?.type === 'code' || current?.codeId) {
+    const allMessages = document.querySelectorAll('#chat-log .message');
+    allMessages.forEach(msg => {
+      if (!msg.classList.contains('codes-session')) {
+        msg.classList.add('codes-session');
+      }
+    });
+  }
   
   const expandBtns = document.querySelectorAll('.message-expand-btn');
   expandBtns.forEach(btn => {
@@ -9763,6 +9801,7 @@ function renderSessions() {
   }
 
   updateCodeSessions(state.sessions);
+  loadCodesData();
 
   const total = sessions.length;
   const pageSize = SESSIONS_PER_PAGE;
@@ -10113,6 +10152,12 @@ function addMessage(
   const node = document.createElement("div");
   const span = document.createElement("span");
   node.className = `message ${role}`;
+  
+  // Add codes-session class for code session messages
+  if (current?.type === 'code' || current?.codeId) {
+    node.classList.add('codes-session');
+  }
+  
   if (index >= 0) {
     node.setAttribute("data-message-index", index);
   }
@@ -10444,30 +10489,36 @@ function setCurrent(s) {
     closeMobileSidebar();
   }
 
-  // Handle websearch state when switching between regular and project sessions
+  // Handle websearch state when switching between regular, project, and code sessions
   const currentIsProject = current && current.type === 'project';
+  const currentIsCode = current && current.type === 'code';
   const nextIsProject = s && s.type === 'project';
+  const nextIsCode = s && s.type === 'code';
   
-  if (!currentIsProject && nextIsProject) {
-    // Switching TO project session: save websearch state and disable
+  if (!currentIsProject && !currentIsCode && (nextIsProject || nextIsCode)) {
+    // Switching TO project/code session: save websearch state and disable
     previousWebSearchState = state.settings.webSearchEnabled;
-    log('WEBSEARCH', 2, 'toggle', 'Entering project session - saving and disabling websearch', { 
+    const sessionType = nextIsProject ? 'project' : 'code';
+    log('WEBSEARCH', 2, 'toggle', `Entering ${sessionType} session - saving and disabling websearch`, { 
       previousState: previousWebSearchState,
-      projectSession: s?.name 
+      sessionType,
+      sessionName: s?.name 
     });
     if (state.settings.webSearchEnabled) {
       state.settings.webSearchEnabled = false;
       const webSearchSwitch = document.getElementById('web-search-switch');
       if (webSearchSwitch) webSearchSwitch.checked = false;
-      log('WEBSEARCH', 2, 'toggle', 'WebSearch disabled for project session', { 
+      log('WEBSEARCH', 2, 'toggle', `WebSearch disabled for ${sessionType} session`, { 
         newState: false 
       });
     }
-  } else if (currentIsProject && !nextIsProject) {
-    // Switching FROM project session: restore previous websearch state
+  } else if ((currentIsProject || currentIsCode) && !nextIsProject && !nextIsCode) {
+    // Switching FROM project/code session: restore previous websearch state
     if (previousWebSearchState !== null) {
-      log('WEBSEARCH', 2, 'toggle', 'Leaving project session - restoring websearch', { 
+      const sessionType = currentIsProject ? 'project' : 'code';
+      log('WEBSEARCH', 2, 'toggle', `Leaving ${sessionType} session - restoring websearch`, { 
         restoreState: previousWebSearchState,
+        sessionType,
         regularSession: s?.name 
       });
       state.settings.webSearchEnabled = previousWebSearchState;
@@ -10690,6 +10741,11 @@ async function load() {
     console.warn("Failed to load projects on startup:", e),
   );
 
+  // Load codes data
+  await loadCodesData().catch((e) =>
+    console.warn("Failed to load codes on startup:", e),
+  );
+
   const thinkSel = document.getElementById("extended-thinking");
   if (thinkSel) {
     thinkSel.value = state.settings.think?.mode || "off";
@@ -10708,6 +10764,7 @@ async function load() {
     if (data) {
       state.sessions = data.sessions || [];
       updateCodeSessions(state.sessions);
+      loadCodesData();
       state.settings = { ...state.settings, ...(data.settings || {}) };
       state.sessions.forEach(ensureTokenFields);
       state.sessions.forEach((s) => {
@@ -11024,6 +11081,7 @@ function updateInputState() {
   const isStreaming = streamManager.isStreamingInSession(current);
   const isCurrentNull = !current;
   const isProjectSession = current && current.type === 'project';
+  const isCodeSession = current && current.type === 'code';
 
   const msgEl = $("#msg");
   msgEl.disabled = isCurrentNull;
@@ -11062,19 +11120,20 @@ function updateInputState() {
     msgCentral.placeholder = "How can i help you today?";
   }
 
-  // Hide websearch toggle in project sessions (research agent includes websearch)
+  // Hide websearch toggle in project/code sessions
   const webSearchSwitch = document.getElementById('web-search-switch');
   if (webSearchSwitch) {
     // Get the parent .theme-switcher container
     const webSearchToggle = webSearchSwitch.closest('.theme-switcher');
     if (webSearchToggle) {
       const wasHidden = webSearchToggle.style.display === 'none';
-      const willHide = isProjectSession;
-      webSearchToggle.style.display = isProjectSession ? 'none' : '';
+      const willHide = isProjectSession || isCodeSession;
+      webSearchToggle.style.display = (isProjectSession || isCodeSession) ? 'none' : '';
       
       if (wasHidden !== willHide) {
         log('WEBSEARCH', 2, 'toggle', 'WebSearch sidebar toggle visibility changed', { 
           isProjectSession,
+          isCodeSession,
           visible: !willHide,
           currentState: state.settings.webSearchEnabled
         });
@@ -11082,16 +11141,17 @@ function updateInputState() {
     }
   }
   
-  // Hide websearch button in chat form when in project session
+  // Hide websearch button in chat form when in project/code session
   const webSearchChatBtn = document.getElementById('btn-web-search-chat');
   if (webSearchChatBtn) {
     const wasHidden = webSearchChatBtn.style.display === 'none';
-    const willHide = isProjectSession;
-    webSearchChatBtn.style.display = isProjectSession ? 'none' : '';
+    const willHide = isProjectSession || isCodeSession;
+    webSearchChatBtn.style.display = (isProjectSession || isCodeSession) ? 'none' : '';
     
     if (wasHidden !== willHide) {
       log('WEBSEARCH', 2, 'toggle', 'WebSearch chat button visibility changed', { 
         isProjectSession,
+        isCodeSession,
         visible: !willHide,
         currentState: state.settings.webSearchEnabled
       });
@@ -12743,7 +12803,13 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           updateStreamingHtml(div, html);
           div._lastRenderedLength = display.length;
           scheduleEnhancements(div, { immediate: gotEnd });
-          debouncedAIScrollToBottom();
+          
+          // Always scroll to bottom for codes session
+          if (s.session?.type === 'code' || s.session?.codeId) {
+            scrollToBottom({ force: true });
+          } else {
+            debouncedAIScrollToBottom();
+          }
 
           if (gotEnd) {
             finalize();
@@ -12760,6 +12826,11 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           }
 
           scheduleSmartRender(display, gotEnd);
+          
+          // Always scroll to bottom for codes session after smart render
+          if (s.session?.type === 'code' || s.session?.codeId) {
+            scrollToBottom({ force: true });
+          }
         }
       }
     } else if (gotEnd) {
@@ -13062,6 +13133,7 @@ async function createNewSession(initialMessages = [], options = {}) {
 
   state.sessions.unshift(s);
   updateCodeSessions(state.sessions);
+  loadCodesData();
   await saveSession(s.id, { reason: "create-session" });
   log("SESSION", 2, "createNewSession", "New session object created.", {
     sessionId: s.id,
@@ -13480,6 +13552,7 @@ function deleteSession(sessionToDelete) {
   const wasCurrent = current === sessionToDelete;
   state.sessions = state.sessions.filter((s) => s !== sessionToDelete);
   updateCodeSessions(state.sessions);
+  loadCodesData();
   if (wasCurrent) showWelcomeScreen();
   else renderSessions();
 
@@ -16861,6 +16934,14 @@ function initializeApp() {
 
         session.messages.push(['user', trimmed, { codeId: activeCode.id }]);
         session.messages.push(['ai', '', modelInfo]);
+        
+        // Setup _newMessages to ensure messages are saved (same as handleProjectSend)
+        if (!session._newMessages) {
+          session._newMessages = [];
+        }
+        session._newMessages.push([0, ['user', trimmed, { codeId: activeCode.id }]]);
+        session._newMessages.push([1, ['ai', '', modelInfo]]);
+        
         session.last_updated = nowISO();
 
         activeCode.updated_at = nowISO();

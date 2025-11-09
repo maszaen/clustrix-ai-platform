@@ -40,6 +40,49 @@ export async function runCodeChatStream({
     apiKey: modelOptions.apiKey,
   };
 
+  if (typeof window.api?.codes?.stream === 'function') {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const resolveOnce = (value) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      const rejectOnce = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+
+      try {
+        window.api.codes.stream(payload, (event) => {
+          if (!event || typeof event !== 'object') {
+            return;
+          }
+
+          if (event.type === 'chunk') {
+            handler(event.chunk ?? '');
+            return;
+          }
+
+          if (event.type === 'error') {
+            rejectOnce(new Error(event.error || 'Code agent streaming failed.'));
+            return;
+          }
+
+          if (event.type === 'done') {
+            resolveOnce({
+              usage: event.usage || null,
+              cancelled: !!event.cancelled,
+            });
+          }
+        });
+      } catch (error) {
+        rejectOnce(error);
+      }
+    });
+  }
+
   try {
     const response = await window.api?.codes?.chat?.(payload);
     if (!response) {

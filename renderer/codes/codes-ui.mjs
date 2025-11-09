@@ -7,6 +7,8 @@ const STATE = {
   sessions: [],
 };
 
+let isComposerSubmitting = false;
+
 let deps = {
   log: () => {},
   savePageState: () => {},
@@ -15,6 +17,7 @@ let deps = {
   focusSession: null,
   pushPageHistory: null,
   closeMobileSidebar: null,
+  launchCodeSession: null,
 };
 
 function log(context, level, fn, message, details = {}) {
@@ -31,6 +34,85 @@ function getCodesListElement() {
 
 function getCodeDetailView() {
   return document.getElementById('code-detail-view');
+}
+
+function getCodeComposerInput() {
+  return document.getElementById('code-session-input');
+}
+
+function getCodeComposerSendButton() {
+  return document.getElementById('code-session-send-btn');
+}
+
+function resizeCodeComposer(input = getCodeComposerInput()) {
+  if (!input) return;
+  input.style.height = 'auto';
+  const maxHeight = 280;
+  input.style.height = `${Math.min(input.scrollHeight, maxHeight)}px`;
+}
+
+function resetCodeComposer() {
+  const input = getCodeComposerInput();
+  if (!input) return;
+  input.value = '';
+  input.disabled = false;
+  input.style.height = 'auto';
+  resizeCodeComposer(input);
+}
+
+async function submitCodeComposer() {
+  if (isComposerSubmitting) return;
+  if (!STATE.currentCode) return;
+
+  const input = getCodeComposerInput();
+  if (!input) return;
+
+  const raw = input.value || '';
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    resizeCodeComposer(input);
+    return;
+  }
+
+  if (typeof deps.launchCodeSession !== 'function') {
+    log('CODES', 2, 'submitCodeComposer', 'launchCodeSession dependency missing');
+    return;
+  }
+
+  const sendBtn = getCodeComposerSendButton();
+
+  isComposerSubmitting = true;
+  input.disabled = true;
+  if (sendBtn) sendBtn.disabled = true;
+
+  try {
+    const session = await deps.launchCodeSession({
+      code: STATE.currentCode,
+      prompt: trimmed,
+    });
+
+    if (session) {
+      STATE.currentCode.updated_at = nowISO();
+      await saveCodes();
+      resetCodeComposer();
+      renderCodeSessions(STATE.currentCode);
+    }
+  } catch (error) {
+    log('CODES', 4, 'submitCodeComposer', 'Failed to start code session from composer', {
+      error: error?.message || error,
+      codeId: STATE.currentCode?.id,
+    });
+  } finally {
+    const composerInput = getCodeComposerInput();
+    if (composerInput) {
+      composerInput.disabled = false;
+      resizeCodeComposer(composerInput);
+      composerInput.focus();
+    }
+    const button = getCodeComposerSendButton();
+    if (button) button.disabled = false;
+    isComposerSubmitting = false;
+  }
 }
 
 function updateInfoBar() {
@@ -128,6 +210,11 @@ function showCodesListView() {
   }
   const hadActiveCode = !!STATE.currentCode;
   STATE.currentCode = null;
+  resetCodeComposer();
+  const composerSendBtn = getCodeComposerSendButton();
+  if (composerSendBtn) {
+    composerSendBtn.disabled = true;
+  }
 
   if (hadActiveCode) {
     deps.pushPageHistory?.({ page: 'codes-list' });
@@ -228,6 +315,7 @@ function renderCodeSessions(code) {
     });
 
     list.appendChild(item);
+
   }
 }
 
@@ -258,6 +346,22 @@ function renderCodeDetail(code) {
   renderCodeInstruction(code);
   renderCodeWorkspace(code);
   renderCodeSessions(code);
+
+  const composerInput = getCodeComposerInput();
+  if (composerInput) {
+    const placeholderName = code.name ? ` ${code.name}` : '';
+    composerInput.placeholder = `Ask about${placeholderName || ' this workspace'} or start a new coding run...`;
+    composerInput.disabled = false;
+    resizeCodeComposer(composerInput);
+    setTimeout(() => {
+      composerInput.focus();
+    }, 0);
+  }
+
+  const composerSendBtn = getCodeComposerSendButton();
+  if (composerSendBtn) {
+    composerSendBtn.disabled = false;
+  }
 }
 
 function showCodeDetail(codeId) {
@@ -376,16 +480,28 @@ function ensureListeners() {
     saveCodes();
   });
 
-  document.getElementById('code-new-session-btn')?.addEventListener('click', async () => {
-    if (!STATE.currentCode || !deps.createNewSession) return;
-    const session = await deps.createNewSession([], {
-      type: 'code',
-      codeId: STATE.currentCode.id,
+  const composerInput = getCodeComposerInput();
+  if (composerInput) {
+    composerInput.addEventListener('input', () => {
+      resizeCodeComposer(composerInput);
     });
-    if (!session) return;
-    renderCodeSessions(STATE.currentCode);
-    deps.focusSession?.(session.id);
-  });
+
+    composerInput.addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        submitCodeComposer();
+      }
+    });
+  }
+
+  const composerSendBtn = getCodeComposerSendButton();
+  if (composerSendBtn) {
+    composerSendBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      submitCodeComposer();
+    });
+  }
 
   const starBtn = document.querySelector('#code-detail-view .code-star-btn');
   starBtn?.addEventListener('click', () => {
@@ -682,6 +798,7 @@ function showNewCodeModal() {
  * @param {Function} [options.setCurrentSession] setter for active chat session
  * @param {Function} [options.createNewSession] factory for creating sessions
  * @param {Function} [options.focusSession] focus a specific session by id
+ * @param {Function} [options.launchCodeSession] launch a code session with initial prompt
  * @param {Function} [options.pushPageHistory] push navigation breadcrumb
  * @param {Function} [options.closeMobileSidebar] close the mobile sidebar if open
  */

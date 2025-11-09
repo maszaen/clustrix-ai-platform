@@ -8787,6 +8787,77 @@ function buildMessagesForProject(session) {
   return msgs;
 }
 
+function buildMessagesForCode(session, codeOverride = null) {
+  const { currentCode: codesModuleCurrent } = getCodesState?.() || {};
+  const code = codeOverride && codeOverride.id ? codeOverride : codesModuleCurrent;
+
+  let systemPrompt = personaSystem();
+
+  if (code) {
+    const sections = [];
+    if (code.name) {
+      sections.push(`Workspace Name: ${code.name}`);
+    }
+    if (code.description) {
+      sections.push(`Workspace Description:\n${code.description}`);
+    }
+    if (code.instruction) {
+      sections.push(`Workspace Instruction:\n${code.instruction}`);
+    }
+    if (code.workspacePath) {
+      sections.push(`Preferred Working Directory: ${code.workspacePath}`);
+    }
+    const meta = code.workspaceMetadata || {};
+    const metaBits = [];
+    if (Number.isFinite(meta.fileCount) || Number.isFinite(meta.files)) {
+      const count = Number.isFinite(meta.fileCount) ? meta.fileCount : meta.files;
+      if (count) metaBits.push(`${count} files indexed`);
+    }
+    if (Number.isFinite(meta.folderCount) || Number.isFinite(meta.folders)) {
+      const count = Number.isFinite(meta.folderCount) ? meta.folderCount : meta.folders;
+      if (count) metaBits.push(`${count} folders`);
+    }
+    if (Number.isFinite(meta.ignored)) {
+      metaBits.push(`${meta.ignored} ignored entries`);
+    }
+    if (metaBits.length > 0) {
+      sections.push(`Workspace Snapshot: ${metaBits.join(', ')}`);
+    }
+
+    if (sections.length > 0) {
+      systemPrompt += '\n\n=== CODE WORKSPACE CONTEXT ===\n';
+      systemPrompt += sections.map(text => `- ${text}`).join('\n');
+      systemPrompt += '\n=== END CODE WORKSPACE CONTEXT ===\n';
+    }
+  }
+
+  const msgs = [{ role: 'system', content: systemPrompt }];
+  const messageList = Array.isArray(session?.messages) ? session.messages : [];
+
+  for (const messageData of messageList) {
+    const [role, content, metadata] = messageData;
+    if (role === 'ai' && content === '') continue;
+
+    if (role === 'user') {
+      let fullUserPrompt = content;
+      if (metadata && metadata.files && metadata.files.length > 0) {
+        let context = '\n\nAttached files for context:\n\n';
+        metadata.files.forEach((file) => {
+          if (!file?.error) {
+            context += `--- FILE: ${file.name} ---\n${file.content}\n--- END OF FILE ---\n\n`;
+          }
+        });
+        fullUserPrompt = `${content}${context}`;
+      }
+      msgs.push({ role: 'user', content: fullUserPrompt });
+    } else if (role === 'ai') {
+      msgs.push({ role: 'assistant', content });
+    }
+  }
+
+  return msgs;
+}
+
 function buildMessagesUpTo(indexInclusive) {
   const msgs = [{ role: "system", content: personaSystem() }];
   if (!current || !current.messages) return msgs;
@@ -16677,6 +16748,94 @@ function initializeApp() {
       const session = state.sessions.find((s) => s.id === sessionId);
       if (session) {
         setCurrent(session);
+      }
+    },
+    launchCodeSession: async ({ code, prompt }) => {
+      try {
+        const activeCode = code && code.id ? code : getCodesState()?.currentCode;
+        if (!activeCode || !activeCode.id) {
+          log('CODES', 3, 'launchCodeSession', 'Missing code metadata for composer launch', {
+            hasCode: !!code,
+          });
+          return null;
+        }
+
+        const trimmed = typeof prompt === 'string' ? prompt.trim() : '';
+        if (!trimmed) {
+          log('CODES', 2, 'launchCodeSession', 'Composer submission without prompt ignored', {
+            codeId: activeCode.id,
+          });
+          return null;
+        }
+
+        log('CODES', 1, 'launchCodeSession', 'Launching code session from composer', {
+          codeId: activeCode.id,
+          hasInstruction: !!activeCode.instruction,
+          hasWorkspacePath: !!activeCode.workspacePath,
+        });
+
+        const config = getActiveChatConfig();
+        const modelMeta = getModelMeta(state.settings?.models, config.provider, config.model) || {};
+        const modelInfo = {
+          provider: config.provider,
+          model: config.model,
+          label: modelMeta.label || config.model,
+        };
+
+        const session = await createNewSession([], {
+          type: 'code',
+          codeId: activeCode.id,
+        });
+
+        if (!session) {
+          log('CODES', 4, 'launchCodeSession', 'createNewSession returned null when launching code session', {
+            codeId: activeCode.id,
+          });
+          return null;
+        }
+
+        session.messages.push(['user', trimmed, { codeId: activeCode.id }]);
+        session.messages.push(['ai', '', modelInfo]);
+        session.last_updated = nowISO();
+
+        activeCode.updated_at = nowISO();
+
+        setCurrent(session);
+
+        clearLog();
+        addMessage('user', trimmed, {
+          final: true,
+          index: 0,
+          metadata: { codeId: activeCode.id },
+        });
+
+        const aiIndex = session.messages.length - 1;
+        const aiNode = addMessage('ai', '', {
+          final: false,
+          index: aiIndex,
+          metadata: modelInfo,
+        });
+
+        createResponseSpacer();
+        setTimeout(() => expandSpacer(), 50);
+
+        if (session.name === null) {
+          generateAndSetTitle(session);
+        }
+
+        await saveSession(session.id, { reason: 'code-send' });
+        renderSessions();
+
+        scheduleThinkingText(aiNode);
+        const messagesForAI = buildMessagesForCode(session, activeCode);
+        startStream(session, trimmed, aiNode, aiIndex, false, messagesForAI);
+
+        return session;
+      } catch (error) {
+        log('CODES', 4, 'launchCodeSession', 'Failed to launch code session from composer', {
+          error: error?.message || error,
+        });
+        return null;
       }
     },
     pushPageHistory,

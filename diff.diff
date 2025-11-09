@@ -1,0 +1,782 @@
+diff --git a/backend/codes/code-agent.js b/backend/codes/code-agent.js
+index 00a84a0..ec22566 100644
+--- a/backend/codes/code-agent.js
++++ b/backend/codes/code-agent.js
+@@ -508,6 +508,8 @@ async function processCodeRequest({
+   baseUrl,
+   apiKey,
+   codeId,
++  onChunk,
++  shouldCancel,
+ }) {
+   const state = getSessionState(sessionId);
+   const codeRecord = deps.getCodeById?.(codeId);
+@@ -527,6 +529,14 @@ async function processCodeRequest({
+   let usage = null;
+ 
+   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
++    if (typeof shouldCancel === 'function' && shouldCancel()) {
++      log('CODES', 1, 'processCodeRequest', 'Streaming cancelled before iteration', {
++        iteration,
++        sessionId,
++      });
++      break;
++    }
++
+     const { parsed, usage: iterationUsage } = await runAgentIteration({
+       iteration,
+       state,
+@@ -537,6 +547,14 @@ async function processCodeRequest({
+       apiKey,
+     });
+ 
++    if (typeof shouldCancel === 'function' && shouldCancel()) {
++      log('CODES', 1, 'processCodeRequest', 'Streaming cancelled after agent response', {
++        iteration,
++        sessionId,
++      });
++      break;
++    }
++
+     usage = mergeUsage(usage, iterationUsage);
+ 
+     const { output, exitCode, blocked } = await executeCommand(state, parsed.command);
+@@ -563,6 +581,20 @@ async function processCodeRequest({
+     });
+     if (formatted) {
+       chunks.push(formatted);
++      if (typeof onChunk === 'function') {
++        try {
++          onChunk(formatted, {
++            iteration,
++            done: !parsed.command || parsed.done,
++          });
++        } catch (error) {
++          log('CODES', 2, 'processCodeRequest', 'Failed to deliver chunk to streamer', {
++            error: error?.message || error,
++            iteration,
++            sessionId,
++          });
++        }
++      }
+     }
+ 
+     if (!parsed.command || parsed.done) {
+@@ -573,6 +605,7 @@ async function processCodeRequest({
+   return {
+     chunks,
+     usage,
++    cancelled: typeof shouldCancel === 'function' ? !!shouldCancel() : false,
+   };
+ }
+ 
+diff --git a/main.js b/main.js
+index f7ac364..014d2d4 100644
+--- a/main.js
++++ b/main.js
+@@ -111,6 +111,7 @@ let closeDelayTimeout = null;
+ let finalizingCount = 0;
+ let lastFinalizeCompletedAt = null;
+ let isQuitScheduled = false;
++const codeStreamControllers = new Map();
+ 
+ initializeCodeAgent({
+   log,
+@@ -2800,6 +2801,38 @@ ipcMain.handle('codes:save', async (_evt, codes) => {
+   }
+ });
+ 
++function normalizeCodeChatRequest(payload = {}) {
++  if (!payload || typeof payload !== 'object') {
++    throw new Error('Invalid payload for code chat processing.');
++  }
++
++  const sessionId = payload.sessionId || payload.session?.id;
++  if (!sessionId) {
++    throw new Error('Session ID is required for code chat processing.');
++  }
++
++  const userPrompt = payload.userPrompt;
++  if (!userPrompt || typeof userPrompt !== 'string') {
++    throw new Error('User prompt is required for code chat processing.');
++  }
++
++  const provider = (payload.provider || 'openrouter').toLowerCase();
++  const model = payload.model || 'glm-4.5-flash';
++  const baseUrl = payload.baseUrl || getBaseUrl(provider, payload);
++  const apiKey = payload.apiKey || getApiKey(provider, payload);
++  const codeId = payload.codeId || payload.session?.codeId || null;
++
++  return {
++    sessionId,
++    userPrompt,
++    provider,
++    model,
++    baseUrl,
++    apiKey,
++    codeId,
++  };
++}
++
+ ipcMain.handle('codes:chat', async (_event, payload = {}) => {
+   try {
+     if (!useSQLite || !db) {
+@@ -2808,30 +2841,9 @@ ipcMain.handle('codes:chat', async (_event, payload = {}) => {
+       useSQLite = true;
+     }
+ 
+-    const sessionId = payload.sessionId || payload.session?.id;
+-    const userPrompt = payload.userPrompt;
+-    if (!sessionId) {
+-      throw new Error('Session ID is required for code chat processing.');
+-    }
+-    if (!userPrompt || typeof userPrompt !== 'string') {
+-      throw new Error('User prompt is required for code chat processing.');
+-    }
++    const request = normalizeCodeChatRequest(payload);
+ 
+-    const provider = (payload.provider || 'openrouter').toLowerCase();
+-    const model = payload.model || 'glm-4.5-flash';
+-    const baseUrl = payload.baseUrl || getBaseUrl(provider, payload);
+-    const apiKey = payload.apiKey || getApiKey(provider, payload);
+-    const codeId = payload.codeId || payload.session?.codeId || null;
+-
+-    return await processCodeRequest({
+-      sessionId,
+-      userPrompt,
+-      provider,
+-      model,
+-      baseUrl,
+-      apiKey,
+-      codeId,
+-    });
++    return await processCodeRequest(request);
+   } catch (error) {
+     log('CODES', 4, 'codes:chat', 'Failed to process code agent request', {
+       error: error?.message || error,
+@@ -2840,6 +2852,90 @@ ipcMain.handle('codes:chat', async (_event, payload = {}) => {
+   }
+ });
+ 
++ipcMain.on('codes:stream-start', async (event, payload = {}) => {
++  const reqId = payload?.reqId;
++  if (!reqId) {
++    log('CODES', 3, 'codes:stream-start', 'Missing request ID for streaming payload');
++    return;
++  }
++
++  const controllerState = { cancelled: false };
++  codeStreamControllers.set(reqId, controllerState);
++
++  const send = (suffix, data) => {
++    try {
++      event.sender.send(`codes:${suffix}-${reqId}`, data);
++    } catch (error) {
++      log('CODES', 3, 'codes:stream-start', 'Failed to emit stream event', {
++        suffix,
++        error: error?.message || error,
++      });
++    }
++  };
++
++  let finished = false;
++
++  try {
++    if (!useSQLite || !db) {
++      db = new DatabaseManager(app);
++      invalidateUsageStatisticsCache();
++      useSQLite = true;
++    }
++
++    const request = normalizeCodeChatRequest(payload);
++
++    const result = await processCodeRequest({
++      ...request,
++      onChunk: (chunk, info = {}) => {
++        if (controllerState.cancelled) {
++          return;
++        }
++        send('chunk', {
++          chunk,
++          iteration: info.iteration ?? 0,
++          done: !!info.done,
++        });
++      },
++      shouldCancel: () => controllerState.cancelled,
++    });
++
++    if (controllerState.cancelled) {
++      return;
++    }
++
++    send('done', {
++      usage: result.usage || null,
++      cancelled: false,
++    });
++    finished = true;
++  } catch (error) {
++    if (!controllerState.cancelled) {
++      send('error', {
++        message: error?.message || String(error),
++      });
++      finished = true;
++    }
++  } finally {
++    if (controllerState.cancelled && !finished) {
++      send('done', {
++        usage: null,
++        cancelled: true,
++      });
++    }
++    codeStreamControllers.delete(reqId);
++  }
++});
++
++ipcMain.on('codes:stream-cancel', (_event, reqId) => {
++  if (!reqId) {
++    return;
++  }
++  const controller = codeStreamControllers.get(reqId);
++  if (controller) {
++    controller.cancelled = true;
++  }
++});
++
+ ipcMain.handle('usage:fetchStats', async (_evt, filters = {}) => {
+   try {
+     if (!useSQLite || !db) {
+diff --git a/preload.js b/preload.js
+index 3e8e771..af8ea01 100644
+--- a/preload.js
++++ b/preload.js
+@@ -172,6 +172,70 @@ contextBridge.exposeInMainWorld('api', {
+   codes: {
+     load: () => ipcRenderer.invoke('codes:load'),
+     save: (codes) => ipcRenderer.invoke('codes:save', codes),
++    stream: (payload, onEvent) => {
++      const id = rid();
++      const handler = typeof onEvent === 'function' ? onEvent : () => {};
++
++      const chunkChannel = `codes:chunk-${id}`;
++      const doneChannel = `codes:done-${id}`;
++      const errorChannel = `codes:error-${id}`;
++
++      const cleanup = () => {
++        ipcRenderer.removeAllListeners(chunkChannel);
++        ipcRenderer.removeAllListeners(doneChannel);
++        ipcRenderer.removeAllListeners(errorChannel);
++      };
++
++      ipcRenderer.on(chunkChannel, (_event, data = {}) => {
++        try {
++          handler({
++            type: 'chunk',
++            chunk: data.chunk,
++            iteration: data.iteration,
++            done: data.done,
++          });
++        } catch (error) {
++          console.error('Codes stream chunk handler error:', error);
++        }
++      });
++
++      ipcRenderer.once(doneChannel, (_event, data = {}) => {
++        cleanup();
++        try {
++          handler({
++            type: 'done',
++            usage: data.usage || null,
++            cancelled: !!data.cancelled,
++          });
++        } catch (error) {
++          console.error('Codes stream done handler error:', error);
++        }
++      });
++
++      ipcRenderer.once(errorChannel, (_event, data = {}) => {
++        cleanup();
++        try {
++          handler({
++            type: 'error',
++            error: data.message || data.error || data,
++          });
++        } catch (error) {
++          console.error('Codes stream error handler failure:', error);
++        }
++      });
++
++      ipcRenderer.send('codes:stream-start', {
++        ...(payload || {}),
++        reqId: id,
++      });
++
++      return {
++        cancel: () => {
++          cleanup();
++          ipcRenderer.send('codes:stream-cancel', id);
++        },
++      };
++    },
+     chat: (payload) => ipcRenderer.invoke('codes:chat', payload),
+   },
+   usage: {
+diff --git a/renderer/codes/code-chat.mjs b/renderer/codes/code-chat.mjs
+index 8f6cbbe..51ceb43 100644
+--- a/renderer/codes/code-chat.mjs
++++ b/renderer/codes/code-chat.mjs
+@@ -40,6 +40,49 @@ export async function runCodeChatStream({
+     apiKey: modelOptions.apiKey,
+   };
+ 
++  if (typeof window.api?.codes?.stream === 'function') {
++    return new Promise((resolve, reject) => {
++      let settled = false;
++      const resolveOnce = (value) => {
++        if (settled) return;
++        settled = true;
++        resolve(value);
++      };
++      const rejectOnce = (error) => {
++        if (settled) return;
++        settled = true;
++        reject(error);
++      };
++
++      try {
++        window.api.codes.stream(payload, (event) => {
++          if (!event || typeof event !== 'object') {
++            return;
++          }
++
++          if (event.type === 'chunk') {
++            handler(event.chunk ?? '');
++            return;
++          }
++
++          if (event.type === 'error') {
++            rejectOnce(new Error(event.error || 'Code agent streaming failed.'));
++            return;
++          }
++
++          if (event.type === 'done') {
++            resolveOnce({
++              usage: event.usage || null,
++              cancelled: !!event.cancelled,
++            });
++          }
++        });
++      } catch (error) {
++        rejectOnce(error);
++      }
++    });
++  }
++
+   try {
+     const response = await window.api?.codes?.chat?.(payload);
+     if (!response) {
+diff --git a/renderer/codes/codes-ui.mjs b/renderer/codes/codes-ui.mjs
+index b112b42..73f7b2d 100644
+--- a/renderer/codes/codes-ui.mjs
++++ b/renderer/codes/codes-ui.mjs
+@@ -7,6 +7,8 @@ const STATE = {
+   sessions: [],
+ };
+ 
++let isComposerSubmitting = false;
++
+ let deps = {
+   log: () => {},
+   savePageState: () => {},
+@@ -15,6 +17,7 @@ let deps = {
+   focusSession: null,
+   pushPageHistory: null,
+   closeMobileSidebar: null,
++  launchCodeSession: null,
+ };
+ 
+ function log(context, level, fn, message, details = {}) {
+@@ -33,6 +36,85 @@ function getCodeDetailView() {
+   return document.getElementById('code-detail-view');
+ }
+ 
++function getCodeComposerInput() {
++  return document.getElementById('code-session-input');
++}
++
++function getCodeComposerSendButton() {
++  return document.getElementById('code-session-send-btn');
++}
++
++function resizeCodeComposer(input = getCodeComposerInput()) {
++  if (!input) return;
++  input.style.height = 'auto';
++  const maxHeight = 280;
++  input.style.height = `${Math.min(input.scrollHeight, maxHeight)}px`;
++}
++
++function resetCodeComposer() {
++  const input = getCodeComposerInput();
++  if (!input) return;
++  input.value = '';
++  input.disabled = false;
++  input.style.height = 'auto';
++  resizeCodeComposer(input);
++}
++
++async function submitCodeComposer() {
++  if (isComposerSubmitting) return;
++  if (!STATE.currentCode) return;
++
++  const input = getCodeComposerInput();
++  if (!input) return;
++
++  const raw = input.value || '';
++  const trimmed = raw.trim();
++  if (!trimmed) {
++    resizeCodeComposer(input);
++    return;
++  }
++
++  if (typeof deps.launchCodeSession !== 'function') {
++    log('CODES', 2, 'submitCodeComposer', 'launchCodeSession dependency missing');
++    return;
++  }
++
++  const sendBtn = getCodeComposerSendButton();
++
++  isComposerSubmitting = true;
++  input.disabled = true;
++  if (sendBtn) sendBtn.disabled = true;
++
++  try {
++    const session = await deps.launchCodeSession({
++      code: STATE.currentCode,
++      prompt: trimmed,
++    });
++
++    if (session) {
++      STATE.currentCode.updated_at = nowISO();
++      await saveCodes();
++      resetCodeComposer();
++      renderCodeSessions(STATE.currentCode);
++    }
++  } catch (error) {
++    log('CODES', 4, 'submitCodeComposer', 'Failed to start code session from composer', {
++      error: error?.message || error,
++      codeId: STATE.currentCode?.id,
++    });
++  } finally {
++    const composerInput = getCodeComposerInput();
++    if (composerInput) {
++      composerInput.disabled = false;
++      resizeCodeComposer(composerInput);
++      composerInput.focus();
++    }
++    const button = getCodeComposerSendButton();
++    if (button) button.disabled = false;
++    isComposerSubmitting = false;
++  }
++}
++
+ function updateInfoBar() {
+   const infoEl = document.getElementById('codes-total-count');
+   if (!infoEl) return;
+@@ -128,6 +210,11 @@ function showCodesListView() {
+   }
+   const hadActiveCode = !!STATE.currentCode;
+   STATE.currentCode = null;
++  resetCodeComposer();
++  const composerSendBtn = getCodeComposerSendButton();
++  if (composerSendBtn) {
++    composerSendBtn.disabled = true;
++  }
+ 
+   if (hadActiveCode) {
+     deps.pushPageHistory?.({ page: 'codes-list' });
+@@ -228,6 +315,7 @@ function renderCodeSessions(code) {
+     });
+ 
+     list.appendChild(item);
++
+   }
+ }
+ 
+@@ -258,6 +346,22 @@ function renderCodeDetail(code) {
+   renderCodeInstruction(code);
+   renderCodeWorkspace(code);
+   renderCodeSessions(code);
++
++  const composerInput = getCodeComposerInput();
++  if (composerInput) {
++    const placeholderName = code.name ? ` ${code.name}` : '';
++    composerInput.placeholder = `Ask about${placeholderName || ' this workspace'} or start a new coding run...`;
++    composerInput.disabled = false;
++    resizeCodeComposer(composerInput);
++    setTimeout(() => {
++      composerInput.focus();
++    }, 0);
++  }
++
++  const composerSendBtn = getCodeComposerSendButton();
++  if (composerSendBtn) {
++    composerSendBtn.disabled = false;
++  }
+ }
+ 
+ function showCodeDetail(codeId) {
+@@ -376,16 +480,28 @@ function ensureListeners() {
+     saveCodes();
+   });
+ 
+-  document.getElementById('code-new-session-btn')?.addEventListener('click', async () => {
+-    if (!STATE.currentCode || !deps.createNewSession) return;
+-    const session = await deps.createNewSession([], {
+-      type: 'code',
+-      codeId: STATE.currentCode.id,
++  const composerInput = getCodeComposerInput();
++  if (composerInput) {
++    composerInput.addEventListener('input', () => {
++      resizeCodeComposer(composerInput);
+     });
+-    if (!session) return;
+-    renderCodeSessions(STATE.currentCode);
+-    deps.focusSession?.(session.id);
+-  });
++
++    composerInput.addEventListener('keydown', (event) => {
++      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
++        event.preventDefault();
++        event.stopPropagation();
++        submitCodeComposer();
++      }
++    });
++  }
++
++  const composerSendBtn = getCodeComposerSendButton();
++  if (composerSendBtn) {
++    composerSendBtn.addEventListener('click', (event) => {
++      event.preventDefault();
++      submitCodeComposer();
++    });
++  }
+ 
+   const starBtn = document.querySelector('#code-detail-view .code-star-btn');
+   starBtn?.addEventListener('click', () => {
+@@ -682,6 +798,7 @@ function showNewCodeModal() {
+  * @param {Function} [options.setCurrentSession] setter for active chat session
+  * @param {Function} [options.createNewSession] factory for creating sessions
+  * @param {Function} [options.focusSession] focus a specific session by id
++ * @param {Function} [options.launchCodeSession] launch a code session with initial prompt
+  * @param {Function} [options.pushPageHistory] push navigation breadcrumb
+  * @param {Function} [options.closeMobileSidebar] close the mobile sidebar if open
+  */
+diff --git a/renderer/index.html b/renderer/index.html
+index 2d3cfc5..8a05e77 100644
+--- a/renderer/index.html
++++ b/renderer/index.html
+@@ -766,12 +766,22 @@
+               <div class="code-sessions project-sessions">
+                 <div class="project-card-header">
+                   <h3>Code Sessions</h3>
+-                  <button id="code-new-session-btn" class="white-btn" title="New Code Session">
+-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+-                      <path d="M12 5v14m-7-7h14" />
+-                    </svg>
+-                    <span>New Session</span>
+-                  </button>
++                </div>
++                <div class="code-session-composer input-container-parent">
++                  <div class="input-container">
++                    <textarea id="code-session-input" spellcheck="false" autocorrect="off" rows="1" placeholder="Ask about this workspace or start a new coding run..."></textarea>
++                  </div>
++                  <div class="row-between pad-l-sm">
++                    <div class="row-gap w-50"></div>
++                    <div class="row-gap w-50">
++                      <button id="code-session-send-btn" class="send-button" title="Send message (Ctrl + Enter)">
++                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-icon lucide-arrow-up">
++                          <path d="m5 12 7-7 7 7" />
++                          <path d="M12 19V5" />
++                        </svg>
++                      </button>
++                    </div>
++                  </div>
+                 </div>
+                 <div id="code-sessions-list" class="project-sessions-list"></div>
+               </div>
+diff --git a/renderer/renderer.js b/renderer/renderer.js
+index 7c5b777..e3d0658 100644
+--- a/renderer/renderer.js
++++ b/renderer/renderer.js
+@@ -8787,6 +8787,77 @@ function buildMessagesForProject(session) {
+   return msgs;
+ }
+ 
++function buildMessagesForCode(session, codeOverride = null) {
++  const { currentCode: codesModuleCurrent } = getCodesState?.() || {};
++  const code = codeOverride && codeOverride.id ? codeOverride : codesModuleCurrent;
++
++  let systemPrompt = personaSystem();
++
++  if (code) {
++    const sections = [];
++    if (code.name) {
++      sections.push(`Workspace Name: ${code.name}`);
++    }
++    if (code.description) {
++      sections.push(`Workspace Description:\n${code.description}`);
++    }
++    if (code.instruction) {
++      sections.push(`Workspace Instruction:\n${code.instruction}`);
++    }
++    if (code.workspacePath) {
++      sections.push(`Preferred Working Directory: ${code.workspacePath}`);
++    }
++    const meta = code.workspaceMetadata || {};
++    const metaBits = [];
++    if (Number.isFinite(meta.fileCount) || Number.isFinite(meta.files)) {
++      const count = Number.isFinite(meta.fileCount) ? meta.fileCount : meta.files;
++      if (count) metaBits.push(`${count} files indexed`);
++    }
++    if (Number.isFinite(meta.folderCount) || Number.isFinite(meta.folders)) {
++      const count = Number.isFinite(meta.folderCount) ? meta.folderCount : meta.folders;
++      if (count) metaBits.push(`${count} folders`);
++    }
++    if (Number.isFinite(meta.ignored)) {
++      metaBits.push(`${meta.ignored} ignored entries`);
++    }
++    if (metaBits.length > 0) {
++      sections.push(`Workspace Snapshot: ${metaBits.join(', ')}`);
++    }
++
++    if (sections.length > 0) {
++      systemPrompt += '\n\n=== CODE WORKSPACE CONTEXT ===\n';
++      systemPrompt += sections.map(text => `- ${text}`).join('\n');
++      systemPrompt += '\n=== END CODE WORKSPACE CONTEXT ===\n';
++    }
++  }
++
++  const msgs = [{ role: 'system', content: systemPrompt }];
++  const messageList = Array.isArray(session?.messages) ? session.messages : [];
++
++  for (const messageData of messageList) {
++    const [role, content, metadata] = messageData;
++    if (role === 'ai' && content === '') continue;
++
++    if (role === 'user') {
++      let fullUserPrompt = content;
++      if (metadata && metadata.files && metadata.files.length > 0) {
++        let context = '\n\nAttached files for context:\n\n';
++        metadata.files.forEach((file) => {
++          if (!file?.error) {
++            context += `--- FILE: ${file.name} ---\n${file.content}\n--- END OF FILE ---\n\n`;
++          }
++        });
++        fullUserPrompt = `${content}${context}`;
++      }
++      msgs.push({ role: 'user', content: fullUserPrompt });
++    } else if (role === 'ai') {
++      msgs.push({ role: 'assistant', content });
++    }
++  }
++
++  return msgs;
++}
++
+ function buildMessagesUpTo(indexInclusive) {
+   const msgs = [{ role: "system", content: personaSystem() }];
+   if (!current || !current.messages) return msgs;
+@@ -16679,6 +16750,94 @@ function initializeApp() {
+         setCurrent(session);
+       }
+     },
++    launchCodeSession: async ({ code, prompt }) => {
++      try {
++        const activeCode = code && code.id ? code : getCodesState()?.currentCode;
++        if (!activeCode || !activeCode.id) {
++          log('CODES', 3, 'launchCodeSession', 'Missing code metadata for composer launch', {
++            hasCode: !!code,
++          });
++          return null;
++        }
++
++        const trimmed = typeof prompt === 'string' ? prompt.trim() : '';
++        if (!trimmed) {
++          log('CODES', 2, 'launchCodeSession', 'Composer submission without prompt ignored', {
++            codeId: activeCode.id,
++          });
++          return null;
++        }
++
++        log('CODES', 1, 'launchCodeSession', 'Launching code session from composer', {
++          codeId: activeCode.id,
++          hasInstruction: !!activeCode.instruction,
++          hasWorkspacePath: !!activeCode.workspacePath,
++        });
++
++        const config = getActiveChatConfig();
++        const modelMeta = getModelMeta(state.settings?.models, config.provider, config.model) || {};
++        const modelInfo = {
++          provider: config.provider,
++          model: config.model,
++          label: modelMeta.label || config.model,
++        };
++
++        const session = await createNewSession([], {
++          type: 'code',
++          codeId: activeCode.id,
++        });
++
++        if (!session) {
++          log('CODES', 4, 'launchCodeSession', 'createNewSession returned null when launching code session', {
++            codeId: activeCode.id,
++          });
++          return null;
++        }
++
++        session.messages.push(['user', trimmed, { codeId: activeCode.id }]);
++        session.messages.push(['ai', '', modelInfo]);
++        session.last_updated = nowISO();
++
++        activeCode.updated_at = nowISO();
++
++        setCurrent(session);
++
++        clearLog();
++        addMessage('user', trimmed, {
++          final: true,
++          index: 0,
++          metadata: { codeId: activeCode.id },
++        });
++
++        const aiIndex = session.messages.length - 1;
++        const aiNode = addMessage('ai', '', {
++          final: false,
++          index: aiIndex,
++          metadata: modelInfo,
++        });
++
++        createResponseSpacer();
++        setTimeout(() => expandSpacer(), 50);
++
++        if (session.name === null) {
++          generateAndSetTitle(session);
++        }
++
++        await saveSession(session.id, { reason: 'code-send' });
++        renderSessions();
++
++        scheduleThinkingText(aiNode);
++        const messagesForAI = buildMessagesForCode(session, activeCode);
++        startStream(session, trimmed, aiNode, aiIndex, false, messagesForAI);
++
++        return session;
++      } catch (error) {
++        log('CODES', 4, 'launchCodeSession', 'Failed to launch code session from composer', {
++          error: error?.message || error,
++        });
++        return null;
++      }
++    },
+     pushPageHistory,
+     closeMobileSidebar,
+   });

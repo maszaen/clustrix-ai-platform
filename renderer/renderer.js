@@ -6567,6 +6567,13 @@ async function handleProjectSend() {
   s.messages.push(["user", originalText, { files: userFilesForSession }]);
   s.messages.push(["ai", "", modelInfo]);
 
+  // Setup _newMessages untuk memastikan pesan tersimpan (seperti di sendFromWelcome)
+  if (!s._newMessages) {
+    s._newMessages = [];
+  }
+  s._newMessages.push([0, ["user", originalText, { files: userFilesForSession }]]);
+  s._newMessages.push([1, ["ai", "", modelInfo]]);
+
   // 4. Update dan simpan data proyek
   currentProject.last_updated = nowISO();
   await saveProjectsData();

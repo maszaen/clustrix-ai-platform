@@ -132,33 +132,17 @@ function renderCodeMessageFiles() {
 
   container.innerHTML = '';
 
-  for (const file of codeMessageStagedFiles) {
-    const fileItem = document.createElement('div');
-    fileItem.className = 'file-upload-item';
-    fileItem.innerHTML = `
-      <div class="file-upload-item-info">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-          <polyline points="13 2 13 9 20 9" />
-        </svg>
-        <span>${escapeHtml(file.name)}</span>
-      </div>
-      <button class="file-upload-item-remove" data-file-index="${codeMessageStagedFiles.indexOf(file)}" title="Remove file">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-        </svg>
-      </button>
-    `;
-
-    const removeBtn = fileItem.querySelector('.file-upload-item-remove');
-    removeBtn?.addEventListener('click', () => {
-      const index = parseInt(removeBtn.dataset.fileIndex);
+  codeMessageStagedFiles.forEach((file, index) => {
+    const pill = document.createElement('div');
+    pill.className = 'file-pill';
+    pill.innerHTML = `<span>${escapeHtml(file.name)}</span><button class="remove-file-btn" data-index="${index}">&times;</button>`;
+    pill.querySelector('.remove-file-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
       codeMessageStagedFiles.splice(index, 1);
       renderCodeMessageFiles();
     });
-
-    container.appendChild(fileItem);
-  }
+    container.appendChild(pill);
+  });
 }
 
 async function startCodeRename(code) {
@@ -247,7 +231,11 @@ function updateCodeStarButton() {
   const starBtn = detailView?.querySelector('.code-star-btn');
 
   if (starBtn && STATE.currentCode) {
-    starBtn.classList.toggle('active', !!STATE.currentCode.isFavorite);
+    if (STATE.currentCode.isFavorite) {
+      starBtn.classList.add('starred');
+    } else {
+      starBtn.classList.remove('starred');
+    }
   }
 }
 

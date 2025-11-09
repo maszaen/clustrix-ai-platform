@@ -430,14 +430,11 @@ function renderCodeInstruction(code) {
 
   if (code.instruction) {
     const text = document.createElement('p');
+    text.className = 'instruction-preview-text';
     text.innerHTML = escapeHtml(code.instruction).replace(/\n/g, '<br/>');
     instructionDiv.appendChild(text);
-  } else {
-    const hint = document.createElement('p');
-    hint.className = 'empty-hint';
-    hint.textContent = 'No instruction yet. Provide guidance for this workspace to shape the coding agent.';
-    instructionDiv.appendChild(hint);
   }
+
 
   container.appendChild(instructionDiv);
 }
@@ -450,8 +447,17 @@ function renderCodeWorkspace(code) {
 
   if (!code.workspacePath) {
     const empty = document.createElement('div');
-    empty.className = 'empty-hint';
-    empty.textContent = 'No workspace selected. Choose a local project folder to enable context-aware coding.';
+    empty.className = 'file-empty-state-icon';
+    empty.style.gridColumn = '1 / -1';
+    empty.innerHTML = `
+      <div class="file-drop-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M20 7h-4v-.5a3.5 3.5 0 0 0-7 0V7H5c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2Z"/>
+          <path d="M9 7V6.5A2.5 2.5 0 0 1 11.5 4h1a2.5 2.5 0 0 1 2.5 2.5V7"/>
+        </svg>
+      </div>
+      <small>Select a project folder to enable<br>context-aware coding assistance.</small>
+    `;
     container.appendChild(empty);
     return;
   }
@@ -496,10 +502,11 @@ function renderCodeSessions(code) {
   list.innerHTML = '';
   const related = STATE.sessions.filter(session => session.codeId === code.id);
   if (related.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'empty-hint';
-    empty.textContent = 'No sessions yet. Start a new coding conversation to launch the PowerShell workspace.';
-    list.appendChild(empty);
+    list.innerHTML = `
+      <div class="project-session-item-none">
+        <p>Start a coding session to organize<br>conversations and leverage workspace context.</p>
+      </div>
+    `;
     return;
   }
 
@@ -1415,3 +1422,16 @@ export function getCodesState() {
 export function openCodeDetail(codeId) {
   showCodeDetail(codeId);
 }
+
+/**
+ * Get code message staged files array for file upload
+ * @returns {Array} staged files array
+ */
+export function getCodeMessageStagedFiles() {
+  return codeMessageStagedFiles;
+}
+
+/**
+ * Render code message staged files
+ */
+export { renderCodeMessageFiles };

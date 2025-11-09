@@ -49,6 +49,10 @@ let currentProject = null;
 let projectsData = [];
 let mermaidInitialized = false;
 let previousWebSearchState = null; // Track websearch state before entering project
+let currentCode = null;
+let codesData = [];
+let isCodesSelectMode = false;
+let selectedCodeIds = new Set();
 let confirmationModal = null;
 let confirmationTitleEl = null;
 let confirmationMessageEl = null;
@@ -6471,6 +6475,83 @@ async function toggleProjectFavorite(project) {
     projectId: project.id,
     isFavorite: project.isFavorite,
   });
+}
+
+// =====================
+// Codes Data Functions
+// =====================
+
+async function saveCodesData() {
+  try {
+    log("CODES", 1, "saveCodesData", "Attempting to save codes", {
+      codeCount: codesData.length
+    });
+
+    if (window.api && window.api.codes) {
+      // Save all codes to database
+      for (const code of codesData) {
+        await window.api.codes.save(code);
+      }
+      log("CODES", 2, "saveCodesData", "Codes saved successfully");
+    } else {
+      // Fallback to localStorage
+      localStorage.setItem("codes_data", JSON.stringify(codesData));
+      log("CODES", 2, "saveCodesData", "Saved to localStorage (debug mode)");
+    }
+  } catch (error) {
+    log("CODES", 4, "saveCodesData", "Error saving codes", {
+      error: error.message
+    });
+  }
+}
+
+async function loadCodesData() {
+  try {
+    if (window.api && window.api.codes) {
+      codesData = (await window.api.codes.load()) || [];
+    } else {
+      // Fallback to localStorage
+      const saved = localStorage.getItem("codes_data");
+      codesData = saved ? JSON.parse(saved) : [];
+    }
+
+    // Ensure all codes have isFavorite property
+    codesData.forEach(code => {
+      if (code.isFavorite === undefined) {
+        code.isFavorite = false;
+      }
+    });
+
+    log("CODES", 2, "loadCodesData", "Codes loaded successfully", {
+      codeCount: codesData.length
+    });
+  } catch (error) {
+    log("CODES", 4, "loadCodesData", "Error loading codes", {
+      error: error.message
+    });
+    codesData = [];
+  }
+}
+
+async function toggleCodeFavorite(code) {
+  code.isFavorite = !code.isFavorite;
+  await saveCodesData();
+
+  log("CODES", 2, "toggleCodeFavorite", "Code favorite toggled", {
+    codeId: code.id,
+    isFavorite: code.isFavorite
+  });
+}
+
+function updateCodeStarButton() {
+  const starBtn = document.querySelector(".code-star-btn");
+  if (starBtn && currentCode) {
+    if (currentCode.isFavorite) {
+      starBtn.classList.add("favorited");
+    } else {
+      starBtn.classList.remove("favorited");
+    }
+  }
 }
 
 function updateProjectStarButton() {

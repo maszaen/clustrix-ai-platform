@@ -169,6 +169,17 @@ contextBridge.exposeInMainWorld('api', {
     load: () => ipcRenderer.invoke('projects:load'),
     save: (projects) => ipcRenderer.invoke('projects:save', projects),
   },
+  codes: {
+    load: () => ipcRenderer.invoke('codes:load'),
+    save: (code) => ipcRenderer.invoke('codes:save', code),
+    delete: (codeId) => ipcRenderer.invoke('codes:delete', codeId),
+    getIterations: (codeId) => ipcRenderer.invoke('codes:get-iterations', codeId),
+    streamStart: (payload) => ipcRenderer.send('codes:stream-start', payload),
+    approveCommand: (payload) => ipcRenderer.invoke('codes:approve-command', payload),
+    onProgress: (callback) => ipcRenderer.on('codes:progress', callback),
+    onDone: (reqId, callback) => ipcRenderer.once(`codes:done-${reqId}`, callback),
+    onError: (reqId, callback) => ipcRenderer.once(`codes:error-${reqId}`, callback),
+  },
   usage: {
     fetchStats: (filters) => ipcRenderer.invoke('usage:fetchStats', filters),
   },

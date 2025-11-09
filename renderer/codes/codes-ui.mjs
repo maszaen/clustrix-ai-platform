@@ -77,6 +77,37 @@ async function submitCodeComposer() {
     return;
   }
 
+  // Check if workspace is set
+  if (!STATE.currentCode.workspacePath || STATE.currentCode.workspacePath.trim() === '') {
+    // Open workspace settings modal instead of sending message
+    log('CODES', 2, 'submitCodeComposer', 'Workspace not set, opening settings modal');
+
+    const existing = STATE.currentCode.workspacePath || '';
+    const value = await showCodesInputModal({
+      title: 'Workspace Directory Required',
+      description: 'Please set a workspace directory before starting a code session. This allows the AI to access and understand your project context.',
+      defaultValue: existing,
+      placeholder: 'C:/Users/you/projects/acme-app',
+      confirmLabel: 'Save Path',
+      multiline: false,
+      allowEmpty: false,
+      hasBrowseButton: true,
+    });
+
+    if (value && value.trim()) {
+      STATE.currentCode.workspacePath = value.trim();
+      STATE.currentCode.updated_at = nowISO();
+      renderCodeWorkspace(STATE.currentCode);
+      await saveCodes();
+
+      // After setting workspace, focus back to input
+      if (input) {
+        input.focus();
+      }
+    }
+    return;
+  }
+
   if (typeof deps.launchCodeSession !== 'function') {
     log('CODES', 2, 'submitCodeComposer', 'launchCodeSession dependency missing');
     return;

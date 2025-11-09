@@ -2377,6 +2377,7 @@ ipcMain.handle('sessions:load', async () => {
           created_at: session.last_updated,
           last_updated: session.last_updated,
           projectId: session.project_id,
+          codeGroupId: metadata.codeGroupId || null,
           isProject: session.is_project === 1,
           isFavorite: session.is_favorite === 1,
           persona: {
@@ -2699,6 +2700,104 @@ ipcMain.handle('projects:save', async (_evt, projects) => {
       stack: e.stack
     });
     throw e;
+  }
+});
+
+async function loadCodeGroupsFromStorage() {
+  try {
+    if (useSQLite && db) {
+      const groups = db.getAllCodeGroups();
+      return groups.map(group => {
+        let workspaceSummary = null;
+        if (group.workspace_summary) {
+          try {
+            workspaceSummary = JSON.parse(group.workspace_summary);
+          } catch (parseError) {
+            log('CODE_GROUPS', 3, 'loadCodeGroupsFromStorage', 'Failed parsing workspace summary', {
+              id: group.id,
+              error: parseError.message
+            });
+          }
+        }
+
+        const files = db.getCodeGroupFiles(group.id);
+        return {
+          id: group.id,
+          name: group.name,
+          description: group.description,
+          instruction: group.instruction || '',
+          workspacePath: group.workspace_path || '',
+          workspaceName: group.workspace_name || '',
+          workspaceSummary,
+          created_at: new Date(group.created_at).toISOString(),
+          updated_at: new Date(group.updated_at).toISOString(),
+          isFavorite: group.is_favorite === 1,
+          files: files.map(f => ({
+            name: f.name,
+            type: f.type,
+            size: f.size,
+            content: f.content.toString('utf-8')
+          }))
+        };
+      });
+    }
+
+    throw new Error('SQLite database not available');
+  } catch (error) {
+    log('CODE_GROUPS', 4, 'loadCodeGroupsFromStorage', 'Failed to load code groups', {
+      error: error.message
+    });
+    throw error;
+  }
+}
+
+ipcMain.handle('codes:groups-load', async () => {
+  try {
+    return await loadCodeGroupsFromStorage();
+  } catch (error) {
+    log('CODE_GROUPS', 4, 'codes:groups-load', 'Failed', { error: error.message });
+    throw error;
+  }
+});
+
+ipcMain.handle('codes:groups-save', async (_evt, groups = []) => {
+  try {
+    if (!useSQLite || !db) {
+      log('CODE_GROUPS', 1, 'codes:groups-save', 'Initializing SQLite for code groups');
+      db = new DatabaseManager(app);
+      useSQLite = true;
+    }
+
+    db.transaction(() => {
+      const incomingIds = new Set(groups.map(group => group.id));
+      const existingGroups = db.getAllCodeGroups();
+
+      for (const existing of existingGroups) {
+        if (!incomingIds.has(existing.id)) {
+          db.deleteCodeGroup(existing.id);
+        }
+      }
+
+      for (const group of groups) {
+        db.saveCodeGroup(group);
+        db.deleteCodeGroupFiles(group.id);
+        if (Array.isArray(group.files)) {
+          for (const file of group.files) {
+            db.saveCodeGroupFile(group.id, file);
+          }
+        }
+      }
+    });
+
+    log('CODE_GROUPS', 2, 'codes:groups-save', 'Saved code groups', {
+      count: groups.length
+    });
+    return true;
+  } catch (error) {
+    log('CODE_GROUPS', 4, 'codes:groups-save', 'Failed to save code groups', {
+      error: error.message
+    });
+    throw error;
   }
 });
 

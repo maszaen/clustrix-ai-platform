@@ -174,6 +174,8 @@ contextBridge.exposeInMainWorld('api', {
     inspectWorkspace: (folderPath) => ipcRenderer.invoke('codes:inspect-workspace', folderPath),
     executeCommand: (payload) => ipcRenderer.invoke('codes:execute-command', payload),
     shutdownTerminal: (sessionId) => ipcRenderer.invoke('codes:shutdown-terminal', sessionId),
+    loadGroups: () => ipcRenderer.invoke('codes:groups-load'),
+    saveGroups: (groups) => ipcRenderer.invoke('codes:groups-save', groups),
   },
   usage: {
     fetchStats: (filters) => ipcRenderer.invoke('usage:fetchStats', filters),

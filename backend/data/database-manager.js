@@ -159,8 +159,39 @@ class DatabaseManager {
         
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
       );
-      
+
       CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project_id);
+
+      CREATE TABLE IF NOT EXISTS code_groups (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        instruction TEXT,
+        workspace_path TEXT,
+        workspace_name TEXT,
+        workspace_summary TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        is_favorite INTEGER DEFAULT 0,
+        metadata TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_code_groups_created ON code_groups(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS code_group_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code_group_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        content BLOB NOT NULL,
+        created_at INTEGER NOT NULL,
+        metadata TEXT,
+
+        FOREIGN KEY (code_group_id) REFERENCES code_groups(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_code_group_files_group ON code_group_files(code_group_id);
       
       CREATE TABLE IF NOT EXISTS drafts (
         id TEXT PRIMARY KEY,
@@ -298,6 +329,9 @@ class DatabaseManager {
 
     if (session.code) {
       metadataPayload.code = session.code;
+    }
+    if (session.codeGroupId) {
+      metadataPayload.codeGroupId = session.codeGroupId;
     }
 
     return stmt.run(
@@ -575,6 +609,89 @@ class DatabaseManager {
     return this.db.prepare(`
       DELETE FROM project_files WHERE project_id = ?
     `).run(projectId);
+  }
+
+  getAllCodeGroups() {
+    return this.db.prepare(`
+      SELECT * FROM code_groups
+      ORDER BY created_at DESC
+    `).all();
+  }
+
+  getCodeGroup(groupId) {
+    return this.db.prepare(`
+      SELECT * FROM code_groups WHERE id = ?
+    `).get(groupId);
+  }
+
+  saveCodeGroup(group) {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO code_groups
+      (id, name, description, instruction, workspace_path, workspace_name, workspace_summary,
+       created_at, updated_at, is_favorite, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const createdAt = group.created_at ? Date.parse(group.created_at) : Date.now();
+    const updatedAt = group.updated_at || group.last_updated
+      ? Date.parse(group.updated_at || group.last_updated)
+      : Date.now();
+    const workspaceSummary = group.workspaceSummary || group.workspace_summary || null;
+
+    return stmt.run(
+      group.id,
+      group.name,
+      group.description || '',
+      group.instruction || '',
+      group.workspacePath || group.workspace_path || '',
+      group.workspaceName || group.workspace_name || '',
+      workspaceSummary ? JSON.stringify(workspaceSummary) : null,
+      createdAt,
+      updatedAt,
+      group.isFavorite ? 1 : 0,
+      JSON.stringify(group.metadata || {})
+    );
+  }
+
+  deleteCodeGroup(groupId) {
+    return this.db.prepare(`
+      DELETE FROM code_groups WHERE id = ?
+    `).run(groupId);
+  }
+
+  getCodeGroupFiles(groupId) {
+    return this.db.prepare(`
+      SELECT * FROM code_group_files
+      WHERE code_group_id = ?
+    `).all(groupId);
+  }
+
+  saveCodeGroupFile(groupId, file) {
+    const stmt = this.db.prepare(`
+      INSERT INTO code_group_files
+      (code_group_id, name, type, size, content, created_at, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const binaryContent = typeof file.content === 'string'
+      ? Buffer.from(file.content, 'utf-8')
+      : file.content;
+
+    return stmt.run(
+      groupId,
+      file.name,
+      file.type || '',
+      binaryContent.length,
+      binaryContent,
+      Date.now(),
+      JSON.stringify(file.metadata || {})
+    );
+  }
+
+  deleteCodeGroupFiles(groupId) {
+    return this.db.prepare(`
+      DELETE FROM code_group_files WHERE code_group_id = ?
+    `).run(groupId);
   }
   
   getSetting(key) {

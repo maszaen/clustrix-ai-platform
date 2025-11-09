@@ -77,6 +77,7 @@ describe('agent helpers', () => {
     const prompt = buildPrompt(session, '', session.code.commandHistory[0]);
     expect(prompt).toContain('=== ORIGINAL USER REQUEST ===');
     expect(prompt).toContain('Fix the failing tests');
+    expect(prompt).toContain('Current working directory:');
     expect(prompt).toContain('- #1 Get-ChildItem src');
     expect(prompt).toContain('=== LAST COMMAND ===');
   });

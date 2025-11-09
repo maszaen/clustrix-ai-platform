@@ -83,6 +83,9 @@ export function buildCodeAgentSystemPrompt(session, originalPrompt, lastEntry) {
   const promptLines = [];
   promptLines.push('You are a PowerShell-based coding assistant helping user fix bugs in code files or any problem.');
   promptLines.push('');
+  const workingDir = session?.code?.workspacePath || '(workspace not selected yet)';
+  promptLines.push(`Current working directory: ${workingDir}`);
+  promptLines.push('');
   const basePrompt = originalPrompt || session?.code?.originalRequest || '';
   promptLines.push('=== ORIGINAL USER REQUEST ===');
   promptLines.push(basePrompt || '');
@@ -127,6 +130,7 @@ export function buildCodeAgentSystemPrompt(session, originalPrompt, lastEntry) {
   promptLines.push('<cmd>');
   promptLines.push('Next PowerShell command (optional - only if needed)');
   promptLines.push('</cmd>');
+  promptLines.push('use <end> tag to end the coding session without providing <cmd> tag');
   promptLines.push('');
   promptLines.push('=== DECISION TREE ===');
   promptLines.push('Follow the provided workflow.');

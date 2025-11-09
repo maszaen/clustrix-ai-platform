@@ -508,6 +508,8 @@ async function processCodeRequest({
   baseUrl,
   apiKey,
   codeId,
+  onChunk,
+  shouldCancel,
 }) {
   const state = getSessionState(sessionId);
   const codeRecord = deps.getCodeById?.(codeId);
@@ -527,6 +529,14 @@ async function processCodeRequest({
   let usage = null;
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
+    if (typeof shouldCancel === 'function' && shouldCancel()) {
+      log('CODES', 1, 'processCodeRequest', 'Streaming cancelled before iteration', {
+        iteration,
+        sessionId,
+      });
+      break;
+    }
+
     const { parsed, usage: iterationUsage } = await runAgentIteration({
       iteration,
       state,
@@ -536,6 +546,14 @@ async function processCodeRequest({
       baseUrl,
       apiKey,
     });
+
+    if (typeof shouldCancel === 'function' && shouldCancel()) {
+      log('CODES', 1, 'processCodeRequest', 'Streaming cancelled after agent response', {
+        iteration,
+        sessionId,
+      });
+      break;
+    }
 
     usage = mergeUsage(usage, iterationUsage);
 
@@ -563,6 +581,20 @@ async function processCodeRequest({
     });
     if (formatted) {
       chunks.push(formatted);
+      if (typeof onChunk === 'function') {
+        try {
+          onChunk(formatted, {
+            iteration,
+            done: !parsed.command || parsed.done,
+          });
+        } catch (error) {
+          log('CODES', 2, 'processCodeRequest', 'Failed to deliver chunk to streamer', {
+            error: error?.message || error,
+            iteration,
+            sessionId,
+          });
+        }
+      }
     }
 
     if (!parsed.command || parsed.done) {
@@ -573,6 +605,7 @@ async function processCodeRequest({
   return {
     chunks,
     usage,
+    cancelled: typeof shouldCancel === 'function' ? !!shouldCancel() : false,
   };
 }
 

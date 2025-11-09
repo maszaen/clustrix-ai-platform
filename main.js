@@ -111,6 +111,7 @@ let closeDelayTimeout = null;
 let finalizingCount = 0;
 let lastFinalizeCompletedAt = null;
 let isQuitScheduled = false;
+const codeStreamControllers = new Map();
 
 initializeCodeAgent({
   log,
@@ -2800,6 +2801,38 @@ ipcMain.handle('codes:save', async (_evt, codes) => {
   }
 });
 
+function normalizeCodeChatRequest(payload = {}) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Invalid payload for code chat processing.');
+  }
+
+  const sessionId = payload.sessionId || payload.session?.id;
+  if (!sessionId) {
+    throw new Error('Session ID is required for code chat processing.');
+  }
+
+  const userPrompt = payload.userPrompt;
+  if (!userPrompt || typeof userPrompt !== 'string') {
+    throw new Error('User prompt is required for code chat processing.');
+  }
+
+  const provider = (payload.provider || 'openrouter').toLowerCase();
+  const model = payload.model || 'glm-4.5-flash';
+  const baseUrl = payload.baseUrl || getBaseUrl(provider, payload);
+  const apiKey = payload.apiKey || getApiKey(provider, payload);
+  const codeId = payload.codeId || payload.session?.codeId || null;
+
+  return {
+    sessionId,
+    userPrompt,
+    provider,
+    model,
+    baseUrl,
+    apiKey,
+    codeId,
+  };
+}
+
 ipcMain.handle('codes:chat', async (_event, payload = {}) => {
   try {
     if (!useSQLite || !db) {
@@ -2808,35 +2841,98 @@ ipcMain.handle('codes:chat', async (_event, payload = {}) => {
       useSQLite = true;
     }
 
-    const sessionId = payload.sessionId || payload.session?.id;
-    const userPrompt = payload.userPrompt;
-    if (!sessionId) {
-      throw new Error('Session ID is required for code chat processing.');
-    }
-    if (!userPrompt || typeof userPrompt !== 'string') {
-      throw new Error('User prompt is required for code chat processing.');
-    }
+    const request = normalizeCodeChatRequest(payload);
 
-    const provider = (payload.provider || 'openrouter').toLowerCase();
-    const model = payload.model || 'glm-4.5-flash';
-    const baseUrl = payload.baseUrl || getBaseUrl(provider, payload);
-    const apiKey = payload.apiKey || getApiKey(provider, payload);
-    const codeId = payload.codeId || payload.session?.codeId || null;
-
-    return await processCodeRequest({
-      sessionId,
-      userPrompt,
-      provider,
-      model,
-      baseUrl,
-      apiKey,
-      codeId,
-    });
+    return await processCodeRequest(request);
   } catch (error) {
     log('CODES', 4, 'codes:chat', 'Failed to process code agent request', {
       error: error?.message || error,
     });
     throw error;
+  }
+});
+
+ipcMain.on('codes:stream-start', async (event, payload = {}) => {
+  const reqId = payload?.reqId;
+  if (!reqId) {
+    log('CODES', 3, 'codes:stream-start', 'Missing request ID for streaming payload');
+    return;
+  }
+
+  const controllerState = { cancelled: false };
+  codeStreamControllers.set(reqId, controllerState);
+
+  const send = (suffix, data) => {
+    try {
+      event.sender.send(`codes:${suffix}-${reqId}`, data);
+    } catch (error) {
+      log('CODES', 3, 'codes:stream-start', 'Failed to emit stream event', {
+        suffix,
+        error: error?.message || error,
+      });
+    }
+  };
+
+  let finished = false;
+
+  try {
+    if (!useSQLite || !db) {
+      db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
+      useSQLite = true;
+    }
+
+    const request = normalizeCodeChatRequest(payload);
+
+    const result = await processCodeRequest({
+      ...request,
+      onChunk: (chunk, info = {}) => {
+        if (controllerState.cancelled) {
+          return;
+        }
+        send('chunk', {
+          chunk,
+          iteration: info.iteration ?? 0,
+          done: !!info.done,
+        });
+      },
+      shouldCancel: () => controllerState.cancelled,
+    });
+
+    if (controllerState.cancelled) {
+      return;
+    }
+
+    send('done', {
+      usage: result.usage || null,
+      cancelled: false,
+    });
+    finished = true;
+  } catch (error) {
+    if (!controllerState.cancelled) {
+      send('error', {
+        message: error?.message || String(error),
+      });
+      finished = true;
+    }
+  } finally {
+    if (controllerState.cancelled && !finished) {
+      send('done', {
+        usage: null,
+        cancelled: true,
+      });
+    }
+    codeStreamControllers.delete(reqId);
+  }
+});
+
+ipcMain.on('codes:stream-cancel', (_event, reqId) => {
+  if (!reqId) {
+    return;
+  }
+  const controller = codeStreamControllers.get(reqId);
+  if (controller) {
+    controller.cancelled = true;
   }
 });
 

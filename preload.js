@@ -172,6 +172,70 @@ contextBridge.exposeInMainWorld('api', {
   codes: {
     load: () => ipcRenderer.invoke('codes:load'),
     save: (codes) => ipcRenderer.invoke('codes:save', codes),
+    stream: (payload, onEvent) => {
+      const id = rid();
+      const handler = typeof onEvent === 'function' ? onEvent : () => {};
+
+      const chunkChannel = `codes:chunk-${id}`;
+      const doneChannel = `codes:done-${id}`;
+      const errorChannel = `codes:error-${id}`;
+
+      const cleanup = () => {
+        ipcRenderer.removeAllListeners(chunkChannel);
+        ipcRenderer.removeAllListeners(doneChannel);
+        ipcRenderer.removeAllListeners(errorChannel);
+      };
+
+      ipcRenderer.on(chunkChannel, (_event, data = {}) => {
+        try {
+          handler({
+            type: 'chunk',
+            chunk: data.chunk,
+            iteration: data.iteration,
+            done: data.done,
+          });
+        } catch (error) {
+          console.error('Codes stream chunk handler error:', error);
+        }
+      });
+
+      ipcRenderer.once(doneChannel, (_event, data = {}) => {
+        cleanup();
+        try {
+          handler({
+            type: 'done',
+            usage: data.usage || null,
+            cancelled: !!data.cancelled,
+          });
+        } catch (error) {
+          console.error('Codes stream done handler error:', error);
+        }
+      });
+
+      ipcRenderer.once(errorChannel, (_event, data = {}) => {
+        cleanup();
+        try {
+          handler({
+            type: 'error',
+            error: data.message || data.error || data,
+          });
+        } catch (error) {
+          console.error('Codes stream error handler failure:', error);
+        }
+      });
+
+      ipcRenderer.send('codes:stream-start', {
+        ...(payload || {}),
+        reqId: id,
+      });
+
+      return {
+        cancel: () => {
+          cleanup();
+          ipcRenderer.send('codes:stream-cancel', id);
+        },
+      };
+    },
     chat: (payload) => ipcRenderer.invoke('codes:chat', payload),
   },
   usage: {

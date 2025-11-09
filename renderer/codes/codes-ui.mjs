@@ -1055,6 +1055,165 @@ function ensureListeners() {
     saveCodes();
     renderCodesList();
   });
+
+  // Add hover management for persistent menus - CODES PAGE VERSION
+  const codesPage = document.getElementById('codes-page');
+  if (codesPage) {
+    codesPage.addEventListener(
+      'mouseenter',
+      (e) => {
+        const codeItem = e.target.closest('.code-item');
+        if (codeItem) {
+          const dropdown = codeItem.querySelector(
+            '.code-menu-dropdown.persistent-open',
+          );
+          const menuButton = codeItem.querySelector('.project-menu-btn');
+          if (dropdown && menuButton) {
+            menuButton.classList.add('persistent-active');
+          }
+        }
+      },
+      true,
+    );
+
+    codesPage.addEventListener(
+      'mouseleave',
+      (e) => {
+        const codeItem = e.target.closest('.code-item');
+        if (codeItem) {
+          // Check if mouse is actually leaving the code-item
+          const rect = codeItem.getBoundingClientRect();
+          const isStillInside =
+            e.clientX >= rect.left &&
+            e.clientX <= rect.right &&
+            e.clientY >= rect.top &&
+            e.clientY <= rect.bottom;
+
+          // Check if mouse is hovering over dropdown menu
+          const dropdown = codeItem.querySelector(
+            '.code-menu-dropdown.persistent-open',
+          );
+          const isHoveringDropdown =
+            dropdown && e.target.closest('.code-menu-dropdown');
+
+          // Only close menu if mouse actually left code-item AND not hovering dropdown
+          if (!isStillInside && !isHoveringDropdown) {
+            const menuButton = codeItem.querySelector('.project-menu-btn');
+            if (dropdown && menuButton) {
+              dropdown.classList.remove('persistent-open');
+              menuButton.classList.remove('persistent-active');
+            }
+          }
+        }
+      },
+      true,
+    );
+
+    // Handle mouseleave from dropdown menu
+    codesPage.addEventListener(
+      'mouseleave',
+      (e) => {
+        const dropdown = e.target.closest(
+          '.code-menu-dropdown.persistent-open',
+        );
+        if (dropdown) {
+          // Delay check to ensure mouse isn't moving to code-item
+          setTimeout(() => {
+            const codeItem = dropdown.closest('.code-item');
+            if (codeItem) {
+              // Check if mouse is still within code-item or dropdown
+              const codeRect = codeItem.getBoundingClientRect();
+              const dropdownRect = dropdown.getBoundingClientRect();
+
+              // Get current mouse position (approximate)
+              const mouseX = window.lastMouseX || 0;
+              const mouseY = window.lastMouseY || 0;
+
+              const isInCodeItem =
+                mouseX >= codeRect.left &&
+                mouseX <= codeRect.right &&
+                mouseY >= codeRect.top &&
+                mouseY <= codeRect.bottom;
+
+              const isInDropdown =
+                mouseX >= dropdownRect.left &&
+                mouseX <= dropdownRect.right &&
+                mouseY >= dropdownRect.top &&
+                mouseY <= dropdownRect.bottom;
+
+              // Close menu if mouse is not in code-item or dropdown
+              if (!isInCodeItem && !isInDropdown) {
+                const menuButton = codeItem.querySelector('.project-menu-btn');
+                if (menuButton) {
+                  dropdown.classList.remove('persistent-open');
+                  menuButton.classList.remove('persistent-active');
+                }
+              }
+            }
+          }, 50);
+        }
+      },
+      true,
+    );
+
+    // Track mouse position for dropdown detection
+    if (!window.lastMouseX) {
+      document.addEventListener('mousemove', (e) => {
+        window.lastMouseX = e.clientX;
+        window.lastMouseY = e.clientY;
+      });
+    }
+  }
+
+  // Add hover management for project-session-item persistent menus
+  document.addEventListener(
+    'mouseenter',
+    (e) => {
+      if (!(e.target instanceof Element)) return;
+      const sessionItem = e.target.closest('.project-session-item');
+      if (sessionItem) {
+        const dropdown = sessionItem.querySelector(
+          '.session-menu-dropdown.persistent-open',
+        );
+        const menuButton = sessionItem.querySelector('.session-menu-btn');
+        if (dropdown && menuButton) {
+          menuButton.classList.add('persistent-active');
+        }
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
+    'mouseleave',
+    (e) => {
+      if (!(e.target instanceof Element)) return;
+      const sessionItem = e.target.closest('.project-session-item');
+      if (sessionItem) {
+        const rect = sessionItem.getBoundingClientRect();
+        const isStillInside =
+          e.clientX >= rect.left &&
+          e.clientX <= rect.right &&
+          e.clientY >= rect.top &&
+          e.clientY <= rect.bottom;
+
+        const dropdown = sessionItem.querySelector(
+          '.session-menu-dropdown.persistent-open',
+        );
+        const isHoveringDropdown =
+          dropdown && e.target.closest('.session-menu-dropdown');
+
+        if (!isStillInside && !isHoveringDropdown) {
+          const menuButton = sessionItem.querySelector('.session-menu-btn');
+          if (dropdown && menuButton) {
+            dropdown.classList.remove('persistent-open');
+            menuButton.classList.remove('persistent-active');
+          }
+        }
+      }
+    },
+    true,
+  );
 }
 
 async function loadCodes() {

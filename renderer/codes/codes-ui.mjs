@@ -512,27 +512,67 @@ function renderCodeSessions(code) {
   for (const session of related) {
     const item = document.createElement('div');
     item.className = 'project-session-item';
+    item.dataset.sessionId = session.id;
+
+    const formattedDate = formatRelativeTime(session.last_updated || session.created_at || nowISO());
+
     item.innerHTML = `
-      <div class="project-session-main">
-        <h4>${escapeHtml(session.name || 'Untitled session')}</h4>
-        <p>Last activity ${formatRelativeTime(session.last_updated || session.created_at || nowISO())}</p>
+      <div class="session-info">
+        <h4 class="session-title">${escapeHtml(session.name || 'Untitled session')}</h4>
+        <small class="session-date">Last updated ${formattedDate}</small>
       </div>
-      <button class="project-session-open" data-session-id="${session.id}" title="Open session">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="m9 18 6-6-6-6" />
-        </svg>
-      </button>
+      <div class="session-actions">
+        <div class="session-menu-container">
+          <button class="session-menu-btn" data-session-id="${session.id}" title="Session options">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="5" cy="12" r="2"/>
+              <circle cx="12" cy="12" r="2"/>
+              <circle cx="19" cy="12" r="2"/>
+            </svg>
+          </button>
+          <div class="session-menu-dropdown" data-session-id="${session.id}">
+            <div class="session-menu-item" data-action="open">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+              <span>Open Session</span>
+            </div>
+            <div class="session-menu-item" data-action="favorite">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </svg>
+              <span>${session.isFavorite ? 'Unstar' : 'Star'}</span>
+            </div>
+            <div class="session-menu-item" data-action="rename">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+              </svg>
+              <span>Rename</span>
+            </div>
+            <div class="session-menu-item session-menu-item-danger" data-action="delete">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M6 2l-2 2h12l-2-2H6zM4 6v10c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6H4zm2 2h8v8H6V8z"/>
+              </svg>
+              <span>Delete</span>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
 
     item.addEventListener('click', (event) => {
-      const sessionId = event.currentTarget?.querySelector('.project-session-open')?.dataset.sessionId;
+      // Don't open session if clicking on menu
+      if (event.target.closest('.session-menu-container')) {
+        return;
+      }
+
+      const sessionId = item.dataset.sessionId;
       if (sessionId) {
         deps.focusSession?.(sessionId);
       }
     });
 
     list.appendChild(item);
-
   }
 }
 
@@ -778,6 +818,78 @@ function ensureListeners() {
       document.querySelectorAll('.code-title-menu-dropdown.persistent-open').forEach((menu) => {
         menu.classList.remove('persistent-open');
         const menuButton = menu.parentElement?.querySelector('.code-title-menu-btn');
+        if (menuButton) menuButton.classList.remove('persistent-active');
+      });
+    }
+
+    // Handle session menu button clicks
+    if (target.closest('.session-menu-btn')) {
+      e.stopPropagation();
+      const menuContainer = target.closest('.session-menu-container');
+      const menuButton = menuContainer?.querySelector('.session-menu-btn');
+      const dropdown = menuContainer?.querySelector('.session-menu-dropdown');
+
+      if (dropdown && menuButton) {
+        // Close all other session menus
+        document.querySelectorAll('.session-menu-dropdown.persistent-open').forEach((menu) => {
+          if (menu !== dropdown) {
+            menu.classList.remove('persistent-open');
+            const otherButton = menu.parentElement?.querySelector('.session-menu-btn');
+            if (otherButton) otherButton.classList.remove('persistent-active');
+          }
+        });
+
+        // Toggle current menu
+        const isOpen = dropdown.classList.contains('persistent-open');
+        if (isOpen) {
+          dropdown.classList.remove('persistent-open');
+          menuButton.classList.remove('persistent-active');
+        } else {
+          dropdown.classList.add('persistent-open');
+          menuButton.classList.add('persistent-active');
+        }
+      }
+      return;
+    }
+
+    // Handle session menu item clicks
+    if (target.closest('.session-menu-dropdown .session-menu-item')) {
+      e.stopPropagation();
+      const menuItem = target.closest('.session-menu-item');
+      const action = menuItem?.dataset.action;
+      const dropdown = target.closest('.session-menu-dropdown');
+      const sessionId = dropdown?.dataset.sessionId;
+
+      // Close menu
+      if (dropdown) {
+        dropdown.classList.remove('persistent-open');
+        const menuButton = dropdown.parentElement?.querySelector('.session-menu-btn');
+        if (menuButton) menuButton.classList.remove('persistent-active');
+      }
+
+      const session = STATE.sessions.find(s => s.id === sessionId);
+      if (!session) return;
+
+      if (action === 'open') {
+        deps.focusSession?.(sessionId);
+      } else if (action === 'favorite') {
+        session.isFavorite = !session.isFavorite;
+        renderCodeSessions(STATE.currentCode);
+      } else if (action === 'rename') {
+        // TODO: Add rename session functionality
+        log('CODES', 2, 'session-menu', 'Rename session not yet implemented');
+      } else if (action === 'delete') {
+        // TODO: Add delete session functionality
+        log('CODES', 2, 'session-menu', 'Delete session not yet implemented');
+      }
+      return;
+    }
+
+    // Close session menus when clicking outside
+    if (!target.closest('.session-menu-container')) {
+      document.querySelectorAll('.session-menu-dropdown.persistent-open').forEach((menu) => {
+        menu.classList.remove('persistent-open');
+        const menuButton = menu.parentElement?.querySelector('.session-menu-btn');
         if (menuButton) menuButton.classList.remove('persistent-active');
       });
     }

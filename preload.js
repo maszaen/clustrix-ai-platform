@@ -169,6 +169,11 @@ contextBridge.exposeInMainWorld('api', {
     load: () => ipcRenderer.invoke('projects:load'),
     save: (projects) => ipcRenderer.invoke('projects:save', projects),
   },
+  codes: {
+    load: () => ipcRenderer.invoke('codes:load'),
+    save: (codes) => ipcRenderer.invoke('codes:save', codes),
+    chat: (payload) => ipcRenderer.invoke('codes:chat', payload),
+  },
   usage: {
     fetchStats: (filters) => ipcRenderer.invoke('usage:fetchStats', filters),
   },

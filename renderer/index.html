@@ -694,6 +694,91 @@
     
       </div>
       </div>
+      <div id="codes-page" class="codes-page">
+        <div class="chats-header">
+          <h2>Your Code Workspaces</h2>
+          <button id="new-code-btn" class="white-btn" title="New Code Workspace">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 5v14m-7-7h14" />
+            </svg>
+            <span>New Code</span>
+          </button>
+        </div>
+        <div class="chats-search-container">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input id="codes-search" placeholder="Search your code workspaces..." />
+          </div>
+        </div>
+        <div id="codes-controls-container" class="chats-controls-container">
+          <div id="codes-info-bar" class="chats-info-bar">
+            <span id="codes-total-count">...</span>
+          </div>
+        </div>
+        <div id="codes-list" class="chats-list"></div>
+        <div id="code-detail-view" class="project-detail-view" style="display: none;">
+          <div class="project-back-btn">
+            <button id="back-to-codes-btn" title="Back to Codes">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M19 12H5m7-7-7 7 7 7" />
+              </svg>
+              <p>All codes</p>
+            </button>
+          </div>
+          <div class="project-detail-container code-detail-container">
+            <div class="project-left-column">
+              <div class="project-detail-header">
+                <div class="project-title-container">
+                  <h2 id="code-detail-title">Code Workspace</h2>
+                  <div class="project-title-actions">
+                    <button class="code-star-btn" title="Star code workspace">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <p id="code-detail-desc"></p>
+              </div>
+              <div class="code-instruction-card project-instructions">
+                <div class="project-card-header">
+                  <h3>Instructions</h3>
+                  <button id="code-edit-instruction-btn" title="Add/Edit Instruction">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" class="shrink-0" aria-hidden="true"><path d="M9.72821 2.87934C10.0318 2.10869 10.9028 1.72933 11.6735 2.03266L14.4655 3.13226C15.2363 3.43593 15.6145 4.30697 15.3112 5.07758L11.3903 15.0307C11.2954 15.2717 11.1394 15.4835 10.9391 15.6459L10.8513 15.7123L7.7077 17.8979C7.29581 18.1843 6.73463 17.9917 6.57294 17.5356L6.54657 17.4409L5.737 13.6987C5.67447 13.4092 5.69977 13.107 5.80829 12.8315L9.72821 2.87934ZM6.73798 13.1987C6.70201 13.2903 6.69385 13.3906 6.71454 13.4868L7.44501 16.8627L10.28 14.892L10.3376 14.8452C10.3909 14.7949 10.4325 14.7332 10.4597 14.6645L13.0974 7.96723L9.37567 6.50141L6.73798 13.1987ZM11.3073 2.96332C11.0504 2.86217 10.7601 2.98864 10.6589 3.24555L9.74188 5.57074L13.4636 7.03754L14.3806 4.71137C14.4817 4.45445 14.3552 4.16413 14.0983 4.06293L11.3073 2.96332Z"></path></svg>
+                  </button>
+                </div>
+                <div id="code-instruction-text" class="project-instruction-text"></div>
+              </div>
+              <div class="code-workspace-card project-files">
+                <div class="project-card-header">
+                  <h3>Workspace</h3>
+                  <button id="code-workspace-btn" title="Select Workspace">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M10 3C10.2761 3 10.5 3.22386 10.5 3.5V9.5H16.5L16.6006 9.50977C16.8286 9.55629 17 9.75829 17 10C17 10.2417 16.8286 10.4437 16.6006 10.4902L16.5 10.5H10.5V16.5C10.5 16.7761 10.2761 17 10 17C9.72386 17 9.5 16.7761 9.5 16.5V10.5H3.5C3.22386 10.5 3 10.2761 3 10C3 9.72386 3.22386 9.5 3.5 9.5H9.5V3.5C9.5 3.22386 9.72386 3 10 3Z"></path>
+                    </svg>
+                  </button>
+                </div>
+                <div id="code-workspace-summary" class="code-workspace-summary"></div>
+              </div>
+              <div class="code-sessions project-sessions">
+                <div class="project-card-header">
+                  <h3>Code Sessions</h3>
+                  <button id="code-new-session-btn" class="white-btn" title="New Code Session">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M12 5v14m-7-7h14" />
+                    </svg>
+                    <span>New Session</span>
+                  </button>
+                </div>
+                <div id="code-sessions-list" class="project-sessions-list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <!-- Chats Page -->
       <div id="chats-page" class="chats-page">
         <div class="chats-header">

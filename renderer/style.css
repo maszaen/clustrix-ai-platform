@@ -2495,41 +2495,87 @@ input:checked + .slider:before {
   transform: translateY(150%);
 }
 
+/* Codes Page Active State */
+.chat-area.codes-active #welcome-screen {
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
+}
+
+.chat-area.codes-active #chats-page {
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
+}
+
+.chat-area.codes-active #artifacts-page {
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
+}
+
+.chat-area.codes-active #projects-page {
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: bottom center;
+    transform: translateX(0px) scale(0.95);
+}
+
+.chat-area.codes-active #codes-page {
+  opacity: 1;
+  pointer-events: auto;
+  max-height: 100vh;
+  transform: translateY(0) scale(1);
+  animation: slideInPage 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chat-area.codes-active #chat-log {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat-area.codes-active #input-area {
+  transform: translateY(150%);
+}
+
 /* Chat session active state (no specific class - default state) */
-.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active) #welcome-screen {
+.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active):not(.codes-active):not(.codes-active) #welcome-screen {
   opacity: 0;
   pointer-events: none;
   transform-origin: bottom center;
     transform: translateX(0px) scale(0.95);
 }
 
-.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active) #chats-page {
+.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active):not(.codes-active) #chats-page {
   opacity: 0;
   pointer-events: none;
   transform-origin: bottom center;
     transform: translateX(0px) scale(0.95);
 }
 
-.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active) #artifacts-page {
+.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active):not(.codes-active) #artifacts-page {
   opacity: 0;
   pointer-events: none;
   transform-origin: bottom center;
     transform: translateX(0px) scale(0.95);
 }
 
-.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active) #projects-page {
+.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active):not(.codes-active) #projects-page {
   opacity: 0;
   pointer-events: none;
   transform-origin: bottom center;
     transform: translateX(0px) scale(0.95);
 }
 
-.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active) #chat-log {
+.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active):not(.codes-active) #chat-log {
   opacity: 1;
   pointer-events: auto;
 }
 
-.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active) #input-area {
+.chat-area:not(.welcome-active):not(.chats-active):not(.artifacts-active):not(.projects-active):not(.codes-active) #input-area {
   transform: translateY(0);
 }
 

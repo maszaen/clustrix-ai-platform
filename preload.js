@@ -180,6 +180,7 @@ contextBridge.exposeInMainWorld('api', {
     onDone: (reqId, callback) => ipcRenderer.once(`codes:done-${reqId}`, callback),
     onError: (reqId, callback) => ipcRenderer.once(`codes:error-${reqId}`, callback),
   },
+  selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
   usage: {
     fetchStats: (filters) => ipcRenderer.invoke('usage:fetchStats', filters),
   },

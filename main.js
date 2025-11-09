@@ -2870,6 +2870,27 @@ ipcMain.handle('codes:approve-command', async (_evt, { codeId, iterationNumber, 
   }
 });
 
+// =====================
+// Dialog Handlers
+// =====================
+
+ipcMain.handle('dialog:selectFolder', async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory']
+    });
+
+    if (result.canceled) {
+      return null;
+    }
+
+    return result.filePaths[0];
+  } catch (error) {
+    log('DIALOG', 4, 'dialog:selectFolder', 'Error showing dialog', { error: error.message });
+    throw error;
+  }
+});
+
 ipcMain.handle('usage:fetchStats', async (_evt, filters = {}) => {
   try {
     if (!useSQLite || !db) {

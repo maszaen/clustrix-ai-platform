@@ -6327,6 +6327,809 @@ function setupProjectsPageListeners() {
 
   // Project file input is now handled by drop zone click, no need for change listener
 }
+// =====================
+// CODES PAGE FUNCTIONS
+// =====================
+
+function showCodesPage() {
+  current = null;
+  currentCode = null;
+  isCodesSelectMode = false;
+  selectedCodeIds.clear();
+
+  $(".chat-area").classList.remove("welcome-active");
+  $(".chat-area").classList.remove("chats-active");
+  $(".chat-area").classList.remove("artifacts-active");
+  $(".chat-area").classList.remove("projects-active");
+  $(".chat-area").classList.add("codes-active");
+
+  document.getElementById("codes-btn")?.classList.add("active");
+  document.getElementById("chats-btn")?.classList.remove("active");
+  document.getElementById("artifact-btn")?.classList.remove("active");
+  document.getElementById("projects-btn")?.classList.remove("active");
+
+  savePageState("codes");
+
+  // Push to page history
+  if (typeof pushPageHistory === 'function') {
+    pushPageHistory({ page: 'codes-list' });
+  }
+
+  // Hide all other pages
+  document.getElementById("welcome-screen").style.display = "none";
+  const welcomeScreen = document.getElementById("welcome-screen");
+  if (welcomeScreen) welcomeScreen.style.display = "none";
+
+  // Close code detail view if it's open
+  const detailView = document.getElementById("code-detail-view");
+  if (detailView && detailView.classList.contains("active")) {
+    detailView.classList.remove("active");
+    detailView.classList.add("closing");
+    setTimeout(() => {
+      detailView.classList.remove("closing");
+      detailView.style.display = "none";
+    }, 300);
+  }
+
+  // Show codes list view
+  showCodesListView();
+
+  renderCodesPage();
+  renderSessions();
+  updateInputState();
+
+  // Auto focus search bar
+  const searchInput = document.getElementById('codes-search');
+  if (searchInput) searchInput.focus();
+
+  log("UI", 2, "showCodesPage", "Switched to Codes Page");
+}
+
+function showCodesListView() {
+  const detailView = document.getElementById("code-detail-view");
+
+  // Ensure codes page stays active
+  const chatArea = document.querySelector(".chat-area");
+  if (chatArea && !chatArea.classList.contains("codes-active")) {
+    chatArea.classList.add("codes-active");
+  }
+
+  if (detailView && detailView.classList.contains("active")) {
+    // Start close animation
+    detailView.classList.remove("active");
+    detailView.classList.add("closing");
+
+    // Wait for animation to complete, then hide
+    setTimeout(() => {
+      detailView.classList.remove("closing");
+      detailView.style.display = "none";
+    }, 300);
+  } else {
+    if (detailView) {
+      detailView.classList.remove("active");
+      detailView.classList.remove("closing");
+      detailView.style.display = "none";
+    }
+  }
+
+  currentCode = null;
+  const codeInput = document.getElementById("code-message-input");
+  if (codeInput) {
+    codeInput.value = "";
+    codeInput.style.height = "auto";
+  }
+}
+
+function showCodeDetailView(code) {
+  const detailView = document.getElementById("code-detail-view");
+
+  // Ensure codes page stays active
+  const chatArea = document.querySelector(".chat-area");
+  if (chatArea && !chatArea.classList.contains("codes-active")) {
+    chatArea.classList.add("codes-active");
+  }
+
+  // Show detail view with animation
+  if (detailView) {
+    detailView.style.display = "flex";
+    detailView.classList.add("active");
+  }
+
+  currentCode = code;
+
+  // Update title and description
+  const titleEl = document.getElementById("code-detail-title");
+  const descEl = document.getElementById("code-detail-desc");
+  if (titleEl) titleEl.textContent = code.name || "Coding Session";
+  if (descEl) descEl.textContent = code.description || "";
+
+  // Update star button
+  updateCodeStarButton();
+
+  // Render iterations and workspace info
+  renderCodeIterations(code.id);
+  renderWorkspaceInfo(code);
+  renderCommandHistory(code.id);
+
+  // Auto focus code message input
+  const codeInput = document.getElementById('code-message-input');
+  if (codeInput) codeInput.focus();
+
+  log("UI", 2, "showCodeDetailView", "Showing code detail view", { codeId: code.id });
+}
+
+function renderCodesPage() {
+  const codesList = document.getElementById("codes-list");
+  if (!codesList) return;
+
+  const searchValue = (
+    document.getElementById("codes-search")?.value || ""
+  ).toLowerCase();
+
+  // Filter codes
+  let codes = [...codesData];
+  if (searchValue) {
+    codes = codes.filter((code) => {
+      const nameMatch = (code.name || "").toLowerCase().includes(searchValue);
+      const descMatch = (code.description || "").toLowerCase().includes(searchValue);
+      return nameMatch || descMatch;
+    });
+  }
+
+  // Sort codes: favorites first, then by last_updated
+  codes.sort((a, b) => {
+    if (a.isFavorite && !b.isFavorite) return -1;
+    if (!a.isFavorite && b.isFavorite) return 1;
+    return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
+  });
+
+  // Update UI Controls
+  const infoBar = document.getElementById("codes-info-bar");
+  const actionBar = document.getElementById("codes-select-action-bar");
+  const totalCountEl = document.getElementById("codes-total-count");
+  const selectedCountEl = document.getElementById("codes-selected-count");
+
+  if (totalCountEl) {
+    totalCountEl.textContent = `${codes.length} session${codes.length !== 1 ? 's' : ''}`;
+  }
+
+  if (isCodesSelectMode) {
+    if (infoBar) infoBar.style.display = "none";
+    if (actionBar) actionBar.style.display = "flex";
+    if (selectedCountEl) {
+      selectedCountEl.textContent = `${selectedCodeIds.size} selected`;
+    }
+  } else {
+    if (infoBar) infoBar.style.display = "flex";
+    if (actionBar) actionBar.style.display = "none";
+  }
+
+  // Render codes list
+  codesList.innerHTML = "";
+
+  if (codes.length === 0) {
+    codesList.innerHTML = `
+      <div class="empty-state">
+        <p>No coding sessions yet. Create one to get started!</p>
+      </div>
+    `;
+    return;
+  }
+
+  codes.forEach((code) => {
+    const codeItem = createCodeListItem(code);
+    codesList.appendChild(codeItem);
+  });
+}
+
+function createCodeListItem(code) {
+  const item = document.createElement("div");
+  item.className = "project-item"; // Reuse project-item styles
+  item.dataset.codeId = code.id;
+
+  const isSelected = selectedCodeIds.has(code.id);
+
+  const checkboxHTML = `
+    <div class="project-item-checkbox-wrapper">
+      <input type="checkbox" class="code-item-checkbox" data-code-id="${code.id}" ${isSelected ? "checked" : ""}>
+    </div>
+  `;
+
+  if (isCodesSelectMode) {
+    item.classList.add("select-mode");
+  }
+
+  if (isSelected) {
+    item.classList.add("selected");
+  }
+
+  const formattedDate = formatRelativeTime(code.updated_at || code.created_at);
+
+  item.innerHTML = `
+    ${checkboxHTML}
+    <div class="project-item-content">
+      <div class="project-item-header">
+        <h3 class="project-item-title">${escapeHtml(code.name || "Untitled Session")}</h3>
+        <span class="project-item-date">Last updated ${formattedDate}</span>
+      </div>
+
+      ${code.description ? `<p class="project-description">${escapeHtml(code.description)}</p>` : `<p class="project-description">No description</p>`}
+
+      ${code.workspace_name ? `<p class="project-description"><strong>Workspace:</strong> ${escapeHtml(code.workspace_name)}</p>` : ''}
+    </div>
+    <div class="project-item-actions">
+      <div class="project-menu-container">
+        <button class="project-menu-btn" data-code-id="${code.id}" title="Session options">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="5" cy="12" r="2"/>
+            <circle cx="12" cy="12" r="2"/>
+            <circle cx="19" cy="12" r="2"/>
+          </svg>
+        </button>
+        <div class="project-menu-dropdown" data-code-id="${code.id}">
+          <div class="project-menu-item" data-action="open">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+            <span>Open Session</span>
+          </div>
+          <div class="project-menu-item" data-action="rename">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+            </svg>
+            <span>Rename</span>
+          </div>
+          <div class="project-menu-item project-menu-item-danger" data-action="delete">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M6 2l-2 2h12l-2-2H6zM4 6v10c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6H4zm2 2h8v8H6V8z"/>
+            </svg>
+            <span>Delete</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  return item;
+}
+
+async function renderCodeIterations(codeId) {
+  const iterationsList = document.getElementById("code-iterations-list");
+  if (!iterationsList) return;
+
+  try {
+    const iterations = await window.api.codes.getIterations(codeId);
+
+    iterationsList.innerHTML = "";
+
+    if (iterations.length === 0) {
+      iterationsList.innerHTML = `
+        <div class="project-session-item-none">
+          <p>No iterations yet. Send a message to start!</p>
+        </div>
+      `;
+      return;
+    }
+
+    iterations.forEach((iteration) => {
+      const iterItem = createIterationItem(iteration);
+      iterationsList.appendChild(iterItem);
+    });
+  } catch (error) {
+    log("CODES", 4, "renderCodeIterations", "Error loading iterations", { error: error.message });
+  }
+}
+
+function createIterationItem(iteration) {
+  const item = document.createElement("div");
+  item.className = "project-session-item";
+
+  const statusIcon = iteration.is_final
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="green"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>'
+    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="orange"><circle cx="12" cy="12" r="10"/></svg>';
+
+  item.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      ${statusIcon}
+      <h4>Iteration ${iteration.iteration_number}</h4>
+    </div>
+    <div style="font-size: 0.9rem; margin-top: 0.5rem;">
+      ${iteration.ai_answer ? `<p>${escapeHtml(iteration.ai_answer).substring(0, 100)}...</p>` : ''}
+      ${iteration.command ? `<pre style="background: var(--bg-secondary); padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem; overflow-x: auto;"><code>${escapeHtml(iteration.command)}</code></pre>` : ''}
+    </div>
+  `;
+
+  return item;
+}
+
+async function renderCommandHistory(codeId) {
+  const historyContainer = document.getElementById("code-command-history");
+  if (!historyContainer) return;
+
+  try {
+    const iterations = await window.api.codes.getIterations(codeId);
+    const commandIterations = iterations.filter(it => it.command);
+
+    historyContainer.innerHTML = "";
+
+    if (commandIterations.length === 0) {
+      historyContainer.innerHTML = `
+        <div style="padding: 1rem; text-align: center; color: var(--text-secondary);">
+          <p>No commands executed yet</p>
+        </div>
+      `;
+      return;
+    }
+
+    commandIterations.forEach((iteration) => {
+      const commandItem = document.createElement("div");
+      commandItem.className = "project-instruction-item";
+      commandItem.style.cssText = "padding: 0.75rem; border-bottom: 1px solid var(--border-color);";
+
+      commandItem.innerHTML = `
+        <div style="font-size: 0.85rem; color: var(--text-secondary);">Iteration ${iteration.iteration_number}</div>
+        <pre style="background: var(--bg-secondary); padding: 0.5rem; border-radius: 4px; margin-top: 0.25rem; font-size: 0.8rem; overflow-x: auto;"><code>${escapeHtml(iteration.command)}</code></pre>
+        ${iteration.ai_internal ? `<div style="font-size: 0.8rem; margin-top: 0.5rem; color: var(--text-secondary);">${escapeHtml(iteration.ai_internal).substring(0, 80)}...</div>` : ''}
+      `;
+
+      historyContainer.appendChild(commandItem);
+    });
+  } catch (error) {
+    log("CODES", 4, "renderCommandHistory", "Error loading command history", { error: error.message });
+  }
+}
+
+function renderWorkspaceInfo(code) {
+  const workspaceInfo = document.getElementById("code-workspace-info");
+  if (!workspaceInfo) return;
+
+  if (!code.workspace_path || !code.workspace_name) {
+    workspaceInfo.innerHTML = `
+      <div style="padding: 1rem; text-align: center; color: var(--text-secondary);">
+        <p>No workspace attached</p>
+      </div>
+    `;
+    return;
+  }
+
+  // For now, just show the workspace path and name
+  // TODO: Implement file/folder counting
+  workspaceInfo.innerHTML = `
+    <div class="file-card" style="grid-column: 1 / -1;">
+      <div class="file-card-header">
+        <h4><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: middle; margin-right: 0.5rem;"><path d="M2 4a2 2 0 0 1 2-2h4.586a1 1 0 0 1 .707.293l1.414 1.414A1 1 0 0 0 11.414 4H16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4z"/></svg>${escapeHtml(code.workspace_name)}</h4>
+        <p class="file-card-info" style="font-size: 0.75rem; margin-top: 0.25rem;">${escapeHtml(code.workspace_path)}</p>
+      </div>
+    </div>
+  `;
+}
+
+function setupCodesPageListeners() {
+  // Codes search
+  const searchInput = document.getElementById("codes-search");
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      renderCodesPage();
+    });
+  }
+
+  // New code button
+  const newCodeBtn = document.getElementById("new-code-btn");
+  if (newCodeBtn && !newCodeBtn._hasListener) {
+    newCodeBtn.addEventListener("click", () => {
+      showCreateCodeModal();
+    });
+    newCodeBtn._hasListener = true;
+  }
+
+  // Back to codes button
+  const backBtn = document.getElementById("back-to-codes-btn");
+  if (backBtn && !backBtn._hasListener) {
+    backBtn.addEventListener("click", () => {
+      showCodesListView();
+    });
+    backBtn._hasListener = true;
+  }
+
+  // Code send button
+  const sendBtn = document.getElementById("code-send-btn");
+  if (sendBtn && !sendBtn._hasListener) {
+    sendBtn.addEventListener("click", () => {
+      handleCodeSend();
+    });
+    sendBtn._hasListener = true;
+  }
+
+  // Attach folder button
+  const attachFolderBtn = document.getElementById("code-attach-folder-btn");
+  if (attachFolderBtn && !attachFolderBtn._hasListener) {
+    attachFolderBtn.addEventListener("click", async () => {
+      await handleAttachFolder();
+    });
+    attachFolderBtn._hasListener = true;
+  }
+
+  // Clear history button
+  const clearHistoryBtn = document.getElementById("clear-history-btn");
+  if (clearHistoryBtn && !clearHistoryBtn._hasListener) {
+    clearHistoryBtn.addEventListener("click", () => {
+      // TODO: Implement clear history
+      showToast("Clear history not yet implemented");
+    });
+    clearHistoryBtn._hasListener = true;
+  }
+
+  // Code star button
+  const starBtn = document.querySelector(".code-star-btn");
+  if (starBtn && !starBtn._hasListener) {
+    starBtn.addEventListener("click", async () => {
+      if (currentCode) {
+        await toggleCodeFavorite(currentCode);
+        updateCodeStarButton();
+        renderCodesPage();
+      }
+    });
+    starBtn._hasListener = true;
+  }
+
+  // Codes page event delegation
+  const codesPage = document.getElementById("codes-page");
+  if (!codesPage) return;
+
+  // Remove previous listener if exists
+  if (codesPage._listener) {
+    codesPage.removeEventListener("click", codesPage._listener);
+  }
+
+  // Central listener for all actions
+  const pageListener = (e) => {
+    const target = e.target;
+    const codeId = target.closest("[data-code-id]")?.dataset.codeId;
+
+    // Select mode toggle
+    if (target.closest("#codes-select-btn")) {
+      isCodesSelectMode = true;
+      renderCodesPage();
+      return;
+    }
+
+    // Close select mode
+    if (target.closest("#codes-select-close-btn")) {
+      isCodesSelectMode = false;
+      selectedCodeIds.clear();
+      renderCodesPage();
+      return;
+    }
+
+    // Mass delete
+    if (isCodesSelectMode && target.closest("#codes-delete-selected-btn")) {
+      if (selectedCodeIds.size === 0) return;
+      showConfirmationModal(
+        "Delete Selected Sessions",
+        `Delete ${selectedCodeIds.size} coding sessions?`,
+        async () => {
+          for (const id of selectedCodeIds) {
+            await window.api.codes.delete(id);
+          }
+          codesData = codesData.filter(c => !selectedCodeIds.has(c.id));
+          isCodesSelectMode = false;
+          selectedCodeIds.clear();
+          renderCodesPage();
+        }
+      );
+      return;
+    }
+
+    // Checkbox handling
+    if (target.classList.contains("code-item-checkbox")) {
+      const codeId = target.dataset.codeId;
+      if (target.checked) {
+        selectedCodeIds.add(codeId);
+      } else {
+        selectedCodeIds.delete(codeId);
+      }
+      renderCodesPage();
+      return;
+    }
+
+    // Select all checkbox
+    if (target.id === "codes-select-all-checkbox") {
+      if (target.checked) {
+        codesData.forEach(c => selectedCodeIds.add(c.id));
+      } else {
+        selectedCodeIds.clear();
+      }
+      renderCodesPage();
+      return;
+    }
+
+    // Menu actions
+    const menuItem = target.closest(".project-menu-item");
+    if (menuItem && codeId) {
+      const action = menuItem.dataset.action;
+      const code = codesData.find(c => c.id === codeId);
+      if (!code) return;
+
+      switch (action) {
+        case "open":
+          showCodeDetailView(code);
+          break;
+        case "rename":
+          renameCode(code);
+          break;
+        case "delete":
+          deleteCode(code);
+          break;
+      }
+      return;
+    }
+
+    // Click on code item (not in select mode)
+    if (!isCodesSelectMode && !target.closest(".project-menu-btn") && !target.closest(".code-item-checkbox")) {
+      const codeItem = target.closest(".project-item[data-code-id]");
+      if (codeItem && codeItem.dataset.codeId) {
+        const code = codesData.find(c => c.id === codeItem.dataset.codeId);
+        if (code) {
+          showCodeDetailView(code);
+        }
+      }
+    }
+
+    // Code title menu
+    const codeTitleMenuItem = target.closest(".code-title-menu-item");
+    if (codeTitleMenuItem && currentCode) {
+      const action = codeTitleMenuItem.dataset.action;
+      switch (action) {
+        case "rename":
+          renameCode(currentCode);
+          break;
+        case "delete":
+          deleteCode(currentCode);
+          break;
+      }
+    }
+  };
+
+  codesPage.addEventListener("click", pageListener);
+  codesPage._listener = pageListener;
+}
+
+// =====================
+// CODES ACTION FUNCTIONS
+// =====================
+
+function showCreateCodeModal() {
+  const modal = createQuickInputModal(
+    "New Coding Session",
+    "Session name:",
+    "My Coding Session",
+    async (name) => {
+      if (!name || !name.trim()) {
+        showToast("Please enter a session name");
+        return false;
+      }
+
+      const code = {
+        id: `code_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: name.trim(),
+        description: "",
+        workspace_path: null,
+        workspace_name: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        isFavorite: false
+      };
+
+      codesData.push(code);
+      await saveCodesData();
+      showCodeDetailView(code);
+      return true;
+    }
+  );
+}
+
+function renameCode(code) {
+  const modal = createQuickInputModal(
+    "Rename Session",
+    "New name:",
+    code.name,
+    async (newName) => {
+      if (!newName || !newName.trim()) {
+        showToast("Please enter a name");
+        return false;
+      }
+
+      code.name = newName.trim();
+      code.updated_at = new Date().toISOString();
+      await saveCodesData();
+
+      if (currentCode && currentCode.id === code.id) {
+        const titleEl = document.getElementById("code-detail-title");
+        if (titleEl) titleEl.textContent = code.name;
+      }
+
+      renderCodesPage();
+      return true;
+    }
+  );
+}
+
+async function deleteCode(code) {
+  showConfirmationModal(
+    "Delete Session",
+    `Delete "${code.name}"? All iterations and command history will be lost.`,
+    async () => {
+      try {
+        await window.api.codes.delete(code.id);
+        codesData = codesData.filter(c => c.id !== code.id);
+
+        if (currentCode && currentCode.id === code.id) {
+          showCodesListView();
+        }
+
+        renderCodesPage();
+        showToast("Session deleted");
+      } catch (error) {
+        log("CODES", 4, "deleteCode", "Error deleting code", { error: error.message });
+        showToast("Failed to delete session");
+      }
+    }
+  );
+}
+
+async function handleAttachFolder() {
+  if (!currentCode) return;
+
+  try {
+    const folderPath = await window.api.selectFolder();
+    if (folderPath) {
+      const folderName = folderPath.split(/[/\\]/).pop();
+      currentCode.workspace_path = folderPath;
+      currentCode.workspace_name = folderName;
+      currentCode.updated_at = new Date().toISOString();
+      await saveCodesData();
+      renderWorkspaceInfo(currentCode);
+      showToast(`Workspace attached: ${folderName}`);
+    }
+  } catch (error) {
+    log("CODES", 4, "handleAttachFolder", "Error attaching folder", { error: error.message });
+    showToast("Failed to attach folder");
+  }
+}
+
+async function handleCodeSend() {
+  if (!currentCode) return;
+
+  const input = document.getElementById("code-message-input");
+  const message = input.value.trim();
+
+  if (!message) return;
+
+  try {
+    // Clear input
+    input.value = "";
+    input.style.height = "auto";
+
+    // Generate request ID
+    const reqId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Show typing indicator
+    const statusText = document.getElementById("code-terminal-status-text");
+    if (statusText) statusText.textContent = "Processing...";
+
+    // Setup progress listener
+    window.api.codes.onProgress((event, update) => {
+      handleCodingProgress(update, reqId);
+    });
+
+    // Setup done listener
+    window.api.codes.onDone(reqId, (event, result) => {
+      handleCodingDone(result);
+    });
+
+    // Setup error listener
+    window.api.codes.onError(reqId, (event, error) => {
+      handleCodingError(error);
+    });
+
+    // Start streaming
+    window.api.codes.streamStart({
+      codeId: currentCode.id,
+      message,
+      reqId
+    });
+
+  } catch (error) {
+    log("CODES", 4, "handleCodeSend", "Error sending message", { error: error.message });
+    showToast("Failed to send message");
+  }
+}
+
+function handleCodingProgress(update, expectedReqId) {
+  if (update.reqId !== expectedReqId) return;
+
+  const { type, iteration, answer, command, output } = update;
+  const statusText = document.getElementById("code-terminal-status-text");
+
+  switch (type) {
+    case 'ai_thinking':
+      if (statusText) statusText.textContent = `Iteration ${iteration}: Thinking...`;
+      break;
+    case 'iteration_complete':
+      if (statusText) statusText.textContent = `Iteration ${iteration} complete`;
+      // Refresh iterations list
+      if (currentCode) renderCodeIterations(currentCode.id);
+      break;
+    case 'command_executing':
+      if (statusText) statusText.textContent = `Executing command...`;
+      break;
+    case 'command_complete':
+      if (statusText) statusText.textContent = `Command executed`;
+      // Refresh command history
+      if (currentCode) {
+        renderCodeIterations(currentCode.id);
+        renderCommandHistory(currentCode.id);
+      }
+      break;
+    case 'command_approval_needed':
+      if (statusText) statusText.textContent = `Approval needed`;
+      handleCommandApproval(update.codeId, iteration, command, update.reason);
+      break;
+  }
+}
+
+function handleCodingDone(result) {
+  const statusText = document.getElementById("code-terminal-status-text");
+  if (statusText) statusText.textContent = "Ready";
+
+  if (currentCode) {
+    renderCodeIterations(currentCode.id);
+    renderCommandHistory(currentCode.id);
+  }
+
+  if (result.result?.complete) {
+    showToast("Task completed!");
+  }
+}
+
+function handleCodingError(error) {
+  const statusText = document.getElementById("code-terminal-status-text");
+  if (statusText) statusText.textContent = "Error";
+
+  log("CODES", 4, "handleCodingError", "Coding agent error", { error: error.error });
+  showToast(`Error: ${error.error}`);
+}
+
+function handleCommandApproval(codeId, iterationNumber, command, reason) {
+  showConfirmationModal(
+    "Approve Destructive Command",
+    `${reason || 'This command may modify or delete data'}:\n\n${command}\n\nApprove execution?`,
+    async () => {
+      try {
+        const statusText = document.getElementById("code-terminal-status-text");
+        if (statusText) statusText.textContent = "Executing approved command...";
+
+        const result = await window.api.codes.approveCommand({
+          codeId,
+          iterationNumber,
+          command
+        });
+
+        if (statusText) statusText.textContent = "Ready";
+
+        if (currentCode) {
+          renderCodeIterations(currentCode.id);
+          renderCommandHistory(currentCode.id);
+        }
+
+        showToast("Command approved and executed");
+      } catch (error) {
+        log("CODES", 4, "handleCommandApproval", "Error approving command", { error: error.message });
+        showToast("Failed to execute command");
+      }
+    }
+  );
+}
 
 async function showCreateProjectModal() {
   // Create modal for new project
@@ -10627,6 +11430,11 @@ async function load() {
     console.warn("Failed to load projects on startup:", e),
   );
 
+  // Load codes data
+  await loadCodesData().catch((e) =>
+    console.warn("Failed to load codes on startup:", e),
+  );
+
   const thinkSel = document.getElementById("extended-thinking");
   if (thinkSel) {
     thinkSel.value = state.settings.think?.mode || "off";
@@ -14557,6 +15365,7 @@ function setupEventListeners() {
   let projectsListenersAdded = false;
   if (!projectsListenersAdded) {
     setupProjectsPageListeners();
+    setupCodesPageListeners();
     projectsListenersAdded = true;
   }
   document.addEventListener("keydown", (e) => {
@@ -15307,6 +16116,22 @@ function setupEventListeners() {
       showProjectsListView();
     } else {
       showProjectsPage();
+    }
+  });
+
+  $("#codes-btn").addEventListener("click", () => {
+    log("UI", 0, "event:codes-page-click", "Codes page button clicked");
+
+    // Close mobile sidebar when switching to codes page
+    if (window.innerWidth <= 998) {
+      closeMobileSidebar();
+    }
+
+    // If currently in code detail view, use showCodesListView() for smooth transition
+    if (currentCode) {
+      showCodesListView();
+    } else {
+      showCodesPage();
     }
   });
 

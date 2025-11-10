@@ -161,14 +161,19 @@ class PowerShellSession {
       this.currentCommand = { resolve, reject };
       this.sentinel = `__CLX_DONE_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
+      // Encode command to base64 to safely handle multi-line strings, special chars, quotes
+      const cmdBuffer = Buffer.from(command, 'utf16le');
+      const base64Cmd = cmdBuffer.toString('base64');
+
       const script = `
 $ErrorActionPreference = 'Stop'
 $clx__exit = 0
+$clx__cmd = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String('${base64Cmd}'))
 try {
-${command}
+  & ([scriptblock]::Create($clx__cmd))
 }
 catch {
-  Write-Error $_
+  [Console]::Error.WriteLine($_)
   if ($LASTEXITCODE -ne $null) {
     $clx__exit = [int]$LASTEXITCODE
   } else {
@@ -178,8 +183,9 @@ catch {
 if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) {
   $clx__exit = [int]$LASTEXITCODE
 }
-Write-Output "${this.sentinel}"
-Write-Output "EXIT_CODE:$clx__exit"
+[Console]::Out.WriteLine("${this.sentinel}")
+[Console]::Out.WriteLine("EXIT_CODE:$clx__exit")
+[Console]::Out.Flush()
 `;
 
       try {

@@ -15262,10 +15262,10 @@ function setupEventListeners() {
     const codeId = current.codeId;
     const code = codesData.find(c => c.id === codeId);
     log("STATE_CODE", 2, "Code workspace state information", code);
-    showCodesPage();
+    triggerCodesPage();
     setTimeout(() => {
       if (code) {
-        showCodeDetail(code.id);
+        openCodeDetail(code.id);
       }
     }, 100);
   });

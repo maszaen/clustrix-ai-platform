@@ -12921,14 +12921,23 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     if ((s.session?.type === 'code' || s.session?.codeId) && s.session.messages?.[s.messageIndex]) {
       const now = Date.now();
       const shouldSave = gotEnd || (now - lastCodesSaveTime >= CODES_SAVE_THROTTLE_MS);
-      
+
       if (shouldSave) {
         lastCodesSaveTime = now;
         try {
           // Update AI message content with current fullResponse
           s.session.messages[s.messageIndex][1] = fullResponse;
           s.session.last_updated = nowISO();
-          
+
+          // Track updated message for incremental save (CRITICAL for database persistence)
+          // Clear and repopulate to avoid duplicate entries from multiple chunk saves
+          if (!s.session._newMessages) {
+            s.session._newMessages = [];
+          }
+          // Remove any existing entry for this messageIndex to avoid duplicates
+          s.session._newMessages = s.session._newMessages.filter(([idx]) => idx !== s.messageIndex);
+          s.session._newMessages.push([s.messageIndex, s.session.messages[s.messageIndex]]);
+
           // Save session asynchronously (fire and forget)
           saveSession(s.session.id, { reason: 'code-chunk-autosave' }).catch(err => {
             log("CODES", 2, "chunk-autosave", "Failed to auto-save codes session", {

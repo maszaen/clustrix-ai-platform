@@ -11773,7 +11773,7 @@ function handleConfirmationRequest(streamState, confirmData) {
   container.style.marginTop = "12px";
   container.style.padding = "var(--spacing-lg)";
   container.style.borderRadius = "var(--radius-lg)";
-  container.style.border = "var(--border)";
+  container.style.border = "1px solid var(--border)";
   container.style.flexDirection = "row";
   container.style.justifyContent = "space-between";
 
@@ -12948,8 +12948,22 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         try {
           // Update AI message content with current fullResponse
           s.session.messages[s.messageIndex][1] = fullResponse;
+
+          // Ensure incremental save payload includes the updated message
+          if (!Array.isArray(s.session._newMessages)) {
+            s.session._newMessages = [];
+          }
+
+          const messageData = s.session.messages[s.messageIndex];
+          const existingEntryIndex = s.session._newMessages.findIndex(([idx]) => idx === s.messageIndex);
+          if (existingEntryIndex >= 0) {
+            s.session._newMessages[existingEntryIndex] = [s.messageIndex, messageData];
+          } else {
+            s.session._newMessages.push([s.messageIndex, messageData]);
+          }
+
           s.session.last_updated = nowISO();
-          
+
           // Save session asynchronously (fire and forget)
           saveSession(s.session.id, { reason: 'code-chunk-autosave' }).catch(err => {
             log("CODES", 2, "chunk-autosave", "Failed to auto-save codes session", {

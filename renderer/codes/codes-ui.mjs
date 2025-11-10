@@ -1,3 +1,4 @@
+import { filesUploadDark, filesUploadLight } from '../utils/constants.mjs'
 import { nowISO, formatRelativeTime } from '../time/time-utils.mjs';
 import { escapeHtml } from '../markdown/markdown.mjs';
 
@@ -465,15 +466,17 @@ function renderCodeWorkspace(code) {
   container.innerHTML = '';
 
   if (!code.workspacePath) {
+    // const isDarkTheme = (state.settings.theme === "dark");
+    const isDarkTheme = true //remporary value, waiting for refactoring the app-state.js
+    const iconSVG = isDarkTheme
+          ? filesUploadDark
+          : filesUploadLight;
     const empty = document.createElement('div');
     empty.className = 'file-empty-state-icon';
     empty.style.gridColumn = '1 / -1';
     empty.innerHTML = `
       <div class="file-drop-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M20 7h-4v-.5a3.5 3.5 0 0 0-7 0V7H5c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2Z"/>
-          <path d="M9 7V6.5A2.5 2.5 0 0 1 11.5 4h1a2.5 2.5 0 0 1 2.5 2.5V7"/>
-        </svg>
+        <div class="file-drop-icon">${iconSVG}</div>
       </div>
       <small>Select a project folder to enable<br>context-aware coding assistance.</small>
     `;

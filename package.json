@@ -11,6 +11,9 @@
     "dev": "electron .",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:codes": "jest backend/codes/__tests__",
+    "test:codes:watch": "jest backend/codes/__tests__ --watch",
+    "test:coverage": "jest --coverage",
     "make": "electron-builder",
     "package": "electron-builder --dir",
     "publish": "electron-builder --publish=always"

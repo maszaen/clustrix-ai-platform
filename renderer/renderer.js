@@ -75,6 +75,7 @@ let saveScheduled = false;
 // PERFORMANCE: Dirty session tracking for incremental saves
 const dirtySessionIds = new Set();
 const lastSavedSessionTimestamps = new Map();
+const listeners = {}; 
 let lastSavedSettingsSignature = null;
 
 function computeSessionTimestamp(session) {
@@ -5601,17 +5602,39 @@ function getFileLineCount(file) {
   return count;
 }
 
-function renderProjectFiles(project) {
+export const AppState = {
+  get theme() {
+    return state.settings.theme;
+  },
+  
+  on(event, callback) {
+    if (!listeners[event]) listeners[event] = [];
+    listeners[event].push(callback);
+  },
+  
+  off(event, callback) {
+    if (!listeners[event]) return;
+    listeners[event] = listeners[event].filter(cb => cb !== callback);
+  },
+  
+  _emit(event, data) {
+    if (listeners[event]) {
+      listeners[event].forEach(cb => cb(data));
+    }
+  }
+};
+
+function renderEmptyState() {
   const filesList = document.getElementById("project-files-list");
+  if (filesList.querySelector('.file-card')) {
+    return;
+  }
   if (!filesList) return;
 
   filesList.innerHTML = ""; // Bersihkan daftar
 
-  if (!project.files || project.files.length === 0) {
-    const isDarkTheme = (state.settings.theme === "dark");
-    const iconSVG = isDarkTheme
-      ? filesUploadDark
-      : filesUploadLight;
+    const isDarkTheme = (AppState.theme === 'dark');
+    const iconSVG = isDarkTheme ? filesUploadDark : filesUploadLight;
 
     filesList.innerHTML = `
       <div class="file-empty-state-icon" style="grid-column: 1 / -1;">
@@ -5619,6 +5642,34 @@ function renderProjectFiles(project) {
         <small>Add PDFs, documents, or other text<br>to reference in this project.</small>
       </div>
     `;
+    return;
+  }
+
+function renderProjectFiles(project) {
+  const filesList = document.getElementById("project-files-list");
+  
+
+  if (!filesList) return;
+
+  filesList.innerHTML = ""; // Bersihkan daftar
+
+
+  function renderEmptyState() {
+    const isDarkTheme = (AppState.theme === 'dark');
+    const iconSVG = isDarkTheme ? filesUploadDark : filesUploadLight;
+
+    filesList.innerHTML = `
+      <div class="file-empty-state-icon" style="grid-column: 1 / -1;">
+        <div class="file-drop-icon">${iconSVG}</div>
+        <small>Add PDFs, documents, or other text<br>to reference in this project.</small>
+      </div>
+    `;
+    return;
+  }
+
+  // Initial render
+  if (!project.files || project.files.length === 0) {
+    renderEmptyState();
     return;
   }
 
@@ -6911,284 +6962,187 @@ async function viewProjectFile(index) {
 }
 
 function startProjectRename(project) {
-  // Ensure we're on the projects page and it's fully rendered
-  if (!document.querySelector('#projects-page') || document.querySelector('#projects-page').style.display === 'none') {
-    log("PROJECTS", 4, "startProjectRename", "Not on projects page or page not visible", {
-      projectId: project.id,
-      currentPage: document.querySelector('.page:not([style*="display: none"])')?.id || 'unknown'
-    });
-    return;
-  }
+  showProjectInputModal({
+    title: 'Rename Project',
+    description: 'Enter a new name for this project.',
+    defaultValue: project.name || '',
+    placeholder: 'Project name',
+    confirmLabel: 'Rename',
+  }).then(async (value) => {
+    if (value === null || value === project.name) return;
 
-  const projectItem = document.querySelector(
-    `#projects-page [data-project-id="${project.id}"]`,
-  );
-  if (!projectItem) {
-    log("PROJECTS", 4, "startProjectRename", "Project item not found in DOM", {
-      projectId: project.id,
-      availableProjectIds: Array.from(document.querySelectorAll('#projects-page [data-project-id]')).map(el => el.dataset.projectId)
-    });
-    return;
-  }
+    project.name = value;
+    project.last_updated = nowISO();
 
-  // Ensure the project item has basic structure
-  if (!projectItem.children || projectItem.children.length === 0) {
-    log("PROJECTS", 4, "startProjectRename", "Project item has no children elements", {
-      projectId: project.id,
-      projectItemHTML: projectItem.innerHTML.substring(0, 100) + '...'
-    });
-    return;
-  }
+    // Update the UI immediately
+    const projectItem = document.querySelector(
+      `#projects-page [data-project-id="${project.id}"]`,
+    );
+    if (projectItem) {
+      const titleEl = projectItem.querySelector('.project-item-title');
+      if (titleEl) titleEl.textContent = value || 'Untitled Project';
 
-  const titleElement = projectItem.querySelector(".project-item-title");
-  let targetElement = titleElement;
-  if (!titleElement) {
-    // Try to find any h3 element as fallback
-    const h3Element = projectItem.querySelector("h3");
-    if (h3Element) {
-      h3Element.classList.add("project-item-title");
-      targetElement = h3Element;
-      log("PROJECTS", 3, "startProjectRename", "Found h3 element, added title class", {
-        projectId: project.id,
-      });
-    } else {
-      // Create the title element if it doesn't exist at all
-      const headerElement = projectItem.querySelector(".project-item-header");
-      if (headerElement) {
-        const newTitle = document.createElement("h3");
-        newTitle.className = "project-item-title";
-        newTitle.textContent = project.name || "Untitled Project";
-        headerElement.insertBefore(newTitle, headerElement.firstChild);
-        targetElement = newTitle;
-        log("PROJECTS", 3, "startProjectRename", "Created missing title element", {
-          projectId: project.id,
-        });
-      } else {
-        // Ultimate fallback: create title element in the project item content
-        const contentElement = projectItem.querySelector(".project-item-content");
-        if (contentElement) {
-          const newTitle = document.createElement("h3");
-          newTitle.className = "project-item-title";
-          newTitle.textContent = project.name || "Untitled Project";
-          newTitle.style.cssText = `
-            font-size: 16px;
-            font-weight: 600;
-            margin: 0 0 4px 0;
-            color: var(--text-primary);
-          `;
-          contentElement.insertBefore(newTitle, contentElement.firstChild);
-          targetElement = newTitle;
-          log("PROJECTS", 3, "startProjectRename", "Created title element in content area", {
-            projectId: project.id,
-          });
-        } else {
-          log("PROJECTS", 4, "startProjectRename", "No suitable container found to create title in", {
-            projectId: project.id,
-            projectItemHTML: projectItem.innerHTML.substring(0, 300) + '...',
-            allClasses: Array.from(projectItem.querySelectorAll('*')).map(el => el.className).filter(c => c).join(', '),
-            childElements: Array.from(projectItem.children).map(el => el.tagName + (el.className ? '.' + el.className : '')).join(', ')
-          });
-          return;
-        }
+      const dateElement = projectItem.querySelector('.project-item-date');
+      if (dateElement) {
+        dateElement.textContent = `Last updated ${formatRelativeTime(project.last_updated || project.created_at)}`;
       }
     }
-  }
-  
-  const originalName = project.name || "Untitled Project";
 
-  // Create input element
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = originalName;
-  input.className = "project-rename-input";
-  input.style.cssText = `
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    font-size: inherit;
-    font-weight: inherit;
-    padding: 4px 8px;
-    border-radius: 4px;
-    width: 100%;
-  `;
+    await saveProjectsData();
 
-  // Replace title with input
-  const parent = targetElement.parentNode;
-  parent.replaceChild(input, targetElement);
-  input.focus();
-  input.select();
+    log("PROJECTS", 2, "startProjectRename", "Project renamed", {
+      projectId: project.id,
+      newName: project.name,
+    });
+  });
+}
 
-  const finishRename = async (save = false) => {
-    if (save && input.value.trim() && input.value.trim() !== originalName) {
-      project.name = input.value.trim();
-      project.last_updated = nowISO();
-      await saveProjectsData();
+function showProjectInputModal({
+  title,
+  description = '',
+  defaultValue = '',
+  placeholder = '',
+  multiline = false,
+  confirmLabel = 'Save',
+  allowEmpty = false,
+} = {}) {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal projects-modal';
+    modal.innerHTML = `
+      <div class="modal-overlay"></div>
+      <div class="modal-card" style="max-width: 520px;">
+        <div class="modal-header">
+          <h2>${escapeHtml(title)}</h2>
+          <button class="close-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          ${description ? `<p class="modal-description">${escapeHtml(description)}</p>` : ''}
+          <div class="form-group">
+            <label>${escapeHtml(title)}</label>
+            ${multiline
+              ? `<textarea rows="6" placeholder="${escapeHtml(placeholder)}">${escapeHtml(defaultValue)}</textarea>`
+              : `<input type="text" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(defaultValue)}" />`
+            }
+          </div>
+          <div class="form-actions">
+            <button class="primary-btn" data-action="cancel">Cancel</button>
+            <button class="primary-btn" data-action="confirm">${escapeHtml(confirmLabel)}</button>
+          </div>
+        </div>
+      </div>
+    `;
 
-      log("PROJECTS", 2, "startProjectRename", "Project renamed", {
-        projectId: project.id,
-        oldName: originalName,
-        newName: project.name,
-      });
-    }
+    document.body.appendChild(modal);
 
-    // Restore title element
-    const newTitle = document.createElement("h3");
-    newTitle.className = "project-item-title";
-    newTitle.textContent = project.name || "Untitled Project";
-    parent.replaceChild(newTitle, input);
+    const close = (value) => {
+      if (modal && modal.parentNode) {
+        modal.parentNode.removeChild(modal);
+      }
+      resolve(value);
+    };
 
-    // Update the date display to reflect the new last_updated time
-    const dateElement = projectItem.querySelector(".project-item-date");
-    if (dateElement) {
-      dateElement.textContent = `Last updated ${formatRelativeTime(project.last_updated || project.created_at)}`;
-    }
-  };
+    const overlay = modal.querySelector('.modal-overlay');
+    const closeBtn = modal.querySelector('.close-btn');
+    const cancelBtn = modal.querySelector('[data-action="cancel"]');
+    const confirmBtn = modal.querySelector('[data-action="confirm"]');
+    const inputEl = modal.querySelector('.form-group input, .form-group textarea');
 
-  input.addEventListener("blur", () => finishRename(true));
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      finishRename(true);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      finishRename(false);
-    }
+    const submit = () => {
+      if (!inputEl) {
+        close(null);
+        return;
+      }
+
+      const trimmed = (inputEl.value || '').trim();
+
+      if (!allowEmpty && !trimmed) {
+        inputEl.focus();
+        return;
+      }
+
+      close(trimmed);
+    };
+
+    overlay?.addEventListener('click', () => close(null));
+    closeBtn?.addEventListener('click', () => close(null));
+    cancelBtn?.addEventListener('click', () => close(null));
+    confirmBtn?.addEventListener('click', () => submit());
+
+    modal.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close(null);
+      } else if (event.key === 'Enter' && (!multiline || event.ctrlKey)) {
+        event.preventDefault();
+        submit();
+      }
+    });
+
+    setTimeout(() => {
+      if (inputEl instanceof HTMLInputElement || inputEl instanceof HTMLTextAreaElement) {
+        inputEl.focus();
+        if (inputEl instanceof HTMLInputElement) {
+          inputEl.select();
+        }
+      }
+    }, 0);
   });
 }
 
 function startProjectDetailRename(project) {
-  const titleElement = document.getElementById("project-detail-title");
-  if (!titleElement) {
-    log("PROJECTS", 4, "startProjectDetailRename", "Title element not found", {
+  showProjectInputModal({
+    title: 'Rename Project',
+    description: 'Enter a new name for this project.',
+    defaultValue: project.name || '',
+    placeholder: 'Project name',
+    confirmLabel: 'Rename',
+  }).then(async (value) => {
+    if (value === null || value === project.name) return;
+
+    project.name = value;
+    project.last_updated = nowISO();
+
+    const titleEl = document.getElementById('project-detail-title');
+    if (titleEl) titleEl.textContent = value || 'Untitled Project';
+
+    await saveProjectsData();
+    renderProjectsPage();
+
+    log("PROJECTS", 2, "startProjectDetailRename", "Project renamed", {
       projectId: project.id,
+      newName: project.name,
     });
-    return;
-  }
-  
-  const originalName = project.name || "Untitled Project";
-
-  // Create input element
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = originalName;
-  input.className = "project-detail-rename-input";
-  input.style.cssText = `
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    font-size: inherit;
-    font-weight: inherit;
-    padding: 4px 8px;
-    border-radius: 4px;
-    width: 100%;
-  `;
-
-  // Replace title with input
-  const parent = titleElement.parentNode;
-  parent.replaceChild(input, titleElement);
-  input.focus();
-  input.select();
-
-  const finishRename = async (save = false) => {
-    if (save && input.value.trim() && input.value.trim() !== originalName) {
-      project.name = input.value.trim();
-      project.last_updated = nowISO();
-      await saveProjectsData();
-
-      log("PROJECTS", 2, "startProjectDetailRename", "Project renamed", {
-        projectId: project.id,
-        oldName: originalName,
-        newName: project.name,
-      });
-    }
-
-    // Restore title element
-    const newTitle = document.createElement("h2");
-    newTitle.id = "project-detail-title";
-    newTitle.textContent = project.name || "Untitled Project";
-    parent.replaceChild(newTitle, input);
-
-    // Update star button state after rename
-    updateProjectStarButton();
-  };
-
-  input.addEventListener("blur", () => finishRename(true));
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      finishRename(true);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      finishRename(false);
-    }
   });
 }
 
 function startProjectDetailDescriptionEdit(project) {
-  const descElement = document.getElementById("project-detail-desc");
-  if (!descElement) {
-    log("PROJECTS", 4, "startProjectDetailDescriptionEdit", "Description element not found", {
+  showProjectInputModal({
+    title: 'Edit Description',
+    description: 'Update the description for this project.',
+    defaultValue: project.description || '',
+    placeholder: 'Description...',
+    multiline: true,
+    confirmLabel: 'Save',
+    allowEmpty: true,
+  }).then(async (value) => {
+    if (value === null) return;
+
+    project.description = value;
+    project.last_updated = nowISO();
+
+    const descEl = document.getElementById('project-detail-desc');
+    if (descEl) descEl.textContent = value || '';
+
+    await saveProjectsData();
+
+    log("PROJECTS", 2, "startProjectDetailDescriptionEdit", "Project description updated", {
       projectId: project.id,
     });
-    return;
-  }
-  
-  const originalDesc = project.description || "";
-
-  // Create textarea element for editing
-  const textarea = document.createElement("textarea");
-  textarea.value = originalDesc;
-  textarea.className = "project-detail-description-edit";
-  textarea.placeholder = "Enter project description (optional)";
-  textarea.style.cssText = `
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-    font-size: inherit;
-    font-family: inherit;
-    padding: 8px 12px;
-    border-radius: 4px;
-    width: 100%;
-    min-height: 80px;
-    max-height: 150px;
-    resize: vertical;
-    line-height: 1.4;
-  `;
-
-  // Replace description with textarea
-  const parent = descElement.parentNode;
-  parent.replaceChild(textarea, descElement);
-  textarea.focus();
-
-  const finishEdit = async (save = false) => {
-    if (save) {
-      const newDesc = textarea.value.trim();
-      if (newDesc !== originalDesc) {
-        project.description = newDesc;
-        project.last_updated = nowISO();
-        await saveProjectsData();
-
-        log("PROJECTS", 2, "startProjectDetailDescriptionEdit", "Project description updated", {
-          projectId: project.id,
-          oldDesc: originalDesc,
-          newDesc: newDesc,
-        });
-      }
-    }
-
-    // Restore description element
-    const newDesc = document.createElement("p");
-    newDesc.id = "project-detail-desc";
-    newDesc.textContent = project.description || "";
-    parent.replaceChild(newDesc, textarea);
-  };
-
-  textarea.addEventListener("blur", () => finishEdit(true));
-  textarea.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      finishEdit(false);
-    }
   });
 }
 
@@ -13878,6 +13832,8 @@ function toggleTheme() {
   // When switching themes, use 'standard' variant by default
   applyTheme(newTheme, 'standard');
   save();
+  AppState._emit('theme-changed', newTheme);
+  renderEmptyState();
 }
 
 function showConfirmationModal(options = {}, legacyMessage, legacyOnConfirm) {

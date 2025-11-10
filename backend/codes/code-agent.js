@@ -14,6 +14,9 @@ const COMMAND_EXECUTION_TIMEOUT_MS = 30 * 1000; // 30 seconds max for command ex
 
 const PROMPT_FIRST = `You are a PowerShell-based coding assistant helping user fix bugs in code files or any problem.
 
+⚠️ CRITICAL: You have MEMORY! Read the COMMAND HISTORY below carefully. You've already executed commands and seen their output.
+DO NOT repeat what you've already done. Build on previous work. Use context from earlier commands.
+
 === ORIGINAL USER REQUEST ===
 {user_prompt}
 
@@ -24,6 +27,12 @@ const PROMPT_FIRST = `You are a PowerShell-based coding assistant helping user f
 Command: {last_command}
 Output: 
 {last_output}
+
+💡 CONTEXT AWARENESS:
+- If you already listed files → You know what files exist
+- If you already read a file → You know its content
+- If you already ran code → You know the output
+- DON'T repeat commands unless the output was unclear or you need to verify a change
 
 === POWERSHELL COMMAND ARSENAL ===
 You have full access to PowerShell commands. Here are some useful patterns (but feel free to use ANY PowerShell command):
@@ -67,6 +76,20 @@ You have full access to PowerShell commands. Here are some useful patterns (but 
 - $var = Get-Content file.txt; $var -replace "old","new" | Set-Content file.txt
 - Multiple commands in sequence are totally fine!
 
+**IMPORTANT - Multi-line String Replacement Rules:**
+⚠️  AVOID complex -replace patterns with multi-line content or special chars - they often fail!
+Instead:
+- For multi-line changes: Read file → Store in variable → Modify → Write back (3-4 steps)
+- For simple replacements: Use (Get-Content) -replace "simple","pattern" on single lines only
+- For code blocks: Use @' '@  here-strings or manually construct the content
+Example that WORKS:
+  $content = Get-Content "file.py"
+  $content = $content -replace "def old_func", "def new_func"
+  $content | Set-Content "file.py"
+Example that FAILS (avoid!):
+  (Get-Content file.py) -replace "def func():..." (multi-line regex) 
+If replacement fails first time, DON'T RETRY - use a different approach!
+
 === THINKING APPROACH ===
 Before each action, ask yourself:
 1. **Understanding**: Do I fully understand the problem from the output?
@@ -78,7 +101,7 @@ Then decide:
 - **Need info?** → Use search, grep, file reading, listing
 - **Ready to fix?** → Use replace, edit, or multi-step modifications
 - **Need to verify?** → Run the code/tests
-- **Stuck?** → Ask Zaeni for clarification
+- **Stuck?** → Ask User for clarification
 - **Done?** → Summarize and add <!END>
 
 === CORE PRINCIPLES ===
@@ -111,12 +134,65 @@ Useful for complex transformations
 === RESPONSE FORMAT ===
 Always respond in this exact format:
 
+**First Response (iteration 0): Start solving**
+Option A: Simple problem → just <answer> + <cmd>
+Option B: Complex problem (3+ steps) → create <todo> first, then <answer>
+
+IF creating task plan (complex problems only):
+<todo>
+- [ ] Step 1
+- [ ] Step 2
+- [ ] Step 3
+</todo>
+
 <answer>
-Brief explanation in casual Indonesian (e.g., "oke zaen, gue bakal cek dulu file main.py nya ya" or "nemu bug di line 45, gue fix sekarang")
+Brief explanation of your plan or approach
 </answer>
+
 <cmd>
-Your PowerShell command here (optional - only if you need to execute something)
+PowerShell command for first step (optional)
 </cmd>
+
+IF no plan needed (simple or single-step):
+<answer>
+Brief explanation and action
+</answer>
+
+<cmd>
+PowerShell command (optional)
+</cmd>
+
+**Subsequent Responses (iteration 1+): Continue solving**
+IF you created <todo> before → update checklist:
+<checklist>
+- [x] Completed steps
+- [ ] Next steps
+</checklist>
+
+<answer>
+What you found + what's next
+</answer>
+
+<cmd>
+PowerShell command for next action (optional)
+</cmd>
+
+IF no <todo> before → just respond normally:
+<answer>
+What you found + what's next
+</answer>
+
+<cmd>
+PowerShell command (optional)
+</cmd>
+
+=== TODO/CHECKLIST GUIDELINES ===
+1. **Create <todo> only if** → problem needs 3+ steps OR complex multi-file changes
+2. **Don't create <todo> if** → simple problem, single command fixes, or quick verification
+3. **Be selective** → Not every problem needs planning. Use judgment!
+4. **Track Progress** → If you created <todo>, update <checklist> each iteration
+5. **Stay Focused** → Max 5-7 items in todo, don't expand scope
+6. **Done Signal** → When all [x] complete → add <!END>
 
 **Important**: 
 - If just answering a question (no file operations needed) → only use <answer>, no <cmd>
@@ -124,6 +200,9 @@ Your PowerShell command here (optional - only if you need to execute something)
 - Never put explanations/questions inside <cmd> - only valid PowerShell commands!`;
 
 const PROMPT_SUBSEQUENT = `You are a PowerShell-based coding assistant helping user fix bugs in code files or any problem.
+
+CRITICAL: You have MEMORY! Read the COMMAND HISTORY below carefully. You've already executed commands and seen their output.
+DO NOT repeat what you've already done. Build on previous work. Use context from earlier commands.
 
 === ORIGINAL USER REQUEST ===
 {user_prompt}
@@ -175,7 +254,7 @@ Decision paths:
 - **Ready to fix** → Apply edits (replace, modify lines, multi-step)
 - **Need verification** → Run code/tests
 - **Task complete** → Summarize + <!END>
-- **Uncertain** → Ask Zaeni
+- **Uncertain** → Ask User
 
 === CORE PRINCIPLES ===
 1. **Creativity First**: Use ANY PowerShell command - don't be rigid
@@ -201,25 +280,45 @@ Decision paths:
 - Try a different search pattern
 - Read more context
 - Break problem into smaller steps
-- Ask Zaeni for clarification
+- Ask User for clarification
 
 === RESPONSE FORMAT ===
 Always use this exact structure:
 
-<internal>
-[Internal reasoning: Quickly summarize what the last command revealed and what you'll do next]
-</internal>
+**IF you created <todo> in first response → update checklist:**
+<checklist>
+- [x] Completed items
+- [ ] Next item to do
+</checklist>
+
 <answer>
-[Brief casual Indonesian response to user, like "oke udah ketemu bugnya di line 23, gue fix ya" or "file udah di-scan, gue cek yang error"]
+What you found + what you'll do next (brief, Indonesian)
 </answer>
+
 <cmd>
-[Your PowerShell command - ONLY if you need to execute something. Omit this tag if done.]
+PowerShell command for next step (optional)
 </cmd>
 
-**Stop Signal:**
-When task is complete, or you need user confirmation, or you're truly stuck → add <!END> at the end
+**IF no <todo> was created → just respond normally:**
+<answer>
+What you found + what you'll do next (brief, Indonesian)
+</answer>
 
-**Remember**: <cmd> contains ONLY executable PowerShell commands, never explanations or questions!`;
+<cmd>
+PowerShell command (optional)
+</cmd>
+
+=== CHECKLIST RULES FOR ITERATIONS ===
+1. **Only if you created <todo>** → update <checklist> each iteration
+2. **Mark items done** → Change [x] when truly complete
+3. **No new items** → Stay focused on original plan
+4. **If stuck** → Ask User, try different approach, don't expand scope
+5. **Done Signal** → When all [x] complete → add <!END>
+
+**Stop Signal:**
+When all tasks complete, or you need clarification → add <!END> at the end
+
+**Remember**: Use <todo>/<checklist> only when needed, keep it simple!`;
 
 let deps = {
   log: () => {},
@@ -227,6 +326,7 @@ let deps = {
 };
 
 const sessionStates = new Map();
+const confirmationPromises = new Map(); // Store pending confirmation promises
 let idleTimer = null;
 
 function log(context, level, func, message, details = {}) {
@@ -271,6 +371,36 @@ function getSessionState(sessionId) {
   return state;
 }
 
+function waitForUserConfirmation(sessionId, iteration) {
+  const key = `${sessionId}-${iteration}`;
+  
+  return new Promise((resolve) => {
+    // Store resolve function to be called when user responds
+    confirmationPromises.set(key, resolve);
+    
+    // Timeout after 5 minutes - auto deny
+    setTimeout(() => {
+      if (confirmationPromises.has(key)) {
+        confirmationPromises.delete(key);
+        resolve({ allowed: false });
+      }
+    }, 5 * 60 * 1000);
+  });
+}
+
+function resolveUserConfirmation(sessionId, iteration, allowed) {
+  const key = `${sessionId}-${iteration}`;
+  const resolve = confirmationPromises.get(key);
+  
+  if (resolve) {
+    confirmationPromises.delete(key);
+    resolve({ allowed });
+    return true;
+  }
+  
+  return false;
+}
+
 function truncateOutput(output) {
   if (!output) return '';
   const lines = output.split(/\r?\n/).slice(0, MAX_OUTPUT_LINES);
@@ -297,13 +427,33 @@ function formatCommandHistory(history = []) {
   if (!history.length) {
     return 'No commands executed yet.';
   }
-  return history
-    .slice(-MAX_HISTORY)
-    .map((entry, index) => {
-      const idx = history.length - Math.min(history.length, MAX_HISTORY) + index + 1;
+  
+  const recentHistory = history.slice(-MAX_HISTORY);
+  const olderHistory = recentHistory.slice(0, -3); // All but last 3
+  const recentThree = recentHistory.slice(-3); // Last 3 commands with full output
+  
+  const parts = [];
+  
+  // Older commands: show summary only
+  if (olderHistory.length > 0) {
+    parts.push('=== OLDER COMMANDS (summary) ===');
+    parts.push(olderHistory.map((entry, index) => {
+      const idx = history.length - recentHistory.length + index + 1;
       return `#${idx} ${entry.command} → ${entry.summary}`;
-    })
-    .join('\n');
+    }).join('\n'));
+  }
+  
+  // Recent 3 commands: show FULL output for better context
+  if (recentThree.length > 0) {
+    parts.push('\n=== RECENT COMMANDS (full output) ===');
+    recentThree.forEach((entry, index) => {
+      const idx = history.length - recentThree.length + index + 1;
+      const output = truncateOutput(entry.output || 'No output');
+      parts.push(`#${idx} ${entry.command}\nOutput:\n${output}\nExit Code: ${entry.exitCode}`);
+    });
+  }
+  
+  return parts.join('\n');
 }
 
 function getLastCommand(history = []) {
@@ -348,13 +498,21 @@ function parseAgentResponse(text = '') {
   const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/i);
   const cmdMatch = text.match(/<cmd>([\s\S]*?)<\/cmd>/i);
   const done = /<!END>/i.test(text);
-  const internalMatches = Array.from(text.matchAll(/<internal>([\s\S]*?)<\/internal>/gi));
+  const todoMatch = text.match(/<todo>([\s\S]*?)<\/todo>/i);
+  const checklistMatch = text.match(/<checklist>([\s\S]*?)<\/checklist>/i);
+
+  // Clean answer by removing <!END> tag if it appears inside
+  let cleanAnswer = answerMatch ? answerMatch[1].trim() : '';
+  if (cleanAnswer) {
+    cleanAnswer = cleanAnswer.replace(/<!END>/gi, '').trim();
+  }
 
   return {
-    answer: answerMatch ? answerMatch[1].trim() : '',
+    answer: cleanAnswer,
     command: cmdMatch ? cmdMatch[1].trim() : '',
     done,
-    internal: internalMatches.map(match => match[1].trim()).filter(Boolean),
+    todo: todoMatch ? todoMatch[1].trim() : null,
+    checklist: checklistMatch ? checklistMatch[1].trim() : null,
   };
 }
 
@@ -388,13 +546,15 @@ function formatIterationOutput({ answer, command, output, exitCode, blocked }) {
 }
 
 function formatResponseAndCommand({ answer, command }) {
-  // Format response and command together (sent BEFORE execution)
   const sections = [];
   if (answer) {
-    sections.push(answer);
+    const cleanedAnswer = answer
+      .replace(/^```[\w]*\n?/, '') 
+      .replace(/\n?```$/, '');     
+    sections.push('\n' + cleanedAnswer + '\n');
   }
   if (command) {
-    sections.push('```powershell\n' + command.trim() + '\n```');
+    sections.push('```powershell\n' + command.trim() + '\n```\n');
   }
   return sections.length > 0 ? sections.join('\n\n') : null;
 }
@@ -405,9 +565,9 @@ function formatOutput({ output, exitCode, blocked }) {
     const exitLine = Number.isFinite(exitCode)
       ? `\n# Exit Code: ${exitCode}`
       : '';
-    return '```text\n' + output.trim() + exitLine + '\n```';
+    return '```text\n' + output.trim() + exitLine + '\n```\n';
   } else if (blocked) {
-    return '```text\nCommand blocked by safety policy.\n```';
+    return '```text\nCommand blocked by safety policy.\n```\n';
   }
   return null;
 }
@@ -427,6 +587,57 @@ function mergeUsage(target, usage) {
     result.total_tokens = result.prompt_tokens + result.completion_tokens;
   }
   return result;
+}
+
+function formatTodo(todoText) {
+  // Parse todo checklist into structured format
+  if (!todoText) return null;
+  
+  const lines = todoText.split('\n').filter(line => line.trim().startsWith('-'));
+  const items = lines.map(line => {
+    const match = line.match(/^-\s*\[([ xX])\]\s*(.+)$/);
+    if (match) {
+      return {
+        checked: match[1].toLowerCase() === 'x',
+        text: match[2].trim(),
+      };
+    }
+    return null;
+  }).filter(Boolean);
+  
+  return items.length > 0 ? items : null;
+}
+
+function formatTodoChunk(todo, checklist, iteration) {
+  // Return formatted todo/checklist for sending to renderer
+  const content = [];
+  
+  if (iteration === 0 && todo) {
+    // First iteration: show todo list
+    content.push('📋 **My Plan:**\n');
+    const items = formatTodo(todo);
+    if (items) {
+      items.forEach(item => {
+        content.push(`- [${item.checked ? 'x' : ' '}] ${item.text}`);
+      });
+    } else {
+      content.push(todo);
+    }
+  } else if (iteration > 0 && checklist) {
+    // Subsequent iterations: show checklist
+    content.push('✓ **Progress:**\n');
+    const items = formatTodo(checklist);
+    if (items) {
+      items.forEach(item => {
+        const icon = item.checked ? '✅' : '⬜';
+        content.push(`${icon} ${item.text}`);
+      });
+    } else {
+      content.push(checklist);
+    }
+  }
+  
+  return content.length > 0 ? content.join('\n') : null;
 }
 
 function ensurePowerShellSession(state, workspacePath) {
@@ -576,14 +787,8 @@ async function executeCommand(state, command) {
     };
   }
 
-  if (isHighImpactCommand(command)) {
-    return {
-      output: 'Command blocked: requires manual confirmation for destructive operations.',
-      exitCode: 1,
-      blocked: true,
-      executed: false,
-    };
-  }
+  // Note: High impact commands are now handled in processCodeRequest
+  // This function just executes what's given
 
   try {
     const terminal = ensurePowerShellSession(state, state.workspacePath);
@@ -667,6 +872,8 @@ async function processCodeRequest({
 
   const chunks = [];
   let usage = null;
+  let lastCommandErrorPattern = null;
+  let sameErrorCount = 0;
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
     if (typeof shouldCancel === 'function' && shouldCancel()) {
@@ -697,6 +904,25 @@ async function processCodeRequest({
 
     usage = mergeUsage(usage, iterationUsage);
 
+    // STEP 0: Send todo/checklist if present (for planning & progress tracking)
+    const todoChunk = formatTodoChunk(parsed.todo, parsed.checklist, iteration);
+    if (todoChunk && typeof onChunk === 'function') {
+      try {
+        chunks.push(todoChunk);
+        onChunk(todoChunk, {
+          iteration,
+          type: 'todo',
+          done: false,
+        });
+      } catch (error) {
+        log('CODES', 2, 'processCodeRequest', 'Failed to deliver todo chunk', {
+          error: error?.message || error,
+          iteration,
+          sessionId,
+        });
+      }
+    }
+
     // STEP 1: Send response + command BEFORE executing
     const responseCommandChunk = formatResponseAndCommand({
       answer: parsed.answer || 'No response provided.',
@@ -720,7 +946,74 @@ async function processCodeRequest({
       }
     }
 
-    // STEP 2: Execute command
+    // STEP 2: Check if command requires confirmation
+    if (isHighImpactCommand(parsed.command)) {
+      // Send confirmation request chunk (no history entry yet)
+      const confirmationChunk = JSON.stringify({
+        type: 'confirmation-required',
+        command: parsed.command,
+        iteration,
+      }) + '\n';
+      
+      if (typeof onChunk === 'function') {
+        try {
+          chunks.push(confirmationChunk);
+          onChunk(confirmationChunk, {
+            iteration,
+            type: 'confirmation-required',
+            done: false,
+            awaitingConfirmation: true,
+          });
+        } catch (error) {
+          log('CODES', 2, 'processCodeRequest', 'Failed to deliver confirmation chunk', {
+            error: error?.message || error,
+            iteration,
+            sessionId,
+          });
+        }
+      }
+      
+      // Wait for user confirmation
+      const userDecision = await waitForUserConfirmation(sessionId, iteration);
+      
+      if (!userDecision.allowed) {
+        // User skipped - add system message to guide AI
+        const skipMessage = 'The user is skipping this command. Use another approach, or just <!END> and mention to the user what\'s wrong.';
+        state.commandHistory.push({
+          command: '[SYSTEM - USER SKIPPED]',
+          output: skipMessage,
+          exitCode: 1,
+          summary: 'User skipped destructive command',
+          timestamp: Date.now(),
+        });
+        
+        // Send skip notification to UI
+        const skipChunk = formatOutput({ 
+          output: skipMessage, 
+          exitCode: 1, 
+          blocked: false 
+        });
+        if (skipChunk && typeof onChunk === 'function') {
+          try {
+            chunks.push(skipChunk);
+            onChunk(skipChunk, {
+              iteration,
+              type: 'output',
+              done: false,
+            });
+          } catch (error) {
+            log('CODES', 2, 'processCodeRequest', 'Failed to deliver skip chunk', {
+              error: error?.message || error,
+              iteration,
+              sessionId,
+            });
+          }
+        }
+        continue; // Go to next iteration with system message
+      }
+    }
+    
+    // STEP 3: Execute command
     const { output, exitCode, blocked, isTimeout } = await executeCommand(state, parsed.command);
     const historyEntry = {
       command: parsed.command || '[no command]',
@@ -733,6 +1026,33 @@ async function processCodeRequest({
       state.commandHistory.push(historyEntry);
       if (state.commandHistory.length > MAX_HISTORY * 2) {
         state.commandHistory.splice(0, state.commandHistory.length - MAX_HISTORY * 2);
+      }
+    }
+
+    // Detect repeated failure pattern (e.g., same syntax error twice in a row)
+    if (exitCode !== 0 && parsed.command && parsed.command.includes('-replace')) {
+      const errorPattern = output.substring(0, 100); // First 100 chars of error
+      if (errorPattern === lastCommandErrorPattern) {
+        sameErrorCount += 1;
+        if (sameErrorCount >= 2) {
+          log('CODES', 2, 'processCodeRequest', 'Breaking loop: same -replace error repeated twice', {
+            iteration,
+            errorPattern,
+            sameErrorCount,
+          });
+          // Add message to history so AI knows to try different approach
+          state.commandHistory.push({
+            command: '[SYSTEM]',
+            output: 'LOOP BREAKER: Same -replace command failed twice. Try a different approach (multi-step instead of single -replace).',
+            exitCode: 1,
+            summary: 'Repeated -replace failure - suggest multi-step approach',
+            timestamp: Date.now(),
+          });
+          break; // Break iteration loop
+        }
+      } else {
+        lastCommandErrorPattern = errorPattern;
+        sameErrorCount = 1; // Reset count when error changes
       }
     }
 
@@ -792,4 +1112,5 @@ function initializeCodeAgent(options = {}) {
 module.exports = {
   initializeCodeAgent,
   processCodeRequest,
+  resolveUserConfirmation,
 };

@@ -4112,9 +4112,10 @@ textarea::-webkit-scrollbar {
 }
 
 .secondary-btn {
-  color: var(--fg);
   background: transparent;
-  border: 1px solid var(--border);
+  color: var(--primary);
+  border: none;
+  padding: var(--spacing-xs) var(--spacing-lg);
   border-radius: 30px;
   cursor: pointer;
   font-weight: var(--font-bold);
@@ -4124,13 +4125,16 @@ textarea::-webkit-scrollbar {
   justify-content: center;
   gap: var(--spacing-sm);
   height: 40px;
-  padding: 0 16px;
 }
 
 .secondary-btn:hover {
-  color: var(--hover-bg);
-  border-color: var(--hover-bg);
-  background: var(--hover-bg-alpha);
+  background: var(--bg-secondary);
+  color: var(--fg);
+  transform: translateY(-1px);
+}
+
+.secondary-btn:active {
+  transform: translateY(0);
 }
 
 .danger-btn {
@@ -5425,8 +5429,9 @@ a:focus-visible {
 .message.codes-session .code-block-container pre[class*=language-],
 .message.codes-session .code-block-container pre.hljs {
   max-height: 329px;
+  border: 1px solid var(--border) !important;
   overflow-y: auto;
-  border-top: none !important;
+  background: var(--bg);
   border-radius: var(--radius-lg);
 }
 

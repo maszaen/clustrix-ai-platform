@@ -25,7 +25,7 @@ const GitHubStorageService = require('./backend/github/github-storage-service');
 const SmartBackupService = require('./backend/sync/smart-backup-service');
 const { queryUsageStatistics, invalidateUsageStatisticsCache } = require('./backend/data/usage-statistics');
 const { queryBenchmarkStatistics, invalidateBenchmarkStatisticsCache } = require('./backend/data/benchmark-statistics');
-const { initializeCodeAgent, processCodeRequest } = require('./backend/codes/code-agent');
+const { initializeCodeAgent, processCodeRequest, resolveUserConfirmation } = require('./backend/codes/code-agent');
 
 function createTimestampedBackup(filePath, reason = '') {
   try {
@@ -2933,6 +2933,31 @@ ipcMain.on('codes:stream-cancel', (_event, reqId) => {
   const controller = codeStreamControllers.get(reqId);
   if (controller) {
     controller.cancelled = true;
+  }
+});
+
+ipcMain.handle('codes:confirm-command', async (_event, { sessionId, iteration, allowed }) => {
+  try {
+    const resolved = resolveUserConfirmation(sessionId, iteration, allowed);
+    if (resolved) {
+      log('CODES', 1, 'codes:confirm-command', 'User confirmation resolved', {
+        sessionId,
+        iteration,
+        allowed,
+      });
+      return { success: true };
+    } else {
+      log('CODES', 2, 'codes:confirm-command', 'No pending confirmation found', {
+        sessionId,
+        iteration,
+      });
+      return { success: false, error: 'No pending confirmation' };
+    }
+  } catch (error) {
+    log('CODES', 3, 'codes:confirm-command', 'Failed to resolve confirmation', {
+      error: error?.message || error,
+    });
+    throw error;
   }
 });
 

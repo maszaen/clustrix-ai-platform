@@ -11738,6 +11738,123 @@ function clearStreamingState(div) {
   }
 }
 
+function handleConfirmationRequest(streamState, confirmData) {
+  log("CODES", 1, "handleConfirmationRequest", "Confirmation required for destructive command", {
+    command: confirmData.command,
+    iteration: confirmData.iteration,
+  });
+
+  if (!streamState || !streamState.aiNode || !streamState.session) {
+    log("CODES", 3, "handleConfirmationRequest", "Invalid stream state for confirmation");
+    return;
+  }
+
+  const { aiNode, session } = streamState;
+  const div = aiNode.querySelector(".message-text");
+  if (!div) return;
+
+  // Hide thinking indicator
+  const loader = aiNode.querySelector(".inline-loader");
+  if (loader?.parentNode) loader.parentNode.removeChild(loader);
+
+  // Create confirmation UI
+  const placeholderText = "Do you allow me to execute this command?";
+  const confirmationHtml = `
+    <div class="confirmation-request" data-iteration="${confirmData.iteration}">
+      <div class="confirmation-message">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <span style="color: var(--fg-muted); font-style: italic;">${placeholderText}</span>
+          <div style="display: flex; gap: 8px;">
+            <button class="secondary-btn confirmation-skip" 
+                    data-session-id="${session.id}" 
+                    data-iteration="${confirmData.iteration}"
+                    style="height: 32px; font-size: 13px;">
+              Skip
+            </button>
+            <button class="primary-btn confirmation-allow" 
+                    data-session-id="${session.id}" 
+                    data-iteration="${confirmData.iteration}"
+                    style="height: 32px; font-size: 13px;">
+              Allow
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="confirmation-command" style="margin-top: 8px;">
+        <pre><code class="language-powershell">${escapeHtml(confirmData.command)}</code></pre>
+      </div>
+    </div>
+  `;
+
+  div.innerHTML = confirmationHtml;
+
+  // Highlight the command
+  try {
+    highlightAllUnder(div);
+  } catch (e) {
+    log("CODES", 2, "handleConfirmationRequest", "Failed to highlight command", { error: e });
+  }
+
+  // Attach button handlers
+  const allowBtn = div.querySelector(".confirmation-allow");
+  const skipBtn = div.querySelector(".confirmation-skip");
+
+  if (allowBtn) {
+    allowBtn.addEventListener("click", async () => {
+      try {
+        allowBtn.disabled = true;
+        skipBtn.disabled = true;
+        allowBtn.textContent = "Allowing...";
+        
+        await window.api.codes.confirmCommand({
+          sessionId: session.id,
+          iteration: confirmData.iteration,
+          allowed: true,
+        });
+        
+        // Show processing message
+        div.innerHTML = `<div style="color: var(--fg-muted); font-style: italic;">Command allowed. Processing...</div>`;
+      } catch (error) {
+        log("CODES", 3, "handleConfirmationRequest", "Failed to allow command", { error });
+        allowBtn.disabled = false;
+        skipBtn.disabled = false;
+        allowBtn.textContent = "Allow";
+      }
+    });
+  }
+
+  if (skipBtn) {
+    skipBtn.addEventListener("click", async () => {
+      try {
+        allowBtn.disabled = true;
+        skipBtn.disabled = true;
+        skipBtn.textContent = "Skipping...";
+        
+        await window.api.codes.confirmCommand({
+          sessionId: session.id,
+          iteration: confirmData.iteration,
+          allowed: false,
+        });
+        
+        // Show skip message
+        div.innerHTML = `<div style="color: var(--fg-warning, #ff9500); font-style: italic;">Command skipped. AI will try another approach...</div>`;
+      } catch (error) {
+        log("CODES", 3, "handleConfirmationRequest", "Failed to skip command", { error });
+        allowBtn.disabled = false;
+        skipBtn.disabled = false;
+        skipBtn.textContent = "Skip";
+      }
+    });
+  }
+
+  // Scroll to confirmation UI
+  try {
+    scrollToBottom({ fromAI: true });
+  } catch (e) {
+    log("CODES", 2, "handleConfirmationRequest", "Failed to scroll", { error: e });
+  }
+}
+
 function createStreamHandler(streamId, text, isFirstInteraction = false) {
   log("STREAM", 2, "createStreamHandler", "Stream handler created", {
     streamId,
@@ -11756,6 +11873,10 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
   let lastParsedContent = "";
   let lastParsedHtml = "";
   let fullRenderCounter = 0;
+
+  // Auto-save throttling for codes session (save max every 2 seconds)
+  let lastCodesSaveTime = 0;
+  const CODES_SAVE_THROTTLE_MS = 2000;
 
   let renderInFlight = false;
   let pendingRender = null;
@@ -12661,6 +12782,19 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     const s = getState();
     if (!s) return;
 
+    // Check if this is a confirmation request from code agent
+    if (typeof evt === "string" && evt.trim().startsWith("{")) {
+      try {
+        const parsed = JSON.parse(evt.trim());
+        if (parsed.type === "confirmation-required") {
+          handleConfirmationRequest(s, parsed);
+          return;
+        }
+      } catch (e) {
+        // Not a JSON chunk, continue normal processing
+      }
+    }
+
     const isDone =
       evt === null ||
       evt === "[DONE]" ||
@@ -12782,6 +12916,33 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     fullResponse += String(token);
     const gotEnd = END_RX.test(fullResponse);
     if (gotEnd) sawEnd = true;
+
+    // Auto-save session for codes session (throttled) to prevent data loss on timeout/error
+    if ((s.session?.type === 'code' || s.session?.codeId) && s.session.messages?.[s.messageIndex]) {
+      const now = Date.now();
+      const shouldSave = gotEnd || (now - lastCodesSaveTime >= CODES_SAVE_THROTTLE_MS);
+      
+      if (shouldSave) {
+        lastCodesSaveTime = now;
+        try {
+          // Update AI message content with current fullResponse
+          s.session.messages[s.messageIndex][1] = fullResponse;
+          s.session.last_updated = nowISO();
+          
+          // Save session asynchronously (fire and forget)
+          saveSession(s.session.id, { reason: 'code-chunk-autosave' }).catch(err => {
+            log("CODES", 2, "chunk-autosave", "Failed to auto-save codes session", {
+              error: err?.message || err,
+              sessionId: s.session.id,
+            });
+          });
+        } catch (err) {
+          log("CODES", 2, "chunk-autosave", "Error during chunk auto-save", {
+            error: err?.message || err,
+          });
+        }
+      }
+    }
 
     if (s.aiNode && document.contains(s.aiNode)) {
       const div = s.aiNode.querySelector(".message-text");

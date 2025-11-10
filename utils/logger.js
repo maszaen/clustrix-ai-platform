@@ -5,7 +5,7 @@ let logFilePath = path.join(process.cwd(), 'app.log');
 let debugEnabled = false;
 
 // DISABLE LOGGER COMPLETELY - Uncomment this line to disable all logging
-const DISABLE_LOGGER = true;
+const DISABLE_LOGGER = false;
 
 const SESSION_MARKER = '========================================';
 const SESSION_START_PREFIX = 'SESSION START:';

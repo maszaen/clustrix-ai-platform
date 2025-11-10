@@ -25,7 +25,7 @@ const GitHubStorageService = require('./backend/github/github-storage-service');
 const SmartBackupService = require('./backend/sync/smart-backup-service');
 const { queryUsageStatistics, invalidateUsageStatisticsCache } = require('./backend/data/usage-statistics');
 const { queryBenchmarkStatistics, invalidateBenchmarkStatisticsCache } = require('./backend/data/benchmark-statistics');
-const { initializeCodeAgent, processCodeRequest, resolveUserConfirmation } = require('./backend/codes/code-agent');
+const { initializeCodeAgent, processCodeRequest, resolveUserConfirmation, disposeAllCodeSessions } = require('./backend/codes/code-agent');
 
 function createTimestampedBackup(filePath, reason = '') {
   try {
@@ -2343,6 +2343,15 @@ app.on('before-quit', () => {
   isQuitScheduled = true;
   pendingCloseRequest = false;
   clearCloseDelayTimer();
+  
+  // Cleanup all PowerShell sessions
+  try {
+    disposeAllCodeSessions();
+  } catch (error) {
+    log('CLEANUP', 4, 'before-quit', 'Failed to dispose code sessions', {
+      error: error?.message || error,
+    });
+  }
 });
 app.on('window-all-closed', () => {
   // Close callback server before quitting

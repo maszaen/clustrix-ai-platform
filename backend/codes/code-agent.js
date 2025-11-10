@@ -403,10 +403,20 @@ function resolveUserConfirmation(sessionId, iteration, allowed) {
   return false;
 }
 
-function truncateOutput(output) {
+function truncateOutput(output, mode = 'full') {
   if (!output) return '';
-  const lines = output.split(/\r?\n/).slice(0, MAX_OUTPUT_LINES);
+  const allLines = output.split(/\r?\n/);
+  
+  // Mode: 'older' = 10 lines for older commands, 'full' = 100 lines for recent commands
+  const maxLines = mode === 'older' ? 10 : MAX_OUTPUT_LINES;
+  const lines = allLines.slice(0, maxLines);
   let joined = lines.join('\n');
+  
+  // Add "X more lines" indicator if truncated
+  if (mode === 'older' && allLines.length > maxLines) {
+    joined += `\n... (${allLines.length - maxLines} more lines)`;
+  }
+  
   if (joined.length > MAX_OUTPUT_LENGTH) {
     joined = joined.slice(0, MAX_OUTPUT_LENGTH) + '\n…';
   }
@@ -436,12 +446,13 @@ function formatCommandHistory(history = []) {
   
   const parts = [];
   
-  // Older commands: show summary only
+  // Older commands: show command + truncated output (10 lines)
   if (olderHistory.length > 0) {
-    parts.push('=== OLDER COMMANDS (summary) ===');
+    parts.push('=== OLDER COMMANDS (truncated) ===');
     parts.push(olderHistory.map((entry, index) => {
       const idx = history.length - recentHistory.length + index + 1;
-      return `#${idx} ${entry.command} → ${entry.summary}`;
+      const output = truncateOutput(entry.output || 'No output', 'older');
+      return `#${idx} ${entry.command}\nOutput:\n${output}\nExit Code: ${entry.exitCode}\n`;
     }).join('\n'));
   }
   
@@ -450,7 +461,7 @@ function formatCommandHistory(history = []) {
     parts.push('\n=== RECENT COMMANDS (full output) ===');
     recentThree.forEach((entry, index) => {
       const idx = history.length - recentThree.length + index + 1;
-      const output = truncateOutput(entry.output || 'No output');
+      const output = truncateOutput(entry.output || 'No output', 'full');
       parts.push(`#${idx} ${entry.command}\nOutput:\n${output}\nExit Code: ${entry.exitCode}`);
     });
   }
@@ -489,12 +500,34 @@ function selectPromptTemplate(iteration) {
 }
 
 function renderSystemPrompt(template, { userPrompt, commandHistory, lastCommand }) {
+  // Check if last output > 10 lines for dynamic injection
+  const lastOutputLines = (lastCommand.output || '').split(/\r?\n/).length;
+  
+  // 1. Summary FORMAT for SYSTEM_PROMPT (response format section)
+  const summaryFormat = lastOutputLines > 10 
+    ? `
+<summary>
+Summarize the command output (one line, max 160 chars)
+</summary>
+
+`
+    : '';
+  
+  // 2. Summary REMINDER for PROMPT_SUBSEQUENT (task section)
+  const summaryReminder = lastOutputLines > 10 
+    ? `\nRemember to add <summary> tag for your command output.\n`
+    : '';
+  
+  // Inject summary format into SYSTEM_PROMPT dynamically
+  const dynamicSystemPrompt = SYSTEM_PROMPT.replace('{summary_format}', summaryFormat);
+  
   return template
     .replace('{user_prompt}', userPrompt)
     .replace('{command_history}', commandHistory)
     .replace('{last_command}', lastCommand.command)
     .replace('{last_output}', lastCommand.output)
-    .replace('{common_command}', SYSTEM_PROMPT);
+    .replace('{summary_reminder}', summaryReminder)
+    .replace('{common_command}', dynamicSystemPrompt);
 }
 
 function parseAgentResponse(text = '') {
@@ -761,6 +794,11 @@ async function runAgentIteration({
     commandHistory: commandHistoryText,
     lastCommand,
   });
+
+  // Debug: Log processed prompt for each iteration
+  console.log('\n\n=== CODE AGENT ITERATION #' + iteration + ' - SYSTEM PROMPT ===');
+  console.log(systemPrompt);
+  console.log('=== END SYSTEM PROMPT ===\n\n');
 
   const messages = [
     { role: 'system', content: systemPrompt },
@@ -1135,8 +1173,32 @@ function initializeCodeAgent(options = {}) {
   };
 }
 
+function disposeAllCodeSessions() {
+  log('CODES', 1, 'disposeAllCodeSessions', 'Disposing all PowerShell sessions', {
+    sessionCount: sessionStates.size,
+  });
+  
+  for (const [sessionId, state] of sessionStates.entries()) {
+    try {
+      if (state.terminal && !state.terminal.isDisposed) {
+        state.terminal.dispose();
+        log('CODES', 2, 'disposeAllCodeSessions', 'Disposed PowerShell session', { sessionId });
+      }
+    } catch (error) {
+      log('CODES', 4, 'disposeAllCodeSessions', 'Error disposing session', {
+        sessionId,
+        error: error?.message || error,
+      });
+    }
+  }
+  
+  sessionStates.clear();
+  log('CODES', 1, 'disposeAllCodeSessions', 'All PowerShell sessions disposed');
+}
+
 module.exports = {
   initializeCodeAgent,
   processCodeRequest,
   resolveUserConfirmation,
+  disposeAllCodeSessions,
 };

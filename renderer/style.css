@@ -3457,6 +3457,7 @@ textarea::-webkit-scrollbar {
 }
 
 .send-button {
+  position: relative;
   width: 39px;
   height: 39px;
   border: none;
@@ -3472,7 +3473,37 @@ textarea::-webkit-scrollbar {
   /* border: 1px solid black; */
 }
 
-.send-button svg {
+/* Button wrapper for loader positioning */
+.button-wrapper {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Send button loader ring */
+.send-loader {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 32px;
+  height: 32px;
+  margin-left: -16px;
+  margin-top: -16px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  opacity: 0;
+  visibility: hidden;
+  z-index: -1;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.send-button.interrupt:hover + .send-loader {
+  background-color: var(--border) !important;
+  border-top-color: var(--danger);
+}
+
+.send-button svg {s
   color: var(--icon) !important;
   stroke: var(--icon) !important;
   align-items: center;
@@ -3504,6 +3535,12 @@ textarea::-webkit-scrollbar {
   background: var(--primary-light);
 }
 
+/* Remove hover scale when button is in interrupt/loading state */
+.send-button.interrupt:hover {
+  background: transparent !important;
+  border-radius: var(--radius-full) !important;
+}
+
 .send-button:active {
   transform: scale(0.95);
 }
@@ -3512,6 +3549,34 @@ textarea::-webkit-scrollbar {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+/* Shrink icon animation */
+@keyframes shrinkIcon {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(0.8);
+  }
+}
+
+/* Spin loader animation */
+@keyframes spinLoader {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Interrupt/Loading state: shrink icon */
+.send-button.interrupt svg {
+  animation: shrinkIcon 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Interrupt/Loading state: show and spin loader */
+.send-button.interrupt + .send-loader {
+  opacity: 1;
+  visibility: visible;
+  animation: spinLoader 1s linear infinite;
 }
 
 .input-footer {

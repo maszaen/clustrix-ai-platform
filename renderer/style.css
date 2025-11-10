@@ -2091,6 +2091,20 @@ input:checked + .slider:before {
   flex-shrink: 0;
 }
 
+.project-file-name {
+  color: var(--fg-muted) !important;
+  font-size: 14px;
+  padding-top: 4px;
+  font-weight: var(--font-bold);
+}
+
+.project-file-size {
+  color: var(--fg-muted) !important;
+  font-size: 14px;
+  word-break: break-word; /* Break kata panjang yang gabisa wrap */
+  overflow-wrap: break-word; /* Fallback buat browser lama */
+}
+
 /* Project Instruction Items */
 .instruction-preview-text {
   color: var(--fg-muted);
@@ -8312,7 +8326,8 @@ button:disabled .btn-icon {
 }
 
 #projects-select-btn,
-#chats-select-btn {
+#chats-select-btn,
+#codes-select-btn {
   color: var(--primary);
   text-decoration: none;
 }

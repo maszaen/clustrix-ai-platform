@@ -1,3 +1,4 @@
+import { AppState } from '../renderer.js';
 import { filesUploadDark, filesUploadLight } from '../utils/constants.mjs'
 import { nowISO, formatRelativeTime } from '../time/time-utils.mjs';
 import { escapeHtml } from '../markdown/markdown.mjs';
@@ -12,7 +13,6 @@ const STATE = {
 
 let isComposerSubmitting = false;
 let codeMessageStagedFiles = [];
-
 let deps = {
   log: () => {},
   savePageState: () => {},
@@ -465,33 +465,42 @@ function renderCodeWorkspace(code) {
 
   container.innerHTML = '';
 
-  if (!code.workspacePath) {
-    // const isDarkTheme = (state.settings.theme === "dark");
-    const isDarkTheme = true //remporary value, waiting for refactoring the app-state.js
-    const iconSVG = isDarkTheme
-          ? filesUploadDark
-          : filesUploadLight;
+  AppState.on('theme-changed', () => {
+    if (!code.workspacePath) {
+      renderEmptyState();
+    }
+  });
+
+  function renderEmptyState() {
+    const oldEmpty = container.querySelector('.file-empty-state-icon');
+    if (oldEmpty) oldEmpty.remove();
+    
+    const isDarkTheme = (AppState.theme === 'dark');
+    const iconSVG = isDarkTheme ? filesUploadDark : filesUploadLight;
+    
     const empty = document.createElement('div');
     empty.className = 'file-empty-state-icon';
     empty.style.gridColumn = '1 / -1';
     empty.innerHTML = `
-      <div class="file-drop-icon">
-        <div class="file-drop-icon">${iconSVG}</div>
-      </div>
+      <div class="file-drop-icon">${iconSVG}</div>
       <small>Select a project folder to enable<br>context-aware coding assistance.</small>
     `;
     container.appendChild(empty);
+  }
+
+  // Initial render
+  if (!code.workspacePath) {
+    container.classList.add('project-files-grid');
+    renderEmptyState();
     return;
   }
 
+
+  container.classList.remove('project-files-grid');
+
   const workspaceItem = document.createElement('div');
-  workspaceItem.className = 'project-file-item';
   workspaceItem.innerHTML = `
     <div class="project-file-info">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <path d="M20 7h-4v-.5a3.5 3.5 0 0 0-7 0V7H5c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2Z"/>
-        <path d="M9 7V6.5A2.5 2.5 0 0 1 11.5 4h1a2.5 2.5 0 0 1 2.5 2.5V7"/>
-      </svg>
       <div class="project-file-text">
         <p class="project-file-name">${escapeHtml(code.workspacePath.split(/[\\/]/).pop() || code.workspacePath)}</p>
         <p class="project-file-size">${escapeHtml(code.workspacePath)}</p>

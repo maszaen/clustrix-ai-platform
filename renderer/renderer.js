@@ -11757,47 +11757,69 @@ function handleConfirmationRequest(streamState, confirmData) {
   const loader = aiNode.querySelector(".inline-loader");
   if (loader?.parentNode) loader.parentNode.removeChild(loader);
 
-  // Create confirmation UI
-  const placeholderText = "Do you allow me to execute this command?";
-  const confirmationHtml = `
-    <div class="confirmation-request" data-iteration="${confirmData.iteration}">
-      <div class="confirmation-message">
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-          <span style="color: var(--fg-muted); font-style: italic;">${placeholderText}</span>
-          <div style="display: flex; gap: 8px;">
-            <button class="secondary-btn confirmation-skip" 
-                    data-session-id="${session.id}" 
-                    data-iteration="${confirmData.iteration}"
-                    style="height: 32px; font-size: 13px;">
-              Skip
-            </button>
-            <button class="primary-btn confirmation-allow" 
-                    data-session-id="${session.id}" 
-                    data-iteration="${confirmData.iteration}"
-                    style="height: 32px; font-size: 13px;">
-              Allow
-            </button>
-          </div>
-        </div>
-      </div>
-      <div class="confirmation-command" style="margin-top: 8px;">
-        <pre><code class="language-powershell">${escapeHtml(confirmData.command)}</code></pre>
-      </div>
-    </div>
-  `;
-
-  div.innerHTML = confirmationHtml;
-
-  // Highlight the command
-  try {
-    highlightAllUnder(div);
-  } catch (e) {
-    log("CODES", 2, "handleConfirmationRequest", "Failed to highlight command", { error: e });
+  // Remove existing confirmation placeholder for this iteration if present
+  const existingBlock = div.querySelector(`.command-approval-placeholder[data-iteration="${confirmData.iteration}"]`);
+  if (existingBlock?.parentNode) {
+    existingBlock.parentNode.removeChild(existingBlock);
   }
 
-  // Attach button handlers
-  const allowBtn = div.querySelector(".confirmation-allow");
-  const skipBtn = div.querySelector(".confirmation-skip");
+  // Create simple confirmation placeholder (command already rendered by previous chunk)
+  const container = document.createElement("div");
+  container.classList.add("command-approval-placeholder");
+  container.dataset.iteration = String(confirmData.iteration);
+  container.style.display = "flex";
+  container.style.flexDirection = "column";
+  container.style.gap = "8px";
+  container.style.marginTop = "12px";
+  container.style.padding = "var(--spacing-lg)";
+  container.style.borderRadius = "var(--radius-lg)";
+  container.style.border = "var(--border)";
+  container.style.flexDirection = "row";
+  container.style.justifyContent = "space-between";
+
+  const messageEl = document.createElement("div");
+  messageEl.classList.add("confirmation-message");
+  messageEl.textContent = "> Waiting for approval (auto-skip in 15min)";
+  messageEl.style.color = "var(--fg-muted)";
+  messageEl.style.fontStyle = "italic";
+
+  const buttonsWrap = document.createElement("div");
+  buttonsWrap.classList.add("confirmation-buttons");
+  buttonsWrap.style.display = "flex";
+  buttonsWrap.style.gap = "8px";
+
+  const skipBtn = document.createElement("button");
+  skipBtn.classList.add("secondary-btn", "confirmation-skip");
+  skipBtn.dataset.sessionId = session.id;
+  skipBtn.dataset.iteration = String(confirmData.iteration);
+  skipBtn.style.height = "32px";
+  skipBtn.style.fontSize = "13px";
+  skipBtn.textContent = "Skip";
+
+  const allowBtn = document.createElement("button");
+  allowBtn.classList.add("primary-btn", "confirmation-allow");
+  allowBtn.dataset.sessionId = session.id;
+  allowBtn.dataset.iteration = String(confirmData.iteration);
+  allowBtn.style.height = "32px";
+  allowBtn.style.fontSize = "13px";
+  allowBtn.textContent = "Allow";
+
+  buttonsWrap.appendChild(skipBtn);
+  buttonsWrap.appendChild(allowBtn);
+
+  container.appendChild(messageEl);
+  container.appendChild(buttonsWrap);
+
+  div.appendChild(container);
+
+  const setStatus = (text, variant = "pending") => {
+    messageEl.textContent = text;
+    messageEl.style.color = variant === "error"
+      ? "var(--fg-warning, #ff9500)"
+      : "var(--fg-muted)";
+    messageEl.style.fontStyle = "italic";
+    container.dataset.status = variant;
+  };
 
   if (allowBtn) {
     allowBtn.addEventListener("click", async () => {
@@ -11805,20 +11827,19 @@ function handleConfirmationRequest(streamState, confirmData) {
         allowBtn.disabled = true;
         skipBtn.disabled = true;
         allowBtn.textContent = "Allowing...";
+        setStatus("Command allowed. Processing...", "allowed");
         
         await window.api.codes.confirmCommand({
           sessionId: session.id,
           iteration: confirmData.iteration,
           allowed: true,
         });
-        
-        // Show processing message
-        div.innerHTML = `<div style="color: var(--fg-muted); font-style: italic;">Command allowed. Processing...</div>`;
       } catch (error) {
         log("CODES", 3, "handleConfirmationRequest", "Failed to allow command", { error });
         allowBtn.disabled = false;
         skipBtn.disabled = false;
         allowBtn.textContent = "Allow";
+        setStatus("Approval failed. Please try again.", "error");
       }
     });
   }
@@ -11829,20 +11850,20 @@ function handleConfirmationRequest(streamState, confirmData) {
         allowBtn.disabled = true;
         skipBtn.disabled = true;
         skipBtn.textContent = "Skipping...";
+        setStatus("Skipping command...", "skipping");
         
         await window.api.codes.confirmCommand({
           sessionId: session.id,
           iteration: confirmData.iteration,
           allowed: false,
         });
-        
-        // Show skip message
-        div.innerHTML = `<div style="color: var(--fg-warning, #ff9500); font-style: italic;">Command skipped. AI will try another approach...</div>`;
+  setStatus("Command skipped. AI will try another approach...", "skipped");
       } catch (error) {
         log("CODES", 3, "handleConfirmationRequest", "Failed to skip command", { error });
         allowBtn.disabled = false;
         skipBtn.disabled = false;
         skipBtn.textContent = "Skip";
+        setStatus("Skip failed. Please try again.", "error");
       }
     });
   }

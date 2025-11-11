@@ -32,6 +32,7 @@ import { scheduleDeferredRender, cancelDeferredRender } from './utils/deferred-r
 import { createHighlightedCode } from './markdown/highlight.mjs';
 import { initializeUsageStatistics } from './usage/usage-statistics.mjs';
 import { initializeBenchmarkStatistics } from './usage/benchmark-statistics.mjs';
+import { applyStreamUsageToSession } from './usage/token-usage-updater.mjs';
 import {
   initializeCodesFeature,
   handleSessionsUpdate as updateCodeSessions,
@@ -13362,17 +13363,24 @@ async function startStream(
         handler,
       });
 
-      const messageMeta = session.messages?.[aiMessageIndex]?.[2];
-      if (messageMeta && typeof messageMeta === 'object') {
-        if (result?.usage) {
-          messageMeta.usage = result.usage;
-        }
-        if (modelOptions.provider) {
-          messageMeta.provider = modelOptions.provider;
-        }
-        if (modelOptions.model) {
-          messageMeta.model = modelOptions.model;
-        }
+      const usageResult = applyStreamUsageToSession(
+        session,
+        aiMessageIndex,
+        result?.usage,
+        {
+          ensureTokenFields,
+          provider: modelOptions.provider,
+          model: modelOptions.model,
+        },
+      );
+
+      if (usageResult.shouldUpdateTokensUI) {
+        updateTokensUI(session);
+      }
+
+      if (usageResult.persisted) {
+        markSessionDirty(session.id);
+        debouncedSave();
       }
 
       handler(null);

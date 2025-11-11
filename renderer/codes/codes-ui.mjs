@@ -2,6 +2,7 @@ import { AppState } from '../renderer.js';
 import { filesUploadDark, filesUploadLight } from '../utils/constants.mjs'
 import { nowISO, formatRelativeTime } from '../time/time-utils.mjs';
 import { escapeHtml } from '../markdown/markdown.mjs';
+import { showConfirmationModal } from '../ui/modal.mjs'
 
 const STATE = {
   codes: [],
@@ -239,11 +240,15 @@ async function startCodeDetailEditDescription(code) {
 }
 
 async function deleteCode(code) {
-  const confirmDelete = confirm(
-    `Are you sure you want to delete "${code.name || 'Untitled code workspace'}"? This action cannot be undone.`
-  );
+  const confirmed = await showConfirmationModal({
+    title: 'Delete Code Workspace',
+    message: `Are you sure you want to delete "${code.name || 'Untitled code workspace'}"? This action cannot be undone.`,
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    confirmVariant: 'danger',
+  });
 
-  if (!confirmDelete) return;
+  if (!confirmed) return;
 
   const index = STATE.codes.findIndex(c => c.id === code.id);
   if (index !== -1) {
@@ -991,11 +996,15 @@ function ensureListeners() {
   document.getElementById('codes-delete-selected-btn')?.addEventListener('click', async () => {
     if (STATE.selectedCodeIds.size === 0) return;
 
-    const confirmDelete = confirm(
-      `Are you sure you want to delete ${STATE.selectedCodeIds.size} code workspace${STATE.selectedCodeIds.size === 1 ? '' : 's'}? This action cannot be undone.`
-    );
+    const confirmed = await showConfirmationModal({
+      title: 'Delete Code Workspaces',
+      message: `Are you sure you want to delete ${STATE.selectedCodeIds.size} code workspace${STATE.selectedCodeIds.size === 1 ? '' : 's'}? This action cannot be undone.`,
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      confirmVariant: 'danger',
+    });
 
-    if (confirmDelete) {
+    if (confirmed) {
       const idsToDelete = Array.from(STATE.selectedCodeIds);
       STATE.codes = STATE.codes.filter((c) => !idsToDelete.includes(c.id));
       await saveCodes();

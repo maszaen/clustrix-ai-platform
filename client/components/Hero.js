@@ -1,7 +1,7 @@
 function Hero() {
   try {
     const handleGitHubClick = () => {
-      alert('This is a private repository. Please contact the team for access.');
+      showModal('This is a private repository. Please contact the team for access.');
     };
 
     return (

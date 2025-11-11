@@ -1910,6 +1910,96 @@ function saveCodeArtifact(
   return artifact;
 }
 
+function showCreateArtifactModal() {
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-overlay"></div>
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2>New Artifact</h2>
+        <button class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="artifact-title-input">Title</label>
+          <input id="artifact-title-input" placeholder="Enter artifact title" />
+        </div>
+        <div class="form-group">
+          <label for="artifact-language-input">Language</label>
+          <input id="artifact-language-input" placeholder="e.g. javascript" />
+        </div>
+        <div class="form-group">
+          <textarea id="artifact-content-input" placeholder="Paste or type your code snippet..." rows="8"></textarea>
+        </div>
+        <div class="form-actions">
+          <button id="cancel-artifact-btn" class="primary-btn">Cancel</button>
+          <button id="save-artifact-btn" class="primary-btn">Save Artifact</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const titleInput = modal.querySelector("#artifact-title-input");
+  const languageInput = modal.querySelector("#artifact-language-input");
+  const contentInput = modal.querySelector("#artifact-content-input");
+
+  if (contentInput) {
+    contentInput.focus();
+  }
+
+  const closeModal = () => {
+    if (modal.parentNode) {
+      modal.parentNode.removeChild(modal);
+    }
+  };
+
+  modal.addEventListener("click", (e) => {
+    if (
+      e.target.classList.contains("modal-overlay") ||
+      e.target.closest(".close-btn") ||
+      e.target.closest("#cancel-artifact-btn")
+    ) {
+      closeModal();
+      return;
+    }
+
+    if (e.target.closest("#save-artifact-btn")) {
+      const title = titleInput?.value.trim() || "";
+      const language = languageInput?.value.trim() || "";
+      const codeValue = contentInput?.value || "";
+
+      if (!codeValue.trim()) {
+        contentInput?.focus();
+        return;
+      }
+
+      const artifact = saveCodeArtifact(title, codeValue, language);
+
+      log("ARTIFACTS", 2, "event:new-artifact-created", "Created artifact from artifacts page", {
+        artifactId: artifact.id,
+        hasTitle: !!title,
+        hasLanguage: !!language,
+      });
+
+      renderArtifactsPage();
+
+      const searchInput = document.getElementById("artifacts-search");
+      if (searchInput && searchInput.value) {
+        filterArtifacts(searchInput.value);
+      }
+
+      closeModal();
+    }
+  });
+}
+
 function highlightAllUnder(container, options = {}) {
   const { isIncremental = false, deltaNodes = null } = options;
 
@@ -3176,6 +3266,16 @@ function showWelcomeScreen() {
   });
 }
 
+function startNewChatFlow() {
+  closeModalWithAnimation($("#quick-model-switch-modal"));
+
+  if (window.innerWidth <= 998) {
+    closeMobileSidebar();
+  }
+
+  showWelcomeScreen();
+}
+
 function showChatsPage() {
   current = null;
   isChatsSelectMode = false;
@@ -4273,6 +4373,14 @@ function renderArtifactsPage() {
 }
 
 function setupArtifactsPageListeners() {
+  const newArtifactBtn = document.getElementById("new-artifact-btn");
+  if (newArtifactBtn) {
+    newArtifactBtn.addEventListener("click", () => {
+      log("UI", 0, "event:new-artifact-page-click", "New artifact page button clicked");
+      showCreateArtifactModal();
+    });
+  }
+
   // Back button
   const backBtn = document.getElementById("back-to-chat-from-artifacts");
   if (backBtn) {
@@ -15531,15 +15639,17 @@ function setupEventListeners() {
 
   $("#new-chat").addEventListener("click", () => {
     log("UI", 0, "event:new-chat-click", "New chat button clicked");
-    closeModalWithAnimation($("#quick-model-switch-modal"));
-
-    // Close mobile sidebar when creating new chat
-    if (window.innerWidth <= 998) {
-      closeMobileSidebar();
-    }
-
-    showWelcomeScreen();
+    startNewChatFlow();
   });
+
+  const newChatPageBtn = $("#new-chat-btn");
+  if (newChatPageBtn) {
+    newChatPageBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      log("UI", 0, "event:new-chat-page-click", "New chat page button clicked");
+      startNewChatFlow();
+    });
+  }
 
   $("#chats-btn").addEventListener("click", () => {
     log("UI", 0, "event:chats-page-click", "Chats page button clicked");

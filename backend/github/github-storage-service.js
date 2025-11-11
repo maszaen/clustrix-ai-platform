@@ -7,7 +7,7 @@ class GitHubStorageService {
   constructor(accessToken, username) {
     this.accessToken = accessToken;
     this.username = username;
-    this.repoName = `clustrix-sync-${username}`;
+    this.repoName = `clustrix-database`;
     this.owner = username;
   }
   

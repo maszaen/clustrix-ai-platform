@@ -1920,7 +1920,7 @@ function showCreateArtifactModal() {
     <div class="modal-overlay"></div>
     <div class="modal-card" style="max-width: 600px;">
       <div class="modal-header">
-        <h2>New Artifact</h2>
+        <h2>Create Artifact</h2>
         <button class="close-btn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
@@ -12161,9 +12161,52 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
   let lastParsedHtml = "";
   let fullRenderCounter = 0;
 
-  // Auto-save throttling for codes session (save max every 2 seconds)
-  let lastCodesSaveTime = 0;
-  const CODES_SAVE_THROTTLE_MS = 2000;
+  // Auto-save throttling for codes session (save only after idle window)
+  let codesAutosaveTimer = null;
+  const CODES_AUTOSAVE_IDLE_MS = 2500;
+
+  const queueCodesAutosave = (sessionRef, { reason = "idle", immediate = false } = {}) => {
+    if (!sessionRef || !sessionRef.id) {
+      return;
+    }
+
+    const flush = () => {
+      try {
+        markSessionDirty(sessionRef.id);
+        debouncedSave();
+      } catch (err) {
+        log(
+          "CODES",
+          2,
+          "chunk-autosave",
+          "Failed to queue codes session autosave",
+          {
+            sessionId: sessionRef.id,
+            reason,
+            error: err?.message || err,
+          },
+        );
+      }
+    };
+
+    if (immediate) {
+      if (codesAutosaveTimer) {
+        clearTimeout(codesAutosaveTimer);
+        codesAutosaveTimer = null;
+      }
+      flush();
+      return;
+    }
+
+    if (codesAutosaveTimer) {
+      clearTimeout(codesAutosaveTimer);
+    }
+
+    codesAutosaveTimer = setTimeout(() => {
+      codesAutosaveTimer = null;
+      flush();
+    }, CODES_AUTOSAVE_IDLE_MS);
+  };
 
   let renderInFlight = false;
   let pendingRender = null;
@@ -12194,6 +12237,10 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         cancelScheduledEnhancements(textDiv);
         clearStreamingState(textDiv);
       }
+    }
+    if (codesAutosaveTimer) {
+      clearTimeout(codesAutosaveTimer);
+      codesAutosaveTimer = null;
     }
     updateInputState?.();
   };
@@ -13204,44 +13251,37 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     const gotEnd = END_RX.test(fullResponse);
     if (gotEnd) sawEnd = true;
 
-    // Auto-save session for codes session (throttled) to prevent data loss on timeout/error
+    // Auto-save session for codes session after idle window to prevent blocking the stream
     if ((s.session?.type === 'code' || s.session?.codeId) && s.session.messages?.[s.messageIndex]) {
-      const now = Date.now();
-      const shouldSave = gotEnd || (now - lastCodesSaveTime >= CODES_SAVE_THROTTLE_MS);
-      
-      if (shouldSave) {
-        lastCodesSaveTime = now;
-        try {
-          // Update AI message content with current fullResponse
-          s.session.messages[s.messageIndex][1] = fullResponse;
+      try {
+        // Update AI message content with current fullResponse
+        s.session.messages[s.messageIndex][1] = fullResponse;
 
-          // Ensure incremental save payload includes the updated message
-          if (!Array.isArray(s.session._newMessages)) {
-            s.session._newMessages = [];
-          }
-
-          const messageData = s.session.messages[s.messageIndex];
-          const existingEntryIndex = s.session._newMessages.findIndex(([idx]) => idx === s.messageIndex);
-          if (existingEntryIndex >= 0) {
-            s.session._newMessages[existingEntryIndex] = [s.messageIndex, messageData];
-          } else {
-            s.session._newMessages.push([s.messageIndex, messageData]);
-          }
-
-          s.session.last_updated = nowISO();
-
-          // Save session asynchronously (fire and forget)
-          saveSession(s.session.id, { reason: 'code-chunk-autosave' }).catch(err => {
-            log("CODES", 2, "chunk-autosave", "Failed to auto-save codes session", {
-              error: err?.message || err,
-              sessionId: s.session.id,
-            });
-          });
-        } catch (err) {
-          log("CODES", 2, "chunk-autosave", "Error during chunk auto-save", {
-            error: err?.message || err,
-          });
+        // Ensure incremental save payload includes the updated message
+        if (!Array.isArray(s.session._newMessages)) {
+          s.session._newMessages = [];
         }
+
+        const messageData = s.session.messages[s.messageIndex];
+        const existingEntryIndex = s.session._newMessages.findIndex(([idx]) => idx === s.messageIndex);
+        if (existingEntryIndex >= 0) {
+          s.session._newMessages[existingEntryIndex] = [s.messageIndex, messageData];
+        } else {
+          s.session._newMessages.push([s.messageIndex, messageData]);
+        }
+
+        s.session.last_updated = nowISO();
+
+        if (gotEnd) {
+          queueCodesAutosave(s.session, { reason: 'stream-complete', immediate: true });
+        } else {
+          queueCodesAutosave(s.session, { reason: 'chunk-idle' });
+        }
+      } catch (err) {
+        log("CODES", 3, "chunk-autosave", "Error preparing chunk autosave", {
+          error: err?.message || err,
+          sessionId: s.session.id,
+        });
       }
     }
 

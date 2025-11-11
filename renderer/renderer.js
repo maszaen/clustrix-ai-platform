@@ -1910,6 +1910,106 @@ function saveCodeArtifact(
   return artifact;
 }
 
+async function showNewArtifactModal() {
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-overlay"></div>
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2>Create New Artifact</h2>
+        <button class="close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="artifact-title">Title</label>
+          <input type="text" id="artifact-title" placeholder="Enter artifact title..." />
+        </div>
+        <div class="form-group">
+          <label for="artifact-language">Language</label>
+          <select id="artifact-language">
+            <option value="javascript">JavaScript</option>
+            <option value="typescript">TypeScript</option>
+            <option value="python">Python</option>
+            <option value="java">Java</option>
+            <option value="cpp">C++</option>
+            <option value="csharp">C#</option>
+            <option value="go">Go</option>
+            <option value="rust">Rust</option>
+            <option value="php">PHP</option>
+            <option value="ruby">Ruby</option>
+            <option value="swift">Swift</option>
+            <option value="kotlin">Kotlin</option>
+            <option value="html">HTML</option>
+            <option value="css">CSS</option>
+            <option value="sql">SQL</option>
+            <option value="bash">Bash</option>
+            <option value="json">JSON</option>
+            <option value="yaml">YAML</option>
+            <option value="markdown">Markdown</option>
+            <option value="text">Plain Text</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="artifact-content">Content</label>
+          <textarea id="artifact-content" placeholder="Enter your code or content here..." rows="12"></textarea>
+        </div>
+        <div class="form-actions">
+          <button id="cancel-artifact-btn" class="primary-btn">Cancel</button>
+          <button id="save-artifact-btn" class="primary-btn">Save Artifact</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const titleInput = modal.querySelector("#artifact-title");
+  const languageSelect = modal.querySelector("#artifact-language");
+  const contentInput = modal.querySelector("#artifact-content");
+
+  if (titleInput) titleInput.focus();
+
+  const closeModal = () => document.body.removeChild(modal);
+
+  modal.addEventListener("click", async (e) => {
+    if (e.target.closest(".close-btn") || e.target.closest("#cancel-artifact-btn") || e.target.classList.contains("modal-overlay")) {
+      closeModal();
+    }
+
+    if (e.target.closest("#save-artifact-btn")) {
+      const title = titleInput?.value.trim() || "";
+      const language = languageSelect?.value || "text";
+      const content = contentInput?.value || "";
+
+      if (!content.trim()) {
+        alert("Content cannot be empty");
+        return;
+      }
+
+      // Create artifact with sessionId = null (outside session)
+      saveCodeArtifact(title || `Untitled ${language}`, content, language, null, null);
+
+      log("ARTIFACT", 2, "createNewArtifact", "New artifact created", {
+        title,
+        language,
+        sessionId: null
+      });
+
+      // Refresh artifacts page if currently viewing it
+      if (document.getElementById("artifacts-page")?.classList.contains("active")) {
+        renderArtifactsPage();
+      }
+
+      closeModal();
+    }
+  });
+}
+
 function highlightAllUnder(container, options = {}) {
   const { isIncremental = false, deltaNodes = null } = options;
 
@@ -3760,6 +3860,13 @@ function setupChatsPageListeners() {
     const target = e.target;
     const sessionId = target.closest(".chat-item")?.dataset.sessionId;
 
+    // Handle new chat button
+    if (target.closest("#new-chat-btn")) {
+      log("UI", 0, "event:new-chat-btn-click", "New chat button clicked from Chats page");
+      showWelcomeScreen();
+      return;
+    }
+
     // Aksi untuk mengaktifkan mode seleksi
     if (target.closest("#chats-select-btn")) {
       isChatsSelectMode = true;
@@ -4287,6 +4394,15 @@ function setupArtifactsPageListeners() {
   if (searchInput) {
     searchInput.addEventListener("input", (e) => {
       filterArtifacts(e.target.value);
+    });
+  }
+
+  // New artifact button
+  const newArtifactBtn = document.getElementById("new-artifact-btn");
+  if (newArtifactBtn) {
+    newArtifactBtn.addEventListener("click", () => {
+      log("UI", 0, "event:new-artifact-btn-click", "New artifact button clicked");
+      showNewArtifactModal();
     });
   }
 

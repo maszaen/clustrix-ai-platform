@@ -928,6 +928,31 @@
             <input id="artifacts-search" placeholder="Search artifacts..." />
           </div>
         </div>
+        <div id="artifacts-controls-container" class="artifacts-controls-container chats-controls-container">
+          <div id="artifacts-info-bar" class="chats-info-bar">
+            <span id="artifacts-total-count">...</span>
+            <button id="artifacts-select-btn" class="link-btn">Select</button>
+          </div>
+          <div id="artifacts-select-action-bar" class="chats-select-action-bar" style="display: none;">
+            <div class="selection-group">
+              <input type="checkbox" id="artifacts-select-all-checkbox" />
+              <label for="artifacts-select-all-checkbox" id="artifacts-selected-count">0 selected</label>
+            </div>
+            <div class="action-group">
+              <button id="artifacts-delete-selected-btn" class="icon-btn danger" title="Delete Selected" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </button>
+              <button id="artifacts-select-close-btn" class="icon-btn" title="Cancel Selection">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M15.1465 4.14642C15.3418 3.95121 15.6583 3.95118 15.8536 4.14642C16.0487 4.34168 16.0488 4.65822 15.8536 4.85346L10.7071 9.99997L15.8536 15.1465C16.0487 15.3417 16.0488 15.6583 15.8536 15.8535C15.6828 16.0244 15.4187 16.0461 15.2247 15.918L15.1465 15.8535L10 10.707L4.85352 15.8535C4.65827 16.0486 4.34168 16.0486 4.14648 15.8535C3.95129 15.6583 3.95142 15.3418 4.14648 15.1465L9.293 9.99997L4.14648 4.85346C3.95142 4.65818 3.95129 4.34162 4.14648 4.14642C4.34168 3.95128 4.65825 3.95138 4.85352 4.14642L10 9.29294L15.1465 4.14642Z"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
         <div id="artifacts-list" class="artifacts-list"></div>
       </div>
       <div id="input-area">

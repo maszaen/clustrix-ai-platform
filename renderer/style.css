@@ -2395,6 +2395,10 @@ input:checked + .slider:before {
   background: var(--bg);
 }
 
+#artifacts-info-bar, #artifacts-select-action-bar {
+  margin-bottom: 10px;
+}
+
 #artifacts-page .artifacts-header,
 #artifacts-page .chats-search-container,
 #artifacts-page .artifacts-controls-container {
@@ -3483,29 +3487,7 @@ textarea::-webkit-scrollbar {
 }
 
 /* Send button loader ring */
-.send-loader {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 30px;
-  height: 30px;
-  margin-left: -15px;
-  margin-top: -15px;
-  border: 2.8px solid var(--border);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  opacity: 0;
-  visibility: hidden;
-  z-index: -1;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.send-button.interrupt:hover + .send-loader {
-  background-color: var(--border) !important;
-  border-top-color: var(--danger);
-}
-
-.send-button svg {s
+.send-button svg {
   color: var(--icon) !important;
   stroke: var(--icon) !important;
   align-items: center;
@@ -3563,15 +3545,38 @@ textarea::-webkit-scrollbar {
   }
 }
 
+.send-loader {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  margin-left: -15px;
+  margin-top: -15px;
+  border: 2.8px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  opacity: 0;
+  visibility: hidden;
+  z-index: -1;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.send-button.interrupt:hover + .send-loader {
+  background-color: var(--border) !important;
+  border-top-color: var(--danger);
+}
+
 /* Spin loader animation */
 @keyframes spinLoader {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  0% { transform: rotate(0deg); }
+  50% { transform: rotate(180deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* Interrupt/Loading state: shrink icon */
 .send-button.interrupt svg {
-  animation: shrinkIcon 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: shrinkIcon 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.1s forwards;
 }
 
 /* Interrupt/Loading state: show and spin loader */
@@ -7131,7 +7136,8 @@ button:disabled .btn-icon {
 }
 
 .chat-item:hover .chat-item-checkbox-wrapper,
-.project-item:hover .project-item-checkbox-wrapper {
+.project-item:hover .project-item-checkbox-wrapper,
+.artifact-item:hover .artifact-item-checkbox-wrapper {
   opacity: 1;
   visibility: visible;
   align-items: center;
@@ -7785,12 +7791,13 @@ button:disabled .btn-icon {
 .selection-group, .action-group { display: flex; align-items: center; gap: 8px; }
 .selection-group label { font-size: 13px; user-select: none; }
 
-#chats-select-all-checkbox-wrapper, 
-#projects-select-all-checkbox-wrapper { 
-  position: absolute; 
-  left: -5px; 
-  top: 50%; 
-  transform: translateY(-50%); 
+#chats-select-all-checkbox-wrapper,
+#projects-select-all-checkbox-wrapper,
+#artifacts-select-all-checkbox-wrapper {
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
   opacity: 0;
   visibility: hidden;
   transition: var(--transition-fast);
@@ -7799,7 +7806,8 @@ button:disabled .btn-icon {
 
 /* Custom checkbox styling */
 #chats-select-all-checkbox,
-#projects-select-all-checkbox {
+#projects-select-all-checkbox,
+#artifacts-select-all-checkbox {
   appearance: none;
   width: 15px;
   height: 15px;
@@ -7812,13 +7820,15 @@ button:disabled .btn-icon {
 }
 
 #chats-select-all-checkbox:checked,
-#projects-select-all-checkbox:checked {
+#projects-select-all-checkbox:checked,
+#artifacts-select-all-checkbox:checked {
   background: var(--primary);
   border-color: var(--primary-light);
 }
 
 #chats-select-all-checkbox:checked::after,
-#projects-select-all-checkbox:checked::after {
+#projects-select-all-checkbox:checked::after,
+#artifacts-select-all-checkbox:checked::after {
   content: '';
   position: absolute;
   left: 4px;
@@ -7832,11 +7842,12 @@ button:disabled .btn-icon {
 
 /* Chat selection styles */
 .chat-item-checkbox-wrapper,
-.project-item-checkbox-wrapper { 
-  position: absolute; 
-  left: -8px; 
-  top: 50%; 
-  transform: translateY(-50%); 
+.project-item-checkbox-wrapper,
+.artifact-item-checkbox-wrapper {
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
   opacity: 0;
   visibility: hidden;
   transition: var(--transition-fast);
@@ -7844,9 +7855,16 @@ button:disabled .btn-icon {
   align-items: center;
 }
 
+.artifact-item-checkbox-wrapper {
+  left: 12px;
+  top: 12px;
+  transform: none;
+}
+
 /* Custom checkbox styling */
 .chat-item-checkbox,
-.project-item-checkbox {
+.project-item-checkbox,
+.artifact-item-checkbox {
   appearance: none;
   width: 15px;
   height: 15px;
@@ -7861,14 +7879,16 @@ button:disabled .btn-icon {
 }
 
 .chat-item-checkbox:checked,
-.project-item-checkbox:checked {
+.project-item-checkbox:checked,
+.artifact-item-checkbox:checked {
   background: var(--primary);
   border-color: var(--primary-light);
 }
 
 /* tanda centang */
 .chat-item-checkbox:checked::after,
-.project-item-checkbox:checked::after {
+.project-item-checkbox:checked::after,
+.artifact-item-checkbox:checked::after {
   content: '';
   position: absolute;
   left: 4px;
@@ -7881,24 +7901,29 @@ button:disabled .btn-icon {
 }
 
 .chat-item.select-mode,
-.project-item.select-mode { 
+.project-item.select-mode,
+.artifact-item.select-mode {
 }
 
 .chat-item.select-mode .chat-item-checkbox-wrapper,
 .chat-item.selected .chat-item-checkbox-wrapper,
 .project-item.select-mode .project-item-checkbox-wrapper,
-.project-item.selected .project-item-checkbox-wrapper {
+.project-item.selected .project-item-checkbox-wrapper,
+.artifact-item.select-mode .artifact-item-checkbox-wrapper,
+.artifact-item.selected .artifact-item-checkbox-wrapper {
   opacity: 1;
   visibility: visible;
 }
 
 .chat-item.select-mode .chat-item-actions,
-.project-item.select-mode .project-item-actions {
+.project-item.select-mode .project-item-actions,
+.artifact-item.select-mode .artifact-actions {
   display: none !important;
 }
 
 .chat-item.selected,
-.project-item.selected {
+.project-item.selected,
+.artifact-item.selected .artifact-preview-container {
   border-color: var(--border-active);
 }
 
@@ -7983,7 +8008,7 @@ button:disabled .btn-icon {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   height: fit-content;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .artifact-header svg {
@@ -8396,7 +8421,8 @@ button:disabled .btn-icon {
 
 #projects-select-btn,
 #chats-select-btn,
-#codes-select-btn {
+#codes-select-btn,
+#artifacts-select-btn {
   color: var(--primary);
   text-decoration: none;
 }

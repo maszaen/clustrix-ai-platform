@@ -58,6 +58,8 @@ let isProcessingQueue = false;
 let sessionDrafts = new Map();
 let projectsDocumentListener = null;
 let codeArtifacts = [];
+let isArtifactsSelectMode = false;
+let selectedArtifactIds = new Set();
 let isChatsSelectMode = false;
 let selectedChatIds = new Set();
 let isProjectsSelectMode = false;
@@ -2122,6 +2124,10 @@ async function saveArtifactsToFile() {
 
 function deleteArtifact(artifactId) {
   codeArtifacts = codeArtifacts.filter((a) => a.id !== artifactId);
+  selectedArtifactIds.delete(artifactId);
+  if (selectedArtifactIds.size === 0) {
+    isArtifactsSelectMode = false;
+  }
   saveArtifactsToFile();
 }
 
@@ -4215,6 +4221,8 @@ let artifactsListenersAdded = false;
 
 function showArtifactsPage() {
   current = null;
+  isArtifactsSelectMode = false;
+  selectedArtifactIds.clear();
 
   $(".chat-area").classList.remove("welcome-active");
   $(".chat-area").classList.remove("chats-active");
@@ -4275,36 +4283,122 @@ function renderArtifactsPage() {
     return;
   }
 
-  if (codeArtifacts.length === 0) {
+  const infoBar = document.getElementById("artifacts-info-bar");
+  const actionBar = document.getElementById("artifacts-select-action-bar");
+  const totalCountEl = document.getElementById("artifacts-total-count");
+  const selectedCountEl = document.getElementById("artifacts-selected-count");
+  const deleteBtn = document.getElementById("artifacts-delete-selected-btn");
+  const selectAllCheckbox = document.getElementById("artifacts-select-all-checkbox");
+
+  const searchValue = (
+    document.getElementById("artifacts-search")?.value || ""
+  ).toLowerCase();
+
+  const validArtifactIds = new Set(codeArtifacts.map((artifact) => artifact.id));
+  selectedArtifactIds = new Set(
+    [...selectedArtifactIds].filter((id) => validArtifactIds.has(id)),
+  );
+
+
+  const filteredArtifacts = codeArtifacts.filter((artifact) => {
+    if (!searchValue) return true;
+    const title = (artifact.title || "").toLowerCase();
+    const code = (artifact.code || "").toLowerCase();
+    const language = (artifact.language || "").toLowerCase();
+    return (
+      title.includes(searchValue) ||
+      code.includes(searchValue) ||
+      language.includes(searchValue)
+    );
+  });
+
+  if (!codeArtifacts.length) {
     artifactsList.innerHTML = `
 
-    <div class="empty-state">
-      ${svgEmptyStateArtifacts}
-      <h3>No code artifacts yet</h3>
-      <p>Save code snippets from chat <br> messages to build your collection.</p>
-    </div>
+      <div class="empty-state">
+        ${svgEmptyStateArtifacts}
+        <h3>No code artifacts yet</h3>
+        <p>Save code snippets from chat <br> messages to build your collection.</p>
+      </div>
 
-    
+
     `;
+    selectedArtifactIds.clear();
+    isArtifactsSelectMode = false;
+    if (infoBar) infoBar.style.display = "none";
+    if (actionBar) actionBar.style.display = "none";
+    if (deleteBtn) deleteBtn.disabled = true;
+    if (selectAllCheckbox) selectAllCheckbox.checked = false;
     return;
+  }
+
+  if (isArtifactsSelectMode) {
+    if (infoBar) infoBar.style.display = "none";
+    if (actionBar) actionBar.style.display = "flex";
+    if (selectedCountEl) {
+      selectedCountEl.textContent = `${selectedArtifactIds.size} selected`;
+    }
+    if (deleteBtn) {
+      deleteBtn.disabled = selectedArtifactIds.size === 0;
+    }
+  } else {
+    if (infoBar) infoBar.style.display = "flex";
+    if (actionBar) actionBar.style.display = "none";
+    if (totalCountEl) {
+      totalCountEl.textContent = `${filteredArtifacts.length} ${
+        filteredArtifacts.length === 1 ? "artifact" : "artifacts"
+      }`;
+    }
+    if (selectAllCheckbox) {
+      selectAllCheckbox.checked = false;
+    }
+  }
+
+  if (isArtifactsSelectMode && selectAllCheckbox) {
+    if (!filteredArtifacts.length) {
+      selectAllCheckbox.checked = false;
+    } else {
+      const allVisibleSelected = filteredArtifacts.every((artifact) =>
+        selectedArtifactIds.has(artifact.id),
+      );
+      selectAllCheckbox.checked =
+        allVisibleSelected && filteredArtifacts.length > 0;
+    }
   }
 
   artifactsList.innerHTML = "";
 
-  // Sort artifacts: starred first, then by creation date (newest first)
-  const sortedArtifacts = [...codeArtifacts].sort((a, b) => {
-    // First priority: starred items go to top
+  if (!filteredArtifacts.length) {
+    artifactsList.innerHTML = `
+      <div class="empty-state">
+        <h3>No artifacts found</h3>
+        <p>Try adjusting your search terms.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const sortedArtifacts = [...filteredArtifacts].sort((a, b) => {
     if (a.isFavorite && !b.isFavorite) return -1;
     if (!a.isFavorite && b.isFavorite) return 1;
-
-    // Second priority: within same favorite status, sort by creation date (newest first)
     return new Date(b.created_at) - new Date(a.created_at);
   });
 
   sortedArtifacts.forEach((artifact) => {
     const artifactItem = document.createElement("div");
-    artifactItem.className = `artifact-item${artifact.isFavorite ? " starred" : ""}`;
+    artifactItem.className = `artifact-item${
+      artifact.isFavorite ? " starred" : ""
+    }`;
     artifactItem.dataset.artifactId = artifact.id;
+
+    if (isArtifactsSelectMode) {
+      artifactItem.classList.add("select-mode");
+    }
+
+    const isSelected = selectedArtifactIds.has(artifact.id);
+    if (isSelected) {
+      artifactItem.classList.add("selected");
+    }
 
     const formattedDate = formatRelativeTime(artifact.created_at);
 
@@ -4318,6 +4412,11 @@ function renderArtifactsPage() {
     );
 
     artifactItem.innerHTML = `
+      <div class="artifact-item-checkbox-wrapper">
+        <input type="checkbox" class="artifact-item-checkbox" data-artifact-id="${artifact.id}" ${
+      isSelected ? "checked" : ""
+    }>
+      </div>
       <div class="artifact-menu-container">
         <button class="artifact-menu-btn" data-artifact-id="${artifact.id}" title="Artifact options">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -4393,17 +4492,122 @@ function setupArtifactsPageListeners() {
   // Search functionality
   const searchInput = document.getElementById("artifacts-search");
   if (searchInput) {
-    searchInput.addEventListener("input", (e) => {
-      filterArtifacts(e.target.value);
+    searchInput.addEventListener("input", () => {
+      renderArtifactsPage();
+    });
+  }
+
+  const selectBtn = document.getElementById("artifacts-select-btn");
+  if (selectBtn) {
+    selectBtn.addEventListener("click", () => {
+      if (!codeArtifacts.length) return;
+      isArtifactsSelectMode = true;
+      renderArtifactsPage();
+    });
+  }
+
+  const closeSelectBtn = document.getElementById("artifacts-select-close-btn");
+  if (closeSelectBtn) {
+    closeSelectBtn.addEventListener("click", () => {
+      isArtifactsSelectMode = false;
+      selectedArtifactIds.clear();
+      const selectAllCheckbox = document.getElementById("artifacts-select-all-checkbox");
+      if (selectAllCheckbox) {
+        selectAllCheckbox.checked = false;
+      }
+      renderArtifactsPage();
+    });
+  }
+
+  const deleteSelectedBtn = document.getElementById("artifacts-delete-selected-btn");
+  if (deleteSelectedBtn) {
+    deleteSelectedBtn.addEventListener("click", () => {
+      if (!isArtifactsSelectMode || selectedArtifactIds.size === 0) return;
+      showConfirmationModal(
+        "Delete Selected Artifacts",
+        `Delete ${selectedArtifactIds.size} artifact${selectedArtifactIds.size === 1 ? "" : "s"}?`,
+        () => {
+          const idsToDelete = [...selectedArtifactIds];
+          idsToDelete.forEach((id) => deleteArtifact(id));
+          selectedArtifactIds.clear();
+          isArtifactsSelectMode = false;
+          const selectAllCheckbox = document.getElementById("artifacts-select-all-checkbox");
+          if (selectAllCheckbox) {
+            selectAllCheckbox.checked = false;
+          }
+          renderArtifactsPage();
+        },
+      );
+    });
+  }
+
+  const selectAllCheckbox = document.getElementById("artifacts-select-all-checkbox");
+  if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener("change", (event) => {
+      const isChecked = event.target.checked;
+      const visibleArtifacts = Array.from(
+        document.querySelectorAll("#artifacts-list .artifact-item"),
+      );
+      const visibleIds = visibleArtifacts.map((item) => item.dataset.artifactId);
+
+      if (isChecked) {
+        visibleIds.forEach((id) => {
+          if (id) selectedArtifactIds.add(id);
+        });
+        if (visibleIds.length > 0) {
+          isArtifactsSelectMode = true;
+        }
+      } else {
+        visibleIds.forEach((id) => {
+          if (id) selectedArtifactIds.delete(id);
+        });
+        if (selectedArtifactIds.size === 0) {
+          isArtifactsSelectMode = false;
+        }
+      }
+
+      renderArtifactsPage();
     });
   }
 
   // Artifact menu and action handlers
   document.addEventListener("click", (e) => {
-    // Handle artifact menu button clicks
-    if (e.target.closest(".artifact-menu-btn")) {
+    const target = e.target;
+
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    // Handle checkbox clicks
+    const checkboxWrapper = target.closest(".artifact-item-checkbox-wrapper");
+    const checkboxInput =
+      target.closest(".artifact-item-checkbox") ||
+      checkboxWrapper?.querySelector(".artifact-item-checkbox");
+    if (checkboxInput) {
       e.stopPropagation();
-      const menuContainer = e.target.closest(".artifact-menu-container");
+      const artifactId = checkboxInput.dataset.artifactId;
+      if (artifactId) {
+        if (selectedArtifactIds.has(artifactId)) {
+          selectedArtifactIds.delete(artifactId);
+        } else {
+          selectedArtifactIds.add(artifactId);
+        }
+
+        if (selectedArtifactIds.size > 0) {
+          isArtifactsSelectMode = true;
+        } else {
+          isArtifactsSelectMode = false;
+        }
+
+        renderArtifactsPage();
+      }
+      return;
+    }
+
+    // Handle artifact menu button clicks
+    if (target.closest(".artifact-menu-btn")) {
+      e.stopPropagation();
+      const menuContainer = target.closest(".artifact-menu-container");
       const menuButton = menuContainer.querySelector(".artifact-menu-btn");
       const dropdown = menuContainer.querySelector(".artifact-menu-dropdown");
 
@@ -4435,11 +4639,11 @@ function setupArtifactsPageListeners() {
     }
 
     // Handle artifact menu item clicks
-    if (e.target.closest(".artifact-menu-item")) {
+    if (target.closest(".artifact-menu-item")) {
       e.stopPropagation();
-      const menuItem = e.target.closest(".artifact-menu-item");
+      const menuItem = target.closest(".artifact-menu-item");
       const action = menuItem.dataset.action;
-      const dropdown = e.target.closest(".artifact-menu-dropdown");
+      const dropdown = target.closest(".artifact-menu-dropdown");
       const artifactId = dropdown.dataset.artifactId;
 
       // Close menu and remove persistent state
@@ -4499,20 +4703,38 @@ function setupArtifactsPageListeners() {
 
     // Handle artifact item clicks (for viewing)
     if (
-      e.target.closest(".artifact-item") &&
-      !e.target.closest(".artifact-menu-container")
+      target.closest(".artifact-item") &&
+      !target.closest(".artifact-menu-container")
     ) {
-      const artifactItem = e.target.closest(".artifact-item");
+      const artifactItem = target.closest(".artifact-item");
       const artifactId = artifactItem.dataset.artifactId;
-      const artifact = codeArtifacts.find((a) => a.id === artifactId);
-      if (artifact) {
-        showArtifactModal(artifact);
+      if (!artifactId) {
+        return;
+      }
+
+      if (isArtifactsSelectMode) {
+        if (selectedArtifactIds.has(artifactId)) {
+          selectedArtifactIds.delete(artifactId);
+        } else {
+          selectedArtifactIds.add(artifactId);
+        }
+
+        if (selectedArtifactIds.size === 0) {
+          isArtifactsSelectMode = false;
+        }
+
+        renderArtifactsPage();
+      } else {
+        const artifact = codeArtifacts.find((a) => a.id === artifactId);
+        if (artifact) {
+          showArtifactModal(artifact);
+        }
       }
       return;
     }
 
     // Legacy artifact action buttons (fallback for old structure)
-    const artifactId = e.target.dataset.artifactId;
+    const artifactId = target.dataset.artifactId;
     if (!artifactId) return;
 
     const artifact = codeArtifacts.find((a) => a.id === artifactId);
@@ -4636,26 +4858,6 @@ function setupArtifactsPageListeners() {
           if (menuButton) menuButton.classList.remove("persistent-active");
         });
     }
-  });
-}
-
-function filterArtifacts(searchTerm) {
-  const artifactItems = document.querySelectorAll(".artifact-item");
-  const term = searchTerm.toLowerCase();
-
-  artifactItems.forEach((item) => {
-    const title = item
-      .querySelector(".artifact-title")
-      .textContent.toLowerCase();
-    const code = item
-      .querySelector(".artifact-preview code")
-      .textContent.toLowerCase();
-    const language = item
-      .querySelector(".artifact-language")
-      .textContent.toLowerCase();
-    const matches =
-      title.includes(term) || code.includes(term) || language.includes(term);
-    item.style.display = matches ? "block" : "none";
   });
 }
 

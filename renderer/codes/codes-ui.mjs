@@ -3,6 +3,7 @@ import { filesUploadDark, filesUploadLight } from '../utils/constants.mjs'
 import { nowISO, formatRelativeTime } from '../time/time-utils.mjs';
 import { escapeHtml } from '../markdown/markdown.mjs';
 import { showConfirmationModal } from '../ui/modal.mjs'
+import { svgEmptyStateCodes } from '../utils/svg.mjs';
 
 const STATE = {
   codes: [],
@@ -321,12 +322,14 @@ function renderCodesList() {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
     empty.innerHTML = `
-      <div class="empty-state-body">
-        <h3>No code workspaces found</h3>
-        <p>Start by creating a new code workspace to organize your coding sessions.</p>
+      <div class="empty-state">
+        ${svgEmptyStateCodes}
+        <h3>Looking to start coding?</h3>
+        <p>Create a code workspace and spin up<br>your first session with your coding agent.</p>
       </div>
     `;
     list.appendChild(empty);
+    infoBar.style.display = 'none';
     updateInfoBar();
     return;
   }
@@ -698,7 +701,7 @@ function activateCodesPage() {
 
   const chatTitle = document.getElementById('chat-title');
   if (chatTitle) {
-    chatTitle.textContent = 'Your Code Workspaces';
+    chatTitle.textContent = 'Code Workspaces';
     chatTitle.title = 'Manage your code workspaces';
   }
   const logoEl = document.getElementById('clustrix-logo');

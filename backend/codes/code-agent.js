@@ -544,6 +544,12 @@ function parseAgentResponse(text = '') {
     cleanAnswer = cleanAnswer.replace(/<!END>/gi, '').trim();
   }
 
+  // If no <answer> tag found, use the entire text as answer (fallback for unformatted responses)
+  // Clean all XML-like tags from the text to get clean answer
+  if (!answerMatch && text.trim()) {
+    cleanAnswer = text.replace(/<[^>]*>/g, '').trim();
+  }
+
   return {
     answer: cleanAnswer,
     command: cmdMatch ? cmdMatch[1].trim() : '',
@@ -555,33 +561,145 @@ function parseAgentResponse(text = '') {
 }
 
 function isHighImpactCommand(command = '') {
-  const lowered = command.toLowerCase();
+  // Remove leading/trailing whitespace dan normalize newlines
+  const normalized = command
+    .trim()
+    .replace(/^\s+/gm, '') // Remove whitespace di awal setiap line
+    .toLowerCase();
+  
+  // Ambil line pertama yang non-empty
+  const firstLine = normalized
+    .split('\n')
+    .map(line => line.trim())
+    .find(line => line.length > 0) || '';
+  
   const dangerousPatterns = [
+    // File/Directory deletion
     'remove-item',
     'rm ',
-    ' rmdir',
+    'rmdir',
     'del ',
     'format-',
     'clear-content',
     'truncate',
+    'shred',
+    'wipe',
+    
+    // Disk operations
     'format-volume',
     'mkfs',
     'new-partition',
+    'diskpart',
+    'fdisk',
+    'parted',
+    'dd ',
+    
+    // Git operations
+    'git checkout',
+    'git reset',
+    'git clean',
+    'git push --force',
+    'git push -f',
+    'git rebase',
+    'git branch -d',
+    'git branch -D',
+    'git filter-branch',
+    'git gc',
+    
+    // Process/Service management
+    'stop-service',
+    'stop-process',
+    'kill ',
+    'killall',
+    'taskkill',
+    'pkill',
+    
+    // Registry (Windows)
+    'reg delete',
+    'remove-itemproperty',
+    
+    // Permission changes
+    'chmod',
+    'chown',
+    'icacls',
+    'set-acl',
+    'chgrp',
+    'setfacl',
+    
+    // Network config
+    'netsh',
+    'iptables',
+    'route delete',
+    'ifconfig',
+    'ip route',
+    'ufw delete',
+    'firewall-cmd',
+    
+    // System config
+    'shutdown',
+    'restart-computer',
+    'disable-',
+    'uninstall',
+    'reboot',
+    'halt',
+    'poweroff',
+    'init ',
+    'systemctl stop',
+    'systemctl disable',
+    
+    // Package managers
+    'npm uninstall',
+    'yarn remove',
+    'pip uninstall',
+    'apt-get remove',
+    'apt-get purge',
+    'yum remove',
+    'pacman -r',
+    'brew uninstall',
+    
+    // Environment/Config
+    'set-executionpolicy',
+    'setenforce',
+    
+    // Cron/Scheduled tasks
+    'crontab -r',
+    'unregister-scheduledtask',
+    'schtasks /delete',
+    
+    // Docker/Container
+    'docker rm',
+    'docker rmi',
+    'docker system prune',
+    'docker volume rm',
+    'kubectl delete',
+    
+    // Certificate/Security
+    'revoke-',
+    'remove-certificate',
+    
+    // Symbolic links
+    'ln -sf',
+    'mklink',
+    
+    // Sudo prefix
+    'sudo ',
   ];
-  return dangerousPatterns.some(pattern => lowered.includes(pattern));
+  
+  // Check if first non-empty line STARTS with any dangerous pattern
+  return dangerousPatterns.some(pattern => firstLine.startsWith(pattern));
 }
 
-function formatIterationOutput({ answer, command, output, exitCode, blocked }) {
-  // Return structured object instead of combined string
-  // This allows separate delivery of response+command vs output
-  return {
-    answer: answer || null,
-    command: command || null,
-    output: output || null,
-    exitCode,
-    blocked: !!blocked,
-  };
-}
+// function formatIterationOutput({ answer, command, output, exitCode, blocked }) {
+//   // Return structured object instead of combined string
+//   // This allows separate delivery of response+command vs output
+//   return {
+//     answer: answer || null,
+//     command: command || null,
+//     output: output || null,
+//     exitCode,
+//     blocked: !!blocked,
+//   };
+// }
 
 function formatResponseAndCommand({ answer, command }) {
   const sections = [];

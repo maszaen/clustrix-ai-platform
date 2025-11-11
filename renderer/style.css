@@ -7744,6 +7744,8 @@ button:disabled .btn-icon {
 }
 
 .empty-state svg {
+  height: 120px;
+  width: 120px;
   color: var(--fg-muted);
 }
 

@@ -632,6 +632,12 @@ class DatabaseManager {
   }
 
   deleteCode(codeId) {
+    // Delete associated sessions first to prevent orphaned data
+    this.db.prepare(`
+      DELETE FROM sessions WHERE code_id = ?
+    `).run(codeId);
+    
+    // Then delete the code
     return this.db.prepare(`
       DELETE FROM codes WHERE id = ?
     `).run(codeId);

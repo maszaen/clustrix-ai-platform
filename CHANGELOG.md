@@ -1,35 +1,28 @@
-Changelog v34.7.0: **Database Schema Updates for Sync Support**
+# Changelog v35.3.0: Code Agent Integration & UI Enhancements
 
-**Database Schema Enhancements:**
-- Added sync-related columns to sessions table: `deleted`, `device_id`, `synced_at`, `hash`
-- Added sync-related columns to messages table: `deleted`, `device_id`, `synced_at`, `sequence`, `updated_at`
-- Improved migration logic with `ensureColumn()` helper function for backward compatibility
-- Enhanced schema initialization with comprehensive column additions
+## Features
+- **Code Agent Backend:** Added comprehensive code agent system in `backend/codes/` with AI-powered code generation, execution, and session management
+- **Codes Page UI:** Integrated codes page with dropdown menus, workspace validation, and interactive elements
+- **PowerShell Session Support:** Added PowerShell session handling for Windows environments
+- **Code Title Indicator:** Added dynamic code title generation and display
 
-**Error Handling Improvements:**
-- Updated `sessions:save` IPC handler to throw errors instead of returning false
-- Better error propagation for database operation failures
-- Improved error logging and context in database operations
+## Code Quality
+- **Comprehensive Testing:** Added full test suite for code agent (integration and unit tests) with 80%+ coverage target
+- **Jest Configuration:** Updated jest.config.js for better test organization and backend testing
+- **AppState Management:** Introduced centralized AppState with event listeners for better state consistency in renderer
+- **Styling Improvements:** Enhanced send button with loading states, animations, and interrupt functionality
+- **Project File Display:** Added styling for project file names and sizes with proper text wrapping
 
-**Code Quality Improvements:**
-- Reformatted SQL statements for better readability and consistency
-- Removed temporary test files (`direct-test.js`, `link.test.js`) from renderer core
-- Cleaned up unused test code and development artifacts
+## Architecture
+- **Modular Code Agent:** Separated code agent logic into modular files (code-agent.js, codes-prompt.js, powershell-session.js)
+- **Renderer Refactoring:** Simplified renderer.js with AppState integration and removed redundant code
+- **IPC Integration:** Added IPC handlers for codes operations and session management
 
-**Database Migration:**
-- Automatic column addition for legacy databases during initialization
-- Robust migration handling with proper error logging
-- Support for incremental schema updates without data loss
+## Statistics
+- 16 files modified, 2,572 insertions, 1,927 deletions
+- New: backend/codes/ module with agent, prompts, and tests
+- Enhanced: renderer UI with codes page, styling, and state management
+- Updated: jest config and package.json dependencies
 
-**Code Quality:**
-- Enhanced database schema documentation and comments
-- Improved code formatting and SQL statement alignment
-- Better separation of migration logic into reusable functions
-
-**Statistics:**
-- 4 files changed, 2 files removed
-- ~80 lines added for schema enhancements
-- ~40 lines removed (test files cleanup)
-- Database schema expanded with 9 new columns across 2 tables
-
-> **Status:** ✓ Production Ready | _Database Enhancement Release_
+> **Status:** ✓ Production Ready | _Minor Release_</content>
+<parameter name="filePath">h:\VSCode\Clustrix-AI-Platform\changelog\release-notes\v35.3.0.md

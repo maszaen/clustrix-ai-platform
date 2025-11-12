@@ -78,6 +78,18 @@ let saveScheduled = false;
 const PROJECT_DETAIL_RENDER_KEY = 'project-detail:render';
 const dirtySessionIds = new Set();
 const lastSavedSessionTimestamps = new Map();
+
+function bindEmptyStateAction(container, actionName, handler) {
+  if (!container || typeof handler !== "function") return;
+  const button = container.querySelector(
+    `[data-empty-action="${actionName}"]`,
+  );
+  if (!button) return;
+  button.addEventListener("click", (event) => {
+    event?.stopPropagation?.();
+    handler();
+  });
+}
 const listeners = {}; 
 let lastSavedSettingsSignature = null;
 
@@ -3342,8 +3354,15 @@ function renderChatsPage() {
     document.getElementById("chats-search")?.value || ""
   ).toLowerCase();
 
+  const allSessions = [...state.sessions];
+  const hasChats = allSessions.length > 0;
+  const newChatBtn = document.getElementById("new-chat-btn");
+  if (newChatBtn) {
+    newChatBtn.style.display = hasChats ? "" : "none";
+  }
+
   // Filter dengan advanced search (selalu aktif)
-  let sessions = [...state.sessions];
+  let sessions = [...allSessions];
   if (searchValue) {
     sessions = sessions.filter((session) => {
       const nameMatch = (session.name || "")
@@ -3397,14 +3416,38 @@ function renderChatsPage() {
   const pageItems = sessions.slice(0, limit);
 
   if (pageItems.length === 0 && !isChatsSelectMode) {
-    const noChats = `
-    <div class="empty-state">
-      ${svgEmptyStateChats}
-      <h3>Ready for your first chat?</h3>
-      <p>Chat with Clustrix about anything,<br>your messages will appear here.</p>
-    </div>
-    `
-    chatsList.innerHTML = `<div class="empty-state"><p>${searchValue ? "No chats found" : noChats }</p></div>`;
+    const emptyStateHtml = `
+      <div class="empty-state">
+        ${svgEmptyStateChats}
+        <h3>Ready for your first chat?</h3>
+        <p>Chat with Clustrix about anything,<br>your messages will appear here.</p>
+        <button class="stroke-btn" data-empty-action="new-chat">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+            <path d="M12 5v14m-7-7h14" />
+          </svg>
+          <span>New Chat</span>
+        </button>
+      </div>
+    `;
+    const searchEmptyHtml = `
+      <div class="empty-state">
+        <h3>No chats found</h3>
+        <p>Try adjusting your search terms.</p>
+      </div>
+    `;
+
+    chatsList.innerHTML = hasChats ? searchEmptyHtml : emptyStateHtml;
+    if (!hasChats) {
+      bindEmptyStateAction(chatsList, "new-chat", () => {
+        log(
+          "UI",
+          0,
+          "event:new-chat-empty-state-click",
+          "New chat empty state button clicked",
+        );
+        startNewChatFlow();
+      });
+    }
     infoBar.style.display = 'none';
     return;
   }
@@ -4310,17 +4353,35 @@ function renderArtifactsPage() {
     );
   });
 
+  const newArtifactBtn = document.getElementById("new-artifact-btn");
+  const hasArtifacts = codeArtifacts.length > 0;
+  if (newArtifactBtn) {
+    newArtifactBtn.style.display = hasArtifacts ? "" : "none";
+  }
+
   if (!codeArtifacts.length) {
     artifactsList.innerHTML = `
-
       <div class="empty-state">
         ${svgEmptyStateArtifacts}
         <h3>No code artifacts yet</h3>
-        <p>Save code snippets from chat <br> messages to build your collection.</p>
+        <p>Collect snippets from chats, or create<br>artifacts manually in one place.</p>
+        <button class="stroke-btn" data-empty-action="new-artifact">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+            <path d="M12 5v14m-7-7h14" />
+          </svg>
+          <span>Create Artifact</span>
+        </button>
       </div>
-
-
     `;
+    bindEmptyStateAction(artifactsList, "new-artifact", () => {
+      log(
+        "UI",
+        0,
+        "event:new-artifact-empty-state-click",
+        "New artifact empty state button clicked",
+      );
+      showCreateArtifactModal();
+    });
     selectedArtifactIds.clear();
     isArtifactsSelectMode = false;
     if (infoBar) infoBar.style.display = "none";
@@ -5563,6 +5624,12 @@ function renderProjectsPage() {
   ).toLowerCase();
 
   // Filter projects
+  const hasProjects = projectsData.length > 0;
+  const newProjectBtn = document.getElementById("new-project-btn");
+  if (newProjectBtn) {
+    newProjectBtn.style.display = hasProjects ? "" : "none";
+  }
+
   let projects = [...projectsData];
   if (searchValue) {
     projects = projects.filter((project) => {
@@ -5606,13 +5673,32 @@ function renderProjectsPage() {
   projectsList.innerHTML = "";
 
   if (projects.length === 0 && !isProjectsSelectMode) {
-    projectsList.innerHTML = `
+    const emptyStateHtml = `
       <div class="empty-state">
         ${svgEmptyStateProjects}
         <h3>Looking to start a project?</h3>
         <p>Upload materials, set custom instructions,<br>and organize conversations in one space.</p>
+        <button class="stroke-btn" data-empty-action="new-project">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+            <path d="M12 5v14m-7-7h14" />
+          </svg>
+          <span>New Project</span>
+        </button>
       </div>
     `;
+    const searchEmptyHtml = `
+      <div class="empty-state">
+        <h3>No projects found</h3>
+        <p>Try adjusting your search terms.</p>
+      </div>
+    `;
+
+    projectsList.innerHTML = hasProjects ? searchEmptyHtml : emptyStateHtml;
+    if (!hasProjects) {
+      bindEmptyStateAction(projectsList, "new-project", () => {
+        showCreateProjectModal();
+      });
+    }
     infoBar.style.display = 'none';
     return;
   }

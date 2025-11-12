@@ -1,89 +1,205 @@
-const cheerio = require('cheerio');
+const PREVIEW_LIMIT = 200;
 
-function autoheal(response) {
-  // Trim
-  response = response.trim();
-
-  // Normalize uppercase tags
-  response = response.replace(/<TRY>/gi, '<try>');
-  response = response.replace(/<\/TRY>/gi, '</try>');
-  response = response.replace(/<LI>/gi, '<li>');
-  response = response.replace(/<\/LI>/gi, '</li>');
-  response = response.replace(/<TRY-TITLE>/gi, '<try-title>');
-  response = response.replace(/<\/TRY-TITLE>/gi, '</try-title>');
-
-  // Fix specific malformed
-  response = response.replace(/<\/li<li>/g, '</li><li>');
-
-  // Close unclosed <li>
-  response = response.replace(/<li>([^<]*?)(?=<li|<\/try-title|<\/try|$)/g, '<li>$1</li>');
-
-  // Ensure starts with <try>
-  if (!response.startsWith('<try>')) {
-    response = '<try>' + response;
+function createLogger(logger) {
+  if (typeof logger !== 'function') {
+    return () => {};
   }
 
-  // Ensure ends with </try>
-  if (!response.endsWith('</try>')) {
-    response = response + '</try>';
+  return (level, fn, message, details = {}) => {
+    try {
+      logger(level, fn, message, details);
+    } catch (err) {
+      // Swallow logging errors to keep healing resilient
+    }
+  };
+}
+
+function preview(value) {
+  if (typeof value !== 'string') return '';
+  if (value.length <= PREVIEW_LIMIT) return value;
+  return `${value.slice(0, PREVIEW_LIMIT)}…`;
+}
+
+function autoheal(response, options = {}) {
+  const { logger: rawLogger } = options;
+  const log = createLogger(rawLogger);
+  let working = typeof response === 'string' ? response : '';
+
+  log(1, 'autoheal:start', 'Autoheal invoked', {
+    originalPreview: preview(working),
+  });
+
+  const applyTransform = (stage, transform) => {
+    const before = working;
+    const after = transform(before);
+    if (before !== after) {
+      log(1, `autoheal:${stage}`, 'Applied autoheal transformation', {
+        stage,
+        before: preview(before),
+        after: preview(after),
+      });
+    }
+    working = after;
+  };
+
+  applyTransform('trim', (value) => value.trim());
+  applyTransform('normalize-try-open', (value) => value.replace(/<TRY>/gi, '<try>'));
+  applyTransform('normalize-try-close', (value) => value.replace(/<\/TRY>/gi, '</try>'));
+  applyTransform('normalize-li-open', (value) => value.replace(/<LI>/gi, '<li>'));
+  applyTransform('normalize-li-close', (value) => value.replace(/<\/LI>/gi, '</li>'));
+  applyTransform('normalize-try-title-open', (value) => value.replace(/<TRY-TITLE>/gi, '<try-title>'));
+  applyTransform('normalize-try-title-close', (value) => value.replace(/<\/TRY-TITLE>/gi, '</try-title>'));
+  applyTransform('fix-li-join', (value) => value.replace(/<\/li<li>/g, '</li><li>'));
+  applyTransform('close-li', (value) =>
+    value.replace(/<li>([^<]*?)(?=<li|<\/try-title|<\/try|$)/g, '<li>$1</li>'),
+  );
+
+  if (!working.startsWith('<try>')) {
+    const before = working;
+    working = `<try>${working}`;
+    log(1, 'autoheal:ensure-try-open', 'Added missing <try> opening tag', {
+      before: preview(before),
+      after: preview(working),
+    });
   }
 
-  // Extract content inside <try>
-  const tryMatch = response.match(/^<try>([\s\S]*)<\/try>$/);
-  if (!tryMatch) return response; // fallback
+  if (!working.endsWith('</try>')) {
+    const before = working;
+    working = `${working}</try>`;
+    log(1, 'autoheal:ensure-try-close', 'Added missing </try> closing tag', {
+      before: preview(before),
+      after: preview(working),
+    });
+  }
+
+  const tryMatch = working.match(/^<try>([\s\S]*)<\/try>$/);
+  if (!tryMatch) {
+    log(2, 'autoheal:skip', 'Unable to locate <try> wrapper, returning raw response', {
+      preview: preview(working),
+    });
+    return working;
+  }
+
   let content = tryMatch[1];
 
-  // Handle plain text
   if (content.trim() === '') {
-    return '<try></try>';
-  } else if (!content.includes('<')) {
-    return '<try><li>' + content + '</li></try>';
+    const healed = '<try></try>';
+    log(1, 'autoheal:empty', 'Normalized empty try block', {
+      before: preview(working),
+      after: healed,
+    });
+    return healed;
   }
 
-  // Handle <try-title>
+  if (!content.includes('<')) {
+    const healed = `<try><li>${content}</li></try>`;
+    log(1, 'autoheal:plain-text', 'Wrapped plain text in list item', {
+      plainText: preview(content),
+      resultPreview: preview(healed),
+    });
+    return healed;
+  }
+
   let title = '';
   const titleRegex = /<try-title>([\s\S]*?)<\/try-title>/;
   const titleMatch = content.match(titleRegex);
   if (titleMatch) {
     title = titleMatch[0];
     content = content.replace(titleMatch[0], '');
+    log(1, 'autoheal:title-extract', 'Extracted try-title block', {
+      titlePreview: preview(title),
+    });
   } else {
-    // Look for unclosed
     const titleStart = content.indexOf('<try-title>');
     if (titleStart !== -1) {
       let titleEnd = content.indexOf('</try-title>', titleStart);
       if (titleEnd === -1) {
-        // Find next tag
         const titleContent = content.slice(titleStart + 11).split('<')[0];
         const endPos = titleStart + 11 + titleContent.length;
-        title = '<try-title>' + titleContent + '</try-title>';
+        title = `<try-title>${titleContent}</try-title>`;
         content = content.slice(0, titleStart) + content.slice(endPos);
+        log(1, 'autoheal:title-heal', 'Reconstructed missing </try-title> tag', {
+          titlePreview: preview(title),
+        });
       } else {
         title = content.slice(titleStart, titleEnd + 13);
         content = content.slice(0, titleStart) + content.slice(titleEnd + 13);
+        log(1, 'autoheal:title-trim', 'Normalized try-title placement', {
+          titlePreview: preview(title),
+        });
       }
     }
   }
 
-  // Handle <li>
   let lis = [];
   const liRegex = /<li>([\s\S]*?)<\/li>/gs;
   let match;
   while ((match = liRegex.exec(content)) !== null) {
-    lis.push('<li>' + match[1] + '</li>');
+    lis.push(`<li>${match[1]}</li>`);
   }
 
-  // Remove duplicates
-  lis = [...new Set(lis)];
+  if (lis.length === 0) {
+    log(2, 'autoheal:no-list-items', 'No list items found during autoheal', {
+      contentPreview: preview(content),
+    });
+  }
 
-  // Rebuild
+  const uniqueLis = [...new Set(lis)];
+  if (uniqueLis.length !== lis.length) {
+    log(1, 'autoheal:dedupe', 'Removed duplicate list items', {
+      removed: lis.length - uniqueLis.length,
+    });
+  }
+  lis = uniqueLis;
+
   let result = '<try>' + title;
-  for (let li of lis) {
+  for (const li of lis) {
     result += li;
   }
   result += '</try>';
 
+  log(1, 'autoheal:complete', 'Autoheal completed', {
+    finalPreview: preview(result),
+  });
+
   return result;
 }
 
-module.exports = { autoheal };
+function hasMalformedTags(response, options = {}) {
+  const { logger: rawLogger } = options;
+  const log = createLogger(rawLogger);
+  const text = typeof response === 'string' ? response : '';
+
+  if (text.includes('<try>') && !/^<try>[\s\S]*<\/try>$/.test(text)) {
+    log(1, 'hasMalformedTags', 'Detected incomplete <try> wrapper', {
+      preview: preview(text),
+    });
+    return true;
+  }
+
+  const titleCount = (text.match(/<try-title>/g) || []).length;
+  const titleCloseCount = (text.match(/<\/try-title>/g) || []).length;
+  if (titleCount !== titleCloseCount) {
+    log(1, 'hasMalformedTags', 'Detected unbalanced <try-title> tags', {
+      preview: preview(text),
+      openCount: titleCount,
+      closeCount: titleCloseCount,
+    });
+    return true;
+  }
+
+  const liCount = (text.match(/<li>/g) || []).length;
+  const liCloseCount = (text.match(/<\/li>/g) || []).length;
+  if (liCount !== liCloseCount) {
+    log(1, 'hasMalformedTags', 'Detected unbalanced <li> tags', {
+      preview: preview(text),
+      openCount: liCount,
+      closeCount: liCloseCount,
+    });
+    return true;
+  }
+
+  return false;
+}
+
+module.export = { autoheal, hasMalformedTags };

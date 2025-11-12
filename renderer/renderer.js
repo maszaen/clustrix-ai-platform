@@ -3957,13 +3957,9 @@ function setupChatsPageListeners() {
       showConfirmationModal(
         "Delete Selected Chats",
         `Delete ${selectedChatIds.size} chats?`,
-        () => {
+        async () => {
           const idsToDelete = [...selectedChatIds];
-          state.sessions = state.sessions.filter(
-            (s) => !idsToDelete.includes(s.id),
-          );
-          clearDirtyTracking(); // Force full save untuk ensure backend dapat update yang benar
-          save();
+          await bulkDeleteSessions(idsToDelete);
           isChatsSelectMode = false;
           selectedChatIds.clear();
           // Reset "Select All" checkbox state
@@ -14059,6 +14055,41 @@ async function regenerateFromIncomplete(targetButton) {
 }
 
 // Session Management
+async function bulkDeleteSessions(sessionIds) {
+  const ids = Array.isArray(sessionIds)
+    ? sessionIds.filter((id) => typeof id === "string" && id.length > 0)
+    : [];
+
+  if (ids.length === 0) return;
+
+  log("SESSION", 2, "bulkDeleteSessions", "Deleting multiple sessions", {
+    count: ids.length,
+  });
+
+  const idsSet = new Set(ids);
+
+  state.sessions.forEach((session) => {
+    if (session?.id && idsSet.has(session.id)) {
+      invalidateSessionCache(session.id);
+      dirtySessionIds.delete(session.id);
+    }
+  });
+
+  const wasCurrent = current && idsSet.has(current.id);
+
+  state.sessions = state.sessions.filter((session) => !idsSet.has(session.id));
+  updateCodeSessions(state.sessions);
+  loadCodesData();
+
+  if (wasCurrent) {
+    showWelcomeScreen();
+  } else {
+    renderSessions();
+  }
+
+  await save({ forceFull: true, reason: "bulk-delete-sessions" });
+}
+
 function deleteSession(sessionToDelete) {
   if (!sessionToDelete) return;
   log("SESSION", 2, "deleteSession", "Deleting session", {

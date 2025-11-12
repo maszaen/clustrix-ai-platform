@@ -285,6 +285,11 @@ function renderCodesList() {
   const actionBar = document.getElementById('codes-select-action-bar');
   const selectedCountEl = document.getElementById('codes-selected-count');
   const deleteBtn = document.getElementById('codes-delete-selected-btn');
+  const newCodeBtn = document.getElementById('new-code-btn');
+  const hasCodes = STATE.codes.length > 0;
+  if (newCodeBtn) {
+    newCodeBtn.style.display = hasCodes ? '' : 'none';
+  }
 
   if (STATE.isSelectMode) {
     infoBar.style.display = 'none';
@@ -321,13 +326,32 @@ function renderCodesList() {
   if (filtered.length === 0 && !STATE.isSelectMode) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.innerHTML = `
-      <div class="empty-state">
-        ${svgEmptyStateCodes}
-        <h3>Looking to start coding?</h3>
-        <p>Create a code workspace and spin up<br>your first session with your coding agent.</p>
-      </div>
-    `;
+    if (hasCodes) {
+      empty.innerHTML = `
+        <div class="empty-state">
+          <h3>No code workspaces found</h3>
+          <p>Try adjusting your search terms.</p>
+        </div>
+      `;
+    } else {
+      empty.innerHTML = `
+        <div class="empty-state">
+          ${svgEmptyStateCodes}
+          <h3>Looking to start coding?</h3>
+          <p>Create a code workspace and spin up<br>your first session with your coding agent.</p>
+          <button class="stroke-btn" data-empty-action="new-code">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9">
+              <path d="M12 5v14m-7-7h14" />
+            </svg>
+            <span>New Code Workspace</span>
+          </button>
+        </div>
+      `;
+      empty.querySelector('[data-empty-action="new-code"]')?.addEventListener('click', async (event) => {
+        event?.stopPropagation?.();
+        await promptNewCode();
+      });
+    }
     list.appendChild(empty);
     infoBar.style.display = 'none';
     updateInfoBar();

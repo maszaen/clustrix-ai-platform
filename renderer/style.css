@@ -8419,6 +8419,34 @@ button:disabled .btn-icon {
   height: 23px;
 }
 
+.stroke-btn {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  border: none;
+  padding: 16px 9px;
+  height: 31px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-user);
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  transition: all 0.3s ease;
+  margin: auto;
+}
+
+.stroke-btn:hover {
+  background: var(--hover-bg);
+}
+
+.stroke-btn svg {
+  flex-shrink: 0;
+  padding-right: 5px;
+  width: 23px;
+  height: 23px;
+}
+
 #projects-select-btn,
 #chats-select-btn,
 #codes-select-btn,

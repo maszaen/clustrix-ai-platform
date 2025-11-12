@@ -213,7 +213,7 @@ testCases.forEach((test, index) => {
   console.log(`Test ${index + 1}: ${test.description}`);
   console.log('Input:', test.input);
 
-  const output = autoheal(test.input, null);
+  const output = autoheal(test.input);
   console.log('Output:', output);
   console.log('Expected:', test.expected);
 

@@ -9004,7 +9004,6 @@ function personaSystem() { // V3
       prompt += userInstructions.map(instruction => `- ${instruction}`).join("\n");
       prompt += "\n";
     }
-  console.log(prompt);
   return prompt;
 }
 
@@ -12914,7 +12913,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         const pendingPageCount = getAndClearPendingWebSearchData(session.id);
         if (pendingPageCount !== null) {
           modelInfo.webSearchPages = pendingPageCount;
-          console.log("Applied pending web search data to finalized message:", { sessionId: session.id, pageCount: pendingPageCount });
+          log("Applied pending web search data to finalized message:", { sessionId: session.id, pageCount: pendingPageCount });
         }
       
         // Include thinking data if exists

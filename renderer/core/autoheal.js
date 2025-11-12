@@ -54,6 +54,29 @@ function autoheal(response, options = {}) {
     value.replace(/<li>([^<]*?)(?=<li|<\/try-title|<\/try|$)/g, '<li>$1</li>'),
   );
 
+  let prefix = '';
+  let suffix = '';
+
+  const tryOpenIndex = working.indexOf('<try>');
+  if (tryOpenIndex > 0) {
+    prefix = working.slice(0, tryOpenIndex);
+    working = working.slice(tryOpenIndex);
+    log(1, 'autoheal:preserve-prefix', 'Preserved leading content outside <try>', {
+      prefixPreview: preview(prefix),
+    });
+  }
+
+  const tryCloseIndex = working.lastIndexOf('</try>');
+  if (tryCloseIndex !== -1 && tryCloseIndex + 6 < working.length) {
+    suffix = working.slice(tryCloseIndex + 6);
+    working = working.slice(0, tryCloseIndex + 6);
+    log(1, 'autoheal:preserve-suffix', 'Preserved trailing content outside </try>', {
+      suffixPreview: preview(suffix),
+    });
+  }
+
+  const finalize = (healed = '') => `${prefix}${healed}${suffix}`;
+
   if (!working.startsWith('<try>')) {
     const before = working;
     working = `<try>${working}`;
@@ -77,7 +100,7 @@ function autoheal(response, options = {}) {
     log(2, 'autoheal:skip', 'Unable to locate <try> wrapper, returning raw response', {
       preview: preview(working),
     });
-    return working;
+    return finalize(working);
   }
 
   let content = tryMatch[1];
@@ -88,7 +111,7 @@ function autoheal(response, options = {}) {
       before: preview(working),
       after: healed,
     });
-    return healed;
+    return finalize(healed);
   }
 
   if (!content.includes('<')) {
@@ -97,7 +120,7 @@ function autoheal(response, options = {}) {
       plainText: preview(content),
       resultPreview: preview(healed),
     });
-    return healed;
+    return finalize(healed);
   }
 
   let title = '';
@@ -162,7 +185,7 @@ function autoheal(response, options = {}) {
     finalPreview: preview(result),
   });
 
-  return result;
+  return finalize(result);
 }
 
 function hasMalformedTags(response, options = {}) {

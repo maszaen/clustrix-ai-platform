@@ -12878,29 +12878,34 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       });
 
       const display = trimEnd(fullResponse);
-      const hasContent = display.length > 0;
+      const autohealLogger = (level, fn, message, details) =>
+        log("AUTOHEAL", level, fn, message, details);
+      let finalDisplay = display;
       const hasEnd = END_RX.test(fullResponse) || sawEnd;
 
       const isComplete = hasEnd || !interrupted;
 
       // Autoheal if malformed tags detected
-      let finalDisplay = display;
-      if (hasMalformedTags(display)) {
-        log("FINALIZE", 1, "finalize", "Detected malformed tags, applying autoheal");
-        finalDisplay = autoheal(display);
+      if (hasMalformedTags(display, { logger: autohealLogger })) {
+        log("FINALIZE", 1, "finalize", "Detected malformed tags, applying autoheal", {
+          messagePreview: display.slice(0, 200),
+        });
+        finalDisplay = autoheal(display, { logger: autohealLogger });
       }
+
+      const hasContent = finalDisplay.length > 0;
 
       // Collapse response spacer when response is complete
       if (isComplete) {
         collapseSpacer();
       }
 
-      let finalMessageToSave = display;
+      let finalMessageToSave = finalDisplay;
       if (interrupted) {
         collapseSpacer();
         const formattedError = formatErrorMessageForSaving(reason);
         finalMessageToSave = hasContent
-          ? `${display}\n\n${formattedError}`
+          ? `${finalDisplay}\n\n${formattedError}`
           : formattedError;
       }
 
@@ -12923,13 +12928,14 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         }
 
         session.messages[messageIndex] = ["ai", finalMessageToSave, modelInfo];
-      
+
         // Track updated message for incremental save
         if (!session._newMessages) {
           session._newMessages = [];
         }
         session._newMessages.push([messageIndex, ["ai", finalMessageToSave, modelInfo]]);
-      
+        markSessionDirty(session.id);
+
         log(
           "FINALIZE",
           2,
@@ -12949,18 +12955,19 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         if (session._x_think_updates && session._x_think_updates[messageIndex]) {
           modelInfo.thinkingUpdate = session._x_think_updates[messageIndex];
         }
-      
+
         session.messages[messageIndex] = [
           "ai",
           formatErrorMessageForSaving(reason),
           modelInfo,
         ];
-      
+
         // Track updated message for incremental save
         if (!session._newMessages) {
           session._newMessages = [];
         }
         session._newMessages.push([messageIndex, ["ai", formatErrorMessageForSaving(reason), modelInfo]]);
+        markSessionDirty(session.id);
       }
 
       if (aiNode) {
@@ -13043,7 +13050,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
         clearContinuePlaceholder(aiNode);
 
         if (hasContent && !isComplete && !interrupted) {
-          renderContinuePlaceholder(aiNode, session, messageIndex, display, {
+          renderContinuePlaceholder(aiNode, session, messageIndex, finalDisplay, {
             disabledMs: 1200,
             interrupted: false,
           });

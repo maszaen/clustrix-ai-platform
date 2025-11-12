@@ -43,6 +43,7 @@ import {
   renderCodeMessageFiles,
 } from './codes/codes-ui.mjs';
 import { runCodeChatStream } from './codes/code-chat.mjs';
+import { autoheal, hasMalformedTags } from './core/autoheal.js';
 
 let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",themeVariant: "standard",language: "autodetect"},};
 let welcomeScreenStagedFiles = [];
@@ -12881,6 +12882,13 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
       const hasEnd = END_RX.test(fullResponse) || sawEnd;
 
       const isComplete = hasEnd || !interrupted;
+
+      // Autoheal if malformed tags detected
+      let finalDisplay = display;
+      if (hasMalformedTags(display)) {
+        log("FINALIZE", 1, "finalize", "Detected malformed tags, applying autoheal");
+        finalDisplay = autoheal(display);
+      }
 
       // Collapse response spacer when response is complete
       if (isComplete) {

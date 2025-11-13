@@ -358,6 +358,7 @@ function getSessionState(sessionId) {
   if (!state) {
     state = {
       commandHistory: [],
+      conversationHistory: [], // NEW: Track full conversation for context
       terminal: null,
       lastUsed: Date.now(),
       iterationCount: 0,
@@ -918,10 +919,26 @@ async function runAgentIteration({
   console.log(systemPrompt);
   console.log('=== END SYSTEM PROMPT ===\n\n');
 
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt },
-  ];
+  // Build messages array with conversation history
+  let messages;
+  
+  if (iteration === 0) {
+    // First iteration: system + user prompt
+    messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ];
+    // Initialize conversation history
+    state.conversationHistory = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ];
+  } else {
+    // Subsequent iterations: use full conversation history
+    // Update system prompt with latest command history
+    state.conversationHistory[0] = { role: 'system', content: systemPrompt };
+    messages = [...state.conversationHistory];
+  }
 
   const response = await callOpenAICompatibleChat({
     baseUrl,
@@ -932,6 +949,15 @@ async function runAgentIteration({
   });
 
   const parsed = parseAgentResponse(response.content || '');
+  
+  // Store assistant's response in conversation history
+  if (response.content) {
+    state.conversationHistory.push({
+      role: 'assistant',
+      content: response.content,
+    });
+  }
+  
   return {
     parsed,
     usage: response.usage,
@@ -1163,6 +1189,12 @@ async function processCodeRequest({
           timestamp: Date.now(),
         });
         
+        // Add skip message to conversation history
+        state.conversationHistory.push({
+          role: 'user',
+          content: `[SYSTEM] ${skipMessage}`,
+        });
+        
         // Send skip notification to UI
         const skipChunk = formatOutput({ 
           output: skipMessage, 
@@ -1209,6 +1241,14 @@ async function processCodeRequest({
       if (state.commandHistory.length > MAX_HISTORY * 2) {
         state.commandHistory.splice(0, state.commandHistory.length - MAX_HISTORY * 2);
       }
+      
+      // Add command execution result to conversation history as user message
+      // This gives the AI feedback about what happened
+      const feedbackMessage = `Command executed:\n\`\`\`powershell\n${parsed.command}\n\`\`\`\n\nOutput:\n\`\`\`\n${truncateOutput(output)}\n\`\`\`\nExit Code: ${exitCode}`;
+      state.conversationHistory.push({
+        role: 'user',
+        content: feedbackMessage,
+      });
     }
 
     // Detect repeated failure pattern (e.g., same syntax error twice in a row)
@@ -1223,12 +1263,18 @@ async function processCodeRequest({
             sameErrorCount,
           });
           // Add message to history so AI knows to try different approach
+          const loopBreakerMsg = 'LOOP BREAKER: Same -replace command failed twice. Try a different approach (multi-step instead of single -replace).';
           state.commandHistory.push({
             command: '[SYSTEM]',
-            output: 'LOOP BREAKER: Same -replace command failed twice. Try a different approach (multi-step instead of single -replace).',
+            output: loopBreakerMsg,
             exitCode: 1,
             summary: 'Repeated -replace failure - suggest multi-step approach',
             timestamp: Date.now(),
+          });
+          // Add to conversation history
+          state.conversationHistory.push({
+            role: 'user',
+            content: `[SYSTEM] ${loopBreakerMsg}`,
           });
           break; // Break iteration loop
         }

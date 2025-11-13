@@ -7,7 +7,7 @@ const os = require('os');
 const { app } = require('electron');
 
 // Toggle monitoring on/off
-const MONITORING_ENABLED = true;
+const MONITORING_ENABLED = false;
 
 class PerformanceMonitor {
     constructor() {

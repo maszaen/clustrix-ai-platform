@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -59,6 +60,9 @@ class PowerShellSession {
     this.process.stdin.setDefaultEncoding('utf-8');
     this.process.stdout.setEncoding('utf-8');
     this.process.stderr.setEncoding('utf-8');
+    
+    // Load helper functions
+    this._loadHelperFunctions();
 
     this.stdoutBuffer = '';
     this.stderrBuffer = '';
@@ -138,6 +142,28 @@ class PowerShellSession {
     this.sentinel = null;
     this.stdoutBuffer = '';
     this.stderrBuffer = '';
+  }
+
+  _loadHelperFunctions() {
+    // Load helper functions into PowerShell session
+    const helperPath = path.join(__dirname, 'powershell-helpers.ps1');
+    if (!fs.existsSync(helperPath)) {
+      this.log('CODES', 2, 'powershell-session:loadHelpers', 'Helper functions file not found', {
+        path: helperPath
+      });
+      return;
+    }
+    
+    try {
+      const helperScript = fs.readFileSync(helperPath, 'utf8');
+      // Inject helper functions into session (don't wait for response)
+      this.process.stdin.write(helperScript + '\n');
+      this.log('CODES', 1, 'powershell-session:loadHelpers', 'Helper functions loaded');
+    } catch (error) {
+      this.log('CODES', 3, 'powershell-session:loadHelpers', 'Failed to load helper functions', {
+        error: error?.message
+      });
+    }
   }
 
   async run(command, options = {}) {

@@ -35,6 +35,7 @@ Search: gc <file> | Select-String "pattern" -Context 2,2
 Run: python <file>.py | node <file>.js | npm test
 
 **DECISION TREE:**
+- Read AGENTS.md first (if exist)
 - Show line count of the file.
 - File < 300 lines → Show full with line numbers first
 - File > 300 lines → Count, then show range

@@ -3,7 +3,13 @@ const { URL } = require('url');
 const fs = require('fs');
 const { PowerShellSession } = require('./powershell-session');
 const { joinEndpoint } = require('../integration/langchain-helpers');
-const { SYSTEM_PROMPT, PROMPT_FIRST, PROMPT_SUBSEQUENT } = require('./codes-prompt');
+const {
+  SYSTEM_PROMPT,
+  PROMPT_FIRST,
+  PROMPT_SUBSEQUENT,
+  getCommandReference,
+  getErrorGuidance,
+} = require('./codes-prompt');
 const MAX_ITERATIONS = 30;
 const MAX_HISTORY = 15;
 const MAX_OUTPUT_LINES = 100;
@@ -500,12 +506,52 @@ function selectPromptTemplate(iteration) {
   return iteration === 0 ? PROMPT_FIRST : PROMPT_SUBSEQUENT;
 }
 
-function renderSystemPrompt(template, { userPrompt, commandHistory, lastCommand }) {
+function detectErrorContext(commandHistory = []) {
+  // Detect error patterns from recent command history to inject targeted guidance
+  const recentCommands = commandHistory.slice(-3); // Last 3 commands
+
+  let errorType = null;
+  let includeCommandReference = false;
+
+  for (const entry of recentCommands) {
+    const { command = '', output = '', exitCode = 0 } = entry;
+
+    // Detect -replace command failures
+    if (exitCode !== 0 && command.includes('-replace')) {
+      errorType = 'replace_failed';
+      includeCommandReference = true;
+      break;
+    }
+
+    // Detect timeout errors
+    if (output.includes('timeout') || output.includes('Terminal execution failed')) {
+      errorType = 'command_timeout';
+      includeCommandReference = true;
+      break;
+    }
+
+    // Detect file too large issues
+    if (output.includes('out of range') || output.toLowerCase().includes('too large')) {
+      errorType = 'file_too_large';
+      includeCommandReference = true;
+      break;
+    }
+  }
+
+  // Include detailed command reference after 5+ iterations or on error
+  if (!includeCommandReference && commandHistory.length > 5) {
+    includeCommandReference = true;
+  }
+
+  return { errorType, includeCommandReference };
+}
+
+function renderSystemPrompt(template, { userPrompt, commandHistory, lastCommand, iteration = 0 }) {
   // Check if last output > 10 lines for dynamic injection
   const lastOutputLines = (lastCommand.output || '').split(/\r?\n/).length;
-  
+
   // 1. Summary FORMAT for SYSTEM_PROMPT (response format section)
-  const summaryFormat = lastOutputLines > 10 
+  const summaryFormat = lastOutputLines > 10
     ? `
 <summary>
 Summarize the command output (one line, max 160 chars)
@@ -513,22 +559,41 @@ Summarize the command output (one line, max 160 chars)
 
 `
     : '';
-  
+
   // 2. Summary REMINDER for PROMPT_SUBSEQUENT (task section)
-  const summaryReminder = lastOutputLines > 10 
+  const summaryReminder = lastOutputLines > 10
     ? `\nRemember to add <summary> tag for your command output.\n`
     : '';
-  
-  // Inject summary format into SYSTEM_PROMPT dynamically
-  const dynamicSystemPrompt = SYSTEM_PROMPT.replace('{summary_format}', summaryFormat);
-  
+
+  // 3. DYNAMIC ERROR DETECTION & GUIDANCE INJECTION
+  const { errorType, includeCommandReference } = detectErrorContext(commandHistory);
+  const errorGuidance = errorType ? getErrorGuidance(errorType) : '';
+
+  // Only include detailed command reference when:
+  // - Error detected
+  // - After 5+ iterations (complex problem)
+  // - First iteration (to establish baseline knowledge)
+  const commandReference = (includeCommandReference || iteration === 0)
+    ? getCommandReference(true)
+    : '';
+
+  // Inject dynamic content into SYSTEM_PROMPT
+  const dynamicSystemPrompt = SYSTEM_PROMPT
+    .replace('{summary_format}', summaryFormat)
+    .replace('{command_reference}', commandReference);
+
+  // Build final prompt with error guidance if detected
+  const finalSystemPrompt = errorGuidance
+    ? `${dynamicSystemPrompt}\n\n${errorGuidance}`
+    : dynamicSystemPrompt;
+
   return template
     .replace('{user_prompt}', userPrompt)
     .replace('{command_history}', commandHistory)
     .replace('{last_command}', lastCommand.command)
     .replace('{last_output}', lastCommand.output)
     .replace('{summary_reminder}', summaryReminder)
-    .replace('{common_command}', dynamicSystemPrompt);
+    .replace('{common_command}', finalSystemPrompt);
 }
 
 function parseAgentResponse(text = '') {
@@ -908,10 +973,13 @@ async function runAgentIteration({
 }) {
   const commandHistoryText = formatCommandHistory(state.commandHistory);
   const lastCommand = getLastCommand(state.commandHistory);
+
+  // Pass iteration for dynamic command reference injection
   const systemPrompt = renderSystemPrompt(selectPromptTemplate(iteration), {
     userPrompt,
     commandHistory: commandHistoryText,
     lastCommand,
+    iteration,
   });
 
   // Debug: Log processed prompt for each iteration
@@ -919,25 +987,28 @@ async function runAgentIteration({
   console.log(systemPrompt);
   console.log('=== END SYSTEM PROMPT ===\n\n');
 
-  // Build messages array with conversation history
+  // Build messages array - OPTIMIZED for token efficiency
   let messages;
-  
+
   if (iteration === 0) {
     // First iteration: system + user prompt
     messages = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ];
-    // Initialize conversation history
+    // Initialize conversation history WITHOUT duplicating system prompt
+    // System prompt is rebuilt each iteration, no need to store it
     state.conversationHistory = [
-      { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
     ];
   } else {
-    // Subsequent iterations: use full conversation history
-    // Update system prompt with latest command history
-    state.conversationHistory[0] = { role: 'system', content: systemPrompt };
-    messages = [...state.conversationHistory];
+    // Subsequent iterations: rebuild messages with CURRENT system prompt
+    // This prevents resending old/stale system prompts
+    // System prompt is dynamically built based on current error context
+    messages = [
+      { role: 'system', content: systemPrompt },
+      ...state.conversationHistory, // Only user/assistant exchanges
+    ];
   }
 
   const response = await callOpenAICompatibleChat({
@@ -949,7 +1020,7 @@ async function runAgentIteration({
   });
 
   const parsed = parseAgentResponse(response.content || '');
-  
+
   // Store assistant's response in conversation history
   if (response.content) {
     state.conversationHistory.push({
@@ -957,7 +1028,7 @@ async function runAgentIteration({
       content: response.content,
     });
   }
-  
+
   return {
     parsed,
     usage: response.usage,

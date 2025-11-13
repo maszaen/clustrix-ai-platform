@@ -964,14 +964,44 @@ function ensureListeners() {
       });
     }
 
+    // Handle checkbox clicks specifically
+    if (
+      target.closest('.project-item-checkbox') ||
+      target.classList.contains('project-item-checkbox')
+    ) {
+      e.stopPropagation();
+      const checkbox = target.closest('.project-item-checkbox') || target;
+      const checkboxCodeId = checkbox.dataset.codeId;
+
+      if (checkboxCodeId) {
+        if (STATE.selectedCodeIds.has(checkboxCodeId)) {
+          STATE.selectedCodeIds.delete(checkboxCodeId);
+          checkbox.checked = false;
+        } else {
+          STATE.selectedCodeIds.add(checkboxCodeId);
+          checkbox.checked = true;
+        }
+
+        // Auto-enter select mode when first item is selected
+        // Auto-exit select mode when no items are selected
+        if (STATE.selectedCodeIds.size > 0) {
+          STATE.isSelectMode = true;
+        } else {
+          STATE.isSelectMode = false;
+        }
+
+        renderCodesList(); // Re-render to update UI
+      }
+      return;
+    }
+
     // Handle clicks on code item cards
     if (target.closest('.code-item')) {
       const item = target.closest('.code-item');
       const codeId = item?.dataset.codeId;
 
-      // Skip if clicking on checkbox, menu button, or menu dropdown
-      if (target.closest('.project-item-checkbox-wrapper') ||
-          target.closest('.project-menu-btn') ||
+      // Skip if clicking on menu button or menu dropdown
+      if (target.closest('.project-menu-btn') ||
           target.closest('.code-menu-dropdown')) {
         return;
       }

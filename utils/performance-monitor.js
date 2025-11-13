@@ -7,11 +7,12 @@ const os = require('os');
 const { app } = require('electron');
 
 // Toggle monitoring on/off
-const MONITORING_ENABLED = false;
+const MONITORING_ENABLED = true;
 
 class PerformanceMonitor {
     constructor() {
         this.previousCPUUsage = null;
+        this.previousTime = null;
         this.updateInterval = null;
         this.cachedGPUInfo = null;
         this.gpuInfoCacheTime = 0;
@@ -19,28 +20,40 @@ class PerformanceMonitor {
     }
 
     /**
-     * Get CPU usage percentage
+     * Get process-specific CPU usage percentage
      */
-    getCPUUsage() {
-        const cpus = os.cpus();
-        let totalIdle = 0;
-        let totalTick = 0;
+    getProcessCPUUsage() {
+        const currentUsage = process.cpuUsage();
+        const currentTime = Date.now();
 
-        cpus.forEach(cpu => {
-            for (let type in cpu.times) {
-                totalTick += cpu.times[type];
-            }
-            totalIdle += cpu.times.idle;
-        });
+        if (!this.previousCPUUsage || !this.previousTime) {
+            // First call, store values and return 0
+            this.previousCPUUsage = currentUsage;
+            this.previousTime = currentTime;
+            return {
+                usage: '0.0',
+                cores: os.cpus().length
+            };
+        }
 
-        const idle = totalIdle / cpus.length;
-        const total = totalTick / cpus.length;
-        const usage = 100 - ~~(100 * idle / total);
+        // Calculate CPU usage since last call
+        const userDiff = currentUsage.user - this.previousCPUUsage.user;
+        const systemDiff = currentUsage.system - this.previousCPUUsage.system;
+        const timeDiff = (currentTime - this.previousTime) * 1000; // Convert to microseconds
+
+        // Total CPU time used by this process
+        const totalCPUTime = userDiff + systemDiff;
+        
+        // Calculate percentage (divide by number of cores for accurate percentage)
+        const cpuPercent = (totalCPUTime / timeDiff) * 100;
+
+        // Store current values for next calculation
+        this.previousCPUUsage = currentUsage;
+        this.previousTime = currentTime;
 
         return {
-            usage: usage.toFixed(1),
-            cores: cpus.length,
-            model: cpus[0].model
+            usage: cpuPercent.toFixed(1),
+            cores: os.cpus().length
         };
     }
 
@@ -117,24 +130,14 @@ class PerformanceMonitor {
             return { enabled: false };
         }
 
-        const cpu = this.getCPUUsage();
-        const ram = this.getRAMUsage();
+        const cpu = this.getProcessCPUUsage();
         const processMemory = this.getProcessMemory();
-        const gpu = await this.getGPUInfo();
 
         return {
             enabled: true,
             timestamp: Date.now(),
             cpu,
-            ram,
-            processMemory,
-            gpu,
-            platform: {
-                type: os.type(),
-                platform: os.platform(),
-                arch: os.arch(),
-                uptime: os.uptime()
-            }
+            processMemory
         };
     }
 

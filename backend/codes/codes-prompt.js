@@ -1,149 +1,267 @@
 // ===================================================================
-// OPTIMIZED PROMPTS FOR CODE AGENT (Token-Efficient Design)
+// CODE AGENT V2: STATE-BASED DYNAMIC PROMPTING SYSTEM
 // ===================================================================
 //
 // DESIGN PHILOSOPHY:
-// 1. CORE_PROMPT: Compact, essential rules only (~35 lines)
-// 2. COMMAND_REFERENCE: Detailed docs, injected dynamically on error
-// 3. Dynamic injection prevents expensive token costs (92k → ~10-15k)
+// 1. STATE-BASED: Different states = different prompts & response formats
+// 2. HIDDEN TAG: Internal AI thinking (not shown to user, reduces clutter)
+// 3. COMMAND BLOCKING: Prevent dangerous/stuck commands BEFORE execution
+// 4. CONTEXT COMPRESSION: Smart memory management (remember what AI knows)
+// 5. TOKEN EFFICIENT: 6-7x reduction (92k → 12-15k tokens)
 //
-// BEFORE: 151 lines sent every iteration = 92k tokens for simple bug
-// AFTER: 35 lines core + dynamic injection = ~10-15k tokens
+// STATES: EXPLORE → READ → UNDERSTAND → EDIT → VERIFY → DONE
 // ===================================================================
 
 // ===================================
-// CORE SYSTEM PROMPT (Compact Version)
+// AGENT STATES
 // ===================================
-const SYSTEM_PROMPT = `You are a PowerShell-based coding assistant. Solve problems efficiently using PowerShell commands.
+const AGENT_STATES = {
+  EXPLORE: 'explore',     // Finding files, searching codebase
+  READ: 'read',           // Reading file contents
+  UNDERSTAND: 'understand', // Analyzing code/structure
+  EDIT: 'edit',           // Modifying files
+  EXECUTE: 'execute',     // Running tests/commands
+  VERIFY: 'verify',       // Checking results
+  DONE: 'done',           // Task complete
+};
+
+// ===================================
+// DANGEROUS COMMAND PATTERNS (BLOCKING)
+// ===================================
+const DANGEROUS_PATTERNS = [
+  {
+    pattern: /Get-ChildItem.*-Recurse(?!.*-Depth)/i,
+    warning: 'BLOCKED: Unbounded -Recurse without -Depth limit will hang PowerShell',
+    suggestion: 'Add -Depth 2: Get-ChildItem -Filter "*.js" -Depth 2',
+    block: true,
+  },
+  {
+    pattern: /Get-ChildItem.*-Recurse.*\|.*Select-String/i,
+    warning: 'BLOCKED: Piping recursive Get-ChildItem to Select-String will hang',
+    suggestion: 'Use: Get-ChildItem -Filter "*.js" -Path "backend/" -Depth 2 | Select-String "pattern"',
+    block: true,
+  },
+  {
+    pattern: /-Recurse.*\|/i,
+    warning: 'WARNING: Unbounded -Recurse with pipe can be slow',
+    suggestion: 'Add -Depth limit or use specific path filter',
+    block: false, // Warning only
+  },
+  {
+    pattern: /-replace.*[\[\]{}()\\]/,
+    warning: 'FRAGILE: Special regex characters in -replace often fail',
+    suggestion: 'Use Set-FileLine or $lines pattern instead',
+    block: false,
+  },
+];
+
+// ===================================
+// STATE RESPONSE FORMATS
+// ===================================
+const STATE_RESPONSE_FORMATS = {
+  [AGENT_STATES.EXPLORE]: {
+    format: '<hidden>thinking where to look</hidden>\n<cmd>search command</cmd>',
+    useHidden: true,
+    useAnswer: false,
+  },
+  [AGENT_STATES.READ]: {
+    format: '<cmd>read command</cmd>',
+    useHidden: false,
+    useAnswer: false,
+  },
+  [AGENT_STATES.UNDERSTAND]: {
+    format: '<hidden>detailed analysis</hidden>\n<answer>key insights for user</answer>',
+    useHidden: true,
+    useAnswer: true,
+  },
+  [AGENT_STATES.EDIT]: {
+    format: '<answer>what is being changed and why</answer>\n<cmd>edit command</cmd>',
+    useHidden: false,
+    useAnswer: true,
+  },
+  [AGENT_STATES.EXECUTE]: {
+    format: '<hidden>why running this</hidden>\n<cmd>run command</cmd>',
+    useHidden: true,
+    useAnswer: false,
+  },
+  [AGENT_STATES.VERIFY]: {
+    format: '<answer>verification result</answer>\n<cmd>check command (optional)</cmd>',
+    useHidden: false,
+    useAnswer: true,
+  },
+  [AGENT_STATES.DONE]: {
+    format: '<answer>summary of what was done</answer>\n<!END>',
+    useHidden: false,
+    useAnswer: true,
+  },
+};
+
+// ===================================
+// STATE-SPECIFIC RULES
+// ===================================
+const STATE_RULES = {
+  [AGENT_STATES.EXPLORE]: `
+
+**EXPLORE STATE:**
+- Use ls/dir with specific filters: ls *.js, ls backend/codes/
+- NEVER -Recurse without -Depth: Get-ChildItem -Filter "*.js" -Depth 2
+- For search: Select-String "pattern" -Path "specific-file.js"
+- Think in <hidden>, don't explain trivial navigation to user`,
+
+  [AGENT_STATES.READ]: `
+
+**READ STATE:**
+- ALWAYS count first: (gc file.txt).Count
+- If < 300 lines: Show-FileWithLineNumbers -Path file.txt
+- If > 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 100
+- NO <answer> tag for reading, just <cmd>
+- Store learnings in memory (no output needed)`,
+
+  [AGENT_STATES.UNDERSTAND]: `
+
+**UNDERSTAND STATE:**
+- Use <hidden> for detailed analysis (not shown to user)
+- Use <answer> for key insights user needs to know
+- Look for: structure, patterns, bugs, TODOs
+- Summarize, don't repeat every detail`,
+
+  [AGENT_STATES.EDIT]: `
+
+**EDIT STATE:**
+- MUST use <answer> to explain what & why
+- Set-FileLine for single: Set-FileLine -Path file.txt -LineNumber 25 -NewContent "new"
+- Set-MultipleLines for batch: Set-MultipleLines -Path file.txt -Replacements @{25='line1'; 30='line2'}
+- NEVER use -replace for complex patterns
+- Verify line numbers from READ state first`,
+
+  [AGENT_STATES.EXECUTE]: `
+
+**EXECUTE STATE:**
+- Use <hidden> to explain why running
+- Tests: npm test, pytest, node test.js
+- Syntax: node --check file.js, python -m py_compile file.py
+- NO <answer> unless output is important`,
+
+  [AGENT_STATES.VERIFY]: `
+
+**VERIFY STATE:**
+- Check if changes worked
+- Re-read edited sections if needed
+- Use <answer> to report results
+- Move to DONE if verified successfully`,
+
+  [AGENT_STATES.DONE]: `
+
+**DONE STATE:**
+- Summarize accomplishments in <answer>
+- List files modified
+- Mention remaining issues/next steps
+- Add <!END> tag
+- NO new commands`,
+};
+
+// ===================================
+// CORE SYSTEM PROMPT (State-Aware)
+// ===================================
+const SYSTEM_PROMPT = `You are a PowerShell coding assistant. Work in STATES for efficiency.
+
+**CURRENT STATE: {current_state}**
 
 **RESPONSE FORMAT:**
-<answer>Casual Indonesian explanation (gue/lo/bro)</answer>
-<cmd>Single PowerShell command</cmd>{summary_format}
+{state_format}
 
-**CRITICAL RULES:**
-1. **Before editing**: ALWAYS show file with line numbers first: Show-FileWithLineNumbers -Path <file>
-2. **Helper functions** (1-indexed): Set-FileLine, Remove-FileLine, Add-FileLine, Show-FileWithLineNumbers
-3. **Count first**: Large files? → (gc file.txt).Count before reading
-4. **Max 300 lines/read**: Break into chunks if larger (always read the line count first before read "(Get-Content file.txt).Count)")
-5. **NO -replace loops**: If -replace fails once, use $lines pattern instead
-6. **One command per <cmd>**: No bash, no natural language in <cmd> tag
-
-**COMMON PATTERNS:**
-Read: Show-FileWithLineNumbers -Path <file> -StartLine 1 -EndLine 100
-Edit: Set-FileLine -Path <file> -LineNumber 25 -NewContent "new line"
-Search: gc <file> | Select-String "pattern" -Context 2,2
-Run: python <file>.py | node <file>.js | npm test
-
-**DECISION TREE:**
-- Read AGENTS.md first (if exist)
-- Show line count of the file.
-- File < 300 lines → Show full with line numbers first
-- File > 300 lines → Count, then show range
-- Edit needed → Get line #s, use Set-FileLine
-- Stuck/Error → Try different approach, DON'T repeat same command{command_reference}`;
+**CORE RULES:**
+1. Use <hidden> for internal thinking (NOT shown to user)
+2. Use <answer> ONLY when user needs info (state-specific)
+3. NEVER repeat failed commands - try different approach
+4. Count before read: (gc file.txt).Count
+5. Helpers: Show-FileWithLineNumbers, Set-FileLine, Add-FileLine, Set-MultipleLines
+6. Read AGENTS.md first if exists{state_rules}{command_reference}`;
 
 // ===================================
-// COMMAND REFERENCE (Dynamic Injection)
+// COMMAND REFERENCE (Minimal)
 // ===================================
-// Only inject when errors occur or complex operations needed
 const COMMAND_REFERENCE = `
 
-**DETAILED COMMAND REFERENCE:**
+**HELPER FUNCTIONS:**
+Show-FileWithLineNumbers -Path <file> [-StartLine N] [-EndLine N]
+Set-FileLine -Path <file> -LineNumber N -NewContent "text"
+Set-MultipleLines -Path <file> -Replacements @{25='line1'; 30='line2'}
+Remove-FileLine -Path <file> -LineNumber N
+Add-FileLine -Path <file> -LineNumber N -NewContent "text"
+Search-FileWithContext -Path <file> -Pattern "regex" -ContextBefore 2 -ContextAfter 2
+Find-DuplicateLines -Path <file>
 
-**FILE READING:**
-- Show-FileWithLineNumbers -Path <file>                              # Full file with line numbers
-- Show-FileWithLineNumbers -Path <file> -StartLine 50 -EndLine 100  # Specific range
-- (gc <file>).Count                                                  # Count lines
-- gc <file> -Head 20 / -Tail 20                                      # First/last N lines
-- (gc <file>)[10..15]                                                # Lines 11-16 (0-indexed)
+**BASIC COMMANDS:**
+ls / dir - list (add -Filter "*.js")
+gc <file> - read (check .Count first!)
+Select-String "pattern" <file>`;
 
-**SEARCH (with line numbers):**
-- gc <file> | ForEach-Object -Begin {$i=0} -Process {"{0:D3}: {1}" -f ++$i, $_}  # Show with line numbers
-- gc <file> | ForEach-Object -Begin {$i=0} -Process {"{0:D3}: {1}" -f ++$i, $_} | Select-String "pattern"  # Search with line #s
-- gc <file> | Select-String "pattern" -Context 2,5                   # 2 before, 5 after (NO line numbers)
-- Get-ChildItem -Recurse -Filter "*.js" | Select-String "pattern"    # Recursive search
-
-**REGEX PATTERNS:**
-- Select-String "\\bfunction\\s+(\\w+)"        # Function names
-- Select-String "^import.*from"                # Import statements
-- Select-String "class\\s+\\w+\\s*\\{"         # Class definitions
-
-**FILE EDITING (1-indexed helpers):**
-- Set-FileLine -Path <file> -LineNumber 25 -NewContent "new"  # Replace line 25
-- Remove-FileLine -Path <file> -LineNumber 25                     # Delete line 25
-- Add-FileLine -Path <file> -LineNumber 25 -NewContent "new"  # Insert before line 25
-
-**FILE EDITING (0-indexed array):**
-$lines = gc <file>
-$lines[24] = 'new content'    # Line 25 = index 24
-$lines | Set-Content <file>
-
-**OTHER:**
-- (gc <file>) -replace "old", "new" | Set-Content <file>  # Simple replace (AVOID for complex patterns!)
-- ls / dir / Test-Path / pwd / Copy-Item                  # File operations
-- python <file>.py / node <file>.js / npm test            # Execute code
-- python -c "import ast; ast.parse(...)" / node --check   # Syntax validation`;
-
-// ============================================
-// ERROR-SPECIFIC GUIDANCE (Dynamic Injection)
-// ============================================
+// ===================================
+// ERROR-SPECIFIC GUIDANCE
+// ===================================
 const ERROR_GUIDANCE = {
   replace_failed: `
-**-REPLACE COMMAND FAILED:**
-Your -replace command failed. This is common with:
-- Multi-line patterns
-- Special characters (quotes, backslashes, brackets)
-- Complex regex
+**-REPLACE FAILED:**
+Your -replace command failed (common with special chars/regex).
 
-**SOLUTION - Use multi-step $lines approach:**
+**SOLUTION:**
 $lines = gc <file>
 $lines[24] = 'exact new content for line 25'
 $lines | Set-Content <file>
 
-**NEVER retry the same -replace command!**`,
+NEVER retry same -replace!`,
 
   line_numbers_missing: `
-**LINE NUMBERS NEEDED:**
-You tried to edit without knowing exact line numbers. This will fail!
+**NEED LINE NUMBERS:**
+You tried editing without knowing exact line numbers.
 
-**REQUIRED WORKFLOW:**
+**REQUIRED:**
 1. Show-FileWithLineNumbers -Path <file>
 2. Identify exact line number
 3. Set-FileLine -Path <file> -LineNumber X -NewContent "..."`,
 
   file_too_large: `
 **FILE TOO LARGE:**
-Reading entire file failed or took too long.
+Reading entire file failed/slow.
 
 **SOLUTION:**
-1. Count lines: (gc <file>).Count
-2. Read in chunks: Show-FileWithLineNumbers -Path <file> -StartLine 1 -EndLine 300
-3. Process section by section`,
+1. Count: (gc <file>).Count
+2. Read chunks: Show-FileWithLineNumbers -Path <file> -StartLine 1 -EndLine 300`,
 
   command_timeout: `
-**COMMAND TIMED OUT:**
-Your command took > 30 seconds and was killed.
+**COMMAND TIMEOUT:**
+Command took > 30 seconds.
 
 **SOLUTIONS:**
 - Break into smaller operations
 - Process fewer lines per command
-- Avoid expensive operations (recursive searches in large dirs)`,
+- Avoid expensive recursion`,
+
+  command_blocked: `
+**COMMAND BLOCKED:**
+Your command was blocked for safety (would hang PowerShell).
+
+**COMMON FIXES:**
+- Add -Depth to -Recurse: Get-ChildItem -Recurse -Depth 2
+- Use specific filters: Get-ChildItem -Filter "*.js" -Path "backend/"
+- Avoid piping unbounded recursion`,
 };
 
-// ============================================
-// FIRST PROMPT (Initial Request)
-// ============================================
+// ===================================
+// FIRST PROMPT
+// ===================================
 const PROMPT_FIRST = `=== USER REQUEST ===
 {user_prompt}
 
 {common_command}
 
 === TASK ===
-Analyze the request and begin solving. Start working now.`;
+Start solving now. Remember your current state and work efficiently.`;
 
-// ============================================
-// SUBSEQUENT PROMPT (Iterations)
-// ============================================
+// ===================================
+// SUBSEQUENT PROMPT
+// ===================================
 const PROMPT_SUBSEQUENT = `=== ORIGINAL REQUEST ===
 {user_prompt}
 
@@ -158,31 +276,107 @@ Output:
 {common_command}
 
 === TASK ===
-Analyze the output and continue solving.
+Continue solving based on output above.
 {summary_reminder}
 **CONTEXT AWARENESS:**
 - You've executed commands in history - DON'T REPEAT THEM
-- If search failed, try different pattern or read file directly
-- Build on previous work
 - If stuck after 3 attempts, ask user + <!END>
+- Build on previous work, remember what you learned
 
-**Anti-patterns:**
+**ANTI-PATTERNS (NEVER DO):**
 - Repeating same command
-- Using "Select-String | Select-Object LineNumber" (NEVER WORKS!)
+- Get-ChildItem -Recurse without -Depth (BLOCKED!)
 - Editing without line numbers
-- Guessing line numbers
-- Reading huge files without counting
-- Retrying failed -replace (use $lines instead!)
+- Complex -replace patterns (use $lines instead)
 
-**When complete:**
+**WHEN DONE:**
 <answer>Summary (casual Indonesian)</answer>
 <!END>`;
 
-// ============================================
-// HELPER: Inject Command Reference Dynamically
-// ============================================
-function getCommandReference(includeDetailed = false) {
-  return includeDetailed ? COMMAND_REFERENCE : '';
+// ===================================
+// STATE DETECTION
+// ===================================
+function detectCurrentState(commandHistory = [], lastCommand = '', iteration = 0) {
+  // Determine current state from recent activity
+
+  // First iteration = EXPLORE
+  if (iteration === 0) {
+    return AGENT_STATES.EXPLORE;
+  }
+
+  // Check last command type
+  if (lastCommand.includes('Show-FileWithLineNumbers') || lastCommand.includes('gc ')) {
+    return AGENT_STATES.READ;
+  }
+  if (lastCommand.includes('Set-FileLine') || lastCommand.includes('Set-MultipleLines')) {
+    return AGENT_STATES.EDIT;
+  }
+  if (lastCommand.match(/python |node |npm |pytest/)) {
+    return AGENT_STATES.EXECUTE;
+  }
+  if (lastCommand.includes('ls') || lastCommand.includes('dir') || lastCommand.includes('Get-ChildItem')) {
+    return AGENT_STATES.EXPLORE;
+  }
+
+  // Check recent history for verification pattern
+  const recentCommands = commandHistory.slice(-3);
+  for (const entry of recentCommands) {
+    if (entry.command && entry.command.includes('Set-FileLine')) {
+      // Just edited, now should verify
+      return AGENT_STATES.VERIFY;
+    }
+  }
+
+  // Default to UNDERSTAND for analysis
+  return AGENT_STATES.UNDERSTAND;
+}
+
+// ===================================
+// DETECT DANGEROUS COMMANDS
+// ===================================
+function detectDangerousCommand(command = '') {
+  const warnings = [];
+
+  for (const danger of DANGEROUS_PATTERNS) {
+    if (danger.pattern.test(command)) {
+      warnings.push({
+        warning: danger.warning,
+        suggestion: danger.suggestion,
+        block: danger.block,
+      });
+    }
+  }
+
+  return warnings;
+}
+
+// ===================================
+// BUILD STATE-SPECIFIC PROMPT
+// ===================================
+function buildStatePrompt(state, iteration, commandHistory, includeReference = false) {
+  const stateFormat = STATE_RESPONSE_FORMATS[state];
+  const stateRules = STATE_RULES[state] || '';
+
+  // Build command reference (only when needed)
+  const commandRef = (includeReference || iteration === 0 || iteration > 5)
+    ? COMMAND_REFERENCE
+    : '';
+
+  // Build prompt with state-specific rules
+  let prompt = SYSTEM_PROMPT
+    .replace('{current_state}', state.toUpperCase())
+    .replace('{state_format}', stateFormat.format)
+    .replace('{state_rules}', stateRules)
+    .replace('{command_reference}', commandRef);
+
+  return prompt;
+}
+
+// ===================================
+// HELPER FUNCTIONS
+// ===================================
+function getCommandReference(include = false) {
+  return include ? COMMAND_REFERENCE : '';
 }
 
 function getErrorGuidance(errorType = null) {
@@ -192,15 +386,22 @@ function getErrorGuidance(errorType = null) {
   return ERROR_GUIDANCE[errorType];
 }
 
-// ============================================
+// ===================================
 // EXPORTS
-// ============================================
+// ===================================
 module.exports = {
-  PROMPT_FIRST,
-  PROMPT_SUBSEQUENT,
+  AGENT_STATES,
+  DANGEROUS_PATTERNS,
+  STATE_RESPONSE_FORMATS,
+  STATE_RULES,
   SYSTEM_PROMPT,
   COMMAND_REFERENCE,
   ERROR_GUIDANCE,
+  PROMPT_FIRST,
+  PROMPT_SUBSEQUENT,
+  detectCurrentState,
+  detectDangerousCommand,
+  buildStatePrompt,
   getCommandReference,
   getErrorGuidance,
 };

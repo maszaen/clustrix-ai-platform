@@ -4,9 +4,14 @@ const fs = require('fs');
 const { PowerShellSession } = require('./powershell-session');
 const { joinEndpoint } = require('../integration/langchain-helpers');
 const {
+  AGENT_STATES,
+  DANGEROUS_PATTERNS,
   SYSTEM_PROMPT,
   PROMPT_FIRST,
   PROMPT_SUBSEQUENT,
+  detectCurrentState,
+  detectDangerousCommand,
+  buildStatePrompt,
   getCommandReference,
   getErrorGuidance,
 } = require('./codes-prompt');
@@ -516,6 +521,13 @@ function detectErrorContext(commandHistory = []) {
   for (const entry of recentCommands) {
     const { command = '', output = '', exitCode = 0 } = entry;
 
+    // V2: Detect BLOCKED commands
+    if (output.includes('[COMMAND BLOCKED FOR SAFETY]')) {
+      errorType = 'command_blocked';
+      includeCommandReference = true;
+      break;
+    }
+
     // Detect -replace command failures
     if (exitCode !== 0 && command.includes('-replace')) {
       errorType = 'replace_failed';
@@ -547,45 +559,38 @@ function detectErrorContext(commandHistory = []) {
 }
 
 function renderSystemPrompt(template, { userPrompt, commandHistory, lastCommand, iteration = 0 }) {
+  // V2: STATE-BASED PROMPTING
+  // Detect current state from command history
+  const currentState = detectCurrentState(
+    commandHistory,
+    lastCommand.command || '',
+    iteration
+  );
+
   // Check if last output > 10 lines for dynamic injection
   const lastOutputLines = (lastCommand.output || '').split(/\r?\n/).length;
 
-  // 1. Summary FORMAT for SYSTEM_PROMPT (response format section)
-  const summaryFormat = lastOutputLines > 10
-    ? `
-<summary>
-Summarize the command output (one line, max 160 chars)
-</summary>
-
-`
-    : '';
-
-  // 2. Summary REMINDER for PROMPT_SUBSEQUENT (task section)
+  // 1. Summary REMINDER for PROMPT_SUBSEQUENT (task section)
   const summaryReminder = lastOutputLines > 10
     ? `\nRemember to add <summary> tag for your command output.\n`
     : '';
 
-  // 3. DYNAMIC ERROR DETECTION & GUIDANCE INJECTION
+  // 2. V2: Build state-specific system prompt
   const { errorType, includeCommandReference } = detectErrorContext(commandHistory);
   const errorGuidance = errorType ? getErrorGuidance(errorType) : '';
 
-  // Only include detailed command reference when:
-  // - Error detected
-  // - After 5+ iterations (complex problem)
-  // - First iteration (to establish baseline knowledge)
-  const commandReference = (includeCommandReference || iteration === 0)
-    ? getCommandReference(true)
-    : '';
-
-  // Inject dynamic content into SYSTEM_PROMPT
-  const dynamicSystemPrompt = SYSTEM_PROMPT
-    .replace('{summary_format}', summaryFormat)
-    .replace('{command_reference}', commandReference);
+  // Build state-aware prompt (includes state rules + format)
+  const statePrompt = buildStatePrompt(
+    currentState,
+    iteration,
+    commandHistory,
+    includeCommandReference || iteration === 0
+  );
 
   // Build final prompt with error guidance if detected
   const finalSystemPrompt = errorGuidance
-    ? `${dynamicSystemPrompt}\n\n${errorGuidance}`
-    : dynamicSystemPrompt;
+    ? `${statePrompt}\n\n${errorGuidance}`
+    : statePrompt;
 
   return template
     .replace('{user_prompt}', userPrompt)
@@ -597,6 +602,7 @@ Summarize the command output (one line, max 160 chars)
 }
 
 function parseAgentResponse(text = '') {
+  const hiddenMatch = text.match(/<hidden>([\s\S]*?)<\/hidden>/i);
   const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/i);
   const cmdMatch = text.match(/<cmd>([\s\S]*?)<\/cmd>/i);
   const done = /<!END>/i.test(text);
@@ -617,6 +623,7 @@ function parseAgentResponse(text = '') {
   }
 
   return {
+    hidden: hiddenMatch ? hiddenMatch[1].trim() : null, // V2: Internal AI thinking
     answer: cleanAnswer,
     command: cmdMatch ? cmdMatch[1].trim() : '',
     done,
@@ -1050,8 +1057,35 @@ async function executeCommand(state, command, options = {}) {
     };
   }
 
+  // V2: DANGEROUS COMMAND DETECTION & BLOCKING
+  const warnings = detectDangerousCommand(command);
+  const blockedWarnings = warnings.filter(w => w.block);
+
+  if (blockedWarnings.length > 0) {
+    // Command is BLOCKED for safety
+    const blockMessages = blockedWarnings.map(w =>
+      `${w.warning}\n\nSUGGESTION: ${w.suggestion}`
+    ).join('\n\n');
+
+    return {
+      output: `[COMMAND BLOCKED FOR SAFETY]\n\n${blockMessages}\n\nThis command would hang PowerShell. Please try the suggested alternative.`,
+      exitCode: 1,
+      blocked: true,
+      executed: false,
+    };
+  }
+
+  // Show warnings for non-blocking patterns
+  const nonBlockingWarnings = warnings.filter(w => !w.block);
+  if (nonBlockingWarnings.length > 0) {
+    const warnMessages = nonBlockingWarnings.map(w =>
+      `[WARNING] ${w.warning}\nSUGGESTION: ${w.suggestion}`
+    ).join('\n');
+    console.log('\n' + warnMessages + '\n');
+  }
+
   // Note: High impact commands are now handled in processCodeRequest
-  // This function just executes what's given
+  // This function executes validated commands
 
   try {
     const terminal = ensurePowerShellSession(state, state.workspacePath);

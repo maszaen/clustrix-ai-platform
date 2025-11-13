@@ -55,7 +55,7 @@ function Show-FileWithLineNumbers {
     }
 }
 
-function Replace-FileLine {
+function Set-FileLine {
     <#
     .SYNOPSIS
     Replace specific line(s) in a file
@@ -73,7 +73,7 @@ function Replace-FileLine {
     Create backup before modifying (default: $true)
     
     .EXAMPLE
-    Replace-FileLine -Path "index.html" -LineNumber 25 -NewContent "    <h1>New Title</h1>"
+    Set-FileLine -Path "index.html" -LineNumber 25 -NewContent "    <h1>New Title</h1>"
     #>
     param(
         [Parameter(Mandatory=$true)]
@@ -182,7 +182,7 @@ function Remove-FileLine {
     Write-Output "Line $LineNumber removed successfully"
 }
 
-function Insert-FileLine {
+function Add-FileLine {
     <#
     .SYNOPSIS
     Insert a new line at specific position
@@ -200,7 +200,7 @@ function Insert-FileLine {
     Create backup before modifying (default: $true)
     
     .EXAMPLE
-    Insert-FileLine -Path "index.html" -LineNumber 25 -NewContent "    <div class='new-section'>"
+    Add-FileLine -Path "index.html" -LineNumber 25 -NewContent "    <div class='new-section'>"
     #>
     param(
         [Parameter(Mandatory=$true)]
@@ -258,7 +258,7 @@ function Insert-FileLine {
     Write-Output "Line inserted at position $LineNumber successfully"
 }
 
-function Replace-MultipleLines {
+function Set-MultipleLines {
     <#
     .SYNOPSIS
     Replace multiple lines in a file (batch edit)
@@ -274,7 +274,7 @@ function Replace-MultipleLines {
     Create backup before modifying (default: $true)
 
     .EXAMPLE
-    Replace-MultipleLines -Path "index.html" -Replacements @{25='<h1>New</h1>'; 30='<p>Text</p>'}
+    Set-MultipleLines -Path "index.html" -Replacements @{25='<h1>New</h1>'; 30='<p>Text</p>'}
     #>
     param(
         [Parameter(Mandatory=$true)]
@@ -492,4 +492,4 @@ function Find-DuplicateLines {
 }
 
 # Export functions
-Export-ModuleMember -Function Show-FileWithLineNumbers, Replace-FileLine, Remove-FileLine, Insert-FileLine, Replace-MultipleLines, Search-FileWithContext, Get-FileLineRange, Find-DuplicateLines
+Export-ModuleMember -Function Show-FileWithLineNumbers, Set-FileLine, Remove-FileLine, Add-FileLine, Set-MultipleLines, Search-FileWithContext, Get-FileLineRange, Find-DuplicateLines

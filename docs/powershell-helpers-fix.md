@@ -46,12 +46,12 @@ Show-FileWithLineNumbers -Path "index.html" -StartLine 50 -EndLine 100
 - ✅ Handles encoding properly (UTF-8)
 - ✅ Can show specific ranges without array slicing
 
-### 2. Replace-FileLine
+### 2. Set-FileLine
 **Purpose:** Replace specific line in file (1-indexed)
 
 **Usage:**
 ```powershell
-Replace-FileLine -Path "index.html" -LineNumber 25 -NewContent "    <h1>New Title</h1>"
+Set-FileLine -Path "index.html" -LineNumber 25 -NewContent "    <h1>New Title</h1>"
 ```
 
 **Benefits:**
@@ -74,13 +74,13 @@ Remove-FileLine -Path "index.html" -LineNumber 25
 - ✅ Validates line number range
 - ✅ Safe array manipulation
 
-### 4. Insert-FileLine
+### 4. Add-FileLine
 **Purpose:** Insert new line at specific position (1-indexed)
 
 **Usage:**
 ```powershell
 # Insert before line 25
-Insert-FileLine -Path "index.html" -LineNumber 25 -NewContent "    <div class='new-section'>"
+Add-FileLine -Path "index.html" -LineNumber 25 -NewContent "    <div class='new-section'>"
 ```
 
 **Benefits:**
@@ -106,9 +106,9 @@ Updated prompt to recommend helper functions:
 
 ```javascript
 **RECOMMENDED - Use helper functions (more reliable, 1-indexed):**
-- Replace-FileLine -Path <file> -LineNumber 25 -NewContent "new content"
+- Set-FileLine -Path <file> -LineNumber 25 -NewContent "new content"
 - Remove-FileLine -Path <file> -LineNumber 25
-- Insert-FileLine -Path <file> -LineNumber 25 -NewContent "new line"
+- Add-FileLine -Path <file> -LineNumber 25 -NewContent "new line"
 ```
 
 ## Comparison: Before vs After
@@ -135,7 +135,7 @@ Show-FileWithLineNumbers -Path "index.html" -StartLine 100 -EndLine 150
 # ...
 
 # Replace line 25 (WORKS, no confusion):
-Replace-FileLine -Path "index.html" -LineNumber 25 -NewContent "    <h1>New Title</h1>"
+Set-FileLine -Path "index.html" -LineNumber 25 -NewContent "    <h1>New Title</h1>"
 # Output: Backup created: index.html.backup
 #         Line 25 replaced successfully
 ```

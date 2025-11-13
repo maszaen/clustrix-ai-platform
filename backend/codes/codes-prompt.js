@@ -22,7 +22,7 @@ const SYSTEM_PROMPT = `You are a PowerShell-based coding assistant. Solve proble
 
 **CRITICAL RULES:**
 1. **Before editing**: ALWAYS show file with line numbers first: Show-FileWithLineNumbers -Path <file>
-2. **Helper functions** (1-indexed): Replace-FileLine, Remove-FileLine, Insert-FileLine, Show-FileWithLineNumbers
+2. **Helper functions** (1-indexed): Set-FileLine, Remove-FileLine, Add-FileLine, Show-FileWithLineNumbers
 3. **Count first**: Large files? → (gc file.txt).Count before reading
 4. **Max 300 lines/read**: Break into chunks if larger
 5. **NO -replace loops**: If -replace fails once, use $lines pattern instead
@@ -30,14 +30,14 @@ const SYSTEM_PROMPT = `You are a PowerShell-based coding assistant. Solve proble
 
 **COMMON PATTERNS:**
 Read: Show-FileWithLineNumbers -Path <file> -StartLine 1 -EndLine 100
-Edit: Replace-FileLine -Path <file> -LineNumber 25 -NewContent "new line"
+Edit: Set-FileLine -Path <file> -LineNumber 25 -NewContent "new line"
 Search: gc <file> | Select-String "pattern" -Context 2,2
 Run: python <file>.py | node <file>.js | npm test
 
 **DECISION TREE:**
 - File < 300 lines → Show full with line numbers first
 - File > 300 lines → Count, then show range
-- Edit needed → Get line #s, use Replace-FileLine
+- Edit needed → Get line #s, use Set-FileLine
 - Stuck/Error → Try different approach, DON'T repeat same command{command_reference}`;
 
 // ===================================
@@ -67,9 +67,9 @@ const COMMAND_REFERENCE = `
 - Select-String "class\\s+\\w+\\s*\\{"         # Class definitions
 
 **FILE EDITING (1-indexed helpers):**
-- Replace-FileLine -Path <file> -LineNumber 25 -NewContent "new"  # Replace line 25
+- Set-FileLine -Path <file> -LineNumber 25 -NewContent "new"  # Replace line 25
 - Remove-FileLine -Path <file> -LineNumber 25                     # Delete line 25
-- Insert-FileLine -Path <file> -LineNumber 25 -NewContent "new"  # Insert before line 25
+- Add-FileLine -Path <file> -LineNumber 25 -NewContent "new"  # Insert before line 25
 
 **FILE EDITING (0-indexed array):**
 $lines = gc <file>
@@ -107,7 +107,7 @@ You tried to edit without knowing exact line numbers. This will fail!
 **REQUIRED WORKFLOW:**
 1. Show-FileWithLineNumbers -Path <file>
 2. Identify exact line number
-3. Replace-FileLine -Path <file> -LineNumber X -NewContent "..."`,
+3. Set-FileLine -Path <file> -LineNumber X -NewContent "..."`,
 
   file_too_large: `
 **FILE TOO LARGE:**

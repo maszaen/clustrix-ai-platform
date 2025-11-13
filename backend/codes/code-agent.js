@@ -616,10 +616,16 @@ function parseAgentResponse(text = '') {
     cleanAnswer = cleanAnswer.replace(/<!END>/gi, '').trim();
   }
 
-  // If no <answer> tag found, use the entire text as answer (fallback for unformatted responses)
-  // Clean all XML-like tags from the text to get clean answer
+  // V2: If no <answer> tag found, check if <hidden> tag exists
+  // If ONLY <hidden> tag exists, answer should be empty (hidden content is internal)
+  // Only use fallback if NEITHER <answer> NOR <hidden> tag found
   if (!answerMatch && text.trim()) {
-    cleanAnswer = text.replace(/<[^>]*>/g, '').trim();
+    if (!hiddenMatch) {
+      // No structured tags at all - fallback to entire text (unformatted response)
+      cleanAnswer = text.replace(/<[^>]*>/g, '').trim();
+    }
+    // else: hidden tag exists but no answer tag = intentional (EXPLORE/EXECUTE state)
+    // answer should remain empty - hidden content is for AI only
   }
 
   return {
@@ -1227,11 +1233,18 @@ async function processCodeRequest({
     }
 
     // STEP 1: Send response + command BEFORE executing
+    // V2: Only show "No response provided" if there's NO answer, NO hidden content, AND NO command
+    // If hidden/command exists, answer can be intentionally empty (EXPLORE/EXECUTE states)
+    let answerToSend = parsed.answer;
+    if (!answerToSend && !parsed.hidden && !parsed.command) {
+      answerToSend = 'No response provided.';
+    }
+
     const responseCommandChunk = formatResponseAndCommand({
-      answer: parsed.answer || 'No response provided.',
+      answer: answerToSend,
       command: parsed.command,
     });
-    
+
     if (responseCommandChunk && typeof onChunk === 'function') {
       try {
         chunks.push(responseCommandChunk);

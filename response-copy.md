@@ -503,7 +503,7 @@ Gue mulai perbaiki dari yang paling krusial dulu - syntax error di tag link dan 
 
 
 ```powershell
-Replace-FileLine -Path "H:\VSCode\Hotel Landing Page\hotel-landing-page\index.html" -LineNumber 86 -NewContent "              <a href=\"#\">Continue Reading</a>"
+Set-FileLine -Path "H:\VSCode\Hotel Landing Page\hotel-landing-page\index.html" -LineNumber 86 -NewContent "              <a href=\"#\">Continue Reading</a>"
 ```
 ```text
 Backup created: H:\VSCode\Hotel Landing Page\hotel-landing-page\index.html.backup
@@ -515,7 +515,7 @@ Oke bro, gue udah perbaiki syntax error di baris 86. Sekarang gue perbaiki synta
 
 
 ```powershell
-Replace-FileLine -Path "H:\VSCode\Hotel Landing Page\hotel-landing-page\index.html" -LineNumber 105 -NewContent "                  <span class=\"fa fa-cutlery orange\" aria-hidden=\"true\"></span>"
+Set-FileLine -Path "H:\VSCode\Hotel Landing Page\hotel-landing-page\index.html" -LineNumber 105 -NewContent "                  <span class=\"fa fa-cutlery orange\" aria-hidden=\"true\"></span>"
 ```
 ```text
 Cannot process argument transformation on parameter 'Backup'. Cannot convert value "System.String" to type "System.Boolean". Boolean parameters accept only Boolean values and numbers, such as $True, $False, 1 or 0.

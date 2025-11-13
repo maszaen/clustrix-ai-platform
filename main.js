@@ -5005,61 +5005,31 @@ async function runWebSearchChat(event, payload) {
 // Performance Monitoring IPC Handlers
 // ============================================================================
 
-// Initialize performance monitor
+// Initialize performance monitor with auto-start
 if (MONITORING_ENABLED) {
   performanceMonitor = new PerformanceMonitor();
   log('PERFORMANCE', 1, 'init', 'Performance monitor initialized');
+  
+  // Auto-start monitoring with console logging
+  performanceMonitor.startMonitoring((metrics) => {
+    // Format and log metrics - only Clustrix app resources
+    const time = new Date(metrics.timestamp).toLocaleTimeString('id-ID');
+    const cpuUsage = metrics.cpu.usage;
+    const heapUsed = metrics.processMemory.heapUsed;
+    const heapTotal = metrics.processMemory.heapTotal;
+    const rss = metrics.processMemory.rss;
+    const external = metrics.processMemory.external;
+    
+    console.log('\n' + '='.repeat(70));
+    console.log(`[${time}] CLUSTRIX PERFORMANCE`);
+    console.log('='.repeat(70));
+    console.log(`CPU Usage:     ${cpuUsage}%`);
+    console.log(`Memory (Heap): ${heapUsed} MB / ${heapTotal} MB`);
+    console.log(`Memory (RSS):  ${rss} MB`);
+    console.log(`Memory (Ext):  ${external} MB`);
+    console.log('='.repeat(70) + '\n');
+  }, 2000); // Update every 2 seconds
 }
-
-// Get current performance metrics
-ipcMain.handle('monitoring:getMetrics', async () => {
-  if (!MONITORING_ENABLED || !performanceMonitor) {
-    return { enabled: false };
-  }
-
-  try {
-    const metrics = await performanceMonitor.getAllMetrics();
-    return metrics;
-  } catch (error) {
-    log('PERFORMANCE', 3, 'monitoring:getMetrics', 'Failed to get metrics', { error: error.message });
-    return { enabled: true, error: error.message };
-  }
-});
-
-// Start continuous monitoring
-ipcMain.handle('monitoring:start', async (event) => {
-  if (!MONITORING_ENABLED || !performanceMonitor) {
-    return { success: false, message: 'Monitoring is disabled' };
-  }
-
-  try {
-    performanceMonitor.startMonitoring((metrics) => {
-      event.sender.send('monitoring:update', metrics);
-    }, 2000); // Update every 2 seconds to reduce overhead
-
-    log('PERFORMANCE', 1, 'monitoring:start', 'Continuous monitoring started');
-    return { success: true };
-  } catch (error) {
-    log('PERFORMANCE', 3, 'monitoring:start', 'Failed to start monitoring', { error: error.message });
-    return { success: false, error: error.message };
-  }
-});
-
-// Stop continuous monitoring
-ipcMain.handle('monitoring:stop', async () => {
-  if (!MONITORING_ENABLED || !performanceMonitor) {
-    return { success: false, message: 'Monitoring is disabled' };
-  }
-
-  try {
-    performanceMonitor.stopMonitoring();
-    log('PERFORMANCE', 1, 'monitoring:stop', 'Continuous monitoring stopped');
-    return { success: true };
-  } catch (error) {
-    log('PERFORMANCE', 3, 'monitoring:stop', 'Failed to stop monitoring', { error: error.message });
-    return { success: false, error: error.message };
-  }
-});
 
 // ============================================================================
 

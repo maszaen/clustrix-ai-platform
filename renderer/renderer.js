@@ -7,7 +7,6 @@ import { showBrowserWarningModal,
   closeModalWithAnimation,
   openModalWithAnimation,
   showConfirmationModal } from './ui/modal.mjs'
-import { monitoringUI } from './utils/monitoring-ui.mjs';
 import {
   cacheSession,
   clearSessionCache,
@@ -19578,10 +19577,5 @@ window.DEBUG = {
       el.classList.remove('force-hover-state');
     });
     activeHoverElements.clear();
-  },
-
-  // Performance monitoring
-  startMonitoring: () => monitoringUI.start(),
-  stopMonitoring: () => monitoringUI.stop(),
-  toggleMonitoring: () => monitoringUI.toggle()
+  }
 };

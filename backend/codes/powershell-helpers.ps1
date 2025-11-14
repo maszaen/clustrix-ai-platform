@@ -303,15 +303,46 @@ function Set-MultipleLines {
     $totalLines = $lines.Count
     $changedCount = 0
 
-    # Apply all replacements
+    # Separate valid and invalid line numbers
+    $validEdits = @{}
+    $invalidLines = @()
+
     foreach ($lineNum in $Replacements.Keys) {
         if ($lineNum -lt 1 -or $lineNum -gt $totalLines) {
-            Write-Warning "Line number $lineNum is out of range (1-$totalLines), skipping"
-            continue
+            $invalidLines += $lineNum
+        } else {
+            $validEdits[$lineNum] = $Replacements[$lineNum]
         }
+    }
 
+    # Report invalid lines with actionable guidance (single summary, no spam)
+    if ($invalidLines.Count -gt 0) {
+        $sortedInvalid = $invalidLines | Sort-Object
+        $minInvalid = $sortedInvalid[0]
+        $maxInvalid = $sortedInvalid[-1]
+
+        Write-Output ""
+        Write-Output "========================================"
+        Write-Output "WARNING: Some edits are out of range"
+        Write-Output "========================================"
+        Write-Output ""
+        Write-Output "File has $totalLines lines (range: 1-$totalLines)"
+        Write-Output "Skipped $($invalidLines.Count) invalid line numbers: $minInvalid-$maxInvalid"
+        Write-Output ""
+        Write-Output "SOLUTION:"
+        Write-Output "  1. Read file first: Show-FileWithLineNumbers -Path `"$Path`""
+        Write-Output "  2. Check actual line count"
+        Write-Output "  3. Use Set-Content to rewrite entire file if adding new content"
+        Write-Output ""
+        Write-Output "Proceeding with $($validEdits.Count) valid edits only..."
+        Write-Output "========================================"
+        Write-Output ""
+    }
+
+    # Apply valid replacements only
+    foreach ($lineNum in $validEdits.Keys) {
         $idx = $lineNum - 1
-        $lines[$idx] = $Replacements[$lineNum]
+        $lines[$idx] = $validEdits[$lineNum]
         $changedCount++
     }
 

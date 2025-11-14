@@ -1328,6 +1328,9 @@ async function processCodeRequest({
     }
   }
 
+  // Track the final answer for storing in code_messages (NOT iteration feedback)
+  let finalAnswer = null;
+
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
     if (typeof shouldCancel === 'function' && shouldCancel()) {
       log('CODES', 1, 'processCodeRequest', 'Streaming cancelled before iteration', {
@@ -1382,6 +1385,21 @@ async function processCodeRequest({
     let answerToSend = parsed.answer;
     if (!answerToSend && !parsed.hidden && !parsed.command) {
       answerToSend = 'No response provided.';
+    }
+
+    // Track final answer for code_messages storage (only meaningful user-facing content)
+    // Skip iteration feedback like "Command executed: X"
+    if (parsed.answer && parsed.answer.trim()) {
+      // Only update if it's NOT iteration feedback
+      const isIterationFeedback =
+        parsed.answer.startsWith('Command executed:') ||
+        parsed.answer.startsWith('[ERROR]') ||
+        parsed.answer.startsWith('[RESULT]') ||
+        parsed.answer.startsWith('[SYSTEM]');
+
+      if (!isIterationFeedback) {
+        finalAnswer = parsed.answer.trim();
+      }
     }
 
     const responseCommandChunk = formatResponseAndCommand({
@@ -1591,28 +1609,20 @@ async function processCodeRequest({
   }
 
   // Store final AI answer in code_messages table (clean text, no markdown)
-  // Extract the last answer from conversation history
-  if (db && sessionId) {
+  // Only store meaningful user-facing answers, NOT iteration feedback like "Command executed: X"
+  if (db && sessionId && finalAnswer) {
     try {
-      // Find last assistant message in conversationHistory
-      const lastAssistantMsg = state.conversationHistory
-        .slice()
-        .reverse()
-        .find(msg => msg.role === 'assistant');
+      const existingMessages = db.getCodeMessages?.(sessionId) || [];
+      const nextMessageIndex = existingMessages.length;
 
-      if (lastAssistantMsg && lastAssistantMsg.content) {
-        const existingMessages = db.getCodeMessages?.(sessionId) || [];
-        const nextMessageIndex = existingMessages.length;
+      // Store clean final answer (not iteration feedback)
+      db.addCodeMessage?.(sessionId, 'assistant', finalAnswer, nextMessageIndex);
 
-        // Store clean answer (already cleaned in conversationHistory)
-        db.addCodeMessage?.(sessionId, 'assistant', lastAssistantMsg.content, nextMessageIndex);
-
-        log('CODES', 1, 'processCodeRequest', 'Stored AI answer in code_messages', {
-          sessionId,
-          messageIndex: nextMessageIndex,
-          contentLength: lastAssistantMsg.content.length,
-        });
-      }
+      log('CODES', 1, 'processCodeRequest', 'Stored final AI answer in code_messages', {
+        sessionId,
+        messageIndex: nextMessageIndex,
+        contentLength: finalAnswer.length,
+      });
     } catch (error) {
       log('CODES', 3, 'processCodeRequest', 'Failed to store AI answer', {
         sessionId,

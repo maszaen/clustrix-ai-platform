@@ -370,7 +370,6 @@ function getSessionState(sessionId) {
     state = {
       commandHistory: [],
       conversationHistory: [], // Iteration history within current request
-      previousMessages: [], // Message history from database (across requests)
       terminal: null,
       lastUsed: Date.now(),
       iterationCount: 0,
@@ -559,7 +558,7 @@ function detectErrorContext(commandHistory = []) {
   return { errorType, includeCommandReference };
 }
 
-function renderSystemPrompt(template, { userPrompt, commandHistory, lastCommand, iteration = 0 }) {
+function renderSystemPrompt(template, { userPrompt, commandHistory, lastCommand, iteration = 0, previousMessagesHistory = '' }) {
   // V2: STATE-BASED PROMPTING
   // Detect current state from command history
   const currentState = detectCurrentState(
@@ -593,13 +592,19 @@ function renderSystemPrompt(template, { userPrompt, commandHistory, lastCommand,
     ? `${statePrompt}\n\n${errorGuidance}`
     : statePrompt;
 
+  // Inject previous messages history before current user prompt
+  const fullContext = previousMessagesHistory
+    ? `${previousMessagesHistory}\n=== CURRENT USER PROMPT ===\n{user_prompt}`
+    : '{user_prompt}';
+
   return template
-    .replace('{user_prompt}', userPrompt)
+    .replace('{user_prompt}', fullContext)
     .replace('{command_history}', commandHistory)
     .replace('{last_command}', lastCommand.command)
     .replace('{last_output}', lastCommand.output)
     .replace('{summary_reminder}', summaryReminder)
-    .replace('{common_command}', finalSystemPrompt);
+    .replace('{common_command}', finalSystemPrompt)
+    .replace('{user_prompt}', userPrompt); // Replace the placeholder with actual user prompt
 }
 
 function parseAgentResponse(text = '') {
@@ -1020,9 +1025,58 @@ async function runAgentIteration({
   model,
   baseUrl,
   apiKey,
+  db,
+  sessionId,
 }) {
   const commandHistoryText = formatCommandHistory(state.commandHistory);
   const lastCommand = getLastCommand(state.commandHistory);
+
+  // Load previous message iterations from database and format into system prompt
+  let previousMessagesHistory = '';
+  if (db && sessionId) {
+    try {
+      const dbMessages = db.getMessages?.(sessionId) || [];
+
+      // Get last 3 user messages (max)
+      const userMessages = dbMessages.filter(m => m.role === 'user').slice(-3);
+
+      if (userMessages.length > 0) {
+        const historyParts = [];
+
+        for (let i = 0; i < userMessages.length; i++) {
+          const msgIndex = userMessages[i].message_index;
+          const msgContent = userMessages[i].content;
+
+          // Load iterations for this message
+          const iterations = db.getCodeIterations?.(sessionId, msgIndex) || [];
+
+          if (iterations.length > 0) {
+            historyParts.push(`\nPREVIOUS USER PROMPT (message ${msgIndex}):`);
+            historyParts.push(msgContent);
+            historyParts.push('\n=== COMMAND HISTORY (MESSAGE ' + msgIndex + ') ===');
+
+            iterations.forEach((iter, idx) => {
+              const cmd = iter.command || '[no command]';
+              const output = iter.output || 'No output';
+              const exitCode = iter.exit_code ?? 0;
+              historyParts.push(`#${idx + 1} ${cmd}`);
+              historyParts.push(`Output:\n${output}`);
+              historyParts.push(`Exit Code: ${exitCode}\n`);
+            });
+          }
+        }
+
+        if (historyParts.length > 0) {
+          previousMessagesHistory = historyParts.join('\n') + '\n';
+        }
+      }
+    } catch (error) {
+      log('CODES', 3, 'runAgentIteration', 'Failed to load previous iterations', {
+        sessionId,
+        error: error?.message || error,
+      });
+    }
+  }
 
   // Pass iteration for dynamic command reference injection
   const systemPrompt = renderSystemPrompt(selectPromptTemplate(iteration), {
@@ -1030,6 +1084,7 @@ async function runAgentIteration({
     commandHistory: commandHistoryText,
     lastCommand,
     iteration,
+    previousMessagesHistory,
   });
 
   // Debug: Log processed prompt for each iteration
@@ -1042,11 +1097,9 @@ async function runAgentIteration({
 
   if (iteration === 0) {
     // First iteration OF THIS REQUEST
-    // Include: system + previousMessages (from DB) + current user prompt
-    // Initialize conversationHistory with current user prompt
+    // Previous iterations loaded into system prompt, not message bodies
     messages = [
       { role: 'system', content: systemPrompt },
-      ...state.previousMessages, // Previous conversation from database
       { role: 'user', content: userPrompt }, // Current request
     ];
 
@@ -1056,10 +1109,9 @@ async function runAgentIteration({
     ];
   } else {
     // Subsequent iterations: rebuild messages with CURRENT system prompt
-    // Include: system + previousMessages (from DB) + conversationHistory (iterations)
+    // Include: system + conversationHistory (current request iterations)
     messages = [
       { role: 'system', content: systemPrompt },
-      ...state.previousMessages, // Previous conversation from database
       ...state.conversationHistory, // Current request's iteration history
     ];
   }
@@ -1258,30 +1310,6 @@ async function processCodeRequest({
     state.workspacePath = ensureDirectoryExists(codeRecord.workspace_path || codeRecord.workspacePath || '') || state.workspacePath;
   }
 
-  // Load previous conversation history from database
-  // This includes ALL previous user messages and their full iteration histories
-  if (state.previousMessages.length === 0 && db && sessionId) {
-    try {
-      const dbMessages = db.getMessages?.(sessionId) || [];
-
-      // Convert database messages to conversation format
-      state.previousMessages = dbMessages.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      }));
-
-      log('CODES', 1, 'processCodeRequest', 'Loaded previous messages from database', {
-        sessionId,
-        totalMessages: dbMessages.length,
-      });
-    } catch (error) {
-      log('CODES', 3, 'processCodeRequest', 'Failed to load previous messages', {
-        sessionId,
-        error: error?.message || error,
-      });
-    }
-  }
-
   ensurePowerShellSession(state, state.workspacePath || process.cwd());
 
   const userPromptWithContext = buildUserPrompt({
@@ -1290,10 +1318,15 @@ async function processCodeRequest({
     workspacePath: state.workspacePath,
   });
 
+  // Get current message index for this request
+  const existingMessages = db?.getMessages?.(sessionId) || [];
+  const currentMessageIndex = existingMessages.length;
+
   const chunks = [];
   let usage = null;
   let lastCommandErrorPattern = null;
   let sameErrorCount = 0;
+  let finalAnswer = null; // Track final answer to save to messages table
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
     if (typeof shouldCancel === 'function' && shouldCancel()) {
@@ -1312,6 +1345,8 @@ async function processCodeRequest({
       model,
       baseUrl,
       apiKey,
+      db,
+      sessionId,
     });
 
     if (typeof shouldCancel === 'function' && shouldCancel()) {
@@ -1323,6 +1358,11 @@ async function processCodeRequest({
     }
 
     usage = mergeUsage(usage, iterationUsage);
+
+    // Track final answer if this is meaningful content (not just command)
+    if (parsed.answer && parsed.answer.trim() && parsed.done) {
+      finalAnswer = parsed.answer.trim();
+    }
 
     // STEP 0: Send todo/checklist if present (for planning & progress tracking)
     const todoChunk = formatTodoChunk(parsed.todo, parsed.checklist, iteration);
@@ -1483,6 +1523,26 @@ async function processCodeRequest({
         role: 'user',
         content: feedbackMessage,
       });
+
+      // Save iteration to code_iterations table
+      if (db && sessionId) {
+        try {
+          db.addCodeIteration?.(sessionId, currentMessageIndex, iteration, {
+            command: parsed.command,
+            output: truncateOutput(output, 'older'),
+            exitCode,
+            answer: parsed.answer || null,
+            hidden: parsed.hidden || null,
+            summary: entrySummary,
+          });
+        } catch (error) {
+          log('CODES', 3, 'processCodeRequest', 'Failed to save iteration', {
+            sessionId,
+            iteration,
+            error: error?.message || error,
+          });
+        }
+      }
     }
 
     // Detect repeated failure pattern (e.g., same syntax error twice in a row)
@@ -1557,34 +1617,43 @@ async function processCodeRequest({
     }
   }
 
-  // Save full conversation history to database for future context
-  // This persists ALL iterations from this request so next request has full context
-  if (db && sessionId && state.conversationHistory.length > 0) {
+  // Save user prompt and final answer to messages table (clean, no iterations)
+  // Iterations are stored in code_iterations table
+  if (db && sessionId) {
     try {
-      // Get current message count to determine starting index
-      const existingMessages = db.getMessages?.(sessionId) || [];
-      let nextMessageIndex = existingMessages.length;
+      // Save user message
+      db.addMessage?.(
+        sessionId,
+        'user',
+        userPrompt,
+        {},
+        currentMessageIndex,
+        Date.now()
+      );
 
-      // Save each message in conversationHistory to database
-      for (const msg of state.conversationHistory) {
+      // Save assistant final answer (if exists)
+      if (finalAnswer) {
         db.addMessage?.(
           sessionId,
-          msg.role,
-          msg.content,
-          {}, // metadata (empty for code agent)
-          nextMessageIndex,
+          'assistant',
+          finalAnswer,
+          {},
+          currentMessageIndex + 1,
           Date.now()
         );
-        nextMessageIndex++;
-      }
 
-      log('CODES', 1, 'processCodeRequest', 'Saved conversation history to database', {
-        sessionId,
-        messagesSaved: state.conversationHistory.length,
-        totalMessages: nextMessageIndex,
-      });
+        log('CODES', 1, 'processCodeRequest', 'Saved user message and final answer to database', {
+          sessionId,
+          messageIndex: currentMessageIndex,
+        });
+      } else {
+        log('CODES', 1, 'processCodeRequest', 'Saved user message to database (no final answer)', {
+          sessionId,
+          messageIndex: currentMessageIndex,
+        });
+      }
     } catch (error) {
-      log('CODES', 3, 'processCodeRequest', 'Failed to save conversation history', {
+      log('CODES', 3, 'processCodeRequest', 'Failed to save messages', {
         sessionId,
         error: error?.message || error,
       });

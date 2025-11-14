@@ -177,6 +177,24 @@ class DatabaseManager {
 
       CREATE INDEX IF NOT EXISTS idx_codes_created ON codes(created_at DESC);
 
+      CREATE TABLE IF NOT EXISTS code_iterations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        message_index INTEGER NOT NULL,
+        iteration INTEGER NOT NULL,
+        command TEXT,
+        output TEXT,
+        exit_code INTEGER,
+        answer TEXT,
+        hidden TEXT,
+        summary TEXT,
+        created_at INTEGER NOT NULL,
+
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_code_iterations_session ON code_iterations(session_id, message_index, iteration);
+
       CREATE TABLE IF NOT EXISTS drafts (
         id TEXT PRIMARY KEY,
         content TEXT NOT NULL,
@@ -641,6 +659,44 @@ class DatabaseManager {
     return this.db.prepare(`
       DELETE FROM codes WHERE id = ?
     `).run(codeId);
+  }
+
+  // Code iterations methods
+  addCodeIteration(sessionId, messageIndex, iteration, data) {
+    const stmt = this.db.prepare(`
+      INSERT INTO code_iterations
+      (session_id, message_index, iteration, command, output, exit_code, answer, hidden, summary, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    return stmt.run(
+      sessionId,
+      messageIndex,
+      iteration,
+      data.command || null,
+      data.output || null,
+      data.exitCode ?? null,
+      data.answer || null,
+      data.hidden || null,
+      data.summary || null,
+      Date.now()
+    );
+  }
+
+  getCodeIterations(sessionId, messageIndex = null) {
+    if (messageIndex !== null) {
+      return this.db.prepare(`
+        SELECT * FROM code_iterations
+        WHERE session_id = ? AND message_index = ?
+        ORDER BY iteration ASC
+      `).all(sessionId, messageIndex);
+    }
+
+    return this.db.prepare(`
+      SELECT * FROM code_iterations
+      WHERE session_id = ?
+      ORDER BY message_index ASC, iteration ASC
+    `).all(sessionId);
   }
 
   getSetting(key) {

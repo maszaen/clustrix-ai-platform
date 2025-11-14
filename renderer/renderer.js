@@ -12823,99 +12823,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     if (footer) footer.innerHTML = "";
   }
 
-  function renderContinuePlaceholder(
-    aiNode,
-    session,
-    messageIndex,
-    seedText,
-    opts = {},
-  ) {
-    const { disabledMs = 3000, interrupted = false } = opts;
-
-    collapseSpacer();
-
-    if (!aiNode || !document.contains(aiNode)) return;
-
-    let footer = aiNode.querySelector(".message-footer");
-    if (!footer) {
-      footer = document.createElement("div");
-      footer.className = "message-footer";
-      const messageContent = aiNode.querySelector(".message-content");
-      if (messageContent) {
-        messageContent.appendChild(footer);
-      } else {
-        aiNode.appendChild(footer);
-      }
-    }
-    footer.innerHTML = "";
-
-    const placeholderCard = document.createElement("div");
-    placeholderCard.className = "continue-placeholder";
-
-    const hint = document.createElement("span");
-    hint.className = "placeholder-hint";
-    hint.textContent = interrupted
-      ? "Response interrupted by user"
-      : "Do you see incomplete response?";
-
-    const btn = document.createElement("button");
-    btn.className = "primary-btn continue-fragment";
-    btn.textContent = interrupted ? "Continue" : "Continue";
-    btn.disabled = true;
-    if (interrupted) btn.title = "Continue from interrupted point";
-
-    placeholderCard.appendChild(hint);
-    placeholderCard.appendChild(btn);
-
-    footer.appendChild(placeholderCard);
-
-    setTimeout(
-      () => {
-        btn.disabled = false;
-      },
-      Math.max(0, disabledMs),
-    );
-
-    btn.addEventListener("click", () => {
-      footer.innerHTML = "";
-
-      const existingMessage = session.messages[messageIndex];
-      const modelInfo = Array.isArray(existingMessage)
-        ? existingMessage[2]
-        : null;
-      session.messages[messageIndex] = ["ai", seedText, modelInfo];
-      log(
-        "STREAM",
-        2,
-        "renderContinuePlaceholder:click",
-        "Continuing stream, preserving modelInfo.",
-        { modelInfo },
-      );
-
-      const msgs = buildResumeMessagesFromSession(
-        session,
-        messageIndex,
-        seedText,
-      );
-
-      const textEl = aiNode.querySelector(".message-text");
-      if (textEl) {
-        // For continue, append thinking markup to existing partial content
-        textEl.innerHTML += getThinkingMarkup();
-        scheduleThinkingText(aiNode);
-      }
-
-      startStream(
-        session,
-        "[System] Resume",
-        aiNode,
-        messageIndex,
-        false,
-        msgs,
-      );
-      updateInputState?.();
-    });
-  }
+  // Continue placeholder removed - if interrupted, just finalize
 
   const finalize = async ({ interrupted = false, reason = null } = {}) => {
     log("STREAM", 2, "finalize", "Finalizing stream", {
@@ -13129,13 +13037,8 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
         clearContinuePlaceholder(aiNode);
 
-        if (hasContent && !isComplete && !interrupted) {
-          renderContinuePlaceholder(aiNode, session, messageIndex, finalDisplay, {
-            disabledMs: 1200,
-            interrupted: false,
-          });
-          restoreAiMessageAutoHeight();
-        }
+        // Continue placeholder removed - user requested to finalize on interrupt instead
+        // If interrupted, response is already finalized by the finalize() call
 
         renderAiFinalActions(aiNode, finalMessageToSave, messageIndex);
       }
@@ -16542,67 +16445,10 @@ function setupEventListeners() {
         }
       }
 
-      let footer = aiNode.querySelector(".message-footer");
-      if (!footer) {
-        footer = document.createElement("div");
-        footer.className = "message-footer";
-        const messageContent = aiNode.querySelector(".message-content");
-        if (messageContent) messageContent.appendChild(footer);
-        else aiNode.appendChild(footer);
-      }
-      footer.innerHTML = "";
+      // Finalize message - add normal action buttons (copy, regenerate, etc)
+      clearContinuePlaceholder(aiNode);
+      renderAiFinalActions(aiNode, content, messageIndex);
 
-      const placeholderCard = document.createElement("div");
-      placeholderCard.className = "continue-placeholder";
-
-      const hint = document.createElement("span");
-      hint.className = "placeholder-hint";
-      hint.textContent = "Response interrupted by user";
-
-      const btn = document.createElement("button");
-      btn.className = "primary-btn continue-fragment";
-      btn.textContent = "Continue";
-      btn.disabled = true;
-      btn.title = "Continue from interrupted point";
-
-      placeholderCard.appendChild(hint);
-      placeholderCard.appendChild(btn);
-
-      setTimeout(() => {
-        btn.disabled = false;
-      }, 1500);
-
-      btn.addEventListener("click", () => {
-        log(
-          "STREAM",
-          2,
-          "continue:interrupted:click",
-          "User clicked 'Continue' after manual interruption",
-          { session: session.created_at, messageIndex },
-        );
-
-        btn.disabled = true;
-        footer.innerHTML = "";
-
-        const msgs = buildResumeMessagesFromSession(
-          session,
-          messageIndex,
-          partial,
-        );
-
-        startStream(
-          session,
-          "[System] Continue EXACTLY where the last assistant message stopped. Do NOT repeat previous text or acknowledge this instruction. Just provide the continuation.",
-          aiNode,
-          messageIndex,
-          false,
-          msgs,
-          partial,
-        );
-        updateInputState();
-      });
-
-      footer.appendChild(placeholderCard);
       break;
     }
 

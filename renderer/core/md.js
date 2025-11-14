@@ -770,17 +770,22 @@ function processMarkdownFormatting(text, globalReferences = {}) {
     // Skip if preceded by @ (email addresses in mailto links)
     if (offset > 0 && html[offset - 1] === '@') return match;
     
-    // Skip if inside any HTML tag (link, button, img, etc.)
+    // Skip if inside any HTML tag (link, button, img, code, pre, etc.)
     const beforeMatch = html.substring(0, offset);
     const lastOpenTag = Math.max(
       beforeMatch.lastIndexOf('<a '),
       beforeMatch.lastIndexOf('<button '),
-      beforeMatch.lastIndexOf('<img ')
+      beforeMatch.lastIndexOf('<img '),
+      beforeMatch.lastIndexOf('<code>'),
+      beforeMatch.lastIndexOf('<code '),
+      beforeMatch.lastIndexOf('<pre>')
     );
     const lastCloseTag = Math.max(
       beforeMatch.lastIndexOf('</a>'),
       beforeMatch.lastIndexOf('</button>'),
-      beforeMatch.lastIndexOf('/>')
+      beforeMatch.lastIndexOf('/>'),
+      beforeMatch.lastIndexOf('</code>'),
+      beforeMatch.lastIndexOf('</pre>')
     );
     if (lastOpenTag > lastCloseTag) return match; // Inside HTML tag
     
@@ -1076,17 +1081,22 @@ function parseInlineMarkdown(text, globalReferences = {}) {
     // Skip if preceded by @ (email addresses in mailto links)
     if (offset > 0 && html[offset - 1] === '@') return match;
     
-    // Skip if inside any HTML tag (link, button, img, etc.)
+    // Skip if inside any HTML tag (link, button, img, code, pre, etc.)
     const beforeMatch = html.substring(0, offset);
     const lastOpenTag = Math.max(
       beforeMatch.lastIndexOf('<a '),
       beforeMatch.lastIndexOf('<button '),
-      beforeMatch.lastIndexOf('<img ')
+      beforeMatch.lastIndexOf('<img '),
+      beforeMatch.lastIndexOf('<code>'),
+      beforeMatch.lastIndexOf('<code '),
+      beforeMatch.lastIndexOf('<pre>')
     );
     const lastCloseTag = Math.max(
       beforeMatch.lastIndexOf('</a>'),
       beforeMatch.lastIndexOf('</button>'),
-      beforeMatch.lastIndexOf('/>')
+      beforeMatch.lastIndexOf('/>'),
+      beforeMatch.lastIndexOf('</code>'),
+      beforeMatch.lastIndexOf('</pre>')
     );
     if (lastOpenTag > lastCloseTag) return match; // Inside HTML tag
     

@@ -4,9 +4,14 @@ const fs = require('fs');
 const { PowerShellSession } = require('./powershell-session');
 const { joinEndpoint } = require('../integration/langchain-helpers');
 const {
+  AGENT_STATES,
+  DANGEROUS_PATTERNS,
   SYSTEM_PROMPT,
   PROMPT_FIRST,
   PROMPT_SUBSEQUENT,
+  detectCurrentState,
+  detectDangerousCommand,
+  buildStatePrompt,
   getCommandReference,
   getErrorGuidance,
 } = require('./codes-prompt');
@@ -364,7 +369,7 @@ function getSessionState(sessionId) {
   if (!state) {
     state = {
       commandHistory: [],
-      conversationHistory: [], // NEW: Track full conversation for context
+      conversationHistory: [], // Iteration history within current request
       terminal: null,
       lastUsed: Date.now(),
       iterationCount: 0,
@@ -516,6 +521,13 @@ function detectErrorContext(commandHistory = []) {
   for (const entry of recentCommands) {
     const { command = '', output = '', exitCode = 0 } = entry;
 
+    // V2: Detect BLOCKED commands
+    if (output.includes('[COMMAND BLOCKED FOR SAFETY]')) {
+      errorType = 'command_blocked';
+      includeCommandReference = true;
+      break;
+    }
+
     // Detect -replace command failures
     if (exitCode !== 0 && command.includes('-replace')) {
       errorType = 'replace_failed';
@@ -546,79 +558,122 @@ function detectErrorContext(commandHistory = []) {
   return { errorType, includeCommandReference };
 }
 
-function renderSystemPrompt(template, { userPrompt, commandHistory, lastCommand, iteration = 0 }) {
+function renderSystemPrompt(template, { userPrompt, commandHistory, lastCommand, iteration = 0, previousMessagesHistory = '' }) {
+  // V2: STATE-BASED PROMPTING
+  // Detect current state from command history
+  const currentState = detectCurrentState(
+    commandHistory,
+    lastCommand.command || '',
+    iteration
+  );
+
   // Check if last output > 10 lines for dynamic injection
   const lastOutputLines = (lastCommand.output || '').split(/\r?\n/).length;
 
-  // 1. Summary FORMAT for SYSTEM_PROMPT (response format section)
-  const summaryFormat = lastOutputLines > 10
-    ? `
-<summary>
-Summarize the command output (one line, max 160 chars)
-</summary>
-
-`
-    : '';
-
-  // 2. Summary REMINDER for PROMPT_SUBSEQUENT (task section)
+  // 1. Summary REMINDER for PROMPT_SUBSEQUENT (task section)
   const summaryReminder = lastOutputLines > 10
     ? `\nRemember to add <summary> tag for your command output.\n`
     : '';
 
-  // 3. DYNAMIC ERROR DETECTION & GUIDANCE INJECTION
+  // 2. V2: Build state-specific system prompt
   const { errorType, includeCommandReference } = detectErrorContext(commandHistory);
   const errorGuidance = errorType ? getErrorGuidance(errorType) : '';
 
-  // Only include detailed command reference when:
-  // - Error detected
-  // - After 5+ iterations (complex problem)
-  // - First iteration (to establish baseline knowledge)
-  const commandReference = (includeCommandReference || iteration === 0)
-    ? getCommandReference(true)
-    : '';
-
-  // Inject dynamic content into SYSTEM_PROMPT
-  const dynamicSystemPrompt = SYSTEM_PROMPT
-    .replace('{summary_format}', summaryFormat)
-    .replace('{command_reference}', commandReference);
+  // Build state-aware prompt (includes state rules + format)
+  const statePrompt = buildStatePrompt(
+    currentState,
+    iteration,
+    commandHistory,
+    includeCommandReference || iteration === 0
+  );
 
   // Build final prompt with error guidance if detected
   const finalSystemPrompt = errorGuidance
-    ? `${dynamicSystemPrompt}\n\n${errorGuidance}`
-    : dynamicSystemPrompt;
+    ? `${statePrompt}\n\n${errorGuidance}`
+    : statePrompt;
+
+  // Inject previous messages history before current user prompt
+  const fullContext = previousMessagesHistory
+    ? `${previousMessagesHistory}\n=== CURRENT USER PROMPT ===\n{user_prompt}`
+    : '{user_prompt}';
 
   return template
-    .replace('{user_prompt}', userPrompt)
+    .replace('{user_prompt}', fullContext)
     .replace('{command_history}', commandHistory)
     .replace('{last_command}', lastCommand.command)
     .replace('{last_output}', lastCommand.output)
     .replace('{summary_reminder}', summaryReminder)
-    .replace('{common_command}', finalSystemPrompt);
+    .replace('{common_command}', finalSystemPrompt)
+    .replace('{user_prompt}', userPrompt); // Replace the placeholder with actual user prompt
 }
 
 function parseAgentResponse(text = '') {
+  const hiddenMatch = text.match(/<hidden>([\s\S]*?)<\/hidden>/i);
   const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/i);
   const cmdMatch = text.match(/<cmd>([\s\S]*?)<\/cmd>/i);
-  const done = /<!END>/i.test(text);
+  let done = /<!END>/i.test(text);
   const todoMatch = text.match(/<todo>([\s\S]*?)<\/todo>/i);
   const checklistMatch = text.match(/<checklist>([\s\S]*?)<\/checklist>/i);
   const summaryMatch = text.match(/<summary>([\s\S]*?)<\/summary>/i);
 
-  // Clean answer by removing <!END> tag if it appears inside
-  let cleanAnswer = answerMatch ? answerMatch[1].trim() : '';
-  if (cleanAnswer) {
-    cleanAnswer = cleanAnswer.replace(/<!END>/gi, '').trim();
+  // Detect malformed responses: AI outputting "Command executed: X" without tags
+  // This happens when AI forgets to use <cmd> tags
+  let extractedCommand = '';
+  if (!cmdMatch && text.trim().startsWith('Command executed:')) {
+    // Try to extract command from plain text
+    const commandMatch = text.match(/^Command executed:\s*(.+?)(?:\n|$)/i);
+    if (commandMatch) {
+      extractedCommand = commandMatch[1].trim();
+      log('CODES', 2, 'parseAgentResponse', 'Malformed response: AI output plain "Command executed:" without <cmd> tags', {
+        extractedCommand: extractedCommand.substring(0, 100),
+      });
+      // This is malformed, but we'll treat it as done since there's no actual <cmd> tag
+      done = true;
+    }
   }
 
-  // If no <answer> tag found, use the entire text as answer (fallback for unformatted responses)
-  // Clean all XML-like tags from the text to get clean answer
+  // Clean answer by removing tags that should not appear in user-facing text
+  let cleanAnswer = answerMatch ? answerMatch[1].trim() : '';
+  if (cleanAnswer) {
+    // Remove <!END> tag
+    cleanAnswer = cleanAnswer.replace(/<!END>/gi, '').trim();
+    // Remove <cmd> tags if they leaked into answer (AI should put cmd in separate tag)
+    cleanAnswer = cleanAnswer.replace(/<cmd>[\s\S]*?<\/cmd>/gi, '').trim();
+    // Remove <hidden> tags if they leaked into answer
+    cleanAnswer = cleanAnswer.replace(/<hidden>[\s\S]*?<\/hidden>/gi, '').trim();
+    // Remove other V2 tags that shouldn't be in answer
+    cleanAnswer = cleanAnswer.replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '').trim();
+  }
+
+  // V2: If no <answer> tag found, check if other structured tags exist
+  // Only use fallback if NO structured tags at all (unformatted response)
   if (!answerMatch && text.trim()) {
-    cleanAnswer = text.replace(/<[^>]*>/g, '').trim();
+    if (!hiddenMatch && !cmdMatch) {
+      // No structured tags at all - check if it's malformed "Command executed:" text
+      if (extractedCommand) {
+        // Don't put the malformed command text in answer
+        cleanAnswer = '';
+      } else {
+        // Truly unformatted response - fallback to entire text
+        cleanAnswer = text.replace(/<[^>]*>/g, '').trim();
+      }
+    }
+    // else: has hidden/cmd tag but no answer tag = intentional (EXPLORE/READ/EXECUTE state)
+    // answer should remain empty - hidden/cmd content is for specific purposes
+  }
+
+  const command = cmdMatch ? cmdMatch[1].trim() : '';
+
+  // Auto-detect done: if no command and no answer and no hidden, we're done
+  if (!command && !cleanAnswer && !hiddenMatch && !done) {
+    log('CODES', 2, 'parseAgentResponse', 'Auto-detected done: no command, no answer, no hidden content');
+    done = true;
   }
 
   return {
+    hidden: hiddenMatch ? hiddenMatch[1].trim() : null, // V2: Internal AI thinking
     answer: cleanAnswer,
-    command: cmdMatch ? cmdMatch[1].trim() : '',
+    command,
     done,
     todo: todoMatch ? todoMatch[1].trim() : null,
     checklist: checklistMatch ? checklistMatch[1].trim() : null,
@@ -970,9 +1025,58 @@ async function runAgentIteration({
   model,
   baseUrl,
   apiKey,
+  db,
+  sessionId,
 }) {
   const commandHistoryText = formatCommandHistory(state.commandHistory);
   const lastCommand = getLastCommand(state.commandHistory);
+
+  // Load previous message iterations from database and format into system prompt
+  let previousMessagesHistory = '';
+  if (db && sessionId) {
+    try {
+      const dbMessages = db.getMessages?.(sessionId) || [];
+
+      // Get last 3 user messages (max)
+      const userMessages = dbMessages.filter(m => m.role === 'user').slice(-3);
+
+      if (userMessages.length > 0) {
+        const historyParts = [];
+
+        for (let i = 0; i < userMessages.length; i++) {
+          const msgIndex = userMessages[i].message_index;
+          const msgContent = userMessages[i].content;
+
+          // Load iterations for this message
+          const iterations = db.getCodeIterations?.(sessionId, msgIndex) || [];
+
+          if (iterations.length > 0) {
+            historyParts.push(`\nPREVIOUS USER PROMPT (message ${msgIndex}):`);
+            historyParts.push(msgContent);
+            historyParts.push('\n=== COMMAND HISTORY (MESSAGE ' + msgIndex + ') ===');
+
+            iterations.forEach((iter, idx) => {
+              const cmd = iter.command || '[no command]';
+              const output = iter.output || 'No output';
+              const exitCode = iter.exit_code ?? 0;
+              historyParts.push(`#${idx + 1} ${cmd}`);
+              historyParts.push(`Output:\n${output}`);
+              historyParts.push(`Exit Code: ${exitCode}\n`);
+            });
+          }
+        }
+
+        if (historyParts.length > 0) {
+          previousMessagesHistory = historyParts.join('\n') + '\n';
+        }
+      }
+    } catch (error) {
+      log('CODES', 3, 'runAgentIteration', 'Failed to load previous iterations', {
+        sessionId,
+        error: error?.message || error,
+      });
+    }
+  }
 
   // Pass iteration for dynamic command reference injection
   const systemPrompt = renderSystemPrompt(selectPromptTemplate(iteration), {
@@ -980,6 +1084,7 @@ async function runAgentIteration({
     commandHistory: commandHistoryText,
     lastCommand,
     iteration,
+    previousMessagesHistory,
   });
 
   // Debug: Log processed prompt for each iteration
@@ -991,23 +1096,23 @@ async function runAgentIteration({
   let messages;
 
   if (iteration === 0) {
-    // First iteration: system + user prompt
+    // First iteration OF THIS REQUEST
+    // Previous iterations loaded into system prompt, not message bodies
     messages = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
+      { role: 'user', content: userPrompt }, // Current request
     ];
-    // Initialize conversation history WITHOUT duplicating system prompt
-    // System prompt is rebuilt each iteration, no need to store it
+
+    // Reset iteration history for this new request
     state.conversationHistory = [
       { role: 'user', content: userPrompt },
     ];
   } else {
     // Subsequent iterations: rebuild messages with CURRENT system prompt
-    // This prevents resending old/stale system prompts
-    // System prompt is dynamically built based on current error context
+    // Include: system + conversationHistory (current request iterations)
     messages = [
       { role: 'system', content: systemPrompt },
-      ...state.conversationHistory, // Only user/assistant exchanges
+      ...state.conversationHistory, // Current request's iteration history
     ];
   }
 
@@ -1019,14 +1124,59 @@ async function runAgentIteration({
     messages,
   });
 
+  // V2: Log messages sent to LLM for debugging conversation history
+  console.log('\n\n=== MESSAGES SENT TO LLM (Iteration #' + iteration + ') ===');
+  console.log('Total messages:', messages.length);
+  messages.forEach((msg, idx) => {
+    const preview = msg.content.substring(0, 150).replace(/\n/g, ' ');
+    console.log(`[${idx}] ${msg.role}: ${preview}${msg.content.length > 150 ? '...' : ''}`);
+  });
+  console.log('=== END MESSAGES ===\n');
+
+  // V2: Log raw AI response for debugging
+  console.log('\n\n=== CODE AGENT ITERATION #' + iteration + ' - RAW AI RESPONSE ===');
+  console.log(response.content || '(empty response)');
+  console.log('=== END RAW AI RESPONSE ===\n');
+
   const parsed = parseAgentResponse(response.content || '');
 
+  // V2: Log parsed response structure for debugging
+  console.log('=== PARSED RESPONSE ===');
+  console.log('Hidden:', parsed.hidden ? `"${parsed.hidden.substring(0, 100)}${parsed.hidden.length > 100 ? '...' : ''}"` : 'null');
+  console.log('Answer:', parsed.answer ? `"${parsed.answer.substring(0, 100)}${parsed.answer.length > 100 ? '...' : ''}"` : 'null');
+  console.log('Command:', parsed.command ? `"${parsed.command.substring(0, 100)}${parsed.command.length > 100 ? '...' : ''}"` : 'null');
+  console.log('Done:', parsed.done);
+  console.log('Todo:', parsed.todo ? 'present' : 'null');
+  console.log('Checklist:', parsed.checklist ? 'present' : 'null');
+  console.log('Summary:', parsed.summary ? 'present' : 'null');
+  console.log('=== END PARSED RESPONSE ===\n\n');
+
   // Store assistant's response in conversation history
-  if (response.content) {
+  // V2: Store CLEANED response (no control tags) to prevent tag leaking
+  // Only store the answer that user actually sees, not internal tags
+  // DON'T add "Command executed: X" - it makes AI mimic that format
+  if (parsed.answer && parsed.answer.trim()) {
     state.conversationHistory.push({
       role: 'assistant',
-      content: response.content,
+      content: parsed.answer,
     });
+  } else if (!parsed.answer && !parsed.command && response.content) {
+    // Fallback: if no parsed answer/command, store raw (for unstructured responses)
+    // But still strip all V2 tags to prevent leaking
+    const strippedContent = response.content
+      .replace(/<hidden>[\s\S]*?<\/hidden>/gi, '')
+      .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
+      .replace(/<answer>[\s\S]*?<\/answer>/gi, '')
+      .replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '')
+      .replace(/<!END>/gi, '')
+      .trim();
+
+    if (strippedContent) {
+      state.conversationHistory.push({
+        role: 'assistant',
+        content: strippedContent,
+      });
+    }
   }
 
   return {
@@ -1050,8 +1200,35 @@ async function executeCommand(state, command, options = {}) {
     };
   }
 
+  // V2: DANGEROUS COMMAND DETECTION & BLOCKING
+  const warnings = detectDangerousCommand(command);
+  const blockedWarnings = warnings.filter(w => w.block);
+
+  if (blockedWarnings.length > 0) {
+    // Command is BLOCKED for safety
+    const blockMessages = blockedWarnings.map(w =>
+      `${w.warning}\n\nSUGGESTION: ${w.suggestion}`
+    ).join('\n\n');
+
+    return {
+      output: `[COMMAND BLOCKED FOR SAFETY]\n\n${blockMessages}\n\nThis command would hang PowerShell. Please try the suggested alternative.`,
+      exitCode: 1,
+      blocked: true,
+      executed: false,
+    };
+  }
+
+  // Show warnings for non-blocking patterns
+  const nonBlockingWarnings = warnings.filter(w => !w.block);
+  if (nonBlockingWarnings.length > 0) {
+    const warnMessages = nonBlockingWarnings.map(w =>
+      `[WARNING] ${w.warning}\nSUGGESTION: ${w.suggestion}`
+    ).join('\n');
+    console.log('\n' + warnMessages + '\n');
+  }
+
   // Note: High impact commands are now handled in processCodeRequest
-  // This function just executes what's given
+  // This function executes validated commands
 
   try {
     const terminal = ensurePowerShellSession(state, state.workspacePath);
@@ -1124,6 +1301,7 @@ async function processCodeRequest({
   codeId,
   onChunk,
   shouldCancel,
+  db, // Database manager for loading chat history
 }) {
   const state = getSessionState(sessionId);
   const codeRecord = deps.getCodeById?.(codeId);
@@ -1131,6 +1309,7 @@ async function processCodeRequest({
     state.instruction = codeRecord.instruction || '';
     state.workspacePath = ensureDirectoryExists(codeRecord.workspace_path || codeRecord.workspacePath || '') || state.workspacePath;
   }
+
   ensurePowerShellSession(state, state.workspacePath || process.cwd());
 
   const userPromptWithContext = buildUserPrompt({
@@ -1139,10 +1318,15 @@ async function processCodeRequest({
     workspacePath: state.workspacePath,
   });
 
+  // Get current message index for this request
+  const existingMessages = db?.getMessages?.(sessionId) || [];
+  const currentMessageIndex = existingMessages.length;
+
   const chunks = [];
   let usage = null;
   let lastCommandErrorPattern = null;
   let sameErrorCount = 0;
+  let finalAnswer = null; // Track final answer to save to messages table
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
     if (typeof shouldCancel === 'function' && shouldCancel()) {
@@ -1161,6 +1345,8 @@ async function processCodeRequest({
       model,
       baseUrl,
       apiKey,
+      db,
+      sessionId,
     });
 
     if (typeof shouldCancel === 'function' && shouldCancel()) {
@@ -1172,6 +1358,11 @@ async function processCodeRequest({
     }
 
     usage = mergeUsage(usage, iterationUsage);
+
+    // Track final answer if this is meaningful content (not just command)
+    if (parsed.answer && parsed.answer.trim() && parsed.done) {
+      finalAnswer = parsed.answer.trim();
+    }
 
     // STEP 0: Send todo/checklist if present (for planning & progress tracking)
     const todoChunk = formatTodoChunk(parsed.todo, parsed.checklist, iteration);
@@ -1193,11 +1384,18 @@ async function processCodeRequest({
     }
 
     // STEP 1: Send response + command BEFORE executing
+    // V2: Only show "No response provided" if there's NO answer, NO hidden content, AND NO command
+    // If hidden/command exists, answer can be intentionally empty (EXPLORE/EXECUTE states)
+    let answerToSend = parsed.answer;
+    if (!answerToSend && !parsed.hidden && !parsed.command) {
+      answerToSend = 'No response provided.';
+    }
+
     const responseCommandChunk = formatResponseAndCommand({
-      answer: parsed.answer || 'No response provided.',
+      answer: answerToSend,
       command: parsed.command,
     });
-    
+
     if (responseCommandChunk && typeof onChunk === 'function') {
       try {
         chunks.push(responseCommandChunk);
@@ -1298,6 +1496,83 @@ async function processCodeRequest({
     const { output, exitCode, blocked, isTimeout } = await executeCommand(state, parsed.command, {
       disableTimeout: requiresConfirmation && confirmationApproved,
     });
+
+    // Check if user cancelled (interrupt button) after command execution
+    if (typeof shouldCancel === 'function' && shouldCancel()) {
+      log('CODES', 1, 'processCodeRequest', 'Streaming cancelled after command execution', {
+        iteration,
+        sessionId,
+      });
+      break;
+    }
+
+    // Detect ripgrep auto-install - restart terminal and retry ONCE
+    if (output && output.includes('[RG_INSTALLED]')) {
+      log('CODES', 1, 'processCodeRequest', 'Ripgrep installed', {
+        iteration,
+        sessionId,
+        alreadyAttempted: state.rgInstallAttempted || false,
+      });
+
+      // Track installation attempt to prevent infinite loop
+      if (!state.rgInstallAttempted) {
+        state.rgInstallAttempted = true;
+
+        // Dispose current terminal to restart with new PATH
+        try {
+          state.terminal?.dispose();
+          state.terminal = null;
+          log('CODES', 1, 'processCodeRequest', 'Terminal disposed for ripgrep PATH update', { sessionId });
+        } catch (error) {
+          log('CODES', 2, 'processCodeRequest', 'Failed to dispose terminal', {
+            error: error?.message || error,
+          });
+        }
+
+        // Add system message to conversation history
+        const systemMsg = '[SYSTEM] Ripgrep installed successfully. Terminal restarted. Please retry the Search-InFiles command once.';
+        state.conversationHistory.push({
+          role: 'user',
+          content: systemMsg,
+        });
+
+        state.commandHistory.push({
+          command: '[SYSTEM - RG INSTALLED]',
+          output: systemMsg,
+          exitCode: 0,
+          summary: 'Ripgrep auto-installed, terminal restarted',
+          timestamp: Date.now(),
+        });
+
+        // Continue to next iteration - allow ONE retry
+        continue;
+      } else {
+        // Already attempted install - PATH update requires app restart
+        const restartMsg = '[SYSTEM] Ripgrep was installed but requires application restart to update PATH. Please ask the user to restart Clustrix, or use alternative commands (ls, gc, etc.) instead of Search-InFiles.';
+
+        state.conversationHistory.push({
+          role: 'user',
+          content: restartMsg,
+        });
+
+        state.commandHistory.push({
+          command: '[SYSTEM - RG INSTALL FAILED]',
+          output: restartMsg,
+          exitCode: 1,
+          summary: 'Ripgrep install requires app restart',
+          timestamp: Date.now(),
+        });
+
+        log('CODES', 2, 'processCodeRequest', 'Ripgrep install requires app restart - preventing infinite loop', {
+          iteration,
+          sessionId,
+        });
+
+        // Continue to let AI know about the issue and use fallback
+        continue;
+      }
+    }
+
     // Use AI's summary if provided, otherwise auto-generate
     const entrySummary = parsed.summary || summarizeOutput(output, exitCode);
     const historyEntry = {
@@ -1312,14 +1587,39 @@ async function processCodeRequest({
       if (state.commandHistory.length > MAX_HISTORY * 2) {
         state.commandHistory.splice(0, state.commandHistory.length - MAX_HISTORY * 2);
       }
-      
+
       // Add command execution result to conversation history as user message
       // This gives the AI feedback about what happened
-      const feedbackMessage = `Command executed:\n\`\`\`powershell\n${parsed.command}\n\`\`\`\n\nOutput:\n\`\`\`\n${truncateOutput(output)}\n\`\`\`\nExit Code: ${exitCode}`;
+      // V2: Use SIMPLE format to avoid confusing AI (no markdown code blocks!)
+      // Use 'older' mode for truncation (max 10 lines) to keep context concise
+      const feedbackMessage = exitCode === 0
+        ? `[RESULT] Command successful.\n${truncateOutput(output, 'older')}`
+        : `[ERROR] Command failed (exit ${exitCode}).\n${truncateOutput(output, 'older')}`;
+
       state.conversationHistory.push({
         role: 'user',
         content: feedbackMessage,
       });
+
+      // Save iteration to code_iterations table
+      if (db && sessionId) {
+        try {
+          db.addCodeIteration?.(sessionId, currentMessageIndex, iteration, {
+            command: parsed.command,
+            output: truncateOutput(output, 'older'),
+            exitCode,
+            answer: parsed.answer || null,
+            hidden: parsed.hidden || null,
+            summary: entrySummary,
+          });
+        } catch (error) {
+          log('CODES', 3, 'processCodeRequest', 'Failed to save iteration', {
+            sessionId,
+            iteration,
+            error: error?.message || error,
+          });
+        }
+      }
     }
 
     // Detect repeated failure pattern (e.g., same syntax error twice in a row)
@@ -1394,6 +1694,49 @@ async function processCodeRequest({
     }
   }
 
+  // Save user prompt and final answer to messages table (clean, no iterations)
+  // Iterations are stored in code_iterations table
+  if (db && sessionId) {
+    try {
+      // Save user message
+      db.addMessage?.(
+        sessionId,
+        'user',
+        userPrompt,
+        {},
+        currentMessageIndex,
+        Date.now()
+      );
+
+      // Save assistant final answer (if exists)
+      if (finalAnswer) {
+        db.addMessage?.(
+          sessionId,
+          'assistant',
+          finalAnswer,
+          {},
+          currentMessageIndex + 1,
+          Date.now()
+        );
+
+        log('CODES', 1, 'processCodeRequest', 'Saved user message and final answer to database', {
+          sessionId,
+          messageIndex: currentMessageIndex,
+        });
+      } else {
+        log('CODES', 1, 'processCodeRequest', 'Saved user message to database (no final answer)', {
+          sessionId,
+          messageIndex: currentMessageIndex,
+        });
+      }
+    } catch (error) {
+      log('CODES', 3, 'processCodeRequest', 'Failed to save messages', {
+        sessionId,
+        error: error?.message || error,
+      });
+    }
+  }
+
   return {
     chunks,
     usage,
@@ -1431,9 +1774,36 @@ function disposeAllCodeSessions() {
   log('CODES', 1, 'disposeAllCodeSessions', 'All PowerShell sessions disposed');
 }
 
+function cancelCodeSession(sessionId) {
+  log('CODES', 1, 'cancelCodeSession', 'Cancelling code session', { sessionId });
+
+  const state = sessionStates.get(sessionId);
+  if (!state) {
+    log('CODES', 2, 'cancelCodeSession', 'Session not found', { sessionId });
+    return false;
+  }
+
+  try {
+    // Dispose terminal to immediately kill any running commands
+    if (state.terminal && !state.terminal.isDisposed) {
+      state.terminal.dispose();
+      state.terminal = null;
+      log('CODES', 1, 'cancelCodeSession', 'PowerShell terminal disposed', { sessionId });
+    }
+    return true;
+  } catch (error) {
+    log('CODES', 3, 'cancelCodeSession', 'Failed to dispose terminal', {
+      sessionId,
+      error: error?.message || error,
+    });
+    return false;
+  }
+}
+
 module.exports = {
   initializeCodeAgent,
   processCodeRequest,
   resolveUserConfirmation,
   disposeAllCodeSessions,
+  cancelCodeSession,
 };

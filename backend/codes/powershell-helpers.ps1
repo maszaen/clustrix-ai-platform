@@ -491,6 +491,197 @@ function Find-DuplicateLines {
     }
 }
 
+function List-ProjectFiles {
+    <#
+    .SYNOPSIS
+    Ultra-fast directory listing with extension filtering and depth control.
+
+    .PARAMETER Path
+    Root directory to scan (default: current working directory)
+
+    .PARAMETER Extensions
+    Comma separated list or array of extensions (".js,.ts") or wildcard patterns ("*.js").
+
+    .PARAMETER Depth
+    Maximum depth to recurse relative to the starting directory. Use -1 for unlimited.
+
+    .PARAMETER Exclude
+    Directory names to ignore during traversal.
+
+    .PARAMETER Absolute
+    Emit absolute paths instead of paths relative to the root.
+
+    .PARAMETER Sort
+    Sort the results alphabetically before emitting them.
+    #>
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$Path = (Get-Location),
+
+        [Parameter(Mandatory=$false)]
+        [object]$Extensions = '*.js,*.ts,*.tsx,*.jsx,*.cjs,*.mjs,*.css,*.scss',
+
+        [Parameter(Mandatory=$false)]
+        [int]$Depth = 2,
+
+        [Parameter(Mandatory=$false)]
+        [object]$Exclude = 'node_modules,.git,dist,build,out,coverage,.cache',
+
+        [switch]$Absolute,
+
+        [switch]$Sort
+    )
+
+    $resolvedPath = $null
+    try {
+        $resolvedPath = (Resolve-Path -Path $Path).ProviderPath
+    }
+    catch {
+        Write-Error "List-ProjectFiles: Path not found: $Path"
+        return
+    }
+
+    if (-not (Test-Path $resolvedPath -PathType Container)) {
+        Write-Error "List-ProjectFiles: Path is not a directory: $resolvedPath"
+        return
+    }
+
+    $normalizeList = {
+        param([object]$value)
+
+        $result = @()
+        if ($null -eq $value) {
+            return $result
+        }
+
+        $items = if ($value -is [System.Array]) { $value } else { @($value) }
+        foreach ($item in $items) {
+            if ($null -eq $item) { continue }
+
+            $parts = "$item".Split(',', [System.StringSplitOptions]::RemoveEmptyEntries)
+            foreach ($part in $parts) {
+                $trimmed = $part.Trim()
+                if ($trimmed.Length -gt 0) {
+                    $result += $trimmed
+                }
+            }
+        }
+
+        return $result
+    }
+
+    $extensionValues = & $normalizeList $Extensions
+    $extensionSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($ext in $extensionValues) {
+        $normalized = $ext
+        if ($normalized.StartsWith('*')) {
+            $normalized = $normalized.Substring(1)
+        }
+
+        if ($normalized.Length -eq 0) {
+            continue
+        }
+
+        if (-not $normalized.StartsWith('.')) {
+            $normalized = ".$normalized"
+        }
+
+        if ($normalized.Length -eq 1) {
+            continue
+        }
+
+        $extensionSet.Add($normalized.ToLowerInvariant()) | Out-Null
+    }
+
+    $hasExtensionFilter = $extensionSet.Count -gt 0
+
+    $excludeValues = & $normalizeList $Exclude
+    if ($excludeValues.Count -eq 0) {
+        $excludeValues = @('node_modules', '.git', 'dist', 'build', 'out', 'coverage', '.cache')
+    }
+
+    $excludeSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($item in $excludeValues) {
+        if ([string]::IsNullOrWhiteSpace($item)) { continue }
+        $excludeSet.Add($item.Trim()) | Out-Null
+    }
+
+    $maxDepth = if ($Depth -lt 0) { [int]::MaxValue } else { $Depth }
+
+    $results = [System.Collections.Generic.List[string]]::new()
+    $queue = [System.Collections.Generic.Queue[object]]::new()
+    $queue.Enqueue([PSCustomObject]@{ Path = $resolvedPath; Depth = 0 })
+
+    while ($queue.Count -gt 0) {
+        $current = $queue.Dequeue()
+        $currentPath = $current.Path
+        $currentDepth = $current.Depth
+
+        try {
+            $entries = [System.IO.Directory]::EnumerateFileSystemEntries($currentPath)
+        }
+        catch {
+            Write-Warning "List-ProjectFiles: Skipping $currentPath ($($_.Exception.Message))"
+            continue
+        }
+
+        foreach ($entry in $entries) {
+            $name = [System.IO.Path]::GetFileName($entry)
+
+            if ([System.IO.Directory]::Exists($entry)) {
+                if ($excludeSet.Contains($name)) {
+                    continue
+                }
+
+                if ($currentDepth -lt $maxDepth) {
+                    $queue.Enqueue([PSCustomObject]@{ Path = $entry; Depth = $currentDepth + 1 })
+                }
+
+                continue
+            }
+
+            if ($hasExtensionFilter) {
+                $ext = [System.IO.Path]::GetExtension($entry)
+                if (-not $extensionSet.Contains($ext.ToLowerInvariant())) {
+                    continue
+                }
+            }
+
+            $outputPath = $entry
+            if (-not $Absolute.IsPresent) {
+                try {
+                    $outputPath = [System.IO.Path]::GetRelativePath($resolvedPath, $entry)
+                }
+                catch {
+                    try {
+                        $rootUri = New-Object System.Uri(($resolvedPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar))
+                        $entryUri = New-Object System.Uri($entry)
+                        $outputPath = $rootUri.MakeRelativeUri($entryUri).ToString()
+                        if ([System.IO.Path]::DirectorySeparatorChar -ne '/') {
+                            $outputPath = $outputPath -replace '/', [System.IO.Path]::DirectorySeparatorChar
+                        }
+                    }
+                    catch {
+                        $outputPath = $entry
+                    }
+                }
+            }
+
+            if (-not $Absolute.IsPresent) {
+                $outputPath = $outputPath.TrimStart([char[]]"\/")
+            }
+
+            $results.Add($outputPath)
+        }
+    }
+
+    if ($Sort.IsPresent) {
+        $results.Sort([System.StringComparer]::OrdinalIgnoreCase)
+    }
+
+    $results | ForEach-Object { Write-Output $_ }
+}
+
 function Search-InFiles {
     <#
     .SYNOPSIS
@@ -927,4 +1118,4 @@ function Get-FileStats {
 }
 
 # Export functions
-Export-ModuleMember -Function Show-FileWithLineNumbers, Set-FileLine, Remove-FileLine, Add-FileLine, Set-MultipleLines, Search-FileWithContext, Get-FileLineRange, Find-DuplicateLines, Search-InFiles, Find-Pattern, Get-FileStats
+Export-ModuleMember -Function Show-FileWithLineNumbers, Set-FileLine, Remove-FileLine, Add-FileLine, Set-MultipleLines, Search-FileWithContext, Get-FileLineRange, Find-DuplicateLines, List-ProjectFiles, Search-InFiles, Find-Pattern, Get-FileStats

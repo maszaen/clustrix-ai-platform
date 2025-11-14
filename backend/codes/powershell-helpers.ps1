@@ -543,6 +543,72 @@ function Search-InFiles {
     Write-Output "Path: $Path | Filter: $Filter | Depth: $Depth"
     Write-Output ""
 
+    # Check if ripgrep is available
+    $rgAvailable = $null -ne (Get-Command rg -ErrorAction SilentlyContinue)
+
+    if (-not $rgAvailable) {
+        Write-Output "Ripgrep not found, using PowerShell Select-String (slower)..."
+        Write-Output ""
+
+        # PowerShell fallback implementation
+        $filters = $Filter -split ','
+        $allMatches = @()
+
+        foreach ($f in $filters) {
+            $f = $f.Trim()
+            try {
+                $files = Get-ChildItem -Path $Path -Filter $f -Depth $Depth -File -ErrorAction SilentlyContinue |
+                         Where-Object { $_.FullName -notmatch 'node_modules|\.git|dist|build' }
+
+                foreach ($file in $files) {
+                    if ($Context -gt 0) {
+                        $matches = Select-String -Path $file.FullName -Pattern $Pattern -Context $Context -ErrorAction SilentlyContinue
+                    } else {
+                        $matches = Select-String -Path $file.FullName -Pattern $Pattern -ErrorAction SilentlyContinue
+                    }
+
+                    if ($matches) {
+                        $allMatches += $matches
+                    }
+                }
+            } catch {
+                Write-Warning "Error searching $f : $_"
+            }
+        }
+
+        if ($allMatches.Count -eq 0) {
+            Write-Output "No matches found."
+            return
+        }
+
+        Write-Output "Found $($allMatches.Count) matches:"
+        Write-Output ""
+
+        $groupedMatches = $allMatches | Group-Object -Property Path
+        foreach ($group in $groupedMatches) {
+            $relativePath = Resolve-Path -Relative $group.Name
+            Write-Output "=== $relativePath ==="
+
+            foreach ($match in $group.Group) {
+                Write-Output "$($match.LineNumber): $($match.Line)"
+                if ($match.Context) {
+                    if ($match.Context.PreContext) {
+                        foreach ($pre in $match.Context.PreContext) {
+                            Write-Output "  $pre"
+                        }
+                    }
+                    if ($match.Context.PostContext) {
+                        foreach ($post in $match.Context.PostContext) {
+                            Write-Output "  $post"
+                        }
+                    }
+                }
+            }
+            Write-Output ""
+        }
+        return
+    }
+
     # Build ripgrep command
     $rgArgs = @(
         $Pattern,

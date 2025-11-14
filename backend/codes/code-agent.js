@@ -1240,6 +1240,7 @@ async function processCodeRequest({
   codeId,
   onChunk,
   shouldCancel,
+  db, // Database manager for loading chat history
 }) {
   const state = getSessionState(sessionId);
   const codeRecord = deps.getCodeById?.(codeId);
@@ -1247,6 +1248,35 @@ async function processCodeRequest({
     state.instruction = codeRecord.instruction || '';
     state.workspacePath = ensureDirectoryExists(codeRecord.workspace_path || codeRecord.workspacePath || '') || state.workspacePath;
   }
+
+  // Load chat history from database (max 6 messages = 3 exchanges)
+  // This should be done ONCE per request, not per iteration
+  if (state.conversationHistory.length === 0 && db && codeId) {
+    try {
+      const dbMessages = db.getMessages?.(codeId) || [];
+      const last6Messages = dbMessages.slice(-6); // Take last 6 messages
+
+      // Convert database messages to conversation history format
+      state.conversationHistory = last6Messages.map((msg) => ({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.content || '',
+      }));
+
+      log('CODES', 1, 'processCodeRequest', 'Loaded chat history from database', {
+        sessionId,
+        codeId,
+        totalDbMessages: dbMessages.length,
+        loadedMessages: state.conversationHistory.length,
+      });
+    } catch (error) {
+      log('CODES', 3, 'processCodeRequest', 'Failed to load chat history from database', {
+        sessionId,
+        codeId,
+        error: error?.message || error,
+      });
+    }
+  }
+
   ensurePowerShellSession(state, state.workspacePath || process.cwd());
 
   const userPromptWithContext = buildUserPrompt({
@@ -1559,9 +1589,36 @@ function disposeAllCodeSessions() {
   log('CODES', 1, 'disposeAllCodeSessions', 'All PowerShell sessions disposed');
 }
 
+function cancelCodeSession(sessionId) {
+  log('CODES', 1, 'cancelCodeSession', 'Cancelling code session', { sessionId });
+
+  const state = sessionStates.get(sessionId);
+  if (!state) {
+    log('CODES', 2, 'cancelCodeSession', 'Session not found', { sessionId });
+    return false;
+  }
+
+  try {
+    // Dispose terminal to immediately kill any running commands
+    if (state.terminal && !state.terminal.isDisposed) {
+      state.terminal.dispose();
+      state.terminal = null;
+      log('CODES', 1, 'cancelCodeSession', 'PowerShell terminal disposed', { sessionId });
+    }
+    return true;
+  } catch (error) {
+    log('CODES', 3, 'cancelCodeSession', 'Failed to dispose terminal', {
+      sessionId,
+      error: error?.message || error,
+    });
+    return false;
+  }
+}
+
 module.exports = {
   initializeCodeAgent,
   processCodeRequest,
   resolveUserConfirmation,
   disposeAllCodeSessions,
+  cancelCodeSession,
 };

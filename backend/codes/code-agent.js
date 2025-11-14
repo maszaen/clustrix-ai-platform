@@ -623,16 +623,15 @@ function parseAgentResponse(text = '') {
     cleanAnswer = cleanAnswer.replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '').trim();
   }
 
-  // V2: If no <answer> tag found, check if <hidden> tag exists
-  // If ONLY <hidden> tag exists, answer should be empty (hidden content is internal)
-  // Only use fallback if NEITHER <answer> NOR <hidden> tag found
+  // V2: If no <answer> tag found, check if other structured tags exist
+  // Only use fallback if NO structured tags at all (unformatted response)
   if (!answerMatch && text.trim()) {
-    if (!hiddenMatch) {
+    if (!hiddenMatch && !cmdMatch) {
       // No structured tags at all - fallback to entire text (unformatted response)
       cleanAnswer = text.replace(/<[^>]*>/g, '').trim();
     }
-    // else: hidden tag exists but no answer tag = intentional (EXPLORE/EXECUTE state)
-    // answer should remain empty - hidden content is for AI only
+    // else: has hidden/cmd tag but no answer tag = intentional (EXPLORE/READ/EXECUTE state)
+    // answer should remain empty - hidden/cmd content is for specific purposes
   }
 
   return {

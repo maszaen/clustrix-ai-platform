@@ -136,6 +136,8 @@ const STATE_RULES = {
 - MUST use <answer> to explain what & why
 - Set-FileLine for single: Set-FileLine -Path file.txt -LineNumber 25 -NewContent "new"
 - Set-MultipleLines for batch: Set-MultipleLines -Path file.txt -Replacements @{25='line1'; 30='line2'}
+- CRITICAL: NO inline comments in hashtable! @{1='x'; 2='y'} ✓  NOT @{1='x'; // comment ✗
+- For 50+ line edits: Use Set-Content to rewrite entire file instead of Set-MultipleLines
 - NEVER use -replace for complex patterns
 - Verify line numbers from READ state first`,
 
@@ -211,6 +213,8 @@ List-ProjectFiles -Extensions ".js,.ts" [-Depth 2] [-Path "dir"] [-Sort]  # Fast
 Show-FileWithLineNumbers -Path <file> [-StartLine N] [-EndLine N]
 Set-FileLine -Path <file> -LineNumber N -NewContent "text"
 Set-MultipleLines -Path <file> -Replacements @{25='line1'; 30='line2'}
+  WARNING: NO inline comments in hashtable! @{1='x'; 2='y'} ✓  @{1='x'; // bad ✗
+  For 50+ edits: Use Set-Content instead
 Remove-FileLine -Path <file> -LineNumber N
 Add-FileLine -Path <file> -LineNumber N -NewContent "text"
 
@@ -271,6 +275,36 @@ Search-InFiles -Pattern "your-pattern" -Filter "*.js" -Depth 2
 
 **NEVER do:** Get-ChildItem -Recurse | Select-String
 **ALWAYS do:** Search-InFiles -Pattern "..." -Filter "*.js" -Depth 2`,
+
+  hashtable_syntax: `
+**HASHTABLE SYNTAX ERROR:**
+Your Set-MultipleLines command failed with "hash literal was incomplete" or "Unexpected token".
+
+**ROOT CAUSE:**
+PowerShell hashtables DON'T support inline comments!
+
+**WRONG (FAILS):**
+@{
+  1='line1'; // comment here ← INVALID!
+  2='line2'
+}
+
+**CORRECT:**
+@{
+  1='line1';
+  2='line2'
+}
+
+**BEST SOLUTION FOR LARGE EDITS (50+ lines):**
+Instead of Set-MultipleLines, use Set-Content to rewrite entire file:
+
+$lines = gc <file>
+$lines[0] = 'new line 1'
+$lines[1] = 'new line 2'
+# ... edit more lines ...
+$lines | Set-Content <file>
+
+**CRITICAL:** NEVER use inline comments (//) in hashtable values!`,
 };
 
 // ===================================

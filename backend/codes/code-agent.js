@@ -1506,41 +1506,71 @@ async function processCodeRequest({
       break;
     }
 
-    // Detect ripgrep auto-install - restart terminal and retry
+    // Detect ripgrep auto-install - restart terminal and retry ONCE
     if (output && output.includes('[RG_INSTALLED]')) {
-      log('CODES', 1, 'processCodeRequest', 'Ripgrep installed, restarting terminal', {
+      log('CODES', 1, 'processCodeRequest', 'Ripgrep installed', {
         iteration,
         sessionId,
+        alreadyAttempted: state.rgInstallAttempted || false,
       });
 
-      // Dispose current terminal to restart with new PATH
-      try {
-        state.terminal?.dispose();
-        state.terminal = null;
-        log('CODES', 1, 'processCodeRequest', 'Terminal disposed for ripgrep PATH update', { sessionId });
-      } catch (error) {
-        log('CODES', 2, 'processCodeRequest', 'Failed to dispose terminal', {
-          error: error?.message || error,
+      // Track installation attempt to prevent infinite loop
+      if (!state.rgInstallAttempted) {
+        state.rgInstallAttempted = true;
+
+        // Dispose current terminal to restart with new PATH
+        try {
+          state.terminal?.dispose();
+          state.terminal = null;
+          log('CODES', 1, 'processCodeRequest', 'Terminal disposed for ripgrep PATH update', { sessionId });
+        } catch (error) {
+          log('CODES', 2, 'processCodeRequest', 'Failed to dispose terminal', {
+            error: error?.message || error,
+          });
+        }
+
+        // Add system message to conversation history
+        const systemMsg = '[SYSTEM] Ripgrep installed successfully. Terminal restarted. Please retry the Search-InFiles command once.';
+        state.conversationHistory.push({
+          role: 'user',
+          content: systemMsg,
         });
+
+        state.commandHistory.push({
+          command: '[SYSTEM - RG INSTALLED]',
+          output: systemMsg,
+          exitCode: 0,
+          summary: 'Ripgrep auto-installed, terminal restarted',
+          timestamp: Date.now(),
+        });
+
+        // Continue to next iteration - allow ONE retry
+        continue;
+      } else {
+        // Already attempted install - PATH update requires app restart
+        const restartMsg = '[SYSTEM] Ripgrep was installed but requires application restart to update PATH. Please ask the user to restart Clustrix, or use alternative commands (ls, gc, etc.) instead of Search-InFiles.';
+
+        state.conversationHistory.push({
+          role: 'user',
+          content: restartMsg,
+        });
+
+        state.commandHistory.push({
+          command: '[SYSTEM - RG INSTALL FAILED]',
+          output: restartMsg,
+          exitCode: 1,
+          summary: 'Ripgrep install requires app restart',
+          timestamp: Date.now(),
+        });
+
+        log('CODES', 2, 'processCodeRequest', 'Ripgrep install requires app restart - preventing infinite loop', {
+          iteration,
+          sessionId,
+        });
+
+        // Continue to let AI know about the issue and use fallback
+        continue;
       }
-
-      // Add system message to conversation history
-      const systemMsg = '[SYSTEM] Ripgrep installed successfully. Terminal restarted to apply PATH changes. Please retry the Search-InFiles command.';
-      state.conversationHistory.push({
-        role: 'user',
-        content: systemMsg,
-      });
-
-      state.commandHistory.push({
-        command: '[SYSTEM - RG INSTALLED]',
-        output: systemMsg,
-        exitCode: 0,
-        summary: 'Ripgrep auto-installed, terminal restarted',
-        timestamp: Date.now(),
-      });
-
-      // Continue to next iteration (don't break)
-      continue;
     }
 
     // Use AI's summary if provided, otherwise auto-generate

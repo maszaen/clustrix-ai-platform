@@ -547,10 +547,73 @@ function Search-InFiles {
     $rgAvailable = $null -ne (Get-Command rg -ErrorAction SilentlyContinue)
 
     if (-not $rgAvailable) {
-        Write-Output "Ripgrep not found, using PowerShell Select-String (slower)..."
+        Write-Output "Ripgrep (rg) not found. Installing automatically..."
         Write-Output ""
 
+        try {
+            # Detect OS and install ripgrep
+            if ($IsWindows -or $env:OS -match "Windows") {
+                # Try winget first (fastest, built into Windows 11+)
+                $wingetAvailable = $null -ne (Get-Command winget -ErrorAction SilentlyContinue)
+                if ($wingetAvailable) {
+                    Write-Output "Installing ripgrep via winget..."
+                    winget install BurntSushi.ripgrep.MSVC --silent --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
+                } else {
+                    # Fallback to choco
+                    $chocoAvailable = $null -ne (Get-Command choco -ErrorAction SilentlyContinue)
+                    if ($chocoAvailable) {
+                        Write-Output "Installing ripgrep via chocolatey..."
+                        choco install ripgrep -y 2>&1 | Out-Null
+                    } else {
+                        Write-Error "Neither winget nor chocolatey found. Cannot auto-install ripgrep."
+                        Write-Output "Using PowerShell Select-String fallback..."
+                        $rgAvailable = $false
+                    }
+                }
+            } elseif ($IsMacOS) {
+                Write-Output "Installing ripgrep via homebrew..."
+                brew install ripgrep 2>&1 | Out-Null
+            } else {
+                # Linux
+                if (Test-Path "/usr/bin/apt") {
+                    Write-Output "Installing ripgrep via apt..."
+                    sudo apt-get update -y 2>&1 | Out-Null
+                    sudo apt-get install -y ripgrep 2>&1 | Out-Null
+                } elseif (Test-Path "/usr/bin/yum") {
+                    Write-Output "Installing ripgrep via yum..."
+                    sudo yum install -y ripgrep 2>&1 | Out-Null
+                }
+            }
+
+            # Refresh PATH in current session
+            if ($IsWindows -or $env:OS -match "Windows") {
+                $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+            }
+
+            # Check if install succeeded
+            $rgAvailable = $null -ne (Get-Command rg -ErrorAction SilentlyContinue)
+
+            if ($rgAvailable) {
+                Write-Output ""
+                Write-Output "[RG_INSTALLED] Ripgrep installed successfully. Restarting terminal to apply PATH changes..."
+                return
+            } else {
+                Write-Output ""
+                Write-Output "Ripgrep installation completed. Terminal restart required to update PATH."
+                Write-Output "[RG_INSTALLED] Terminal will restart automatically."
+                return
+            }
+        } catch {
+            Write-Error "Failed to install ripgrep: $_"
+            Write-Output "Falling back to PowerShell Select-String..."
+        }
+    }
+
+    if (-not $rgAvailable) {
         # PowerShell fallback implementation
+        Write-Output "Using PowerShell Select-String (slower)..."
+        Write-Output ""
+
         $filters = $Filter -split ','
         $allMatches = @()
 

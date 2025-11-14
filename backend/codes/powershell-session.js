@@ -236,6 +236,14 @@ if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) {
     if (this.isDisposed) return;
 
     this.isDisposed = true;
+
+    // Immediately reject any pending command
+    if (this.currentCommand) {
+      const error = new Error('PowerShell session disposed (interrupted by user)');
+      this.currentCommand.reject(error);
+      this._clearCurrentCommand();
+    }
+
     if (this.commandTimer) {
       clearTimeout(this.commandTimer);
       this.commandTimer = null;

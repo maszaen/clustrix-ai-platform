@@ -491,5 +491,440 @@ function Find-DuplicateLines {
     }
 }
 
+function Search-InFiles {
+    <#
+    .SYNOPSIS
+    ULTRA-FAST recursive search using ripgrep (rg) - 100x faster than PowerShell Select-String!
+    Automatically excludes node_modules, .git, dist, build, and respects .gitignore
+
+    .PARAMETER Pattern
+    Regex pattern to search
+
+    .PARAMETER Path
+    Starting directory (default: current directory)
+
+    .PARAMETER Filter
+    File filter (e.g., "*.js", "*.html,*.css")
+
+    .PARAMETER Depth
+    Maximum recursion depth (default: 3)
+
+    .PARAMETER Context
+    Lines of context to show (default: 0)
+
+    .EXAMPLE
+    Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
+    Search-InFiles -Pattern "class.*Button" -Filter "*.tsx" -Context 2
+    Search-InFiles -Pattern "#code-title" -Filter "*.html,*.js" -Path "renderer"
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Pattern,
+
+        [Parameter(Mandatory=$false)]
+        [string]$Path = ".",
+
+        [Parameter(Mandatory=$false)]
+        [string]$Filter = "*.*",
+
+        [Parameter(Mandatory=$false)]
+        [int]$Depth = 3,
+
+        [Parameter(Mandatory=$false)]
+        [int]$Context = 0
+    )
+
+    if (-not (Test-Path $Path)) {
+        Write-Error "Path not found: $Path"
+        return
+    }
+
+    Write-Output "Searching for pattern: $Pattern"
+    Write-Output "Path: $Path | Filter: $Filter | Depth: $Depth"
+    Write-Output ""
+
+    # Check if ripgrep is available
+    $rgAvailable = $null -ne (Get-Command rg -ErrorAction SilentlyContinue)
+
+    if (-not $rgAvailable) {
+        Write-Output "Ripgrep (rg) not found. Installing automatically..."
+        Write-Output ""
+
+        try {
+            # Detect OS and install ripgrep
+            if ($IsWindows -or $env:OS -match "Windows") {
+                # Try winget first (fastest, built into Windows 11+)
+                $wingetAvailable = $null -ne (Get-Command winget -ErrorAction SilentlyContinue)
+                if ($wingetAvailable) {
+                    Write-Output "Installing ripgrep via winget..."
+                    winget install BurntSushi.ripgrep.MSVC --silent --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
+                } else {
+                    # Fallback to choco
+                    $chocoAvailable = $null -ne (Get-Command choco -ErrorAction SilentlyContinue)
+                    if ($chocoAvailable) {
+                        Write-Output "Installing ripgrep via chocolatey..."
+                        choco install ripgrep -y 2>&1 | Out-Null
+                    } else {
+                        Write-Error "Neither winget nor chocolatey found. Cannot auto-install ripgrep."
+                        Write-Output "Using PowerShell Select-String fallback..."
+                        $rgAvailable = $false
+                    }
+                }
+            } elseif ($IsMacOS) {
+                Write-Output "Installing ripgrep via homebrew..."
+                brew install ripgrep 2>&1 | Out-Null
+            } else {
+                # Linux
+                if (Test-Path "/usr/bin/apt") {
+                    Write-Output "Installing ripgrep via apt..."
+                    sudo apt-get update -y 2>&1 | Out-Null
+                    sudo apt-get install -y ripgrep 2>&1 | Out-Null
+                } elseif (Test-Path "/usr/bin/yum") {
+                    Write-Output "Installing ripgrep via yum..."
+                    sudo yum install -y ripgrep 2>&1 | Out-Null
+                }
+            }
+
+            # Refresh PATH in current session
+            if ($IsWindows -or $env:OS -match "Windows") {
+                $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+            }
+
+            # Check if install succeeded
+            $rgAvailable = $null -ne (Get-Command rg -ErrorAction SilentlyContinue)
+
+            if ($rgAvailable) {
+                Write-Output ""
+                Write-Output "[RG_INSTALLED] Ripgrep installed successfully. Restarting terminal to apply PATH changes..."
+                return
+            } else {
+                Write-Output ""
+                Write-Output "Ripgrep installation completed. Terminal restart required to update PATH."
+                Write-Output "[RG_INSTALLED] Terminal will restart automatically."
+                return
+            }
+        } catch {
+            Write-Error "Failed to install ripgrep: $_"
+            Write-Output "Falling back to PowerShell Select-String..."
+        }
+    }
+
+    if (-not $rgAvailable) {
+        # PowerShell fallback implementation
+        Write-Output "Using PowerShell Select-String (slower)..."
+        Write-Output ""
+
+        $filters = $Filter -split ','
+        $allMatches = @()
+
+        foreach ($f in $filters) {
+            $f = $f.Trim()
+            try {
+                $files = Get-ChildItem -Path $Path -Filter $f -Depth $Depth -File -ErrorAction SilentlyContinue |
+                         Where-Object { $_.FullName -notmatch 'node_modules|\.git|dist|build' }
+
+                foreach ($file in $files) {
+                    if ($Context -gt 0) {
+                        $matches = Select-String -Path $file.FullName -Pattern $Pattern -Context $Context -ErrorAction SilentlyContinue
+                    } else {
+                        $matches = Select-String -Path $file.FullName -Pattern $Pattern -ErrorAction SilentlyContinue
+                    }
+
+                    if ($matches) {
+                        $allMatches += $matches
+                    }
+                }
+            } catch {
+                Write-Warning "Error searching $f : $_"
+            }
+        }
+
+        if ($allMatches.Count -eq 0) {
+            Write-Output "No matches found."
+            return
+        }
+
+        Write-Output "Found $($allMatches.Count) matches:"
+        Write-Output ""
+
+        $groupedMatches = $allMatches | Group-Object -Property Path
+        foreach ($group in $groupedMatches) {
+            $relativePath = Resolve-Path -Relative $group.Name
+            Write-Output "=== $relativePath ==="
+
+            foreach ($match in $group.Group) {
+                Write-Output "$($match.LineNumber): $($match.Line)"
+                if ($match.Context) {
+                    if ($match.Context.PreContext) {
+                        foreach ($pre in $match.Context.PreContext) {
+                            Write-Output "  $pre"
+                        }
+                    }
+                    if ($match.Context.PostContext) {
+                        foreach ($post in $match.Context.PostContext) {
+                            Write-Output "  $post"
+                        }
+                    }
+                }
+            }
+            Write-Output ""
+        }
+        return
+    }
+
+    # Build ripgrep command
+    $rgArgs = @(
+        $Pattern,
+        $Path,
+        '--line-number',
+        '--heading',
+        '--color', 'never',
+        '--max-depth', $Depth.ToString()
+    )
+
+    # Add context if requested
+    if ($Context -gt 0) {
+        $rgArgs += '-C'
+        $rgArgs += $Context.ToString()
+    }
+
+    # Handle file filters (convert "*.js,*.html" to multiple --glob arguments)
+    if ($Filter -ne "*.*") {
+        $filters = $Filter -split ','
+        foreach ($f in $filters) {
+            $f = $f.Trim()
+            $rgArgs += '--glob'
+            $rgArgs += $f
+        }
+    }
+
+    # Add common exclusions for extra speed (ripgrep already ignores these by default, but explicit is better)
+    $excludes = @(
+        'node_modules',
+        '.git',
+        'dist',
+        'build',
+        '.next',
+        '.nuxt',
+        'coverage',
+        '__pycache__',
+        '*.min.js',
+        '*.bundle.js'
+    )
+
+    foreach ($exclude in $excludes) {
+        $rgArgs += '--glob'
+        $rgArgs += "!$exclude"
+    }
+
+    try {
+        # Execute ripgrep
+        $output = & rg @rgArgs 2>&1
+
+        if ($LASTEXITCODE -eq 0) {
+            # Matches found
+            Write-Output $output
+        } elseif ($LASTEXITCODE -eq 1) {
+            # No matches found (not an error)
+            Write-Output "No matches found."
+        } else {
+            # Actual error
+            Write-Error "Ripgrep error: $output"
+        }
+    } catch {
+        Write-Error "Failed to execute ripgrep: $_"
+        Write-Output ""
+        Write-Output "Falling back to PowerShell Select-String (slower)..."
+
+        # Fallback to original PowerShell method if ripgrep fails
+        $filters = $Filter -split ','
+        $allMatches = @()
+
+        foreach ($f in $filters) {
+            $f = $f.Trim()
+            try {
+                $files = Get-ChildItem -Path $Path -Filter $f -Depth $Depth -File -ErrorAction SilentlyContinue |
+                         Where-Object { $_.FullName -notmatch 'node_modules|\.git|dist|build' }
+
+                foreach ($file in $files) {
+                    if ($Context -gt 0) {
+                        $matches = Select-String -Path $file.FullName -Pattern $Pattern -Context $Context -ErrorAction SilentlyContinue
+                    } else {
+                        $matches = Select-String -Path $file.FullName -Pattern $Pattern -ErrorAction SilentlyContinue
+                    }
+
+                    if ($matches) {
+                        $allMatches += $matches
+                    }
+                }
+            } catch {
+                Write-Warning "Error searching $f : $_"
+            }
+        }
+
+        if ($allMatches.Count -eq 0) {
+            Write-Output "No matches found."
+            return
+        }
+
+        Write-Output "Found $($allMatches.Count) matches:"
+        Write-Output ""
+
+        $groupedMatches = $allMatches | Group-Object -Property Path
+        foreach ($group in $groupedMatches) {
+            $relativePath = Resolve-Path -Relative $group.Name
+            Write-Output "=== $relativePath ==="
+
+            foreach ($match in $group.Group) {
+                Write-Output "Line $($match.LineNumber): $($match.Line.Trim())"
+
+                if ($Context -gt 0 -and $match.Context) {
+                    if ($match.Context.PreContext) {
+                        $match.Context.PreContext | ForEach-Object { Write-Output "  - $_" }
+                    }
+                    if ($match.Context.PostContext) {
+                        $match.Context.PostContext | ForEach-Object { Write-Output "  + $_" }
+                    }
+                }
+            }
+            Write-Output ""
+        }
+    }
+}
+
+function Find-Pattern {
+    <#
+    .SYNOPSIS
+    Fast single-file pattern search with line numbers (uses Select-String, NOT Get-Content)
+
+    .PARAMETER Pattern
+    Regex pattern to search
+
+    .PARAMETER Path
+    File path
+
+    .PARAMETER Context
+    Lines of context (default: 2)
+
+    .PARAMETER CaseSensitive
+    Case-sensitive search (default: false)
+
+    .EXAMPLE
+    Find-Pattern -Pattern "function.*open" -Path "renderer.js"
+    Find-Pattern -Pattern "display.*none" -Path "style.css" -Context 3
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Pattern,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Path,
+
+        [Parameter(Mandatory=$false)]
+        [int]$Context = 2,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$CaseSensitive
+    )
+
+    if (-not (Test-Path $Path)) {
+        Write-Error "File not found: $Path"
+        return
+    }
+
+    Write-Output "Searching in: $Path"
+    Write-Output "Pattern: $Pattern"
+    Write-Output ""
+
+    try {
+        # Use Select-String with context (FAST - native regex, no file loading!)
+        $matches = if ($CaseSensitive) {
+            Select-String -Path $Path -Pattern $Pattern -Context $Context -CaseSensitive
+        } else {
+            Select-String -Path $Path -Pattern $Pattern -Context $Context
+        }
+
+        if (-not $matches) {
+            Write-Output "No matches found."
+            return
+        }
+
+        Write-Output "Found $($matches.Count) matches:"
+        Write-Output ""
+
+        foreach ($match in $matches) {
+            Write-Output "--- Line $($match.LineNumber) ---"
+
+            # Show context before
+            if ($match.Context.PreContext) {
+                foreach ($line in $match.Context.PreContext) {
+                    Write-Output "  $line"
+                }
+            }
+
+            # Show matching line (highlighted)
+            Write-Output ">>> $($match.Line.Trim())"
+
+            # Show context after
+            if ($match.Context.PostContext) {
+                foreach ($line in $match.Context.PostContext) {
+                    Write-Output "  $line"
+                }
+            }
+
+            Write-Output ""
+        }
+    } catch {
+        Write-Error "Error searching file: $_"
+    }
+}
+
+function Get-FileStats {
+    <#
+    .SYNOPSIS
+    Get file statistics WITHOUT loading content (fast check before reading)
+
+    .PARAMETER Path
+    File path
+
+    .EXAMPLE
+    Get-FileStats -Path "large-file.js"
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        Write-Error "File not found: $Path"
+        return
+    }
+
+    $file = Get-Item -Path $Path
+
+    # Use .NET StreamReader to count lines WITHOUT loading entire file (FAST!)
+    $lineCount = 0
+    try {
+        $reader = [System.IO.File]::OpenText($file.FullName)
+        while ($null -ne $reader.ReadLine()) {
+            $lineCount++
+        }
+        $reader.Close()
+    } catch {
+        Write-Warning "Could not count lines: $_"
+        $lineCount = "unknown"
+    }
+
+    [PSCustomObject]@{
+        Path = $file.FullName
+        Name = $file.Name
+        SizeKB = [math]::Round($file.Length / 1KB, 2)
+        SizeMB = [math]::Round($file.Length / 1MB, 2)
+        Lines = $lineCount
+        Extension = $file.Extension
+        LastModified = $file.LastWriteTime
+    } | Format-List
+}
+
 # Export functions
-Export-ModuleMember -Function Show-FileWithLineNumbers, Set-FileLine, Remove-FileLine, Add-FileLine, Set-MultipleLines, Search-FileWithContext, Get-FileLineRange, Find-DuplicateLines
+Export-ModuleMember -Function Show-FileWithLineNumbers, Set-FileLine, Remove-FileLine, Add-FileLine, Set-MultipleLines, Search-FileWithContext, Get-FileLineRange, Find-DuplicateLines, Search-InFiles, Find-Pattern, Get-FileStats

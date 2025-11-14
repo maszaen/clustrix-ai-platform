@@ -25,7 +25,7 @@ const GitHubStorageService = require('./backend/github/github-storage-service');
 const SmartBackupService = require('./backend/sync/smart-backup-service');
 const { queryUsageStatistics, invalidateUsageStatisticsCache } = require('./backend/data/usage-statistics');
 const { queryBenchmarkStatistics, invalidateBenchmarkStatisticsCache } = require('./backend/data/benchmark-statistics');
-const { initializeCodeAgent, processCodeRequest, resolveUserConfirmation, disposeAllCodeSessions } = require('./backend/codes/code-agent');
+const { initializeCodeAgent, processCodeRequest, resolveUserConfirmation, disposeAllCodeSessions, cancelCodeSession } = require('./backend/codes/code-agent');
 
 function createTimestampedBackup(filePath, reason = '') {
   try {
@@ -2852,7 +2852,7 @@ ipcMain.handle('codes:chat', async (_event, payload = {}) => {
 
     const request = normalizeCodeChatRequest(payload);
 
-    return await processCodeRequest(request);
+    return await processCodeRequest({ ...request, db });
   } catch (error) {
     log('CODES', 4, 'codes:chat', 'Failed to process code agent request', {
       error: error?.message || error,
@@ -2868,7 +2868,8 @@ ipcMain.on('codes:stream-start', async (event, payload = {}) => {
     return;
   }
 
-  const controllerState = { cancelled: false };
+  const request = normalizeCodeChatRequest(payload);
+  const controllerState = { cancelled: false, sessionId: request.sessionId };
   codeStreamControllers.set(reqId, controllerState);
 
   const send = (suffix, data) => {
@@ -2891,10 +2892,9 @@ ipcMain.on('codes:stream-start', async (event, payload = {}) => {
       useSQLite = true;
     }
 
-    const request = normalizeCodeChatRequest(payload);
-
     const result = await processCodeRequest({
       ...request,
+      db,
       onChunk: (chunk, info = {}) => {
         if (controllerState.cancelled) {
           return;
@@ -2942,6 +2942,14 @@ ipcMain.on('codes:stream-cancel', (_event, reqId) => {
   const controller = codeStreamControllers.get(reqId);
   if (controller) {
     controller.cancelled = true;
+    // Also kill the PowerShell session immediately to stop any running commands
+    if (controller.sessionId) {
+      cancelCodeSession(controller.sessionId);
+      log('CODES', 1, 'codes:stream-cancel', 'Code session cancelled and terminal disposed', {
+        reqId,
+        sessionId: controller.sessionId,
+      });
+    }
   }
 });
 

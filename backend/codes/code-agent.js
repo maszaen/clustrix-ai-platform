@@ -1269,17 +1269,31 @@ async function processCodeRequest({
     state.workspacePath = ensureDirectoryExists(codeRecord.workspace_path || codeRecord.workspacePath || '') || state.workspacePath;
   }
 
-  // DO NOT load previous messages from database for code agent sessions
-  // Why: Database stores markdown-formatted responses (code blocks, outputs)
-  // This pollutes AI context and makes AI mimic the markdown format instead of using <cmd> tags
-  // Command history within request provides enough context for code agent
-  //
-  // If message history is needed, it should be:
-  // 1. Stored as clean text (no markdown) in database
-  // 2. Only final answers, not iteration feedback
-  //
-  // For now: Code agent starts fresh each request, using command history as context
-  state.previousMessages = []; // Always empty for code agent
+  // Load previous code messages from code_messages table (clean format, no markdown)
+  // This table stores ONLY user prompts and final AI answers (no iteration feedback)
+  // Format is clean text suitable for LLM context
+  if (state.previousMessages.length === 0 && db && sessionId) {
+    try {
+      const codeMessages = db.getCodeMessages?.(sessionId) || [];
+      const last6Messages = codeMessages.slice(-6); // Max 6 messages (3 exchanges)
+
+      state.previousMessages = last6Messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
+      log('CODES', 1, 'processCodeRequest', 'Loaded previous code messages from database', {
+        sessionId,
+        totalMessages: codeMessages.length,
+        loadedMessages: state.previousMessages.length,
+      });
+    } catch (error) {
+      log('CODES', 3, 'processCodeRequest', 'Failed to load previous code messages', {
+        sessionId,
+        error: error?.message || error,
+      });
+    }
+  }
 
   ensurePowerShellSession(state, state.workspacePath || process.cwd());
 
@@ -1293,6 +1307,26 @@ async function processCodeRequest({
   let usage = null;
   let lastCommandErrorPattern = null;
   let sameErrorCount = 0;
+
+  // Store user message in code_messages table
+  if (db && sessionId) {
+    try {
+      const existingMessages = db.getCodeMessages?.(sessionId) || [];
+      const nextMessageIndex = existingMessages.length;
+
+      db.addCodeMessage?.(sessionId, 'user', userPrompt, nextMessageIndex);
+
+      log('CODES', 1, 'processCodeRequest', 'Stored user message in code_messages', {
+        sessionId,
+        messageIndex: nextMessageIndex,
+      });
+    } catch (error) {
+      log('CODES', 3, 'processCodeRequest', 'Failed to store user message', {
+        sessionId,
+        error: error?.message || error,
+      });
+    }
+  }
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
     if (typeof shouldCancel === 'function' && shouldCancel()) {
@@ -1553,6 +1587,37 @@ async function processCodeRequest({
 
     if (!parsed.command || parsed.done) {
       break;
+    }
+  }
+
+  // Store final AI answer in code_messages table (clean text, no markdown)
+  // Extract the last answer from conversation history
+  if (db && sessionId) {
+    try {
+      // Find last assistant message in conversationHistory
+      const lastAssistantMsg = state.conversationHistory
+        .slice()
+        .reverse()
+        .find(msg => msg.role === 'assistant');
+
+      if (lastAssistantMsg && lastAssistantMsg.content) {
+        const existingMessages = db.getCodeMessages?.(sessionId) || [];
+        const nextMessageIndex = existingMessages.length;
+
+        // Store clean answer (already cleaned in conversationHistory)
+        db.addCodeMessage?.(sessionId, 'assistant', lastAssistantMsg.content, nextMessageIndex);
+
+        log('CODES', 1, 'processCodeRequest', 'Stored AI answer in code_messages', {
+          sessionId,
+          messageIndex: nextMessageIndex,
+          contentLength: lastAssistantMsg.content.length,
+        });
+      }
+    } catch (error) {
+      log('CODES', 3, 'processCodeRequest', 'Failed to store AI answer', {
+        sessionId,
+        error: error?.message || error,
+      });
     }
   }
 

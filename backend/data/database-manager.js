@@ -176,7 +176,20 @@ class DatabaseManager {
       );
 
       CREATE INDEX IF NOT EXISTS idx_codes_created ON codes(created_at DESC);
-      
+
+      CREATE TABLE IF NOT EXISTS code_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        message_index INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_code_messages_session ON code_messages(session_id, message_index);
+
       CREATE TABLE IF NOT EXISTS drafts (
         id TEXT PRIMARY KEY,
         content TEXT NOT NULL,
@@ -636,13 +649,46 @@ class DatabaseManager {
     this.db.prepare(`
       DELETE FROM sessions WHERE code_id = ?
     `).run(codeId);
-    
+
     // Then delete the code
     return this.db.prepare(`
       DELETE FROM codes WHERE id = ?
     `).run(codeId);
   }
-  
+
+  // Code message functions (for code agent clean message history)
+  getCodeMessages(sessionId) {
+    return this.db.prepare(`
+      SELECT * FROM code_messages
+      WHERE session_id = ?
+      ORDER BY message_index ASC
+    `).all(sessionId);
+  }
+
+  addCodeMessage(sessionId, role, content, messageIndex) {
+    const now = Date.now();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO code_messages
+      (session_id, role, content, message_index, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    return stmt.run(
+      sessionId,
+      role,
+      content,
+      messageIndex,
+      now
+    );
+  }
+
+  deleteCodeMessages(sessionId) {
+    return this.db.prepare(`
+      DELETE FROM code_messages WHERE session_id = ?
+    `).run(sessionId);
+  }
+
   getSetting(key) {
     const row = this.db.prepare(`
       SELECT value FROM settings WHERE key = ?

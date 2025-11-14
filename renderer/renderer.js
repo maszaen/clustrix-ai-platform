@@ -1,5 +1,5 @@
-import { welcomeMessages, filesUploadDark, filesUploadLight } from './utils/constants.mjs';
-import { svgEmptyStateChats, svgEmptyStateProjects, svgEmptyStateArtifacts, svgEmptyStateCodes } from './utils/svg.mjs'
+import { welcomeMessages, filesUploadDark, filesUploadLight, LOADING_VERBS } from './utils/constants.mjs';
+import { svgEmptyStateChats, svgEmptyStateProjects, svgEmptyStateArtifacts } from './utils/svg.mjs'
 import { showBrowserWarningModal,
   closeDropdownWithAnimation,
   openDropdownWithAnimation,
@@ -7599,48 +7599,129 @@ async function deleteProject(project) {
 }
 
 // End of Projects functionality
-// ========================================
+let lastUsedVerb = null;
 
-function scheduleThinkingText(
-  aiNode,
-  { delay1 = 800, delay2 = 2500, delay3 = 4500, delay4 = 6500 } = {},
-) {
+// Get random verb from the list, excluding the last one used
+function getRandomLoadingVerb() {
+  if (LOADING_VERBS.length === 1) return LOADING_VERBS[0];
+  
+  let newVerb;
+  do {
+    newVerb = LOADING_VERBS[Math.floor(Math.random() * LOADING_VERBS.length)];
+  } while (newVerb === lastUsedVerb);
+  
+  lastUsedVerb = newVerb;
+  return newVerb + "...";
+}
+
+// Morph from oldWord to newWord character by character with cursor
+async function morphText(textEl, oldWord, newWord) {
+  const newLength = newWord.length;
+  const oldLength = oldWord.length;
+  const cursorPos = newLength;
+  
+  const FIRST_DELETE_DELAY = 250; // First delete delay (thinking time)
+  const DELETE_SPEED = 40; // Speed delete constant
+  
+  // FASE 1: DELETE LEFT - First char slow, then fast
+  const leftDeleteCount = Math.min(oldLength, cursorPos);
+  if (leftDeleteCount > 0) {
+    for (let leftChars = leftDeleteCount; leftChars > 0; leftChars--) {
+      let morphed = "";
+      
+      for (let j = 0; j < leftChars; j++) {
+        morphed += oldWord[j];
+      }
+      
+      morphed += "│";
+      
+      for (let j = cursorPos; j < oldLength; j++) {
+        morphed += oldWord[j];
+      }
+      
+      textEl.textContent = morphed;
+      
+      // First delete is slow (thinking), rest are fast
+      const delay = leftChars === leftDeleteCount ? FIRST_DELETE_DELAY : DELETE_SPEED;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  // FASE 2: BUILD NEW WORD - Random realistic typing delays
+  for (let i = 0; i <= newLength; i++) {
+    let morphed = "";
+    
+    for (let j = 0; j < i; j++) {
+      morphed += newWord[j];
+    }
+    
+    morphed += "│";
+    
+    if (oldLength > cursorPos) {
+      for (let j = cursorPos; j < oldLength; j++) {
+        morphed += oldWord[j];
+      }
+    }
+    
+    textEl.textContent = morphed;
+    
+    // Random realistic typing delay (50-120ms)
+    const delay = 50 + Math.random() * 70;
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+  
+  // FASE 3: DELETE RIGHT - Fast constant speed
+  const rightDeleteCount = oldLength > cursorPos ? oldLength - cursorPos : 0;
+  if (rightDeleteCount > 0) {
+    for (let i = rightDeleteCount; i > 0; i--) {
+      let morphed = newWord + "│";
+      
+      for (let j = 0; j < i - 1; j++) {
+        morphed += oldWord[cursorPos + j];
+      }
+      
+      textEl.textContent = morphed;
+      await new Promise(resolve => setTimeout(resolve, DELETE_SPEED));
+    }
+  }
+  
+  // FASE 4: FINAL - Remove cursor
+  textEl.textContent = newWord;
+  
+  // IDLE STATE: Wait exactly 2500ms before next transition
+  await new Promise(resolve => setTimeout(resolve, 2500));
+}
+
+async function scheduleThinkingText(aiNode) {
   cancelThinkingText(aiNode);
   const textEl = aiNode.querySelector(".thinking-text-indicator");
   if (!textEl) return;
 
-  const timer1 = setTimeout(() => {
-    const currentTextEl = aiNode.querySelector(".thinking-text-indicator");
-    if (currentTextEl) currentTextEl.textContent = "Reading your request";
-  }, delay1);
+  // Set initial random text
+  let currentVerb = getRandomLoadingVerb();
+  textEl.textContent = currentVerb;
 
-  const timer2 = setTimeout(() => {
-    const currentTextEl = aiNode.querySelector(".thinking-text-indicator");
-    if (currentTextEl) currentTextEl.textContent = "Processing thoughts";
-  }, delay2);
+  // Create animation loop
+  const runLoop = async () => {
+    while (THINKING_TIMER.has(aiNode)) {
+      const oldVerb = currentVerb;
+      const newVerb = getRandomLoadingVerb();
+      
+      await morphText(textEl, oldVerb, newVerb);
+      currentVerb = newVerb;
+    }
+  };
 
-  const timer3 = setTimeout(() => {
-    const currentTextEl = aiNode.querySelector(".thinking-text-indicator");
-    if (currentTextEl) currentTextEl.textContent = "Organizing response";
-  }, delay3);
-
-  const timer4 = setTimeout(() => {
-    const currentTextEl = aiNode.querySelector(".thinking-text-indicator");
-    if (currentTextEl) currentTextEl.textContent = "Almost ready";
-  }, delay4);
-
-  THINKING_TIMER.set(aiNode, { timer1, timer2, timer3, timer4 });
+  THINKING_TIMER.set(aiNode, { running: true });
+  runLoop();
 }
 
 function cancelThinkingText(aiNode) {
-  const t = THINKING_TIMER.get(aiNode);
-  if (t) {
-    clearTimeout(t.timer1);
-    clearTimeout(t.timer2);
-    clearTimeout(t.timer3);
-    clearTimeout(t.timer4);
+  const timers = THINKING_TIMER.get(aiNode);
+  if (timers) {
+    if (timers.interval) clearInterval(timers.interval);
+    THINKING_TIMER.delete(aiNode);
   }
-  THINKING_TIMER.delete(aiNode);
 }
 
 // Smart scroll state tracking with cooldown system

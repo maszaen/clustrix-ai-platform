@@ -103,10 +103,12 @@ const STATE_RULES = {
   [AGENT_STATES.EXPLORE]: `
 
 **EXPLORE STATE:**
-- Use ls/dir with specific filters: ls *.js, ls backend/codes/
-- NEVER -Recurse without -Depth: Get-ChildItem -Filter "*.js" -Depth 2
-- For search: Select-String "pattern" -Path "specific-file.js"
-- Think in <hidden>, don't explain trivial navigation to user`,
+- ALWAYS use Search-InFiles for recursive search (FAST, safe, no hangs!)
+  Example: Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
+- Use Find-Pattern for single-file search with context
+- Use ls -Filter "*.js" -Depth 2 for file listing (NEVER naked -Recurse!)
+- Think in <hidden>, don't explain trivial navigation to user
+- FORBIDDEN: Get-ChildItem -Recurse | Select-String (SLOW & HANGS!)`,
 
   [AGENT_STATES.READ]: `
 
@@ -174,28 +176,33 @@ const SYSTEM_PROMPT = `You are a PowerShell coding assistant. Work in STATES for
 1. Use <hidden> for internal thinking (NOT shown to user)
 2. Use <answer> ONLY when user needs info (state-specific)
 3. NEVER repeat failed commands - try different approach
-4. Count before read: (gc file.txt).Count
-5. Helpers: Show-FileWithLineNumbers, Set-FileLine, Add-FileLine, Set-MultipleLines
-6. Read AGENTS.md first if exists{state_rules}{command_reference}`;
+4. Search: Use Search-InFiles (FAST!) not Get-ChildItem -Recurse
+5. File ops: Show-FileWithLineNumbers, Set-FileLine, Set-MultipleLines
+6. Check size: Get-FileStats before reading large files{state_rules}{command_reference}`;
 
 // ===================================
 // COMMAND REFERENCE (Minimal)
 // ===================================
 const COMMAND_REFERENCE = `
 
-**HELPER FUNCTIONS:**
+**FAST SEARCH (Use these FIRST - no file loading!):**
+Search-InFiles -Pattern "regex" -Filter "*.js" [-Path "dir"] [-Depth 2] [-Context 2]
+  Example: Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
+  Example: Search-InFiles -Pattern "class.*Button" -Filter "*.tsx,*.jsx" -Path "renderer"
+Find-Pattern -Pattern "regex" -Path <file> [-Context 2]
+  Example: Find-Pattern -Pattern "display.*none" -Path "style.css"
+Get-FileStats -Path <file>  # Check file size/lines before reading
+
+**FILE OPERATIONS:**
 Show-FileWithLineNumbers -Path <file> [-StartLine N] [-EndLine N]
 Set-FileLine -Path <file> -LineNumber N -NewContent "text"
 Set-MultipleLines -Path <file> -Replacements @{25='line1'; 30='line2'}
 Remove-FileLine -Path <file> -LineNumber N
 Add-FileLine -Path <file> -LineNumber N -NewContent "text"
-Search-FileWithContext -Path <file> -Pattern "regex" -ContextBefore 2 -ContextAfter 2
-Find-DuplicateLines -Path <file>
 
 **BASIC COMMANDS:**
-ls / dir - list (add -Filter "*.js")
-gc <file> - read (check .Count first!)
-Select-String "pattern" <file>`;
+ls -Filter "*.js" [-Depth 2]  # List files (ALWAYS use -Filter)
+gc <file> - read (check .Count first! Or use Get-FileStats)`;
 
 // ===================================
 // ERROR-SPECIFIC GUIDANCE
@@ -242,10 +249,15 @@ Command took > 30 seconds.
 **COMMAND BLOCKED:**
 Your command was blocked for safety (would hang PowerShell).
 
-**COMMON FIXES:**
-- Add -Depth to -Recurse: Get-ChildItem -Recurse -Depth 2
-- Use specific filters: Get-ChildItem -Filter "*.js" -Path "backend/"
-- Avoid piping unbounded recursion`,
+**SOLUTION - Use fast search instead:**
+Search-InFiles -Pattern "your-pattern" -Filter "*.js" -Depth 2
+
+**Why blocked:**
+- Get-ChildItem -Recurse without -Depth = infinite recursion (node_modules!)
+- Piping to Select-String = double slowdown
+
+**NEVER do:** Get-ChildItem -Recurse | Select-String
+**ALWAYS do:** Search-InFiles -Pattern "..." -Filter "*.js" -Depth 2`,
 };
 
 // ===================================

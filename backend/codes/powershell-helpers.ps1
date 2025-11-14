@@ -491,5 +491,247 @@ function Find-DuplicateLines {
     }
 }
 
+function Search-InFiles {
+    <#
+    .SYNOPSIS
+    Fast recursive search using native Select-String (NO Get-Content, NO file loading)
+
+    .PARAMETER Pattern
+    Regex pattern to search
+
+    .PARAMETER Path
+    Starting directory (default: current directory)
+
+    .PARAMETER Filter
+    File filter (e.g., "*.js", "*.html")
+
+    .PARAMETER Depth
+    Maximum recursion depth (default: 3, prevents hangs)
+
+    .PARAMETER Context
+    Lines of context to show (default: 0)
+
+    .EXAMPLE
+    Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
+    Search-InFiles -Pattern "class.*Button" -Filter "*.tsx" -Context 2
+    Search-InFiles -Pattern "#code-title" -Filter "*.html,*.js" -Path "renderer"
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Pattern,
+
+        [Parameter(Mandatory=$false)]
+        [string]$Path = ".",
+
+        [Parameter(Mandatory=$false)]
+        [string]$Filter = "*.*",
+
+        [Parameter(Mandatory=$false)]
+        [int]$Depth = 3,
+
+        [Parameter(Mandatory=$false)]
+        [int]$Context = 0
+    )
+
+    if (-not (Test-Path $Path)) {
+        Write-Error "Path not found: $Path"
+        return
+    }
+
+    Write-Output "Searching for pattern: $Pattern"
+    Write-Output "Path: $Path | Filter: $Filter | Depth: $Depth"
+    Write-Output ""
+
+    # Handle multiple filters (e.g., "*.js,*.html")
+    $filters = $Filter -split ','
+    $allMatches = @()
+
+    foreach ($f in $filters) {
+        $f = $f.Trim()
+        try {
+            # Use Select-String with native file discovery (FAST - no Get-Content!)
+            $files = Get-ChildItem -Path $Path -Filter $f -Depth $Depth -File -ErrorAction SilentlyContinue
+
+            foreach ($file in $files) {
+                if ($Context -gt 0) {
+                    $matches = Select-String -Path $file.FullName -Pattern $Pattern -Context $Context -ErrorAction SilentlyContinue
+                } else {
+                    $matches = Select-String -Path $file.FullName -Pattern $Pattern -ErrorAction SilentlyContinue
+                }
+
+                if ($matches) {
+                    $allMatches += $matches
+                }
+            }
+        } catch {
+            Write-Warning "Error searching $f : $_"
+        }
+    }
+
+    if ($allMatches.Count -eq 0) {
+        Write-Output "No matches found."
+        return
+    }
+
+    Write-Output "Found $($allMatches.Count) matches:"
+    Write-Output ""
+
+    # Group by file for better readability
+    $groupedMatches = $allMatches | Group-Object -Property Path
+
+    foreach ($group in $groupedMatches) {
+        $relativePath = Resolve-Path -Relative $group.Name
+        Write-Output "=== $relativePath ==="
+
+        foreach ($match in $group.Group) {
+            Write-Output "Line $($match.LineNumber): $($match.Line.Trim())"
+
+            if ($Context -gt 0 -and $match.Context) {
+                if ($match.Context.PreContext) {
+                    $match.Context.PreContext | ForEach-Object { Write-Output "  - $_" }
+                }
+                if ($match.Context.PostContext) {
+                    $match.Context.PostContext | ForEach-Object { Write-Output "  + $_" }
+                }
+            }
+        }
+        Write-Output ""
+    }
+}
+
+function Find-Pattern {
+    <#
+    .SYNOPSIS
+    Fast single-file pattern search with line numbers (uses Select-String, NOT Get-Content)
+
+    .PARAMETER Pattern
+    Regex pattern to search
+
+    .PARAMETER Path
+    File path
+
+    .PARAMETER Context
+    Lines of context (default: 2)
+
+    .PARAMETER CaseSensitive
+    Case-sensitive search (default: false)
+
+    .EXAMPLE
+    Find-Pattern -Pattern "function.*open" -Path "renderer.js"
+    Find-Pattern -Pattern "display.*none" -Path "style.css" -Context 3
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Pattern,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Path,
+
+        [Parameter(Mandatory=$false)]
+        [int]$Context = 2,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$CaseSensitive
+    )
+
+    if (-not (Test-Path $Path)) {
+        Write-Error "File not found: $Path"
+        return
+    }
+
+    Write-Output "Searching in: $Path"
+    Write-Output "Pattern: $Pattern"
+    Write-Output ""
+
+    try {
+        # Use Select-String with context (FAST - native regex, no file loading!)
+        $matches = if ($CaseSensitive) {
+            Select-String -Path $Path -Pattern $Pattern -Context $Context -CaseSensitive
+        } else {
+            Select-String -Path $Path -Pattern $Pattern -Context $Context
+        }
+
+        if (-not $matches) {
+            Write-Output "No matches found."
+            return
+        }
+
+        Write-Output "Found $($matches.Count) matches:"
+        Write-Output ""
+
+        foreach ($match in $matches) {
+            Write-Output "--- Line $($match.LineNumber) ---"
+
+            # Show context before
+            if ($match.Context.PreContext) {
+                foreach ($line in $match.Context.PreContext) {
+                    Write-Output "  $line"
+                }
+            }
+
+            # Show matching line (highlighted)
+            Write-Output ">>> $($match.Line.Trim())"
+
+            # Show context after
+            if ($match.Context.PostContext) {
+                foreach ($line in $match.Context.PostContext) {
+                    Write-Output "  $line"
+                }
+            }
+
+            Write-Output ""
+        }
+    } catch {
+        Write-Error "Error searching file: $_"
+    }
+}
+
+function Get-FileStats {
+    <#
+    .SYNOPSIS
+    Get file statistics WITHOUT loading content (fast check before reading)
+
+    .PARAMETER Path
+    File path
+
+    .EXAMPLE
+    Get-FileStats -Path "large-file.js"
+    #>
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        Write-Error "File not found: $Path"
+        return
+    }
+
+    $file = Get-Item -Path $Path
+
+    # Use .NET StreamReader to count lines WITHOUT loading entire file (FAST!)
+    $lineCount = 0
+    try {
+        $reader = [System.IO.File]::OpenText($file.FullName)
+        while ($null -ne $reader.ReadLine()) {
+            $lineCount++
+        }
+        $reader.Close()
+    } catch {
+        Write-Warning "Could not count lines: $_"
+        $lineCount = "unknown"
+    }
+
+    [PSCustomObject]@{
+        Path = $file.FullName
+        Name = $file.Name
+        SizeKB = [math]::Round($file.Length / 1KB, 2)
+        SizeMB = [math]::Round($file.Length / 1MB, 2)
+        Lines = $lineCount
+        Extension = $file.Extension
+        LastModified = $file.LastWriteTime
+    } | Format-List
+}
+
 # Export functions
-Export-ModuleMember -Function Show-FileWithLineNumbers, Set-FileLine, Remove-FileLine, Add-FileLine, Set-MultipleLines, Search-FileWithContext, Get-FileLineRange, Find-DuplicateLines
+Export-ModuleMember -Function Show-FileWithLineNumbers, Set-FileLine, Remove-FileLine, Add-FileLine, Set-MultipleLines, Search-FileWithContext, Get-FileLineRange, Find-DuplicateLines, Search-InFiles, Find-Pattern, Get-FileStats

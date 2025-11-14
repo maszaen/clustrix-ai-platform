@@ -1011,16 +1011,30 @@ async function runAgentIteration({
   let messages;
 
   if (iteration === 0) {
-    // First iteration: system + user prompt
-    messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ];
-    // Initialize conversation history WITHOUT duplicating system prompt
-    // System prompt is rebuilt each iteration, no need to store it
-    state.conversationHistory = [
-      { role: 'user', content: userPrompt },
-    ];
+    // First iteration OF THIS REQUEST
+    // Check if conversation history exists (continuing conversation) or is new
+    const isNewConversation = state.conversationHistory.length === 0;
+
+    if (isNewConversation) {
+      // Brand new conversation - initialize history
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ];
+      state.conversationHistory = [
+        { role: 'user', content: userPrompt },
+      ];
+    } else {
+      // Continuing existing conversation - append new user message
+      state.conversationHistory.push({
+        role: 'user',
+        content: userPrompt,
+      });
+      messages = [
+        { role: 'system', content: systemPrompt },
+        ...state.conversationHistory,
+      ];
+    }
   } else {
     // Subsequent iterations: rebuild messages with CURRENT system prompt
     // This prevents resending old/stale system prompts
@@ -1058,11 +1072,42 @@ async function runAgentIteration({
   console.log('=== END PARSED RESPONSE ===\n\n');
 
   // Store assistant's response in conversation history
-  if (response.content) {
-    state.conversationHistory.push({
-      role: 'assistant',
-      content: response.content,
-    });
+  // V2: Store CLEANED response (no control tags) to prevent tag leaking
+  // Only store the answer that user actually sees, not internal tags
+  if (parsed.answer || parsed.command) {
+    // Build clean response: answer + command reference (no raw tags)
+    let cleanResponse = '';
+    if (parsed.answer) {
+      cleanResponse += parsed.answer;
+    }
+    if (parsed.command) {
+      // Include command in history so AI knows what it ran
+      cleanResponse += (cleanResponse ? '\n\n' : '') +
+                       `Command executed: ${parsed.command}`;
+    }
+    if (cleanResponse.trim()) {
+      state.conversationHistory.push({
+        role: 'assistant',
+        content: cleanResponse,
+      });
+    }
+  } else if (response.content) {
+    // Fallback: if no parsed answer/command, store raw (for unstructured responses)
+    // But still strip all V2 tags to prevent leaking
+    const strippedContent = response.content
+      .replace(/<hidden>[\s\S]*?<\/hidden>/gi, '')
+      .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
+      .replace(/<answer>[\s\S]*?<\/answer>/gi, '')
+      .replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '')
+      .replace(/<!END>/gi, '')
+      .trim();
+
+    if (strippedContent) {
+      state.conversationHistory.push({
+        role: 'assistant',
+        content: strippedContent,
+      });
+    }
   }
 
   return {

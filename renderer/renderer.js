@@ -16445,8 +16445,10 @@ function setupEventListeners() {
         }
       }
 
-      // Finalize message - add normal action buttons (copy, regenerate, etc)
-      clearContinuePlaceholder(aiNode);
+      // Finalize message - clear placeholder and add normal action buttons
+      const footer = aiNode.querySelector(".message-footer");
+      if (footer) footer.innerHTML = "";
+
       renderAiFinalActions(aiNode, content, messageIndex);
 
       break;

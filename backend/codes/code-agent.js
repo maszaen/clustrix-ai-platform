@@ -369,7 +369,8 @@ function getSessionState(sessionId) {
   if (!state) {
     state = {
       commandHistory: [],
-      conversationHistory: [], // NEW: Track full conversation for context
+      conversationHistory: [], // Iteration history within current request
+      previousMessages: [], // Message history from database (across requests)
       terminal: null,
       lastUsed: Date.now(),
       iterationCount: 0,
@@ -605,10 +606,26 @@ function parseAgentResponse(text = '') {
   const hiddenMatch = text.match(/<hidden>([\s\S]*?)<\/hidden>/i);
   const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/i);
   const cmdMatch = text.match(/<cmd>([\s\S]*?)<\/cmd>/i);
-  const done = /<!END>/i.test(text);
+  let done = /<!END>/i.test(text);
   const todoMatch = text.match(/<todo>([\s\S]*?)<\/todo>/i);
   const checklistMatch = text.match(/<checklist>([\s\S]*?)<\/checklist>/i);
   const summaryMatch = text.match(/<summary>([\s\S]*?)<\/summary>/i);
+
+  // Detect malformed responses: AI outputting "Command executed: X" without tags
+  // This happens when AI forgets to use <cmd> tags
+  let extractedCommand = '';
+  if (!cmdMatch && text.trim().startsWith('Command executed:')) {
+    // Try to extract command from plain text
+    const commandMatch = text.match(/^Command executed:\s*(.+?)(?:\n|$)/i);
+    if (commandMatch) {
+      extractedCommand = commandMatch[1].trim();
+      log('CODES', 2, 'parseAgentResponse', 'Malformed response: AI output plain "Command executed:" without <cmd> tags', {
+        extractedCommand: extractedCommand.substring(0, 100),
+      });
+      // This is malformed, but we'll treat it as done since there's no actual <cmd> tag
+      done = true;
+    }
+  }
 
   // Clean answer by removing tags that should not appear in user-facing text
   let cleanAnswer = answerMatch ? answerMatch[1].trim() : '';
@@ -627,17 +644,31 @@ function parseAgentResponse(text = '') {
   // Only use fallback if NO structured tags at all (unformatted response)
   if (!answerMatch && text.trim()) {
     if (!hiddenMatch && !cmdMatch) {
-      // No structured tags at all - fallback to entire text (unformatted response)
-      cleanAnswer = text.replace(/<[^>]*>/g, '').trim();
+      // No structured tags at all - check if it's malformed "Command executed:" text
+      if (extractedCommand) {
+        // Don't put the malformed command text in answer
+        cleanAnswer = '';
+      } else {
+        // Truly unformatted response - fallback to entire text
+        cleanAnswer = text.replace(/<[^>]*>/g, '').trim();
+      }
     }
     // else: has hidden/cmd tag but no answer tag = intentional (EXPLORE/READ/EXECUTE state)
     // answer should remain empty - hidden/cmd content is for specific purposes
   }
 
+  const command = cmdMatch ? cmdMatch[1].trim() : '';
+
+  // Auto-detect done: if no command and no answer and no hidden, we're done
+  if (!command && !cleanAnswer && !hiddenMatch && !done) {
+    log('CODES', 2, 'parseAgentResponse', 'Auto-detected done: no command, no answer, no hidden content');
+    done = true;
+  }
+
   return {
     hidden: hiddenMatch ? hiddenMatch[1].trim() : null, // V2: Internal AI thinking
     answer: cleanAnswer,
-    command: cmdMatch ? cmdMatch[1].trim() : '',
+    command,
     done,
     todo: todoMatch ? todoMatch[1].trim() : null,
     checklist: checklistMatch ? checklistMatch[1].trim() : null,
@@ -1011,36 +1042,25 @@ async function runAgentIteration({
 
   if (iteration === 0) {
     // First iteration OF THIS REQUEST
-    // Check if conversation history exists (continuing conversation) or is new
-    const isNewConversation = state.conversationHistory.length === 0;
-
-    if (isNewConversation) {
-      // Brand new conversation - initialize history
-      messages = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ];
-      state.conversationHistory = [
-        { role: 'user', content: userPrompt },
-      ];
-    } else {
-      // Continuing existing conversation - append new user message
-      state.conversationHistory.push({
-        role: 'user',
-        content: userPrompt,
-      });
-      messages = [
-        { role: 'system', content: systemPrompt },
-        ...state.conversationHistory,
-      ];
-    }
-  } else {
-    // Subsequent iterations: rebuild messages with CURRENT system prompt
-    // This prevents resending old/stale system prompts
-    // System prompt is dynamically built based on current error context
+    // Include: system + previousMessages (from DB) + current user prompt
+    // Initialize conversationHistory with current user prompt
     messages = [
       { role: 'system', content: systemPrompt },
-      ...state.conversationHistory, // Only user/assistant exchanges
+      ...state.previousMessages, // Previous conversation from database
+      { role: 'user', content: userPrompt }, // Current request
+    ];
+
+    // Reset iteration history for this new request
+    state.conversationHistory = [
+      { role: 'user', content: userPrompt },
+    ];
+  } else {
+    // Subsequent iterations: rebuild messages with CURRENT system prompt
+    // Include: system + previousMessages (from DB) + conversationHistory (iterations)
+    messages = [
+      { role: 'system', content: systemPrompt },
+      ...state.previousMessages, // Previous conversation from database
+      ...state.conversationHistory, // Current request's iteration history
     ];
   }
 
@@ -1249,29 +1269,29 @@ async function processCodeRequest({
     state.workspacePath = ensureDirectoryExists(codeRecord.workspace_path || codeRecord.workspacePath || '') || state.workspacePath;
   }
 
-  // Load chat history from database (max 6 messages = 3 exchanges)
-  // This should be done ONCE per request, not per iteration
-  if (state.conversationHistory.length === 0 && db && codeId) {
+  // Load previous messages from database (max 6 messages = 3 exchanges)
+  // IMPORTANT: Use sessionId not codeId! Messages are linked to sessions, not codes.
+  // previousMessages = message history from database (across requests)
+  // conversationHistory = iteration history within current request
+  if (state.previousMessages.length === 0 && db && sessionId) {
     try {
-      const dbMessages = db.getMessages?.(codeId) || [];
+      const dbMessages = db.getMessages?.(sessionId) || [];
       const last6Messages = dbMessages.slice(-6); // Take last 6 messages
 
-      // Convert database messages to conversation history format
-      state.conversationHistory = last6Messages.map((msg) => ({
+      // Convert database messages to LLM message format
+      state.previousMessages = last6Messages.map((msg) => ({
         role: msg.role === 'user' ? 'user' : 'assistant',
         content: msg.content || '',
       }));
 
-      log('CODES', 1, 'processCodeRequest', 'Loaded chat history from database', {
+      log('CODES', 1, 'processCodeRequest', 'Loaded previous messages from database', {
         sessionId,
-        codeId,
         totalDbMessages: dbMessages.length,
-        loadedMessages: state.conversationHistory.length,
+        loadedPreviousMessages: state.previousMessages.length,
       });
     } catch (error) {
-      log('CODES', 3, 'processCodeRequest', 'Failed to load chat history from database', {
+      log('CODES', 3, 'processCodeRequest', 'Failed to load previous messages from database', {
         sessionId,
-        codeId,
         error: error?.message || error,
       });
     }

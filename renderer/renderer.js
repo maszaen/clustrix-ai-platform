@@ -16417,32 +16417,30 @@ function setupEventListeners() {
         : null;
       
       session.messages[messageIndex] = ["ai", partial, modelInfo];
-      
+
       // Track updated message for incremental save
       if (!session._newMessages) {
         session._newMessages = [];
       }
       session._newMessages.push([messageIndex, ["ai", partial, modelInfo]]);
 
+      // For manual interruption, don't show error message - just render whatever content we have
+      const content = partial || "";
+
       const div = aiNode.querySelector(".message-text");
-      if (div) {
-        // For manual interruption, don't show error message - just render whatever content we have
-        const content = partial || ""; // Don't show error for manual interruption
-        
-        if (content.trim()) {
-          md(content).then(html => {
-            div.innerHTML = html;
-            if (div.querySelector("pre code")) highlightAllUnder(div);
-            attachCodeBlockListeners(div);
-            renderMathInElement(div);
-          }).catch(err => {
-            console.warn('Markdown rendering error in interrupt handler:', err);
-            div.innerHTML = mdFallback(content, STREAMING_FALLBACK_OPTIONS);
-            if (div.querySelector("pre code")) highlightAllUnder(div);
-            attachCodeBlockListeners(div);
-            renderMathInElement(div);
-          });
-        }
+      if (div && content.trim()) {
+        md(content).then(html => {
+          div.innerHTML = html;
+          if (div.querySelector("pre code")) highlightAllUnder(div);
+          attachCodeBlockListeners(div);
+          renderMathInElement(div);
+        }).catch(err => {
+          console.warn('Markdown rendering error in interrupt handler:', err);
+          div.innerHTML = mdFallback(content, STREAMING_FALLBACK_OPTIONS);
+          if (div.querySelector("pre code")) highlightAllUnder(div);
+          attachCodeBlockListeners(div);
+          renderMathInElement(div);
+        });
       }
 
       // Finalize message - clear placeholder and add normal action buttons

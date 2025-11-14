@@ -1496,6 +1496,44 @@ async function processCodeRequest({
     const { output, exitCode, blocked, isTimeout } = await executeCommand(state, parsed.command, {
       disableTimeout: requiresConfirmation && confirmationApproved,
     });
+
+    // Detect ripgrep auto-install - restart terminal and retry
+    if (output && output.includes('[RG_INSTALLED]')) {
+      log('CODES', 1, 'processCodeRequest', 'Ripgrep installed, restarting terminal', {
+        iteration,
+        sessionId,
+      });
+
+      // Dispose current terminal to restart with new PATH
+      try {
+        state.terminal?.dispose();
+        state.terminal = null;
+        log('CODES', 1, 'processCodeRequest', 'Terminal disposed for ripgrep PATH update', { sessionId });
+      } catch (error) {
+        log('CODES', 2, 'processCodeRequest', 'Failed to dispose terminal', {
+          error: error?.message || error,
+        });
+      }
+
+      // Add system message to conversation history
+      const systemMsg = '[SYSTEM] Ripgrep installed successfully. Terminal restarted to apply PATH changes. Please retry the Search-InFiles command.';
+      state.conversationHistory.push({
+        role: 'user',
+        content: systemMsg,
+      });
+
+      state.commandHistory.push({
+        command: '[SYSTEM - RG INSTALLED]',
+        output: systemMsg,
+        exitCode: 0,
+        summary: 'Ripgrep auto-installed, terminal restarted',
+        timestamp: Date.now(),
+      });
+
+      // Continue to next iteration (don't break)
+      continue;
+    }
+
     // Use AI's summary if provided, otherwise auto-generate
     const entrySummary = parsed.summary || summarizeOutput(output, exitCode);
     const historyEntry = {

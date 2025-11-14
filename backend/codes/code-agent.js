@@ -1258,6 +1258,30 @@ async function processCodeRequest({
     state.workspacePath = ensureDirectoryExists(codeRecord.workspace_path || codeRecord.workspacePath || '') || state.workspacePath;
   }
 
+  // Load previous conversation history from database
+  // This includes ALL previous user messages and their full iteration histories
+  if (state.previousMessages.length === 0 && db && sessionId) {
+    try {
+      const dbMessages = db.getMessages?.(sessionId) || [];
+
+      // Convert database messages to conversation format
+      state.previousMessages = dbMessages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
+      log('CODES', 1, 'processCodeRequest', 'Loaded previous messages from database', {
+        sessionId,
+        totalMessages: dbMessages.length,
+      });
+    } catch (error) {
+      log('CODES', 3, 'processCodeRequest', 'Failed to load previous messages', {
+        sessionId,
+        error: error?.message || error,
+      });
+    }
+  }
+
   ensurePowerShellSession(state, state.workspacePath || process.cwd());
 
   const userPromptWithContext = buildUserPrompt({
@@ -1530,6 +1554,40 @@ async function processCodeRequest({
 
     if (!parsed.command || parsed.done) {
       break;
+    }
+  }
+
+  // Save full conversation history to database for future context
+  // This persists ALL iterations from this request so next request has full context
+  if (db && sessionId && state.conversationHistory.length > 0) {
+    try {
+      // Get current message count to determine starting index
+      const existingMessages = db.getMessages?.(sessionId) || [];
+      let nextMessageIndex = existingMessages.length;
+
+      // Save each message in conversationHistory to database
+      for (const msg of state.conversationHistory) {
+        db.addMessage?.(
+          sessionId,
+          msg.role,
+          msg.content,
+          {}, // metadata (empty for code agent)
+          nextMessageIndex,
+          Date.now()
+        );
+        nextMessageIndex++;
+      }
+
+      log('CODES', 1, 'processCodeRequest', 'Saved conversation history to database', {
+        sessionId,
+        messagesSaved: state.conversationHistory.length,
+        totalMessages: nextMessageIndex,
+      });
+    } catch (error) {
+      log('CODES', 3, 'processCodeRequest', 'Failed to save conversation history', {
+        sessionId,
+        error: error?.message || error,
+      });
     }
   }
 

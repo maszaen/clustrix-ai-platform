@@ -1269,33 +1269,17 @@ async function processCodeRequest({
     state.workspacePath = ensureDirectoryExists(codeRecord.workspace_path || codeRecord.workspacePath || '') || state.workspacePath;
   }
 
-  // Load previous messages from database (max 6 messages = 3 exchanges)
-  // IMPORTANT: Use sessionId not codeId! Messages are linked to sessions, not codes.
-  // previousMessages = message history from database (across requests)
-  // conversationHistory = iteration history within current request
-  if (state.previousMessages.length === 0 && db && sessionId) {
-    try {
-      const dbMessages = db.getMessages?.(sessionId) || [];
-      const last6Messages = dbMessages.slice(-6); // Take last 6 messages
-
-      // Convert database messages to LLM message format
-      state.previousMessages = last6Messages.map((msg) => ({
-        role: msg.role === 'user' ? 'user' : 'assistant',
-        content: msg.content || '',
-      }));
-
-      log('CODES', 1, 'processCodeRequest', 'Loaded previous messages from database', {
-        sessionId,
-        totalDbMessages: dbMessages.length,
-        loadedPreviousMessages: state.previousMessages.length,
-      });
-    } catch (error) {
-      log('CODES', 3, 'processCodeRequest', 'Failed to load previous messages from database', {
-        sessionId,
-        error: error?.message || error,
-      });
-    }
-  }
+  // DO NOT load previous messages from database for code agent sessions
+  // Why: Database stores markdown-formatted responses (code blocks, outputs)
+  // This pollutes AI context and makes AI mimic the markdown format instead of using <cmd> tags
+  // Command history within request provides enough context for code agent
+  //
+  // If message history is needed, it should be:
+  // 1. Stored as clean text (no markdown) in database
+  // 2. Only final answers, not iteration feedback
+  //
+  // For now: Code agent starts fresh each request, using command history as context
+  state.previousMessages = []; // Always empty for code agent
 
   ensurePowerShellSession(state, state.workspacePath || process.cwd());
 

@@ -1102,24 +1102,13 @@ async function runAgentIteration({
   // Store assistant's response in conversation history
   // V2: Store CLEANED response (no control tags) to prevent tag leaking
   // Only store the answer that user actually sees, not internal tags
-  if (parsed.answer || parsed.command) {
-    // Build clean response: answer + command reference (no raw tags)
-    let cleanResponse = '';
-    if (parsed.answer) {
-      cleanResponse += parsed.answer;
-    }
-    if (parsed.command) {
-      // Include command in history so AI knows what it ran
-      cleanResponse += (cleanResponse ? '\n\n' : '') +
-                       `Command executed: ${parsed.command}`;
-    }
-    if (cleanResponse.trim()) {
-      state.conversationHistory.push({
-        role: 'assistant',
-        content: cleanResponse,
-      });
-    }
-  } else if (response.content) {
+  // DON'T add "Command executed: X" - it makes AI mimic that format
+  if (parsed.answer && parsed.answer.trim()) {
+    state.conversationHistory.push({
+      role: 'assistant',
+      content: parsed.answer,
+    });
+  } else if (!parsed.answer && !parsed.command && response.content) {
     // Fallback: if no parsed answer/command, store raw (for unstructured responses)
     // But still strip all V2 tags to prevent leaking
     const strippedContent = response.content
@@ -1269,32 +1258,6 @@ async function processCodeRequest({
     state.workspacePath = ensureDirectoryExists(codeRecord.workspace_path || codeRecord.workspacePath || '') || state.workspacePath;
   }
 
-  // Load previous code messages from code_messages table (clean format, no markdown)
-  // This table stores ONLY user prompts and final AI answers (no iteration feedback)
-  // Format is clean text suitable for LLM context
-  if (state.previousMessages.length === 0 && db && sessionId) {
-    try {
-      const codeMessages = db.getCodeMessages?.(sessionId) || [];
-      const last6Messages = codeMessages.slice(-6); // Max 6 messages (3 exchanges)
-
-      state.previousMessages = last6Messages.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      }));
-
-      log('CODES', 1, 'processCodeRequest', 'Loaded previous code messages from database', {
-        sessionId,
-        totalMessages: codeMessages.length,
-        loadedMessages: state.previousMessages.length,
-      });
-    } catch (error) {
-      log('CODES', 3, 'processCodeRequest', 'Failed to load previous code messages', {
-        sessionId,
-        error: error?.message || error,
-      });
-    }
-  }
-
   ensurePowerShellSession(state, state.workspacePath || process.cwd());
 
   const userPromptWithContext = buildUserPrompt({
@@ -1307,29 +1270,6 @@ async function processCodeRequest({
   let usage = null;
   let lastCommandErrorPattern = null;
   let sameErrorCount = 0;
-
-  // Store user message in code_messages table
-  if (db && sessionId) {
-    try {
-      const existingMessages = db.getCodeMessages?.(sessionId) || [];
-      const nextMessageIndex = existingMessages.length;
-
-      db.addCodeMessage?.(sessionId, 'user', userPrompt, nextMessageIndex);
-
-      log('CODES', 1, 'processCodeRequest', 'Stored user message in code_messages', {
-        sessionId,
-        messageIndex: nextMessageIndex,
-      });
-    } catch (error) {
-      log('CODES', 3, 'processCodeRequest', 'Failed to store user message', {
-        sessionId,
-        error: error?.message || error,
-      });
-    }
-  }
-
-  // Track the final answer for storing in code_messages (NOT iteration feedback)
-  let finalAnswer = null;
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
     if (typeof shouldCancel === 'function' && shouldCancel()) {
@@ -1385,21 +1325,6 @@ async function processCodeRequest({
     let answerToSend = parsed.answer;
     if (!answerToSend && !parsed.hidden && !parsed.command) {
       answerToSend = 'No response provided.';
-    }
-
-    // Track final answer for code_messages storage (only meaningful user-facing content)
-    // Skip iteration feedback like "Command executed: X"
-    if (parsed.answer && parsed.answer.trim()) {
-      // Only update if it's NOT iteration feedback
-      const isIterationFeedback =
-        parsed.answer.startsWith('Command executed:') ||
-        parsed.answer.startsWith('[ERROR]') ||
-        parsed.answer.startsWith('[RESULT]') ||
-        parsed.answer.startsWith('[SYSTEM]');
-
-      if (!isIterationFeedback) {
-        finalAnswer = parsed.answer.trim();
-      }
     }
 
     const responseCommandChunk = formatResponseAndCommand({
@@ -1605,29 +1530,6 @@ async function processCodeRequest({
 
     if (!parsed.command || parsed.done) {
       break;
-    }
-  }
-
-  // Store final AI answer in code_messages table (clean text, no markdown)
-  // Only store meaningful user-facing answers, NOT iteration feedback like "Command executed: X"
-  if (db && sessionId && finalAnswer) {
-    try {
-      const existingMessages = db.getCodeMessages?.(sessionId) || [];
-      const nextMessageIndex = existingMessages.length;
-
-      // Store clean final answer (not iteration feedback)
-      db.addCodeMessage?.(sessionId, 'assistant', finalAnswer, nextMessageIndex);
-
-      log('CODES', 1, 'processCodeRequest', 'Stored final AI answer in code_messages', {
-        sessionId,
-        messageIndex: nextMessageIndex,
-        contentLength: finalAnswer.length,
-      });
-    } catch (error) {
-      log('CODES', 3, 'processCodeRequest', 'Failed to store AI answer', {
-        sessionId,
-        error: error?.message || error,
-      });
     }
   }
 

@@ -1497,6 +1497,15 @@ async function processCodeRequest({
       disableTimeout: requiresConfirmation && confirmationApproved,
     });
 
+    // Check if user cancelled (interrupt button) after command execution
+    if (typeof shouldCancel === 'function' && shouldCancel()) {
+      log('CODES', 1, 'processCodeRequest', 'Streaming cancelled after command execution', {
+        iteration,
+        sessionId,
+      });
+      break;
+    }
+
     // Detect ripgrep auto-install - restart terminal and retry
     if (output && output.includes('[RG_INSTALLED]')) {
       log('CODES', 1, 'processCodeRequest', 'Ripgrep installed, restarting terminal', {

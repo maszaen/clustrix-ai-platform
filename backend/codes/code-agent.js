@@ -610,10 +610,17 @@ function parseAgentResponse(text = '') {
   const checklistMatch = text.match(/<checklist>([\s\S]*?)<\/checklist>/i);
   const summaryMatch = text.match(/<summary>([\s\S]*?)<\/summary>/i);
 
-  // Clean answer by removing <!END> tag if it appears inside
+  // Clean answer by removing tags that should not appear in user-facing text
   let cleanAnswer = answerMatch ? answerMatch[1].trim() : '';
   if (cleanAnswer) {
+    // Remove <!END> tag
     cleanAnswer = cleanAnswer.replace(/<!END>/gi, '').trim();
+    // Remove <cmd> tags if they leaked into answer (AI should put cmd in separate tag)
+    cleanAnswer = cleanAnswer.replace(/<cmd>[\s\S]*?<\/cmd>/gi, '').trim();
+    // Remove <hidden> tags if they leaked into answer
+    cleanAnswer = cleanAnswer.replace(/<hidden>[\s\S]*?<\/hidden>/gi, '').trim();
+    // Remove other V2 tags that shouldn't be in answer
+    cleanAnswer = cleanAnswer.replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '').trim();
   }
 
   // V2: If no <answer> tag found, check if <hidden> tag exists
@@ -1032,7 +1039,23 @@ async function runAgentIteration({
     messages,
   });
 
+  // V2: Log raw AI response for debugging
+  console.log('\n\n=== CODE AGENT ITERATION #' + iteration + ' - RAW AI RESPONSE ===');
+  console.log(response.content || '(empty response)');
+  console.log('=== END RAW AI RESPONSE ===\n');
+
   const parsed = parseAgentResponse(response.content || '');
+
+  // V2: Log parsed response structure for debugging
+  console.log('=== PARSED RESPONSE ===');
+  console.log('Hidden:', parsed.hidden ? `"${parsed.hidden.substring(0, 100)}${parsed.hidden.length > 100 ? '...' : ''}"` : 'null');
+  console.log('Answer:', parsed.answer ? `"${parsed.answer.substring(0, 100)}${parsed.answer.length > 100 ? '...' : ''}"` : 'null');
+  console.log('Command:', parsed.command ? `"${parsed.command.substring(0, 100)}${parsed.command.length > 100 ? '...' : ''}"` : 'null');
+  console.log('Done:', parsed.done);
+  console.log('Todo:', parsed.todo ? 'present' : 'null');
+  console.log('Checklist:', parsed.checklist ? 'present' : 'null');
+  console.log('Summary:', parsed.summary ? 'present' : 'null');
+  console.log('=== END PARSED RESPONSE ===\n\n');
 
   // Store assistant's response in conversation history
   if (response.content) {

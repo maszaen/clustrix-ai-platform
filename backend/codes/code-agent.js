@@ -1427,10 +1427,15 @@ async function processCodeRequest({
       if (state.commandHistory.length > MAX_HISTORY * 2) {
         state.commandHistory.splice(0, state.commandHistory.length - MAX_HISTORY * 2);
       }
-      
+
       // Add command execution result to conversation history as user message
       // This gives the AI feedback about what happened
-      const feedbackMessage = `Command executed:\n\`\`\`powershell\n${parsed.command}\n\`\`\`\n\nOutput:\n\`\`\`\n${truncateOutput(output)}\n\`\`\`\nExit Code: ${exitCode}`;
+      // V2: Use SIMPLE format to avoid confusing AI (no markdown code blocks!)
+      // Use 'older' mode for truncation (max 10 lines) to keep context concise
+      const feedbackMessage = exitCode === 0
+        ? `[RESULT] Command successful.\n${truncateOutput(output, 'older')}`
+        : `[ERROR] Command failed (exit ${exitCode}).\n${truncateOutput(output, 'older')}`;
+
       state.conversationHistory.push({
         role: 'user',
         content: feedbackMessage,

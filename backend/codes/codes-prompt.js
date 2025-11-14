@@ -32,13 +32,13 @@ const DANGEROUS_PATTERNS = [
   {
     pattern: /Get-ChildItem.*-Recurse(?!.*-Depth)/i,
     warning: 'BLOCKED: Unbounded -Recurse without -Depth limit will hang PowerShell',
-    suggestion: 'Add -Depth 2: Get-ChildItem -Filter "*.js" -Depth 2',
+    suggestion: 'Use: List-ProjectFiles -Extensions ".js" -Depth 2',
     block: true,
   },
   {
     pattern: /Get-ChildItem.*-Recurse.*\|.*Select-String/i,
     warning: 'BLOCKED: Piping recursive Get-ChildItem to Select-String will hang',
-    suggestion: 'Use: Get-ChildItem -Filter "*.js" -Path "backend/" -Depth 2 | Select-String "pattern"',
+    suggestion: 'Use: Search-InFiles -Pattern "pattern" -Filter "*.js" -Path "backend" -Depth 2',
     block: true,
   },
   {
@@ -106,7 +106,7 @@ const STATE_RULES = {
 - ALWAYS use Search-InFiles for recursive search (FAST, safe, no hangs!)
   Example: Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
 - Use Find-Pattern for single-file search with context
-- Use ls -Filter "*.js" -Depth 2 for file listing (NEVER naked -Recurse!)
+- Use List-ProjectFiles -Extensions ".js,.ts" -Depth 2 for file listing (skips node_modules automatically)
 - Think in <hidden>, don't explain trivial navigation to user
 - FORBIDDEN: Get-ChildItem -Recurse | Select-String (SLOW & HANGS!)`,
 
@@ -203,6 +203,10 @@ Find-Pattern -Pattern "regex" -Path <file> [-Context 2]
   Example: Find-Pattern -Pattern "display.*none" -Path "style.css"
 Get-FileStats -Path <file>  # Check file size/lines before reading
 
+**FILE DISCOVERY:**
+List-ProjectFiles -Extensions ".js,.ts" [-Depth 2] [-Path "dir"] [-Sort]  # Fast listing (skips node_modules, .git, dist)
+  Example: List-ProjectFiles -Extensions ".js,.ts,.css" -Depth 2 -Sort
+
 **FILE OPERATIONS:**
 Show-FileWithLineNumbers -Path <file> [-StartLine N] [-EndLine N]
 Set-FileLine -Path <file> -LineNumber N -NewContent "text"
@@ -211,7 +215,6 @@ Remove-FileLine -Path <file> -LineNumber N
 Add-FileLine -Path <file> -LineNumber N -NewContent "text"
 
 **BASIC COMMANDS:**
-ls -Filter "*.js" [-Depth 2]  # List files (ALWAYS use -Filter)
 gc <file> - read (check .Count first! Or use Get-FileStats)`;
 
 // ===================================

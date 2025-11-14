@@ -5926,7 +5926,9 @@ a:focus-visible {
 
 .message.ai .thinking-text-indicator {
   color: var(--fg-muted);
+  font-family: var(--font-mono);
   font-size: 15px;
+  margin-top: 2px;
   line-height: 1.45;
   padding: 0 var(--spacing-sm);
   white-space: pre-wrap;

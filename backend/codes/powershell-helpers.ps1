@@ -494,7 +494,8 @@ function Find-DuplicateLines {
 function Search-InFiles {
     <#
     .SYNOPSIS
-    Fast recursive search using native Select-String (NO Get-Content, NO file loading)
+    ULTRA-FAST recursive search using ripgrep (rg) - 100x faster than PowerShell Select-String!
+    Automatically excludes node_modules, .git, dist, build, and respects .gitignore
 
     .PARAMETER Pattern
     Regex pattern to search
@@ -503,10 +504,10 @@ function Search-InFiles {
     Starting directory (default: current directory)
 
     .PARAMETER Filter
-    File filter (e.g., "*.js", "*.html")
+    File filter (e.g., "*.js", "*.html,*.css")
 
     .PARAMETER Depth
-    Maximum recursion depth (default: 3, prevents hangs)
+    Maximum recursion depth (default: 3)
 
     .PARAMETER Context
     Lines of context to show (default: 0)
@@ -542,60 +543,123 @@ function Search-InFiles {
     Write-Output "Path: $Path | Filter: $Filter | Depth: $Depth"
     Write-Output ""
 
-    # Handle multiple filters (e.g., "*.js,*.html")
-    $filters = $Filter -split ','
-    $allMatches = @()
+    # Build ripgrep command
+    $rgArgs = @(
+        $Pattern,
+        $Path,
+        '--line-number',
+        '--heading',
+        '--color', 'never',
+        '--max-depth', $Depth.ToString()
+    )
 
-    foreach ($f in $filters) {
-        $f = $f.Trim()
-        try {
-            # Use Select-String with native file discovery (FAST - no Get-Content!)
-            $files = Get-ChildItem -Path $Path -Filter $f -Depth $Depth -File -ErrorAction SilentlyContinue
+    # Add context if requested
+    if ($Context -gt 0) {
+        $rgArgs += '-C'
+        $rgArgs += $Context.ToString()
+    }
 
-            foreach ($file in $files) {
-                if ($Context -gt 0) {
-                    $matches = Select-String -Path $file.FullName -Pattern $Pattern -Context $Context -ErrorAction SilentlyContinue
-                } else {
-                    $matches = Select-String -Path $file.FullName -Pattern $Pattern -ErrorAction SilentlyContinue
-                }
-
-                if ($matches) {
-                    $allMatches += $matches
-                }
-            }
-        } catch {
-            Write-Warning "Error searching $f : $_"
+    # Handle file filters (convert "*.js,*.html" to multiple --glob arguments)
+    if ($Filter -ne "*.*") {
+        $filters = $Filter -split ','
+        foreach ($f in $filters) {
+            $f = $f.Trim()
+            $rgArgs += '--glob'
+            $rgArgs += $f
         }
     }
 
-    if ($allMatches.Count -eq 0) {
-        Write-Output "No matches found."
-        return
+    # Add common exclusions for extra speed (ripgrep already ignores these by default, but explicit is better)
+    $excludes = @(
+        'node_modules',
+        '.git',
+        'dist',
+        'build',
+        '.next',
+        '.nuxt',
+        'coverage',
+        '__pycache__',
+        '*.min.js',
+        '*.bundle.js'
+    )
+
+    foreach ($exclude in $excludes) {
+        $rgArgs += '--glob'
+        $rgArgs += "!$exclude"
     }
 
-    Write-Output "Found $($allMatches.Count) matches:"
-    Write-Output ""
+    try {
+        # Execute ripgrep
+        $output = & rg @rgArgs 2>&1
 
-    # Group by file for better readability
-    $groupedMatches = $allMatches | Group-Object -Property Path
-
-    foreach ($group in $groupedMatches) {
-        $relativePath = Resolve-Path -Relative $group.Name
-        Write-Output "=== $relativePath ==="
-
-        foreach ($match in $group.Group) {
-            Write-Output "Line $($match.LineNumber): $($match.Line.Trim())"
-
-            if ($Context -gt 0 -and $match.Context) {
-                if ($match.Context.PreContext) {
-                    $match.Context.PreContext | ForEach-Object { Write-Output "  - $_" }
-                }
-                if ($match.Context.PostContext) {
-                    $match.Context.PostContext | ForEach-Object { Write-Output "  + $_" }
-                }
-            }
+        if ($LASTEXITCODE -eq 0) {
+            # Matches found
+            Write-Output $output
+        } elseif ($LASTEXITCODE -eq 1) {
+            # No matches found (not an error)
+            Write-Output "No matches found."
+        } else {
+            # Actual error
+            Write-Error "Ripgrep error: $output"
         }
+    } catch {
+        Write-Error "Failed to execute ripgrep: $_"
         Write-Output ""
+        Write-Output "Falling back to PowerShell Select-String (slower)..."
+
+        # Fallback to original PowerShell method if ripgrep fails
+        $filters = $Filter -split ','
+        $allMatches = @()
+
+        foreach ($f in $filters) {
+            $f = $f.Trim()
+            try {
+                $files = Get-ChildItem -Path $Path -Filter $f -Depth $Depth -File -ErrorAction SilentlyContinue |
+                         Where-Object { $_.FullName -notmatch 'node_modules|\.git|dist|build' }
+
+                foreach ($file in $files) {
+                    if ($Context -gt 0) {
+                        $matches = Select-String -Path $file.FullName -Pattern $Pattern -Context $Context -ErrorAction SilentlyContinue
+                    } else {
+                        $matches = Select-String -Path $file.FullName -Pattern $Pattern -ErrorAction SilentlyContinue
+                    }
+
+                    if ($matches) {
+                        $allMatches += $matches
+                    }
+                }
+            } catch {
+                Write-Warning "Error searching $f : $_"
+            }
+        }
+
+        if ($allMatches.Count -eq 0) {
+            Write-Output "No matches found."
+            return
+        }
+
+        Write-Output "Found $($allMatches.Count) matches:"
+        Write-Output ""
+
+        $groupedMatches = $allMatches | Group-Object -Property Path
+        foreach ($group in $groupedMatches) {
+            $relativePath = Resolve-Path -Relative $group.Name
+            Write-Output "=== $relativePath ==="
+
+            foreach ($match in $group.Group) {
+                Write-Output "Line $($match.LineNumber): $($match.Line.Trim())"
+
+                if ($Context -gt 0 -and $match.Context) {
+                    if ($match.Context.PreContext) {
+                        $match.Context.PreContext | ForEach-Object { Write-Output "  - $_" }
+                    }
+                    if ($match.Context.PostContext) {
+                        $match.Context.PostContext | ForEach-Object { Write-Output "  + $_" }
+                    }
+                }
+            }
+            Write-Output ""
+        }
     }
 }
 

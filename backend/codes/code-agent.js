@@ -1052,6 +1052,15 @@ async function runAgentIteration({
     messages,
   });
 
+  // V2: Log messages sent to LLM for debugging conversation history
+  console.log('\n\n=== MESSAGES SENT TO LLM (Iteration #' + iteration + ') ===');
+  console.log('Total messages:', messages.length);
+  messages.forEach((msg, idx) => {
+    const preview = msg.content.substring(0, 150).replace(/\n/g, ' ');
+    console.log(`[${idx}] ${msg.role}: ${preview}${msg.content.length > 150 ? '...' : ''}`);
+  });
+  console.log('=== END MESSAGES ===\n');
+
   // V2: Log raw AI response for debugging
   console.log('\n\n=== CODE AGENT ITERATION #' + iteration + ' - RAW AI RESPONSE ===');
   console.log(response.content || '(empty response)');

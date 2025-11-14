@@ -16445,67 +16445,10 @@ function setupEventListeners() {
         }
       }
 
-      let footer = aiNode.querySelector(".message-footer");
-      if (!footer) {
-        footer = document.createElement("div");
-        footer.className = "message-footer";
-        const messageContent = aiNode.querySelector(".message-content");
-        if (messageContent) messageContent.appendChild(footer);
-        else aiNode.appendChild(footer);
-      }
-      footer.innerHTML = "";
+      // Finalize message - add normal action buttons (copy, regenerate, etc)
+      clearContinuePlaceholder(aiNode);
+      renderAiFinalActions(aiNode, content, messageIndex);
 
-      const placeholderCard = document.createElement("div");
-      placeholderCard.className = "continue-placeholder";
-
-      const hint = document.createElement("span");
-      hint.className = "placeholder-hint";
-      hint.textContent = "Response interrupted by user";
-
-      const btn = document.createElement("button");
-      btn.className = "primary-btn continue-fragment";
-      btn.textContent = "Continue";
-      btn.disabled = true;
-      btn.title = "Continue from interrupted point";
-
-      placeholderCard.appendChild(hint);
-      placeholderCard.appendChild(btn);
-
-      setTimeout(() => {
-        btn.disabled = false;
-      }, 1500);
-
-      btn.addEventListener("click", () => {
-        log(
-          "STREAM",
-          2,
-          "continue:interrupted:click",
-          "User clicked 'Continue' after manual interruption",
-          { session: session.created_at, messageIndex },
-        );
-
-        btn.disabled = true;
-        footer.innerHTML = "";
-
-        const msgs = buildResumeMessagesFromSession(
-          session,
-          messageIndex,
-          partial,
-        );
-
-        startStream(
-          session,
-          "[System] Continue EXACTLY where the last assistant message stopped. Do NOT repeat previous text or acknowledge this instruction. Just provide the continuation.",
-          aiNode,
-          messageIndex,
-          false,
-          msgs,
-          partial,
-        );
-        updateInputState();
-      });
-
-      footer.appendChild(placeholderCard);
       break;
     }
 

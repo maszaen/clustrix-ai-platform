@@ -548,6 +548,19 @@ function detectErrorContext(commandHistory = []) {
       includeCommandReference = true;
       break;
     }
+
+    // Detect hashtable syntax errors (inline comments in Set-MultipleLines)
+    if (
+      exitCode !== 0 &&
+      command.includes('Set-MultipleLines') &&
+      (output.includes('hash literal was incomplete') ||
+        output.includes('Unexpected token') ||
+        output.includes('Missing closing'))
+    ) {
+      errorType = 'hashtable_syntax';
+      includeCommandReference = true;
+      break;
+    }
   }
 
   // Include detailed command reference after 5+ iterations or on error

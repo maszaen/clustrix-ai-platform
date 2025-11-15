@@ -303,15 +303,46 @@ function Set-MultipleLines {
     $totalLines = $lines.Count
     $changedCount = 0
 
-    # Apply all replacements
+    # Separate valid and invalid line numbers
+    $validEdits = @{}
+    $invalidLines = @()
+
     foreach ($lineNum in $Replacements.Keys) {
         if ($lineNum -lt 1 -or $lineNum -gt $totalLines) {
-            Write-Warning "Line number $lineNum is out of range (1-$totalLines), skipping"
-            continue
+            $invalidLines += $lineNum
+        } else {
+            $validEdits[$lineNum] = $Replacements[$lineNum]
         }
+    }
 
+    # Report invalid lines with actionable guidance (single summary, no spam)
+    if ($invalidLines.Count -gt 0) {
+        $sortedInvalid = $invalidLines | Sort-Object
+        $minInvalid = $sortedInvalid[0]
+        $maxInvalid = $sortedInvalid[-1]
+
+        Write-Output ""
+        Write-Output "========================================"
+        Write-Output "WARNING: Some edits are out of range"
+        Write-Output "========================================"
+        Write-Output ""
+        Write-Output "File has $totalLines lines (range: 1-$totalLines)"
+        Write-Output "Skipped $($invalidLines.Count) invalid line numbers: $minInvalid-$maxInvalid"
+        Write-Output ""
+        Write-Output "SOLUTION:"
+        Write-Output "  1. Read file first: Show-FileWithLineNumbers -Path `"$Path`""
+        Write-Output "  2. Check actual line count"
+        Write-Output "  3. Use Set-Content to rewrite entire file if adding new content"
+        Write-Output ""
+        Write-Output "Proceeding with $($validEdits.Count) valid edits only..."
+        Write-Output "========================================"
+        Write-Output ""
+    }
+
+    # Apply valid replacements only
+    foreach ($lineNum in $validEdits.Keys) {
         $idx = $lineNum - 1
-        $lines[$idx] = $Replacements[$lineNum]
+        $lines[$idx] = $validEdits[$lineNum]
         $changedCount++
     }
 
@@ -738,65 +769,157 @@ function Search-InFiles {
     $rgAvailable = $null -ne (Get-Command rg -ErrorAction SilentlyContinue)
 
     if (-not $rgAvailable) {
-        Write-Output "Ripgrep (rg) not found. Installing automatically..."
+        Write-Output "========================================"
+        Write-Output "Ripgrep (rg) not found - Installing now"
+        Write-Output "========================================"
         Write-Output ""
 
         try {
+            $installSuccess = $false
+
             # Detect OS and install ripgrep
             if ($IsWindows -or $env:OS -match "Windows") {
                 # Try winget first (fastest, built into Windows 11+)
                 $wingetAvailable = $null -ne (Get-Command winget -ErrorAction SilentlyContinue)
                 if ($wingetAvailable) {
-                    Write-Output "Installing ripgrep via winget..."
-                    winget install BurntSushi.ripgrep.MSVC --silent --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
+                    Write-Output "[1/3] Installing ripgrep via winget (Windows Package Manager)..."
+                    Write-Output ""
+
+                    # Show install output for troubleshooting
+                    $installOutput = winget install BurntSushi.ripgrep.MSVC --silent --accept-source-agreements --accept-package-agreements 2>&1
+
+                    if ($LASTEXITCODE -eq 0 -or $installOutput -match "successfully installed") {
+                        Write-Output "✓ Winget install completed"
+                        $installSuccess = $true
+                    } else {
+                        Write-Output "× Winget install failed or already installed"
+                        Write-Output "Install output: $installOutput"
+                    }
                 } else {
                     # Fallback to choco
                     $chocoAvailable = $null -ne (Get-Command choco -ErrorAction SilentlyContinue)
                     if ($chocoAvailable) {
-                        Write-Output "Installing ripgrep via chocolatey..."
-                        choco install ripgrep -y 2>&1 | Out-Null
+                        Write-Output "[1/3] Installing ripgrep via Chocolatey..."
+                        Write-Output ""
+
+                        $installOutput = choco install ripgrep -y 2>&1
+
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Output "✓ Chocolatey install completed"
+                            $installSuccess = $true
+                        } else {
+                            Write-Output "× Chocolatey install failed"
+                            Write-Output "Install output: $installOutput"
+                        }
                     } else {
                         Write-Error "Neither winget nor chocolatey found. Cannot auto-install ripgrep."
-                        Write-Output "Using PowerShell Select-String fallback..."
+                        Write-Output ""
+                        Write-Output "Please install ripgrep manually:"
+                        Write-Output "  - Via winget: winget install BurntSushi.ripgrep.MSVC"
+                        Write-Output "  - Via choco: choco install ripgrep"
+                        Write-Output "  - Download: https://github.com/BurntSushi/ripgrep/releases"
+                        Write-Output ""
+                        Write-Output "Using PowerShell Select-String fallback for now..."
                         $rgAvailable = $false
                     }
                 }
             } elseif ($IsMacOS) {
-                Write-Output "Installing ripgrep via homebrew..."
-                brew install ripgrep 2>&1 | Out-Null
+                Write-Output "[1/3] Installing ripgrep via Homebrew..."
+                Write-Output ""
+
+                $installOutput = brew install ripgrep 2>&1
+
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Output "✓ Homebrew install completed"
+                    $installSuccess = $true
+                } else {
+                    Write-Output "× Homebrew install failed"
+                    Write-Output "Install output: $installOutput"
+                }
             } else {
                 # Linux
                 if (Test-Path "/usr/bin/apt") {
-                    Write-Output "Installing ripgrep via apt..."
-                    sudo apt-get update -y 2>&1 | Out-Null
-                    sudo apt-get install -y ripgrep 2>&1 | Out-Null
+                    Write-Output "[1/3] Installing ripgrep via apt (Ubuntu/Debian)..."
+                    Write-Output ""
+
+                    sudo apt-get update -y
+                    $installOutput = sudo apt-get install -y ripgrep 2>&1
+
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Output "✓ APT install completed"
+                        $installSuccess = $true
+                    } else {
+                        Write-Output "× APT install failed"
+                        Write-Output "Install output: $installOutput"
+                    }
                 } elseif (Test-Path "/usr/bin/yum") {
-                    Write-Output "Installing ripgrep via yum..."
-                    sudo yum install -y ripgrep 2>&1 | Out-Null
+                    Write-Output "[1/3] Installing ripgrep via yum (RedHat/CentOS)..."
+                    Write-Output ""
+
+                    $installOutput = sudo yum install -y ripgrep 2>&1
+
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Output "✓ YUM install completed"
+                        $installSuccess = $true
+                    } else {
+                        Write-Output "× YUM install failed"
+                        Write-Output "Install output: $installOutput"
+                    }
                 }
             }
 
-            # Refresh PATH in current session
+            Write-Output ""
+            Write-Output "[2/3] Refreshing PATH environment variable..."
+
+            # Refresh PATH in current session (Windows only)
             if ($IsWindows -or $env:OS -match "Windows") {
-                $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+                try {
+                    $machinePath = [System.Environment]::GetEnvironmentVariable("Path","Machine")
+                    $userPath = [System.Environment]::GetEnvironmentVariable("Path","User")
+                    $env:Path = "$machinePath;$userPath"
+                    Write-Output "✓ PATH refreshed in current session"
+                } catch {
+                    Write-Warning "Failed to refresh PATH: $_"
+                }
+            } else {
+                Write-Output "✓ PATH refresh not required on this OS"
             }
+
+            Write-Output ""
+            Write-Output "[3/3] Verifying ripgrep installation..."
 
             # Check if install succeeded
             $rgAvailable = $null -ne (Get-Command rg -ErrorAction SilentlyContinue)
 
             if ($rgAvailable) {
+                $rgVersion = (rg --version 2>&1 | Select-Object -First 1)
+                Write-Output "✓ Ripgrep is now available: $rgVersion"
                 Write-Output ""
-                Write-Output "[RG_INSTALLED] Ripgrep installed successfully. Restarting terminal to apply PATH changes..."
+                Write-Output "========================================"
+                Write-Output "[RG_INSTALLED] Installation successful!"
+                Write-Output "========================================"
                 return
             } else {
+                Write-Output "× Ripgrep command still not found after installation"
                 Write-Output ""
-                Write-Output "Ripgrep installation completed. Terminal restart required to update PATH."
-                Write-Output "[RG_INSTALLED] Terminal will restart automatically."
-                return
+
+                if ($installSuccess) {
+                    Write-Output "Installation completed but requires terminal restart to update PATH."
+                    Write-Output ""
+                    Write-Output "========================================"
+                    Write-Output "[RG_INSTALLED] Terminal restart required"
+                    Write-Output "========================================"
+                    return
+                } else {
+                    Write-Warning "Installation may have failed. Using PowerShell Select-String fallback..."
+                    $rgAvailable = $false
+                }
             }
         } catch {
             Write-Error "Failed to install ripgrep: $_"
-            Write-Output "Falling back to PowerShell Select-String..."
+            Write-Output ""
+            Write-Output "Falling back to PowerShell Select-String (slower)..."
+            $rgAvailable = $false
         }
     }
 
@@ -1117,5 +1240,5 @@ function Get-FileStats {
     } | Format-List
 }
 
-# Export functions
-Export-ModuleMember -Function Show-FileWithLineNumbers, Set-FileLine, Remove-FileLine, Add-FileLine, Set-MultipleLines, Search-FileWithContext, Get-FileLineRange, Find-DuplicateLines, List-ProjectFiles, Search-InFiles, Find-Pattern, Get-FileStats
+# Note: Functions are automatically available after dot-sourcing this script
+# No need for Export-ModuleMember (that's only for .psm1 modules)

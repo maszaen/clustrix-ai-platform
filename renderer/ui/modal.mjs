@@ -1,3 +1,4 @@
+import { closeMobile } from "../renderer.js";
 let confirmationModal = null;
 let confirmationTitleEl = null;
 let confirmationMessageEl = null;
@@ -135,6 +136,8 @@ function closeModalWithAnimation(modal, duration = 200) {
 function openModalWithAnimation(modal) {
   const modalElement = typeof modal === 'string' ? document.querySelector(modal) : modal;
   if (!modalElement) return;
+
+  closeMobile();
 
   // Remove hidden and closing classes
   modalElement.classList.remove('hidden', 'closing');

@@ -132,6 +132,38 @@ initializeCodeAgent({
       return null;
     }
   },
+  getMemory: (sessionId, memoryName) => {
+    if (!useSQLite || !db) {
+      db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
+      useSQLite = true;
+    }
+    return db.getMemory(sessionId, memoryName);
+  },
+  saveMemory: (sessionId, memoryName, filePath, startLine, endLine, content) => {
+    if (!useSQLite || !db) {
+      db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
+      useSQLite = true;
+    }
+    return db.saveMemory(sessionId, memoryName, filePath, startLine, endLine, content);
+  },
+  deleteMemory: (sessionId, memoryName) => {
+    if (!useSQLite || !db) {
+      db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
+      useSQLite = true;
+    }
+    return db.deleteMemory(sessionId, memoryName);
+  },
+  clearAllMemory: (sessionId) => {
+    if (!useSQLite || !db) {
+      db = new DatabaseManager(app);
+      invalidateUsageStatisticsCache();
+      useSQLite = true;
+    }
+    return db.clearAllMemory(sessionId);
+  },
 });
 
 function clearCloseDelayTimer() {

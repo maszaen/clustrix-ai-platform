@@ -60,37 +60,37 @@ const DANGEROUS_PATTERNS = [
 // ===================================
 const STATE_RESPONSE_FORMATS = {
   [AGENT_STATES.EXPLORE]: {
-    format: '<hidden>thinking where to look</hidden>\n<cmd>search command</cmd>',
+    format: '<state>EXPLORE</state>\n<hidden>thinking where to look</hidden>\n<cmd>search command</cmd>',
     useHidden: true,
     useAnswer: false,
   },
   [AGENT_STATES.READ]: {
-    format: '<cmd>read command</cmd>',
+    format: '<state>READ</state>\n<cmd>read command</cmd>',
     useHidden: false,
     useAnswer: false,
   },
   [AGENT_STATES.UNDERSTAND]: {
-    format: '<hidden>detailed analysis</hidden>\n<answer>key insights for user</answer>',
+    format: '<state>UNDERSTAND</state>\n<hidden>detailed analysis</hidden>\n<answer>key insights for user</answer>',
     useHidden: true,
     useAnswer: true,
   },
   [AGENT_STATES.EDIT]: {
-    format: '<answer>what is being changed and why</answer>\n<cmd>edit command</cmd>',
+    format: '<state>EDIT</state>\n<answer>what is being changed and why</answer>\n<cmd>edit command</cmd>',
     useHidden: false,
     useAnswer: true,
   },
   [AGENT_STATES.EXECUTE]: {
-    format: '<hidden>why running this</hidden>\n<cmd>run command</cmd>',
+    format: '<state>EXECUTE</state>\n<hidden>why running this</hidden>\n<cmd>run command</cmd>',
     useHidden: true,
     useAnswer: false,
   },
   [AGENT_STATES.VERIFY]: {
-    format: '<answer>verification result</answer>\n<cmd>check command (optional)</cmd>',
+    format: '<state>VERIFY</state>\n<answer>verification result</answer>\n<cmd>check command (optional)</cmd>',
     useHidden: false,
     useAnswer: true,
   },
   [AGENT_STATES.DONE]: {
-    format: '<answer>summary of what was done</answer>\n<!END>',
+    format: '<state>DONE</state>\n<answer>summary of what was done</answer>\n<!END>',
     useHidden: false,
     useAnswer: true,
   },
@@ -115,9 +115,10 @@ const STATE_RULES = {
 **READ STATE:**
 - ALWAYS count first: (gc file.txt).Count
 - If < 300 lines: Show-FileWithLineNumbers -Path file.txt
-- If > 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 100
+- If > 300 lines: Use batches of 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 300
 - NO <answer> tag for reading, just <cmd>
 - Store learnings in memory (no output needed)
+- CRITICAL: Check MEMORY BEFORE reading files! If already in memory, analyze instead.
 - CRITICAL: Commands MUST be in <cmd> tag, NEVER in <answer> or plain text`,
 
   [AGENT_STATES.UNDERSTAND]: `
@@ -134,12 +135,30 @@ const STATE_RULES = {
 
 **EDIT STATE:**
 - MUST use <answer> to explain what & why
-- Set-FileLine for single: Set-FileLine -Path file.txt -LineNumber 25 -NewContent "new"
-- Set-MultipleLines for batch: Set-MultipleLines -Path file.txt -Replacements @{25='line1'; 30='line2'}
-- CRITICAL: NO inline comments in hashtable! @{1='x'; 2='y'} ✓  NOT @{1='x'; // comment ✗
-- For 50+ line edits: Use Set-Content to rewrite entire file instead of Set-MultipleLines
-- NEVER use -replace for complex patterns
-- Verify line numbers from READ state first`,
+- Wrap EVERY edit inside <cmd> with <set> tags only
+- Format:
+  <cmd>
+  <set file="relative/path.tsx" range={20, 40}>
+  <![CDATA[
+  // new lines
+  ]]>
+  </set>
+  </cmd>
+
+**CRITICAL RANGE RULES (MUST READ CAREFULLY):**
+- range={start, end} = DELETE lines from start to end, then INSERT new content in their place
+  Example: range={10, 15} deletes lines 10-15 and replaces with your CDATA content
+  Example: range={103, 103} deletes line 103 only and replaces with your content
+  Example: range={200, 300} deletes lines 200-300 and replaces with your content
+- range={line} = DELETE line, then INSERT new content (same as range={line, line})
+  Example: range={13} deletes line 13 and replaces with your content
+- add={line} = INSERT new content BEFORE the specified line (doesn't delete anything)
+  Example: add={25} inserts new content before line 25 (line 25 becomes line 26+)
+- range={-1} = APPEND new content to the END of file
+- Delete: leave CDATA empty. Insert: omit end. Replace: include both start & end
+- NEVER mix <set> tags with plain text or other commands in the same <cmd>
+- Confirm line numbers from READ state before editing
+- AFTER editing: Move to VERIFY state to check results`,
 
   [AGENT_STATES.EXECUTE]: `
 
@@ -172,36 +191,45 @@ const STATE_RULES = {
 // ===================================
 const SYSTEM_PROMPT = `You are a PowerShell coding assistant. Work in STATES for efficiency.
 
-**CURRENT STATE: {current_state}**
-
 **RESPONSE FORMAT:**
 {state_format}
+
+**STATE SELECTION:**
+Choose your next state based on what you need to do:
+- EXPLORE: Finding files, searching codebase
+- READ: Reading file contents
+- UNDERSTAND: Analyzing code/structure
+- EDIT: Modifying files
+- EXECUTE: Running tests/commands
+- VERIFY: Checking results
+- DONE: Task complete
+
+**CRITICAL STATE RULES:**
+- ALWAYS start with <state>STATE_NAME</state> in EVERY response
+- NEVER respond without <state> tag (except if truly DONE)
+- If continuing same state, still declare it: <state>READ</state>
+- Only use DONE when task is 100% complete
+- If unsure, use UNDERSTAND to analyze what you have
 
 **CORE RULES:**
 1. Use <hidden> for internal thinking (NOT shown to user)
 2. Use <answer> ONLY when user needs info (state-specific)
 3. NEVER repeat failed commands - try different approach
 4. Search: Use Search-InFiles (FAST!) not Get-ChildItem -Recurse
-5. File ops: Show-FileWithLineNumbers, Set-FileLine, Set-MultipleLines
+5. File ops: Show-FileWithLineNumbers for reads, <set> tags inside <cmd> for edits
 6. Check size: Get-FileStats before reading large files
 
 **MEMORY SYSTEM:**
 ALL file reads (Show-FileWithLineNumbers, Search-InFiles) are AUTOMATICALLY saved to "default" memory.
 Command output shows CUMULATIVE MEMORY STATE (not raw output), preventing duplicate reads.
 
-Memory format:
-=== MEMORY STATE: default ===
-/path/to/file.js
-100: code line 100
-101: code line 101
-...
-[Lines 150-200 not explored]
-201: code line 201
+{memory_state}
 
 Memory Commands:
+- Show-Memory <name> - Display full memory state for a specific memory
 - Hide memory <name1> <name2> - Hide memories from view (still saved)
 - Use memory <name1> <name2> - Show hidden memories again
-- Clear memory <name1> - Delete memory (--all for all)
+- Clear memory <name1> <name2> - Delete memory (--all for all)
 - <cmd> | Save memory <name> - Save to named memory instead of default
 
 IMPORTANT: Memory shows ALL previously read lines. Check memory BEFORE reading files!
@@ -232,12 +260,27 @@ List-ProjectFiles -Extensions ".js,.ts" [-Depth 2] [-Path "dir"] [-Sort]  # Fast
 
 **FILE OPERATIONS:**
 Show-FileWithLineNumbers -Path <file> [-StartLine N] [-EndLine N]
-Set-FileLine -Path <file> -LineNumber N -NewContent "text"
-Set-MultipleLines -Path <file> -Replacements @{25='line1'; 30='line2'}
-  WARNING: NO inline comments in hashtable! @{1='x'; 2='y'} ✓  @{1='x'; // bad ✗
-  For 50+ edits: Use Set-Content instead
-Remove-FileLine -Path <file> -LineNumber N
-Add-FileLine -Path <file> -LineNumber N -NewContent "text"
+<cmd>
+<set file="relative/path.js" range={start, end}>
+<![CDATA[
+new line 1
+new line 2
+]]>
+</set>
+<set file="relative/path.js" add={line}>
+<![CDATA[
+inserted content
+]]>
+</set>
+</cmd>
+
+**RANGE MEANINGS (CRITICAL TO UNDERSTAND):**
+- range={10, 15} = Delete lines 10-15 and replace with your CDATA content
+- range={13} = Delete line 13 and replace with your content
+- add={25} = Insert new content before line 25 (doesn't delete anything)
+- range={-1} = Append new content to end of file
+- Delete: keep CDATA empty, Insert: omit end, Replace: include both start & end
+- Multiple edits? Stack more <set> blocks inside the same <cmd>
 
 **BASIC COMMANDS:**
 gc <file> - read (check .Count first! Or use Get-FileStats)`;
@@ -248,23 +291,54 @@ gc <file> - read (check .Count first! Or use Get-FileStats)`;
 const ERROR_GUIDANCE = {
   replace_failed: `
 **-REPLACE FAILED:**
-Your -replace command failed (common with special chars/regex).
+Regex -replace edits are fragile.
 
 **SOLUTION:**
-$lines = gc <file>
-$lines[24] = 'exact new content for line 25'
-$lines | Set-Content <file>
+Switch to <set> tags with explicit ranges:
+<cmd>
+<set file="path/to/file.js" range={24}>
+<![CDATA[
+exact new content for line 24
+]]>
+</set>
+</cmd>
 
-NEVER retry same -replace!`,
+**MULTI-LINE REPLACEMENT EXAMPLE:**
+To replace lines 10-15 with new content (deletes old lines 10-15):
+<cmd>
+<set file="path/to/file.js" range={10, 15}>
+<![CDATA[
+new line 10
+new line 11
+new line 12
+new line 13
+new line 14
+new line 15
+]]>
+</set>
+</cmd>
+
+**INSERT EXAMPLE:**
+To insert new content before line 25 (doesn't delete anything):
+<cmd>
+<set file="path/to/file.js" add={25}>
+<![CDATA[
+new inserted line 1
+new inserted line 2
+]]>
+</set>
+</cmd>
+
+This avoids regex escaping issues.`,
 
   line_numbers_missing: `
 **NEED LINE NUMBERS:**
-You tried editing without knowing exact line numbers.
+You tried editing without precise ranges.
 
 **REQUIRED:**
 1. Show-FileWithLineNumbers -Path <file>
-2. Identify exact line number
-3. Set-FileLine -Path <file> -LineNumber X -NewContent "..."`,
+2. Identify the exact start/end lines
+3. Use <set file="..." range={start, end}> for replacement or <set file="..." add={line}> for insertion`,
 
   file_too_large: `
 **FILE TOO LARGE:**
@@ -298,34 +372,14 @@ Search-InFiles -Pattern "your-pattern" -Filter "*.js" -Depth 2
 **ALWAYS do:** Search-InFiles -Pattern "..." -Filter "*.js" -Depth 2`,
 
   hashtable_syntax: `
-**HASHTABLE SYNTAX ERROR:**
-Your Set-MultipleLines command failed with "hash literal was incomplete" or "Unexpected token".
+**INVALID EDIT SYNTAX:**
+Your edit payload was malformed.
 
-**ROOT CAUSE:**
-PowerShell hashtables DON'T support inline comments!
-
-**WRONG (FAILS):**
-@{
-  1='line1'; // comment here ← INVALID!
-  2='line2'
-}
-
-**CORRECT:**
-@{
-  1='line1';
-  2='line2'
-}
-
-**BEST SOLUTION FOR LARGE EDITS (50+ lines):**
-Instead of Set-MultipleLines, use Set-Content to rewrite entire file:
-
-$lines = gc <file>
-$lines[0] = 'new line 1'
-$lines[1] = 'new line 2'
-# ... edit more lines ...
-$lines | Set-Content <file>
-
-**CRITICAL:** NEVER use inline comments (//) in hashtable values!`,
+**CHECKLIST:**
+- <cmd> should contain ONLY <set> blocks
+- Each <set> needs file="..." and range={start, end} or add={line}
+- Wrap multi-line content inside <![CDATA[ ... ]]>
+- Close the </set> tag and keep CDATA balanced`,
 };
 
 // ===================================
@@ -371,7 +425,13 @@ Continue solving based on output above.
 
 **WHEN DONE:**
 <answer>Summary (casual Indonesian)</answer>
-<!END>`;
+<!END>
+
+**FINAL REMINDER:**
+- Every response MUST have <state> tag first
+- Check memory before reading files
+- Use appropriate state for your current task
+- Don't end prematurely - analyze what you have first`;
 
 // ===================================
 // STATE DETECTION
@@ -382,6 +442,15 @@ function detectCurrentState(commandHistory = [], lastCommand = '', iteration = 0
   // First iteration = EXPLORE
   if (iteration === 0) {
     return AGENT_STATES.EXPLORE;
+  }
+
+  // Check for READ looping: if >3 read commands in last 5, force to UNDERSTAND
+  const recentHistory = commandHistory.slice(-5);
+  const readCount = recentHistory.filter(entry =>
+    entry.command && (entry.command.includes('Show-FileWithLineNumbers') || entry.command.includes('gc '))
+  ).length;
+  if (readCount >= 3) {
+    return AGENT_STATES.UNDERSTAND; // Force transition to prevent infinite read loop
   }
 
   // Check last command type
@@ -433,7 +502,7 @@ function detectDangerousCommand(command = '') {
 // ===================================
 // BUILD STATE-SPECIFIC PROMPT
 // ===================================
-function buildStatePrompt(state, iteration, commandHistory, includeReference = false) {
+function buildStatePrompt(state, iteration, commandHistory, includeReference = false, memoryState = '') {
   const stateFormat = STATE_RESPONSE_FORMATS[state];
   const stateRules = STATE_RULES[state] || '';
 
@@ -444,10 +513,10 @@ function buildStatePrompt(state, iteration, commandHistory, includeReference = f
 
   // Build prompt with state-specific rules
   let prompt = SYSTEM_PROMPT
-    .replace('{current_state}', state.toUpperCase())
     .replace('{state_format}', stateFormat.format)
     .replace('{state_rules}', stateRules)
-    .replace('{command_reference}', commandRef);
+    .replace('{command_reference}', commandRef)
+    .replace('{memory_state}', memoryState);
 
   return prompt;
 }

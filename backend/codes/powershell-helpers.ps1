@@ -1240,5 +1240,18 @@ function Get-FileStats {
     } | Format-List
 }
 
+# ============================================================================
+# LOAD V3: <set> COMMAND HANDLER
+# ============================================================================
+
+# Import the new <set> tag command handler
+$setCommandHandlerPath = Join-Path $PSScriptRoot "set-command-handler.ps1"
+if (Test-Path $setCommandHandlerPath) {
+    . $setCommandHandlerPath
+    Write-Output "[V3] <set> command handler loaded successfully"
+} else {
+    Write-Warning "[V3] <set> command handler not found at: $setCommandHandlerPath"
+}
+
 # Note: Functions are automatically available after dot-sourcing this script
 # No need for Export-ModuleMember (that's only for .psm1 modules)

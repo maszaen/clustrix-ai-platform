@@ -15,6 +15,11 @@ const {
   getCommandReference,
   getErrorGuidance,
 } = require('./codes-prompt');
+const {
+  hasSetTags,
+  wrapSetCommand,
+  parseSetCommandOutput,
+} = require('./set-command-integration');
 const MAX_ITERATIONS = 30;
 const MAX_HISTORY = 15;
 const MAX_OUTPUT_LINES = 100;
@@ -1191,6 +1196,47 @@ async function executeCommand(state, command, options = {}) {
       // Execute actual command but save to named memory
       command = memoryCmd.actualCommand;
       options.saveToMemory = memoryCmd.name;
+    }
+  }
+
+  // V3: DETECT AND ROUTE <set> TAG COMMANDS
+  if (hasSetTags(command)) {
+    log('CODES', 1, 'executeCommand', 'Detected <set> tag command, routing to Invoke-SetCommand');
+
+    try {
+      const terminal = ensurePowerShellSession(state, state.workspacePath);
+      const psCommand = wrapSetCommand(command);
+
+      const result = await terminal.run(psCommand);
+      const combinedOutput = [result.stdout, result.stderr].filter(Boolean).join('\n');
+      const parsed = parseSetCommandOutput(combinedOutput);
+
+      log('CODES', 1, 'executeCommand', '<set> command executed', {
+        success: parsed.success,
+        operations: parsed.operations.length,
+        diffs: parsed.diffs.length,
+      });
+
+      // Update memory state after successful file edit
+      // The output already includes memory state, so we don't need to capture separately
+      return {
+        output: combinedOutput,
+        exitCode: parsed.success ? 0 : 1,
+        blocked: false,
+        executed: true,
+        isSetCommand: true,
+        setResult: parsed,
+      };
+    } catch (error) {
+      log('CODES', 3, 'executeCommand', 'Failed to execute <set> command', {
+        error: error?.message || error,
+      });
+      return {
+        output: `Failed to execute <set> command: ${error?.message || error}`,
+        exitCode: 1,
+        blocked: false,
+        executed: false,
+      };
     }
   }
 

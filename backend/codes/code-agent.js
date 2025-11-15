@@ -4,6 +4,7 @@ const fs = require('fs');
 const { PowerShellSession } = require('./powershell-session');
 const { applySetOperations } = require('./edit-operations');
 const { joinEndpoint } = require('../integration/langchain-helpers');
+const { getRipgrepPath } = require('../../utils/ripgrep-path');
 const {
   AGENT_STATES,
   DANGEROUS_PATTERNS,
@@ -22,7 +23,100 @@ const MAX_OUTPUT_LENGTH = 8000;
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const HISTORY_SUMMARY_LENGTH = 160;
 const COMMAND_EXECUTION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max for command execution
+const BACKGROUND_PROCESS_TIMEOUT_MS = 15 * 1000; // 15 seconds for background processes
 const COMMAND_APPROVAL_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes for user approval window
+
+// Patterns for detecting background/long-running processes
+const BACKGROUND_PROCESS_PATTERNS = [
+  // Node.js ecosystem
+  /^(npm|yarn|pnpm|bun)\s+(run\s+)?(dev|start|serve|watch|preview)/,
+  /^node\s+.*server/,
+  /^nodemon/,
+  /^ts-node.*server/,
+  /^deno\s+run/,
+  /^serve(\s+|$)/,
+  
+  // Build tools & bundlers
+  /vite(\s+|$)/,
+  /webpack(-dev-server|\s+serve)/,
+  /parcel(\s+|$)/,
+  /rollup.*--watch/,
+  /esbuild.*--watch/,
+  /tsc.*--watch/,
+  
+  // Frontend frameworks
+  /ng\s+serve/,
+  /^react-scripts\s+start/,
+  /^next\s+dev/,
+  /^nuxt\s+dev/,
+  /^gatsby\s+develop/,
+  /^svelte-kit\s+dev/,
+  /^astro\s+dev/,
+  /^remix\s+dev/,
+  /^vue-cli-service\s+serve/,
+  /^quasar\s+dev/,
+  /^expo\s+start/,
+  
+  // Python
+  /^python\s+-m\s+http\.server/,
+  /^python.*manage\.py\s+runserver/,
+  /^flask\s+run/,
+  /^uvicorn/,
+  /^gunicorn/,
+  /^streamlit\s+run/,
+  /^jupyter\s+(notebook|lab)/,
+  
+  // PHP
+  /^php\s+(artisan\s+serve|-S\s+)/,
+  /^symfony\s+serve/,
+  
+  // Ruby
+  /^rails\s+(server|s)/,
+  /^bundle\s+exec.*server/,
+  /^rackup/,
+  /^jekyll\s+serve/,
+  /^middleman\s+server/,
+  
+  // Static site generators
+  /^hugo\s+server/,
+  /^eleventy.*--serve/,
+  /^hexo\s+server/,
+  /^docusaurus\s+start/,
+  /^mkdocs\s+serve/,
+  
+  // Java/JVM
+  /^mvn\s+spring-boot:run/,
+  /^gradle(w)?\s+(bootRun|run)/,
+  /^java.*-jar/,
+  
+  // Go
+  /^go\s+run/,
+  /^(air|fresh)(\s+|$)/,
+  
+  // Rust
+  /^cargo\s+(run|watch)/,
+  
+  // Databases
+  /^(mongod|redis-server|mysql|postgres)(\s+|$)/,
+  /^neo4j\s+console/,
+  
+  // Containers & servers
+  /^docker(-compose)?\s+(run|up)/,
+  /^(nginx|apache2ctl|caddy)(\s+|$)/,
+  
+  // Others
+  /^dotnet\s+run/,
+  /^mix\s+phx\.server/,
+  /^iex.*phx\.server/,
+  /live-server/,
+  /browser-sync/,
+  /http-server/,
+];
+
+function isBackgroundProcess(command) {
+  const trimmedCommand = command.trim();
+  return BACKGROUND_PROCESS_PATTERNS.some(pattern => pattern.test(trimmedCommand));
+}
 
 let deps = {
   log: () => {},
@@ -100,6 +194,7 @@ function getSessionState(sessionId) {
       // Memory system: cumulative file view
       memories,
       activeMemoryNames, // Visible memories
+      currentMemory: 'default', // Current working memory for auto-saving
       currentState: AGENT_STATES.EXPLORE, // AI-declared current state
     };
     sessionStates.set(sessionId, state);
@@ -145,17 +240,20 @@ function resolveUserConfirmation(sessionId, iteration, allowed) {
 // MEMORY SYSTEM: Cumulative file view management
 // ============================================================================
 
-function addToMemory(state, filePath, startLine, endLine, lines, memoryName = 'default', sessionId = null) {
+function addToMemory(state, filePath, startLine, endLine, lines, memoryName = 'default', sessionId = null, totalLines = null) {
   if (!state.memories[memoryName]) {
     state.memories[memoryName] = { visible: true, files: {} };
   }
 
   const memory = state.memories[memoryName];
   if (!memory.files[filePath]) {
-    memory.files[filePath] = { ranges: [] };
+    memory.files[filePath] = { ranges: [], totalLines: null };
   }
 
   const fileMemory = memory.files[filePath];
+  if (totalLines !== null) {
+    fileMemory.totalLines = totalLines;
+  }
   const newRange = { start: startLine, end: endLine, lines };
 
   // Merge overlapping or adjacent ranges
@@ -234,10 +332,11 @@ function formatMemoryOutput(state) {
           }
         }
 
-        // Add end-of-file marker after last range
+        // Add end-of-memory marker after last range
         if (fileData.ranges.length > 0) {
           const lastRange = fileData.ranges[fileData.ranges.length - 1];
-          output.push(`[End of file at line ${lastRange.end}]`);
+          const totalLinesInfo = fileData.totalLines ? `, total lines in file is ${fileData.totalLines}` : '';
+          output.push(`[End of current findings in ${filePath} at line ${lastRange.end}${totalLinesInfo}, more content may exist - search to gather more]`);
         }
 
         output.push(''); // Empty line between files
@@ -261,9 +360,20 @@ function hideMemory(state, memoryNames) {
 }
 
 function useMemory(state, memoryNames) {
-  for (const name of memoryNames) {
-    if (state.memories[name] && !state.activeMemoryNames.includes(name)) {
-      state.activeMemoryNames.push(name);
+  // Use-Memory now works like SQL USE - sets current working memory
+  // and makes only that memory visible (single memory context)
+  if (memoryNames.length === 1) {
+    const memoryName = memoryNames[0];
+    if (state.memories[memoryName]) {
+      state.currentMemory = memoryName;
+      state.activeMemoryNames = [memoryName];
+    }
+  } else {
+    // Multiple memories: make them all visible but don't change currentMemory
+    for (const name of memoryNames) {
+      if (state.memories[name] && !state.activeMemoryNames.includes(name)) {
+        state.activeMemoryNames.push(name);
+      }
     }
   }
 }
@@ -323,8 +433,15 @@ function captureFileOutput(state, command, output, memoryName, sessionId = null)
     const parsedLines = [];
     let minLine = Infinity;
     let maxLine = -Infinity;
+    let totalLines = null;
 
     for (const line of lines) {
+      const totalMatch = line.match(/^\[Total lines in file: (\d+)\]$/);
+      if (totalMatch) {
+        totalLines = parseInt(totalMatch[1], 10);
+        continue;
+      }
+      
       const match = line.match(/^(\d+):(.*)$/);
       if (match) {
         const lineNum = parseInt(match[1], 10);
@@ -339,7 +456,7 @@ function captureFileOutput(state, command, output, memoryName, sessionId = null)
       for (let i = minLine; i <= maxLine; i++) {
         actualLines.push(parsedLines[i] || '');
       }
-      addToMemory(state, filePath, minLine, maxLine, actualLines, memoryName, sessionId);
+      addToMemory(state, filePath, minLine, maxLine, actualLines, memoryName, sessionId, totalLines);
       return true;
     }
     return false;
@@ -542,7 +659,7 @@ function detectErrorContext(commandHistory = []) {
   return { errorType, includeCommandReference };
 }
 
-function renderSystemPrompt(template, { userPrompt, commandHistory, commandHistoryArray, lastCommand, iteration = 0, previousMessagesHistory = '', currentState, memoryState }) {
+function renderSystemPrompt(template, { userPrompt, commandHistory, commandHistoryArray, lastCommand, iteration = 0, previousMessagesHistory = '', currentState, memoryState, currentMemory }) {
   // V2: STATE-BASED PROMPTING
   // Use AI-declared current state
 
@@ -564,7 +681,8 @@ function renderSystemPrompt(template, { userPrompt, commandHistory, commandHisto
     iteration,
     commandHistory,
     includeCommandReference || iteration === 0,
-    memoryState
+    memoryState,
+    currentMemory
   );
 
   // Build final prompt with error guidance if detected
@@ -1095,6 +1213,7 @@ async function runAgentIteration({
     previousMessagesHistory,
     currentState: state.currentState,
     memoryState: truncatedMemory,
+    currentMemory: state.currentMemory,
   });
 
   // Debug: Log processed prompt for each iteration
@@ -1210,28 +1329,28 @@ function parseMemoryCommand(command) {
     return { type: 'show', name: showMatch[1] };
   }
 
-  // Hide memory <name1> <name2>
-  const hideMatch = trimmed.match(/^hide\s+memory\s+(.+)$/i);
+  // Hide memory <name1> <name2> (or Hide-Memory <name1> <name2>)
+  const hideMatch = trimmed.match(/^hide\s+memory\s+(.+)$/i) || trimmed.match(/^hide-memory\s+(.+)$/i);
   if (hideMatch) {
     return { type: 'hide', names: hideMatch[1].split(/\s+/) };
   }
 
-  // Use memory <name1> <name2>
-  const useMatch = trimmed.match(/^use\s+memory\s+(.+)$/i);
+  // Use memory <name1> <name2> (or Use-Memory <name1> <name2>)
+  const useMatch = trimmed.match(/^use\s+memory\s+(.+)$/i) || trimmed.match(/^use-memory\s+(.+)$/i);
   if (useMatch) {
     return { type: 'use', names: useMatch[1].split(/\s+/) };
   }
 
-  // Clear memory <name1> <name2>
-  const clearMatch = trimmed.match(/^clear\s+memory\s+(.+)$/i);
+  // Clear memory <name1> <name2> (or Clear-Memory <name1> <name2>)
+  const clearMatch = trimmed.match(/^clear\s+memory\s+(.+)$/i) || trimmed.match(/^clear-memory\s+(.+)$/i);
   if (clearMatch) {
     return { type: 'clear', names: clearMatch[1].split(/\s+/) };
   }
 
-  // Command | Save memory <name>
-  const saveMatch = trimmed.match(/^(.+?)\s*\|\s*save\s+memory\s+(\S+)$/i);
-  if (saveMatch) {
-    return { type: 'save', name: saveMatch[2], actualCommand: saveMatch[1].trim() };
+  // Command | Create memory <name> (or Create-Memory <name>)
+  const createMatch = trimmed.match(/^(.+?)\s*\|\s*create\s+memory\s+(\S+)$/i) || trimmed.match(/^(.+?)\s*\|\s*create-memory\s+(\S+)$/i);
+  if (createMatch) {
+    return { type: 'create', name: createMatch[2], actualCommand: createMatch[1].trim() };
   }
 
   return null;
@@ -1253,6 +1372,10 @@ async function executeCommand(state, command, options = {}) {
     };
   }
 
+  // Check if this is a background process
+  const isBackground = isBackgroundProcess(command);
+  const actualTimeoutMs = isBackground ? BACKGROUND_PROCESS_TIMEOUT_MS : timeoutMs;
+
   try {
     const editResult = applySetOperations(command, { workspacePath: state.workspacePath || process.cwd() });
     if (editResult) {
@@ -1269,7 +1392,7 @@ async function executeCommand(state, command, options = {}) {
         clearFileFromMemories(state, file.filePath);
         file.snippets.forEach(snippet => {
           if (snippet.lines.length > 0) {
-            addToMemory(state, file.filePath, snippet.start, snippet.end, snippet.lines, 'default', sessionId);
+            addToMemory(state, file.filePath, snippet.start, snippet.end, snippet.lines, state.currentMemory, sessionId);
           }
         });
 
@@ -1353,7 +1476,7 @@ async function executeCommand(state, command, options = {}) {
         isMemoryCommand: true,
       };
     }
-    if (memoryCmd.type === 'save') {
+    if (memoryCmd.type === 'create') {
       // Execute actual command but save to named memory
       command = memoryCmd.actualCommand;
       options.saveToMemory = memoryCmd.name;
@@ -1390,16 +1513,27 @@ async function executeCommand(state, command, options = {}) {
   // Note: High impact commands are now handled in processCodeRequest
   // This function executes validated commands
 
+  // Inject bundled ripgrep path for Search-InFiles commands
+  let finalCommand = command;
+  if (command.trim().startsWith('Search-InFiles')) {
+    const rgPath = getRipgrepPath();
+    if (rgPath && rgPath !== 'rg') {
+      // Convert Windows path to PowerShell path format
+      const psPath = rgPath.replace(/\\/g, '/');
+      finalCommand = `${command} -RgPath "${psPath}"`;
+    }
+  }
+
   try {
     const terminal = ensurePowerShellSession(state, state.workspacePath);
-    const runPromise = terminal.run(command);
+    const runPromise = terminal.run(finalCommand);
 
-    const result = await (disableTimeout || !Number.isFinite(timeoutMs) || timeoutMs <= 0
+    const result = await (disableTimeout || !Number.isFinite(actualTimeoutMs) || actualTimeoutMs <= 0
       ? runPromise
       : new Promise((resolve, reject) => {
           const timeoutId = setTimeout(() => {
             reject(new Error('Command execution timeout'));
-          }, timeoutMs);
+          }, actualTimeoutMs);
 
           runPromise
             .then((value) => {
@@ -1415,16 +1549,41 @@ async function executeCommand(state, command, options = {}) {
     const combinedOutput = [result.stdout, result.stderr].filter(Boolean).join('\n');
     const exitCode = typeof result.exitCode === 'number' ? result.exitCode : 0;
 
+    // Special handling for background processes
+    if (isBackground) {
+      // For background processes, return success message with captured output
+      const outputLines = combinedOutput.split('\n').slice(0, 10); // First 10 lines
+      const truncatedOutput = outputLines.join('\n');
+      
+      // Dispose terminal after background process to ensure clean state for next command
+      try {
+        state.terminal?.dispose();
+        state.terminal = null;
+      } catch (disposeError) {
+        log('CODES', 2, 'executeCommand', 'Failed to dispose terminal after background process', {
+          error: disposeError?.message,
+        });
+      }
+      
+      return {
+        output: `Command executed, captured output:\n\n${truncatedOutput}\n\nExit code: ${exitCode}`,
+        exitCode,
+        blocked: false,
+        executed: true,
+        isBackgroundProcess: true,
+      };
+    }
+
     // Capture file read output and save to memory
     let capturedToMemory = false;
+    const memoryName = options.saveToMemory || state.currentMemory;
     if (exitCode === 0 && combinedOutput) {
-      const memoryName = options.saveToMemory || 'default';
       capturedToMemory = captureFileOutput(state, command, combinedOutput, memoryName, sessionId);
     }
 
     // Return memory state if captured, otherwise return raw output
     const output = capturedToMemory
-      ? `${combinedOutput}\n\n[Content saved to memory. Use 'Show-Memory default' to view full memory state, or 'Show-Memory <name>' for other memories.]`
+      ? `${combinedOutput}\n\n[Content saved to memory '${memoryName}'. Use 'Show-Memory ${memoryName}' to view.]`
       : (combinedOutput || 'Command completed with no output.');
 
     return {
@@ -1447,12 +1606,29 @@ async function executeCommand(state, command, options = {}) {
         });
       }
 
+      const timeoutMessage = isBackground 
+        ? 'Background process started successfully and is running. Terminal reset for next command.'
+        : 'Terminal execution failed or timeout, please try again with different command';
+
+      // For background processes, timeout is considered success
+      if (isBackground) {
+        return {
+          output: timeoutMessage,
+          exitCode: 0, // Success for background processes
+          blocked: false,
+          executed: true, // Allow AI to continue
+          isTimeout: true,
+          wasBackgroundProcess: true,
+        };
+      }
+
       return {
-        output: 'Terminal execution failed or timeout, please try again with different command',
+        output: timeoutMessage,
         exitCode: 124, // Standard timeout exit code
         blocked: false,
         executed: false,
         isTimeout: true,
+        wasBackgroundProcess: false,
       };
     }
 
@@ -1722,7 +1898,7 @@ async function processCodeRequest({
 Current findings:
 ${formatMemoryOutput(state)}
 
-If you need more context, try to find more lines.`;
+If you need more context, try searching for additional content or reading different line ranges in other files.`;
 
         loopDetectedOutput = loopBreakerMsg;
       }
@@ -1741,22 +1917,34 @@ If you need more context, try to find more lines.`;
         if (defaultMemory && defaultMemory.files) {
           for (const [memPath, fileData] of Object.entries(defaultMemory.files)) {
             if (memPath.includes(requestedPath) || requestedPath.includes(memPath)) {
-              // File is in memory - check if requested range is already covered
-              if (!startLine && !endLine && fileData.ranges.length > 0) {
+              // File is in memory - check if requested range is already fully covered
+              let rangeFullyCovered = false;
+
+              if (startLine && endLine) {
+                // Check if the requested range is already covered by existing ranges
+                rangeFullyCovered = fileData.ranges.some(range => {
+                  return range.start <= startLine && range.end >= endLine;
+                });
+              } else if (!startLine && !endLine && fileData.ranges.length > 0) {
                 // Full file read requested, and we have at least some data
-                const lastRange = fileData.ranges[fileData.ranges.length - 1];
+                rangeFullyCovered = true;
+              }
+
+              if (rangeFullyCovered) {
                 const loopMsg = `[SYSTEM] The system has collected what you are looking for.
 
 Current findings:
 ${formatMemoryOutput(state)}
 
-You have successfully explored this file to the end. If you need more context, try finding it in other files.`;
+${startLine && endLine ? `The requested range (lines ${startLine}-${endLine}) in ${requestedPath} is already in memory.` : 'The file content shown above is currently in memory.'} If you need more context, try searching for additional content or reading different line ranges.`;
 
                 loopDetectedOutput = loopMsg;
-                log('CODES', 2, 'processCodeRequest', 'Smart file read detection: file already in memory', {
+                log('CODES', 2, 'processCodeRequest', 'Smart file read detection: requested range already in memory', {
                   iteration,
                   requestedPath,
                   memoryPath: memPath,
+                  startLine,
+                  endLine,
                 });
               }
               break;

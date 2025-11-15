@@ -1,8 +1,0 @@
-function testFunction() {
-    console.log("Hello World");
-    return "modified";
-}
-
-// This is a comment
-const variable = "value";
-let anotherVar = 123;

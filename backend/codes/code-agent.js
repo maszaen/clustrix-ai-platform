@@ -68,6 +68,14 @@ function getSessionState(sessionId) {
       iterationCount: 0,
       workspacePath: null,
       instruction: '',
+      // Memory system: cumulative file view
+      memories: {
+        default: {
+          visible: true,
+          files: {} // { 'path/to/file.js': { ranges: [{ start, end, lines: [...] }] } }
+        }
+      },
+      activeMemoryNames: ['default'], // Visible memories
     };
     sessionStates.set(sessionId, state);
   }
@@ -105,6 +113,196 @@ function resolveUserConfirmation(sessionId, iteration, allowed) {
     return true;
   }
   
+  return false;
+}
+
+// ============================================================================
+// MEMORY SYSTEM: Cumulative file view management
+// ============================================================================
+
+function addToMemory(state, filePath, startLine, endLine, lines, memoryName = 'default') {
+  if (!state.memories[memoryName]) {
+    state.memories[memoryName] = { visible: true, files: {} };
+  }
+
+  const memory = state.memories[memoryName];
+  if (!memory.files[filePath]) {
+    memory.files[filePath] = { ranges: [] };
+  }
+
+  const fileMemory = memory.files[filePath];
+  const newRange = { start: startLine, end: endLine, lines };
+
+  // Merge overlapping or adjacent ranges
+  const merged = [];
+  let currentRange = newRange;
+
+  for (const existing of fileMemory.ranges) {
+    if (currentRange.end < existing.start - 1) {
+      // No overlap, current comes before
+      merged.push(currentRange);
+      currentRange = existing;
+    } else if (currentRange.start > existing.end + 1) {
+      // No overlap, existing comes before
+      merged.push(existing);
+    } else {
+      // Overlap or adjacent - merge
+      const mergedStart = Math.min(currentRange.start, existing.start);
+      const mergedEnd = Math.max(currentRange.end, existing.end);
+      const mergedLines = [];
+
+      // Combine lines from both ranges
+      for (let i = mergedStart; i <= mergedEnd; i++) {
+        const fromCurrent = currentRange.lines[i - currentRange.start];
+        const fromExisting = existing.lines[i - existing.start];
+        mergedLines.push(fromCurrent !== undefined ? fromCurrent : fromExisting);
+      }
+
+      currentRange = { start: mergedStart, end: mergedEnd, lines: mergedLines };
+    }
+  }
+
+  merged.push(currentRange);
+  merged.sort((a, b) => a.start - b.start);
+  fileMemory.ranges = merged;
+}
+
+function formatMemoryOutput(state) {
+  const output = [];
+  const visibleMemories = state.activeMemoryNames || ['default'];
+  const hiddenMemories = [];
+
+  for (const [memName, memory] of Object.entries(state.memories || {})) {
+    if (visibleMemories.includes(memName)) {
+      output.push(`=== MEMORY STATE: ${memName} ===\n`);
+
+      for (const [filePath, fileData] of Object.entries(memory.files || {})) {
+        output.push(`/${filePath}`);
+
+        for (const range of fileData.ranges) {
+          for (let i = 0; i < range.lines.length; i++) {
+            const lineNum = range.start + i;
+            output.push(`${lineNum}: ${range.lines[i]}`);
+          }
+
+          // Show gap indicator if there's a next range
+          const currentIndex = fileData.ranges.indexOf(range);
+          const nextRange = fileData.ranges[currentIndex + 1];
+          if (nextRange && nextRange.start > range.end + 1) {
+            output.push(`[Lines ${range.end + 1}-${nextRange.start - 1} not explored]`);
+          }
+        }
+
+        output.push(''); // Empty line between files
+      }
+    } else {
+      hiddenMemories.push(memName);
+    }
+  }
+
+  if (hiddenMemories.length > 0) {
+    output.push(`[Hidden memories: ${hiddenMemories.join(', ')}]`);
+  }
+
+  return output.join('\n');
+}
+
+function hideMemory(state, memoryNames) {
+  state.activeMemoryNames = state.activeMemoryNames.filter(
+    name => !memoryNames.includes(name)
+  );
+}
+
+function useMemory(state, memoryNames) {
+  for (const name of memoryNames) {
+    if (state.memories[name] && !state.activeMemoryNames.includes(name)) {
+      state.activeMemoryNames.push(name);
+    }
+  }
+}
+
+function clearMemory(state, memoryNames) {
+  for (const name of memoryNames) {
+    if (name === '--all') {
+      state.memories = { default: { visible: true, files: {} } };
+      state.activeMemoryNames = ['default'];
+      return;
+    }
+    delete state.memories[name];
+    state.activeMemoryNames = state.activeMemoryNames.filter(n => n !== name);
+  }
+}
+
+function captureFileOutput(state, command, output, memoryName) {
+  // Parse Show-FileWithLineNumbers output
+  // Format: "001: line content"
+  const showFileMatch = command.match(/Show-FileWithLineNumbers\s+-Path\s+"?([^"\s]+)"?/i);
+  if (showFileMatch) {
+    const filePath = showFileMatch[1].replace(/\\/g, '/');
+    const lines = output.split(/\r?\n/);
+    const parsedLines = [];
+    let minLine = Infinity;
+    let maxLine = -Infinity;
+
+    for (const line of lines) {
+      const match = line.match(/^(\d+):\s*(.*)$/);
+      if (match) {
+        const lineNum = parseInt(match[1], 10);
+        parsedLines[lineNum] = match[2];
+        minLine = Math.min(minLine, lineNum);
+        maxLine = Math.max(maxLine, lineNum);
+      }
+    }
+
+    if (parsedLines.length > 0) {
+      const actualLines = [];
+      for (let i = minLine; i <= maxLine; i++) {
+        actualLines.push(parsedLines[i] || '');
+      }
+      addToMemory(state, filePath, minLine, maxLine, actualLines, memoryName);
+      return true;
+    }
+    return false;
+  }
+
+  // Parse Search-InFiles / ripgrep output
+  // Format: "path/to/file.js:123: content"
+  const searchMatch = command.match(/Search-InFiles|rg\s/i);
+  if (searchMatch) {
+    const lines = output.split(/\r?\n/);
+    const fileMatches = {};
+
+    for (const line of lines) {
+      const match = line.match(/^([^:]+):(\d+):\s*(.*)$/);
+      if (match) {
+        const filePath = match[1].replace(/\\/g, '/');
+        const lineNum = parseInt(match[2], 10);
+        const content = match[3];
+
+        if (!fileMatches[filePath]) {
+          fileMatches[filePath] = [];
+        }
+        fileMatches[filePath].push({ lineNum, content });
+      }
+    }
+
+    // Save each file's matches to memory
+    for (const [filePath, matches] of Object.entries(fileMatches)) {
+      const minLine = Math.min(...matches.map(m => m.lineNum));
+      const maxLine = Math.max(...matches.map(m => m.lineNum));
+      const lines = [];
+
+      for (let i = minLine; i <= maxLine; i++) {
+        const match = matches.find(m => m.lineNum === i);
+        lines.push(match ? match.content : '');
+      }
+
+      addToMemory(state, filePath, minLine, maxLine, lines, memoryName);
+    }
+
+    return Object.keys(fileMatches).length > 0;
+  }
+
   return false;
 }
 
@@ -528,17 +726,31 @@ function isHighImpactCommand(command = '') {
 //   };
 // }
 
-function formatResponseAndCommand({ answer, command }) {
+function formatResponseAndCommand({ answer, command, hidden }) {
   const sections = [];
+  
+  // 1. Format hidden as codeblock with '>' prefix
+  if (hidden) {
+    const hiddenLines = hidden
+      .split('\n')
+      .map(line => `> ${line}`)
+      .join('\n');
+    sections.push('\n' + hiddenLines + '\n');
+  }
+  
+  // 2. Add answer (already handled)
   if (answer) {
     const cleanedAnswer = answer
       .replace(/^```[\w]*\n?/, '') 
-      .replace(/\n?```$/, '');     
-    sections.push('\n' + cleanedAnswer + '\n');
+      .replace(/\n?```$/, '');  
+    sections.push(cleanedAnswer);
   }
+  
+  // 3. Add command (already handled)
   if (command) {
-    sections.push('```powershell\n' + command.trim() + '\n```\n');
+    sections.push('```powershell\n' + command.trim() + '\n```');
   }
+  
   return sections.length > 0 ? sections.join('\n\n') : null;
 }
 
@@ -891,6 +1103,36 @@ async function runAgentIteration({
   };
 }
 
+function parseMemoryCommand(command) {
+  const trimmed = command.trim();
+
+  // Hide memory <name1> <name2>
+  const hideMatch = trimmed.match(/^hide\s+memory\s+(.+)$/i);
+  if (hideMatch) {
+    return { type: 'hide', names: hideMatch[1].split(/\s+/) };
+  }
+
+  // Use memory <name1> <name2>
+  const useMatch = trimmed.match(/^use\s+memory\s+(.+)$/i);
+  if (useMatch) {
+    return { type: 'use', names: useMatch[1].split(/\s+/) };
+  }
+
+  // Clear memory <name1> <name2>
+  const clearMatch = trimmed.match(/^clear\s+memory\s+(.+)$/i);
+  if (clearMatch) {
+    return { type: 'clear', names: clearMatch[1].split(/\s+/) };
+  }
+
+  // Command | Save memory <name>
+  const saveMatch = trimmed.match(/^(.+?)\s*\|\s*save\s+memory\s+(\S+)$/i);
+  if (saveMatch) {
+    return { type: 'save', name: saveMatch[2], actualCommand: saveMatch[1].trim() };
+  }
+
+  return null;
+}
+
 async function executeCommand(state, command, options = {}) {
   const {
     disableTimeout = false,
@@ -904,6 +1146,46 @@ async function executeCommand(state, command, options = {}) {
       blocked: false,
       executed: false,
     };
+  }
+
+  // Handle memory management commands
+  const memoryCmd = parseMemoryCommand(command);
+  if (memoryCmd) {
+    if (memoryCmd.type === 'hide') {
+      hideMemory(state, memoryCmd.names);
+      return {
+        output: formatMemoryOutput(state),
+        exitCode: 0,
+        blocked: false,
+        executed: true,
+        isMemoryCommand: true,
+      };
+    }
+    if (memoryCmd.type === 'use') {
+      useMemory(state, memoryCmd.names);
+      return {
+        output: formatMemoryOutput(state),
+        exitCode: 0,
+        blocked: false,
+        executed: true,
+        isMemoryCommand: true,
+      };
+    }
+    if (memoryCmd.type === 'clear') {
+      clearMemory(state, memoryCmd.names);
+      return {
+        output: formatMemoryOutput(state),
+        exitCode: 0,
+        blocked: false,
+        executed: true,
+        isMemoryCommand: true,
+      };
+    }
+    if (memoryCmd.type === 'save') {
+      // Execute actual command but save to named memory
+      command = memoryCmd.actualCommand;
+      options.saveToMemory = memoryCmd.name;
+    }
   }
 
   // V2: DANGEROUS COMMAND DETECTION & BLOCKING
@@ -959,9 +1241,23 @@ async function executeCommand(state, command, options = {}) {
         }));
 
     const combinedOutput = [result.stdout, result.stderr].filter(Boolean).join('\n');
+    const exitCode = typeof result.exitCode === 'number' ? result.exitCode : 0;
+
+    // Capture file read output and save to memory
+    let capturedToMemory = false;
+    if (exitCode === 0 && combinedOutput) {
+      const memoryName = options.saveToMemory || 'default';
+      capturedToMemory = captureFileOutput(state, command, combinedOutput, memoryName);
+    }
+
+    // Return memory state if captured, otherwise return raw output
+    const output = capturedToMemory
+      ? formatMemoryOutput(state)
+      : (combinedOutput || 'Command completed with no output.');
+
     return {
-      output: combinedOutput || 'Command completed with no output.',
-      exitCode: typeof result.exitCode === 'number' ? result.exitCode : 0,
+      output,
+      exitCode,
       blocked: false,
       executed: true,
     };
@@ -1097,8 +1393,30 @@ async function processCodeRequest({
       answerToSend = 'No response provided.';
     }
 
+    // Add assistant's decision to conversation history to prevent looping
+    // This gives the model context about what commands were already tried
+    const assistantMessage = [];
+    if (parsed.hidden) {
+      assistantMessage.push(`[Internal reasoning: ${parsed.hidden.substring(0, 200)}...]`);
+    }
+    if (parsed.answer) {
+      assistantMessage.push(parsed.answer);
+    }
+    if (parsed.command) {
+      assistantMessage.push(`<cmd>${parsed.command}</cmd>`);
+    }
+
+    if (assistantMessage.length > 0) {
+      state.conversationHistory.push({
+        role: 'assistant',
+        content: assistantMessage.join('\n'),
+      });
+    }
+
+
     const responseCommandChunk = formatResponseAndCommand({
-      answer: answerToSend,
+      hidden: parsed.hidden,  // ← Pass hidden langsung
+      answer: answerToSend,   // ← Pass answer langsung
       command: parsed.command,
     });
 
@@ -1361,6 +1679,48 @@ async function processCodeRequest({
       }
     }
 
+    // GENERIC LOOP DETECTION: Check for repeated identical commands
+    if (parsed.command && state.commandHistory.length >= 3) {
+      const recentCommands = state.commandHistory.slice(-5);
+      const sameCommandCount = recentCommands.filter(
+        entry => entry.command === parsed.command
+      ).length;
+
+      if (sameCommandCount >= 2) {
+        log('CODES', 2, 'processCodeRequest', 'Loop detected: same command repeated', {
+          iteration,
+          command: parsed.command.substring(0, 100),
+          count: sameCommandCount + 1,
+        });
+
+        const loopBreakerMsg = `LOOP BREAKER: You've run the same command "${parsed.command.substring(0, 100)}" ${sameCommandCount + 1} times. This suggests:
+1. The command is not producing expected output
+2. You may be reading the wrong file or path
+3. The approach is fundamentally flawed
+
+Please try a COMPLETELY DIFFERENT approach:
+- Use a different command
+- Check if files/paths exist before reading
+- Break the task into smaller steps
+- If truly stuck, use <!END> and explain the issue to the user`;
+
+        state.commandHistory.push({
+          command: '[SYSTEM - LOOP DETECTED]',
+          output: loopBreakerMsg,
+          exitCode: 1,
+          summary: `Same command repeated ${sameCommandCount + 1}x`,
+          timestamp: Date.now(),
+        });
+
+        state.conversationHistory.push({
+          role: 'user',
+          content: `[SYSTEM] ${loopBreakerMsg}`,
+        });
+
+        break; // Break iteration loop
+      }
+    }
+
     // STEP 3: Send output AFTER executing (but NOT if timeout - keep error in history for AI only)
     if (!isTimeout) {
       const outputChunk = formatOutput({
@@ -1400,48 +1760,15 @@ async function processCodeRequest({
     }
   }
 
-  // Save user prompt and final answer to messages table (clean, no iterations)
-  // Iterations are stored in code_iterations table
-  if (db && sessionId) {
-    try {
-      // Save user message
-      db.addMessage?.(
-        sessionId,
-        'user',
-        userPrompt,
-        {},
-        currentMessageIndex,
-        Date.now()
-      );
-
-      // Save assistant final answer (if exists)
-      if (finalAnswer) {
-        db.addMessage?.(
-          sessionId,
-          'assistant',
-          finalAnswer,
-          {},
-          currentMessageIndex + 1,
-          Date.now()
-        );
-
-        log('CODES', 1, 'processCodeRequest', 'Saved user message and final answer to database', {
-          sessionId,
-          messageIndex: currentMessageIndex,
-        });
-      } else {
-        log('CODES', 1, 'processCodeRequest', 'Saved user message to database (no final answer)', {
-          sessionId,
-          messageIndex: currentMessageIndex,
-        });
-      }
-    } catch (error) {
-      log('CODES', 3, 'processCodeRequest', 'Failed to save messages', {
-        sessionId,
-        error: error?.message || error,
-      });
-    }
-  }
+  // SKIP saving user/assistant messages to database here
+  // Frontend (renderer) already saved them before calling processCodeRequest
+  // to prevent duplicate messages after reload
+  // Only code_iterations table is updated during agent execution
+  log('CODES', 1, 'processCodeRequest', 'Skipping message save (frontend already saved)', {
+    sessionId,
+    messageIndex: currentMessageIndex,
+    hasFinalAnswer: !!finalAnswer,
+  });
 
   return {
     chunks,

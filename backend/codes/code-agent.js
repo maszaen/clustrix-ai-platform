@@ -193,6 +193,12 @@ function formatMemoryOutput(state) {
           }
         }
 
+        // Add end-of-file marker after last range
+        if (fileData.ranges.length > 0) {
+          const lastRange = fileData.ranges[fileData.ranges.length - 1];
+          output.push(`[End of file at line ${lastRange.end}]`);
+        }
+
         output.push(''); // Empty line between files
       }
     } else {
@@ -1515,11 +1521,91 @@ async function processCodeRequest({
 
       confirmationApproved = true;
     }
-    
-    // STEP 3: Execute command
-    const { output, exitCode, blocked, isTimeout } = await executeCommand(state, parsed.command, {
-      disableTimeout: requiresConfirmation && confirmationApproved,
-    });
+
+    // GENERIC LOOP DETECTION: Check for repeated identical commands
+    let loopDetectedOutput = null;
+    if (parsed.command && state.commandHistory.length >= 1) {
+      const recentCommands = state.commandHistory.slice(-5);
+      const sameCommandCount = recentCommands.filter(
+        entry => entry.command === parsed.command
+      ).length;
+
+      if (sameCommandCount >= 1) {
+        log('CODES', 2, 'processCodeRequest', 'Loop detected: same command repeated', {
+          iteration,
+          command: parsed.command.substring(0, 100),
+          count: sameCommandCount + 1,
+        });
+
+        const loopBreakerMsg = `[SYSTEM NOTICE] You've already run this command before. Check MEMORY STATE for previously read files - all file reads are automatically saved to memory. If the file is already in memory, analyze what you have instead of re-reading.
+
+Current memory state:
+${formatMemoryOutput(state)}
+
+If you need different information, try a different command or approach.`;
+
+        loopDetectedOutput = loopBreakerMsg;
+      }
+    }
+
+    // SMART FILE READ DETECTION: Check if trying to read file that's already fully in memory
+    if (!loopDetectedOutput && parsed.command) {
+      const showFileMatch = parsed.command.match(/Show-FileWithLineNumbers\s+-Path\s+"?([^"\s]+)"?(?:\s+-StartLine\s+(\d+))?(?:\s+-EndLine\s+(\d+))?/i);
+      if (showFileMatch) {
+        const requestedPath = showFileMatch[1].replace(/\\/g, '/');
+        const startLine = showFileMatch[2] ? parseInt(showFileMatch[2], 10) : null;
+        const endLine = showFileMatch[3] ? parseInt(showFileMatch[3], 10) : null;
+
+        // Check if file exists in memory
+        const defaultMemory = state.memories?.default;
+        if (defaultMemory && defaultMemory.files) {
+          for (const [memPath, fileData] of Object.entries(defaultMemory.files)) {
+            if (memPath.includes(requestedPath) || requestedPath.includes(memPath)) {
+              // File is in memory - check if requested range is already covered
+              if (!startLine && !endLine && fileData.ranges.length > 0) {
+                // Full file read requested, and we have at least some data
+                const lastRange = fileData.ranges[fileData.ranges.length - 1];
+                const loopMsg = `[SYSTEM NOTICE] This file is already in MEMORY STATE. You can see it above in the output. The file shows "[End of file at line ${lastRange.end}]" - this means you've already read the entire file.
+
+Instead of re-reading, analyze what you already have in memory. If you need specific information, use Find-Pattern or check the memory output above.`;
+
+                loopDetectedOutput = loopMsg;
+                log('CODES', 2, 'processCodeRequest', 'Smart file read detection: file already in memory', {
+                  iteration,
+                  requestedPath,
+                  memoryPath: memPath,
+                });
+              }
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // STEP 3: Execute command (or skip if loop detected)
+    let output, exitCode, blocked, isTimeout;
+
+    if (loopDetectedOutput) {
+      // Skip execution, return loop detection feedback
+      output = loopDetectedOutput;
+      exitCode = 0;
+      blocked = false;
+      isTimeout = false;
+
+      log('CODES', 1, 'processCodeRequest', 'Skipped command execution due to loop detection', {
+        iteration,
+        command: parsed.command.substring(0, 100),
+      });
+    } else {
+      const result = await executeCommand(state, parsed.command, {
+        disableTimeout: requiresConfirmation && confirmationApproved,
+      });
+      output = result.output;
+      exitCode = result.exitCode;
+      blocked = result.blocked;
+      isTimeout = result.isTimeout;
+    }
 
     // Check if user cancelled (interrupt button) after command execution
     if (typeof shouldCancel === 'function' && shouldCancel()) {
@@ -1676,48 +1762,6 @@ async function processCodeRequest({
       } else {
         lastCommandErrorPattern = errorPattern;
         sameErrorCount = 1; // Reset count when error changes
-      }
-    }
-
-    // GENERIC LOOP DETECTION: Check for repeated identical commands
-    if (parsed.command && state.commandHistory.length >= 3) {
-      const recentCommands = state.commandHistory.slice(-5);
-      const sameCommandCount = recentCommands.filter(
-        entry => entry.command === parsed.command
-      ).length;
-
-      if (sameCommandCount >= 2) {
-        log('CODES', 2, 'processCodeRequest', 'Loop detected: same command repeated', {
-          iteration,
-          command: parsed.command.substring(0, 100),
-          count: sameCommandCount + 1,
-        });
-
-        const loopBreakerMsg = `LOOP BREAKER: You've run the same command "${parsed.command.substring(0, 100)}" ${sameCommandCount + 1} times. This suggests:
-1. The command is not producing expected output
-2. You may be reading the wrong file or path
-3. The approach is fundamentally flawed
-
-Please try a COMPLETELY DIFFERENT approach:
-- Use a different command
-- Check if files/paths exist before reading
-- Break the task into smaller steps
-- If truly stuck, use <!END> and explain the issue to the user`;
-
-        state.commandHistory.push({
-          command: '[SYSTEM - LOOP DETECTED]',
-          output: loopBreakerMsg,
-          exitCode: 1,
-          summary: `Same command repeated ${sameCommandCount + 1}x`,
-          timestamp: Date.now(),
-        });
-
-        state.conversationHistory.push({
-          role: 'user',
-          content: `[SYSTEM] ${loopBreakerMsg}`,
-        });
-
-        break; // Break iteration loop
       }
     }
 

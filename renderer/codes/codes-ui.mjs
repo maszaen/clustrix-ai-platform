@@ -692,6 +692,7 @@ function showCodeDetail(codeId) {
   const code = STATE.codes.find(c => c.id === codeId);
   if (!code) return;
 
+
   STATE.currentCode = code;
   renderCodeDetail(code);
 

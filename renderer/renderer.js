@@ -3836,8 +3836,8 @@ function createSessionListItem(s) {
       setCurrent(s);
 
       // If we're currently on projects page, switch to chat interface
-        const chatArea = document.querySelector(".chat-area");
-        const projectDetailView = document.getElementById("project-detail-view");
+      const chatArea = document.querySelector(".chat-area");
+      const projectDetailView = document.getElementById("project-detail-view");
       if (
         chatArea &&
         (chatArea.classList.contains("projects-active") || chatArea.classList.contains("codes-active"))
@@ -14352,6 +14352,10 @@ function closeMobileSidebar() {
   sidebar._backdrop = null;
 }
 
+export function closeMobile() {
+  closeMobileSidebar();
+}
+
 function setupTextareaCentralResize() {
   const msgCentral = $("#msg-central");
   msgCentral.addEventListener("input", function () {
@@ -15610,7 +15614,7 @@ function setupEventListeners() {
       if (code) {
         openCodeDetail(code.id);
       }
-    }, 100);
+    }, 500);
   });
 
   $("#refresh-btn").addEventListener("click", async () => {
@@ -16158,6 +16162,7 @@ function setupEventListeners() {
     openAccountBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       openModalWithAnimation($("#account-settings-modal"));
+      closeMobileSidebar();
       closeDropdownWithAnimation($("#settings-menu"));
       await updateAccountModalUI();
       log("UI", 0, "event:open-account-settings", "Account modal opened");
@@ -16264,6 +16269,7 @@ function setupEventListeners() {
     openLearnMoreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       openModalWithAnimation(learnMoreModal);
+      closeMobileSidebar();
       closeDropdownWithAnimation($("#settings-menu"));
       log("UI", 0, "event:open-learn-more", "Learn More modal opened");
     });

@@ -56,7 +56,7 @@ function Show-FileWithLineNumbers {
         $lineNum = $i + 1
         Write-Output ("{0:D3}: {1}" -f $lineNum, $lines[$i])
     }
-
+    
     # Add indication if there are more lines
     if ($EndLine -lt $totalLines) {
         $remaining = $totalLines - $EndLine

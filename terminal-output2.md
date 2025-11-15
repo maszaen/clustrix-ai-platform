@@ -819,7 +819,7 @@ IMPORTANT: Memory shows ALL previously read lines. Check memory BEFORE reading f
 **READ STATE:**
 - ALWAYS count first: (gc file.txt).Count
 - If < 300 lines: Show-FileWithLineNumbers -Path file.txt
-- If > 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 100
+- If > 300 lines: Use batches of 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 300
 - NO <answer> tag for reading, just <cmd>
 - Store learnings in memory (no output needed)
 - CRITICAL: Commands MUST be in <cmd> tag, NEVER in <answer> or plain text
@@ -1066,7 +1066,7 @@ IMPORTANT: Memory shows ALL previously read lines. Check memory BEFORE reading f
 **READ STATE:**
 - ALWAYS count first: (gc file.txt).Count
 - If < 300 lines: Show-FileWithLineNumbers -Path file.txt
-- If > 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 100
+- If > 300 lines: Use batches of 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 300
 - NO <answer> tag for reading, just <cmd>
 - Store learnings in memory (no output needed)
 - CRITICAL: Commands MUST be in <cmd> tag, NEVER in <answer> or plain text

@@ -195,6 +195,22 @@ class DatabaseManager {
 
       CREATE INDEX IF NOT EXISTS idx_code_iterations_session ON code_iterations(session_id, message_index, iteration);
 
+      CREATE TABLE IF NOT EXISTS memory (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        memory_name TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        start_line INTEGER NOT NULL,
+        end_line INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+
+        FOREIGN KEY (session_id) REFERENCES codes(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_memory_session ON memory(session_id, memory_name);
+
       CREATE TABLE IF NOT EXISTS drafts (
         id TEXT PRIMARY KEY,
         content TEXT NOT NULL,
@@ -730,7 +746,46 @@ class DatabaseManager {
   backup(destPath) {
     return this.db.backup(destPath);
   }
-  
+
+  // Memory persistence methods
+  saveMemory(sessionId, memoryName, filePath, startLine, endLine, content) {
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO memory (session_id, memory_name, file_path, start_line, end_line, content, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const now = Date.now();
+    return stmt.run(sessionId, memoryName, filePath, startLine, endLine, JSON.stringify(content), now, now);
+  }
+
+  getMemory(sessionId, memoryName = null) {
+    let query, params;
+    if (memoryName) {
+      query = `SELECT * FROM memory WHERE session_id = ? AND memory_name = ? ORDER BY file_path, start_line`;
+      params = [sessionId, memoryName];
+    } else {
+      query = `SELECT * FROM memory WHERE session_id = ? ORDER BY memory_name, file_path, start_line`;
+      params = [sessionId];
+    }
+
+    const rows = this.db.prepare(query).all(...params);
+    return rows.map(row => ({
+      ...row,
+      content: JSON.parse(row.content)
+    }));
+  }
+
+  deleteMemory(sessionId, memoryName = null) {
+    if (memoryName) {
+      return this.db.prepare(`DELETE FROM memory WHERE session_id = ? AND memory_name = ?`).run(sessionId, memoryName);
+    } else {
+      return this.db.prepare(`DELETE FROM memory WHERE session_id = ?`).run(sessionId);
+    }
+  }
+
+  clearAllMemory(sessionId) {
+    return this.db.prepare(`DELETE FROM memory WHERE session_id = ?`).run(sessionId);
+  }
+
   // Migration: Add thinking_update column if it doesn't exist
   close() {
     this.db.close();

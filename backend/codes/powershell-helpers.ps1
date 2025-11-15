@@ -57,7 +57,8 @@ function Show-FileWithLineNumbers {
         Write-Output ("{0:D3}: {1}" -f $lineNum, $lines[$i])
     }
 
-    # Add indication if there are more lines
+    # Add total line count and indication if there are more lines
+    Write-Output "[Total lines in file: $totalLines]"
     if ($EndLine -lt $totalLines) {
         $remaining = $totalLines - $EndLine
         Write-Output "[${remaining} lines more...]"
@@ -743,6 +744,9 @@ function Search-InFiles {
     .PARAMETER Context
     Lines of context to show (default: 0)
 
+    .PARAMETER RgPath
+    Path to ripgrep executable (optional, for bundled binary)
+
     .EXAMPLE
     Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
     Search-InFiles -Pattern "class.*Button" -Filter "*.tsx" -Context 2
@@ -762,7 +766,10 @@ function Search-InFiles {
         [int]$Depth = 3,
 
         [Parameter(Mandatory=$false)]
-        [int]$Context = 0
+        [int]$Context = 0,
+
+        [Parameter(Mandatory=$false)]
+        [string]$RgPath
     )
 
     if (-not (Test-Path $Path)) {
@@ -775,7 +782,13 @@ function Search-InFiles {
     Write-Output ""
 
     # Check if ripgrep is available
-    $rgAvailable = $null -ne (Get-Command rg -ErrorAction SilentlyContinue)
+    $rgCommand = if ($RgPath -and (Test-Path $RgPath)) {
+        $RgPath
+    } else {
+        "rg"
+    }
+    
+    $rgAvailable = $null -ne (Get-Command $rgCommand -ErrorAction SilentlyContinue)
 
     if (-not $rgAvailable) {
         Write-Output "========================================"
@@ -928,6 +941,57 @@ function Search-InFiles {
             Write-Error "Failed to install ripgrep: $_"
             Write-Output ""
             Write-Output "Falling back to PowerShell Select-String (slower)..."
+            $rgAvailable = $false
+        }
+    }
+
+    if ($rgAvailable) {
+        # Use ripgrep for ultra-fast search
+        Write-Output "Using ripgrep (fast search)..."
+        Write-Output ""
+
+        try {
+            # Build ripgrep command
+            $rgArgs = @(
+                $Pattern,
+                "--glob", $Filter,
+                "--max-depth", $Depth.ToString(),
+                "--line-number",
+                "--no-heading",
+                "--with-filename"
+            )
+
+            if ($Context -gt 0) {
+                $rgArgs += "--context"
+                $rgArgs += $Context.ToString()
+            }
+
+            # Add path
+            $rgArgs += $Path
+
+            # Execute ripgrep
+            $rgOutput = & $rgCommand @rgArgs 2>&1
+
+            if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 1) {  # 0 = matches found, 1 = no matches
+                if ($rgOutput) {
+                    $matchCount = ($rgOutput | Measure-Object).Count
+                    Write-Output "Found $matchCount matches:"
+                    Write-Output ""
+                    $rgOutput | ForEach-Object { Write-Output $_ }
+                } else {
+                    Write-Output "No matches found."
+                }
+            } else {
+                Write-Warning "Ripgrep execution failed with exit code $LASTEXITCODE"
+                Write-Output "Output: $rgOutput"
+                Write-Output ""
+                Write-Output "Falling back to PowerShell Select-String..."
+                $rgAvailable = $false
+            }
+        } catch {
+            Write-Warning "Failed to execute ripgrep: $_"
+            Write-Output ""
+            Write-Output "Falling back to PowerShell Select-String..."
             $rgAvailable = $false
         }
     }

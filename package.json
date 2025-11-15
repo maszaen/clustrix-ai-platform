@@ -28,6 +28,7 @@
       "*",
       "**/*",
       "node_modules/**/*",
+      "resources/**/*",
       "!\\.git/**",
       "!README.md"
     ],

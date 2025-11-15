@@ -220,17 +220,18 @@ Choose your next state based on what you need to do:
 6. Check size: Get-FileStats before reading large files
 
 **MEMORY SYSTEM:**
-ALL file reads (Show-FileWithLineNumbers, Search-InFiles) are AUTOMATICALLY saved to "default" memory.
+ALL file reads (Show-FileWithLineNumbers, Search-InFiles) are AUTOMATICALLY saved to CURRENT working memory.
+Current memory: {current_memory} (change with Use-Memory <name>)
 Command output shows CUMULATIVE MEMORY STATE (not raw output), preventing duplicate reads.
 
 {memory_state}
 
 Memory Commands:
 - Show-Memory <name> - Display full memory state for a specific memory
-- Hide memory <name1> <name2> - Hide memories from view (still saved)
-- Use memory <name1> <name2> - Show hidden memories again
-- Clear memory <name1> <name2> - Delete memory (--all for all)
-- <cmd> | Save memory <name> - Save to named memory instead of default
+- Hide-Memory <name1> <name2> - Hide memories from view (still saved)
+- Use-Memory <name> - Set current working memory (like USE database in SQL) - all file reads auto-save here
+- Clear-Memory <name1> <name2> - Delete memory (--all for all)
+- <cmd> | Create-Memory <name> - Create new named memory and save command output to it
 
 IMPORTANT: Memory shows ALL previously read lines. Check memory BEFORE reading files!
 
@@ -502,7 +503,7 @@ function detectDangerousCommand(command = '') {
 // ===================================
 // BUILD STATE-SPECIFIC PROMPT
 // ===================================
-function buildStatePrompt(state, iteration, commandHistory, includeReference = false, memoryState = '') {
+function buildStatePrompt(state, iteration, commandHistory, includeReference = false, memoryState = '', currentMemory = 'default') {
   const stateFormat = STATE_RESPONSE_FORMATS[state];
   const stateRules = STATE_RULES[state] || '';
 
@@ -516,7 +517,8 @@ function buildStatePrompt(state, iteration, commandHistory, includeReference = f
     .replace('{state_format}', stateFormat.format)
     .replace('{state_rules}', stateRules)
     .replace('{command_reference}', commandRef)
-    .replace('{memory_state}', memoryState);
+    .replace('{memory_state}', memoryState)
+    .replace('{current_memory}', currentMemory || 'default');
 
   return prompt;
 }

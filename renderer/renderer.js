@@ -13462,25 +13462,30 @@ async function startStream(
       aiNode.classList.add('streaming-active');
     }
 
-    streamManager.startStream(streamId, {
-      controller: { cancel() {} },
-      aiNode,
-      session,
-      messageIndex: aiMessageIndex,
-      messages,
-      contextPrompt: text,
-      fullResponse: initialFullResponse,
-      startedAt: Date.now(),
-      thinkStartTime: Date.now(),
-    });
-
     try {
-      const result = await runCodeChatStream({
+      const resultPromise = runCodeChatStream({
         session,
         userPrompt: text,
         modelOptions,
         handler,
       });
+
+      // Use real controller from runCodeChatStream
+      const controller = resultPromise?.controller || { cancel() {} };
+
+      streamManager.startStream(streamId, {
+        controller,
+        aiNode,
+        session,
+        messageIndex: aiMessageIndex,
+        messages,
+        contextPrompt: text,
+        fullResponse: initialFullResponse,
+        startedAt: Date.now(),
+        thinkStartTime: Date.now(),
+      });
+
+      const result = await resultPromise;
 
       const usageResult = applyStreamUsageToSession(
         session,
@@ -13500,6 +13505,15 @@ async function startStream(
       if (usageResult.persisted) {
         markSessionDirty(session.id);
         debouncedSave();
+
+        // Re-render AI actions to show cost button if message is in DOM
+        if (aiNode && document.contains(aiNode) && usageResult.messageMeta?.usage) {
+          const content = session.messages[aiMessageIndex]?.[1] || '';
+          renderAiFinalActions(aiNode, content, aiMessageIndex);
+          log('STREAM', 2, 'codes:usage-updated', 'Re-rendered AI actions with usage data', {
+            usage: usageResult.messageMeta.usage
+          });
+        }
       }
 
       handler(null);

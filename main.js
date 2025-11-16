@@ -441,6 +441,18 @@ app.whenReady().then(async () => {
     invalidateUsageStatisticsCache();
     useSQLite = true;
   }
+
+  // Initialize code agent with database functions
+  initializeCodeAgent({
+    log: logHelper,
+    getCodeById: (id) => db?.getCode?.(id),
+    getMemory: (sessionId) => db?.getMemory?.(sessionId),
+    saveMemory: (sessionId, memoryName, filePath, startLine, endLine, content) => 
+      db?.saveMemory?.(sessionId, memoryName, filePath, startLine, endLine, content),
+    deleteMemory: (sessionId, memoryName) => db?.deleteMemory?.(sessionId, memoryName),
+    clearAllMemory: (sessionId) => db?.clearAllMemory?.(sessionId),
+  });
+  log('CODES', 1, 'init', 'Code agent initialized with database functions');
 });
 
 function logHelper(context, func, message, details = {}) {

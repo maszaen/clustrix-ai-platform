@@ -66,6 +66,7 @@ const BROWSER_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none
 const EMAIL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mail-icon"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>';
 
 function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
+  // COMMAND PARSING TEST - FORCE RELOAD
   // OPTIMIZATION: Check cache first (only for complete parses, not streaming)
   if (!sharedCodeBlocks && !options.isThinkingText) {
     const cacheKey = `${src.substring(0, 200)}-${src.length}`;
@@ -83,6 +84,47 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
 
   // Realtime render: tidak perlu trim, langsung render jika pattern valid
   const truncatedSrc = normalizedSrc;
+  
+  // Extract command input/output tags BEFORE any markdown processing
+  // Group consecutive input-output pairs into single command units
+  const commandGroups = [];
+  let commandIndex = 0;
+  
+  // First pass: collect all command blocks
+  const allCommandBlocks = [];
+  truncatedSrc.replace(/<!--command-(input|output)-->([\s\S]*?)<!--\/command-\1-->/gi, (match, type, content) => {
+    allCommandBlocks.push({ type, content: content.trim() });
+    return match; // Don't replace yet
+  });
+  
+  // Second pass: group consecutive input-output pairs
+  for (let i = 0; i < allCommandBlocks.length; i++) {
+    const block = allCommandBlocks[i];
+    if (block.type === 'input') {
+      const group = { input: block.content };
+      // Check if next block is output
+      if (i + 1 < allCommandBlocks.length && allCommandBlocks[i + 1].type === 'output') {
+        group.output = allCommandBlocks[i + 1].content;
+        i++; // Skip the output block since it's grouped
+      }
+      commandGroups.push(group);
+    } else if (block.type === 'output') {
+      // Standalone output (shouldn't happen in our system, but handle it)
+      commandGroups.push({ output: block.content });
+    }
+  }
+  
+  // Third pass: replace with grouped placeholders
+  let srcAfterCommandExtraction = truncatedSrc;
+  commandGroups.forEach((group, index) => {
+    const inputMatch = group.input ? `<!--command-input-->\n${group.input}\n<!--/command-input-->\n` : '';
+    const outputMatch = group.output ? `<!--command-output-->\n${group.output}\n<!--/command-output-->\n` : '';
+    const combinedMatch = (inputMatch + outputMatch).trim();
+    if (combinedMatch) {
+      const placeholder = `__COMMAND_GROUP_${index}__`;
+      srcAfterCommandExtraction = srcAfterCommandExtraction.replace(combinedMatch, placeholder);
+    }
+  });
   
   // Fix mismatched and malformed container tags before processing
   // AI sometimes generates wrong closing tags or missing closing brackets
@@ -112,7 +154,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     return fixed;
   };
   
-  const fixedSrc = fixMismatchedTags(truncatedSrc);
+  const fixedSrc = fixMismatchedTags(srcAfterCommandExtraction);
 
   // Extract ALL reference-style definitions FIRST (before line-by-line parsing)
   // This allows references to work across paragraphs
@@ -166,7 +208,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     acc.replace(`__TEMP_CODEBLOCK_${i}__`, block), processedSrcAfterContainers);
 
   // Only process codeblocks at top level, not in recursive calls
-  let processedSrc = truncatedSrc;
+  let processedSrc = srcAfterCommandExtraction;
   if (isTopLevel) {
     processedSrc = processedSrcAfterContainers.replace(/```(\w*)\n?([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
       const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
@@ -601,6 +643,29 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       });
     return acc.replace(`XCONTAINERX${i}XCONTAINERX`, processed);
   }, finalHtml);
+  
+  commandGroups.forEach((group, index) => {
+    const placeholder = `__COMMAND_GROUP_${index}__`;
+    let replacement = '';
+    
+    if (group.input) {
+      // Create expandable command input with output
+      const outputHtml = group.output ? 
+        '<div class="command-output">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
+      
+      const toggleButton = group.output ? '<button class="command-toggle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>' : '';
+      
+      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><code class="command-code language-powershell">' + 
+        group.input.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + 
+        '</code>' + toggleButton + '</div>' + outputHtml + '</div>';
+    } else if (group.output) {
+      // Standalone output (fallback)
+      replacement = '<div class="command-output">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+    }
+    
+    finalHtml = finalHtml.replace(placeholder, replacement);
+  });
+  
   return finalHtml;
 }
 
@@ -1160,14 +1225,87 @@ function addPHasListClass(container) {
 function md(src, options = {}) {
   if (!src) return "";
   const cleanSrc = src.trim();
-  const html = enhancedMarkdownParse(cleanSrc, options);
+  
+  // Extract command input/output tags BEFORE any markdown processing
+  // Group consecutive input-output pairs into single command units
+  const commandGroups = [];
+  let commandIndex = 0;
+  
+  // First pass: collect all command blocks
+  const allCommandBlocks = [];
+  cleanSrc.replace(/<!--command-(input|output)-->([\s\S]*?)<!--\/command-\1-->/gi, (match, type, content) => {
+    allCommandBlocks.push({ type, content: content.trim() });
+    return match; // Don't replace yet
+  });
+  
+  // Second pass: group consecutive input-output pairs
+  for (let i = 0; i < allCommandBlocks.length; i++) {
+    const block = allCommandBlocks[i];
+    if (block.type === 'input') {
+      const group = { input: block.content };
+      // Check if next block is output
+      if (i + 1 < allCommandBlocks.length && allCommandBlocks[i + 1].type === 'output') {
+        group.output = allCommandBlocks[i + 1].content;
+        i++; // Skip the output block since it's grouped
+      }
+      commandGroups.push(group);
+    } else if (block.type === 'output') {
+      // Standalone output (shouldn't happen in our system, but handle it)
+      commandGroups.push({ output: block.content });
+    }
+  }
+  
+  // Third pass: replace with grouped placeholders
+  let srcWithPlaceholders = cleanSrc;
+  commandGroups.forEach((group, index) => {
+    const inputMatch = group.input ? `<!--command-input-->\n${group.input}\n<!--/command-input-->\n` : '';
+    const outputMatch = group.output ? `<!--command-output-->\n${group.output}\n<!--/command-output-->\n` : '';
+    const combinedMatch = inputMatch + outputMatch;
+    if (combinedMatch) {
+      const placeholder = `__COMMAND_GROUP_${index}__`;
+      srcWithPlaceholders = srcWithPlaceholders.replace(combinedMatch, placeholder);
+    }
+  });
+  
+  const html = enhancedMarkdownParse(srcWithPlaceholders, options);
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = html;
   addPHasListClass(tempDiv);
   if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
   attachCodeBlockListeners(tempDiv);
+  
+  // Highlight command code blocks
+  if (tempDiv.querySelector(".command-code")) highlightAllUnder(tempDiv);
+  
+  // Initialize command toggles
+  if (tempDiv.querySelector(".command-toggle")) initCommandToggles(tempDiv);
+  
+  // Restore command groups
+  let finalHtml = tempDiv.innerHTML;
+  commandGroups.forEach((group, index) => {
+    const placeholder = `__COMMAND_GROUP_${index}__`;
+    let replacement = '';
+    
+    if (group.input) {
+      // Create expandable command input with output
+      const outputHtml = group.output ? 
+        '<div class="command-output" style="display: none;">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
+      
+      const toggleButton = group.output ? '<button class="command-toggle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>' : '';
+      
+      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><code class="command-code language-powershell">' + 
+        group.input.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + 
+        '</code>' + toggleButton + '</div>' + outputHtml + '</div>';
+    } else if (group.output) {
+      // Standalone output (fallback)
+      replacement = '<div class="command-output">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+    }
+    
+    finalHtml = finalHtml.replace(placeholder, replacement);
+  });
+  
   setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
-  return tempDiv.innerHTML;
+  return finalHtml;
 }
 
 function mdThinking(src) {

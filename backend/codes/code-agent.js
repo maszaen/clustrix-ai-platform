@@ -944,7 +944,7 @@ function formatResponseAndCommand({ answer, command, hidden }) {
   
   // 3. Add command (already handled)
   if (command) {
-    sections.push('```powershell\n' + command.trim() + '\n```');
+    sections.push(`<!--command-input-->\n${command.trim()}\n<!--/command-input-->\n`);
   }
   
   return sections.length > 0 ? sections.join('\n\n') : null;
@@ -956,9 +956,9 @@ function formatOutput({ output, exitCode, blocked }) {
     const exitLine = Number.isFinite(exitCode)
       ? `\n# Exit Code: ${exitCode}`
       : '';
-    return '```text\n' + output.trim() + exitLine + '\n```\n';
+    return `<!--command-output-->\n${output.trim()}${exitLine}\n<!--/command-output-->\n`;
   } else if (blocked) {
-    return '```text\nCommand blocked by safety policy.\n```\n';
+    return '<!--command-output-->\nCommand blocked by safety policy.\n<!--/command-output-->\n';
   }
   return null;
 }
@@ -1254,18 +1254,18 @@ async function runAgentIteration({
   });
 
   // V2: Log messages sent to LLM for debugging conversation history
-  console.log('\n\n=== MESSAGES SENT TO LLM (Iteration #' + iteration + ') ===');
-  console.log('Total messages:', messages.length);
-  messages.forEach((msg, idx) => {
-    const preview = msg.content.substring(0, 150).replace(/\n/g, ' ');
-    console.log(`[${idx}] ${msg.role}: ${preview}${msg.content.length > 150 ? '...' : ''}`);
-  });
-  console.log('=== END MESSAGES ===\n');
+  // console.log('\n\n=== MESSAGES SENT TO LLM (Iteration #' + iteration + ') ===');
+  // console.log('Total messages:', messages.length);
+  // messages.forEach((msg, idx) => {
+  //   const preview = msg.content.substring(0, 150).replace(/\n/g, ' ');
+  //   console.log(`[${idx}] ${msg.role}: ${preview}${msg.content.length > 150 ? '...' : ''}`);
+  // });
+  // console.log('=== END MESSAGES ===\n');
 
-  // V2: Log raw AI response for debugging
-  console.log('\n\n=== CODE AGENT ITERATION #' + iteration + ' - RAW AI RESPONSE ===');
-  console.log(response.content || '(empty response)');
-  console.log('=== END RAW AI RESPONSE ===\n');
+  // // V2: Log raw AI response for debugging
+  // console.log('\n\n=== CODE AGENT ITERATION #' + iteration + ' - RAW AI RESPONSE ===');
+  // console.log(response.content || '(empty response)');
+  // console.log('=== END RAW AI RESPONSE ===\n');
 
   const parsed = parseAgentResponse(response.content || '');
 
@@ -1566,7 +1566,7 @@ async function executeCommand(state, command, options = {}) {
       }
       
       return {
-        output: `Command executed, captured output:\n\n${truncatedOutput}\n\nExit code: ${exitCode}`,
+        output: `Command executed, captured output:\n\n${truncatedOutput}`,
         exitCode,
         blocked: false,
         executed: true,

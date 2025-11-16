@@ -227,11 +227,11 @@ Command output shows CUMULATIVE MEMORY STATE (not raw output), preventing duplic
 {memory_state}
 
 Memory Commands:
-- Show-Memory <name> - Display full memory state for a specific memory
+- Show-Memory <name (optional)> - Display full memory state for a specific memory
 - Hide-Memory <name1> <name2> - Hide memories from view (still saved)
-- Use-Memory <name> - Set current working memory (like USE database in SQL) - all file reads auto-save here
+- Use-Memory <name> - Set current working memory all file reads will auto-save here
 - Clear-Memory <name1> <name2> - Delete memory (--all for all)
-- <cmd> | Create-Memory <name> - Create new named memory and save command output to it
+- Create-Memory <name> - Create new named memory (all file reads will auto-save here)
 
 IMPORTANT: Memory shows ALL previously read lines. Check memory BEFORE reading files!
 
@@ -256,7 +256,7 @@ Find-Pattern -Pattern "regex" -Path <file> [-Context 2]
 Get-FileStats -Path <file>  # Check file size/lines before reading
 
 **FILE DISCOVERY:**
-List-ProjectFiles -Extensions ".js,.ts" [-Depth 2] [-Path "dir"] [-Sort]  # Fast listing (skips node_modules, .git, dist)
+List-ProjectFiles -Extensions ".js,.ts" [-Depth 2] [-Path "dir"] [-Sort]
   Example: List-ProjectFiles -Extensions ".js,.ts,.css" -Depth 2 -Sort
 
 **FILE OPERATIONS:**
@@ -397,7 +397,7 @@ Start solving now. Remember your current state and work efficiently.`;
 // ===================================
 // SUBSEQUENT PROMPT
 // ===================================
-const PROMPT_SUBSEQUENT = `=== ORIGINAL REQUEST ===
+const PROMPT_SUBSEQUENT = `
 {user_prompt}
 
 === COMMAND HISTORY ===

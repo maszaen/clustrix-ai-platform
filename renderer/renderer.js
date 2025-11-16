@@ -2036,14 +2036,14 @@ function highlightAllUnder(container, options = {}) {
           if (code) codeBlocks.push(code);
         } else {
           // Query within the delta node
-          const codes = node.querySelectorAll("pre code");
+          const codes = node.querySelectorAll("pre code, .command-code");
           codeBlocks.push(...codes);
         }
       }
     }
   } else {
     // Full query only on finalization or first render
-    codeBlocks = Array.from(container.querySelectorAll("pre code"));
+    codeBlocks = Array.from(container.querySelectorAll("pre code, .command-code"));
   }
 
   codeBlocks.forEach((codeBlock) => {
@@ -2069,6 +2069,23 @@ function highlightAllUnder(container, options = {}) {
 
 // Expose to global scope for md.js
 window.highlightAllUnder = highlightAllUnder;
+
+// Handle command toggle functionality
+function initCommandToggles(container) {
+  const toggles = container.querySelectorAll('.command-toggle');
+  toggles.forEach(toggle => {
+    toggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const commandInput = this.closest('.command-input');
+      if (commandInput) {
+        commandInput.classList.toggle('expanded');
+      }
+    });
+  });
+}
+
+window.initCommandToggles = initCommandToggles;
 
 async function loadAllArtifacts() {
   try {
@@ -8747,6 +8764,12 @@ function mdFallback(src, options = {}) {
       
       // Highlight code blocks if present
       if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
+      
+      // Highlight command code blocks
+      if (tempDiv.querySelector(".command-code")) highlightAllUnder(tempDiv);
+      
+      // Initialize command toggles
+      if (tempDiv.querySelector(".command-toggle")) initCommandToggles(tempDiv);
 
       if (!skipArtifactHydration) {
         setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);

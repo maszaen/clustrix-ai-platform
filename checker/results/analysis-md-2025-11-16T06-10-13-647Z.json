@@ -1,0 +1,1482 @@
+{
+  "file": "renderer/core/md.js",
+  "fileSize": 58598,
+  "totalLines": 1214,
+  "functions": [
+    {
+      "name": "enhancedMarkdownParse",
+      "line": 68,
+      "params": [
+        "src",
+        "AssignmentPattern",
+        "AssignmentPattern"
+      ],
+      "lines": 545
+    },
+    {
+      "name": "parseInlineMarkdown",
+      "line": 861,
+      "params": [
+        "text",
+        "AssignmentPattern"
+      ],
+      "lines": 294
+    },
+    {
+      "name": "processMarkdownFormatting",
+      "line": 615,
+      "params": [
+        "text",
+        "AssignmentPattern"
+      ],
+      "lines": 235
+    },
+    {
+      "name": "md",
+      "line": 1168,
+      "params": [
+        "src",
+        "AssignmentPattern"
+      ],
+      "lines": 29
+    },
+    {
+      "name": "fixMismatchedTags",
+      "line": 97,
+      "params": [
+        "text"
+      ],
+      "lines": 24,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "flushImageGroup",
+      "line": 259,
+      "params": [],
+      "lines": 23,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "parseInlineContent",
+      "line": 47,
+      "params": [
+        "text"
+      ],
+      "lines": 12
+    },
+    {
+      "name": "mdThinking",
+      "line": 1199,
+      "params": [
+        "src"
+      ],
+      "lines": 10
+    },
+    {
+      "name": "appendToCurrentListItem",
+      "line": 290,
+      "params": [
+        "content"
+      ],
+      "lines": 9,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "addPHasListClass",
+      "line": 1157,
+      "params": [
+        "container"
+      ],
+      "lines": 9
+    },
+    {
+      "name": "esc",
+      "line": 36,
+      "params": [
+        "text"
+      ],
+      "lines": 8
+    },
+    {
+      "name": "groupConsecutiveImages",
+      "line": 852,
+      "params": [
+        "html",
+        "imageBlocks"
+      ],
+      "lines": 7
+    },
+    {
+      "name": "flushParagraph",
+      "line": 284,
+      "params": [],
+      "lines": 5,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "closeOpenBlocks",
+      "line": 300,
+      "params": [],
+      "lines": 4,
+      "type": "arrow/expression"
+    }
+  ],
+  "classes": [
+    {
+      "name": "LRUCache",
+      "line": 2,
+      "methods": [
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "lines": 3
+        },
+        {
+          "name": "get",
+          "kind": "method",
+          "lines": 7
+        },
+        {
+          "name": "set",
+          "kind": "method",
+          "lines": 9
+        },
+        {
+          "name": "clear",
+          "kind": "method",
+          "lines": 2
+        }
+      ],
+      "lines": 29
+    }
+  ],
+  "imports": [],
+  "exports": [],
+  "variables": [
+    {
+      "name": "value",
+      "line": 11,
+      "kind": "const"
+    },
+    {
+      "name": "firstKey",
+      "line": 22,
+      "kind": "const"
+    },
+    {
+      "name": "markdownCache",
+      "line": 33,
+      "kind": "const"
+    },
+    {
+      "name": "SPARKLE",
+      "line": 61,
+      "kind": "const"
+    },
+    {
+      "name": "BROWSER_ICON",
+      "line": 63,
+      "kind": "const"
+    },
+    {
+      "name": "EMAIL_ICON",
+      "line": 66,
+      "kind": "const"
+    },
+    {
+      "name": "cacheKey",
+      "line": 71,
+      "kind": "const"
+    },
+    {
+      "name": "cached",
+      "line": 72,
+      "kind": "const"
+    },
+    {
+      "name": "isThinkingText",
+      "line": 78,
+      "kind": "const"
+    },
+    {
+      "name": "sanitizedSrc",
+      "line": 79,
+      "kind": "let"
+    },
+    {
+      "name": "boldListFixRegex",
+      "line": 80,
+      "kind": "const"
+    },
+    {
+      "name": "normalizedSrc",
+      "line": 82,
+      "kind": "const"
+    },
+    {
+      "name": "truncatedSrc",
+      "line": 85,
+      "kind": "const"
+    },
+    {
+      "name": "commandBlocks",
+      "line": 88,
+      "kind": "const"
+    },
+    {
+      "name": "srcAfterCommandExtraction",
+      "line": 89,
+      "kind": "let"
+    },
+    {
+      "name": "placeholder",
+      "line": 90,
+      "kind": "const"
+    },
+    {
+      "name": "fixed",
+      "line": 98,
+      "kind": "let"
+    },
+    {
+      "name": "fixedSrc",
+      "line": 123,
+      "kind": "const"
+    },
+    {
+      "name": "globalReferences",
+      "line": 127,
+      "kind": "const"
+    },
+    {
+      "name": "srcWithoutRefs",
+      "line": 128,
+      "kind": "const"
+    },
+    {
+      "name": "codeBlocks",
+      "line": 133,
+      "kind": "const"
+    },
+    {
+      "name": "isTopLevel",
+      "line": 134,
+      "kind": "const"
+    },
+    {
+      "name": "latexBlocks",
+      "line": 135,
+      "kind": "const"
+    },
+    {
+      "name": "containerBlocks",
+      "line": 136,
+      "kind": "const"
+    },
+    {
+      "name": "latexRegex",
+      "line": 137,
+      "kind": "const"
+    },
+    {
+      "name": "protectedSrc",
+      "line": 138,
+      "kind": "let"
+    },
+    {
+      "name": "placeholder",
+      "line": 139,
+      "kind": "const"
+    },
+    {
+      "name": "processedSrcAfterContainers",
+      "line": 145,
+      "kind": "let"
+    },
+    {
+      "name": "tempCodeBlocks",
+      "line": 148,
+      "kind": "const"
+    },
+    {
+      "name": "tempProtectedSrc",
+      "line": 149,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 150,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 161,
+      "kind": "const"
+    },
+    {
+      "name": "hasClosingTag",
+      "line": 164,
+      "kind": "const"
+    },
+    {
+      "name": "containerContent",
+      "line": 165,
+      "kind": "const"
+    },
+    {
+      "name": "processedSrc",
+      "line": 177,
+      "kind": "let"
+    },
+    {
+      "name": "placeholder",
+      "line": 180,
+      "kind": "const"
+    },
+    {
+      "name": "codeContent",
+      "line": 181,
+      "kind": "let"
+    },
+    {
+      "name": "language",
+      "line": 182,
+      "kind": "const"
+    },
+    {
+      "name": "lines",
+      "line": 186,
+      "kind": "const"
+    },
+    {
+      "name": "cleanedLines",
+      "line": 187,
+      "kind": "const"
+    },
+    {
+      "name": "cleaned",
+      "line": 189,
+      "kind": "let"
+    },
+    {
+      "name": "beforeClean",
+      "line": 192,
+      "kind": "const"
+    },
+    {
+      "name": "nonEmptyLines",
+      "line": 203,
+      "kind": "const"
+    },
+    {
+      "name": "indents",
+      "line": 205,
+      "kind": "const"
+    },
+    {
+      "name": "match",
+      "line": 206,
+      "kind": "const"
+    },
+    {
+      "name": "minIndent",
+      "line": 209,
+      "kind": "const"
+    },
+    {
+      "name": "i",
+      "line": 211,
+      "kind": "let"
+    },
+    {
+      "name": "isMermaid",
+      "line": 222,
+      "kind": "const"
+    },
+    {
+      "name": "isPreviewableHTML",
+      "line": 224,
+      "kind": "const"
+    },
+    {
+      "name": "newStructure",
+      "line": 225,
+      "kind": "const"
+    },
+    {
+      "name": "lines",
+      "line": 252,
+      "kind": "const"
+    },
+    {
+      "name": "html",
+      "line": 253,
+      "kind": "let"
+    },
+    {
+      "name": "listStack",
+      "line": 254,
+      "kind": "const"
+    },
+    {
+      "name": "paragraphBuffer",
+      "line": 255,
+      "kind": "let"
+    },
+    {
+      "name": "imageBuffer",
+      "line": 256,
+      "kind": "let"
+    },
+    {
+      "name": "currentListItemEndPos",
+      "line": 257,
+      "kind": "let"
+    },
+    {
+      "name": "totalImages",
+      "line": 261,
+      "kind": "const"
+    },
+    {
+      "name": "isCollapsible",
+      "line": 262,
+      "kind": "const"
+    },
+    {
+      "name": "visibleCount",
+      "line": 265,
+      "kind": "const"
+    },
+    {
+      "name": "lastLineWasCodeblock",
+      "line": 305,
+      "kind": "let"
+    },
+    {
+      "name": "i",
+      "line": 306,
+      "kind": "let"
+    },
+    {
+      "name": "line",
+      "line": 307,
+      "kind": "const"
+    },
+    {
+      "name": "trimmedLine",
+      "line": 308,
+      "kind": "const"
+    },
+    {
+      "name": "nextLine",
+      "line": 310,
+      "kind": "const"
+    },
+    {
+      "name": "nextLineTrimmed",
+      "line": 311,
+      "kind": "const"
+    },
+    {
+      "name": "nextLineIndent",
+      "line": 312,
+      "kind": "const"
+    },
+    {
+      "name": "nextNextLine",
+      "line": 313,
+      "kind": "const"
+    },
+    {
+      "name": "upcomingTableSeparator",
+      "line": 314,
+      "kind": "const"
+    },
+    {
+      "name": "isUpcomingTableHeader",
+      "line": 315,
+      "kind": "const"
+    },
+    {
+      "name": "shouldContinueList",
+      "line": 318,
+      "kind": "let"
+    },
+    {
+      "name": "currentListIndent",
+      "line": 320,
+      "kind": "const"
+    },
+    {
+      "name": "nextListMatch",
+      "line": 324,
+      "kind": "const"
+    },
+    {
+      "name": "nextListIndent",
+      "line": 325,
+      "kind": "const"
+    },
+    {
+      "name": "lookAhead",
+      "line": 340,
+      "kind": "let"
+    },
+    {
+      "name": "lookAheadLine",
+      "line": 341,
+      "kind": "const"
+    },
+    {
+      "name": "lookAheadTrimmed",
+      "line": 342,
+      "kind": "const"
+    },
+    {
+      "name": "lookAheadIndent",
+      "line": 343,
+      "kind": "const"
+    },
+    {
+      "name": "hMatch",
+      "line": 371,
+      "kind": "const"
+    },
+    {
+      "name": "hrMatch",
+      "line": 372,
+      "kind": "const"
+    },
+    {
+      "name": "olMatch",
+      "line": 373,
+      "kind": "const"
+    },
+    {
+      "name": "ulMatch",
+      "line": 374,
+      "kind": "const"
+    },
+    {
+      "name": "listMatch",
+      "line": 375,
+      "kind": "const"
+    },
+    {
+      "name": "codeMatch",
+      "line": 376,
+      "kind": "const"
+    },
+    {
+      "name": "nextLine",
+      "line": 377,
+      "kind": "const"
+    },
+    {
+      "name": "isTableHeader",
+      "line": 378,
+      "kind": "const"
+    },
+    {
+      "name": "bqMatch",
+      "line": 379,
+      "kind": "const"
+    },
+    {
+      "name": "isNextLineSeparator",
+      "line": 380,
+      "kind": "const"
+    },
+    {
+      "name": "tableHtml",
+      "line": 382,
+      "kind": "let"
+    },
+    {
+      "name": "headers",
+      "line": 383,
+      "kind": "const"
+    },
+    {
+      "name": "tableRowIndex",
+      "line": 387,
+      "kind": "let"
+    },
+    {
+      "name": "cells",
+      "line": 389,
+      "kind": "const"
+    },
+    {
+      "name": "j",
+      "line": 391,
+      "kind": "let"
+    },
+    {
+      "name": "cellContent",
+      "line": 392,
+      "kind": "const"
+    },
+    {
+      "name": "indent",
+      "line": 412,
+      "kind": "let"
+    },
+    {
+      "name": "type",
+      "line": 413,
+      "kind": "const"
+    },
+    {
+      "name": "number",
+      "line": 414,
+      "kind": "const"
+    },
+    {
+      "name": "content",
+      "line": 415,
+      "kind": "let"
+    },
+    {
+      "name": "isTaskList",
+      "line": 418,
+      "kind": "let"
+    },
+    {
+      "name": "isChecked",
+      "line": 419,
+      "kind": "let"
+    },
+    {
+      "name": "taskMatch",
+      "line": 420,
+      "kind": "const"
+    },
+    {
+      "name": "lastList",
+      "line": 426,
+      "kind": "const"
+    },
+    {
+      "name": "currentLastList",
+      "line": 432,
+      "kind": "const"
+    },
+    {
+      "name": "lastLiPos",
+      "line": 435,
+      "kind": "const"
+    },
+    {
+      "name": "isImplicit",
+      "line": 438,
+      "kind": "const"
+    },
+    {
+      "name": "startAttr",
+      "line": 439,
+      "kind": "const"
+    },
+    {
+      "name": "parsedContent",
+      "line": 444,
+      "kind": "const"
+    },
+    {
+      "name": "checkboxHtml",
+      "line": 446,
+      "kind": "const"
+    },
+    {
+      "name": "bqBlockLines",
+      "line": 456,
+      "kind": "const"
+    },
+    {
+      "name": "nextLine",
+      "line": 459,
+      "kind": "const"
+    },
+    {
+      "name": "nextTrimmed",
+      "line": 460,
+      "kind": "const"
+    },
+    {
+      "name": "isNewBlock",
+      "line": 466,
+      "kind": "const"
+    },
+    {
+      "name": "prevLine",
+      "line": 470,
+      "kind": "const"
+    },
+    {
+      "name": "prevTrimmed",
+      "line": 471,
+      "kind": "const"
+    },
+    {
+      "name": "isTableRow",
+      "line": 472,
+      "kind": "const"
+    },
+    {
+      "name": "prevWasTableRow",
+      "line": 473,
+      "kind": "const"
+    },
+    {
+      "name": "minDepth",
+      "line": 490,
+      "kind": "let"
+    },
+    {
+      "name": "depthMap",
+      "line": 491,
+      "kind": "const"
+    },
+    {
+      "name": "match",
+      "line": 492,
+      "kind": "const"
+    },
+    {
+      "name": "depth",
+      "line": 494,
+      "kind": "const"
+    },
+    {
+      "name": "nestedContent",
+      "line": 502,
+      "kind": "const"
+    },
+    {
+      "name": "processedNestedContent",
+      "line": 511,
+      "kind": "const"
+    },
+    {
+      "name": "parsedContent",
+      "line": 516,
+      "kind": "const"
+    },
+    {
+      "name": "blockquoteContent",
+      "line": 519,
+      "kind": "const"
+    },
+    {
+      "name": "blockquoteHtml",
+      "line": 523,
+      "kind": "const"
+    },
+    {
+      "name": "prefix",
+      "line": 551,
+      "kind": "const"
+    },
+    {
+      "name": "textHtml",
+      "line": 552,
+      "kind": "const"
+    },
+    {
+      "name": "isNestedImageLink",
+      "line": 565,
+      "kind": "const"
+    },
+    {
+      "name": "isImageOnly",
+      "line": 566,
+      "kind": "const"
+    },
+    {
+      "name": "finalHtml",
+      "line": 585,
+      "kind": "let"
+    },
+    {
+      "name": "processed",
+      "line": 594,
+      "kind": "const"
+    },
+    {
+      "name": "processedContent",
+      "line": 598,
+      "kind": "const"
+    },
+    {
+      "name": "processedContent",
+      "line": 605,
+      "kind": "const"
+    },
+    {
+      "name": "references",
+      "line": 620,
+      "kind": "const"
+    },
+    {
+      "name": "processedText",
+      "line": 621,
+      "kind": "let"
+    },
+    {
+      "name": "imageBlocks",
+      "line": 627,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 632,
+      "kind": "const"
+    },
+    {
+      "name": "cleanAlt",
+      "line": 633,
+      "kind": "const"
+    },
+    {
+      "name": "finalImgSrc",
+      "line": 636,
+      "kind": "let"
+    },
+    {
+      "name": "sizeAttr",
+      "line": 637,
+      "kind": "let"
+    },
+    {
+      "name": "sizeMatch",
+      "line": 638,
+      "kind": "const"
+    },
+    {
+      "name": "labelHtml",
+      "line": 645,
+      "kind": "const"
+    },
+    {
+      "name": "ref",
+      "line": 652,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 655,
+      "kind": "const"
+    },
+    {
+      "name": "cleanAlt",
+      "line": 656,
+      "kind": "const"
+    },
+    {
+      "name": "titleAttr",
+      "line": 657,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 664,
+      "kind": "const"
+    },
+    {
+      "name": "cleanAlt",
+      "line": 666,
+      "kind": "const"
+    },
+    {
+      "name": "imgSrc",
+      "line": 668,
+      "kind": "let"
+    },
+    {
+      "name": "sizeAttr",
+      "line": 669,
+      "kind": "let"
+    },
+    {
+      "name": "sizeMatch",
+      "line": 670,
+      "kind": "const"
+    },
+    {
+      "name": "footnoteRefs",
+      "line": 680,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 682,
+      "kind": "const"
+    },
+    {
+      "name": "linkBlocks",
+      "line": 688,
+      "kind": "const"
+    },
+    {
+      "name": "lookupId",
+      "line": 693,
+      "kind": "const"
+    },
+    {
+      "name": "ref",
+      "line": 694,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 697,
+      "kind": "const"
+    },
+    {
+      "name": "hasImage",
+      "line": 700,
+      "kind": "const"
+    },
+    {
+      "name": "processedText",
+      "line": 701,
+      "kind": "const"
+    },
+    {
+      "name": "icon",
+      "line": 702,
+      "kind": "const"
+    },
+    {
+      "name": "titleAttr",
+      "line": 703,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 721,
+      "kind": "const"
+    },
+    {
+      "name": "hasImage",
+      "line": 724,
+      "kind": "const"
+    },
+    {
+      "name": "processedText",
+      "line": 728,
+      "kind": "const"
+    },
+    {
+      "name": "icon",
+      "line": 729,
+      "kind": "const"
+    },
+    {
+      "name": "processedText",
+      "line": 733,
+      "kind": "const"
+    },
+    {
+      "name": "icon",
+      "line": 734,
+      "kind": "const"
+    },
+    {
+      "name": "html",
+      "line": 740,
+      "kind": "let"
+    },
+    {
+      "name": "footnoteGroupRegex",
+      "line": 746,
+      "kind": "const"
+    },
+    {
+      "name": "individualFootnoteRegex",
+      "line": 748,
+      "kind": "const"
+    },
+    {
+      "name": "links",
+      "line": 749,
+      "kind": "const"
+    },
+    {
+      "name": "number",
+      "line": 752,
+      "kind": "const"
+    },
+    {
+      "name": "url",
+      "line": 753,
+      "kind": "const"
+    },
+    {
+      "name": "inlineCodeBlocks",
+      "line": 763,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 765,
+      "kind": "const"
+    },
+    {
+      "name": "tldList",
+      "line": 769,
+      "kind": "const"
+    },
+    {
+      "name": "tldPattern",
+      "line": 770,
+      "kind": "const"
+    },
+    {
+      "name": "autoLinkRegex",
+      "line": 771,
+      "kind": "const"
+    },
+    {
+      "name": "beforeMatch",
+      "line": 782,
+      "kind": "const"
+    },
+    {
+      "name": "lastOpenTag",
+      "line": 783,
+      "kind": "const"
+    },
+    {
+      "name": "lastCloseTag",
+      "line": 791,
+      "kind": "const"
+    },
+    {
+      "name": "href",
+      "line": 800,
+      "kind": "let"
+    },
+    {
+      "name": "allPlaceholders",
+      "line": 808,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 810,
+      "kind": "const"
+    },
+    {
+      "name": "htmlTagPattern",
+      "line": 816,
+      "kind": "const"
+    },
+    {
+      "name": "protectedTags",
+      "line": 817,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 819,
+      "kind": "const"
+    },
+    {
+      "name": "cacheKey",
+      "line": 845,
+      "kind": "const"
+    },
+    {
+      "name": "processedHtml",
+      "line": 854,
+      "kind": "let"
+    },
+    {
+      "name": "parts",
+      "line": 872,
+      "kind": "const"
+    },
+    {
+      "name": "listItems",
+      "line": 873,
+      "kind": "let"
+    },
+    {
+      "name": "currentItem",
+      "line": 874,
+      "kind": "let"
+    },
+    {
+      "name": "i",
+      "line": 875,
+      "kind": "let"
+    },
+    {
+      "name": "part",
+      "line": 876,
+      "kind": "const"
+    },
+    {
+      "name": "listHtml",
+      "line": 889,
+      "kind": "let"
+    },
+    {
+      "name": "cleanItem",
+      "line": 891,
+      "kind": "const"
+    },
+    {
+      "name": "processedItem",
+      "line": 892,
+      "kind": "const"
+    },
+    {
+      "name": "processedText",
+      "line": 899,
+      "kind": "let"
+    },
+    {
+      "name": "references",
+      "line": 903,
+      "kind": "const"
+    },
+    {
+      "name": "imageBlocks",
+      "line": 910,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 915,
+      "kind": "const"
+    },
+    {
+      "name": "cleanAlt",
+      "line": 916,
+      "kind": "const"
+    },
+    {
+      "name": "finalImgSrc",
+      "line": 919,
+      "kind": "let"
+    },
+    {
+      "name": "sizeAttr",
+      "line": 920,
+      "kind": "let"
+    },
+    {
+      "name": "sizeMatch",
+      "line": 921,
+      "kind": "const"
+    },
+    {
+      "name": "labelHtml",
+      "line": 928,
+      "kind": "const"
+    },
+    {
+      "name": "ref",
+      "line": 935,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 938,
+      "kind": "const"
+    },
+    {
+      "name": "cleanAlt",
+      "line": 939,
+      "kind": "const"
+    },
+    {
+      "name": "titleAttr",
+      "line": 940,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 947,
+      "kind": "const"
+    },
+    {
+      "name": "cleanAlt",
+      "line": 949,
+      "kind": "const"
+    },
+    {
+      "name": "imgSrc",
+      "line": 951,
+      "kind": "let"
+    },
+    {
+      "name": "sizeAttr",
+      "line": 952,
+      "kind": "let"
+    },
+    {
+      "name": "sizeMatch",
+      "line": 953,
+      "kind": "const"
+    },
+    {
+      "name": "footnoteRefs",
+      "line": 963,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 965,
+      "kind": "const"
+    },
+    {
+      "name": "linkBlocks",
+      "line": 971,
+      "kind": "const"
+    },
+    {
+      "name": "lookupId",
+      "line": 976,
+      "kind": "const"
+    },
+    {
+      "name": "ref",
+      "line": 977,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 980,
+      "kind": "const"
+    },
+    {
+      "name": "hasImage",
+      "line": 983,
+      "kind": "const"
+    },
+    {
+      "name": "processedText",
+      "line": 984,
+      "kind": "const"
+    },
+    {
+      "name": "icon",
+      "line": 985,
+      "kind": "const"
+    },
+    {
+      "name": "titleAttr",
+      "line": 986,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 1004,
+      "kind": "const"
+    },
+    {
+      "name": "hasImage",
+      "line": 1007,
+      "kind": "const"
+    },
+    {
+      "name": "processedText",
+      "line": 1011,
+      "kind": "const"
+    },
+    {
+      "name": "icon",
+      "line": 1012,
+      "kind": "const"
+    },
+    {
+      "name": "processedText",
+      "line": 1016,
+      "kind": "const"
+    },
+    {
+      "name": "icon",
+      "line": 1017,
+      "kind": "const"
+    },
+    {
+      "name": "html",
+      "line": 1023,
+      "kind": "let"
+    },
+    {
+      "name": "entities",
+      "line": 1026,
+      "kind": "const"
+    },
+    {
+      "name": "footnoteGroupRegex",
+      "line": 1050,
+      "kind": "const"
+    },
+    {
+      "name": "individualFootnoteRegex",
+      "line": 1052,
+      "kind": "const"
+    },
+    {
+      "name": "links",
+      "line": 1053,
+      "kind": "const"
+    },
+    {
+      "name": "number",
+      "line": 1056,
+      "kind": "const"
+    },
+    {
+      "name": "url",
+      "line": 1057,
+      "kind": "const"
+    },
+    {
+      "name": "inlineCodeBlocks",
+      "line": 1074,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 1076,
+      "kind": "const"
+    },
+    {
+      "name": "tldList",
+      "line": 1080,
+      "kind": "const"
+    },
+    {
+      "name": "tldPattern",
+      "line": 1081,
+      "kind": "const"
+    },
+    {
+      "name": "autoLinkRegex",
+      "line": 1082,
+      "kind": "const"
+    },
+    {
+      "name": "beforeMatch",
+      "line": 1093,
+      "kind": "const"
+    },
+    {
+      "name": "lastOpenTag",
+      "line": 1094,
+      "kind": "const"
+    },
+    {
+      "name": "lastCloseTag",
+      "line": 1102,
+      "kind": "const"
+    },
+    {
+      "name": "href",
+      "line": 1111,
+      "kind": "let"
+    },
+    {
+      "name": "allPlaceholders",
+      "line": 1119,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 1121,
+      "kind": "const"
+    },
+    {
+      "name": "htmlTagPattern",
+      "line": 1127,
+      "kind": "const"
+    },
+    {
+      "name": "protectedTags",
+      "line": 1128,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 1130,
+      "kind": "const"
+    },
+    {
+      "name": "pTags",
+      "line": 1159,
+      "kind": "const"
+    },
+    {
+      "name": "nextElement",
+      "line": 1161,
+      "kind": "const"
+    },
+    {
+      "name": "cleanSrc",
+      "line": 1170,
+      "kind": "const"
+    },
+    {
+      "name": "commandBlocks",
+      "line": 1173,
+      "kind": "const"
+    },
+    {
+      "name": "srcWithPlaceholders",
+      "line": 1174,
+      "kind": "const"
+    },
+    {
+      "name": "placeholder",
+      "line": 1175,
+      "kind": "const"
+    },
+    {
+      "name": "html",
+      "line": 1180,
+      "kind": "const"
+    },
+    {
+      "name": "tempDiv",
+      "line": 1181,
+      "kind": "const"
+    },
+    {
+      "name": "finalHtml",
+      "line": 1188,
+      "kind": "let"
+    },
+    {
+      "name": "placeholder",
+      "line": 1190,
+      "kind": "const"
+    },
+    {
+      "name": "replacement",
+      "line": 1191,
+      "kind": "const"
+    },
+    {
+      "name": "cleanSrc",
+      "line": 1201,
+      "kind": "const"
+    },
+    {
+      "name": "html",
+      "line": 1202,
+      "kind": "const"
+    },
+    {
+      "name": "tempDiv",
+      "line": 1203,
+      "kind": "const"
+    }
+  ]
+}

@@ -650,8 +650,8 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     
     if (group.input) {
       // Create expandable command input with output
-      const outputHtml = group.output ? 
-        '<div class="command-output">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
+      const outputHtml = group.output ?
+        '<div class="command-output" aria-hidden="true">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
       
       const toggleButton = group.output ? '<button class="command-toggle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>' : '';
       
@@ -1225,11 +1225,10 @@ function addPHasListClass(container) {
 function md(src, options = {}) {
   if (!src) return "";
   const cleanSrc = src.trim();
-  
+
   // Extract command input/output tags BEFORE any markdown processing
   // Group consecutive input-output pairs into single command units
   const commandGroups = [];
-  let commandIndex = 0;
   
   // First pass: collect all command blocks
   const allCommandBlocks = [];
@@ -1270,42 +1269,45 @@ function md(src, options = {}) {
   const html = enhancedMarkdownParse(srcWithPlaceholders, options);
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = html;
-  addPHasListClass(tempDiv);
-  if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
-  attachCodeBlockListeners(tempDiv);
-  
-  // Highlight command code blocks
-  if (tempDiv.querySelector(".command-code")) highlightAllUnder(tempDiv);
-  
-  // Initialize command toggles
-  if (tempDiv.querySelector(".command-toggle")) initCommandToggles(tempDiv);
-  
+
   // Restore command groups
   let finalHtml = tempDiv.innerHTML;
   commandGroups.forEach((group, index) => {
     const placeholder = `__COMMAND_GROUP_${index}__`;
     let replacement = '';
-    
+
     if (group.input) {
       // Create expandable command input with output
-      const outputHtml = group.output ? 
-        '<div class="command-output" style="display: none;">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
-      
+      const outputHtml = group.output ?
+        '<div class="command-output" aria-hidden="true">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
+
       const toggleButton = group.output ? '<button class="command-toggle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>' : '';
-      
-      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><code class="command-code language-powershell">' + 
-        group.input.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + 
+
+      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><code class="command-code language-powershell">' +
+        group.input.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') +
         '</code>' + toggleButton + '</div>' + outputHtml + '</div>';
     } else if (group.output) {
       // Standalone output (fallback)
       replacement = '<div class="command-output">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
     }
-    
+
     finalHtml = finalHtml.replace(placeholder, replacement);
   });
-  
+
+  tempDiv.innerHTML = finalHtml;
+  addPHasListClass(tempDiv);
+
+  if (tempDiv.querySelector("pre code, .command-code")) {
+    highlightAllUnder(tempDiv);
+  }
+
+  attachCodeBlockListeners(tempDiv);
+
+  if (tempDiv.querySelector(".command-toggle")) initCommandToggles(tempDiv);
+
+  const processedHtml = tempDiv.innerHTML;
   setTimeout(() => updateCodeBlocksWithArtifactInfo(tempDiv), 0);
-  return finalHtml;
+  return processedHtml;
 }
 
 function mdThinking(src) {

@@ -927,11 +927,7 @@ function formatResponseAndCommand({ answer, command, hidden }) {
   
   // 1. Format hidden as codeblock with '>' prefix
   if (hidden) {
-    const hiddenLines = hidden
-      .split('\n')
-      .map(line => `> ${line}`)
-      .join('\n');
-    sections.push('\n' + hiddenLines + '\n');
+    sections.push('```javascript\n' + hidden.trim() + '\n```\n');
   }
   
   // 2. Add answer (already handled)
@@ -956,9 +952,9 @@ function formatOutput({ output, exitCode, blocked }) {
     const exitLine = Number.isFinite(exitCode)
       ? `\n# Exit Code: ${exitCode}`
       : '';
-    return `<!--command-output-->\n${output.trim()}${exitLine}\n<!--/command-output-->\n`;
+    return `<!--command-output-->\n${output.trim()}${exitLine}\n<!--/command-output-->\n\n`;
   } else if (blocked) {
-    return '<!--command-output-->\nCommand blocked by safety policy.\n<!--/command-output-->\n';
+    return '<!--command-output-->\nCommand blocked by safety policy.\n<!--/command-output-->\n\n';
   }
   return null;
 }

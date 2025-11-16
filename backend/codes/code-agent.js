@@ -1,6 +1,8 @@
 const https = require('https');
 const { URL } = require('url');
 const fs = require('fs');
+const path = require('path');
+const os = require('os');
 const { PowerShellSession } = require('./powershell-session');
 const { applySetOperations } = require('./edit-operations');
 const { joinEndpoint } = require('../integration/langchain-helpers');
@@ -390,7 +392,14 @@ function formatMemoryOutput(state) {
       output.push(`=== MEMORY STATE: ${memName} ===\n`);
 
       for (const [filePath, fileData] of Object.entries(memory.files || {})) {
-        output.push(`/${filePath}`);
+        // Calculate total explored lines
+        let totalExplored = 0;
+        for (const range of fileData.ranges) {
+          totalExplored += range.lines.length;
+        }
+
+        const totalLinesInfo = fileData.totalLines ? ` (${fileData.totalLines} lines total, ${totalExplored} explored)` : '';
+        output.push(`/${filePath}${totalLinesInfo}`);
 
         for (const range of fileData.ranges) {
           for (let i = 0; i < range.lines.length; i++) {
@@ -406,13 +415,15 @@ function formatMemoryOutput(state) {
           }
         }
 
-        // Add end-of-memory marker after last range
-        if (fileData.ranges.length > 0) {
+        // Add end-of-file unexplored marker
+        if (fileData.ranges.length > 0 && fileData.totalLines) {
           const lastRange = fileData.ranges[fileData.ranges.length - 1];
-          const totalLinesInfo = fileData.totalLines ? `, total lines in file is ${fileData.totalLines}` : '';
-          output.push(`[End of current findings in ${filePath} at line ${lastRange.end}${totalLinesInfo}, more content may exist - search to gather more]`);
+          const lastExploredLine = lastRange.end;
+          if (lastExploredLine < fileData.totalLines) {
+            output.push(`[Lines ${lastExploredLine + 1}-${fileData.totalLines} unexplored]`);
+          }
         }
-
+        
         output.push(''); // Empty line between files
       }
     } else {
@@ -686,7 +697,7 @@ function getLastCommand(history = []) {
   };
 }
 
-function buildUserPrompt({ userPrompt, instruction, workspacePath }) {
+function buildUserPrompt({ userPrompt, instruction, workspacePath, savedState }) {
   const parts = [];
   if (instruction) {
     parts.push(`=== WORKSPACE INSTRUCTION ===\n${instruction}`);
@@ -694,11 +705,18 @@ function buildUserPrompt({ userPrompt, instruction, workspacePath }) {
   if (workspacePath) {
     parts.push(`Workspace: ${workspacePath}`);
   }
+  if (savedState) {
+    parts.push(`=== CONTINUATION FROM PREVIOUS SESSION ===\nPrevious session ended in ${savedState} state. Continue from where we left off.`);
+  }
   parts.push(`=== USER PROMPT ===\n${userPrompt}`);
   return parts.join('\n\n');
 }
 
-function selectPromptTemplate(iteration) {
+function selectPromptTemplate(iteration, isContinuationSession = false) {
+  // For continuation sessions, always use PROMPT_SUBSEQUENT even for iteration 0
+  if (isContinuationSession) {
+    return PROMPT_SUBSEQUENT;
+  }
   return iteration === 0 ? PROMPT_FIRST : PROMPT_SUBSEQUENT;
 }
 
@@ -813,6 +831,7 @@ function parseAgentResponse(text = '') {
   const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/i);
   const cmdMatch = text.match(/<cmd>([\s\S]*?)<\/cmd>/i);
   const stateMatch = text.match(/<state>([\s\S]*?)<\/state>/i);
+  const savedStateMatch = text.match(/<saved_state>([\s\S]*?)<\/saved_state>/i);
   let done = /<!END>/i.test(text);
   const todoMatch = text.match(/<todo>([\s\S]*?)<\/todo>/i);
   const checklistMatch = text.match(/<checklist>([\s\S]*?)<\/checklist>/i);
@@ -866,10 +885,27 @@ function parseAgentResponse(text = '') {
 
   const command = cmdMatch ? cmdMatch[1].trim() : '';
 
-  // Auto-detect done: if no command and no answer and no hidden, we're done
-  if (!command && !cleanAnswer && !hiddenMatch && !done) {
-    log('CODES', 2, 'parseAgentResponse', 'Auto-detected done: no command, no answer, no hidden content');
-    done = true;
+  // Auto-detect done: if no command and no hidden, and answer doesn't indicate continuation, we're done
+  if (!command && !hiddenMatch && !done) {
+    const hasContinuationIndicators = cleanAnswer && (
+      cleanAnswer.toLowerCase().includes('lanjut') ||
+      cleanAnswer.toLowerCase().includes('perlu') ||
+      cleanAnswer.toLowerCase().includes('cek') ||
+      cleanAnswer.toLowerCase().includes('akan') ||
+      cleanAnswer.toLowerCase().includes('menjalankan') ||
+      cleanAnswer.toLowerCase().includes('memperbaiki') ||
+      cleanAnswer.toLowerCase().includes('jika') ||
+      cleanAnswer.toLowerCase().includes('untuk') ||
+      cleanAnswer.toLowerCase().includes('?') ||
+      cleanAnswer.toLowerCase().includes('fokus') ||
+      cleanAnswer.toLowerCase().includes('selanjutnya') ||
+      cleanAnswer.toLowerCase().includes('eksplor') ||
+      cleanAnswer.toLowerCase().includes('benerin')
+    );
+    if (!cleanAnswer || !hasContinuationIndicators) {
+      log('CODES', 2, 'parseAgentResponse', 'Auto-detected done: no command, no meaningful answer with continuation indicators, no hidden content');
+      done = true;
+    }
   }
 
   return {
@@ -877,6 +913,7 @@ function parseAgentResponse(text = '') {
     answer: cleanAnswer,
     command,
     state: stateMatch ? stateMatch[1].trim().toUpperCase() : null, // AI-declared state
+    savedState: savedStateMatch ? savedStateMatch[1].trim().toUpperCase() : null, // Saved state for next session
     done,
     todo: todoMatch ? todoMatch[1].trim() : null,
     checklist: checklistMatch ? checklistMatch[1].trim() : null,
@@ -1030,7 +1067,7 @@ function formatResponseAndCommand({ answer, command, hidden }) {
   
   // 1. Format hidden as codeblock with '>' prefix
   if (hidden) {
-    sections.push('```javascript\n' + hidden.trim() + '\n```\n');
+    sections.push(`<!--hidden-->\n${hidden.trim()}\n<!--/hidden-->\n`);
   }
   
   // 2. Add answer (already handled)
@@ -1240,6 +1277,7 @@ async function runAgentIteration({
   apiKey,
   db,
   sessionId,
+  isContinuationSession = false,
 }) {
   const commandHistoryText = formatCommandHistory(state.commandHistory);
   const lastCommand = getLastCommand(state.commandHistory);
@@ -1302,8 +1340,8 @@ async function runAgentIteration({
 
   // Pass iteration for dynamic command reference injection
   const memoryState = formatMemoryOutput(state);
-  const truncatedMemory = memoryState.length > 10000 ? memoryState.substring(0, 10000) + '\n[Memory truncated...]' : memoryState;
-  const systemPrompt = renderSystemPrompt(selectPromptTemplate(iteration), {
+  const truncatedMemory = memoryState.length > 150000 ? memoryState.substring(0, 150000) + '\n[Memory truncated, Show-Memory to read all]' : memoryState;
+  const systemPrompt = renderSystemPrompt(selectPromptTemplate(iteration, isContinuationSession), {
     userPrompt,
     commandHistory: commandHistoryText,
     commandHistoryArray: state.commandHistory,
@@ -1374,6 +1412,7 @@ async function runAgentIteration({
   console.log('Answer:', parsed.answer ? `"${parsed.answer.substring(0, 100)}${parsed.answer.length > 100 ? '...' : ''}"` : 'null');
   console.log('Command:', parsed.command ? `"${parsed.command.substring(0, 100)}${parsed.command.length > 100 ? '...' : ''}"` : 'null');
   console.log('State:', parsed.state || 'null');
+  console.log('Saved State:', parsed.savedState || 'null');
   console.log('Done:', parsed.done);
   console.log('Todo:', parsed.todo ? 'present' : 'null');
   console.log('Checklist:', parsed.checklist ? 'present' : 'null');
@@ -1784,12 +1823,33 @@ async function processCodeRequest({
     state.workspacePath = ensureDirectoryExists(codeRecord.workspace_path || codeRecord.workspacePath || '') || state.workspacePath;
   }
 
+  // Load saved state from previous session if exists
+  let isContinuationSession = false;
+  if (sessionId) {
+    try {
+      const userDataPath = process.env.APPDATA || (os.platform() === 'darwin' ? path.join(os.homedir(), 'Library', 'Application Support') : path.join(os.homedir(), '.config'));
+      const appDataPath = path.join(userDataPath, 'clustrix');
+      const stateFile = path.join(appDataPath, `state-${sessionId}.json`);
+      if (fs.existsSync(stateFile)) {
+        const savedData = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+        if (savedData.lastState) {
+          state.currentState = savedData.lastState;
+          isContinuationSession = true; // Mark as continuation session
+          log('CODES', 1, 'processCodeRequest', 'Loaded saved state from previous session', { sessionId, lastState: savedData.lastState });
+        }
+      }
+    } catch (error) {
+      log('CODES', 2, 'processCodeRequest', 'Failed to load saved state', { error: error.message });
+    }
+  }
+
   ensurePowerShellSession(state, state.workspacePath || process.cwd());
 
   const userPromptWithContext = buildUserPrompt({
     userPrompt,
     instruction: state.instruction,
     workspacePath: state.workspacePath,
+    savedState: !isContinuationSession && state.currentState !== AGENT_STATES.EXPLORE ? state.currentState : null,
   });
 
   // Get current message index for this request
@@ -1820,6 +1880,7 @@ async function processCodeRequest({
       apiKey,
       db,
       sessionId,
+      isContinuationSession,
     });
 
     if (typeof shouldCancel === 'function' && shouldCancel()) {
@@ -1835,6 +1896,20 @@ async function processCodeRequest({
     // Track final answer if this is meaningful content (not just command)
     if (parsed.answer && parsed.answer.trim() && parsed.done) {
       finalAnswer = parsed.answer.trim();
+    }
+
+    // Save saved_state to local storage if provided
+    if (parsed.savedState && sessionId) {
+      try {
+        const userDataPath = process.env.APPDATA || (os.platform() === 'darwin' ? path.join(os.homedir(), 'Library', 'Application Support') : path.join(os.homedir(), '.config'));
+        const appDataPath = path.join(userDataPath, 'clustrix');
+        if (!fs.existsSync(appDataPath)) fs.mkdirSync(appDataPath, { recursive: true });
+        const stateFile = path.join(appDataPath, `state-${sessionId}.json`);
+        fs.writeFileSync(stateFile, JSON.stringify({ lastState: parsed.savedState, timestamp: Date.now() }));
+        log('CODES', 1, 'processCodeRequest', 'Saved state for next session', { sessionId, savedState: parsed.savedState });
+      } catch (error) {
+        log('CODES', 2, 'processCodeRequest', 'Failed to save state', { error: error.message });
+      }
     }
 
     // STEP 0: Send todo/checklist if present (for planning & progress tracking)
@@ -2161,6 +2236,21 @@ async function processCodeRequest({
         role: 'user',
         content: feedbackMessage,
       });
+
+      // INTERNAL STATE TRANSITION: Update state based on command type and result
+      if (exitCode === 0) {
+        const cmd = parsed.command.toLowerCase();
+        if (cmd.includes('search-infiles') || cmd.includes('list-projectfiles') || cmd.includes('get-childitem')) {
+          state.currentState = AGENT_STATES.READ; // Search done, now read files
+        } else if (cmd.includes('read-file') || cmd.includes('get-content')) {
+          state.currentState = AGENT_STATES.UNDERSTAND; // Read done, now analyze
+        } else if (cmd.includes('-replace') || cmd.includes('set-content') || cmd.includes('out-file')) {
+          state.currentState = AGENT_STATES.EXECUTE; // Edit done, now test/run
+        } else if (cmd.includes('npm test') || cmd.includes('jest') || cmd.includes('run test')) {
+          state.currentState = AGENT_STATES.VERIFY; // Test done, verify results
+        }
+        // Other commands keep current state
+      }
 
       // Save iteration to code_iterations table
       if (db && sessionId) {

@@ -65,6 +65,567 @@ const BROWSER_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none
 // Email icon SVG untuk mailto links
 const EMAIL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mail-icon"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>';
 
+// Transform command text into human-readable description
+function transformCommandText(commandText) {
+  if (!commandText) return commandText;
+  
+  const cmd = commandText.trim();
+  
+  // Helper: Extract just filename from path (H:\path\to\file.js → file.js)
+  const getFilename = (path) => {
+    if (!path) return path;
+    // Remove quotes first
+    path = path.replace(/['"]/g, '');
+    // Get last part after / or \
+    const parts = path.split(/[/\\]/);
+    return parts[parts.length - 1] || path;
+  };
+  
+  // Helper function to extract parameter value
+  const getParam = (paramName) => {
+    const regex = new RegExp(`-${paramName}\\s+["']?([^"'\\s-]+)["']?`, 'i');
+    const match = cmd.match(regex);
+    return match ? match[1] : null;
+  };
+  
+  // Helper function to extract quoted strings (including paths with spaces)
+  const getQuotedParam = (paramName) => {
+    const regex = new RegExp(`-${paramName}\\s+["']([^"']+)["']`, 'i');
+    const match = cmd.match(regex);
+    return match ? match[1] : null;
+  };
+  
+  // Helper to get file path (can be quoted or unquoted)
+  const getPath = () => {
+    return getQuotedParam('Path') || getParam('Path');
+  };
+  
+  // XML-style edit commands (sometimes AI outputs these)
+  if (cmd.match(/^<set\s+file=/i)) {
+    const fileMatch = cmd.match(/file=["']([^"']+)["']/i);
+    const rangeMatch = cmd.match(/range=\{(\d+),(\d+)\}/i);
+    
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      if (rangeMatch) {
+        const start = rangeMatch[1];
+        const end = rangeMatch[2];
+        return `Edit <strong>${filename}</strong>, lines ${start}-${end}`;
+      }
+      return `Edit <strong>${filename}</strong>`;
+    }
+  }
+  
+  // PowerShell helper functions
+  if (cmd.match(/^Show-FileWithLineNumbers/i)) {
+    const path = getPath();
+    const startLine = getParam('StartLine');
+    const endLine = getParam('EndLine');
+    
+    if (!path) return cmd;
+    
+    const filename = getFilename(path);
+    
+    if (startLine && endLine) {
+      return `Read <strong>${filename}</strong>, lines ${startLine}-${endLine}`;
+    } else if (startLine) {
+      return `Read <strong>${filename}</strong>, from line ${startLine}`;
+    } else {
+      return `Read <strong>${filename}</strong>`;
+    }
+  }
+  
+  if (cmd.match(/^Set-FileLine/i)) {
+    const path = getPath();
+    const lineNum = getParam('LineNumber');
+    
+    if (!path || !lineNum) return cmd;
+    
+    const filename = getFilename(path);
+    return `Edit <strong>${filename}</strong>, line ${lineNum}`;
+  }
+  
+  if (cmd.match(/^Remove-FileLine/i)) {
+    const path = getPath();
+    const lineNum = getParam('LineNumber');
+    
+    if (!path || !lineNum) return cmd;
+    
+    const filename = getFilename(path);
+    return `Remove line ${lineNum} from <strong>${filename}</strong>`;
+  }
+  
+  if (cmd.match(/^Add-FileLine/i)) {
+    const path = getPath();
+    const lineNum = getParam('LineNumber');
+    
+    if (!path || !lineNum) return cmd;
+    
+    const filename = getFilename(path);
+    return `Add line to <strong>${filename}</strong> at position ${lineNum}`;
+  }
+  
+  if (cmd.match(/^Set-MultipleLines/i)) {
+    const path = getPath();
+    
+    if (!path) return cmd;
+    
+    const filename = getFilename(path);
+    
+    // Try to count replacements from hashtable
+    const hashMatch = cmd.match(/@\{([^}]+)\}/);
+    if (hashMatch) {
+      const entries = hashMatch[1].split(';').filter(e => e.trim());
+      return `Edit <strong>${filename}</strong>, ${entries.length} lines`;
+    }
+    
+    return `Edit <strong>${filename}</strong>`;
+  }
+  
+  if (cmd.match(/^Search-Pattern/i)) {
+    const pattern = getQuotedParam('Pattern') || getParam('Pattern');
+    const path = getPath() || getParam('Directory');
+    const filter = getQuotedParam('Filter') || getParam('Filter');
+    
+    if (!pattern) return cmd;
+    
+    let description = `Search <code>${esc(pattern)}</code>`;
+    
+    if (path) {
+      const filename = getFilename(path);
+      // Only add "from" if it's a file, not a directory like "."
+      if (filename !== '.' && filename !== path) {
+        description += ` from <strong>${filename}</strong>`;
+      }
+    }
+    
+    if (filter && filter !== '*.*') {
+      description += ` <span style="opacity: 0.7">(${filter})</span>`;
+    }
+    
+    return description;
+  }
+  
+  if (cmd.match(/^Find-Pattern/i)) {
+    const pattern = getQuotedParam('Pattern') || getParam('Pattern');
+    const path = getPath();
+    
+    if (!pattern || !path) return cmd;
+    
+    const filename = getFilename(path);
+    return `Search <code>${esc(pattern)}</code> from <strong>${filename}</strong>`;
+  }
+  
+  if (cmd.match(/^Get-FileStats/i)) {
+    const path = getPath();
+    
+    if (!path) return cmd;
+    
+    const filename = getFilename(path);
+    return `Get stats for <strong>${filename}</strong>`;
+  }
+  
+  if (cmd.match(/^Replace-InFile/i)) {
+    const path = getPath();
+    const search = getQuotedParam('SearchString');
+    const replace = getQuotedParam('ReplaceString');
+    
+    if (!path) return cmd;
+    
+    const filename = getFilename(path);
+    
+    if (search && replace) {
+      return `Replace <code>${esc(search)}</code> with <code>${esc(replace)}</code> in <strong>${filename}</strong>`;
+    } else if (search) {
+      return `Replace text in <strong>${filename}</strong>`;
+    }
+    
+    return cmd;
+  }
+  
+  if (cmd.match(/^Get-DirectoryStructure/i)) {
+    const path = getPath();
+    const depth = getParam('Depth');
+    
+    if (!path) return cmd;
+    
+    const dirname = getFilename(path);
+    
+    if (depth) {
+      return `List directory <strong>${dirname}</strong> <span style="opacity: 0.7">(depth: ${depth})</span>`;
+    } else {
+      return `List directory <strong>${dirname}</strong>`;
+    }
+  }
+  
+  if (cmd.match(/^List-ProjectFiles/i)) {
+    const path = getPath();
+    const dirname = path ? getFilename(path) : null;
+    
+    if (dirname && dirname !== '.' && dirname !== path) {
+      return `List files in <strong>${dirname}</strong>`;
+    } else {
+      return 'List files';
+    }
+  }
+  
+  if (cmd.match(/^Search-InFiles/i)) {
+    const pattern = getQuotedParam('Pattern') || getParam('Pattern');
+    
+    if (pattern) {
+      return `Search <code>${esc(pattern)}</code>`;
+    }
+    
+    return 'Search files';
+  }
+  
+  // Node.js commands
+  if (cmd.match(/^node\s+/i)) {
+    const fileMatch = cmd.match(/^node\s+["']?([^\s"']+)["']?/i);
+    if (fileMatch) {
+      const file = getFilename(fileMatch[1]);
+      const args = cmd.substring(fileMatch[0].length).trim();
+      
+      if (args) {
+        // Truncate long args
+        const shortArgs = args.length > 40 ? args.substring(0, 37) + '...' : args;
+        return `Run <strong>${file}</strong> <span style="opacity: 0.7">${esc(shortArgs)}</span>`;
+      } else {
+        return `Run <strong>${file}</strong>`;
+      }
+    }
+  }
+  
+  // NPM commands
+  if (cmd.match(/^npm\s+/i)) {
+    const npmMatch = cmd.match(/^npm\s+(\S+)(\s+.*)?/i);
+    if (npmMatch) {
+      const npmCmd = npmMatch[1];
+      const args = npmMatch[2] ? npmMatch[2].trim() : '';
+      
+      const npmDescriptions = {
+        'install': 'Install packages',
+        'i': 'Install packages',
+        'uninstall': 'Uninstall packages',
+        'update': 'Update packages',
+        'run': 'Run',
+        'start': 'Start app',
+        'test': 'Run tests',
+        'build': 'Build project',
+        'dev': 'Start dev server',
+        'init': 'Initialize project',
+        'publish': 'Publish package',
+        'version': 'Manage version',
+        'audit': 'Audit dependencies',
+        'outdated': 'Check outdated',
+        'list': 'List packages',
+        'ls': 'List packages'
+      };
+      
+      const description = npmDescriptions[npmCmd.toLowerCase()] || `npm ${npmCmd}`;
+      
+      if (args) {
+        const shortArgs = args.length > 30 ? args.substring(0, 27) + '...' : args;
+        return `${description} <code>${esc(shortArgs)}</code>`;
+      } else {
+        return description;
+      }
+    }
+  }
+  
+  // Git commands
+  if (cmd.match(/^git\s+/i)) {
+    const gitMatch = cmd.match(/^git\s+(\S+)(\s+.*)?/i);
+    if (gitMatch) {
+      const gitCmd = gitMatch[1];
+      const args = gitMatch[2] ? gitMatch[2].trim() : '';
+      
+      const gitDescriptions = {
+        'clone': 'Clone repo',
+        'pull': 'Pull changes',
+        'push': 'Push changes',
+        'commit': 'Commit',
+        'add': 'Stage files',
+        'status': 'Check status',
+        'log': 'View history',
+        'diff': 'View diff',
+        'branch': 'Manage branches',
+        'checkout': 'Switch to',
+        'merge': 'Merge',
+        'rebase': 'Rebase',
+        'reset': 'Reset',
+        'stash': 'Stash changes',
+        'tag': 'Manage tags',
+        'fetch': 'Fetch',
+        'remote': 'Manage remotes',
+        'init': 'Initialize repo'
+      };
+      
+      const description = gitDescriptions[gitCmd.toLowerCase()] || `git ${gitCmd}`;
+      
+      if (args) {
+        const shortArgs = args.length > 40 ? args.substring(0, 37) + '...' : args;
+        return `${description} <code>${esc(shortArgs)}</code>`;
+      } else {
+        return description;
+      }
+    }
+  }
+  
+  // Python commands
+  if (cmd.match(/^python\s+/i) || cmd.match(/^python3\s+/i)) {
+    const pyMatch = cmd.match(/^(?:python3?)\s+["']?([^\s"']+)["']?/i);
+    if (pyMatch) {
+      const file = getFilename(pyMatch[1]);
+      const args = cmd.substring(pyMatch[0].length).trim();
+      
+      if (args) {
+        const shortArgs = args.length > 30 ? args.substring(0, 27) + '...' : args;
+        return `Run Python <strong>${file}</strong> <span style="opacity: 0.7">${esc(shortArgs)}</span>`;
+      } else {
+        return `Run Python <strong>${file}</strong>`;
+      }
+    }
+  }
+  
+  // pip commands
+  if (cmd.match(/^pip\s+/i) || cmd.match(/^pip3\s+/i)) {
+    const pipMatch = cmd.match(/^pip3?\s+(\S+)(\s+.*)?/i);
+    if (pipMatch) {
+      const pipCmd = pipMatch[1];
+      const args = pipMatch[2] ? pipMatch[2].trim() : '';
+      
+      const pipDescriptions = {
+        'install': 'Install package',
+        'uninstall': 'Uninstall package',
+        'list': 'List packages',
+        'show': 'Show package info',
+        'freeze': 'Freeze packages',
+        'search': 'Search packages',
+        'upgrade': 'Upgrade package'
+      };
+      
+      const description = pipDescriptions[pipCmd.toLowerCase()] || `pip ${pipCmd}`;
+      
+      if (args) {
+        const shortArgs = args.length > 30 ? args.substring(0, 27) + '...' : args;
+        return `${description} <code>${esc(shortArgs)}</code>`;
+      } else {
+        return description;
+      }
+    }
+  }
+  
+  // Cargo (Rust) commands
+  if (cmd.match(/^cargo\s+/i)) {
+    const cargoMatch = cmd.match(/^cargo\s+(\S+)(\s+.*)?/i);
+    if (cargoMatch) {
+      const cargoCmd = cargoMatch[1];
+      const args = cargoMatch[2] ? cargoMatch[2].trim() : '';
+      
+      const cargoDescriptions = {
+        'build': 'Build project',
+        'run': 'Run project',
+        'test': 'Run tests',
+        'check': 'Check code',
+        'clean': 'Clean artifacts',
+        'new': 'New project',
+        'init': 'Init project',
+        'add': 'Add dependency',
+        'update': 'Update deps',
+        'publish': 'Publish crate'
+      };
+      
+      const description = cargoDescriptions[cargoCmd.toLowerCase()] || `cargo ${cargoCmd}`;
+      
+      if (args) {
+        const shortArgs = args.length > 30 ? args.substring(0, 27) + '...' : args;
+        return `${description} <code>${esc(shortArgs)}</code>`;
+      } else {
+        return description;
+      }
+    }
+  }
+  
+  // Docker commands
+  if (cmd.match(/^docker\s+/i)) {
+    const dockerMatch = cmd.match(/^docker\s+(\S+)(\s+.*)?/i);
+    if (dockerMatch) {
+      const dockerCmd = dockerMatch[1];
+      const args = dockerMatch[2] ? dockerMatch[2].trim() : '';
+      
+      const dockerDescriptions = {
+        'build': 'Build image',
+        'run': 'Run container',
+        'ps': 'List containers',
+        'images': 'List images',
+        'pull': 'Pull image',
+        'push': 'Push image',
+        'stop': 'Stop container',
+        'start': 'Start container',
+        'restart': 'Restart container',
+        'rm': 'Remove container',
+        'rmi': 'Remove image',
+        'exec': 'Execute in container',
+        'logs': 'View logs',
+        'compose': 'Docker Compose'
+      };
+      
+      const description = dockerDescriptions[dockerCmd.toLowerCase()] || `docker ${dockerCmd}`;
+      
+      if (args && args.length < 40) {
+        return `${description} <code>${esc(args)}</code>`;
+      } else {
+        return description;
+      }
+    }
+  }
+  
+  // Maven commands
+  if (cmd.match(/^mvn\s+/i)) {
+    const mvnMatch = cmd.match(/^mvn\s+(.+)/i);
+    if (mvnMatch) {
+      const goals = mvnMatch[1].trim();
+      const shortGoals = goals.length > 30 ? goals.substring(0, 27) + '...' : goals;
+      return `Maven <code>${esc(shortGoals)}</code>`;
+    }
+  }
+  
+  // Gradle commands
+  if (cmd.match(/^gradle\s+/i) || cmd.match(/^\.\/gradlew\s+/i)) {
+    const gradleMatch = cmd.match(/^(?:gradle|\.\/gradlew)\s+(.+)/i);
+    if (gradleMatch) {
+      const tasks = gradleMatch[1].trim();
+      const shortTasks = tasks.length > 30 ? tasks.substring(0, 27) + '...' : tasks;
+      return `Gradle <code>${esc(shortTasks)}</code>`;
+    }
+  }
+  
+  // Make commands
+  if (cmd.match(/^make\s+/i)) {
+    const makeMatch = cmd.match(/^make\s+(\S+)?/i);
+    if (makeMatch) {
+      const target = makeMatch[1];
+      if (target) {
+        return `Make <code>${esc(target)}</code>`;
+      } else {
+        return 'Make';
+      }
+    }
+  }
+  
+  // Common shell commands
+  if (cmd.match(/^cd\s+/i)) {
+    const dirMatch = cmd.match(/^cd\s+["']?([^\s"']+)["']?/i);
+    if (dirMatch) {
+      const dirname = getFilename(dirMatch[1]);
+      return `Change to <strong>${dirname}</strong>`;
+    }
+  }
+  
+  if (cmd.match(/^ls\s*/i) || cmd.match(/^dir\s*/i)) {
+    const args = cmd.substring(cmd.match(/^(?:ls|dir)/i)[0].length).trim();
+    if (args) {
+      return `List directory <code>${esc(args)}</code>`;
+    } else {
+      return 'List directory';
+    }
+  }
+  
+  if (cmd.match(/^cat\s+/i) || cmd.match(/^type\s+/i)) {
+    const fileMatch = cmd.match(/^(?:cat|type)\s+["']?([^\s"']+)["']?/i);
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      return `Read <strong>${filename}</strong>`;
+    }
+  }
+  
+  if (cmd.match(/^cp\s+/i) || cmd.match(/^copy\s+/i)) {
+    return 'Copy files';
+  }
+  
+  if (cmd.match(/^mv\s+/i) || cmd.match(/^move\s+/i)) {
+    return 'Move files';
+  }
+  
+  if (cmd.match(/^rm\s+/i) || cmd.match(/^del\s+/i)) {
+    return 'Delete files';
+  }
+  
+  if (cmd.match(/^mkdir\s+/i)) {
+    const dirMatch = cmd.match(/^mkdir\s+["']?([^\s"']+)["']?/i);
+    if (dirMatch) {
+      const dirname = getFilename(dirMatch[1]);
+      return `Create directory <strong>${dirname}</strong>`;
+    }
+    return 'Create directory';
+  }
+  
+  if (cmd.match(/^grep\s+/i)) {
+    const patternMatch = cmd.match(/^grep\s+["']?([^\s"']+)["']?/i);
+    if (patternMatch) {
+      return `Search <code>${esc(patternMatch[1])}</code>`;
+    }
+    return 'Search files';
+  }
+  
+  if (cmd.match(/^curl\s+/i)) {
+    const urlMatch = cmd.match(/^curl\s+(?:-\S+\s+)*["']?([^\s"']+)["']?/i);
+    if (urlMatch) {
+      return `Fetch <code>${esc(urlMatch[1])}</code>`;
+    }
+    return 'HTTP request';
+  }
+  
+  if (cmd.match(/^wget\s+/i)) {
+    const urlMatch = cmd.match(/^wget\s+(?:-\S+\s+)*["']?([^\s"']+)["']?/i);
+    if (urlMatch) {
+      return `Download <code>${esc(urlMatch[1])}</code>`;
+    }
+    return 'Download file';
+  }
+  
+  // PowerShell specific commands
+  if (cmd.match(/^Get-ChildItem/i) || cmd.match(/^gci\s*/i)) {
+    return 'List directory';
+  }
+  
+  if (cmd.match(/^Get-Content/i) || cmd.match(/^gc\s+/i)) {
+    return 'Read file';
+  }
+  
+  if (cmd.match(/^Set-Content/i) || cmd.match(/^sc\s+/i)) {
+    return 'Write file';
+  }
+  
+  if (cmd.match(/^Copy-Item/i) || cmd.match(/^cpi\s+/i)) {
+    return 'Copy files';
+  }
+  
+  if (cmd.match(/^Move-Item/i) || cmd.match(/^mi\s+/i)) {
+    return 'Move files';
+  }
+  
+  if (cmd.match(/^Remove-Item/i) || cmd.match(/^ri\s+/i)) {
+    return 'Remove files';
+  }
+  
+  if (cmd.match(/^New-Item/i) || cmd.match(/^ni\s+/i)) {
+    return 'Create item';
+  }
+  
+  if (cmd.match(/^Test-Path/i)) {
+    return 'Test path';
+  }
+  
+  if (cmd.match(/^Write-Output/i) || cmd.match(/^echo\s+/i)) {
+    return 'Write output';
+  }
+  
+  // If no match, return original command as-is (for compatibility)
+  return cmd;
+}
+
 function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
   // COMMAND PARSING TEST - FORCE RELOAD
   // OPTIMIZATION: Check cache first (only for complete parses, not streaming)
@@ -124,6 +685,14 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const placeholder = `__COMMAND_GROUP_${index}__`;
       srcAfterCommandExtraction = srcAfterCommandExtraction.replace(combinedMatch, placeholder);
     }
+  });
+  
+  // Extract hidden content tags
+  const hiddenBlocks = [];
+  srcAfterCommandExtraction = srcAfterCommandExtraction.replace(/<!--hidden-->([\s\S]*?)<!--\/hidden-->/gi, (match, content) => {
+    const placeholder = `__HIDDEN_BLOCK_${hiddenBlocks.length}__`;
+    hiddenBlocks.push(content.trim());
+    return placeholder;
   });
   
   // Fix mismatched and malformed container tags before processing
@@ -644,6 +1213,296 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     return acc.replace(`XCONTAINERX${i}XCONTAINERX`, processed);
   }, finalHtml);
   
+  // Function to parse command input into user-friendly descriptions
+  function parseCommandInput(input) {
+    if (!input) return input;
+    
+    const trimmed = input.trim();
+    
+    // Helper function to extract filename from path
+    function getFilename(path) {
+      if (!path) return '';
+      // Remove quotes if present
+      const cleanPath = path.replace(/^["']|["']$/g, '');
+      // Get filename from path
+      return cleanPath.split(/[/\\]/).pop() || cleanPath;
+    }
+    
+    // Helper function to format range
+    function formatRange(rangeStr) {
+      if (!rangeStr) return '';
+      const rangeMatch = rangeStr.match(/^(\d+)(?:-(\d+))?$/);
+      if (rangeMatch) {
+        const from = rangeMatch[1];
+        const to = rangeMatch[2];
+        return to && to !== from ? `${from}-${to}` : from;
+      }
+      return rangeStr;
+    }
+    
+    // Parse <set file="..." range={...}> commands
+    const setMatch = trimmed.match(/^<set\s+file="([^"]+)"(?:\s+range=\{([^}]+)\})?\s*\/?>/i);
+    if (setMatch) {
+      const filename = getFilename(setMatch[1]);
+      const range = setMatch[2];
+      if (range) {
+        const formattedRange = formatRange(range);
+        return `Editing ${filename} in range ${formattedRange}`;
+      }
+      return `Editing ${filename}`;
+    }
+    
+    // Parse Search-infiles commands (fallback for simple pattern)
+    const searchMatch = trimmed.match(/^Search-infiles\s+(.+)$/i);
+    if (searchMatch) {
+      const pattern = searchMatch[1].trim();
+      return `Searching for pattern '${pattern}'`;
+    }
+    
+    // Parse Show-FileWithLineNumbers commands
+    const showFileMatch = trimmed.match(/^Show-FileWithLineNumbers\s+-Path\s+["']([^"']+)["'](?:\s+-StartLine\s+(\d+))?(?:\s+-EndLine\s+(\d+))?/i);
+    if (showFileMatch) {
+      const filename = getFilename(showFileMatch[1]);
+      const startLine = showFileMatch[2];
+      const endLine = showFileMatch[3];
+      if (startLine && endLine) {
+        return `Read ${filename}, lines ${startLine}-${endLine}`;
+      } else if (startLine) {
+        return `Read ${filename} from line ${startLine}`;
+      }
+      return `Read ${filename}`;
+    }
+    
+    // Parse Search-InFiles commands
+    const searchInFilesMatch = trimmed.match(/^Search-InFiles\s+-Pattern\s+["']([^"']+)["'](?:\s+-Path\s+["']([^"']+)["'])?(?:\s+-Filter\s+["']([^"']+)["'])?(?:\s+-Depth\s+(\d+))?(?:\s+-Context\s+(\d+))?/i);
+    if (searchInFilesMatch) {
+      const pattern = searchInFilesMatch[1];
+      const path = searchInFilesMatch[2];
+      const filter = searchInFilesMatch[3];
+      const depth = searchInFilesMatch[4];
+      const context = searchInFilesMatch[5];
+      
+      let description = `Find "${pattern}"`;
+      if (filter) {
+        description += ` in ${filter} files`;
+      } else {
+        description += ` in files`;
+      }
+      if (path && path !== '.') {
+        const dirname = getFilename(path);
+        description += ` under ${dirname}`;
+      }
+      return description;
+    }
+    
+    // Parse Get-FileLineRange commands
+    const getFileRangeMatch = trimmed.match(/^Get-FileLineRange\s+-Path\s+["']([^"']+)["']\s+-Ranges\s+@\(([^)]+)\)/i);
+    if (getFileRangeMatch) {
+      const filename = getFilename(getFileRangeMatch[1]);
+      const rangesStr = getFileRangeMatch[2];
+      // Extract ranges like '1-50', '100-150'
+      const ranges = rangesStr.match(/'(\d+-\d+)'/g);
+      if (ranges && ranges.length > 0) {
+        const rangeList = ranges.map(r => r.replace(/'/g, '')).join(', ');
+        return `Read ${filename} ranges ${rangeList}`;
+      }
+      return `Read ${filename} ranges`;
+    }
+    
+    // Parse Set-FileLine commands
+    const setFileLineMatch = trimmed.match(/^Set-FileLine\s+-Path\s+["']?([^"'\s]+)["']?\s+-LineNumber\s+(\d+)/i);
+    if (setFileLineMatch) {
+      const filename = getFilename(setFileLineMatch[1]);
+      const lineNum = setFileLineMatch[2];
+      return `Edit ${filename} line ${lineNum}`;
+    }
+    
+    // Parse Add-FileLine commands
+    const addFileLineMatch = trimmed.match(/^Add-FileLine\s+-Path\s+["']?([^"'\s]+)["']?\s+-LineNumber\s+(\d+)/i);
+    if (addFileLineMatch) {
+      const filename = getFilename(addFileLineMatch[1]);
+      const lineNum = addFileLineMatch[2];
+      return `Add line to ${filename} at ${lineNum}`;
+    }
+    
+    // Parse Remove-FileLine commands
+    const removeFileLineMatch = trimmed.match(/^Remove-FileLine\s+-Path\s+["']?([^"'\s]+)["']?\s+-LineNumber\s+(\d+)/i);
+    if (removeFileLineMatch) {
+      const filename = getFilename(removeFileLineMatch[1]);
+      const lineNum = removeFileLineMatch[2];
+      return `Remove ${filename} line ${lineNum}`;
+    }
+    
+    // Parse Set-MultipleLines commands
+    const setMultipleMatch = trimmed.match(/^Set-MultipleLines\s+-Path\s+["']?([^"'\s]+)["']?\s+-StartLine\s+(\d+)\s+-EndLine\s+(\d+)/i);
+    if (setMultipleMatch) {
+      const filename = getFilename(setMultipleMatch[1]);
+      const startLine = setMultipleMatch[2];
+      const endLine = setMultipleMatch[3];
+      return `Edit ${filename} lines ${startLine}-${endLine}`;
+    }
+    
+    // Parse Search-FileWithContext commands
+    const searchContextMatch = trimmed.match(/^Search-FileWithContext\s+-Path\s+["']?([^"'\s]+)["']?\s+-Pattern\s+["']?([^"'\s]+)["']?/i);
+    if (searchContextMatch) {
+      const filename = getFilename(searchContextMatch[1]);
+      const pattern = searchContextMatch[2];
+      return `Find "${pattern}" in ${filename}`;
+    }
+    
+    // Parse Find-DuplicateLines commands
+    const findDupMatch = trimmed.match(/^Find-DuplicateLines\s+-Path\s+["']?([^"'\s]+)["']?/i);
+    if (findDupMatch) {
+      const filename = getFilename(findDupMatch[1]);
+      return `Find duplicate lines in ${filename}`;
+    }
+    
+    // Parse List-ProjectFiles commands
+    const listProjectMatch = trimmed.match(/^List-ProjectFiles\s+(?:-Path\s+["']?([^"'\s]+)["']?)?(?:\s+-Filter\s+["']?([^"'\s]+)["']?)?(?:\s+-Depth\s+(\d+))?/i);
+    if (listProjectMatch) {
+      const path = listProjectMatch[1];
+      const filter = listProjectMatch[2];
+      const depth = listProjectMatch[3];
+      
+      let description = 'List project files';
+      if (filter) {
+        description += ` (${filter})`;
+      }
+      if (path && path !== '.') {
+        const dirname = getFilename(path);
+        description += ` in ${dirname}`;
+      }
+      if (depth) {
+        description += ` (depth: ${depth})`;
+      }
+      return description;
+    }
+    
+    // Parse Find-Pattern commands
+    const findPatternMatch = trimmed.match(/^Find-Pattern\s+-Pattern\s+["']?([^"'\s]+)["']?(?:\s+-Path\s+["']?([^"'\s]+)["']?)?/i);
+    if (findPatternMatch) {
+      const pattern = findPatternMatch[1];
+      const path = findPatternMatch[2];
+      let description = `Find pattern "${pattern}"`;
+      if (path) {
+        const dirname = getFilename(path);
+        description += ` in ${dirname}`;
+      }
+      return description;
+    }
+    
+    // Parse Get-FileStats commands
+    const getStatsMatch = trimmed.match(/^Get-FileStats\s+-Path\s+["']?([^"'\s]+)["']?/i);
+    if (getStatsMatch) {
+      const filename = getFilename(getStatsMatch[1]);
+      return `Get stats for ${filename}`;
+    }
+    
+    // Parse List-Directory commands
+    const listDirMatch = trimmed.match(/^List-Directory\s+(.+)$/i);
+    if (listDirMatch) {
+      const path = listDirMatch[1].trim();
+      const dirname = path.split(/[/\\]/).pop() || path;
+      return `Listing directory ${dirname}`;
+    }
+    
+    // Parse Run-Command commands
+    const runCmdMatch = trimmed.match(/^Run-Command\s+(.+)$/i);
+    if (runCmdMatch) {
+      const cmd = runCmdMatch[1].trim();
+      return `Running command: ${cmd}`;
+    }
+    
+    // Parse Get-Content / cat commands
+    const getContentMatch = trimmed.match(/^(?:Get-Content|cat)\s+(.+)$/i);
+    if (getContentMatch) {
+      const filename = getFilename(getContentMatch[1].trim());
+      return `Reading ${filename}`;
+    }
+    
+    // Parse Set-Content / echo commands
+    const setContentMatch = trimmed.match(/^(?:Set-Content|echo)\s+(.+)$/i);
+    if (setContentMatch) {
+      const target = setContentMatch[1].trim();
+      const filename = getFilename(target);
+      return `Writing to ${filename}`;
+    }
+    
+    // Parse New-Item / mkdir commands
+    const newItemMatch = trimmed.match(/^(?:New-Item|mkdir)\s+(.+)$/i);
+    if (newItemMatch) {
+      const target = newItemMatch[1].trim();
+      const isDir = target.includes('/') || target.includes('\\') || !target.includes('.');
+      return isDir ? `Creating directory ${getFilename(target)}` : `Creating file ${getFilename(target)}`;
+    }
+    
+    // Parse Remove-Item / rm commands
+    const removeItemMatch = trimmed.match(/^(?:Remove-Item|rm)\s+(.+)$/i);
+    if (removeItemMatch) {
+      const target = removeItemMatch[1].trim();
+      const isDir = target.includes('/') || target.includes('\\') || !target.includes('.');
+      return isDir ? `Removing directory ${getFilename(target)}` : `Removing file ${getFilename(target)}`;
+    }
+    
+    // Parse Copy-Item / cp commands
+    const copyItemMatch = trimmed.match(/^(?:Copy-Item|cp)\s+(.+?)\s+(.+)$/i);
+    if (copyItemMatch) {
+      const source = getFilename(copyItemMatch[1].trim());
+      const dest = getFilename(copyItemMatch[2].trim());
+      return `Copying ${source} to ${dest}`;
+    }
+    
+    // Parse Move-Item / mv commands
+    const moveItemMatch = trimmed.match(/^(?:Move-Item|mv)\s+(.+?)\s+(.+)$/i);
+    if (moveItemMatch) {
+      const source = getFilename(moveItemMatch[1].trim());
+      const dest = getFilename(moveItemMatch[2].trim());
+      return `Moving ${source} to ${dest}`;
+    }
+    
+    // Parse Get-ChildItem / ls / dir commands
+    const listItemsMatch = trimmed.match(/^(?:Get-ChildItem|ls|dir)(?:\s+(.+))?$/i);
+    if (listItemsMatch) {
+      const path = listItemsMatch[1]?.trim();
+      if (path) {
+        const dirname = getFilename(path);
+        return `Listing contents of ${dirname}`;
+      }
+      return 'Listing directory contents';
+    }
+    
+    // Parse Test-Path commands
+    const testPathMatch = trimmed.match(/^Test-Path\s+(.+)$/i);
+    if (testPathMatch) {
+      const target = getFilename(testPathMatch[1].trim());
+      return `Checking if ${target} exists`;
+    }
+    
+    // Parse npm commands
+    const npmMatch = trimmed.match(/^npm\s+(run\s+)?(\w+)(?:\s+(.+))?$/i);
+    if (npmMatch) {
+      const script = npmMatch[2];
+      const args = npmMatch[3];
+      if (script === 'install' && args?.includes('--save-dev')) {
+        return 'Installing dev dependencies';
+      } else if (script === 'install') {
+        return 'Installing dependencies';
+      } else if (script === 'run' && args) {
+        return `Running npm script: ${args}`;
+      } else if (script === 'test') {
+        return 'Running tests';
+      } else if (script === 'start') {
+        return 'Starting application';
+      } else if (script === 'build') {
+        return 'Building application';
+      }
+      return `Running npm ${script}`;
+    }
+    
+    // Return original if no pattern matches
+    return input;
+  }
+  
   commandGroups.forEach((group, index) => {
     const placeholder = `__COMMAND_GROUP_${index}__`;
     let replacement = '';
@@ -655,14 +1514,24 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       
       const toggleButton = group.output ? '<button class="command-toggle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>' : '';
       
-      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><code class="command-code language-powershell">' + 
-        group.input.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + 
-        '</code>' + toggleButton + '</div>' + outputHtml + '</div>';
+      // Transform command text to human-readable format
+      const readableCommand = transformCommandText(group.input);
+      
+      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><span class="command-text">' + 
+        readableCommand + 
+        '</span>' + toggleButton + '</div>' + outputHtml + '</div>';
     } else if (group.output) {
       // Standalone output (fallback)
       replacement = '<div class="command-output">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
     }
     
+    finalHtml = finalHtml.replace(placeholder, replacement);
+  });
+  
+  // Process hidden blocks
+  hiddenBlocks.forEach((content, index) => {
+    const placeholder = `__HIDDEN_BLOCK_${index}__`;
+    const replacement = `<div class="hidden-content" style="max-height: 329px; border: 1px solid var(--border) !important; overflow-y: auto; background: var(--bg); border-radius: var(--radius-lg); padding-top: 9px; padding-bottom: 9px; max-width: 100%;"><pre style="margin: 0; background: transparent; border: none; padding: 0;"><code class="language-javascript">${content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre></div>`;
     finalHtml = finalHtml.replace(placeholder, replacement);
   });
   
@@ -1282,10 +2151,13 @@ function md(src, options = {}) {
         '<div class="command-output" aria-hidden="true">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
 
       const toggleButton = group.output ? '<button class="command-toggle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>' : '';
+      
+      // Transform command text to human-readable format
+      const readableCommand = transformCommandText(group.input);
 
-      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><code class="command-code language-powershell">' +
-        group.input.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') +
-        '</code>' + toggleButton + '</div>' + outputHtml + '</div>';
+      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><span class="command-text">' +
+        readableCommand +
+        '</span>' + toggleButton + '</div>' + outputHtml + '</div>';
     } else if (group.output) {
       // Standalone output (fallback)
       replacement = '<div class="command-output">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
@@ -1297,7 +2169,7 @@ function md(src, options = {}) {
   tempDiv.innerHTML = finalHtml;
   addPHasListClass(tempDiv);
 
-  if (tempDiv.querySelector("pre code, .command-code")) {
+  if (tempDiv.querySelector("pre code, .command-code, .hidden-content pre code")) {
     highlightAllUnder(tempDiv);
   }
 

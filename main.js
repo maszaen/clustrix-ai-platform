@@ -132,37 +132,37 @@ initializeCodeAgent({
       return null;
     }
   },
-  getMemory: (sessionId, memoryName) => {
+  getMemory: (sessionId, memoryName, ownerType = 'code') => {
     if (!useSQLite || !db) {
       db = new DatabaseManager(app);
       invalidateUsageStatisticsCache();
       useSQLite = true;
     }
-    return db.getMemory(sessionId, memoryName);
+    return db.getMemory(sessionId, memoryName, ownerType);
   },
-  saveMemory: (sessionId, memoryName, filePath, startLine, endLine, content) => {
+  saveMemory: (sessionId, memoryName, filePath, startLine, endLine, content, ownerType = 'code') => {
     if (!useSQLite || !db) {
       db = new DatabaseManager(app);
       invalidateUsageStatisticsCache();
       useSQLite = true;
     }
-    return db.saveMemory(sessionId, memoryName, filePath, startLine, endLine, content);
+    return db.saveMemory(sessionId, memoryName, filePath, startLine, endLine, content, ownerType);
   },
-  deleteMemory: (sessionId, memoryName) => {
+  deleteMemory: (sessionId, memoryName, ownerType = 'code') => {
     if (!useSQLite || !db) {
       db = new DatabaseManager(app);
       invalidateUsageStatisticsCache();
       useSQLite = true;
     }
-    return db.deleteMemory(sessionId, memoryName);
+    return db.deleteMemory(sessionId, memoryName, ownerType);
   },
-  clearAllMemory: (sessionId) => {
+  clearAllMemory: (sessionId, ownerType = 'code') => {
     if (!useSQLite || !db) {
       db = new DatabaseManager(app);
       invalidateUsageStatisticsCache();
       useSQLite = true;
     }
-    return db.clearAllMemory(sessionId);
+    return db.clearAllMemory(sessionId, ownerType);
   },
 });
 
@@ -446,11 +446,11 @@ app.whenReady().then(async () => {
   initializeCodeAgent({
     log: logHelper,
     getCodeById: (id) => db?.getCode?.(id),
-    getMemory: (sessionId) => db?.getMemory?.(sessionId),
-    saveMemory: (sessionId, memoryName, filePath, startLine, endLine, content) => 
-      db?.saveMemory?.(sessionId, memoryName, filePath, startLine, endLine, content),
-    deleteMemory: (sessionId, memoryName) => db?.deleteMemory?.(sessionId, memoryName),
-    clearAllMemory: (sessionId) => db?.clearAllMemory?.(sessionId),
+    getMemory: (sessionId, memoryName, ownerType = 'code') => db?.getMemory?.(sessionId, memoryName, ownerType),
+    saveMemory: (sessionId, memoryName, filePath, startLine, endLine, content, ownerType = 'code') =>
+      db?.saveMemory?.(sessionId, memoryName, filePath, startLine, endLine, content, ownerType),
+    deleteMemory: (sessionId, memoryName, ownerType = 'code') => db?.deleteMemory?.(sessionId, memoryName, ownerType),
+    clearAllMemory: (sessionId, ownerType = 'code') => db?.clearAllMemory?.(sessionId, ownerType),
   });
   log('CODES', 1, 'init', 'Code agent initialized with database functions');
 });

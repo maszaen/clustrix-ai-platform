@@ -535,7 +535,7 @@ function Find-DuplicateLines {
 function List-ProjectFiles {
     <#
     .SYNOPSIS
-    Ultra-fast directory listing with extension filtering and depth control.
+    Structured directory listing with file metrics and depth control.
 
     .PARAMETER Path
     Root directory to scan (default: current working directory)
@@ -550,10 +550,10 @@ function List-ProjectFiles {
     Directory names to ignore during traversal.
 
     .PARAMETER Absolute
-    Emit absolute paths instead of paths relative to the root.
+    Include absolute file paths next to the formatted output.
 
     .PARAMETER Sort
-    Sort the results alphabetically before emitting them.
+    (Deprecated) Results are now grouped and sorted automatically for readability.
     #>
     param(
         [Parameter(Mandatory=$false)]
@@ -647,9 +647,30 @@ function List-ProjectFiles {
         $excludeSet.Add($item.Trim()) | Out-Null
     }
 
-    $maxDepth = if ($Depth -lt 0) { [int]::MaxValue } else { $Depth }
+    $depthProvided = $PSBoundParameters.ContainsKey('Depth')
+    $effectiveDepth = if ($depthProvided) { $Depth } else { [Math]::Min($Depth, 2) }
+    $maxDepth = if ($effectiveDepth -lt 0) { [int]::MaxValue } else { $effectiveDepth }
 
-    $results = [System.Collections.Generic.List[string]]::new()
+    $getLineCount = {
+        param([string]$filePath)
+        $reader = $null
+        try {
+            $reader = [System.IO.File]::OpenText($filePath)
+            $count = 0
+            while ($null -ne $reader.ReadLine()) {
+                $count += 1
+            }
+            return $count
+        }
+        catch {
+            return -1
+        }
+        finally {
+            if ($reader) { $reader.Dispose() }
+        }
+    }
+
+    $files = [System.Collections.Generic.List[object]]::new()
     $queue = [System.Collections.Generic.Queue[object]]::new()
     $queue.Enqueue([PSCustomObject]@{ Path = $resolvedPath; Depth = 0 })
 
@@ -688,39 +709,84 @@ function List-ProjectFiles {
                 }
             }
 
-            $outputPath = $entry
-            if (-not $Absolute.IsPresent) {
+            $relativePath = $entry
+            try {
+                $relativePath = [System.IO.Path]::GetRelativePath($resolvedPath, $entry)
+            }
+            catch {
                 try {
-                    $outputPath = [System.IO.Path]::GetRelativePath($resolvedPath, $entry)
+                    $rootUri = New-Object System.Uri(($resolvedPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar))
+                    $entryUri = New-Object System.Uri($entry)
+                    $relativePath = $rootUri.MakeRelativeUri($entryUri).ToString()
+                    if ([System.IO.Path]::DirectorySeparatorChar -ne '/') {
+                        $relativePath = $relativePath -replace '/', [System.IO.Path]::DirectorySeparatorChar
+                    }
                 }
                 catch {
-                    try {
-                        $rootUri = New-Object System.Uri(($resolvedPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar))
-                        $entryUri = New-Object System.Uri($entry)
-                        $outputPath = $rootUri.MakeRelativeUri($entryUri).ToString()
-                        if ([System.IO.Path]::DirectorySeparatorChar -ne '/') {
-                            $outputPath = $outputPath -replace '/', [System.IO.Path]::DirectorySeparatorChar
-                        }
-                    }
-                    catch {
-                        $outputPath = $entry
-                    }
+                    $relativePath = $entry
                 }
             }
 
-            if (-not $Absolute.IsPresent) {
-                $outputPath = $outputPath.TrimStart([char[]]"\/")
+            $relativePath = $relativePath.TrimStart([char[]]"\/")
+            if ([string]::IsNullOrWhiteSpace($relativePath)) {
+                $relativePath = $name
             }
 
-            $results.Add($outputPath)
+            try {
+                $fileInfo = Get-Item -LiteralPath $entry -ErrorAction Stop
+            }
+            catch {
+                Write-Warning "List-ProjectFiles: Unable to read $entry ($($_.Exception.Message))"
+                continue
+            }
+
+            $lineCount = & $getLineCount $entry
+            $directory = [System.IO.Path]::GetDirectoryName($relativePath)
+            if ([string]::IsNullOrWhiteSpace($directory)) {
+                $directory = '.'
+            }
+
+            $files.Add([PSCustomObject]@{
+                FileName    = $name
+                Directory   = $directory
+                Relative    = $relativePath
+                Absolute    = $entry
+                SizeBytes   = $fileInfo.Length
+                LineCount   = $lineCount
+            })
         }
     }
 
-    if ($Sort.IsPresent) {
-        $results.Sort([System.StringComparer]::OrdinalIgnoreCase)
+    if ($files.Count -eq 0) {
+        Write-Output "No files found matching the provided filters."
+        return
     }
 
-    $results | ForEach-Object { Write-Output $_ }
+    $sep = [System.IO.Path]::DirectorySeparatorChar
+    $grouped = $files | Group-Object -Property Directory | Sort-Object { $_.Name }
+
+    foreach ($group in $grouped) {
+        $dirName = $group.Name
+        $displayDir = if ($dirName -eq '.' -or [string]::IsNullOrWhiteSpace($dirName)) { ".${sep}" } else { ($dirName -replace '[\/]', "$sep") + $sep }
+        Write-Output $displayDir
+
+        $fileEntries = $group.Group | Sort-Object -Property FileName
+        $maxNameLength = ($fileEntries | ForEach-Object { $_.FileName.Length } | Measure-Object -Maximum).Maximum
+        if (-not $maxNameLength) { $maxNameLength = 0 }
+
+        foreach ($file in $fileEntries) {
+            $sizeLabel = "{0:N1} KB" -f ([math]::Round($file.SizeBytes / 1KB, 1))
+            $lineLabel = if ($file.LineCount -ge 0) { "{0} lines" -f $file.LineCount } else { "lines ?" }
+            $format = "  {0,-$maxNameLength}  {1,8}   {2}"
+            $line = $format -f $file.FileName, $sizeLabel, $lineLabel
+            if ($Absolute.IsPresent) {
+                $line += "  [$($file.Absolute)]"
+            }
+            Write-Output $line
+        }
+
+        Write-Output ''
+    }
 }
 
 function Search-InFiles {
@@ -810,10 +876,10 @@ function Search-InFiles {
                     $installOutput = winget install BurntSushi.ripgrep.MSVC --silent --accept-source-agreements --accept-package-agreements 2>&1
 
                     if ($LASTEXITCODE -eq 0 -or $installOutput -match "successfully installed") {
-                        Write-Output "✓ Winget install completed"
+                        Write-Output "[OK] Winget install completed"
                         $installSuccess = $true
                     } else {
-                        Write-Output "× Winget install failed or already installed"
+                        Write-Output "[FAIL] Winget install failed or already installed"
                         Write-Output "Install output: $installOutput"
                     }
                 } else {
@@ -826,10 +892,10 @@ function Search-InFiles {
                         $installOutput = choco install ripgrep -y 2>&1
 
                         if ($LASTEXITCODE -eq 0) {
-                            Write-Output "✓ Chocolatey install completed"
+                            Write-Output "[OK] Chocolatey install completed"
                             $installSuccess = $true
                         } else {
-                            Write-Output "× Chocolatey install failed"
+                            Write-Output "[FAIL] Chocolatey install failed"
                             Write-Output "Install output: $installOutput"
                         }
                     } else {
@@ -851,10 +917,10 @@ function Search-InFiles {
                 $installOutput = brew install ripgrep 2>&1
 
                 if ($LASTEXITCODE -eq 0) {
-                    Write-Output "✓ Homebrew install completed"
+                    Write-Output "[OK] Homebrew install completed"
                     $installSuccess = $true
                 } else {
-                    Write-Output "× Homebrew install failed"
+                    Write-Output "[FAIL] Homebrew install failed"
                     Write-Output "Install output: $installOutput"
                 }
             } else {
@@ -867,10 +933,10 @@ function Search-InFiles {
                     $installOutput = sudo apt-get install -y ripgrep 2>&1
 
                     if ($LASTEXITCODE -eq 0) {
-                        Write-Output "✓ APT install completed"
+                        Write-Output "[OK] APT install completed"
                         $installSuccess = $true
                     } else {
-                        Write-Output "× APT install failed"
+                        Write-Output "[FAIL] APT install failed"
                         Write-Output "Install output: $installOutput"
                     }
                 } elseif (Test-Path "/usr/bin/yum") {
@@ -880,10 +946,10 @@ function Search-InFiles {
                     $installOutput = sudo yum install -y ripgrep 2>&1
 
                     if ($LASTEXITCODE -eq 0) {
-                        Write-Output "✓ YUM install completed"
+                        Write-Output "[OK] YUM install completed"
                         $installSuccess = $true
                     } else {
-                        Write-Output "× YUM install failed"
+                        Write-Output "[FAIL] YUM install failed"
                         Write-Output "Install output: $installOutput"
                     }
                 }
@@ -898,12 +964,12 @@ function Search-InFiles {
                     $machinePath = [System.Environment]::GetEnvironmentVariable("Path","Machine")
                     $userPath = [System.Environment]::GetEnvironmentVariable("Path","User")
                     $env:Path = "$machinePath;$userPath"
-                    Write-Output "✓ PATH refreshed in current session"
+                    Write-Output "[OK] PATH refreshed in current session"
                 } catch {
                     Write-Warning "Failed to refresh PATH: $_"
                 }
             } else {
-                Write-Output "✓ PATH refresh not required on this OS"
+                Write-Output "[OK] PATH refresh not required on this OS"
             }
 
             Write-Output ""
@@ -914,14 +980,14 @@ function Search-InFiles {
 
             if ($rgAvailable) {
                 $rgVersion = (rg --version 2>&1 | Select-Object -First 1)
-                Write-Output "✓ Ripgrep is now available: $rgVersion"
+                Write-Output "[OK] Ripgrep is now available: $rgVersion"
                 Write-Output ""
                 Write-Output "========================================"
                 Write-Output "[RG_INSTALLED] Installation successful!"
                 Write-Output "========================================"
                 return
             } else {
-                Write-Output "× Ripgrep command still not found after installation"
+                Write-Output "[FAIL] Ripgrep command still not found after installation"
                 Write-Output ""
 
                 if ($installSuccess) {

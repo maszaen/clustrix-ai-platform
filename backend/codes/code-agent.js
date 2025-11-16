@@ -181,10 +181,11 @@ function buildMemoryStructures(persistedMemory = []) {
 
 function getSessionState(sessionId, codeId = null) {
   let state = sessionStates.get(sessionId);
-  const desiredMemoryOwnerId = codeId || state?.memoryOwnerId || sessionId;
+  const desiredMemoryOwnerId = sessionId; // Always use sessionId as memory owner
+  const desiredMemoryOwnerType = 'session'; // Always use 'session' as memory owner type
 
   if (!state) {
-    const persistedMemory = desiredMemoryOwnerId ? deps.getMemory?.(desiredMemoryOwnerId) || [] : [];
+    const persistedMemory = desiredMemoryOwnerId ? deps.getMemory?.(desiredMemoryOwnerId, null, desiredMemoryOwnerType) || [] : [];
     const { memories, activeMemoryNames } = buildMemoryStructures(persistedMemory);
 
     state = {
@@ -202,20 +203,25 @@ function getSessionState(sessionId, codeId = null) {
       currentMemory: 'default', // Current working memory for auto-saving
       currentState: AGENT_STATES.EXPLORE, // AI-declared current state
       memoryOwnerId: desiredMemoryOwnerId,
+      memoryOwnerType: desiredMemoryOwnerType,
     };
     sessionStates.set(sessionId, state);
   } else {
     if (!state.memoryOwnerId) {
       state.memoryOwnerId = desiredMemoryOwnerId;
+      state.memoryOwnerType = desiredMemoryOwnerType;
     } else if (desiredMemoryOwnerId && state.memoryOwnerId !== desiredMemoryOwnerId) {
-      const persistedMemory = deps.getMemory?.(desiredMemoryOwnerId) || [];
+      const persistedMemory = deps.getMemory?.(desiredMemoryOwnerId, null, desiredMemoryOwnerType) || [];
       const { memories, activeMemoryNames } = buildMemoryStructures(persistedMemory);
       state.memoryOwnerId = desiredMemoryOwnerId;
+      state.memoryOwnerType = desiredMemoryOwnerType;
       state.memories = memories;
       state.activeMemoryNames = activeMemoryNames;
       if (!state.memories[state.currentMemory]) {
         state.currentMemory = 'default';
       }
+    } else if (desiredMemoryOwnerType && state.memoryOwnerType !== desiredMemoryOwnerType) {
+      state.memoryOwnerType = desiredMemoryOwnerType;
     }
   }
 
@@ -332,8 +338,19 @@ function addToMemory(
       for (let i = mergedStart; i <= mergedEnd; i++) {
         const fromCurrent = currentRange.lines[i - currentRange.start];
         const fromExisting = existing.lines[i - existing.start];
-        // Prefer non-empty line, fallback to existing
-        const line = (fromCurrent !== undefined && fromCurrent !== '') ? fromCurrent : fromExisting;
+        // Prefer non-empty line, then defined line, else empty string
+        let line;
+        if (fromCurrent !== undefined && fromCurrent !== '') {
+          line = fromCurrent;
+        } else if (fromExisting !== undefined && fromExisting !== '') {
+          line = fromExisting;
+        } else if (fromCurrent !== undefined) {
+          line = fromCurrent;
+        } else if (fromExisting !== undefined) {
+          line = fromExisting;
+        } else {
+          line = '';
+        }
         mergedLines.push(line);
       }
 
@@ -347,8 +364,9 @@ function addToMemory(
 
   // Persist to database if memory owner is provided
   if (memoryOwnerId) {
+    const ownerType = state?.memoryOwnerType || 'code';
     try {
-      deps.saveMemory?.(memoryOwnerId, memoryName, filePath, startLine, endLine, lines);
+      deps.saveMemory?.(memoryOwnerId, memoryName, filePath, startLine, endLine, lines, ownerType);
     } catch (error) {
       log('CODES', 3, 'addToMemory', 'Failed to persist memory to database', {
         sessionId: memoryOwnerId,
@@ -434,7 +452,7 @@ function useMemory(state, memoryNames) {
   }
 }
 
-function clearMemory(state, memoryNames, memoryOwnerId = null) {
+function clearMemory(state, memoryNames, memoryOwnerId = null, memoryOwnerType = 'code') {
   for (const name of memoryNames) {
     if (name === '--all') {
       state.memories = { default: { visible: true, files: {} } };
@@ -442,7 +460,7 @@ function clearMemory(state, memoryNames, memoryOwnerId = null) {
       // Clear all memory from database
       if (memoryOwnerId) {
         try {
-          deps.clearAllMemory?.(memoryOwnerId);
+          deps.clearAllMemory?.(memoryOwnerId, memoryOwnerType);
         } catch (error) {
           log('CODES', 3, 'clearMemory', 'Failed to clear memory from database', {
             sessionId: memoryOwnerId,
@@ -458,7 +476,7 @@ function clearMemory(state, memoryNames, memoryOwnerId = null) {
     // Delete specific memory from database
     if (memoryOwnerId) {
       try {
-        deps.deleteMemory?.(memoryOwnerId, name);
+        deps.deleteMemory?.(memoryOwnerId, name, memoryOwnerType);
       } catch (error) {
         log('CODES', 3, 'clearMemory', 'Failed to delete memory from database', {
           sessionId: memoryOwnerId,
@@ -511,7 +529,7 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
     if (parsedLines.length > 0) {
       const actualLines = [];
       for (let i = minLine; i <= maxLine; i++) {
-        actualLines.push(parsedLines[i] || '');
+        actualLines.push(parsedLines[i] !== undefined ? parsedLines[i] : '');
       }
       const added = addToMemory(state, filePath, minLine, maxLine, actualLines, memoryName, memoryOwnerId, totalLines);
       hasNewContent = hasNewContent || added;
@@ -526,67 +544,60 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
   if (searchMatch) {
     const lines = output.split(/\r?\n/);
     const fileMatches = {};
-    let currentFile = null;
+    let hasNewContent = false;
 
     for (const rawLine of lines) {
       const trimmed = rawLine.trimEnd();
-      if (!trimmed) {
-        continue;
-      }
-      if (trimmed === '--') {
-        currentFile = null;
+      if (!trimmed || trimmed.startsWith('Search result saved to memory') || trimmed.startsWith('Searching for pattern') || trimmed.startsWith('Using ripgrep') || trimmed.startsWith('Exit Code')) {
         continue;
       }
 
-      const lineMatch = trimmed.match(/^(\d+):(.*)$/);
-      if (lineMatch && currentFile) {
-        const filePath = currentFile;
-        const lineNum = parseInt(lineMatch[1], 10);
-        const content = lineMatch[2] || '';
+      const lineMatch = trimmed.match(/^([^:]+):(\d+):(.*)$/);
+      if (lineMatch) {
+        const filePath = lineMatch[1].replace(/\\/g, '/').replace(/^\.\/+/, '');
+        const lineNum = parseInt(lineMatch[2], 10);
+        const content = lineMatch[3] || '';
 
         if (!fileMatches[filePath]) {
           fileMatches[filePath] = [];
         }
         fileMatches[filePath].push({ lineNum, content });
-        continue;
       }
+    }
 
-      const normalizedPath = trimmed.replace(/\\/g, '/').replace(/^\.\/+/, '');
-      if (normalizedPath) {
-        currentFile = normalizedPath;
-        if (!fileMatches[currentFile]) {
-          fileMatches[currentFile] = [];
+    // Process each file's matches
+    for (const [filePath, matches] of Object.entries(fileMatches)) {
+      if (matches.length === 0) continue;
+
+      // Sort matches by line number
+      matches.sort((a, b) => a.lineNum - b.lineNum);
+
+      // Group into ranges
+      const ranges = [];
+      let currentRange = { start: matches[0].lineNum, end: matches[0].lineNum, lines: [] };
+
+      for (const match of matches) {
+        if (match.lineNum <= currentRange.end + 1) {
+          // Extend current range
+          currentRange.end = Math.max(currentRange.end, match.lineNum);
+        } else {
+          // Start new range
+          ranges.push(currentRange);
+          currentRange = { start: match.lineNum, end: match.lineNum, lines: [] };
         }
       }
-    }
+      ranges.push(currentRange);
 
-    let captured = false;
-    let hasNewContent = false;
-
-    for (const [filePath, matches] of Object.entries(fileMatches)) {
-      if (!matches.length) {
-        continue;
+      // For each range, create the lines array
+      for (const range of ranges) {
+        const lines = [];
+        for (let i = range.start; i <= range.end; i++) {
+          const match = matches.find(m => m.lineNum === i);
+          lines.push(match ? match.content : '');
+        }
+        const added = addToMemory(state, filePath, range.start, range.end, lines, memoryName, memoryOwnerId);
+        hasNewContent = hasNewContent || added;
       }
-      captured = true;
-      const minLine = Math.min(...matches.map(m => m.lineNum));
-      const maxLine = Math.max(...matches.map(m => m.lineNum));
-      const linesMap = new Map();
-
-      matches.forEach(match => {
-        linesMap.set(match.lineNum, match.content);
-      });
-
-      const collectedLines = [];
-      for (let i = minLine; i <= maxLine; i++) {
-        collectedLines.push(linesMap.get(i) || '');
-      }
-
-      const added = addToMemory(state, filePath, minLine, maxLine, collectedLines, memoryName, memoryOwnerId);
-      hasNewContent = hasNewContent || added;
-    }
-
-    if (!captured) {
-      return false;
     }
 
     return { captured: true, hasNewContent };
@@ -1556,7 +1567,7 @@ async function executeCommand(state, command, options = {}) {
       };
     }
     if (memoryCmd.type === 'clear') {
-      clearMemory(state, memoryCmd.names, state.memoryOwnerId);
+      clearMemory(state, memoryCmd.names, state.memoryOwnerId, state.memoryOwnerType);
       return {
         output: formatMemoryOutput(state),
         exitCode: 0,

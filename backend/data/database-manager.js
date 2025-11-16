@@ -205,11 +205,10 @@ class DatabaseManager {
         content TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
-
-        FOREIGN KEY (session_id) REFERENCES codes(id) ON DELETE CASCADE
+        owner_type TEXT NOT NULL DEFAULT 'code'
       );
 
-      CREATE INDEX IF NOT EXISTS idx_memory_session ON memory(session_id, memory_name);
+      CREATE INDEX IF NOT EXISTS idx_memory_session ON memory(session_id, owner_type, memory_name);
 
       CREATE TABLE IF NOT EXISTS drafts (
         id TEXT PRIMARY KEY,
@@ -278,6 +277,61 @@ class DatabaseManager {
     ensureColumn('messages', 'synced_at', 'INTEGER');
     ensureColumn('messages', 'sequence', 'INTEGER');
     ensureColumn('messages', 'updated_at', 'INTEGER');
+
+    this.migrateMemoryTable();
+  }
+
+  migrateMemoryTable() {
+    try {
+      const tableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'memory'`).get();
+      if (!tableExists) {
+        return;
+      }
+
+      const columns = this.db.prepare(`PRAGMA table_info(memory)`).all();
+      const hasOwnerType = columns.some(col => col.name === 'owner_type');
+      const foreignKeys = this.db.prepare(`PRAGMA foreign_key_list(memory)`).all();
+      const referencesCodes = foreignKeys.some(fk => fk.table === 'codes');
+
+      if (hasOwnerType && !referencesCodes) {
+        return;
+      }
+
+      this.db.exec('BEGIN TRANSACTION;');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS memory_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id TEXT NOT NULL,
+          memory_name TEXT NOT NULL,
+          file_path TEXT NOT NULL,
+          start_line INTEGER NOT NULL,
+          end_line INTEGER NOT NULL,
+          content TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          owner_type TEXT NOT NULL DEFAULT 'code'
+        );
+      `);
+
+      const ownerColumn = hasOwnerType ? 'owner_type' : "'code'";
+      this.db.exec(`
+        INSERT INTO memory_new (id, session_id, memory_name, file_path, start_line, end_line, content, created_at, updated_at, owner_type)
+        SELECT id, session_id, memory_name, file_path, start_line, end_line, content, created_at, updated_at, ${ownerColumn}
+        FROM memory;
+      `);
+
+      this.db.exec('DROP TABLE memory;');
+      this.db.exec('ALTER TABLE memory_new RENAME TO memory;');
+      this.db.exec('CREATE INDEX IF NOT EXISTS idx_memory_session ON memory(session_id, owner_type, memory_name);');
+      this.db.exec('COMMIT;');
+    } catch (error) {
+      try {
+        this.db.exec('ROLLBACK;');
+      } catch (rollbackError) {
+        console.error('[DATABASE] Failed to rollback memory migration:', rollbackError.message);
+      }
+      console.error('[DATABASE] Failed to migrate memory table:', error.message);
+    }
   }
   
   getAllSessions() {
@@ -748,23 +802,25 @@ class DatabaseManager {
   }
 
   // Memory persistence methods
-  saveMemory(sessionId, memoryName, filePath, startLine, endLine, content) {
+  saveMemory(sessionId, memoryName, filePath, startLine, endLine, content, ownerType = 'code') {
+    const normalizedType = ownerType === 'session' ? 'session' : 'code';
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO memory (session_id, memory_name, file_path, start_line, end_line, content, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO memory (session_id, memory_name, file_path, start_line, end_line, content, created_at, updated_at, owner_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const now = Date.now();
-    return stmt.run(sessionId, memoryName, filePath, startLine, endLine, JSON.stringify(content), now, now);
+    return stmt.run(sessionId, memoryName, filePath, startLine, endLine, JSON.stringify(content), now, now, normalizedType);
   }
 
-  getMemory(sessionId, memoryName = null) {
+  getMemory(sessionId, memoryName = null, ownerType = 'code') {
+    const normalizedType = ownerType === 'session' ? 'session' : 'code';
     let query, params;
     if (memoryName) {
-      query = `SELECT * FROM memory WHERE session_id = ? AND memory_name = ? ORDER BY file_path, start_line`;
-      params = [sessionId, memoryName];
+      query = `SELECT * FROM memory WHERE session_id = ? AND owner_type = ? AND memory_name = ? ORDER BY file_path, start_line`;
+      params = [sessionId, normalizedType, memoryName];
     } else {
-      query = `SELECT * FROM memory WHERE session_id = ? ORDER BY memory_name, file_path, start_line`;
-      params = [sessionId];
+      query = `SELECT * FROM memory WHERE session_id = ? AND owner_type = ? ORDER BY memory_name, file_path, start_line`;
+      params = [sessionId, normalizedType];
     }
 
     const rows = this.db.prepare(query).all(...params);
@@ -774,16 +830,18 @@ class DatabaseManager {
     }));
   }
 
-  deleteMemory(sessionId, memoryName = null) {
+  deleteMemory(sessionId, memoryName = null, ownerType = 'code') {
+    const normalizedType = ownerType === 'session' ? 'session' : 'code';
     if (memoryName) {
-      return this.db.prepare(`DELETE FROM memory WHERE session_id = ? AND memory_name = ?`).run(sessionId, memoryName);
+      return this.db.prepare(`DELETE FROM memory WHERE session_id = ? AND owner_type = ? AND memory_name = ?`).run(sessionId, normalizedType, memoryName);
     } else {
-      return this.db.prepare(`DELETE FROM memory WHERE session_id = ?`).run(sessionId);
+      return this.db.prepare(`DELETE FROM memory WHERE session_id = ? AND owner_type = ?`).run(sessionId, normalizedType);
     }
   }
 
-  clearAllMemory(sessionId) {
-    return this.db.prepare(`DELETE FROM memory WHERE session_id = ?`).run(sessionId);
+  clearAllMemory(sessionId, ownerType = 'code') {
+    const normalizedType = ownerType === 'session' ? 'session' : 'code';
+    return this.db.prepare(`DELETE FROM memory WHERE session_id = ? AND owner_type = ?`).run(sessionId, normalizedType);
   }
 
   // Migration: Add thinking_update column if it doesn't exist

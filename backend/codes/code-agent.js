@@ -155,32 +155,37 @@ function ensureIdleTimer() {
   idleTimer.unref?.();
 }
 
-function getSessionState(sessionId) {
-  let state = sessionStates.get(sessionId);
-  if (!state) {
-    // Load persisted memory from database
-    const persistedMemory = deps.getMemory?.(sessionId) || [];
-    
-    // Build memory structure from persisted data
-    const memories = { default: { visible: true, files: {} } };
-    const activeMemoryNames = ['default'];
-    
-    for (const mem of persistedMemory) {
-      if (!memories[mem.memory_name]) {
-        memories[mem.memory_name] = { visible: true, files: {} };
-        activeMemoryNames.push(mem.memory_name);
-      }
-      
-      if (!memories[mem.memory_name].files[mem.file_path]) {
-        memories[mem.memory_name].files[mem.file_path] = { ranges: [] };
-      }
-      
-      memories[mem.memory_name].files[mem.file_path].ranges.push({
-        start: mem.start_line,
-        end: mem.end_line,
-        lines: mem.content
-      });
+function buildMemoryStructures(persistedMemory = []) {
+  const memories = { default: { visible: true, files: {} } };
+  const activeMemoryNames = ['default'];
+
+  for (const mem of persistedMemory) {
+    if (!memories[mem.memory_name]) {
+      memories[mem.memory_name] = { visible: true, files: {} };
+      activeMemoryNames.push(mem.memory_name);
     }
+
+    if (!memories[mem.memory_name].files[mem.file_path]) {
+      memories[mem.memory_name].files[mem.file_path] = { ranges: [] };
+    }
+
+    memories[mem.memory_name].files[mem.file_path].ranges.push({
+      start: mem.start_line,
+      end: mem.end_line,
+      lines: mem.content,
+    });
+  }
+
+  return { memories, activeMemoryNames };
+}
+
+function getSessionState(sessionId, codeId = null) {
+  let state = sessionStates.get(sessionId);
+  const desiredMemoryOwnerId = codeId || state?.memoryOwnerId || sessionId;
+
+  if (!state) {
+    const persistedMemory = desiredMemoryOwnerId ? deps.getMemory?.(desiredMemoryOwnerId) || [] : [];
+    const { memories, activeMemoryNames } = buildMemoryStructures(persistedMemory);
 
     state = {
       commandHistory: [],
@@ -196,9 +201,24 @@ function getSessionState(sessionId) {
       activeMemoryNames, // Visible memories
       currentMemory: 'default', // Current working memory for auto-saving
       currentState: AGENT_STATES.EXPLORE, // AI-declared current state
+      memoryOwnerId: desiredMemoryOwnerId,
     };
     sessionStates.set(sessionId, state);
+  } else {
+    if (!state.memoryOwnerId) {
+      state.memoryOwnerId = desiredMemoryOwnerId;
+    } else if (desiredMemoryOwnerId && state.memoryOwnerId !== desiredMemoryOwnerId) {
+      const persistedMemory = deps.getMemory?.(desiredMemoryOwnerId) || [];
+      const { memories, activeMemoryNames } = buildMemoryStructures(persistedMemory);
+      state.memoryOwnerId = desiredMemoryOwnerId;
+      state.memories = memories;
+      state.activeMemoryNames = activeMemoryNames;
+      if (!state.memories[state.currentMemory]) {
+        state.currentMemory = 'default';
+      }
+    }
   }
+
   state.lastUsed = Date.now();
   ensureIdleTimer();
   return state;
@@ -240,7 +260,16 @@ function resolveUserConfirmation(sessionId, iteration, allowed) {
 // MEMORY SYSTEM: Cumulative file view management
 // ============================================================================
 
-function addToMemory(state, filePath, startLine, endLine, lines, memoryName = 'default', sessionId = null, totalLines = null) {
+function addToMemory(
+  state,
+  filePath,
+  startLine,
+  endLine,
+  lines,
+  memoryName = 'default',
+  memoryOwnerId = null,
+  totalLines = null
+) {
   if (!state.memories[memoryName]) {
     state.memories[memoryName] = { visible: true, files: {} };
   }
@@ -291,13 +320,13 @@ function addToMemory(state, filePath, startLine, endLine, lines, memoryName = 'd
   merged.sort((a, b) => a.start - b.start);
   fileMemory.ranges = merged;
 
-  // Persist to database if sessionId is provided
-  if (sessionId) {
+  // Persist to database if memory owner is provided
+  if (memoryOwnerId) {
     try {
-      deps.saveMemory?.(sessionId, memoryName, filePath, startLine, endLine, lines);
+      deps.saveMemory?.(memoryOwnerId, memoryName, filePath, startLine, endLine, lines);
     } catch (error) {
       log('CODES', 3, 'addToMemory', 'Failed to persist memory to database', {
-        sessionId,
+        sessionId: memoryOwnerId,
         memoryName,
         filePath,
         error: error?.message || error
@@ -378,18 +407,18 @@ function useMemory(state, memoryNames) {
   }
 }
 
-function clearMemory(state, memoryNames, sessionId = null) {
+function clearMemory(state, memoryNames, memoryOwnerId = null) {
   for (const name of memoryNames) {
     if (name === '--all') {
       state.memories = { default: { visible: true, files: {} } };
       state.activeMemoryNames = ['default'];
       // Clear all memory from database
-      if (sessionId) {
+      if (memoryOwnerId) {
         try {
-          deps.clearAllMemory?.(sessionId);
+          deps.clearAllMemory?.(memoryOwnerId);
         } catch (error) {
           log('CODES', 3, 'clearMemory', 'Failed to clear memory from database', {
-            sessionId,
+            sessionId: memoryOwnerId,
             error: error?.message || error
           });
         }
@@ -398,14 +427,14 @@ function clearMemory(state, memoryNames, sessionId = null) {
     }
     delete state.memories[name];
     state.activeMemoryNames = state.activeMemoryNames.filter(n => n !== name);
-    
+
     // Delete specific memory from database
-    if (sessionId) {
+    if (memoryOwnerId) {
       try {
-        deps.deleteMemory?.(sessionId, name);
+        deps.deleteMemory?.(memoryOwnerId, name);
       } catch (error) {
         log('CODES', 3, 'clearMemory', 'Failed to delete memory from database', {
-          sessionId,
+          sessionId: memoryOwnerId,
           memoryName: name,
           error: error?.message || error
         });
@@ -423,7 +452,7 @@ function clearFileFromMemories(state, filePath) {
   });
 }
 
-function captureFileOutput(state, command, output, memoryName, sessionId = null) {
+function captureFileOutput(state, command, output, memoryName, memoryOwnerId = null) {
   // Parse Show-FileWithLineNumbers output
   // Format: "001: line content"
   const showFileMatch = command.match(/Show-FileWithLineNumbers\s+-Path\s+"?([^"\s]+)"?/i);
@@ -456,7 +485,7 @@ function captureFileOutput(state, command, output, memoryName, sessionId = null)
       for (let i = minLine; i <= maxLine; i++) {
         actualLines.push(parsedLines[i] || '');
       }
-      addToMemory(state, filePath, minLine, maxLine, actualLines, memoryName, sessionId, totalLines);
+      addToMemory(state, filePath, minLine, maxLine, actualLines, memoryName, memoryOwnerId, totalLines);
       return true;
     }
     return false;
@@ -494,7 +523,7 @@ function captureFileOutput(state, command, output, memoryName, sessionId = null)
         lines.push(match ? match.content : '');
       }
 
-      addToMemory(state, filePath, minLine, maxLine, lines, memoryName, sessionId);
+      addToMemory(state, filePath, minLine, maxLine, lines, memoryName, memoryOwnerId);
     }
 
     return Object.keys(fileMatches).length > 0;
@@ -1357,6 +1386,7 @@ async function executeCommand(state, command, options = {}) {
     disableTimeout = false,
     timeoutMs = COMMAND_EXECUTION_TIMEOUT_MS,
     sessionId = null,
+    memoryOwnerId = null,
   } = options;
 
   if (!command || !command.trim()) {
@@ -1388,7 +1418,7 @@ async function executeCommand(state, command, options = {}) {
         clearFileFromMemories(state, file.filePath);
         file.snippets.forEach(snippet => {
           if (snippet.lines.length > 0) {
-            addToMemory(state, file.filePath, snippet.start, snippet.end, snippet.lines, state.currentMemory, sessionId);
+            addToMemory(state, file.filePath, snippet.start, snippet.end, snippet.lines, state.currentMemory, memoryOwnerId);
           }
         });
 
@@ -1463,7 +1493,7 @@ async function executeCommand(state, command, options = {}) {
       };
     }
     if (memoryCmd.type === 'clear') {
-      clearMemory(state, memoryCmd.names, sessionId);
+      clearMemory(state, memoryCmd.names, state.memoryOwnerId);
       return {
         output: formatMemoryOutput(state),
         exitCode: 0,
@@ -1574,7 +1604,7 @@ async function executeCommand(state, command, options = {}) {
     let capturedToMemory = false;
     const memoryName = options.saveToMemory || state.currentMemory;
     if (exitCode === 0 && combinedOutput) {
-      capturedToMemory = captureFileOutput(state, command, combinedOutput, memoryName, sessionId);
+      capturedToMemory = captureFileOutput(state, command, combinedOutput, memoryName, state.memoryOwnerId);
     }
 
     // Return memory state if captured, otherwise return raw output
@@ -1649,7 +1679,7 @@ async function processCodeRequest({
   shouldCancel,
   db, // Database manager for loading chat history
 }) {
-  const state = getSessionState(sessionId);
+  const state = getSessionState(sessionId, codeId);
   const codeRecord = deps.getCodeById?.(codeId);
   if (codeRecord) {
     state.instruction = codeRecord.instruction || '';
@@ -1968,6 +1998,7 @@ ${startLine && endLine ? `The requested range (lines ${startLine}-${endLine}) in
       const result = await executeCommand(state, parsed.command, {
         disableTimeout: requiresConfirmation && confirmationApproved,
         sessionId,
+        memoryOwnerId: state.memoryOwnerId,
       });
       output = result.output;
       exitCode = result.exitCode;

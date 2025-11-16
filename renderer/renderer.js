@@ -8785,7 +8785,7 @@ function mdFallback(src, options = {}) {
       if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
       
       // Highlight command code blocks
-      // if (tempDiv.querySelector(".command-code")) highlightAllUnder(tempDiv);
+      // if (tempDiv.querySelector(".hidden-content")) highlightAllUnder(tempDiv);
       
       // Initialize command toggles
       if (tempDiv.querySelector(".command-toggle")) initCommandToggles(tempDiv);

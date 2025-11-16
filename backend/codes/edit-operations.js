@@ -322,11 +322,13 @@ function applySetOperations(command, options = {}) {
 
     if (operationType === 'replace') {
       // Replace operation: delete start-end, insert new content
-      if (start > lines.length || end > lines.length) {
-        throw new Error(`Replace range ${start}-${end} exceeds file length (${lines.length} lines).`);
+      // Allow end to exceed file length - clamp it to file length
+      const clampedEnd = end > lines.length ? lines.length : end;
+      if (start > lines.length + 1) {
+        throw new Error(`Replace start line ${start} is outside of file bounds (${lines.length} lines).`);
       }
       const startIndex = start - 1;
-      const deleteCount = end - start + 1;
+      const deleteCount = clampedEnd - start + 1;
       const removed = lines.slice(startIndex, startIndex + deleteCount);
       lines.splice(startIndex, deleteCount, ...contentLines);
 
@@ -340,10 +342,8 @@ function applySetOperations(command, options = {}) {
       if (contentLines.length === 0) {
         throw new Error('Insert operations must include content to add.');
       }
-      if (start > lines.length + 1) {
-        throw new Error(`Insert line ${start} is outside of file bounds (${lines.length} lines).`);
-      }
-      const insertIndex = Math.min(start - 1, lines.length);
+      // Allow insert at any line, including beyond file length (append)
+      const insertIndex = start <= 1 ? 0 : Math.min(start - 1, lines.length);
       const isAtEnd = insertIndex === lines.length;
       lines.splice(insertIndex, 0, ...contentLines);
       const newStart = insertIndex + 1;
@@ -355,11 +355,13 @@ function applySetOperations(command, options = {}) {
       result.after = contentLines.join('\n');
     } else if (hasEnd && contentLines.length === 0) {
       // Delete operation (legacy support)
-      if (start > lines.length || end > lines.length) {
-        throw new Error(`Delete range ${start}-${end} exceeds file length (${lines.length} lines).`);
+      // Allow end to exceed file length - clamp it to file length
+      const clampedEnd = end > lines.length ? lines.length : end;
+      if (start > lines.length) {
+        throw new Error(`Delete start line ${start} is outside of file bounds (${lines.length} lines).`);
       }
       const startIndex = start - 1;
-      const deleteCount = end - start + 1;
+      const deleteCount = clampedEnd - start + 1;
       const removed = lines.slice(startIndex, startIndex + deleteCount);
       lines.splice(startIndex, deleteCount);
 

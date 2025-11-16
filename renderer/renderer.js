@@ -2036,14 +2036,14 @@ function highlightAllUnder(container, options = {}) {
           if (code) codeBlocks.push(code);
         } else {
           // Query within the delta node
-          const codes = node.querySelectorAll("pre code, .command-code");
+          const codes = node.querySelectorAll("pre code");
           codeBlocks.push(...codes);
         }
       }
     }
   } else {
     // Full query only on finalization or first render
-    codeBlocks = Array.from(container.querySelectorAll("pre code, .command-code"));
+    codeBlocks = Array.from(container.querySelectorAll("pre code"));
   }
 
   codeBlocks.forEach((codeBlock) => {
@@ -2071,17 +2071,36 @@ function highlightAllUnder(container, options = {}) {
 window.highlightAllUnder = highlightAllUnder;
 
 // Handle command toggle functionality
+let commandToggleListenerRegistered = false;
+
 function initCommandToggles(container) {
-  const toggles = container.querySelectorAll('.command-toggle');
-  toggles.forEach(toggle => {
-    toggle.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      const commandInput = this.closest('.command-input');
-      if (commandInput) {
-        commandInput.classList.toggle('expanded');
+  if (!commandToggleListenerRegistered && typeof document !== 'undefined') {
+    document.addEventListener('click', (event) => {
+      const toggle = event.target.closest('.command-toggle');
+      if (!toggle) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const commandInput = toggle.closest('.command-input');
+      if (!commandInput) return;
+
+      const expanded = commandInput.classList.toggle('expanded');
+      const output = commandInput.querySelector('.command-output');
+      if (output) {
+        output.setAttribute('aria-hidden', expanded ? 'false' : 'true');
       }
     });
+    commandToggleListenerRegistered = true;
+  }
+
+  if (!container) return;
+
+  const outputs = container.querySelectorAll('.command-input .command-output');
+  outputs.forEach((output) => {
+    if (!output.hasAttribute('aria-hidden')) {
+      output.setAttribute('aria-hidden', 'true');
+    }
   });
 }
 
@@ -8766,7 +8785,7 @@ function mdFallback(src, options = {}) {
       if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
       
       // Highlight command code blocks
-      if (tempDiv.querySelector(".command-code")) highlightAllUnder(tempDiv);
+      // if (tempDiv.querySelector(".command-code")) highlightAllUnder(tempDiv);
       
       // Initialize command toggles
       if (tempDiv.querySelector(".command-toggle")) initCommandToggles(tempDiv);

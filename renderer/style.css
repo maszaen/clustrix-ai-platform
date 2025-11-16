@@ -5105,8 +5105,8 @@ a:focus-visible {
   border-top: 2px solid var(--bg) !important;
 }
 
-.message-text :not(pre) > code[class*=language-],
-.message-text :not(pre) > code.hljs {
+.message-text :not(pre) > code[class*=language-]:not(.command-code),
+.message-text :not(pre) > code.hljs:not(.command-code) {
   background: var(--bg-secondary);
   padding: .1em;
   border-top: 2px solid var(--bg) !important;
@@ -5505,20 +5505,6 @@ a:focus-visible {
 :where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre[class*=language-],
 :where(blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote blockquote) .code-block-container pre.hljs {
   background: var(--bg);
-}
-
-/* Codes Session: Custom codeblock styling */
-.message.codes-session .code-block-header {
-  display: none !important;
-}
-
-.message.codes-session .code-block-container pre[class*=language-],
-.message.codes-session .code-block-container pre.hljs {
-  max-height: 329px;
-  border: 1px solid var(--border) !important;
-  overflow-y: auto;
-  background: var(--bg);
-  border-radius: var(--radius-lg);
 }
 
 .language-name {
@@ -8788,6 +8774,10 @@ button:disabled .btn-icon {
   position: relative;
 }
 
+.command-output[aria-hidden="true"] {
+  margin: 0 !important;
+}
+
 .command-input .command-header {
   display: flex;
   align-items: center;
@@ -8804,16 +8794,19 @@ button:disabled .btn-icon {
 .command-input .command-code {
   flex: 1;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 14px !important;
   line-height: 1.4;
   background: transparent;
+  color: var(--fg-muted) !important;
   border: none;
+  margin-top: 2px !important;
   padding: 0;
   margin: 0;
   color: inherit;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-x: auto;
+  white-space: nowrap; /* Ganti dari pre-wrap jadi nowrap */
+  overflow: hidden; /* Sembunyikan teks yang kelebihan */
+  text-overflow: ellipsis; /* Tampilkan titik-titik saat terpotong */
+  width: 90%; /* Pastikan mengisi lebar container */
 }
 
 .command-input .command-toggle {
@@ -8836,6 +8829,9 @@ button:disabled .btn-icon {
 
 .command-input .command-toggle svg {
   transition: transform 0.2s;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .command-input.expanded .command-toggle svg {
@@ -8846,7 +8842,7 @@ button:disabled .btn-icon {
   background: var(--bg);
   color: var(--fg-muted);
   border-top: 1px solid var(--border);
-  padding: 12px 16px;
+  padding: 0 16px;
   font-family: var(--font-mono);
   font-size: 14px;
   line-height: 1.4;
@@ -8866,7 +8862,6 @@ button:disabled .btn-icon {
 
 /* Fallback for standalone command-output */
 .command-output {
-  margin: 8px 0;
   padding: 12px 16px;
   border-radius: var(--radius-md);
   background: var(--bg);
@@ -10530,3 +10525,25 @@ button:disabled .btn-icon {
   }
 }
 
+/* Codes Session: Custom codeblock styling */
+.message.codes-session .code-block-header {
+  display: none !important;
+}
+
+.message.codes-session .code-block-container pre[class*=language-],
+.message.codes-session .code-block-container pre.hljs {
+  max-height: 329px;
+  border: 1px solid var(--border) !important;
+  overflow-y: auto;
+  background: var(--bg);
+  border-radius: var(--radius-lg);
+  padding-top: 9px;
+  padding-bottom: 9px;
+  max-width: 100%;
+}
+
+.message.codes-session pre code {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}

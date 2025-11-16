@@ -260,6 +260,30 @@ function resolveUserConfirmation(sessionId, iteration, allowed) {
 // MEMORY SYSTEM: Cumulative file view management
 // ============================================================================
 
+function isRangeFullyCovered(ranges = [], startLine, endLine) {
+  if (!Array.isArray(ranges) || ranges.length === 0) {
+    return false;
+  }
+
+  const sorted = [...ranges].sort((a, b) => a.start - b.start);
+  let coverageStart = startLine;
+
+  for (const range of sorted) {
+    if (range.end < coverageStart) {
+      continue;
+    }
+    if (range.start > coverageStart) {
+      return false;
+    }
+    if (range.end >= endLine) {
+      return true;
+    }
+    coverageStart = range.end + 1;
+  }
+
+  return false;
+}
+
 function addToMemory(
   state,
   filePath,
@@ -283,6 +307,7 @@ function addToMemory(
   if (totalLines !== null) {
     fileMemory.totalLines = totalLines;
   }
+  const rangeAlreadyCovered = isRangeFullyCovered(fileMemory.ranges, startLine, endLine);
   const newRange = { start: startLine, end: endLine, lines };
 
   // Merge overlapping or adjacent ranges
@@ -333,6 +358,8 @@ function addToMemory(
       });
     }
   }
+
+  return !rangeAlreadyCovered;
 }
 
 function formatMemoryOutput(state) {
@@ -463,6 +490,7 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
     let minLine = Infinity;
     let maxLine = -Infinity;
     let totalLines = null;
+    let hasNewContent = false;
 
     for (const line of lines) {
       const totalMatch = line.match(/^\[Total lines in file: (\d+)\]$/);
@@ -485,8 +513,9 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
       for (let i = minLine; i <= maxLine; i++) {
         actualLines.push(parsedLines[i] || '');
       }
-      addToMemory(state, filePath, minLine, maxLine, actualLines, memoryName, memoryOwnerId, totalLines);
-      return true;
+      const added = addToMemory(state, filePath, minLine, maxLine, actualLines, memoryName, memoryOwnerId, totalLines);
+      hasNewContent = hasNewContent || added;
+      return { captured: true, hasNewContent };
     }
     return false;
   }
@@ -497,36 +526,70 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
   if (searchMatch) {
     const lines = output.split(/\r?\n/);
     const fileMatches = {};
+    let currentFile = null;
 
-    for (const line of lines) {
-      const match = line.match(/^([^:]+):(\d+):\s*(.*)$/);
-      if (match) {
-        const filePath = match[1].replace(/\\/g, '/');
-        const lineNum = parseInt(match[2], 10);
-        const content = match[3];
+    for (const rawLine of lines) {
+      const trimmed = rawLine.trimEnd();
+      if (!trimmed) {
+        continue;
+      }
+      if (trimmed === '--') {
+        currentFile = null;
+        continue;
+      }
+
+      const lineMatch = trimmed.match(/^(\d+):(.*)$/);
+      if (lineMatch && currentFile) {
+        const filePath = currentFile;
+        const lineNum = parseInt(lineMatch[1], 10);
+        const content = lineMatch[2] || '';
 
         if (!fileMatches[filePath]) {
           fileMatches[filePath] = [];
         }
         fileMatches[filePath].push({ lineNum, content });
+        continue;
+      }
+
+      const normalizedPath = trimmed.replace(/\\/g, '/').replace(/^\.\/+/, '');
+      if (normalizedPath) {
+        currentFile = normalizedPath;
+        if (!fileMatches[currentFile]) {
+          fileMatches[currentFile] = [];
+        }
       }
     }
 
-    // Save each file's matches to memory
+    let captured = false;
+    let hasNewContent = false;
+
     for (const [filePath, matches] of Object.entries(fileMatches)) {
+      if (!matches.length) {
+        continue;
+      }
+      captured = true;
       const minLine = Math.min(...matches.map(m => m.lineNum));
       const maxLine = Math.max(...matches.map(m => m.lineNum));
-      const lines = [];
+      const linesMap = new Map();
 
+      matches.forEach(match => {
+        linesMap.set(match.lineNum, match.content);
+      });
+
+      const collectedLines = [];
       for (let i = minLine; i <= maxLine; i++) {
-        const match = matches.find(m => m.lineNum === i);
-        lines.push(match ? match.content : '');
+        collectedLines.push(linesMap.get(i) || '');
       }
 
-      addToMemory(state, filePath, minLine, maxLine, lines, memoryName, memoryOwnerId);
+      const added = addToMemory(state, filePath, minLine, maxLine, collectedLines, memoryName, memoryOwnerId);
+      hasNewContent = hasNewContent || added;
     }
 
-    return Object.keys(fileMatches).length > 0;
+    if (!captured) {
+      return false;
+    }
+
+    return { captured: true, hasNewContent };
   }
 
   return false;
@@ -1228,7 +1291,7 @@ async function runAgentIteration({
 
   // Pass iteration for dynamic command reference injection
   const memoryState = formatMemoryOutput(state);
-  const truncatedMemory = memoryState.length > 2000 ? memoryState.substring(0, 2000) + '\n[Memory truncated...]' : memoryState;
+  const truncatedMemory = memoryState.length > 10000 ? memoryState.substring(0, 10000) + '\n[Memory truncated...]' : memoryState;
   const systemPrompt = renderSystemPrompt(selectPromptTemplate(iteration), {
     userPrompt,
     commandHistory: commandHistoryText,
@@ -1602,15 +1665,39 @@ async function executeCommand(state, command, options = {}) {
 
     // Capture file read output and save to memory
     let capturedToMemory = false;
+    let hasNewMemoryContent = false;
     const memoryName = options.saveToMemory || state.currentMemory;
     if (exitCode === 0 && combinedOutput) {
-      capturedToMemory = captureFileOutput(state, command, combinedOutput, memoryName, state.memoryOwnerId);
+      const captureResult = captureFileOutput(state, command, combinedOutput, memoryName, state.memoryOwnerId);
+      if (captureResult && typeof captureResult === 'object') {
+        capturedToMemory = !!captureResult.captured;
+        hasNewMemoryContent = !!captureResult.hasNewContent;
+      } else {
+        capturedToMemory = !!captureResult;
+        hasNewMemoryContent = capturedToMemory;
+      }
     }
 
+    const isSearchCommand = /^\s*(Search-InFiles|rg\b)/i.test(command);
+    const isShowFileCommand = /^\s*Show-FileWithLineNumbers\b/i.test(command);
+
     // Return memory state if captured, otherwise return raw output
-    const output = capturedToMemory
-      ? `${combinedOutput}\n\n[Content saved to memory '${memoryName}'. Use 'Show-Memory ${memoryName}' to view.]`
-      : (combinedOutput || 'Command completed with no output.');
+    let output;
+    if (capturedToMemory) {
+      if (isSearchCommand) {
+        output = hasNewMemoryContent
+          ? 'Search result saved to memory.'
+          : 'You have explored this line in this file, try another search.';
+      } else if (isShowFileCommand) {
+        output = hasNewMemoryContent
+          ? 'File content saved to memory.'
+          : 'You have explored this line in this file, try another search.';
+      } else {
+        output = `${combinedOutput}\n\n[Content saved to memory '${memoryName}'. Use 'Show-Memory ${memoryName}' to view.]`;
+      }
+    } else {
+      output = combinedOutput || 'Command completed with no output.';
+    }
 
     return {
       output,
@@ -1889,49 +1976,10 @@ async function processCodeRequest({
       confirmationApproved = true;
     }
 
-    // GENERIC LOOP DETECTION: Check for repeated identical commands
-    // Skip loop detection for List-ProjectFiles and commands not related to showing file contents
     let loopDetectedOutput = null;
-    const skipLoopDetectionCommands = [
-      'List-ProjectFiles',
-      'Get-ChildItem',
-      'dir',
-      'ls',
-      'Get-Location',
-      'pwd'
-    ];
-
-    const isFileContentCommand = parsed.command.match(/(Show-FileWithLineNumbers|Read-File|Get-Content|cat|type)\s/i);
-    const shouldSkipLoopDetection = skipLoopDetectionCommands.some(cmd =>
-      parsed.command.startsWith(cmd)
-    ) || !isFileContentCommand;
-
-    if (parsed.command && state.commandHistory.length >= 1 && !shouldSkipLoopDetection) {
-      const recentCommands = state.commandHistory.slice(-5);
-      const sameCommandCount = recentCommands.filter(
-        entry => entry.command === parsed.command
-      ).length;
-
-      if (sameCommandCount >= 1) {
-        log('CODES', 2, 'processCodeRequest', 'Loop detected: same command repeated', {
-          iteration,
-          command: parsed.command.substring(0, 100),
-          count: sameCommandCount + 1,
-        });
-
-        const loopBreakerMsg = `[SYSTEM] The system has collected what you are looking for.
-
-Current findings:
-${formatMemoryOutput(state)}
-
-If you need more context, try searching for additional content or reading different line ranges in other files.`;
-
-        loopDetectedOutput = loopBreakerMsg;
-      }
-    }
 
     // SMART FILE READ DETECTION: Check if trying to read file that's already fully in memory
-    if (!loopDetectedOutput && parsed.command) {
+    if (parsed.command) {
       const showFileMatch = parsed.command.match(/Show-FileWithLineNumbers\s+-Path\s+"?([^"\s]+)"?(?:\s+-StartLine\s+(\d+))?(?:\s+-EndLine\s+(\d+))?/i);
       if (showFileMatch) {
         const requestedPath = showFileMatch[1].replace(/\\/g, '/');
@@ -1957,14 +2005,7 @@ If you need more context, try searching for additional content or reading differ
               }
 
               if (rangeFullyCovered) {
-                const loopMsg = `[SYSTEM] The system has collected what you are looking for.
-
-Current findings:
-${formatMemoryOutput(state)}
-
-${startLine && endLine ? `The requested range (lines ${startLine}-${endLine}) in ${requestedPath} is already in memory.` : 'The file content shown above is currently in memory.'} If you need more context, try searching for additional content or reading different line ranges.`;
-
-                loopDetectedOutput = loopMsg;
+                loopDetectedOutput = '[SYSTEM] You have explored this line in this file, try another search.';
                 log('CODES', 2, 'processCodeRequest', 'Smart file read detection: requested range already in memory', {
                   iteration,
                   requestedPath,

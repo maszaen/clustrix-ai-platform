@@ -486,7 +486,7 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
   if (showFileMatch) {
     const filePath = showFileMatch[1].replace(/\\/g, '/');
     const lines = output.split(/\r?\n/);
-    const parsedLines = [];
+    const parsedLinesMap = new Map(); // Use Map instead of sparse array
     let minLine = Infinity;
     let maxLine = -Infinity;
     let totalLines = null;
@@ -498,20 +498,21 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
         totalLines = parseInt(totalMatch[1], 10);
         continue;
       }
-      
+
       const match = line.match(/^(\d+):(.*)$/);
       if (match) {
         const lineNum = parseInt(match[1], 10);
-        parsedLines[lineNum] = match[2];
+        parsedLinesMap.set(lineNum, match[2]); // Store in Map
         minLine = Math.min(minLine, lineNum);
         maxLine = Math.max(maxLine, lineNum);
       }
     }
 
-    if (parsedLines.length > 0) {
+    if (parsedLinesMap.size > 0) {
+      // Build dense array from Map (no holes/undefined)
       const actualLines = [];
       for (let i = minLine; i <= maxLine; i++) {
-        actualLines.push(parsedLines[i] || '');
+        actualLines.push(parsedLinesMap.get(i) || '');
       }
       const added = addToMemory(state, filePath, minLine, maxLine, actualLines, memoryName, memoryOwnerId, totalLines);
       hasNewContent = hasNewContent || added;

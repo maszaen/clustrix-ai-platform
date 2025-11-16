@@ -720,7 +720,73 @@ function List-ProjectFiles {
         $results.Sort([System.StringComparer]::OrdinalIgnoreCase)
     }
 
-    $results | ForEach-Object { Write-Output $_ }
+    # Enhanced output with size and line count
+    if ($results.Count -eq 0) {
+        Write-Output "No files found."
+        return
+    }
+
+    # Group by directory for better formatting
+    $byDirectory = @{}
+    foreach ($filePath in $results) {
+        $dirName = [System.IO.Path]::GetDirectoryName($filePath)
+        if ([string]::IsNullOrEmpty($dirName)) {
+            $dirName = "."
+        }
+
+        if (-not $byDirectory.ContainsKey($dirName)) {
+            $byDirectory[$dirName] = New-Object System.Collections.Generic.List[string]
+        }
+        $byDirectory[$dirName].Add($filePath)
+    }
+
+    # Output formatted results
+    $sortedDirs = $byDirectory.Keys | Sort-Object
+    foreach ($dir in $sortedDirs) {
+        # Output directory header
+        Write-Output "$dir\"
+
+        # Get files in this directory
+        $filesInDir = $byDirectory[$dir]
+
+        foreach ($filePath in $filesInDir) {
+            $fileName = [System.IO.Path]::GetFileName($filePath)
+
+            # Get full path for stat
+            $fullPath = if ($Absolute.IsPresent) {
+                $filePath
+            } else {
+                Join-Path $resolvedPath $filePath
+            }
+
+            try {
+                $fileInfo = New-Object System.IO.FileInfo($fullPath)
+                $sizeKB = [math]::Round($fileInfo.Length / 1KB, 1)
+
+                # Count lines without loading entire file
+                $lineCount = 0
+                try {
+                    $reader = [System.IO.File]::OpenText($fullPath)
+                    while ($null -ne $reader.ReadLine()) {
+                        $lineCount++
+                    }
+                    $reader.Close()
+                } catch {
+                    $lineCount = 0
+                }
+
+                # Format output: "  filename.ext    X.X KB    YYY lines"
+                $sizeStr = "$sizeKB KB".PadRight(10)
+                $linesStr = "$lineCount lines"
+                Write-Output "  $($fileName.PadRight(20)) $sizeStr $linesStr"
+            } catch {
+                # Fallback if stat fails
+                Write-Output "  $fileName"
+            }
+        }
+
+        Write-Output ""
+    }
 }
 
 function Search-InFiles {

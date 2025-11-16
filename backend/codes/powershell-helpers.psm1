@@ -772,7 +772,6 @@ function Search-InFiles {
 
     Write-Output "Searching for pattern: $Pattern"
     Write-Output "Path: $Path | Filter: $Filter | Depth: $Depth"
-    Write-Output ""
 
     # Check if ripgrep is available
     $rgAvailable = $null -ne (Get-Command rg -ErrorAction SilentlyContinue)
@@ -971,26 +970,34 @@ function Search-InFiles {
         Write-Output ""
 
         $groupedMatches = $allMatches | Group-Object -Property Path
+        $groupIndex = 0
         foreach ($group in $groupedMatches) {
+            $groupIndex++
             $relativePath = Resolve-Path -Relative $group.Name
-            Write-Output "=== $relativePath ==="
+            Write-Output $relativePath
 
             foreach ($match in $group.Group) {
-                Write-Output "$($match.LineNumber): $($match.Line)"
-                if ($match.Context) {
-                    if ($match.Context.PreContext) {
-                        foreach ($pre in $match.Context.PreContext) {
-                            Write-Output "  $pre"
-                        }
+                if ($match.Context -and $match.Context.PreContext) {
+                    $preCount = $match.Context.PreContext.Count
+                    for ($i = 0; $i -lt $preCount; $i++) {
+                        $lineNumber = $match.LineNumber - ($preCount - $i)
+                        Write-Output ("{0}:{1}" -f $lineNumber, $match.Context.PreContext[$i])
                     }
-                    if ($match.Context.PostContext) {
-                        foreach ($post in $match.Context.PostContext) {
-                            Write-Output "  $post"
-                        }
+                }
+
+                Write-Output ("{0}:{1}" -f $match.LineNumber, $match.Line)
+
+                if ($match.Context -and $match.Context.PostContext) {
+                    for ($i = 0; $i -lt $match.Context.PostContext.Count; $i++) {
+                        $lineNumber = $match.LineNumber + $i + 1
+                        Write-Output ("{0}:{1}" -f $lineNumber, $match.Context.PostContext[$i])
                     }
                 }
             }
-            Write-Output ""
+
+            if ($groupIndex -lt $groupedMatches.Count) {
+                Write-Output "--"
+            }
         }
         return
     }
@@ -1042,17 +1049,62 @@ function Search-InFiles {
 
     try {
         # Execute ripgrep
-        $output = & rg @rgArgs 2>&1
+        $rgOutput = & rg @rgArgs 2>&1
 
-        if ($LASTEXITCODE -eq 0) {
-            # Matches found
-            Write-Output $output
-        } elseif ($LASTEXITCODE -eq 1) {
-            # No matches found (not an error)
-            Write-Output "No matches found."
+        if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 1) {
+            if ($rgOutput) {
+                $linePattern = '^(?<path>.+?)([:\-])(?<line>\d+)([:\-])(.*)$'
+                $matchesByFile = [ordered]@{}
+
+                foreach ($line in $rgOutput) {
+                    if ([string]::IsNullOrWhiteSpace($line)) {
+                        continue
+                    }
+                    if ($line -eq '--') {
+                        continue
+                    }
+                    if ($line -match $linePattern) {
+                        $filePath = $Matches['path']
+                        $lineNumber = [int]$Matches['line']
+                        $content = $Matches[5]
+
+                        if (-not $matchesByFile.Contains($filePath)) {
+                            $matchesByFile[$filePath] = New-Object System.Collections.Generic.List[object]
+                        }
+                        $matchesByFile[$filePath].Add([pscustomobject]@{ LineNumber = $lineNumber; Content = $content })
+                    }
+                }
+
+                if ($matchesByFile.Count -eq 0) {
+                    Write-Output "No matches found."
+                } else {
+                    $totalMatches = 0
+                    foreach ($entry in $matchesByFile.GetEnumerator()) {
+                        $totalMatches += $entry.Value.Count
+                    }
+
+                    Write-Output "Found $totalMatches matches:"
+                    Write-Output ""
+
+                    $fileIndex = 0
+                    foreach ($entry in $matchesByFile.GetEnumerator()) {
+                        $fileIndex++
+                        Write-Output $entry.Key
+                        $sortedMatches = $entry.Value | Sort-Object LineNumber
+                        foreach ($match in $sortedMatches) {
+                            Write-Output ("{0}:{1}" -f $match.LineNumber, $match.Content)
+                        }
+                        if ($fileIndex -lt $matchesByFile.Count) {
+                            Write-Output "--"
+                        }
+                    }
+                }
+            } else {
+                Write-Output "No matches found."
+            }
         } else {
             # Actual error
-            Write-Error "Ripgrep error: $output"
+            Write-Error "Ripgrep error: $rgOutput"
         }
     } catch {
         Write-Error "Failed to execute ripgrep: $_"

@@ -779,7 +779,6 @@ function Search-InFiles {
 
     Write-Output "Searching for pattern: $Pattern"
     Write-Output "Path: $Path | Filter: $Filter | Depth: $Depth"
-    Write-Output ""
 
     # Check if ripgrep is available
     $rgCommand = if ($RgPath -and (Test-Path $RgPath)) {
@@ -948,7 +947,6 @@ function Search-InFiles {
     if ($rgAvailable) {
         # Use ripgrep for ultra-fast search
         Write-Output "Using ripgrep (fast search)..."
-        Write-Output ""
 
         try {
             # Build ripgrep command
@@ -974,10 +972,52 @@ function Search-InFiles {
 
             if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 1) {  # 0 = matches found, 1 = no matches
                 if ($rgOutput) {
-                    $matchCount = ($rgOutput | Measure-Object).Count
-                    Write-Output "Found $matchCount matches:"
-                    Write-Output ""
-                    $rgOutput | ForEach-Object { Write-Output $_ }
+                    $linePattern = '^(?<path>.+?)([:\-])(?<line>\d+)([:\-])(.*)$'
+                    $matchesByFile = [ordered]@{}
+
+                    foreach ($line in $rgOutput) {
+                        if ([string]::IsNullOrWhiteSpace($line)) {
+                            continue
+                        }
+                        if ($line -eq '--') {
+                            continue
+                        }
+                        if ($line -match $linePattern) {
+                            $filePath = $Matches['path']
+                            $lineNumber = [int]$Matches['line']
+                            $content = $Matches[5]
+
+                            if (-not $matchesByFile.Contains($filePath)) {
+                                $matchesByFile[$filePath] = New-Object System.Collections.Generic.List[object]
+                            }
+                            $matchesByFile[$filePath].Add([pscustomobject]@{ LineNumber = $lineNumber; Content = $content })
+                        }
+                    }
+
+                    if ($matchesByFile.Count -eq 0) {
+                        Write-Output "No matches found."
+                    } else {
+                        $totalMatches = 0
+                        foreach ($entry in $matchesByFile.GetEnumerator()) {
+                            $totalMatches += $entry.Value.Count
+                        }
+
+                        Write-Output "Found $totalMatches matches:"
+                        Write-Output ""
+
+                        $fileIndex = 0
+                        foreach ($entry in $matchesByFile.GetEnumerator()) {
+                            $fileIndex++
+                            Write-Output $entry.Key
+                            $sortedMatches = $entry.Value | Sort-Object LineNumber
+                            foreach ($match in $sortedMatches) {
+                                Write-Output ("{0}:{1}" -f $match.LineNumber, $match.Content)
+                            }
+                            if ($fileIndex -lt $matchesByFile.Count) {
+                                Write-Output "--"
+                            }
+                        }
+                    }
                 } else {
                     Write-Output "No matches found."
                 }
@@ -994,6 +1034,10 @@ function Search-InFiles {
             Write-Output "Falling back to PowerShell Select-String..."
             $rgAvailable = $false
         }
+    }
+
+    if ($rgAvailable) {
+        return
     }
 
     if (-not $rgAvailable) {
@@ -1035,26 +1079,34 @@ function Search-InFiles {
         Write-Output ""
 
         $groupedMatches = $allMatches | Group-Object -Property Path
+        $groupIndex = 0
         foreach ($group in $groupedMatches) {
+            $groupIndex++
             $relativePath = Resolve-Path -Relative $group.Name
-            Write-Output "=== $relativePath ==="
+            Write-Output $relativePath
 
             foreach ($match in $group.Group) {
-                Write-Output "$($match.LineNumber): $($match.Line)"
-                if ($match.Context) {
-                    if ($match.Context.PreContext) {
-                        foreach ($pre in $match.Context.PreContext) {
-                            Write-Output "  $pre"
-                        }
+                if ($match.Context -and $match.Context.PreContext) {
+                    $preCount = $match.Context.PreContext.Count
+                    for ($i = 0; $i -lt $preCount; $i++) {
+                        $lineNumber = $match.LineNumber - ($preCount - $i)
+                        Write-Output ("{0}:{1}" -f $lineNumber, $match.Context.PreContext[$i])
                     }
-                    if ($match.Context.PostContext) {
-                        foreach ($post in $match.Context.PostContext) {
-                            Write-Output "  $post"
-                        }
+                }
+
+                Write-Output ("{0}:{1}" -f $match.LineNumber, $match.Line)
+
+                if ($match.Context -and $match.Context.PostContext) {
+                    for ($i = 0; $i -lt $match.Context.PostContext.Count; $i++) {
+                        $lineNumber = $match.LineNumber + $i + 1
+                        Write-Output ("{0}:{1}" -f $lineNumber, $match.Context.PostContext[$i])
                     }
                 }
             }
-            Write-Output ""
+
+            if ($groupIndex -lt $groupedMatches.Count) {
+                Write-Output "--"
+            }
         }
         return
     }

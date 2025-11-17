@@ -65,8 +65,8 @@ const STATE_RESPONSE_FORMATS = {
     useAnswer: false,
   },
   [AGENT_STATES.READ]: {
-    format: '<state><Next state></state>\n<cmd>read command</cmd>',
-    useHidden: false,
+    format: '<state><Next state></state>\n<hidden>planning what to read next</hidden>\n<cmd>read command</cmd>',
+    useHidden: true,
     useAnswer: false,
   },
   [AGENT_STATES.UNDERSTAND]: {
@@ -75,8 +75,8 @@ const STATE_RESPONSE_FORMATS = {
     useAnswer: true,
   },
   [AGENT_STATES.EDIT]: {
-    format: '<state><Next state></state>\n<answer>what is being changed and why</answer>\n<cmd>edit command</cmd>',
-    useHidden: false,
+    format: '<state><Next state></state>\n<hidden>analyzing what needs to be changed</hidden>\n<answer>what is being changed and why</answer>\n<cmd>edit command</cmd>',
+    useHidden: true,
     useAnswer: true,
   },
   [AGENT_STATES.EXECUTE]: {
@@ -85,8 +85,8 @@ const STATE_RESPONSE_FORMATS = {
     useAnswer: false,
   },
   [AGENT_STATES.VERIFY]: {
-    format: '<state><Next state></state>\n<answer>verification result</answer>\n<cmd>check command (optional)</cmd>',
-    useHidden: false,
+    format: '<state><Next state></state>\n<hidden>checking verification results</hidden>\n<answer>verification result</answer>\n<cmd>check command (optional)</cmd>',
+    useHidden: true,
     useAnswer: true,
   },
   [AGENT_STATES.DONE]: {
@@ -113,6 +113,7 @@ const STATE_RULES = {
   [AGENT_STATES.READ]: `
 
 **READ STATE:**
+- Use <hidden> for planning what to read next (not shown to user)
 - ALWAYS count first: (gc file.txt).Count
 - If < 300 lines: Show-FileWithLineNumbers -Path file.txt
 - If > 300 lines: Use batches of 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 300
@@ -134,6 +135,7 @@ const STATE_RULES = {
   [AGENT_STATES.EDIT]: `
 
 **EDIT STATE:**
+- Use <hidden> for analyzing what needs to be changed (not shown to user)
 - MUST use <answer> to explain what & why
 - Wrap EVERY edit inside <cmd> with <set> tags only
 - Format:
@@ -171,6 +173,7 @@ const STATE_RULES = {
   [AGENT_STATES.VERIFY]: `
 
 **VERIFY STATE:**
+- Use <hidden> for checking verification results (not shown to user)
 - Check if changes worked
 - Re-read edited sections if needed
 - Use <answer> to report results
@@ -220,16 +223,13 @@ Choose your next state based on what you need to do:
 - If unsure, use UNDERSTAND to analyze what you have
 
 **CORE RULES:**
-1. Use <hidden> for internal thinking (NOT shown to user)
+1. Use <hidden> for internal thinking in EVERY state (MANDATORY except DONE) - extend your analysis and create next todo for you or summary
 2. Use <answer> ONLY when user needs info (state-specific)
 3. NEVER repeat failed commands - try different approach
 4. Search: Use Search-InFiles (FAST!) not Get-ChildItem -Recurse
 5. File ops: Show-FileWithLineNumbers for reads, <set> tags inside <cmd> for edits
 6. Check size: Get-FileStats before reading large files
 7. NEVER read files already in memory - analyze from memory or use EDIT directly
-
-**MEMORY SYSTEM:**
-Current memory: {current_memory}
 
 {memory_state}
 
@@ -400,13 +400,9 @@ Start solving now. Remember your current state and work efficiently.`;
 const PROMPT_SUBSEQUENT = `
 {user_prompt}
 
-=== COMMAND HISTORY ===
 {command_history}
 
-=== LAST COMMAND (dont execute again) ===
-Command: {last_command}
-Output:
-{last_output}
+{last_hidden}
 
 {common_command}
 

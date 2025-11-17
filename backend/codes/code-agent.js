@@ -18,11 +18,11 @@ const {
   getCommandReference,
   getErrorGuidance,
 } = require('./codes-prompt');
-const MAX_ITERATIONS = 30;
-const MAX_HISTORY = 15;
+const MAX_ITERATIONS = 200;
+const MAX_HISTORY = 50;
 const MAX_OUTPUT_LINES = 10000; // Increased from 100 to 10000 for full output
 const MAX_OUTPUT_LENGTH = 500000; // Increased from 8000 to 500000 for full output
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const IDLE_TIMEOUT_MS = 120 * 60 * 1000;
 const HISTORY_SUMMARY_LENGTH = 160;
 const COMMAND_EXECUTION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max for command execution
 const BACKGROUND_PROCESS_TIMEOUT_MS = 15 * 1000; // 15 seconds for background processes
@@ -208,6 +208,7 @@ function getSessionState(sessionId, codeId = null) {
       workspacePath: null,
       instruction: '',
       editHistory: [],
+      lastHidden: null, // Store last hidden content for prompt
       // Memory system: cumulative file view
       memories,
       activeMemoryNames, // Visible memories
@@ -818,17 +819,16 @@ function formatCommandHistory(history = []) {
     parts.push('=== PREVIOUS COMMANDS ===');
     parts.push(olderHistory.map((entry, index) => {
       const idx = history.length - recentHistory.length + index + 1;
-      const summary = summarizeOutput(entry.output || '', entry.exitCode);
-      return `#${idx} ${entry.command} → ${summary}`;
+      return `#${idx}: ${entry.command}`;
     }).join('\n'));
   }
 
   // Last command: show FULL output for current context
   if (lastCommand) {
-    parts.push('\n=== LAST COMMAND (full output) ===');
     const idx = history.length;
     const output = truncateOutput(lastCommand.output || 'No output', 'full');
-    parts.push(`#${idx} ${lastCommand.command}\nOutput:\n${output}\nExit Code: ${lastCommand.exitCode}`);
+    parts.push(`\n=== RECENT COMMAND (iteration #${idx} - dont execute again) ===`);
+    parts.push(`${lastCommand.command}\nOutput:\n${output}\nExit Code: ${lastCommand.exitCode}`);
   }
 
   return parts.join('\n');
@@ -931,7 +931,7 @@ function detectErrorContext(commandHistory = []) {
   return { errorType, includeCommandReference };
 }
 
-function renderSystemPrompt(template, { userPrompt, commandHistory, commandHistoryArray, lastCommand, iteration = 0, previousMessagesHistory = '', currentState, memoryState, currentMemory }) {
+function renderSystemPrompt(template, { userPrompt, commandHistory, commandHistoryArray, lastCommand, iteration = 0, previousMessagesHistory = '', currentState, memoryState, currentMemory, lastHidden }) {
   // V2: STATE-BASED PROMPTING
   // Use AI-declared current state
 
@@ -973,6 +973,7 @@ function renderSystemPrompt(template, { userPrompt, commandHistory, commandHisto
     .replace('{last_command}', lastCommand.command)
     .replace('{last_output}', lastCommand.output)
     .replace('{summary_reminder}', summaryReminder)
+    .replace('{last_hidden}', lastHidden ? `\n=== THE TODO CREATED BY YOUR LAST COMMAND (iteration #${iteration}) ===\n${lastHidden}\n` : '')
     .replace('{common_command}', finalSystemPrompt)
     .replace('{user_prompt}', userPrompt); // Replace the placeholder with actual user prompt
 }
@@ -1502,6 +1503,7 @@ async function runAgentIteration({
     currentState: state.currentState,
     memoryState: truncatedMemory,
     currentMemory: state.currentMemory,
+    lastHidden: state.lastHidden,
   });
 
   // Debug: Log processed prompt for each iteration
@@ -1573,6 +1575,11 @@ async function runAgentIteration({
   // Update current state based on AI declaration
   if (parsed.state && AGENT_STATES[parsed.state]) {
     state.currentState = AGENT_STATES[parsed.state];
+  }
+
+  // Store last hidden content for next prompt
+  if (parsed.hidden) {
+    state.lastHidden = parsed.hidden;
   }
 
   // Store assistant's response in conversation history

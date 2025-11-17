@@ -134,13 +134,11 @@ Critical Rules:
 MUST use <answer> to explain what & why
 Wrap EVERY edit inside <cmd> with <set> tags only
 Edit Format:
-<cmd>
-  <set file="relative/path.tsx" range={20, 40}>
-    <![CDATA[
-      // new content
-    ]]>
-  </set>
-</cmd>
+<cmd><set file="relative/path.tsx" range={20, 40}>
+<![CDATA[
+// new content
+]]>
+</set></cmd>
 CRITICAL RANGE RULES (Must read carefully):
 Range Operations:
   - range={start, end} = DELETE lines from start to end, then INSERT new content in their place

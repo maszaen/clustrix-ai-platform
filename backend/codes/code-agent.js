@@ -20,8 +20,8 @@ const {
 } = require('./codes-prompt');
 const MAX_ITERATIONS = 30;
 const MAX_HISTORY = 15;
-const MAX_OUTPUT_LINES = 100;
-const MAX_OUTPUT_LENGTH = 8000;
+const MAX_OUTPUT_LINES = 10000; // Increased from 100 to 10000 for full output
+const MAX_OUTPUT_LENGTH = 500000; // Increased from 8000 to 500000 for full output
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const HISTORY_SUMMARY_LENGTH = 160;
 const COMMAND_EXECUTION_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max for command execution
@@ -189,6 +189,15 @@ function getSessionState(sessionId, codeId = null) {
   if (!state) {
     const persistedMemory = desiredMemoryOwnerId ? deps.getMemory?.(desiredMemoryOwnerId, null, desiredMemoryOwnerType) || [] : [];
     const { memories, activeMemoryNames } = buildMemoryStructures(persistedMemory);
+    
+    // Clean any corrupted memory ranges loaded from database
+    Object.values(memories).forEach(memory => {
+      if (memory && memory.files) {
+        Object.values(memory.files).forEach(fileMemory => {
+          validateAndCleanMemoryRanges(fileMemory);
+        });
+      }
+    });
 
     state = {
       commandHistory: [],
@@ -215,6 +224,16 @@ function getSessionState(sessionId, codeId = null) {
     } else if (desiredMemoryOwnerId && state.memoryOwnerId !== desiredMemoryOwnerId) {
       const persistedMemory = deps.getMemory?.(desiredMemoryOwnerId, null, desiredMemoryOwnerType) || [];
       const { memories, activeMemoryNames } = buildMemoryStructures(persistedMemory);
+      
+      // Clean any corrupted memory ranges loaded from database
+      Object.values(memories).forEach(memory => {
+        if (memory && memory.files) {
+          Object.values(memory.files).forEach(fileMemory => {
+            validateAndCleanMemoryRanges(fileMemory);
+          });
+        }
+      });
+      
       state.memoryOwnerId = desiredMemoryOwnerId;
       state.memoryOwnerType = desiredMemoryOwnerType;
       state.memories = memories;
@@ -318,7 +337,17 @@ function addToMemory(
   const rangeAlreadyCovered = isRangeFullyCovered(fileMemory.ranges, startLine, endLine);
   const newRange = { start: startLine, end: endLine, lines };
 
-  // Merge overlapping or adjacent ranges
+  log('CODES', 4, 'addToMemory', 'Adding range to memory', {
+    filePath,
+    memoryName,
+    startLine,
+    endLine,
+    linesCount: lines.length,
+    rangeAlreadyCovered,
+    existingRangesCount: fileMemory.ranges.length
+  });
+
+  // Merge overlapping or adjacent ranges with proper conflict resolution
   const merged = [];
   let currentRange = newRange;
 
@@ -331,29 +360,33 @@ function addToMemory(
       // No overlap, existing comes before
       merged.push(existing);
     } else {
-      // Overlap or adjacent - merge
+      // Overlap or adjacent - merge with proper conflict resolution
       const mergedStart = Math.min(currentRange.start, existing.start);
       const mergedEnd = Math.max(currentRange.end, existing.end);
       const mergedLines = [];
 
-      // Combine lines from both ranges
+      // For overlapping regions, prefer the newer range (currentRange) content
+      // For non-overlapping regions, use whichever range covers that area
       for (let i = mergedStart; i <= mergedEnd; i++) {
-        const fromCurrent = currentRange.lines[i - currentRange.start];
-        const fromExisting = existing.lines[i - existing.start];
-        // Prefer non-empty line, then defined line, else empty string
-        let line;
-        if (fromCurrent !== undefined && fromCurrent !== '') {
-          line = fromCurrent;
-        } else if (fromExisting !== undefined && fromExisting !== '') {
-          line = fromExisting;
-        } else if (fromCurrent !== undefined) {
-          line = fromCurrent;
-        } else if (fromExisting !== undefined) {
-          line = fromExisting;
+        const inCurrentRange = i >= currentRange.start && i <= currentRange.end;
+        const inExistingRange = i >= existing.start && i <= existing.end;
+
+        if (inCurrentRange && inExistingRange) {
+          // Overlapping - prefer current (newer) content
+          const currentLine = currentRange.lines[i - currentRange.start];
+          mergedLines.push(currentLine !== undefined ? currentLine : '');
+        } else if (inCurrentRange) {
+          // Only in current range
+          const currentLine = currentRange.lines[i - currentRange.start];
+          mergedLines.push(currentLine !== undefined ? currentLine : '');
+        } else if (inExistingRange) {
+          // Only in existing range
+          const existingLine = existing.lines[i - existing.start];
+          mergedLines.push(existingLine !== undefined ? existingLine : '');
         } else {
-          line = '';
+          // Gap - should not happen in merged range
+          mergedLines.push('');
         }
-        mergedLines.push(line);
       }
 
       currentRange = { start: mergedStart, end: mergedEnd, lines: mergedLines };
@@ -363,6 +396,13 @@ function addToMemory(
   merged.push(currentRange);
   merged.sort((a, b) => a.start - b.start);
   fileMemory.ranges = merged;
+
+  log('CODES', 4, 'addToMemory', 'Memory ranges after merging', {
+    filePath,
+    memoryName,
+    rangesCount: fileMemory.ranges.length,
+    totalLines: fileMemory.totalLines
+  });
 
   // Persist to database if memory owner is provided
   if (memoryOwnerId) {
@@ -389,7 +429,7 @@ function formatMemoryOutput(state) {
 
   for (const [memName, memory] of Object.entries(state.memories || {})) {
     if (visibleMemories.includes(memName)) {
-      output.push(`=== MEMORY STATE: ${memName} ===\n`);
+      output.push(`=== ACTIVE MEMORY: ${memName} ===\n`);
 
       for (const [filePath, fileData] of Object.entries(memory.files || {})) {
         // Calculate total explored lines
@@ -508,6 +548,114 @@ function clearFileFromMemories(state, filePath) {
   });
 }
 
+function validateAndCleanMemoryRanges(fileMemory) {
+  if (!fileMemory.ranges || !Array.isArray(fileMemory.ranges)) {
+    fileMemory.ranges = [];
+    return;
+  }
+
+  // Sort ranges by start line
+  fileMemory.ranges.sort((a, b) => a.start - b.start);
+
+  const cleaned = [];
+  let current = null;
+
+  for (const range of fileMemory.ranges) {
+    // Validate range structure
+    if (!range.start || !range.end || !Array.isArray(range.lines)) {
+      log('CODES', 3, 'validateAndCleanMemoryRanges', 'Skipping invalid range', { range });
+      continue; // Skip invalid ranges
+    }
+
+    // Ensure start <= end
+    if (range.start > range.end) {
+      log('CODES', 3, 'validateAndCleanMemoryRanges', 'Skipping invalid range (start > end)', { range });
+      continue; // Skip invalid ranges
+    }
+
+    // Ensure lines array length matches range size
+    const expectedLength = range.end - range.start + 1;
+    if (range.lines.length !== expectedLength) {
+      log('CODES', 3, 'validateAndCleanMemoryRanges', 'Fixing range lines length', {
+        expected: expectedLength,
+        actual: range.lines.length,
+        range: { start: range.start, end: range.end }
+      });
+      // Try to fix by truncating or padding
+      if (range.lines.length > expectedLength) {
+        range.lines = range.lines.slice(0, expectedLength);
+      } else {
+        while (range.lines.length < expectedLength) {
+          range.lines.push('');
+        }
+      }
+    }
+
+    if (!current) {
+      current = { ...range };
+    } else if (range.start <= current.end + 1) {
+      // Merge overlapping or adjacent ranges
+      const mergedStart = Math.min(current.start, range.start);
+      const mergedEnd = Math.max(current.end, range.end);
+      const mergedLines = [];
+
+      for (let i = mergedStart; i <= mergedEnd; i++) {
+        const inCurrent = i >= current.start && i <= current.end;
+        const inRange = i >= range.start && i <= range.end;
+
+        if (inCurrent && inRange) {
+          // Overlapping - prefer the later range (more recent)
+          const rangeLine = range.lines[i - range.start];
+          mergedLines.push(rangeLine !== undefined ? rangeLine : '');
+        } else if (inCurrent) {
+          const currentLine = current.lines[i - current.start];
+          mergedLines.push(currentLine !== undefined ? currentLine : '');
+        } else if (inRange) {
+          const rangeLine = range.lines[i - range.start];
+          mergedLines.push(rangeLine !== undefined ? rangeLine : '');
+        } else {
+          mergedLines.push('');
+        }
+      }
+
+      current = { start: mergedStart, end: mergedEnd, lines: mergedLines };
+    } else {
+      // No overlap, add current and start new
+      cleaned.push(current);
+      current = { ...range };
+    }
+  }
+
+  if (current) {
+    cleaned.push(current);
+  }
+
+  // Validate final ranges don't have gaps or overlaps
+  for (let i = 1; i < cleaned.length; i++) {
+    const prev = cleaned[i - 1];
+    const curr = cleaned[i];
+    if (prev.end >= curr.start) {
+      log('CODES', 2, 'validateAndCleanMemoryRanges', 'Warning: overlapping ranges after cleaning', {
+        prev: { start: prev.start, end: prev.end },
+        curr: { start: curr.start, end: curr.end }
+      });
+    }
+  }
+
+  fileMemory.ranges = cleaned;
+}
+
+function cleanMemoryCorruption(state) {
+  // Clean all memory ranges to prevent corruption
+  Object.values(state.memories || {}).forEach(memory => {
+    if (memory && memory.files) {
+      Object.values(memory.files).forEach(fileMemory => {
+        validateAndCleanMemoryRanges(fileMemory);
+      });
+    }
+  });
+}
+
 function captureFileOutput(state, command, output, memoryName, memoryOwnerId = null) {
   // Parse Show-FileWithLineNumbers output
   // Format: "001: line content"
@@ -620,18 +768,23 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
 function truncateOutput(output, mode = 'full') {
   if (!output) return '';
   const allLines = output.split(/\r?\n/);
-  
-  // Mode: 'older' = 10 lines for older commands, 'full' = 100 lines for recent commands
-  const maxLines = mode === 'older' ? 10 : MAX_OUTPUT_LINES;
-  const lines = allLines.slice(0, maxLines);
+
+  // Mode: 'older' = 10 lines, 'last' = 5 lines, 'full' = 10000 lines, 'unlimited' = no limit
+  let maxLines;
+  if (mode === 'older') maxLines = 10;
+  else if (mode === 'last') maxLines = 5;
+  else if (mode === 'unlimited') maxLines = Infinity;
+  else maxLines = MAX_OUTPUT_LINES;
+
+  const lines = maxLines === Infinity ? allLines : allLines.slice(0, maxLines);
   let joined = lines.join('\n');
-  
+
   // Add "X more lines" indicator if truncated
-  if (mode === 'older' && allLines.length > maxLines) {
+  if ((mode === 'older' || mode === 'last') && allLines.length > maxLines) {
     joined += `\n... (${allLines.length - maxLines} more lines)`;
   }
-  
-  if (joined.length > MAX_OUTPUT_LENGTH) {
+
+  if (mode !== 'unlimited' && joined.length > MAX_OUTPUT_LENGTH) {
     joined = joined.slice(0, MAX_OUTPUT_LENGTH) + '\n…';
   }
   return joined;
@@ -653,33 +806,31 @@ function formatCommandHistory(history = []) {
   if (!history.length) {
     return 'No commands executed yet.';
   }
-  
+
   const recentHistory = history.slice(-MAX_HISTORY);
-  const olderHistory = recentHistory.slice(0, -3); // All but last 3
-  const recentThree = recentHistory.slice(-3); // Last 3 commands with full output
-  
+  const olderHistory = recentHistory.slice(0, -1); // All but last command
+  const lastCommand = recentHistory.slice(-1)[0]; // Only last command with full output
+
   const parts = [];
-  
-  // Older commands: show command + truncated output (10 lines)
+
+  // Older commands: show ONLY command + summary (no output)
   if (olderHistory.length > 0) {
-    parts.push('=== OLDER COMMANDS (truncated) ===');
+    parts.push('=== PREVIOUS COMMANDS ===');
     parts.push(olderHistory.map((entry, index) => {
       const idx = history.length - recentHistory.length + index + 1;
-      const output = truncateOutput(entry.output || 'No output', 'older');
-      return `#${idx} ${entry.command}\nOutput:\n${output}\nExit Code: ${entry.exitCode}\n`;
+      const summary = summarizeOutput(entry.output || '', entry.exitCode);
+      return `#${idx} ${entry.command} → ${summary}`;
     }).join('\n'));
   }
-  
-  // Recent 3 commands: show FULL output for better context
-  if (recentThree.length > 0) {
-    parts.push('\n=== RECENT COMMANDS (full output) ===');
-    recentThree.forEach((entry, index) => {
-      const idx = history.length - recentThree.length + index + 1;
-      const output = truncateOutput(entry.output || 'No output', 'full');
-      parts.push(`#${idx} ${entry.command}\nOutput:\n${output}\nExit Code: ${entry.exitCode}`);
-    });
+
+  // Last command: show FULL output for current context
+  if (lastCommand) {
+    parts.push('\n=== LAST COMMAND (full output) ===');
+    const idx = history.length;
+    const output = truncateOutput(lastCommand.output || 'No output', 'full');
+    parts.push(`#${idx} ${lastCommand.command}\nOutput:\n${output}\nExit Code: ${lastCommand.exitCode}`);
   }
-  
+
   return parts.join('\n');
 }
 
@@ -693,7 +844,7 @@ function getLastCommand(history = []) {
   const last = history[history.length - 1];
   return {
     command: last.command,
-    output: truncateOutput(last.output || ''),
+    output: truncateOutput(last.output || '', 'last'), // Max 5 lines for last command
   };
 }
 
@@ -1340,7 +1491,7 @@ async function runAgentIteration({
 
   // Pass iteration for dynamic command reference injection
   const memoryState = formatMemoryOutput(state);
-  const truncatedMemory = memoryState.length > 150000 ? memoryState.substring(0, 150000) + '\n[Memory truncated, Show-Memory to read all]' : memoryState;
+  const truncatedMemory = memoryState.length > 150000 ? memoryState.substring(0, 150000) + '\n[Memory truncated, use Show-Memory to read all]' : memoryState;
   const systemPrompt = renderSystemPrompt(selectPromptTemplate(iteration, isContinuationSession), {
     userPrompt,
     commandHistory: commandHistoryText,
@@ -1461,32 +1612,47 @@ async function runAgentIteration({
 function parseMemoryCommand(command) {
   const trimmed = command.trim();
 
-  // Show memory <name> (or Show-Memory <name>)
-  const showMatch = trimmed.match(/^show\s+memory\s+(\S+)$/i) || trimmed.match(/^show-memory\s+(\S+)$/i);
+  // Show-Memory (no parameter = show default)
+  if (trimmed.match(/^Show-Memory$/i)) {
+    return { type: 'show', name: 'default' };
+  }
+
+  // Show memory <name> (or Show-Memory <name> or show-memory <name>)
+  const showMatch = trimmed.match(/^show\s+memory\s+(\S+)$/i) ||
+                   trimmed.match(/^show-memory\s+(\S+)$/i) ||
+                   trimmed.match(/^Show-Memory\s+(\S+)$/i);
   if (showMatch) {
     return { type: 'show', name: showMatch[1] };
   }
 
   // Hide memory <name1> <name2> (or Hide-Memory <name1> <name2>)
-  const hideMatch = trimmed.match(/^hide\s+memory\s+(.+)$/i) || trimmed.match(/^hide-memory\s+(.+)$/i);
+  const hideMatch = trimmed.match(/^hide\s+memory\s+(.+)$/i) ||
+                   trimmed.match(/^hide-memory\s+(.+)$/i) ||
+                   trimmed.match(/^Hide-Memory\s+(.+)$/i);
   if (hideMatch) {
     return { type: 'hide', names: hideMatch[1].split(/\s+/) };
   }
 
   // Use memory <name1> <name2> (or Use-Memory <name1> <name2>)
-  const useMatch = trimmed.match(/^use\s+memory\s+(.+)$/i) || trimmed.match(/^use-memory\s+(.+)$/i);
+  const useMatch = trimmed.match(/^use\s+memory\s+(.+)$/i) ||
+                  trimmed.match(/^use-memory\s+(.+)$/i) ||
+                  trimmed.match(/^Use-Memory\s+(.+)$/i);
   if (useMatch) {
     return { type: 'use', names: useMatch[1].split(/\s+/) };
   }
 
   // Clear memory <name1> <name2> (or Clear-Memory <name1> <name2>)
-  const clearMatch = trimmed.match(/^clear\s+memory\s+(.+)$/i) || trimmed.match(/^clear-memory\s+(.+)$/i);
+  const clearMatch = trimmed.match(/^clear\s+memory\s+(.+)$/i) ||
+                    trimmed.match(/^clear-memory\s+(.+)$/i) ||
+                    trimmed.match(/^Clear-Memory\s+(.+)$/i);
   if (clearMatch) {
     return { type: 'clear', names: clearMatch[1].split(/\s+/) };
   }
 
   // Command | Create memory <name> (or Create-Memory <name>)
-  const createMatch = trimmed.match(/^(.+?)\s*\|\s*create\s+memory\s+(\S+)$/i) || trimmed.match(/^(.+?)\s*\|\s*create-memory\s+(\S+)$/i);
+  const createMatch = trimmed.match(/^(.+?)\s*\|\s*create\s+memory\s+(\S+)$/i) ||
+                     trimmed.match(/^(.+?)\s*\|\s*create-memory\s+(\S+)$/i) ||
+                     trimmed.match(/^(.+?)\s*\|\s*Create-Memory\s+(\S+)$/i);
   if (createMatch) {
     return { type: 'create', name: createMatch[2], actualCommand: createMatch[1].trim() };
   }
@@ -1549,6 +1715,9 @@ async function executeCommand(state, command, options = {}) {
           state.editHistory = state.editHistory.slice(-100);
         }
       });
+
+      // Clean memory corruption after edit operations
+      cleanMemoryCorruption(state);
 
       return {
         output: editResult.text,
@@ -1736,7 +1905,7 @@ async function executeCommand(state, command, options = {}) {
     if (capturedToMemory) {
       if (isSearchCommand) {
         output = hasNewMemoryContent
-          ? 'Search result saved to memory.'
+          ? 'Search result already saved in memory.'
           : 'You have explored this line in this file, try another search.';
       } else if (isShowFileCommand) {
         output = hasNewMemoryContent
@@ -2309,12 +2478,13 @@ async function processCodeRequest({
     // STEP 3: Send output AFTER executing (but NOT if timeout - keep error in history for AI only)
     if (!isTimeout) {
       // Special handling for Show-FileWithLineNumbers with specific range - don't truncate
+      // Also don't truncate for main execution output to show full results
       let finalOutput = output;
       const isSpecificRangeRead = parsed.command && 
         parsed.command.match(/Show-FileWithLineNumbers\s+-Path\s+"?([^"\s]+)"?\s+-StartLine\s+(\d+)\s+-EndLine\s+(\d+)/i);
       
       if (!isSpecificRangeRead) {
-        finalOutput = truncateOutput(output);
+        finalOutput = truncateOutput(output, 'unlimited');
       }
       
       const outputChunk = formatOutput({

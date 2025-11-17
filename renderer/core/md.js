@@ -103,7 +103,7 @@ function transformCommandText(commandText) {
   // XML-style edit commands (sometimes AI outputs these)
   if (cmd.match(/^<set\s+file=/i)) {
     const fileMatch = cmd.match(/file=["']([^"']+)["']/i);
-    const rangeMatch = cmd.match(/range=\{(\d+),(\d+)\}/i);
+    const rangeMatch = cmd.match(/range=\{\s*(\d+)\s*,\s*(\d+)\s*\}/i);
     
     if (fileMatch) {
       const filename = getFilename(fileMatch[1]);
@@ -213,7 +213,7 @@ function transformCommandText(commandText) {
     if (!pattern || !path) return cmd;
     
     const filename = getFilename(path);
-    return `Search <code>${esc(pattern)}</code> from <strong>${filename}</strong>`;
+    return `Search with pattern <code>${esc(pattern)}</code> from <strong>${filename}</strong>`;
   }
   
   if (cmd.match(/^Get-FileStats/i)) {
@@ -258,22 +258,35 @@ function transformCommandText(commandText) {
     }
   }
   
-  if (cmd.match(/^List-ProjectFiles/i)) {
+  if (/^List-ProjectFiles/i.test(cmd)) {
     const path = getPath();
     const dirname = path ? getFilename(path) : null;
-    
+    const extMatch = cmd.match(/-Extensions\s+["']([^"']+)["']/i);
+    const ext = extMatch?.[1] || null;
+
+    // bangun deskripsi
+    const parts = [];
+
+    if (ext) {
+      parts.push(`with <code>${ext}</code> extension`);
+    }
+
     if (dirname && dirname !== '.' && dirname !== path) {
-      return `List files in <strong>${dirname}</strong>`;
-    } else {
+      parts.push(`in <strong>${dirname}</strong>`);
+    }
+
+    if (parts.length === 0) {
       return 'List files';
     }
+
+    return `List files ${parts.join(' ')}`;
   }
   
   if (cmd.match(/^Search-InFiles/i)) {
     const pattern = getQuotedParam('Pattern') || getParam('Pattern');
     
     if (pattern) {
-      return `Search <code>${esc(pattern)}</code>`;
+      return `Search with pattern <code>${esc(pattern)}</code>`;
     }
     
     return 'Search files';

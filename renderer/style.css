@@ -8776,6 +8776,7 @@ button:disabled .btn-icon {
 
 .command-output[aria-hidden="true"] {
   margin: 0 !important;
+  border-top: 0px solid transparent !important;
 }
 
 .command-input .command-header {

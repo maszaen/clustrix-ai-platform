@@ -60,37 +60,37 @@ const DANGEROUS_PATTERNS = [
 // ===================================
 const STATE_RESPONSE_FORMATS = {
   [AGENT_STATES.EXPLORE]: {
-    format: '<state>EXPLORE</state>\n<hidden>thinking where to look</hidden>\n<cmd>search command</cmd>',
+    format: '<state><Next state></state>\n<hidden>thinking where to look</hidden>\n<cmd>search command</cmd>',
     useHidden: true,
     useAnswer: false,
   },
   [AGENT_STATES.READ]: {
-    format: '<state>READ</state>\n<cmd>read command</cmd>',
+    format: '<state><Next state></state>\n<cmd>read command</cmd>',
     useHidden: false,
     useAnswer: false,
   },
   [AGENT_STATES.UNDERSTAND]: {
-    format: '<state>UNDERSTAND</state>\n<hidden>detailed analysis</hidden>\n<answer>key insights for user</answer>',
+    format: '<state><Next state></state>\n<hidden>detailed analysis</hidden>\n<answer>key insights for user</answer>',
     useHidden: true,
     useAnswer: true,
   },
   [AGENT_STATES.EDIT]: {
-    format: '<state>EDIT</state>\n<answer>what is being changed and why</answer>\n<cmd>edit command</cmd>',
+    format: '<state><Next state></state>\n<answer>what is being changed and why</answer>\n<cmd>edit command</cmd>',
     useHidden: false,
     useAnswer: true,
   },
   [AGENT_STATES.EXECUTE]: {
-    format: '<state>EXECUTE</state>\n<hidden>why running this</hidden>\n<cmd>run command</cmd>',
+    format: '<state><Next state></state>\n<hidden>why running this</hidden>\n<cmd>run command</cmd>',
     useHidden: true,
     useAnswer: false,
   },
   [AGENT_STATES.VERIFY]: {
-    format: '<state>VERIFY</state>\n<answer>verification result</answer>\n<cmd>check command (optional)</cmd>',
+    format: '<state><Next state></state>\n<answer>verification result</answer>\n<cmd>check command (optional)</cmd>',
     useHidden: false,
     useAnswer: true,
   },
   [AGENT_STATES.DONE]: {
-    format: '<state>DONE</state>\n<answer>summary of what was done</answer>\n<saved_state>UNDERSTAND</saved_state>\n<!END>',
+    format: '<state><Next state></state>\n<answer>summary of what was done</answer>\n<saved_state><Next state></saved_state>\n<!END>',
     useHidden: false,
     useAnswer: true,
   },
@@ -197,7 +197,7 @@ const STATE_RULES = {
 // ===================================
 // CORE SYSTEM PROMPT (State-Aware)
 // ===================================
-const SYSTEM_PROMPT = `You are an AI coding assistant. You use PowerShell commands to explore, read, edit, and execute code in projects. Work in STATES for efficiency.
+const SYSTEM_PROMPT = `You are an AI fast and helpfull coding assistant. You have capabilities to use PowerShell commands to explore, read, edit, and execute code in projects.
 
 **RESPONSE FORMAT:**
 {state_format}
@@ -238,7 +238,6 @@ IMPORTANT: Check memory BEFORE reading files!
 
 **FORMAT RULES (CRITICAL):**
 - Commands MUST be in <cmd>...</cmd>, NEVER in <answer> or plain text
-- Command output shows MEMORY STATE (cumulative file view)
 - NEVER repeat file reads if already in memory
 - Each response: ONE purpose (search OR read OR edit OR answer)
 {state_rules}{command_reference}`;
@@ -404,7 +403,7 @@ const PROMPT_SUBSEQUENT = `
 === COMMAND HISTORY ===
 {command_history}
 
-=== LAST COMMAND ===
+=== LAST COMMAND (dont execute again) ===
 Command: {last_command}
 Output:
 {last_output}

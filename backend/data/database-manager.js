@@ -278,6 +278,8 @@ class DatabaseManager {
     ensureColumn('messages', 'sequence', 'INTEGER');
     ensureColumn('messages', 'updated_at', 'INTEGER');
 
+    ensureColumn('memory', 'total_lines', 'INTEGER');
+
     this.migrateMemoryTable();
   }
 
@@ -802,14 +804,14 @@ class DatabaseManager {
   }
 
   // Memory persistence methods
-  saveMemory(sessionId, memoryName, filePath, startLine, endLine, content, ownerType = 'code') {
+  saveMemory(sessionId, memoryName, filePath, startLine, endLine, content, ownerType = 'code', totalLines = null) {
     const normalizedType = ownerType === 'session' ? 'session' : 'code';
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO memory (session_id, memory_name, file_path, start_line, end_line, content, created_at, updated_at, owner_type)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO memory (session_id, memory_name, file_path, start_line, end_line, content, created_at, updated_at, owner_type, total_lines)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const now = Date.now();
-    return stmt.run(sessionId, memoryName, filePath, startLine, endLine, JSON.stringify(content), now, now, normalizedType);
+    return stmt.run(sessionId, memoryName, filePath, startLine, endLine, JSON.stringify(content), now, now, normalizedType, totalLines);
   }
 
   getMemory(sessionId, memoryName = null, ownerType = 'code') {

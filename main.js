@@ -140,13 +140,13 @@ initializeCodeAgent({
     }
     return db.getMemory(sessionId, memoryName, ownerType);
   },
-  saveMemory: (sessionId, memoryName, filePath, startLine, endLine, content, ownerType = 'code') => {
+  saveMemory: (sessionId, memoryName, filePath, startLine, endLine, content, ownerType = 'code', totalLines = null) => {
     if (!useSQLite || !db) {
       db = new DatabaseManager(app);
       invalidateUsageStatisticsCache();
       useSQLite = true;
     }
-    return db.saveMemory(sessionId, memoryName, filePath, startLine, endLine, content, ownerType);
+    return db.saveMemory(sessionId, memoryName, filePath, startLine, endLine, content, ownerType, totalLines);
   },
   deleteMemory: (sessionId, memoryName, ownerType = 'code') => {
     if (!useSQLite || !db) {
@@ -447,8 +447,8 @@ app.whenReady().then(async () => {
     log: logHelper,
     getCodeById: (id) => db?.getCode?.(id),
     getMemory: (sessionId, memoryName, ownerType = 'code') => db?.getMemory?.(sessionId, memoryName, ownerType),
-    saveMemory: (sessionId, memoryName, filePath, startLine, endLine, content, ownerType = 'code') =>
-      db?.saveMemory?.(sessionId, memoryName, filePath, startLine, endLine, content, ownerType),
+    saveMemory: (sessionId, memoryName, filePath, startLine, endLine, content, ownerType = 'code', totalLines = null) =>
+      db?.saveMemory?.(sessionId, memoryName, filePath, startLine, endLine, content, ownerType, totalLines),
     deleteMemory: (sessionId, memoryName, ownerType = 'code') => db?.deleteMemory?.(sessionId, memoryName, ownerType),
     clearAllMemory: (sessionId, ownerType = 'code') => db?.clearAllMemory?.(sessionId, ownerType),
   });

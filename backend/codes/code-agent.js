@@ -9,13 +9,10 @@ const { joinEndpoint } = require('../integration/langchain-helpers');
 const { getRipgrepPath } = require('../../utils/ripgrep-path');
 const {
   AGENT_STATES,
-  DANGEROUS_PATTERNS,
-  SYSTEM_PROMPT,
   PROMPT_FIRST,
   PROMPT_SUBSEQUENT,
   detectDangerousCommand,
   buildStatePrompt,
-  getCommandReference,
   getErrorGuidance,
 } = require('./codes-prompt');
 const MAX_ITERATIONS = 200;
@@ -168,7 +165,7 @@ function buildMemoryStructures(persistedMemory = []) {
     }
 
     if (!memories[mem.memory_name].files[mem.file_path]) {
-      memories[mem.memory_name].files[mem.file_path] = { ranges: [] };
+      memories[mem.memory_name].files[mem.file_path] = { ranges: [], totalLines: mem.total_lines || null };
     }
 
     memories[mem.memory_name].files[mem.file_path].ranges.push({
@@ -409,7 +406,7 @@ function addToMemory(
   if (memoryOwnerId) {
     const ownerType = state?.memoryOwnerType || 'code';
     try {
-      deps.saveMemory?.(memoryOwnerId, memoryName, filePath, startLine, endLine, lines, ownerType);
+      deps.saveMemory?.(memoryOwnerId, memoryName, filePath, startLine, endLine, lines, ownerType, fileMemory.totalLines);
     } catch (error) {
       log('CODES', 3, 'addToMemory', 'Failed to persist memory to database', {
         sessionId: memoryOwnerId,
@@ -430,7 +427,7 @@ function formatMemoryOutput(state) {
 
   for (const [memName, memory] of Object.entries(state.memories || {})) {
     if (visibleMemories.includes(memName)) {
-      output.push(`=== ACTIVE MEMORY: ${memName} ===\n`);
+      output.push(`===> ACTIVE MEMORY (${memName})`);
 
       for (const [filePath, fileData] of Object.entries(memory.files || {})) {
         // Calculate total explored lines
@@ -440,7 +437,29 @@ function formatMemoryOutput(state) {
         }
 
         const totalLinesInfo = fileData.totalLines ? ` (${fileData.totalLines} lines total, ${totalExplored} explored)` : '';
+        
+        // If totalLines is null, try to get it from file system
+        if (fileData.totalLines === null) {
+          try {
+            const fullPath = path.resolve(process.cwd(), filePath);
+            if (fs.existsSync(fullPath)) {
+              const content = fs.readFileSync(fullPath, 'utf8');
+              fileData.totalLines = content.split(/\r?\n/).length;
+            }
+          } catch (e) {
+            // Ignore errors
+          }
+        }
+
         output.push(`/${filePath}${totalLinesInfo}`);
+
+        // Debug logging
+        console.log('CODES', 4, 'formatMemoryOutput', 'File memory debug', {
+          filePath,
+          rangesCount: fileData.ranges.length,
+          totalLines: fileData.totalLines,
+          ranges: fileData.ranges.map(r => ({ start: r.start, end: r.end }))
+        });
 
         for (const range of fileData.ranges) {
           for (let i = 0; i < range.lines.length; i++) {
@@ -803,7 +822,7 @@ function summarizeOutput(output = '', exitCode = 0) {
   return `${singleLine.slice(0, HISTORY_SUMMARY_LENGTH)}…`;
 }
 
-function formatCommandHistory(history = []) {
+function formatCommandHistory(history = [], lastHidden = null) {
   if (!history.length) {
     return 'No commands executed yet.';
   }
@@ -816,19 +835,30 @@ function formatCommandHistory(history = []) {
 
   // Older commands: show ONLY command + summary (no output)
   if (olderHistory.length > 0) {
-    parts.push('=== PREVIOUS COMMANDS ===');
+    parts.push('## PREVIOUS COMMANDS:');
     parts.push(olderHistory.map((entry, index) => {
       const idx = history.length - recentHistory.length + index + 1;
       return `#${idx}: ${entry.command}`;
     }).join('\n'));
+    parts.push(''); // Add blank line after previous commands
   }
 
   // Last command: show FULL output for current context
   if (lastCommand) {
     const idx = history.length;
     const output = truncateOutput(lastCommand.output || 'No output', 'full');
-    parts.push(`\n=== RECENT COMMAND (iteration #${idx} - dont execute again) ===`);
-    parts.push(`${lastCommand.command}\nOutput:\n${output}\nExit Code: ${lastCommand.exitCode}`);
+    parts.push(`# LAST COMMAND (iteration #${idx} - dont execute again):`);
+    parts.push(lastCommand.command);
+    parts.push('Full output, not truncated:');
+    parts.push(output);
+    parts.push(`Exit Code: ${lastCommand.exitCode}`);
+  }
+
+  // Add last hidden content if available
+  if (lastHidden) {
+    parts.push('');
+    parts.push(`# INTERNAL THOUGHT/TO-DO CREATED BY YOUR LAST COMMAND:`);
+    parts.push(lastHidden);
   }
 
   return parts.join('\n');
@@ -848,18 +878,27 @@ function getLastCommand(history = []) {
   };
 }
 
-function buildUserPrompt({ userPrompt, instruction, workspacePath, savedState }) {
+function buildUserPrompt({ userPrompt, instruction, workspacePath, savedState, currentState }) {
   const parts = [];
-  if (instruction) {
-    parts.push(`=== WORKSPACE INSTRUCTION ===\n${instruction}`);
-  }
+  parts.push(`# USER PROMPT:\n${userPrompt}`);
+
   if (workspacePath) {
-    parts.push(`Workspace: ${workspacePath}`);
+    parts.push(`# WORKSPACE PATH:\n${workspacePath}`);
+  }
+  if (instruction || currentState) {
+    parts.push(`# [CORE FOCUS] WORKSPACE/STATE INSTRUCTION:\n${instruction}`);
+    if (currentState) {
+      const { STATE_RULES, AGENT_STATES } = require('./codes-prompt');
+      const stateRules = STATE_RULES[currentState] || '';
+      if (stateRules) {
+        parts.push(`${stateRules}`);
+      }
+    }
   }
   if (savedState) {
-    parts.push(`=== CONTINUATION FROM PREVIOUS SESSION ===\nPrevious session ended in ${savedState} state. Continue from where we left off.`);
+    parts.push(`# CONTINUATION FROM PREVIOUS SESSION:\nPrevious session ended in ${savedState} state. Continue from where we left off.`);
   }
-  parts.push(`=== USER PROMPT ===\n${userPrompt}`);
+  
   return parts.join('\n\n');
 }
 
@@ -932,10 +971,6 @@ function detectErrorContext(commandHistory = []) {
 }
 
 function renderSystemPrompt(template, { userPrompt, commandHistory, commandHistoryArray, lastCommand, iteration = 0, previousMessagesHistory = '', currentState, memoryState, currentMemory, lastHidden }) {
-  // V2: STATE-BASED PROMPTING
-  // Use AI-declared current state
-
-  // Check if last output > 10 lines for dynamic injection
   const lastOutputLines = (lastCommand.output || '').split(/\r?\n/).length;
 
   // 1. Summary REMINDER for PROMPT_SUBSEQUENT (task section)
@@ -962,18 +997,19 @@ function renderSystemPrompt(template, { userPrompt, commandHistory, commandHisto
     ? `${statePrompt}\n\n${errorGuidance}`
     : statePrompt;
 
+  const assistantPersona = 'You are Clustrix, a fast and helpful AI coding assistant. You have the capability to use PowerShell commands to explore, read, edit, and execute code in projects.\n\n';
+
   // Inject previous messages history before current user prompt
   const fullContext = previousMessagesHistory
-    ? `${previousMessagesHistory}\n=== CURRENT USER PROMPT ===\n{user_prompt}`
+    ? `===> PREVIOUS MESSAGE INDEX\n${previousMessagesHistory}---\n\n===> RECENT MESSAGE INDEX\n{user_prompt}`
     : '{user_prompt}';
 
   return template
-    .replace('{user_prompt}', fullContext)
+    .replace('{user_prompt}', assistantPersona + fullContext)
     .replace('{command_history}', commandHistory)
     .replace('{last_command}', lastCommand.command)
     .replace('{last_output}', lastCommand.output)
     .replace('{summary_reminder}', summaryReminder)
-    .replace('{last_hidden}', lastHidden ? `\n=== THE TODO CREATED BY YOUR LAST COMMAND (iteration #${iteration}) ===\n${lastHidden}\n` : '')
     .replace('{common_command}', finalSystemPrompt)
     .replace('{user_prompt}', userPrompt); // Replace the placeholder with actual user prompt
 }
@@ -1418,7 +1454,6 @@ function callOpenAICompatibleChat({ baseUrl, provider, apiKey, model, messages }
     req.end();
   });
 }
-
 async function runAgentIteration({
   iteration,
   state,
@@ -1431,7 +1466,7 @@ async function runAgentIteration({
   sessionId,
   isContinuationSession = false,
 }) {
-  const commandHistoryText = formatCommandHistory(state.commandHistory);
+  const commandHistoryText = formatCommandHistory(state.commandHistory, state.lastHidden);
   const lastCommand = getLastCommand(state.commandHistory);
 
   // Load previous message iterations from database and format into system prompt
@@ -1449,31 +1484,35 @@ async function runAgentIteration({
         for (let i = 0; i < userMessages.length; i++) {
           const msgIndex = userMessages[i].message_index;
           const msgContent = userMessages[i].content;
+          const isLastMessage = i === userMessages.length - 1; // Check if this is the last message in history
 
           // Load iterations for this message
-          const iterations = db.getCodeIterations?.(sessionId, msgIndex) || [];
+          const iterationIndex = db.getCodeIterations?.(sessionId, msgIndex) || [];
 
           // Load assistant response for this message
           const assistantMessage = dbMessages.find(m => m.role === 'assistant' && m.message_index === msgIndex);
 
-          if (iterations.length > 0 || assistantMessage) {
-            historyParts.push(`\nPREVIOUS CONVERSATION (message ${msgIndex}):`);
-            historyParts.push(`User: ${msgContent}`);
-            
-            if (assistantMessage) {
-              historyParts.push(`Assistant: ${assistantMessage.content}`);
-            }
+          if (iterationIndex.length > 0 || assistantMessage) {
+            historyParts.push(`# INDEX ${i + 1} PREVIOUS PROMPT:`);
+            historyParts.push(`${msgContent[0].toUpperCase()}${msgContent.slice(1)}`);
+            historyParts.push(''); // blank line
 
-            if (iterations.length > 0) {
-              historyParts.push('\n=== COMMAND HISTORY ===');
-              iterations.forEach((iter, idx) => {
+            if (iterationIndex.length > 0) {
+              historyParts.push(`# INDEX ${i + 1} PREVIOUS COMMAND:`);
+              iterationIndex.forEach((iter, idx) => {
                 const cmd = iter.command || '[no command]';
-                const output = iter.output || 'No output';
-                const exitCode = iter.exit_code ?? 0;
-                historyParts.push(`#${idx + 1} ${cmd}`);
-                historyParts.push(`Output:\n${output}`);
-                historyParts.push(`Exit Code: ${exitCode}\n`);
+                historyParts.push(`#${idx + 1}: ${cmd}`);
+                
+                // // For the last message in history, include output of the last iteration
+                // if (isLastMessage && idx === iterationIndex.length - 1) {
+                //   const output = iter.output || 'No output';
+                //   const exitCode = iter.exit_code ?? 0;
+                //   historyParts.push(`Command output #${idx + 1}:`);
+                //   historyParts.push(output);
+                //   historyParts.push(`Exit Code: ${exitCode}`);
+                // }
               });
+              historyParts.push(''); // blank line after history
             }
           }
         }
@@ -1507,9 +1546,9 @@ async function runAgentIteration({
   });
 
   // Debug: Log processed prompt for each iteration
-  console.log('\n\n=== CODE AGENT ITERATION #' + iteration + ' - SYSTEM PROMPT ===');
-  console.log(systemPrompt);
-  console.log('=== END SYSTEM PROMPT ===\n\n');
+  console.log('\n\n<==>===== CODE AGENT ITERATION #' + iteration + ' - SYSTEM PROMPT =====<==>');
+  console.log(systemPrompt.trim());
+  console.log('<==>===== END SYSTEM PROMPT =====<==>\n\n');
 
   // Build messages array - OPTIMIZED for token efficiency
   let messages;
@@ -1518,7 +1557,7 @@ async function runAgentIteration({
     // First iteration OF THIS REQUEST
     // Previous iterations loaded into system prompt, not message bodies
     messages = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: systemPrompt.trim() },
       { role: 'user', content: userPrompt }, // Current request
     ];
 
@@ -1530,7 +1569,7 @@ async function runAgentIteration({
     // Subsequent iterations: rebuild messages with CURRENT system prompt
     // Include: system + conversationHistory (current request iterations)
     messages = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: systemPrompt.trim() },
       ...state.conversationHistory, // Current request's iteration history
     ];
   }
@@ -1560,7 +1599,7 @@ async function runAgentIteration({
   const parsed = parseAgentResponse(response.content || '');
 
   // V2: Log parsed response structure for debugging
-  console.log('=== PARSED RESPONSE ===');
+  console.log('===== PARSED RESPONSE =====');
   console.log('Hidden:', parsed.hidden ? `"${parsed.hidden.substring(0, 100)}${parsed.hidden.length > 100 ? '...' : ''}"` : 'null');
   console.log('Answer:', parsed.answer ? `"${parsed.answer.substring(0, 100)}${parsed.answer.length > 100 ? '...' : ''}"` : 'null');
   console.log('Command:', parsed.command ? `"${parsed.command.substring(0, 100)}${parsed.command.length > 100 ? '...' : ''}"` : 'null');
@@ -1570,7 +1609,7 @@ async function runAgentIteration({
   console.log('Todo:', parsed.todo ? 'present' : 'null');
   console.log('Checklist:', parsed.checklist ? 'present' : 'null');
   console.log('Summary:', parsed.summary ? 'present' : 'null');
-  console.log('=== END PARSED RESPONSE ===\n\n');
+  console.log('===== END PARSED RESPONSE =====\n\n');
 
   // Update current state based on AI declaration
   if (parsed.state && AGENT_STATES[parsed.state]) {
@@ -1701,12 +1740,32 @@ async function executeCommand(state, command, options = {}) {
       }
 
       editResult.files.forEach(file => {
+        // Clear old memory for this file
         clearFileFromMemories(state, file.filePath);
-        file.snippets.forEach(snippet => {
-          if (snippet.lines.length > 0) {
-            addToMemory(state, file.filePath, snippet.start, snippet.end, snippet.lines, state.currentMemory, memoryOwnerId);
+        
+        // Update memory with entire edited file content
+        const fs = require('fs');
+        const path = require('path');
+        try {
+          const fullPath = path.resolve(state.workspacePath || process.cwd(), file.filePath);
+          if (fs.existsSync(fullPath)) {
+            const content = fs.readFileSync(fullPath, 'utf8');
+            const lines = content.split(/\r?\n/);
+            // Add entire file to memory (start from line 1)
+            addToMemory(state, file.filePath, 1, lines.length, lines, state.currentMemory, memoryOwnerId, lines.length);
+            
+            log('CODES', 3, 'executeCommand', 'Updated memory with full file after edit', {
+              filePath: file.filePath,
+              totalLines: lines.length,
+              memoryName: state.currentMemory
+            });
           }
-        });
+        } catch (error) {
+          log('CODES', 2, 'executeCommand', 'Failed to update memory after edit', {
+            filePath: file.filePath,
+            error: error.message
+          });
+        }
 
         if (!Array.isArray(state.editHistory)) {
           state.editHistory = [];
@@ -1913,11 +1972,11 @@ async function executeCommand(state, command, options = {}) {
       if (isSearchCommand) {
         output = hasNewMemoryContent
           ? 'Search result already saved in memory.'
-          : 'You have explored this line, try another search.';
+          : 'You have explored this line, search result saved to memory.';
       } else if (isShowFileCommand) {
         output = hasNewMemoryContent
           ? 'File content saved to memory.'
-          : 'You have explored this line, try another search.';
+          : 'You have explored this line, search result saved to memory.';
       } else {
         output = `${combinedOutput}\n\n[Content saved to memory '${memoryName}'.\nTip: Use 'Show-Memory ${memoryName}' to view more (only if memory is truncated).]`;
       }
@@ -2026,6 +2085,7 @@ async function processCodeRequest({
     instruction: state.instruction,
     workspacePath: state.workspacePath,
     savedState: !isContinuationSession && state.currentState !== AGENT_STATES.EXPLORE ? state.currentState : null,
+    currentState: state.currentState,
   });
 
   // Get current message index for this request

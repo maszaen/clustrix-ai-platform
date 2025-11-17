@@ -1851,6 +1851,7 @@ input:checked + .slider:before {
 
 .project-left-column {
   flex: 1;
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -1898,6 +1899,18 @@ input:checked + .slider:before {
   display: flex;
   flex-direction: column;
   overflow-y: scroll;
+}
+
+.project-sessions::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0px;
+  width: 8px;
+  height: 50%;
+  z-index: 70;
+  background: linear-gradient(to top, var(--bg), transparent);
+  pointer-events: none;
 }
 
 .project-sessions-list {
@@ -2334,6 +2347,18 @@ input:checked + .slider:before {
   padding: 0 22px 0 30px;
   max-width: 820px;
 }
+
+/* #chats-list::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0px;
+  width: 8px;
+  height: 50%;
+  z-index: 70;
+  background: linear-gradient(to top, var(--fg), transparent);
+  pointer-events: none;
+} */
 
 #chats-page .chats-list {
   display: flex;

@@ -1906,13 +1906,13 @@ async function executeCommand(state, command, options = {}) {
       if (isSearchCommand) {
         output = hasNewMemoryContent
           ? 'Search result already saved in memory.'
-          : 'You have explored this line in this file, try another search.';
+          : 'You have explored this line, try another search.';
       } else if (isShowFileCommand) {
         output = hasNewMemoryContent
           ? 'File content saved to memory.'
-          : 'You have explored this line in this file, try another search.';
+          : 'You have explored this line, try another search.';
       } else {
-        output = `${combinedOutput}\n\n[Content saved to memory '${memoryName}'. Use 'Show-Memory ${memoryName}' to view.]`;
+        output = `${combinedOutput}\n\n[Content saved to memory '${memoryName}'.\nTip: Use 'Show-Memory ${memoryName}' to view more (only if memory is truncated).]`;
       }
     } else {
       output = combinedOutput || 'Command completed with no output.';
@@ -1939,8 +1939,8 @@ async function executeCommand(state, command, options = {}) {
       }
 
       const timeoutMessage = isBackground 
-        ? 'Background process started successfully and is running. Terminal reset for next command.'
-        : 'Terminal execution failed or timeout, please try again with different command';
+        ? '[Executed] Background process has been redirected to another terminal'
+        : '[Failed] Terminal execution failed or timeout, please try again with different command';
 
       // For background processes, timeout is considered success
       if (isBackground) {
@@ -1965,7 +1965,7 @@ async function executeCommand(state, command, options = {}) {
     }
 
     return {
-      output: `Failed to execute command: ${error?.message || error}`,
+      output: `Failed to execute: ${error?.message || error}`,
       exitCode: 1,
       blocked: false,
       executed: false,

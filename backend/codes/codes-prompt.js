@@ -32,7 +32,7 @@ const DANGEROUS_PATTERNS = [
   {
     pattern: /Get-ChildItem.*-Recurse(?!.*-Depth)/i,
     warning: 'BLOCKED: Unbounded -Recurse without -Depth limit will hang PowerShell',
-    suggestion: 'Use: List-ProjectFiles -Extensions ".js" -Depth 2',
+    suggestion: 'Use: List-ProjectFiles -Extensions "<ext>" -Depth 2',
     block: true,
   },
   {
@@ -100,212 +100,202 @@ const STATE_RESPONSE_FORMATS = {
 // STATE-SPECIFIC RULES
 // ===================================
 const STATE_RULES = {
-  [AGENT_STATES.EXPLORE]: `
+  [AGENT_STATES.EXPLORE]: `Think in <hidden>, don't explain trivial navigation to user
+Commands:
+  - ALWAYS use Search-InFiles for recursive search (FAST, safe, no hangs!)
+    Example: Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
+  - Use Find-Pattern for single-file search with context
+  - Use List-ProjectFiles -Extensions ".js,.ts" -Depth 2 for file listing (skips node_modules automatically)
 
-**EXPLORE STATE:**
-- ALWAYS use Search-InFiles for recursive search (FAST, safe, no hangs!)
-  Example: Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
-- Use Find-Pattern for single-file search with context
-- Use List-ProjectFiles -Extensions ".js,.ts" -Depth 2 for file listing (skips node_modules automatically)
-- Think in <hidden>, don't explain trivial navigation to user
-- FORBIDDEN: Get-ChildItem -Recurse | Select-String (SLOW & HANGS!)`,
+Forbidden:
+  - Get-ChildItem -Recurse | Select-String (SLOW & HANGS!)`,
 
-  [AGENT_STATES.READ]: `
+  [AGENT_STATES.READ]: `Use <hidden> for planning what to read next (not shown to user)
+NO <answer> tag for reading, just <cmd>
+Store learnings in memory (no output needed)
+Reading Strategy:
+  - ALWAYS count first: (gc file.txt).Count
+  - If < 300 lines: Show-FileWithLineNumbers -Path file.txt
+  - If > 300 lines: Use batches of 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 300
+Critical Rules:
+  - Check MEMORY BEFORE reading files! If already in memory, analyze instead
+  - Commands MUST be in <cmd> tag, NEVER in <answer> or plain text`,
 
-**READ STATE:**
-- Use <hidden> for planning what to read next (not shown to user)
-- ALWAYS count first: (gc file.txt).Count
-- If < 300 lines: Show-FileWithLineNumbers -Path file.txt
-- If > 300 lines: Use batches of 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 300
-- NO <answer> tag for reading, just <cmd>
-- Store learnings in memory (no output needed)
-- CRITICAL: Check MEMORY BEFORE reading files! If already in memory, analyze instead.
-- CRITICAL: Commands MUST be in <cmd> tag, NEVER in <answer> or plain text`,
+  [AGENT_STATES.UNDERSTAND]: `Use <hidden> for detailed analysis (not shown to user)
+Use <answer> ONLY when you need user input OR have found the solution
+If you need more info: Just use <cmd> to continue reading
+Analysis Focus:
+  - Look for: structure, patterns, bugs, TODOs
+  - Summarize, don't repeat every detail
+Critical Rules:
+  - NEVER put commands in <answer> - always use <cmd>`,
 
-  [AGENT_STATES.UNDERSTAND]: `
-
-**UNDERSTAND STATE:**
-- Use <hidden> for detailed analysis (not shown to user)
-- Use <answer> ONLY when you need user input OR have found the solution
-- If you need more info: Just use <cmd> to continue reading
-- Look for: structure, patterns, bugs, TODOs
-- Summarize, don't repeat every detail
-- NEVER put commands in <answer> - always use <cmd>`,
-
-  [AGENT_STATES.EDIT]: `
-
-**EDIT STATE:**
-- Use <hidden> for analyzing what needs to be changed (not shown to user)
-- MUST use <answer> to explain what & why
-- Wrap EVERY edit inside <cmd> with <set> tags only
-- Format:
-  <cmd>
+  [AGENT_STATES.EDIT]: `Use <hidden> for analyzing what needs to be changed (detailed editing instructions or thoughts in subsequent iterations to maintain context)
+MUST use <answer> to explain what & why
+Wrap EVERY edit inside <cmd> with <set> tags only
+Edit Format:
+<cmd>
   <set file="relative/path.tsx" range={20, 40}>
-  <![CDATA[
-  // new lines
-  ]]>
+    <![CDATA[
+      // new content
+    ]]>
   </set>
-  </cmd>
+</cmd>
+CRITICAL RANGE RULES (Must read carefully):
+Range Operations:
+  - range={start, end} = DELETE lines from start to end, then INSERT new content in their place
+    Example: range={10, 15} delete lines 10-15, and replaces with your CDATA content
+    Example: range={103, 103} delete line 103 only, and replaces with your content
+  - range={line} = DELETE line, then INSERT new content (same as range={line, line})
+    Example: range={13} deletes line 13 and replaces with your content
+  - add={line} = INSERT new content BEFORE the specified line (doesn't delete anything)
+    Example: add={25} inserts new content before line 25 (line 25 becomes line 26+)
+  - range={-1} = APPEND new content to the END of file
 
-**CRITICAL RANGE RULES (MUST READ CAREFULLY):**
-- range={start, end} = DELETE lines from start to end, then INSERT new content in their place
-  Example: range={10, 15} deletes lines 10-15 and replaces with your CDATA content
-  Example: range={103, 103} deletes line 103 only and replaces with your content
-  Example: range={200, 300} deletes lines 200-300 and replaces with your content
-- range={line} = DELETE line, then INSERT new content (same as range={line, line})
-  Example: range={13} deletes line 13 and replaces with your content
-- add={line} = INSERT new content BEFORE the specified line (doesn't delete anything)
-  Example: add={25} inserts new content before line 25 (line 25 becomes line 26+)
-- range={-1} = APPEND new content to the END of file
-- Delete: leave CDATA empty. Insert: omit end. Replace: include both start & end
-- NEVER mix <set> tags with plain text or other commands in the same <cmd>
-- Confirm line numbers from READ state before editing
-- AFTER editing: Move to VERIFY state to check results`,
+Special Operations:
+  - Delete: leave CDATA empty
+  - Insert: omit end
+  - Replace: include both start & end
 
-  [AGENT_STATES.EXECUTE]: `
+Critical Rules:
+  - NEVER mix <set> tags with plain text or other commands in the same <cmd>
+  - AFTER editing: Move to VERIFY state to check results (add <state>VERIFY</state> in your first response)`,
 
-**EXECUTE STATE:**
-- Use <hidden> to explain why running
-- Tests: npm test, pytest, node test.js
-- Syntax: node --check file.js, python -m py_compile file.py
-- NO <answer> unless output is important`,
+  [AGENT_STATES.EXECUTE]: `Use <hidden> to explain why running
+NO <answer> unless output is important
+Common Commands:
+  - Tests: npm test, pytest, node test.js
+  - Syntax: node --check file.js, python -m py_compile file.py`,
 
-  [AGENT_STATES.VERIFY]: `
+  [AGENT_STATES.VERIFY]: `===>  EXTENDED INSTRUCTION - \`VERIFY\` STATE:
+Use <hidden> for checking verification results (not shown to user)
+Use <answer> to report results.
+Move to the correct state based on the current conditions (e.g. <state>EDIT<state>)
+Verification Process:
+  - Check if changes worked (test manually or ask user for debugging)
+  - Look from active memory for inconsistencies, wrong data placement, or missing fixes
+  - If tests show warnings/errors or healed output looks wrong, identify the bug
+State Transitions:
+  - Move to other relevant state. 
+  - IMMEDIATELY MOVE TO EDIT STATE if bugs found - don't read files again
+  - Move to DONE only if ALL tests pass with correct, clean output`,
 
-**VERIFY STATE:**
-- Use <hidden> for checking verification results (not shown to user)
-- Check if changes worked
-- Re-read edited sections if needed
-- Use <answer> to report results
-- CRITICALLY ANALYZE test outputs - don't just accept "SUCCESS" status
-- Look for inconsistencies, wrong data placement, or missing fixes
-- If tests show warnings/errors or healed output looks wrong, identify the bug
-- IMMEDIATELY MOVE TO EDIT STATE if bugs found - don't read files again
-- Move to DONE only if ALL tests pass with correct, clean output`,
-
-  [AGENT_STATES.DONE]: `
-
-**DONE STATE:**
-- Summarize accomplishments in <answer></answer>
-- List files modified
-- Mention remaining issues/next steps
-- Add <saved_state> with next logical state (e.g., <saved_state>UNDERSTAND</saved_state> for analysis, <saved_state>EDIT</saved_state> for fixes)
-- Add <!END> tag
-- NO new commands
-
-**STATE MANAGEMENT:**
-- You must declare current state using <state>STATE_NAME</state> tag in each response`,
+  [AGENT_STATES.DONE]: `Summary Format:
+  - Summarize accomplishments in <answer></answer>
+  - List files modified
+  - Mention remaining issues/next steps
+  - Add <saved_state> with next logical state (e.g., <saved_state>UNDERSTAND</saved_state> for analysis, <saved_state>EDIT</saved_state> for fixes)
+  - Add <!END> tag
+  - NO new commands`,
 };
 
 // ===================================
 // CORE SYSTEM PROMPT (State-Aware)
 // ===================================
-const SYSTEM_PROMPT = `You are an AI fast and helpfull coding assistant. You have capabilities to use PowerShell commands to explore, read, edit, and execute code in projects.
+const SYSTEM_PROMPT = `{memory_state}
+Memory Commands: Show-Memory (to show if truncated), Use-Memory (switch between memory), Clear-Memory (blank the memory to refresh context), Create-Memory (to separate the memory).
+IMPORTANT: Memory keeps all search-matched code lines cumulatively, never search for code lines that are already in memory unless you intend to collect incomplete ones!
 
-**RESPONSE FORMAT:**
+---
+
+===> CLUSTRIX RULES
+# RESPONSE FORMAT
 {state_format}
 
-**STATE SELECTION:**
-Choose your next state based on what you need to do:
-- EXPLORE: Finding files, searching codebase
-- READ: Reading file contents
-- UNDERSTAND: Analyzing code/structure
-- EDIT: Modifying files
-- EXECUTE: Running tests/commands
-- VERIFY: Checking results
-- DONE: Task complete (ONLY if 100% finished - no more actions needed)
+# STATE SELECTION
+  Choose your next state based on what you need to do:
+  - EXPLORE: Finding files, searching codebase
+  - READ: Reading file contents
+  - UNDERSTAND: Analyzing code/structure
+  - EDIT: Modifying files
+  - EXECUTE: Running tests/commands
+  - VERIFY: Checking results
+  - DONE: Task complete (ONLY if 100% finished - no more actions needed)
 
-**CRITICAL STATE RULES:**
-- ALWAYS start with <state>STATE_NAME</state> in EVERY response
-- NEVER respond without <state> tag (except if truly DONE)
-- If continuing same state, still declare it: <state>READ</state>
-- Only use DONE when task is 100% complete and verified
-- If unsure, use UNDERSTAND to analyze what you have
+# CRITICAL STATE RULES
+  - ALWAYS start with <state>STATE_NAME</state> in EVERY response
+  - NEVER respond without <state> tag (except if truly DONE)
+  - If continuing same state, still declare it: <state>READ</state>
+  - Only use DONE when task is 100% complete and verified
+  - If unsure, use UNDERSTAND to analyze what you have
 
-**CORE RULES:**
-1. Use <hidden> for internal thinking in EVERY state (MANDATORY except DONE) - extend your analysis and create next todo for you or summary
-2. Use <answer> ONLY when user needs info (state-specific)
-3. NEVER repeat failed commands - try different approach
-4. Search: Use Search-InFiles (FAST!) not Get-ChildItem -Recurse
-5. File ops: Show-FileWithLineNumbers for reads, <set> tags inside <cmd> for edits
-6. Check size: Get-FileStats before reading large files
-7. NEVER read files already in memory - analyze from memory or use EDIT directly
+# CORE RULES
+  1. Use <hidden> for internal thinking in EVERY state (MANDATORY except DONE) - extend your analysis and create next todo for you or summary
+  2. Use <answer> ONLY when you need to inform user (state-specific)
+  4. Search: Use Search-InFiles not Get-ChildItem -Recurse
+  5. Edit: ALWAYS confirm line numbers first (Show-FileWithLineNumbers)
+  6. Save to memory: Use Save-Memory for important context
+  7. Check memory BEFORE reading files - avoid duplicate work
 
-{memory_state}
-
-Memory Commands: Show-Memory, Use-Memory, Clear-Memory, Create-Memory.
-IMPORTANT: Check memory BEFORE reading files!
-
-**FORMAT RULES (CRITICAL):**
-- Commands MUST be in <cmd>...</cmd>, NEVER in <answer> or plain text
-- NEVER repeat file reads if already in memory
-- Each response: ONE purpose (search OR read OR edit OR answer)
-{state_rules}{command_reference}`;
+{command_reference}`;
 
 // ===================================
-// COMMAND REFERENCE (Minimal)
+// COMMAND REFERENCE
 // ===================================
-const COMMAND_REFERENCE = `
+const COMMAND_REFERENCE = `---
 
-**FAST SEARCH (Use these FIRST - no file loading!):**
-Search-InFiles -Pattern "regex" -Filter "*.js" [-Path "dir"] [-Depth 2] [-Context 2]
+===> COMMAND REFERENCE
+# SEARCH COMMANDS (Use these FIRST):
+Search in multiple files or entire directories recursively (safe):
+  - Search-InFiles -Pattern "regex" -Filter "*.js" [-Path "dir"] [-Depth 2] [-Context 2]
   Example: Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
   Example: Search-InFiles -Pattern "class.*Button" -Filter "*.tsx,*.jsx" -Path "renderer"
-Find-Pattern -Pattern "regex" -Path <file> [-Context 2]
+Search single files only:
+  - Find-Pattern -Pattern "regex" -Path <file> [-Context 2]
   Example: Find-Pattern -Pattern "display.*none" -Path "style.css"
-Get-FileStats -Path <file>  # Check file size/lines before reading
+Check file size/lines:
+  - Get-FileStats -Path <file>
+Show entire file with line numbers:
+  - Show-FileWithLineNumbers -Path "file.js"
+Show specific line range, use for large files (batch reading)
+  - Show-FileWithLineNumbers -Path "file.js" -StartLine 100 -EndLine 200
 
-**FILE DISCOVERY:**
-List-ProjectFiles -Extensions ".js,.ts" [-Depth 2] [-Path "dir"] [-Sort]
-  Example: List-ProjectFiles -Extensions ".js,.ts,.css" -Depth 2 -Sort
-
-**FILE OPERATIONS:**
-Show-FileWithLineNumbers -Path <file> [-StartLine N] [-EndLine N]
+# EDIT COMMANDS
+Replace lines:
 <cmd>
-<set file="relative/path.js" range={start, end}>
+<set file="path/to/file.js" range={10, 15}>
 <![CDATA[
-new line 1
-new line 2
-]]>
-</set>
-<set file="relative/path.js" add={line}>
-<![CDATA[
-inserted content
+New content
 ]]>
 </set>
 </cmd>
 
-**RANGE MEANINGS (CRITICAL TO UNDERSTAND):**
-- range={10, 15} = Delete lines 10-15 and replace with your CDATA content
-- range={13} = Delete line 13 and replace with your content
-- add={25} = Insert new content before line 25 (doesn't delete anything)
-- range={-1} = Append new content to end of file
-- Delete: keep CDATA empty, Insert: omit end, Replace: include both start & end
-- Multiple edits? Stack more <set> blocks inside the same <cmd>
+Insert after line:
+<cmd>
+<set file="path/to/file.js" add={25}>
+<![CDATA[
+new inserted line 1
+new inserted line 2
+]]>
+</set>
+</cmd>
 
-**BASIC COMMANDS:**
-gc <file> - read (check .Count first! Or use Get-FileStats)`;
+# EXECUTION COMMANDS
+Run JavaScript file:
+  - node script.js
+Run test suite:
+  - npm test
+Run Python File:
+  - python script.py
+Check JS Syntax:
+  - node --check file.js`;
 
 // ===================================
-// ERROR-SPECIFIC GUIDANCE
+// ERROR GUIDANCE
 // ===================================
 const ERROR_GUIDANCE = {
-  replace_failed: `
-**-REPLACE FAILED:**
-Regex -replace edits are fragile.
+  set_xml_error: `
+===> XML SYNTAX ERROR
+Your <set> tag has malformed XML.
 
-**SOLUTION:**
-Switch to <set> tags with explicit ranges:
-<cmd>
-<set file="path/to/file.js" range={24}>
-<![CDATA[
-exact new content for line 24
-]]>
-</set>
-</cmd>
+Common Issues:
+- Missing closing tag: </set>
+- Unbalanced CDATA: <![CDATA[ must have matching ]]>
+- Text outside <set> tags in <cmd>
+- Missing file attribute: file="path/to/file.js"
+- Invalid range format: use range={10, 20} not range="10-20"
 
-**MULTI-LINE REPLACEMENT EXAMPLE:**
-To replace lines 10-15 with new content (deletes old lines 10-15):
+Correct Format:
 <cmd>
 <set file="path/to/file.js" range={10, 15}>
 <![CDATA[
@@ -319,8 +309,7 @@ new line 15
 </set>
 </cmd>
 
-**INSERT EXAMPLE:**
-To insert new content before line 25 (doesn't delete anything):
+Insert Format:
 <cmd>
 <set file="path/to/file.js" add={25}>
 <![CDATA[
@@ -328,71 +317,73 @@ new inserted line 1
 new inserted line 2
 ]]>
 </set>
-</cmd>
-
-This avoids regex escaping issues.`,
+</cmd>`,
 
   line_numbers_missing: `
-**NEED LINE NUMBERS:**
+===> NEED LINE NUMBERS
 You tried editing without precise ranges.
 
-**REQUIRED:**
+Required Steps:
 1. Show-FileWithLineNumbers -Path <file>
 2. Identify the exact start/end lines
 3. Use <set file="..." range={start, end}> for replacement or <set file="..." add={line}> for insertion`,
 
   file_too_large: `
-**FILE TOO LARGE:**
+
+===> FILE TOO LARGE
+
 Reading entire file failed/slow.
 
-**SOLUTION:**
+Solution:
 1. Count: (gc <file>).Count
 2. Read chunks: Show-FileWithLineNumbers -Path <file> -StartLine 1 -EndLine 300`,
 
   command_timeout: `
-**COMMAND TIMEOUT:**
+===> COMMAND TIMEOUT
 Command took > 30 seconds.
 
-**SOLUTIONS:**
+Solutions:
 - Break into smaller operations
 - Process fewer lines per command
 - Avoid expensive recursion`,
 
   command_blocked: `
-**COMMAND BLOCKED:**
+===> COMMAND BLOCKED
 Your command was blocked for safety (would hang PowerShell).
 
-**SOLUTION - Use fast search instead:**
+Solution - Use fast search instead:
 Search-InFiles -Pattern "your-pattern" -Filter "*.js" -Depth 2
 
-**Why blocked:**
+Why Blocked:
 - Get-ChildItem -Recurse without -Depth = infinite recursion (node_modules!)
 - Piping to Select-String = double slowdown
 
-**NEVER do:** Get-ChildItem -Recurse | Select-String
-**ALWAYS do:** Search-InFiles -Pattern "..." -Filter "*.js" -Depth 2`,
+Never Do:
+Get-ChildItem -Recurse | Select-String
+
+Always Do:
+Search-InFiles -Pattern "..." -Filter "*.js" -Depth 2`,
 
   hashtable_syntax: `
-**INVALID EDIT SYNTAX:**
+===> INVALID EDIT SYNTAX
 Your edit payload was malformed.
 
-**CHECKLIST:**
-- <cmd> should contain ONLY <set> blocks
-- Each <set> needs file="..." and range={start, end} or add={line}
-- Wrap multi-line content inside <![CDATA[ ... ]]>
-- Close the </set> tag and keep CDATA balanced`,
+Checklist:
+  - <cmd> should contain ONLY <set> blocks
+  - Each <set> needs file="..." and range={start, end} or add={line}
+  - Wrap multi-line content inside <![CDATA[ ... ]]>
+  - Close the </set> tag and keep CDATA balanced`,
 };
 
 // ===================================
 // FIRST PROMPT
 // ===================================
-const PROMPT_FIRST = `=== USER REQUEST ===
+const PROMPT_FIRST = `
 {user_prompt}
 
-{common_command}
+---
 
-=== TASK ===
-Start solving now. Remember your current state and work efficiently.`;
+{common_command}`;
 
 // ===================================
 // SUBSEQUENT PROMPT
@@ -400,29 +391,34 @@ Start solving now. Remember your current state and work efficiently.`;
 const PROMPT_SUBSEQUENT = `
 {user_prompt}
 
+---
+
 {command_history}
 
-{last_hidden}
+
+---
 
 {common_command}
 
-=== TASK ===
-Continue solving based on output above.
-{summary_reminder}
-**CONTEXT AWARENESS:**
-- You've executed commands in history - DON'T REPEAT THEM
-- If stuck after 3 attempts, ask user + <!END>
-- Build on previous work, remember what you learned
+---
 
-**WHEN DONE:**
+===> YOUR TASK
+Continue solving based on information above.
+{summary_reminder}
+# CONTEXT AWARENESS:
+  - You've executed commands in history - DON'T REPEAT THEM
+  - If stuck after 3 attempts, ask user + <!END>
+  - Build on previous work, remember what you learned
+
+# WHEN DONE:
 <answer>Summary (casual Indonesian)</answer>
 <!END>
 
-**FINAL REMINDER:**
-- Every response MUST have <state></state> tag first
-- Check memory before reading files
-- Use appropriate state for your current task
-- Don't end prematurely - analyze what you have first`;
+# FINAL REMINDER:
+  - Every response MUST have <state></state> tag first
+  - Check memory before reading files
+  - Use appropriate state for your current task
+  - Don't end prematurely - analyze what you have first`;
 
 // ===================================
 // STATE DETECTION
@@ -495,7 +491,6 @@ function detectDangerousCommand(command = '') {
 // ===================================
 function buildStatePrompt(state, iteration, commandHistory, includeReference = false, memoryState = '', currentMemory = 'default') {
   const stateFormat = STATE_RESPONSE_FORMATS[state];
-  const stateRules = STATE_RULES[state] || '';
 
   // Build command reference (only when needed)
   const commandRef = (includeReference || iteration === 0 || iteration > 5)
@@ -505,7 +500,6 @@ function buildStatePrompt(state, iteration, commandHistory, includeReference = f
   // Build prompt with state-specific rules
   let prompt = SYSTEM_PROMPT
     .replace('{state_format}', stateFormat.format)
-    .replace('{state_rules}', stateRules)
     .replace('{command_reference}', commandRef)
     .replace('{memory_state}', memoryState)
     .replace('{current_memory}', currentMemory || 'default');

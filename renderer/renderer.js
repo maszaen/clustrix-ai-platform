@@ -12786,6 +12786,12 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
 
     const streamingState = ensureStreamingState(div);
 
+    // Check if command structure changed (force full render if so)
+    const currentCommandGroups = extractCommandGroups(display);
+    const previousCommandGroups = streamingState.lastCommandGroups || [];
+    const commandStructureChanged = !commandGroupsEqual(currentCommandGroups, previousCommandGroups);
+    streamingState.lastCommandGroups = currentCommandGroups;
+
     const handledByCodeStream = await renderStreamingCodeBlock(display, renderToken);
     if (handledByCodeStream) {
       if (gotEnd && renderToken === finalizeAfterToken && !finalized) finalize();
@@ -12793,7 +12799,7 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
     }
 
     const userSetting = state.settings.streamThrottling || "auto";
-    if (userSetting === "none") {
+    if (userSetting === "none" || commandStructureChanged) {
       const html = mdFallback(display, STREAMING_FALLBACK_OPTIONS);
       if (renderToken !== latestRenderToken) return;
       updateStreamingHtml(div, html);
@@ -19568,3 +19574,42 @@ window.DEBUG = {
     activeHoverElements.clear();
   }
 };
+
+// Utility functions for command group detection in streaming
+function extractCommandGroups(src) {
+  const commandGroups = [];
+  const allCommandBlocks = [];
+  
+  src.replace(/<!--command-(input|output)-->([\s\S]*?)<!--\/command-\1-->/gi, (match, type, content) => {
+    allCommandBlocks.push({ type, content: content.trim() });
+    return match;
+  });
+  
+  for (let i = 0; i < allCommandBlocks.length; i++) {
+    const block = allCommandBlocks[i];
+    if (block.type === 'input') {
+      const group = { input: block.content };
+      if (i + 1 < allCommandBlocks.length && allCommandBlocks[i + 1].type === 'output') {
+        group.output = allCommandBlocks[i + 1].content;
+        i++;
+      }
+      commandGroups.push(group);
+    } else if (block.type === 'output') {
+      commandGroups.push({ output: block.content });
+    }
+  }
+  
+  return commandGroups;
+}
+
+function commandGroupsEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ga = a[i], gb = b[i];
+    if (Boolean(ga.input) !== Boolean(gb.input)) return false;
+    if (Boolean(ga.output) !== Boolean(gb.output)) return false;
+    if (ga.input && ga.input !== gb.input) return false;
+    if (ga.output && ga.output !== gb.output) return false;
+  }
+  return true;
+}

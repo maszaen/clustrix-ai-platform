@@ -1,0 +1,139 @@
+{
+  "file": "backend/codes/codes-prompt.js",
+  "fileSize": 18425,
+  "totalLines": 551,
+  "functions": [
+    {
+      "name": "detectCurrentState",
+      "line": 435,
+      "params": [
+        "AssignmentPattern",
+        "AssignmentPattern",
+        "AssignmentPattern"
+      ],
+      "lines": 42
+    },
+    {
+      "name": "buildStatePrompt",
+      "line": 501,
+      "params": [
+        "state",
+        "iteration",
+        "commandHistory",
+        "AssignmentPattern",
+        "AssignmentPattern",
+        "AssignmentPattern"
+      ],
+      "lines": 16
+    },
+    {
+      "name": "detectDangerousCommand",
+      "line": 482,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 14
+    },
+    {
+      "name": "getErrorGuidance",
+      "line": 526,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 5
+    },
+    {
+      "name": "getCommandReference",
+      "line": 522,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 2
+    }
+  ],
+  "classes": [],
+  "imports": [],
+  "exports": [],
+  "variables": [
+    {
+      "name": "AGENT_STATES",
+      "line": 18,
+      "kind": "const"
+    },
+    {
+      "name": "DANGEROUS_PATTERNS",
+      "line": 32,
+      "kind": "const"
+    },
+    {
+      "name": "STATE_RESPONSE_FORMATS",
+      "line": 62,
+      "kind": "const"
+    },
+    {
+      "name": "STATE_RULES",
+      "line": 108,
+      "kind": "const"
+    },
+    {
+      "name": "SYSTEM_PROMPT",
+      "line": 204,
+      "kind": "const"
+    },
+    {
+      "name": "COMMAND_REFERENCE",
+      "line": 244,
+      "kind": "const"
+    },
+    {
+      "name": "ERROR_GUIDANCE",
+      "line": 295,
+      "kind": "const"
+    },
+    {
+      "name": "PROMPT_FIRST",
+      "line": 390,
+      "kind": "const"
+    },
+    {
+      "name": "PROMPT_SUBSEQUENT",
+      "line": 400,
+      "kind": "const"
+    },
+    {
+      "name": "recentHistory",
+      "line": 444,
+      "kind": "const"
+    },
+    {
+      "name": "readCount",
+      "line": 445,
+      "kind": "const"
+    },
+    {
+      "name": "recentCommands",
+      "line": 467,
+      "kind": "const"
+    },
+    {
+      "name": "warnings",
+      "line": 483,
+      "kind": "const"
+    },
+    {
+      "name": "stateFormat",
+      "line": 502,
+      "kind": "const"
+    },
+    {
+      "name": "commandRef",
+      "line": 505,
+      "kind": "const"
+    },
+    {
+      "name": "prompt",
+      "line": 510,
+      "kind": "let"
+    }
+  ]
+}

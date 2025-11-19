@@ -148,6 +148,7 @@ contextBridge.exposeInMainWorld('api', {
     parse: parseThinkingPatterns,
     createState: createThinkingParserState
   },
+  invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
   on: (channel, callback) => {
     const validChannels = ['chat-update', 'stats:update', 'search:status', 'chat:think-', 'parser-log'];
     if (validChannels.some(valid => channel.startsWith(valid))) {

@@ -41,7 +41,7 @@ import {
   getCodeMessageStagedFiles,
   renderCodeMessageFiles,
 } from './codes/codes-ui.mjs';
-import { runCodeChatStream } from './codes/code-chat.mjs';
+import { runCodeChatStream, cancelActiveCodeStream } from './codes/code-chat.mjs';
 import { autoheal, hasMalformedTags } from './core/autoheal.js';
 
 let state = {sessions: [],settings: { persona: { name: "", work: "", prefs: "" }, theme: "light",themeVariant: "standard",language: "autodetect"},};
@@ -13535,6 +13535,63 @@ async function startStream(
 
       const result = await resultPromise;
 
+      // Handle cancelled codes stream (force interrupt)
+      if (result?.cancelled) {
+        log('STREAM', 1, 'codes:interrupted', 'Codes stream was cancelled by interrupt', {
+          sessionId: session.id,
+          messageIndex: aiMessageIndex,
+        });
+        
+        // Get partial response
+        const partial = (streamManager.activeStreams[streamId]?.fullResponse || "").trim();
+        
+        // Update message with partial response
+        session.messages[aiMessageIndex] = ["ai", partial];
+        
+        // Track updated message for incremental save
+        if (!session._newMessages) {
+          session._newMessages = [];
+        }
+        session._newMessages.push([aiMessageIndex, ["ai", partial]]);
+        
+        // Render partial content
+        const content = partial || "";
+        const div = aiNode.querySelector(".message-text");
+        if (div && content.trim()) {
+          md(content).then(html => {
+            div.innerHTML = html;
+            if (div.querySelector("pre code")) highlightAllUnder(div);
+            attachCodeBlockListeners(div);
+            renderMathInElement(div);
+          }).catch(err => {
+            console.warn('Markdown rendering error in codes interrupt handler:', err);
+            div.innerHTML = mdFallback(content, STREAMING_FALLBACK_OPTIONS);
+            if (div.querySelector("pre code")) highlightAllUnder(div);
+            attachCodeBlockListeners(div);
+            renderMathInElement(div);
+          });
+        }
+        
+        // Finalize message
+        const footer = aiNode.querySelector(".message-footer");
+        if (footer) footer.innerHTML = "";
+        renderAiFinalActions(aiNode, content, aiMessageIndex);
+        
+        // Stop the stream in streamManager
+        streamManager.stopStream(streamId);
+        
+        // Save immediately
+        try {
+          await save();
+          log("STREAM", 2, "codes:interrupt:save", "Saved session after codes interrupt");
+        } catch (err) {
+          log("STREAM", 3, "codes:interrupt:save", "Failed to save after codes interrupt", { error: err.message });
+        }
+        
+        updateInputState();
+        return; // Exit early for cancelled streams
+      }
+
       const usageResult = applyStreamUsageToSession(
         session,
         aiMessageIndex,
@@ -16542,6 +16599,24 @@ function setupEventListeners() {
     log("STREAM", 3, "interrupt:click", "User clicked Interrupt button", {
       session: current.name,
     });
+
+    // For codes sessions, only set interrupt flag without canceling stream
+    const isCodesPage = document.querySelector('.chat-area')?.classList.contains('codes-active');
+    const currentCode = isCodesPage ? getCodesState()?.currentCode : null;
+    if (currentCode || (current && (current.type === 'code' || current.codeId))) {
+      const sessionId = currentCode?.id || current?.id;
+      if (sessionId) {
+        try {
+          await window.api.invoke('codes:set-interrupt', sessionId);
+          log("STREAM", 1, "interrupt:codes", "Interrupt flag set for codes session", { sessionId });
+        } catch (error) {
+          log("STREAM", 3, "interrupt:codes", "Failed to set interrupt flag", { error: error.message });
+        }
+        return; // Don't run chat interrupt logic for codes
+      }
+    }
+
+    // Chat interrupt logic (only for non-codes pages)
     let interrupted = false;
     for (const id in streamManager.activeStreams) {
       const st = streamManager.activeStreams[id];

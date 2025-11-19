@@ -68,9 +68,32 @@ const EMAIL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" 
 // Transform command text into human-readable description
 function transformCommandText(commandText) {
   if (!commandText) return commandText;
-  
+
+  const fullCmd = commandText.trim();
+
+  // Check if there are multiple piped commands
+  const pipedCommands = fullCmd.split(/\s*\|\s*/).map(c => c.trim()).filter(c => c);
+  if (pipedCommands.length > 1) {
+    // Process each piped command and join with "and"
+    const descriptions = pipedCommands.map(singleCmd => {
+      const desc = transformSingleCommand(singleCmd);
+      // Return description only if it's different from the original command (meaning it was recognized)
+      return desc !== singleCmd ? desc : null;
+    }).filter(desc => desc);
+
+    if (descriptions.length > 0) {
+      return descriptions.join(' and ');
+    }
+  }
+
+  // Single command - process normally
+  return transformSingleCommand(fullCmd);
+}
+
+// Transform single command (helper for transformCommandText)
+function transformSingleCommand(commandText) {
   const cmd = commandText.trim();
-  
+
   // Helper: Extract just filename from path (H:\path\to\file.js → file.js)
   const getFilename = (path) => {
     if (!path) return path;
@@ -80,31 +103,31 @@ function transformCommandText(commandText) {
     const parts = path.split(/[/\\]/);
     return parts[parts.length - 1] || path;
   };
-  
+
   // Helper function to extract parameter value
   const getParam = (paramName) => {
     const regex = new RegExp(`-${paramName}\\s+["']?([^"'\\s-]+)["']?`, 'i');
     const match = cmd.match(regex);
     return match ? match[1] : null;
   };
-  
+
   // Helper function to extract quoted strings (including paths with spaces)
   const getQuotedParam = (paramName) => {
     const regex = new RegExp(`-${paramName}\\s+["']([^"']+)["']`, 'i');
     const match = cmd.match(regex);
     return match ? match[1] : null;
   };
-  
+
   // Helper to get file path (can be quoted or unquoted)
   const getPath = () => {
     return getQuotedParam('Path') || getParam('Path');
   };
-  
+
   // XML-style edit commands (sometimes AI outputs these)
   if (cmd.match(/^<set\s+file=/i)) {
     const fileMatch = cmd.match(/file=["']([^"']+)["']/i);
     const rangeMatch = cmd.match(/range=\{\s*(\d+)\s*,\s*(\d+)\s*\}/i);
-    
+
     if (fileMatch) {
       const filename = getFilename(fileMatch[1]);
       if (rangeMatch) {
@@ -115,17 +138,17 @@ function transformCommandText(commandText) {
       return `Edit <strong>${filename}</strong>`;
     }
   }
-  
+
   // PowerShell helper functions
   if (cmd.match(/^Show-FileWithLineNumbers/i)) {
     const path = getPath();
     const startLine = getParam('StartLine');
     const endLine = getParam('EndLine');
-    
+
     if (!path) return cmd;
-    
+
     const filename = getFilename(path);
-    
+
     if (startLine && endLine) {
       return `Read <strong>${filename}</strong>, lines ${startLine}-${endLine}`;
     } else if (startLine) {
@@ -134,63 +157,63 @@ function transformCommandText(commandText) {
       return `Read <strong>${filename}</strong>`;
     }
   }
-  
+
   if (cmd.match(/^Set-FileLine/i)) {
     const path = getPath();
     const lineNum = getParam('LineNumber');
-    
+
     if (!path || !lineNum) return cmd;
-    
+
     const filename = getFilename(path);
     return `Edit <strong>${filename}</strong>, line ${lineNum}`;
   }
-  
+
   if (cmd.match(/^Remove-FileLine/i)) {
     const path = getPath();
     const lineNum = getParam('LineNumber');
-    
+
     if (!path || !lineNum) return cmd;
-    
+
     const filename = getFilename(path);
     return `Remove line ${lineNum} from <strong>${filename}</strong>`;
   }
-  
+
   if (cmd.match(/^Add-FileLine/i)) {
     const path = getPath();
     const lineNum = getParam('LineNumber');
-    
+
     if (!path || !lineNum) return cmd;
-    
+
     const filename = getFilename(path);
     return `Add line to <strong>${filename}</strong> at position ${lineNum}`;
   }
-  
+
   if (cmd.match(/^Set-MultipleLines/i)) {
     const path = getPath();
-    
+
     if (!path) return cmd;
-    
+
     const filename = getFilename(path);
-    
+
     // Try to count replacements from hashtable
     const hashMatch = cmd.match(/@\{([^}]+)\}/);
     if (hashMatch) {
       const entries = hashMatch[1].split(';').filter(e => e.trim());
       return `Edit <strong>${filename}</strong>, ${entries.length} lines`;
     }
-    
+
     return `Edit <strong>${filename}</strong>`;
   }
-  
+
   if (cmd.match(/^Search-Pattern/i)) {
     const pattern = getQuotedParam('Pattern') || getParam('Pattern');
     const path = getPath() || getParam('Directory');
     const filter = getQuotedParam('Filter') || getParam('Filter');
-    
+
     if (!pattern) return cmd;
-    
+
     let description = `Search <code>${esc(pattern)}</code>`;
-    
+
     if (path) {
       const filename = getFilename(path);
       // Only add "from" if it's a file, not a directory like "."
@@ -198,66 +221,66 @@ function transformCommandText(commandText) {
         description += ` from <strong>${filename}</strong>`;
       }
     }
-    
+
     if (filter && filter !== '*.*') {
       description += ` <span style="opacity: 0.7">(${filter})</span>`;
     }
-    
+
     return description;
   }
-  
+
   if (cmd.match(/^Find-Pattern/i)) {
     const pattern = getQuotedParam('Pattern') || getParam('Pattern');
     const path = getPath();
-    
+
     if (!pattern || !path) return cmd;
-    
+
     const filename = getFilename(path);
     return `Search with pattern <code>${esc(pattern)}</code> from <strong>${filename}</strong>`;
   }
-  
+
   if (cmd.match(/^Get-FileStats/i)) {
     const path = getPath();
-    
+
     if (!path) return cmd;
-    
+
     const filename = getFilename(path);
     return `Get stats for <strong>${filename}</strong>`;
   }
-  
+
   if (cmd.match(/^Replace-InFile/i)) {
     const path = getPath();
     const search = getQuotedParam('SearchString');
     const replace = getQuotedParam('ReplaceString');
-    
+
     if (!path) return cmd;
-    
+
     const filename = getFilename(path);
-    
+
     if (search && replace) {
       return `Replace <code>${esc(search)}</code> with <code>${esc(replace)}</code> in <strong>${filename}</strong>`;
     } else if (search) {
       return `Replace text in <strong>${filename}</strong>`;
     }
-    
+
     return cmd;
   }
-  
+
   if (cmd.match(/^Get-DirectoryStructure/i)) {
     const path = getPath();
     const depth = getParam('Depth');
-    
+
     if (!path) return cmd;
-    
+
     const dirname = getFilename(path);
-    
+
     if (depth) {
       return `List directory <strong>${dirname}</strong> <span style="opacity: 0.7">(depth: ${depth})</span>`;
     } else {
       return `List directory <strong>${dirname}</strong>`;
     }
   }
-  
+
   if (/^List-ProjectFiles/i.test(cmd)) {
     const path = getPath();
     const dirname = path ? getFilename(path) : null;
@@ -281,24 +304,24 @@ function transformCommandText(commandText) {
 
     return `List files ${parts.join(' ')}`;
   }
-  
+
   if (cmd.match(/^Search-InFiles/i)) {
     const pattern = getQuotedParam('Pattern') || getParam('Pattern');
-    
+
     if (pattern) {
       return `Search with pattern <code>${esc(pattern)}</code>`;
     }
-    
+
     return 'Search files';
   }
-  
+
   // Node.js commands
   if (cmd.match(/^node\s+/i)) {
     const fileMatch = cmd.match(/^node\s+["']?([^\s"']+)["']?/i);
     if (fileMatch) {
       const file = getFilename(fileMatch[1]);
       const args = cmd.substring(fileMatch[0].length).trim();
-      
+
       if (args) {
         // Truncate long args
         const shortArgs = args.length > 40 ? args.substring(0, 37) + '...' : args;
@@ -308,14 +331,14 @@ function transformCommandText(commandText) {
       }
     }
   }
-  
+
   // NPM commands
   if (cmd.match(/^npm\s+/i)) {
     const npmMatch = cmd.match(/^npm\s+(\S+)(\s+.*)?/i);
     if (npmMatch) {
       const npmCmd = npmMatch[1];
       const args = npmMatch[2] ? npmMatch[2].trim() : '';
-      
+
       const npmDescriptions = {
         'install': 'Install packages',
         'i': 'Install packages',
@@ -334,9 +357,9 @@ function transformCommandText(commandText) {
         'list': 'List packages',
         'ls': 'List packages'
       };
-      
+
       const description = npmDescriptions[npmCmd.toLowerCase()] || `npm ${npmCmd}`;
-      
+
       if (args) {
         const shortArgs = args.length > 30 ? args.substring(0, 27) + '...' : args;
         return `${description} <code>${esc(shortArgs)}</code>`;
@@ -345,14 +368,14 @@ function transformCommandText(commandText) {
       }
     }
   }
-  
+
   // Git commands
   if (cmd.match(/^git\s+/i)) {
     const gitMatch = cmd.match(/^git\s+(\S+)(\s+.*)?/i);
     if (gitMatch) {
       const gitCmd = gitMatch[1];
       const args = gitMatch[2] ? gitMatch[2].trim() : '';
-      
+
       const gitDescriptions = {
         'clone': 'Clone repo',
         'pull': 'Pull changes',
@@ -373,9 +396,9 @@ function transformCommandText(commandText) {
         'remote': 'Manage remotes',
         'init': 'Initialize repo'
       };
-      
+
       const description = gitDescriptions[gitCmd.toLowerCase()] || `git ${gitCmd}`;
-      
+
       if (args) {
         const shortArgs = args.length > 40 ? args.substring(0, 37) + '...' : args;
         return `${description} <code>${esc(shortArgs)}</code>`;
@@ -384,14 +407,14 @@ function transformCommandText(commandText) {
       }
     }
   }
-  
+
   // Python commands
   if (cmd.match(/^python\s+/i) || cmd.match(/^python3\s+/i)) {
     const pyMatch = cmd.match(/^(?:python3?)\s+["']?([^\s"']+)["']?/i);
     if (pyMatch) {
       const file = getFilename(pyMatch[1]);
       const args = cmd.substring(pyMatch[0].length).trim();
-      
+
       if (args) {
         const shortArgs = args.length > 30 ? args.substring(0, 27) + '...' : args;
         return `Run Python <strong>${file}</strong> <span style="opacity: 0.7">${esc(shortArgs)}</span>`;
@@ -400,14 +423,14 @@ function transformCommandText(commandText) {
       }
     }
   }
-  
+
   // pip commands
   if (cmd.match(/^pip\s+/i) || cmd.match(/^pip3\s+/i)) {
     const pipMatch = cmd.match(/^pip3?\s+(\S+)(\s+.*)?/i);
     if (pipMatch) {
       const pipCmd = pipMatch[1];
       const args = pipMatch[2] ? pipMatch[2].trim() : '';
-      
+
       const pipDescriptions = {
         'install': 'Install package',
         'uninstall': 'Uninstall package',
@@ -417,9 +440,9 @@ function transformCommandText(commandText) {
         'search': 'Search packages',
         'upgrade': 'Upgrade package'
       };
-      
+
       const description = pipDescriptions[pipCmd.toLowerCase()] || `pip ${pipCmd}`;
-      
+
       if (args) {
         const shortArgs = args.length > 30 ? args.substring(0, 27) + '...' : args;
         return `${description} <code>${esc(shortArgs)}</code>`;
@@ -428,14 +451,14 @@ function transformCommandText(commandText) {
       }
     }
   }
-  
+
   // Cargo (Rust) commands
   if (cmd.match(/^cargo\s+/i)) {
     const cargoMatch = cmd.match(/^cargo\s+(\S+)(\s+.*)?/i);
     if (cargoMatch) {
       const cargoCmd = cargoMatch[1];
       const args = cargoMatch[2] ? cargoMatch[2].trim() : '';
-      
+
       const cargoDescriptions = {
         'build': 'Build project',
         'run': 'Run project',
@@ -448,9 +471,9 @@ function transformCommandText(commandText) {
         'update': 'Update deps',
         'publish': 'Publish crate'
       };
-      
+
       const description = cargoDescriptions[cargoCmd.toLowerCase()] || `cargo ${cargoCmd}`;
-      
+
       if (args) {
         const shortArgs = args.length > 30 ? args.substring(0, 27) + '...' : args;
         return `${description} <code>${esc(shortArgs)}</code>`;
@@ -459,14 +482,14 @@ function transformCommandText(commandText) {
       }
     }
   }
-  
+
   // Docker commands
   if (cmd.match(/^docker\s+/i)) {
     const dockerMatch = cmd.match(/^docker\s+(\S+)(\s+.*)?/i);
     if (dockerMatch) {
       const dockerCmd = dockerMatch[1];
       const args = dockerMatch[2] ? dockerMatch[2].trim() : '';
-      
+
       const dockerDescriptions = {
         'build': 'Build image',
         'run': 'Run container',
@@ -483,9 +506,9 @@ function transformCommandText(commandText) {
         'logs': 'View logs',
         'compose': 'Docker Compose'
       };
-      
+
       const description = dockerDescriptions[dockerCmd.toLowerCase()] || `docker ${dockerCmd}`;
-      
+
       if (args && args.length < 40) {
         return `${description} <code>${esc(args)}</code>`;
       } else {
@@ -493,7 +516,7 @@ function transformCommandText(commandText) {
       }
     }
   }
-  
+
   // Maven commands
   if (cmd.match(/^mvn\s+/i)) {
     const mvnMatch = cmd.match(/^mvn\s+(.+)/i);
@@ -503,7 +526,7 @@ function transformCommandText(commandText) {
       return `Maven <code>${esc(shortGoals)}</code>`;
     }
   }
-  
+
   // Gradle commands
   if (cmd.match(/^gradle\s+/i) || cmd.match(/^\.\/gradlew\s+/i)) {
     const gradleMatch = cmd.match(/^(?:gradle|\.\/gradlew)\s+(.+)/i);
@@ -513,7 +536,7 @@ function transformCommandText(commandText) {
       return `Gradle <code>${esc(shortTasks)}</code>`;
     }
   }
-  
+
   // Make commands
   if (cmd.match(/^make\s+/i)) {
     const makeMatch = cmd.match(/^make\s+(\S+)?/i);
@@ -526,7 +549,7 @@ function transformCommandText(commandText) {
       }
     }
   }
-  
+
   // Common shell commands
   if (cmd.match(/^cd\s+/i)) {
     const dirMatch = cmd.match(/^cd\s+["']?([^\s"']+)["']?/i);
@@ -535,7 +558,7 @@ function transformCommandText(commandText) {
       return `Change to <strong>${dirname}</strong>`;
     }
   }
-  
+
   if (cmd.match(/^ls\s*/i) || cmd.match(/^dir\s*/i)) {
     const args = cmd.substring(cmd.match(/^(?:ls|dir)/i)[0].length).trim();
     if (args) {
@@ -544,7 +567,7 @@ function transformCommandText(commandText) {
       return 'List directory';
     }
   }
-  
+
   if (cmd.match(/^cat\s+/i) || cmd.match(/^type\s+/i)) {
     const fileMatch = cmd.match(/^(?:cat|type)\s+["']?([^\s"']+)["']?/i);
     if (fileMatch) {
@@ -552,19 +575,19 @@ function transformCommandText(commandText) {
       return `Read <strong>${filename}</strong>`;
     }
   }
-  
+
   if (cmd.match(/^cp\s+/i) || cmd.match(/^copy\s+/i)) {
     return 'Copy files';
   }
-  
+
   if (cmd.match(/^mv\s+/i) || cmd.match(/^move\s+/i)) {
     return 'Move files';
   }
-  
+
   if (cmd.match(/^rm\s+/i) || cmd.match(/^del\s+/i)) {
     return 'Delete files';
   }
-  
+
   if (cmd.match(/^mkdir\s+/i)) {
     const dirMatch = cmd.match(/^mkdir\s+["']?([^\s"']+)["']?/i);
     if (dirMatch) {
@@ -573,7 +596,7 @@ function transformCommandText(commandText) {
     }
     return 'Create directory';
   }
-  
+
   if (cmd.match(/^grep\s+/i)) {
     const patternMatch = cmd.match(/^grep\s+["']?([^\s"']+)["']?/i);
     if (patternMatch) {
@@ -581,7 +604,7 @@ function transformCommandText(commandText) {
     }
     return 'Search files';
   }
-  
+
   if (cmd.match(/^curl\s+/i)) {
     const urlMatch = cmd.match(/^curl\s+(?:-\S+\s+)*["']?([^\s"']+)["']?/i);
     if (urlMatch) {
@@ -589,7 +612,7 @@ function transformCommandText(commandText) {
     }
     return 'HTTP request';
   }
-  
+
   if (cmd.match(/^wget\s+/i)) {
     const urlMatch = cmd.match(/^wget\s+(?:-\S+\s+)*["']?([^\s"']+)["']?/i);
     if (urlMatch) {
@@ -597,44 +620,287 @@ function transformCommandText(commandText) {
     }
     return 'Download file';
   }
-  
+
   // PowerShell specific commands
   if (cmd.match(/^Get-ChildItem/i) || cmd.match(/^gci\s*/i)) {
-    return 'List directory';
+    const path = getPath();
+    const filter = getParam('Filter');
+    const recurse = cmd.match(/-Recurse/i) ? true : false;
+
+    const parts = [];
+    if (path) {
+      const dirname = getFilename(path);
+      parts.push(`<strong>${dirname}</strong>`);
+    }
+    if (filter) {
+      parts.push(`filter <code>${esc(filter)}</code>`);
+    }
+    if (recurse) {
+      parts.push(`<span style="opacity: 0.7">(recursive)</span>`);
+    }
+
+    if (parts.length === 0) return 'List directory';
+    return `List directory ${parts.join(' ')}`;
   }
-  
+
   if (cmd.match(/^Get-Content/i) || cmd.match(/^gc\s+/i)) {
-    return 'Read file';
+    const path = getPath();
+    const tail = getParam('Tail');
+    const head = getParam('Head');
+    const readCount = getParam('ReadCount');
+
+    // Check for Select-Object -Last in pipe
+    const selectLastMatch = cmd.match(/\|\s*Select-Object\s+-Last\s+(\d+)/i);
+    const selectLastCount = selectLastMatch ? selectLastMatch[1] : null;
+
+    if (!path) return 'Read file';
+
+    const filename = getFilename(path);
+    const parts = [`<strong>${filename}</strong>`];
+
+    if (selectLastCount) {
+      parts.push(`last ${selectLastCount} lines`);
+    } else if (tail) {
+      parts.push(`last ${tail} lines`);
+    } else if (head) {
+      parts.push(`first ${head} lines`);
+    } else if (readCount) {
+      parts.push(`${readCount} lines`);
+    }
+
+    return `Read ${parts.join(', ')}`;
   }
-  
+
   if (cmd.match(/^Set-Content/i) || cmd.match(/^sc\s+/i)) {
-    return 'Write file';
+    const path = getPath();
+    const encoding = getParam('Encoding');
+
+    if (!path) return 'Write file';
+
+    const filename = getFilename(path);
+    const parts = [`<strong>${filename}</strong>`];
+
+    if (encoding) {
+      parts.push(`<span style="opacity: 0.7">(${encoding})</span>`);
+    }
+
+    return `Write ${parts.join(' ')}`;
   }
-  
+
   if (cmd.match(/^Copy-Item/i) || cmd.match(/^cpi\s+/i)) {
-    return 'Copy files';
+    const path = getPath();
+    const dest = getQuotedParam('Destination') || getParam('Destination');
+    const recurse = cmd.match(/-Recurse/i) ? true : false;
+
+    if (!path) return 'Copy files';
+
+    const filename = getFilename(path);
+    const parts = [`<strong>${filename}</strong>`];
+
+    if (dest) {
+      const destName = getFilename(dest);
+      parts.push(`to <strong>${destName}</strong>`);
+    }
+
+    if (recurse) {
+      parts.push(`<span style="opacity: 0.7">(recursive)</span>`);
+    }
+
+    return `Copy ${parts.join(' ')}`;
   }
-  
+
   if (cmd.match(/^Move-Item/i) || cmd.match(/^mi\s+/i)) {
-    return 'Move files';
+    const path = getPath();
+    const dest = getQuotedParam('Destination') || getParam('Destination');
+
+    if (!path) return 'Move files';
+
+    const filename = getFilename(path);
+    const parts = [`<strong>${filename}</strong>`];
+
+    if (dest) {
+      const destName = getFilename(dest);
+      parts.push(`to <strong>${destName}</strong>`);
+    }
+
+    return `Move ${parts.join(' ')}`;
   }
-  
+
   if (cmd.match(/^Remove-Item/i) || cmd.match(/^ri\s+/i)) {
-    return 'Remove files';
+    const path = getPath();
+    const force = cmd.match(/-Force/i) ? true : false;
+    const recurse = cmd.match(/-Recurse/i) ? true : false;
+
+    if (!path) return 'Remove files';
+
+    const filename = getFilename(path);
+    const parts = [];
+
+    if (force) parts.push(`<span style="opacity: 0.7">(force)</span>`);
+    if (recurse) parts.push(`<span style="opacity: 0.7">(recursive)</span>`);
+
+    const flags = parts.length > 0 ? ` ${parts.join(' ')}` : '';
+    return `Remove <strong>${filename}</strong>${flags}`;
   }
-  
+
   if (cmd.match(/^New-Item/i) || cmd.match(/^ni\s+/i)) {
-    return 'Create item';
+    const path = getPath();
+    const itemType = getParam('ItemType');
+
+    if (!path) return 'Create item';
+
+    const filename = getFilename(path);
+    const parts = [];
+
+    if (itemType) {
+      parts.push(`<span style="opacity: 0.7">(${itemType})</span>`);
+    }
+
+    return `Create <strong>${filename}</strong> ${parts.join(' ')}`.trim();
   }
-  
+
   if (cmd.match(/^Test-Path/i)) {
-    return 'Test path';
+    const path = getPath();
+    const pathType = getParam('PathType');
+
+    if (!path) return 'Test path';
+
+    const filename = getFilename(path);
+    const parts = [];
+
+    if (pathType) {
+      parts.push(`<span style="opacity: 0.7">(${pathType})</span>`);
+    }
+
+    return `Test path <strong>${filename}</strong> ${parts.join(' ')}`.trim();
   }
-  
+
   if (cmd.match(/^Write-Output/i) || cmd.match(/^echo\s+/i)) {
+    // Extract the content being written
+    const contentMatch = cmd.match(/^(?:Write-Output|echo)\s+["']?([^"']+)["']?/i);
+    if (contentMatch) {
+      const content = contentMatch[1];
+      const shortContent = content.length > 40 ? content.substring(0, 37) + '...' : content;
+      return `Write <code>${esc(shortContent)}</code>`;
+    }
     return 'Write output';
   }
-  
+
+  // Handlers untuk command yang biasanya di-pipe (Select-Object, Where-Object, Sort-Object, etc)
+  if (cmd.match(/^Get-Process/i) || cmd.match(/^ps\s*/i)) {
+    const name = getQuotedParam('Name') || getParam('Name');
+    const id = getParam('Id');
+
+    const parts = [];
+    if (name) parts.push(`<code>${esc(name)}</code>`);
+    if (id) parts.push(`ID ${id}`);
+
+    if (parts.length === 0) return 'List processes';
+    return `List processes ${parts.join(', ')}`;
+  }
+
+  if (cmd.match(/^Get-Service/i)) {
+    const name = getQuotedParam('Name') || getParam('Name');
+    const status = getParam('Status');
+
+    const parts = [];
+    if (name) parts.push(`<code>${esc(name)}</code>`);
+    if (status) parts.push(`<span style="opacity: 0.7">(${status})</span>`);
+
+    if (parts.length === 0) return 'List services';
+    return `List services ${parts.join(' ')}`;
+  }
+
+  if (cmd.match(/^Select-Object/i)) {
+    const lastMatch = getParam('Last');
+    const firstMatch = getParam('First');
+    const skipMatch = getParam('Skip');
+    const props = getQuotedParam('Property') || getParam('Property');
+
+    const parts = [];
+    if (lastMatch) parts.push(`last ${lastMatch}`);
+    if (firstMatch) parts.push(`first ${firstMatch}`);
+    if (skipMatch) parts.push(`skip ${skipMatch}`);
+    if (props) parts.push(`<code>${esc(props)}</code>`);
+
+    if (parts.length === 0) return 'Select items';
+    return `Select ${parts.join(', ')}`;
+  }
+
+  if (cmd.match(/^Where-Object/i)) {
+    // Try to extract FilterScript parameter with ScriptBlock handling
+    let filterScript = null;
+
+    // Try quoted version first
+    const quotedMatch = cmd.match(/-FilterScript\s+{([^}]+)}/i);
+    if (quotedMatch) {
+      filterScript = quotedMatch[1].trim();
+    } else {
+      // Fall back to parameter extraction
+      filterScript = getQuotedParam('FilterScript') || getParam('FilterScript');
+    }
+
+    if (filterScript) {
+      // Clean up the filter expression
+      let shortFilter = filterScript
+        .replace(/^\s*{\s*/, '').replace(/\s*}\s*$/, '')
+        .replace(/\$_\s*-/g, '')  // Remove $_ - prefix
+        .trim();
+
+      if (shortFilter.length > 50) {
+        shortFilter = shortFilter.substring(0, 47) + '...';
+      }
+
+      return shortFilter ? `Filter where ${shortFilter}` : 'Filter items';
+    }
+    return 'Filter items';
+  }
+
+  if (cmd.match(/^Sort-Object/i)) {
+    const property = getQuotedParam('Property') || getParam('Property');
+    const descending = cmd.match(/-Descending/i) ? true : false;
+
+    const parts = [];
+    if (property) parts.push(`by <code>${esc(property)}</code>`);
+    if (descending) parts.push(`<span style="opacity: 0.7">(descending)</span>`);
+
+    if (parts.length === 0) return 'Sort items';
+    return `Sort ${parts.join(' ')}`;
+  }
+
+  if (cmd.match(/^Measure-Object/i)) {
+    const property = getQuotedParam('Property') || getParam('Property');
+    const sum = cmd.match(/-Sum/i) ? true : false;
+    const average = cmd.match(/-Average/i) ? true : false;
+
+    const parts = [];
+    if (property) parts.push(`<code>${esc(property)}</code>`);
+    const stats = [];
+    if (sum) stats.push('sum');
+    if (average) stats.push('average');
+    if (stats.length > 0) parts.push(`<span style="opacity: 0.7">(${stats.join(', ')})</span>`);
+
+    if (parts.length === 0) return 'Measure stats';
+    return `Measure ${parts.join(' ')}`;
+  }
+
+  if (cmd.match(/^Group-Object/i)) {
+    const property = getQuotedParam('Property') || getParam('Property');
+    if (property) {
+      return `Group by <code>${esc(property)}</code>`;
+    }
+    return 'Group items';
+  }
+
+  if (cmd.match(/^Tee-Object/i)) {
+    const path = getPath();
+    if (path) {
+      const filename = getFilename(path);
+      return `Tee output to <strong>${filename}</strong>`;
+    }
+    return 'Tee output';
+  }
+
   // If no match, return original command as-is (for compatibility)
   return cmd;
 }
@@ -658,19 +924,19 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
 
   // Realtime render: tidak perlu trim, langsung render jika pattern valid
   const truncatedSrc = normalizedSrc;
-  
+
   // Extract command input/output tags BEFORE any markdown processing
   // Group consecutive input-output pairs into single command units
   const commandGroups = [];
   let commandIndex = 0;
-  
+
   // First pass: collect all command blocks
   const allCommandBlocks = [];
   truncatedSrc.replace(/<!--command-(input|output)-->([\s\S]*?)<!--\/command-\1-->/gi, (match, type, content) => {
     allCommandBlocks.push({ type, content: content.trim() });
     return match; // Don't replace yet
   });
-  
+
   // Second pass: group consecutive input-output pairs
   for (let i = 0; i < allCommandBlocks.length; i++) {
     const block = allCommandBlocks[i];
@@ -687,7 +953,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       commandGroups.push({ output: block.content });
     }
   }
-  
+
   // Third pass: replace with grouped placeholders
   let srcAfterCommandExtraction = truncatedSrc;
   commandGroups.forEach((group, index) => {
@@ -699,7 +965,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       srcAfterCommandExtraction = srcAfterCommandExtraction.replace(combinedMatch, placeholder);
     }
   });
-  
+
   // Extract hidden content tags
   const hiddenBlocks = [];
   srcAfterCommandExtraction = srcAfterCommandExtraction.replace(/<!--hidden-->([\s\S]*?)<!--\/hidden-->/gi, (match, content) => {
@@ -707,35 +973,35 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     hiddenBlocks.push(content.trim());
     return placeholder;
   });
-  
+
   // Fix mismatched and malformed container tags before processing
   // AI sometimes generates wrong closing tags or missing closing brackets
   const fixMismatchedTags = (text) => {
     let fixed = text;
-    
+
     // STEP 1: Fix malformed closing tags (missing >)
     // Fix: </try-title -> </try-title>
     fixed = fixed.replace(/<\/try-title(?!>)/gi, '</try-title>');
     fixed = fixed.replace(/<\/clarify-title(?!>)/gi, '</clarify-title>');
-    
+
     // STEP 2: Fix mismatched opening/closing tags
     // Fix: <try-title>content</try> -> <try-title>content</try-title>
     // Match try-title opening tag followed by content and wrong </try> closing
     fixed = fixed.replace(/<try-title>((?:(?!<\/try-title>|<\/try>|<try-title>).)*?)<\/try>/gi, '<try-title>$1</try-title>');
-    
+
     // Fix: <try>content</try-title> -> <try-title>content</try-title>
     // Match wrong <try> used as title tag
     fixed = fixed.replace(/<try>([^<]*?)<\/try-title>/gi, '<try-title>$1</try-title>');
-    
+
     // Fix: <clarify-title>content</clarify> -> <clarify-title>content</clarify-title>
     fixed = fixed.replace(/<clarify-title>((?:(?!<\/clarify-title>|<\/clarify>|<clarify-title>).)*?)<\/clarify>/gi, '<clarify-title>$1</clarify-title>');
-    
+
     // Fix: <clarify>content</clarify-title> -> <clarify-title>content</clarify-title>
     fixed = fixed.replace(/<clarify>([^<]*?)<\/clarify-title>/gi, '<clarify-title>$1</clarify-title>');
-    
+
     return fixed;
   };
-  
+
   const fixedSrc = fixMismatchedTags(srcAfterCommandExtraction);
 
   // Extract ALL reference-style definitions FIRST (before line-by-line parsing)
@@ -775,11 +1041,11 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     (match, tagName, whitespace, content) => {
       // Trigger: ada title tag setelah opening tag (dengan optional newline/whitespace)
       const placeholder = `XCONTAINERX${containerBlocks.length}XCONTAINERX`;
-      
+
       // Build container dengan atau tanpa closing tag
       const hasClosingTag = match.includes(`</${tagName}>`);
       const containerContent = `<${tagName}>${whitespace}<${tagName}-title>${content}${hasClosingTag ? `</${tagName}>` : ''}`;
-      
+
       containerBlocks.push(containerContent);
       return placeholder;
     }
@@ -796,51 +1062,51 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
       let codeContent = code; // Don't trim yet - we need original whitespace for dedent
       const language = lang || "text";
-    
-    // Clean blockquote markers from code content if present
-    // This handles codeblocks inside blockquotes where the content includes blockquote prefixes
-    const lines = codeContent.split('\n');
-    const cleanedLines = lines.map(line => {
-      // Remove all leading > markers and whitespace that are from blockquote nesting
-      let cleaned = line;
-      // Keep removing > markers at the start (after optional whitespace)
-      while (true) {
-        const beforeClean = cleaned;
-        // Remove leading whitespace + > + optional space
-        cleaned = cleaned.replace(/^\s*>\s?/, '');
-        // If nothing changed, we're done
-        if (cleaned === beforeClean) break;
-      }
-      return cleaned;
-    });
-    
-    // Normalize indentation: remove common leading whitespace from all non-empty lines
-    // This handles codeblocks in nested lists where markdown indentation should not appear in code
-    const nonEmptyLines = cleanedLines.filter(line => line.trim().length > 0);
-    if (nonEmptyLines.length > 0) {
-      const indents = nonEmptyLines.map(line => {
-        const match = line.match(/^(\s*)/);
-        return match ? match[1].length : 0;
+
+      // Clean blockquote markers from code content if present
+      // This handles codeblocks inside blockquotes where the content includes blockquote prefixes
+      const lines = codeContent.split('\n');
+      const cleanedLines = lines.map(line => {
+        // Remove all leading > markers and whitespace that are from blockquote nesting
+        let cleaned = line;
+        // Keep removing > markers at the start (after optional whitespace)
+        while (true) {
+          const beforeClean = cleaned;
+          // Remove leading whitespace + > + optional space
+          cleaned = cleaned.replace(/^\s*>\s?/, '');
+          // If nothing changed, we're done
+          if (cleaned === beforeClean) break;
+        }
+        return cleaned;
       });
-      const minIndent = Math.min(...indents);
-      if (minIndent > 0) {
-        for (let i = 0; i < cleanedLines.length; i++) {
-          if (cleanedLines[i].trim().length > 0) {
-            cleanedLines[i] = cleanedLines[i].substring(minIndent);
+
+      // Normalize indentation: remove common leading whitespace from all non-empty lines
+      // This handles codeblocks in nested lists where markdown indentation should not appear in code
+      const nonEmptyLines = cleanedLines.filter(line => line.trim().length > 0);
+      if (nonEmptyLines.length > 0) {
+        const indents = nonEmptyLines.map(line => {
+          const match = line.match(/^(\s*)/);
+          return match ? match[1].length : 0;
+        });
+        const minIndent = Math.min(...indents);
+        if (minIndent > 0) {
+          for (let i = 0; i < cleanedLines.length; i++) {
+            if (cleanedLines[i].trim().length > 0) {
+              cleanedLines[i] = cleanedLines[i].substring(minIndent);
+            }
           }
         }
       }
-    }
-    
-    codeContent = cleanedLines.join('\n').trim();
-    
-    // Different structure for thinking-text (no action buttons)
-    const isMermaid = language.toLowerCase() === 'mermaid';
-    // Check if HTML and starts with <html> or <!DOCTYPE html> tag (case-insensitive, allowing whitespace)
-    const isPreviewableHTML = language.toLowerCase() === 'html' && /^\s*(<!DOCTYPE\s+html|<html)/i.test(codeContent);
-    const newStructure = isThinkingText ? 
-      `<div class="code-block-container thinking-code"><div class="code-block-header"><span class="language-name">${language}</span></div><pre><code class="language-${language}">${esc(codeContent)}</code></pre></div>` :
-      `
+
+      codeContent = cleanedLines.join('\n').trim();
+
+      // Different structure for thinking-text (no action buttons)
+      const isMermaid = language.toLowerCase() === 'mermaid';
+      // Check if HTML and starts with <html> or <!DOCTYPE html> tag (case-insensitive, allowing whitespace)
+      const isPreviewableHTML = language.toLowerCase() === 'html' && /^\s*(<!DOCTYPE\s+html|<html)/i.test(codeContent);
+      const newStructure = isThinkingText ?
+        `<div class="code-block-container thinking-code"><div class="code-block-header"><span class="language-name">${language}</span></div><pre><code class="language-${language}">${esc(codeContent)}</code></pre></div>` :
+        `
       <div class="code-block-container${isMermaid ? ' mermaid-block' : ''}${isPreviewableHTML ? ' html-block' : ''}" data-language="${language}">
         <div class="code-block-header">
           <span class="language-name">${language}</span>
@@ -861,8 +1127,8 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         </div>
         <pre><code class="language-${language}">${esc(codeContent)}</code></pre>
       </div>`;
-    codeBlocks.push(newStructure);
-    return placeholder;
+      codeBlocks.push(newStructure);
+      return placeholder;
     });
   }
   const lines = processedSrc.split("\n");
@@ -876,10 +1142,10 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     if (imageBuffer.length > 0) {
       const totalImages = imageBuffer.length;
       const isCollapsible = totalImages > 1; // Only collapse if more than 1 image
-      
+
       // Calculate columns for the visible row (1-3 images)
       const visibleCount = Math.min(totalImages, 3);
-      
+
       if (isCollapsible) {
         html += `<div class="md-image-group" data-total="${totalImages}" data-collapsed="true">`;
         html += `<div class="md-image-group-header" onclick="toggleImageGroup(this)">`;
@@ -892,11 +1158,11 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         // Single image, no collapse
         html += `<div class="md-image-group" data-total="1">${imageBuffer.join("")}</div>`;
       }
-      
+
       imageBuffer = [];
     }
   };
-  
+
   const flushParagraph = () => {
     if (paragraphBuffer.length > 0) {
       html += `<p>${paragraphBuffer.join("<br>")}</p>`;
@@ -957,9 +1223,9 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
             const lookAheadLine = lines[i + lookAhead];
             const lookAheadTrimmed = lookAheadLine.trim();
             const lookAheadIndent = lookAheadLine.length - lookAheadLine.trimStart().length;
-            
-            if (lookAheadTrimmed.startsWith("__CODEBLOCK_") || lookAheadTrimmed.startsWith(">") || 
-                (lookAheadTrimmed.includes("|") && lines[i + lookAhead + 1] && lines[i + lookAhead + 1].trim().includes("|") && lines[i + lookAhead + 1].trim().includes("-"))) {
+
+            if (lookAheadTrimmed.startsWith("__CODEBLOCK_") || lookAheadTrimmed.startsWith(">") ||
+              (lookAheadTrimmed.includes("|") && lines[i + lookAhead + 1] && lines[i + lookAhead + 1].trim().includes("|") && lines[i + lookAhead + 1].trim().includes("-"))) {
               if (lookAheadIndent >= currentListIndent) {
                 shouldContinueList = true;
                 break;
@@ -973,13 +1239,13 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         lastLineWasCodeblock = false;
         continue;
       }
-      
+
       // If we have pending images, don't close blocks yet (allow blank lines between images)
       if (imageBuffer.length > 0) {
         lastLineWasCodeblock = false;
         continue;
       }
-      
+
       closeOpenBlocks();
       lastLineWasCodeblock = false;
       continue;
@@ -1029,7 +1295,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const type = olMatch ? "ol" : "ul";
       const number = olMatch ? parseInt(olMatch[2], 10) : null;
       let content = olMatch ? listMatch[3] : ulMatch[2];
-      
+
       // Handle task lists (- [ ] or - [x])
       let isTaskList = false;
       let isChecked = false;
@@ -1074,34 +1340,34 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       while (i + 1 < lines.length) {
         const nextLine = lines[i + 1];
         const nextTrimmed = nextLine.trim();
-        
+
         // Stop if we hit a truly empty line (no > marker)
         if (nextTrimmed === "" && !nextLine.match(/^\s*>/)) break;
-        
+
         // Stop if we hit a non-blockquote block-level element at root level
         const isNewBlock = /^(#|---|```|[*-] |\d+\.\s)/.test(nextTrimmed) && (nextLine.length - nextTrimmed.length === 0);
         if (isNewBlock) break;
-        
+
         // Special case: Allow table rows without > prefix if previous line was a table row
         const prevLine = bqBlockLines[bqBlockLines.length - 1];
         const prevTrimmed = prevLine.replace(/^\s*>\s?/, '').trim();
         const isTableRow = nextTrimmed.startsWith('|') && nextTrimmed.includes('|');
         const prevWasTableRow = prevTrimmed.includes('|');
-        
+
         if (isTableRow && prevWasTableRow) {
           // Continue collecting table row even without > prefix
           i++;
           bqBlockLines.push(nextLine);
           continue;
         }
-        
+
         // Stop if line doesn't start with > and isn't empty
         if (!nextLine.match(/^\s*>/) && nextTrimmed !== "") break;
-        
+
         i++;
         bqBlockLines.push(nextLine);
       }
-      
+
       // Count the minimum number of > markers to determine the depth
       let minDepth = Infinity;
       const depthMap = bqBlockLines.map(l => {
@@ -1113,7 +1379,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         }
         return { line: l, depth: 0 };
       });
-      
+
       // Remove only the minimum depth level (one blockquote level)
       const nestedContent = depthMap.map(({ line, depth }) => {
         if (depth > 0) {
@@ -1122,20 +1388,20 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         }
         return line;
       }).join("\n");
-      
+
       // Replace any codeblock placeholders in nested content with special tokens
       const processedNestedContent = nestedContent.replace(/__CODEBLOCK_(\d+)__/g, (match, index) => {
         return `CODEBLOCKEMBED${index}PLACEHOLDER`;
       });
-      
+
       // Process the content with full markdown parsing, passing shared codeBlocks array
       const parsedContent = enhancedMarkdownParse(processedNestedContent, options, codeBlocks);
-      
+
       // Replace embedded codeblock tokens with actual HTML
       const blockquoteContent = parsedContent.replace(/CODEBLOCKEMBED(\d+)PLACEHOLDER/g, (match, index) => {
         return codeBlocks[parseInt(index)];
       });
-      
+
       const blockquoteHtml = `<blockquote>${blockquoteContent}</blockquote>`;
       // For blockquotes in lists, always append to current list item to maintain proper nesting
       if (listStack.length > 0) {
@@ -1196,14 +1462,14 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     }
   }
   closeOpenBlocks();
-  
+
   // Restore LaTeX blocks FIRST (before processing other placeholders that might be wrapped in HTML)
   let finalHtml = html;
   finalHtml = latexBlocks.reduce((acc, block, i) => {
     // Use split/join to avoid $ being treated as special character in replace()
     return acc.split(`__LATEX_${i}__`).join(block);
   }, finalHtml);
-  
+
   finalHtml = codeBlocks.reduce((acc, block, i) => acc.replace(`__CODEBLOCK_${i}__`, block), finalHtml);
   finalHtml = containerBlocks.reduce((acc, block, i) => {
     // Realtime render: process container dengan atau tanpa closing tag
@@ -1225,13 +1491,13 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       });
     return acc.replace(`XCONTAINERX${i}XCONTAINERX`, processed);
   }, finalHtml);
-  
+
   // Function to parse command input into user-friendly descriptions
   function parseCommandInput(input) {
     if (!input) return input;
-    
+
     const trimmed = input.trim();
-    
+
     // Helper function to extract filename from path
     function getFilename(path) {
       if (!path) return '';
@@ -1240,7 +1506,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       // Get filename from path
       return cleanPath.split(/[/\\]/).pop() || cleanPath;
     }
-    
+
     // Helper function to format range
     function formatRange(rangeStr) {
       if (!rangeStr) return '';
@@ -1252,7 +1518,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
       return rangeStr;
     }
-    
+
     // Parse <set file="..." range={...}> commands
     const setMatch = trimmed.match(/^<set\s+file="([^"]+)"(?:\s+range=\{([^}]+)\})?\s*\/?>/i);
     if (setMatch) {
@@ -1264,14 +1530,14 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
       return `Editing ${filename}`;
     }
-    
+
     // Parse Search-infiles commands (fallback for simple pattern)
     const searchMatch = trimmed.match(/^Search-infiles\s+(.+)$/i);
     if (searchMatch) {
       const pattern = searchMatch[1].trim();
       return `Searching for pattern '${pattern}'`;
     }
-    
+
     // Parse Show-FileWithLineNumbers commands
     const showFileMatch = trimmed.match(/^Show-FileWithLineNumbers\s+-Path\s+["']([^"']+)["'](?:\s+-StartLine\s+(\d+))?(?:\s+-EndLine\s+(\d+))?/i);
     if (showFileMatch) {
@@ -1285,7 +1551,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
       return `Read ${filename}`;
     }
-    
+
     // Parse Search-InFiles commands
     const searchInFilesMatch = trimmed.match(/^Search-InFiles\s+-Pattern\s+["']([^"']+)["'](?:\s+-Path\s+["']([^"']+)["'])?(?:\s+-Filter\s+["']([^"']+)["'])?(?:\s+-Depth\s+(\d+))?(?:\s+-Context\s+(\d+))?/i);
     if (searchInFilesMatch) {
@@ -1294,7 +1560,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const filter = searchInFilesMatch[3];
       const depth = searchInFilesMatch[4];
       const context = searchInFilesMatch[5];
-      
+
       let description = `Find "${pattern}"`;
       if (filter) {
         description += ` in ${filter} files`;
@@ -1307,7 +1573,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
       return description;
     }
-    
+
     // Parse Get-FileLineRange commands
     const getFileRangeMatch = trimmed.match(/^Get-FileLineRange\s+-Path\s+["']([^"']+)["']\s+-Ranges\s+@\(([^)]+)\)/i);
     if (getFileRangeMatch) {
@@ -1321,7 +1587,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
       return `Read ${filename} ranges`;
     }
-    
+
     // Parse Set-FileLine commands
     const setFileLineMatch = trimmed.match(/^Set-FileLine\s+-Path\s+["']?([^"'\s]+)["']?\s+-LineNumber\s+(\d+)/i);
     if (setFileLineMatch) {
@@ -1329,7 +1595,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const lineNum = setFileLineMatch[2];
       return `Edit ${filename} line ${lineNum}`;
     }
-    
+
     // Parse Add-FileLine commands
     const addFileLineMatch = trimmed.match(/^Add-FileLine\s+-Path\s+["']?([^"'\s]+)["']?\s+-LineNumber\s+(\d+)/i);
     if (addFileLineMatch) {
@@ -1337,7 +1603,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const lineNum = addFileLineMatch[2];
       return `Add line to ${filename} at ${lineNum}`;
     }
-    
+
     // Parse Remove-FileLine commands
     const removeFileLineMatch = trimmed.match(/^Remove-FileLine\s+-Path\s+["']?([^"'\s]+)["']?\s+-LineNumber\s+(\d+)/i);
     if (removeFileLineMatch) {
@@ -1345,7 +1611,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const lineNum = removeFileLineMatch[2];
       return `Remove ${filename} line ${lineNum}`;
     }
-    
+
     // Parse Set-MultipleLines commands
     const setMultipleMatch = trimmed.match(/^Set-MultipleLines\s+-Path\s+["']?([^"'\s]+)["']?\s+-StartLine\s+(\d+)\s+-EndLine\s+(\d+)/i);
     if (setMultipleMatch) {
@@ -1354,7 +1620,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const endLine = setMultipleMatch[3];
       return `Edit ${filename} lines ${startLine}-${endLine}`;
     }
-    
+
     // Parse Search-FileWithContext commands
     const searchContextMatch = trimmed.match(/^Search-FileWithContext\s+-Path\s+["']?([^"'\s]+)["']?\s+-Pattern\s+["']?([^"'\s]+)["']?/i);
     if (searchContextMatch) {
@@ -1362,21 +1628,21 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const pattern = searchContextMatch[2];
       return `Find "${pattern}" in ${filename}`;
     }
-    
+
     // Parse Find-DuplicateLines commands
     const findDupMatch = trimmed.match(/^Find-DuplicateLines\s+-Path\s+["']?([^"'\s]+)["']?/i);
     if (findDupMatch) {
       const filename = getFilename(findDupMatch[1]);
       return `Find duplicate lines in ${filename}`;
     }
-    
+
     // Parse List-ProjectFiles commands
     const listProjectMatch = trimmed.match(/^List-ProjectFiles\s+(?:-Path\s+["']?([^"'\s]+)["']?)?(?:\s+-Filter\s+["']?([^"'\s]+)["']?)?(?:\s+-Depth\s+(\d+))?/i);
     if (listProjectMatch) {
       const path = listProjectMatch[1];
       const filter = listProjectMatch[2];
       const depth = listProjectMatch[3];
-      
+
       let description = 'List project files';
       if (filter) {
         description += ` (${filter})`;
@@ -1390,7 +1656,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
       return description;
     }
-    
+
     // Parse Find-Pattern commands
     const findPatternMatch = trimmed.match(/^Find-Pattern\s+-Pattern\s+["']?([^"'\s]+)["']?(?:\s+-Path\s+["']?([^"'\s]+)["']?)?/i);
     if (findPatternMatch) {
@@ -1403,14 +1669,14 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
       return description;
     }
-    
+
     // Parse Get-FileStats commands
     const getStatsMatch = trimmed.match(/^Get-FileStats\s+-Path\s+["']?([^"'\s]+)["']?/i);
     if (getStatsMatch) {
       const filename = getFilename(getStatsMatch[1]);
       return `Get stats for ${filename}`;
     }
-    
+
     // Parse List-Directory commands
     const listDirMatch = trimmed.match(/^List-Directory\s+(.+)$/i);
     if (listDirMatch) {
@@ -1418,21 +1684,21 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const dirname = path.split(/[/\\]/).pop() || path;
       return `Listing directory ${dirname}`;
     }
-    
+
     // Parse Run-Command commands
     const runCmdMatch = trimmed.match(/^Run-Command\s+(.+)$/i);
     if (runCmdMatch) {
       const cmd = runCmdMatch[1].trim();
       return `Running command: ${cmd}`;
     }
-    
+
     // Parse Get-Content / cat commands
     const getContentMatch = trimmed.match(/^(?:Get-Content|cat)\s+(.+)$/i);
     if (getContentMatch) {
       const filename = getFilename(getContentMatch[1].trim());
       return `Reading ${filename}`;
     }
-    
+
     // Parse Set-Content / echo commands
     const setContentMatch = trimmed.match(/^(?:Set-Content|echo)\s+(.+)$/i);
     if (setContentMatch) {
@@ -1440,7 +1706,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const filename = getFilename(target);
       return `Writing to ${filename}`;
     }
-    
+
     // Parse New-Item / mkdir commands
     const newItemMatch = trimmed.match(/^(?:New-Item|mkdir)\s+(.+)$/i);
     if (newItemMatch) {
@@ -1448,7 +1714,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const isDir = target.includes('/') || target.includes('\\') || !target.includes('.');
       return isDir ? `Creating directory ${getFilename(target)}` : `Creating file ${getFilename(target)}`;
     }
-    
+
     // Parse Remove-Item / rm commands
     const removeItemMatch = trimmed.match(/^(?:Remove-Item|rm)\s+(.+)$/i);
     if (removeItemMatch) {
@@ -1456,7 +1722,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const isDir = target.includes('/') || target.includes('\\') || !target.includes('.');
       return isDir ? `Removing directory ${getFilename(target)}` : `Removing file ${getFilename(target)}`;
     }
-    
+
     // Parse Copy-Item / cp commands
     const copyItemMatch = trimmed.match(/^(?:Copy-Item|cp)\s+(.+?)\s+(.+)$/i);
     if (copyItemMatch) {
@@ -1464,7 +1730,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const dest = getFilename(copyItemMatch[2].trim());
       return `Copying ${source} to ${dest}`;
     }
-    
+
     // Parse Move-Item / mv commands
     const moveItemMatch = trimmed.match(/^(?:Move-Item|mv)\s+(.+?)\s+(.+)$/i);
     if (moveItemMatch) {
@@ -1472,7 +1738,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const dest = getFilename(moveItemMatch[2].trim());
       return `Moving ${source} to ${dest}`;
     }
-    
+
     // Parse Get-ChildItem / ls / dir commands
     const listItemsMatch = trimmed.match(/^(?:Get-ChildItem|ls|dir)(?:\s+(.+))?$/i);
     if (listItemsMatch) {
@@ -1483,14 +1749,14 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
       return 'Listing directory contents';
     }
-    
+
     // Parse Test-Path commands
     const testPathMatch = trimmed.match(/^Test-Path\s+(.+)$/i);
     if (testPathMatch) {
       const target = getFilename(testPathMatch[1].trim());
       return `Checking if ${target} exists`;
     }
-    
+
     // Parse npm commands
     const npmMatch = trimmed.match(/^npm\s+(run\s+)?(\w+)(?:\s+(.+))?$/i);
     if (npmMatch) {
@@ -1511,43 +1777,43 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       }
       return `Running npm ${script}`;
     }
-    
+
     // Return original if no pattern matches
     return input;
   }
-  
+
   commandGroups.forEach((group, index) => {
     const placeholder = `__COMMAND_GROUP_${index}__`;
     let replacement = '';
-    
+
     if (group.input) {
       // Create expandable command input with output
       const outputHtml = group.output ?
         '<div class="command-output" aria-hidden="true">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
-      
+
       const toggleButton = group.output ? '<button class="command-toggle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>' : '';
-      
+
       // Transform command text to human-readable format
       const readableCommand = transformCommandText(group.input);
-      
-      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><span class="command-text">' + 
-        readableCommand + 
+
+      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><span class="command-text">' +
+        readableCommand +
         '</span>' + toggleButton + '</div>' + outputHtml + '</div>';
     } else if (group.output) {
       // Standalone output (fallback)
       replacement = '<div class="command-output">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
     }
-    
+
     finalHtml = finalHtml.replace(placeholder, replacement);
   });
-  
+
   // Process hidden blocks
   hiddenBlocks.forEach((content, index) => {
     const placeholder = `__HIDDEN_BLOCK_${index}__`;
     const replacement = `<div class="hidden-content" style="max-height: 329px; border: 1px solid var(--border) !important; overflow-y: auto; background: var(--bg); border-radius: var(--radius-lg); padding-top: 9px; padding-bottom: 9px; max-width: 100%;"><pre style="margin: 0; background: transparent; border: none; padding: 0;"><code class="language-javascript">${content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre></div>`;
     finalHtml = finalHtml.replace(placeholder, replacement);
   });
-  
+
   return finalHtml;
 }
 
@@ -1556,7 +1822,7 @@ function processMarkdownFormatting(text, globalReferences = {}) {
 
   // Use global references (passed from parseInlineMarkdown)
   // Also parse local references in case they exist in this text block
-  const references = {...globalReferences};
+  const references = { ...globalReferences };
   let processedText = text.replace(/^\[([^\]]+)\]:\s*(\S+)(?:\s+"([^"]*)")?\s*$/gm, (_, refId, url, title) => {
     references[refId.toLowerCase()] = { url, title: title || '' };
     return ''; // Remove reference definition from text
@@ -1622,7 +1888,7 @@ function processMarkdownFormatting(text, globalReferences = {}) {
     footnoteRefs.push(`<sup class="footnote-ref"><a href="#fn-${ref}">[${ref}]</a></sup>`);
     return placeholder;
   });
-  
+
   // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
   const linkBlocks = [];
 
@@ -1677,11 +1943,11 @@ function processMarkdownFormatting(text, globalReferences = {}) {
   });
 
   let html = processedText.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-  
+
   // Restore images FIRST (before links, for clickable images)
   // Group consecutive images together
   html = groupConsecutiveImages(html, imageBlocks);
-  
+
   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
   html = html.replace(footnoteGroupRegex, match => {
     const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
@@ -1694,7 +1960,7 @@ function processMarkdownFormatting(text, globalReferences = {}) {
     }
     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
   });
-  
+
   // Restore links
   html = linkBlocks.reduce((acc, block, i) => acc.replace(`__LINK_${i}__`, block), html);
 
@@ -1705,18 +1971,18 @@ function processMarkdownFormatting(text, globalReferences = {}) {
     inlineCodeBlocks.push(`<code>${content}</code>`);
     return placeholder;
   });
-  const tldList = ["com","net","org","io","gov","edu","co","info","biz","online","app","id","me","site","tech","dev","ai","cloud","shop","store","live","blog","club","news","xyz","link","cloud","space","page","pro","design","agency","group","company","inc","us","uk","au","ca","de","fr","es","it","nl","se","no","fi","ru","cn","jp","br","in","cz","pl","be","ch","at","sg","hk","nz","mx","ar","cl","kr","za","ae","sa"];
+  const tldList = ["com", "net", "org", "io", "gov", "edu", "co", "info", "biz", "online", "app", "id", "me", "site", "tech", "dev", "ai", "cloud", "shop", "store", "live", "blog", "club", "news", "xyz", "link", "cloud", "space", "page", "pro", "design", "agency", "group", "company", "inc", "us", "uk", "au", "ca", "de", "fr", "es", "it", "nl", "se", "no", "fi", "ru", "cn", "jp", "br", "in", "cz", "pl", "be", "ch", "at", "sg", "hk", "nz", "mx", "ar", "cl", "kr", "za", "ae", "sa"];
   const tldPattern = tldList.join("|");
   const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
   html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl, offset) => {
     // Skip if inside href, src attributes, or near placeholders
-    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`) || 
-        html.includes(`href=&quot;${match}`) || html.includes(`src=&quot;${match}`) ||
-        /__(?:IMAGE|LINK|INLINE_CODE)_\d+__/.test(match)) return match;
-    
+    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`) ||
+      html.includes(`href=&quot;${match}`) || html.includes(`src=&quot;${match}`) ||
+      /__(?:IMAGE|LINK|INLINE_CODE)_\d+__/.test(match)) return match;
+
     // Skip if preceded by @ (email addresses in mailto links)
     if (offset > 0 && html[offset - 1] === '@') return match;
-    
+
     // Skip if inside any HTML tag (link, button, img, code, pre, etc.)
     const beforeMatch = html.substring(0, offset);
     const lastOpenTag = Math.max(
@@ -1735,13 +2001,13 @@ function processMarkdownFormatting(text, globalReferences = {}) {
       beforeMatch.lastIndexOf('</pre>')
     );
     if (lastOpenTag > lastCloseTag) return match; // Inside HTML tag
-    
+
     let href = protocolUrl || domainUrl;
     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
     return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}${BROWSER_ICON}</a>`;
   });
   html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
-  
+
   // Inline formatting - but protect placeholders and HTML attributes from being formatted
   // First, protect all __PLACEHOLDER__ patterns (use # to avoid underscore issues)
   const allPlaceholders = [];
@@ -1750,7 +2016,7 @@ function processMarkdownFormatting(text, globalReferences = {}) {
     allPlaceholders.push(match);
     return placeholder;
   });
-  
+
   // Then protect content inside HTML tags (including attributes)
   const htmlTagPattern = /<[^>]+>/g;
   const protectedTags = [];
@@ -1759,7 +2025,7 @@ function processMarkdownFormatting(text, globalReferences = {}) {
     protectedTags.push(match);
     return placeholder;
   });
-  
+
   // Now apply formatting to the remaining text (safe from placeholders)
   html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
     .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>")
@@ -1768,7 +2034,7 @@ function processMarkdownFormatting(text, globalReferences = {}) {
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(/(^|[\s"'([{])_([^_\s][^_]*?[^_\s])_(\s|["')\]},;.!?]|$)/g, "$1<em>$2</em>$3")
     .replace(/~~(.*?)~~/g, "<del>$1</del>");
-  
+
   // Restore protected HTML tags
   protectedTags.forEach((tag, i) => {
     html = html.replace(`@@TAG#${i}@@`, tag);
@@ -1839,7 +2105,7 @@ function parseInlineMarkdown(text, globalReferences = {}) {
 
   // Use global references (passed from enhancedMarkdownParse)
   // Also parse local references in case they exist in this text block
-  const references = {...globalReferences};
+  const references = { ...globalReferences };
   processedText = processedText.replace(/^\[([^\]]+)\]:\s*(\S+)(?:\s+"([^"]*)")?\s*$/gm, (_, refId, url, title) => {
     references[refId.toLowerCase()] = { url, title: title || '' };
     return ''; // Remove reference definition from text
@@ -1905,7 +2171,7 @@ function parseInlineMarkdown(text, globalReferences = {}) {
     footnoteRefs.push(`<sup class="footnote-ref"><a href="#fn-${ref}">[${ref}]</a></sup>`);
     return placeholder;
   });
-  
+
   // Parse links (including mailto) BEFORE HTML escaping to handle parentheses and special chars
   const linkBlocks = [];
 
@@ -1979,13 +2245,13 @@ function parseInlineMarkdown(text, globalReferences = {}) {
     '&amp;quot;': '&quot;',
     '&amp;apos;': '&apos;'
   };
-  
+
   for (const [escaped, entity] of Object.entries(entities)) {
     html = html.replaceAll(escaped, entity);
   }
-  
+
   html = html.replace(/__BR_TAG__/g, "<br>");
-  
+
   const footnoteGroupRegex = /((?:\[Source\s+\d+\]\((?:.*?)\)(?:\s*,\s*)?)+)/g;
   html = html.replace(footnoteGroupRegex, match => {
     const individualFootnoteRegex = /\[Source\s+(\d+)\]\((.*?)\)/g;
@@ -1998,17 +2264,17 @@ function parseInlineMarkdown(text, globalReferences = {}) {
     }
     return `<sup class="footnote-ref">${links.join(", ")}</sup>`;
   });
-  
+
   // Restore footnotes FIRST
   html = footnoteRefs.reduce((acc, block, i) => acc.replace(`__FOOTNOTE_REF_${i}__`, block), html);
-  
+
   // Restore links (they may contain image placeholders)
   html = linkBlocks.reduce((acc, block, i) => acc.replace(`__LINK_${i}__`, block), html);
-  
+
   // Restore images AFTER links (so images inside links work correctly)
   // Group consecutive images together
   html = groupConsecutiveImages(html, imageBlocks);
-  
+
   html = html.replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/g, "<u>$1</u>");
   const inlineCodeBlocks = [];
   html = html.replace(/`([^`]+?)`/g, (match, content) => {
@@ -2016,18 +2282,18 @@ function parseInlineMarkdown(text, globalReferences = {}) {
     inlineCodeBlocks.push(`<code>${content}</code>`);
     return placeholder;
   });
-  const tldList = ["com","net","org","io","gov","edu","co","info","biz","online","app","id","me","site","tech","dev","ai","cloud","shop","store","live","blog","club","news","xyz","link","cloud","space","page","pro","design","agency","group","company","inc","us","uk","au","ca","de","fr","es","it","nl","se","no","fi","ru","cn","jp","br","in","cz","pl","be","ch","at","sg","hk","nz","mx","ar","cl","kr","za","ae","sa"];
+  const tldList = ["com", "net", "org", "io", "gov", "edu", "co", "info", "biz", "online", "app", "id", "me", "site", "tech", "dev", "ai", "cloud", "shop", "store", "live", "blog", "club", "news", "xyz", "link", "cloud", "space", "page", "pro", "design", "agency", "group", "company", "inc", "us", "uk", "au", "ca", "de", "fr", "es", "it", "nl", "se", "no", "fi", "ru", "cn", "jp", "br", "in", "cz", "pl", "be", "ch", "at", "sg", "hk", "nz", "mx", "ar", "cl", "kr", "za", "ae", "sa"];
   const tldPattern = tldList.join("|");
   const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
   html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl, offset) => {
     // Skip if inside href, src attributes, or near placeholders
-    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`) || 
-        html.includes(`href=&quot;${match}`) || html.includes(`src=&quot;${match}`) ||
-        /__(?:IMAGE|LINK|INLINE_CODE)_\d+__/.test(match)) return match;
-    
+    if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`) ||
+      html.includes(`href=&quot;${match}`) || html.includes(`src=&quot;${match}`) ||
+      /__(?:IMAGE|LINK|INLINE_CODE)_\d+__/.test(match)) return match;
+
     // Skip if preceded by @ (email addresses in mailto links)
     if (offset > 0 && html[offset - 1] === '@') return match;
-    
+
     // Skip if inside any HTML tag (link, button, img, code, pre, etc.)
     const beforeMatch = html.substring(0, offset);
     const lastOpenTag = Math.max(
@@ -2046,13 +2312,13 @@ function parseInlineMarkdown(text, globalReferences = {}) {
       beforeMatch.lastIndexOf('</pre>')
     );
     if (lastOpenTag > lastCloseTag) return match; // Inside HTML tag
-    
+
     let href = protocolUrl || domainUrl;
     if (!/^https?:\/\//i.test(href)) href = "https://" + href;
     return `<a class="link" href="${href}" target="_blank" rel="noopener noreferrer">${match}${BROWSER_ICON}</a>`;
   });
   html = inlineCodeBlocks.reduce((acc, block, i) => acc.replace(`__INLINE_CODE_${i}__`, block), html);
-  
+
   // Inline formatting - but protect placeholders and HTML attributes from being formatted
   // First, protect all __PLACEHOLDER__ patterns (use # to avoid underscore issues)
   const allPlaceholders = [];
@@ -2061,7 +2327,7 @@ function parseInlineMarkdown(text, globalReferences = {}) {
     allPlaceholders.push(match);
     return placeholder;
   });
-  
+
   // Then protect content inside HTML tags (including attributes)
   const htmlTagPattern = /<[^>]+>/g;
   const protectedTags = [];
@@ -2070,7 +2336,7 @@ function parseInlineMarkdown(text, globalReferences = {}) {
     protectedTags.push(match);
     return placeholder;
   });
-  
+
   // Now apply formatting to the remaining text (safe from placeholders)
   html = html.replace(/\*\*\*(.*?)\*\*\*/g, "<strong><em>$1</em></strong>")
     .replace(/___(.*?)___/g, "<strong><em>$1</em></strong>")
@@ -2079,17 +2345,17 @@ function parseInlineMarkdown(text, globalReferences = {}) {
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(/(^|[\s"'([{])_([^_\s][^_]*?[^_\s])_(\s|["')\]},;.!?]|$)/g, "$1<em>$2</em>$3")
     .replace(/~~(.*?)~~/g, "<del>$1</del>");
-  
+
   // Restore protected HTML tags
   protectedTags.forEach((tag, i) => {
     html = html.replace(`@@TAG#${i}@@`, tag);
   });
-  
+
   // Restore all placeholders
   allPlaceholders.forEach((ph, i) => {
     html = html.replace(`@@PROTECTED#${i}@@`, ph);
   });
-  
+
   return html;
 }
 
@@ -2111,14 +2377,14 @@ function md(src, options = {}) {
   // Extract command input/output tags BEFORE any markdown processing
   // Group consecutive input-output pairs into single command units
   const commandGroups = [];
-  
+
   // First pass: collect all command blocks
   const allCommandBlocks = [];
   cleanSrc.replace(/<!--command-(input|output)-->([\s\S]*?)<!--\/command-\1-->/gi, (match, type, content) => {
     allCommandBlocks.push({ type, content: content.trim() });
     return match; // Don't replace yet
   });
-  
+
   // Second pass: group consecutive input-output pairs
   for (let i = 0; i < allCommandBlocks.length; i++) {
     const block = allCommandBlocks[i];
@@ -2135,7 +2401,7 @@ function md(src, options = {}) {
       commandGroups.push({ output: block.content });
     }
   }
-  
+
   // Third pass: replace with grouped placeholders
   let srcWithPlaceholders = cleanSrc;
   commandGroups.forEach((group, index) => {
@@ -2147,7 +2413,7 @@ function md(src, options = {}) {
       srcWithPlaceholders = srcWithPlaceholders.replace(combinedMatch, placeholder);
     }
   });
-  
+
   const html = enhancedMarkdownParse(srcWithPlaceholders, options);
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = html;
@@ -2164,7 +2430,7 @@ function md(src, options = {}) {
         '<div class="command-output" aria-hidden="true">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
 
       const toggleButton = group.output ? '<button class="command-toggle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>' : '';
-      
+
       // Transform command text to human-readable format
       const readableCommand = transformCommandText(group.input);
 

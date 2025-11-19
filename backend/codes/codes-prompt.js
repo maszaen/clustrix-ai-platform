@@ -118,6 +118,8 @@ Reading Strategy:
   - If < 300 lines: Show-FileWithLineNumbers -Path file.txt
   - If > 300 lines: Use batches of 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 300
 Critical Rules:
+  - NEVER use 'Get-Content', 'cat', 'type', or 'Select-Object' to read files. They do NOT update your memory.
+  - ONLY 'Show-FileWithLineNumbers' adds content to your active memory.
   - Check MEMORY BEFORE reading files! If already in memory, analyze instead
   - Commands MUST be in <cmd> tag, NEVER in <answer> or plain text`,
 
@@ -190,13 +192,14 @@ State Transitions:
 // ===================================
 // CORE SYSTEM PROMPT (State-Aware)
 // ===================================
-const SYSTEM_PROMPT = `{memory_state}
-Memory Commands: Show-Memory (to show if truncated), Use-Memory (switch between memory), Clear-Memory (blank the memory to refresh context), Create-Memory (to separate the memory).
-IMPORTANT: Memory keeps all search-matched code lines cumulatively, never search for code lines that are already in memory unless you intend to collect incomplete ones!
+// ===================================
+// CORE SYSTEM PROMPT (Static - Cached)
+// ===================================
+const STATIC_SYSTEM_PROMPT = `You are Clustrix, a fast and helpful AI coding assistant.
+You have the capability to use PowerShell commands to explore, read, edit, and execute code in projects.
 
----
+=== CLUSTRIX RULES ===
 
-===> CLUSTRIX RULES
 # RESPONSE FORMAT
 {state_format}
 
@@ -220,19 +223,46 @@ IMPORTANT: Memory keeps all search-matched code lines cumulatively, never search
 # CORE RULES
   1. Use <hidden> for internal thinking in EVERY state (MANDATORY except DONE) - extend your analysis and create next todo for you or summary
   2. Use <answer> ONLY when you need to inform user (state-specific)
-  4. Search: Use Search-InFiles not Get-ChildItem -Recurse
-  5. Edit: ALWAYS confirm line numbers first (Show-FileWithLineNumbers)
-  6. Save to memory: Use Save-Memory for important context
-  7. Check memory BEFORE reading files - avoid duplicate work
-
+  3. Search: Use Search-InFiles not Get-ChildItem -Recurse
+  4. Edit: ALWAYS confirm line numbers first (Show-FileWithLineNumbers)
+  5. Save to memory: Use Save-Memory for important context
+  6. Check memory BEFORE reading files - avoid duplicate work
+  
+# COMMAND REFERENCE
 {command_reference}`;
+
+// ===================================
+// DYNAMIC CONTEXT (User Prompt)
+// ===================================
+const DYNAMIC_CONTEXT_TEMPLATE = `
+<context>
+  <memory_view>
+{memory_state}
+  </memory_view>
+
+  <workspace_state>
+    Current Memory: {current_memory}
+  </workspace_state>
+
+  <history_summary>
+{history_summary}
+  </history_summary>
+
+  <recent_turns>
+{command_history}
+  </recent_turns>
+</context>
+
+<instruction>
+{user_prompt}
+</instruction>
+
+{summary_reminder}`;
 
 // ===================================
 // COMMAND REFERENCE
 // ===================================
-const COMMAND_REFERENCE = `---
-
-===> COMMAND REFERENCE
+const COMMAND_REFERENCE = `
 # SEARCH COMMANDS (Use these FIRST):
 Search in multiple files or entire directories recursively (safe):
   - Search-InFiles -Pattern "regex" -Filter "*.js" [-Path "dir"] [-Depth 2] [-Context 2]
@@ -374,7 +404,7 @@ Checklist:
 };
 
 // ===================================
-// FIRST PROMPT
+// FIRST PROMPT (LEGACY / OPTIONAL)
 // ===================================
 const PROMPT_FIRST = `
 {user_prompt}
@@ -387,12 +417,10 @@ const PROMPT_FIRST = `
 // SUBSEQUENT PROMPT
 // ===================================
 const PROMPT_SUBSEQUENT = `
+You are Clustrix, a fast and helpful AI coding assistant. You have the capability to use PowerShell commands to explore, read, edit, and execute code in projects.
+
+===> RECENT MESSAGE INDEX & CORE FOCUS
 {user_prompt}
-
----
-
-{command_history}
-
 
 ---
 
@@ -487,7 +515,49 @@ function detectDangerousCommand(command = '') {
 // ===================================
 // BUILD STATE-SPECIFIC PROMPT
 // ===================================
-function buildStatePrompt(state, iteration, commandHistory, includeReference = false, memoryState = '', currentMemory = 'default') {
+// ===================================
+// HISTORY FORMATTING (Pruning & Summarization)
+// ===================================
+function formatCommandHistory(history = [], lastHidden = null) {
+  if (!history || history.length === 0) return 'No recent history.';
+
+  // 1. Pruning: Keep only last 5 turns for full context
+  const recentTurns = history.slice(-5);
+
+  // 2. Summarization: Summarize older turns (simple version for now)
+  // In a real implementation, we might use an LLM to summarize, but here we'll just list commands
+  const olderTurns = history.slice(0, -5);
+  let summary = '';
+  if (olderTurns.length > 0) {
+    summary = olderTurns.map(h => `- ${h.command}`).join('\n');
+  } else {
+    summary = 'No older history.';
+  }
+
+  // 3. Formatting Recent Turns
+  const formattedRecent = recentTurns.map((entry, index) => {
+    // Filter out massive outputs to prevent context flooding
+    let output = entry.output || '';
+    if (output.length > 1000) {
+      output = output.substring(0, 1000) + '\n... [Output Truncated]';
+    }
+
+    return `<turn i="${olderTurns.length + index + 1}">
+<command>${entry.command}</command>
+<output>${output}</output>
+</turn>`;
+  }).join('\n\n');
+
+  return {
+    summary,
+    recent: formattedRecent
+  };
+}
+
+// ===================================
+// BUILD STATE-SPECIFIC PROMPT
+// ===================================
+function buildStatePrompt(state, iteration, commandHistory, includeReference = false, memoryState = '', currentMemory = 'default', userPromptText = '', historySummary = '') {
   const stateFormat = STATE_RESPONSE_FORMATS[state];
 
   // Build command reference (only when needed)
@@ -495,14 +565,21 @@ function buildStatePrompt(state, iteration, commandHistory, includeReference = f
     ? COMMAND_REFERENCE
     : '';
 
-  // Build prompt with state-specific rules
-  let prompt = SYSTEM_PROMPT
+  // 1. Build Static System Prompt
+  let systemPrompt = STATIC_SYSTEM_PROMPT
     .replace('{state_format}', stateFormat.format)
-    .replace('{command_reference}', commandRef)
-    .replace('{memory_state}', memoryState)
-    .replace('{current_memory}', currentMemory || 'default');
+    .replace('{command_reference}', commandRef);
 
-  return prompt;
+  // 2. Build Dynamic User Context
+  let userContext = DYNAMIC_CONTEXT_TEMPLATE
+    .replace('{memory_state}', memoryState)
+    .replace('{current_memory}', currentMemory || 'default')
+    .replace('{history_summary}', historySummary)
+    .replace('{command_history}', commandHistory) // This should be the RECENT turns
+    .replace('{user_prompt}', userPromptText)
+    .replace('{summary_reminder}', ''); // Can be passed in if needed
+
+  return { systemPrompt, userContext };
 }
 
 // ===================================
@@ -527,7 +604,8 @@ module.exports = {
   DANGEROUS_PATTERNS,
   STATE_RESPONSE_FORMATS,
   STATE_RULES,
-  SYSTEM_PROMPT,
+  STATIC_SYSTEM_PROMPT,
+  DYNAMIC_CONTEXT_TEMPLATE,
   COMMAND_REFERENCE,
   ERROR_GUIDANCE,
   PROMPT_FIRST,
@@ -535,6 +613,7 @@ module.exports = {
   detectCurrentState,
   detectDangerousCommand,
   buildStatePrompt,
+  formatCommandHistory,
   getCommandReference,
   getErrorGuidance,
 };

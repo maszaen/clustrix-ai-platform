@@ -866,7 +866,7 @@ hr {
 
 .icon-btn2:hover {
   background: var(--hover-bg);
-  color: var(--fg)
+  color: var(--fg);
   transform: translateY(-1px);
 }
 
@@ -3387,7 +3387,7 @@ input:checked + .slider:before {
   max-width: 785px;
   margin: 0 !important;
   justify-content: center;
-  border: 1px solid var(--border-light)
+  border: 1px solid var(--border-light);
   gap: var(--spacing-md);
   background: var(--bg-secondary);
   border-radius: var(--radius-2xl);
@@ -3417,7 +3417,7 @@ input:checked + .slider:before {
   max-width: 725px;
   justify-content: center;
   margin: 0 auto;
-  border: 1px solid var(--border-light)
+  border: 1px solid var(--border-light);
   gap: var(--spacing-md);
   background: var(--bg-secondary);
   border-radius: var(--radius-2xl);
@@ -4654,7 +4654,7 @@ blockquote blockquote blockquote blockquote::before {
 .message-text h2 { font-size: 17.4px; }
 .message-text h3 { font-size: 16.8px; }
 .message-text h4 { font-size: 16.2px; }
-.message-text h5 { font-size: 15.6px; }`
+.message-text h5 { font-size: 15.6px; };
 .message-text h6 { font-size: 15px; }
 
 .message-text p {
@@ -6059,9 +6059,6 @@ a:focus-visible {
 .custom-tooltip.show .tooltip-text {
   visibility: visible;
   opacity: 1;
-}
-  border-bottom: none;
-  display: none;
 }
 
 .thinking-update:last-child {

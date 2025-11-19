@@ -11,8 +11,10 @@ const {
   AGENT_STATES,
   PROMPT_FIRST,
   PROMPT_SUBSEQUENT,
+  STATIC_SYSTEM_PROMPT,
   detectDangerousCommand,
   buildStatePrompt,
+  formatCommandHistory,
   getErrorGuidance,
 } = require('./codes-prompt');
 const MAX_ITERATIONS = 200;
@@ -34,7 +36,7 @@ const BACKGROUND_PROCESS_PATTERNS = [
   /^ts-node.*server/,
   /^deno\s+run/,
   /^serve(\s+|$)/,
-  
+
   // Build tools & bundlers
   /vite(\s+|$)/,
   /webpack(-dev-server|\s+serve)/,
@@ -42,7 +44,7 @@ const BACKGROUND_PROCESS_PATTERNS = [
   /rollup.*--watch/,
   /esbuild.*--watch/,
   /tsc.*--watch/,
-  
+
   // Frontend frameworks
   /ng\s+serve/,
   /^react-scripts\s+start/,
@@ -55,7 +57,7 @@ const BACKGROUND_PROCESS_PATTERNS = [
   /^vue-cli-service\s+serve/,
   /^quasar\s+dev/,
   /^expo\s+start/,
-  
+
   // Python
   /^python\s+-m\s+http\.server/,
   /^python.*manage\.py\s+runserver/,
@@ -64,45 +66,45 @@ const BACKGROUND_PROCESS_PATTERNS = [
   /^gunicorn/,
   /^streamlit\s+run/,
   /^jupyter\s+(notebook|lab)/,
-  
+
   // PHP
   /^php\s+(artisan\s+serve|-S\s+)/,
   /^symfony\s+serve/,
-  
+
   // Ruby
   /^rails\s+(server|s)/,
   /^bundle\s+exec.*server/,
   /^rackup/,
   /^jekyll\s+serve/,
   /^middleman\s+server/,
-  
+
   // Static site generators
   /^hugo\s+server/,
   /^eleventy.*--serve/,
   /^hexo\s+server/,
   /^docusaurus\s+start/,
   /^mkdocs\s+serve/,
-  
+
   // Java/JVM
   /^mvn\s+spring-boot:run/,
   /^gradle(w)?\s+(bootRun|run)/,
   /^java.*-jar/,
-  
+
   // Go
   /^go\s+run/,
   /^(air|fresh)(\s+|$)/,
-  
+
   // Rust
   /^cargo\s+(run|watch)/,
-  
+
   // Databases
   /^(mongod|redis-server|mysql|postgres)(\s+|$)/,
   /^neo4j\s+console/,
-  
+
   // Containers & servers
   /^docker(-compose)?\s+(run|up)/,
   /^(nginx|apache2ctl|caddy)(\s+|$)/,
-  
+
   // Others
   /^dotnet\s+run/,
   /^mix\s+phx\.server/,
@@ -118,12 +120,12 @@ function isBackgroundProcess(command) {
 }
 
 let deps = {
-  log: () => {},
+  log: () => { },
   getCodeById: () => null,
   getMemory: () => [],
-  saveMemory: () => {},
-  deleteMemory: () => {},
-  clearAllMemory: () => {},
+  saveMemory: () => { },
+  deleteMemory: () => { },
+  clearAllMemory: () => { },
 };
 
 const sessionStates = new Map();
@@ -146,7 +148,7 @@ function ensureIdleTimer() {
       if (now - state.lastUsed > IDLE_TIMEOUT_MS) {
         try {
           state.terminal?.dispose();
-        } catch {}
+        } catch { }
         sessionStates.delete(sessionId);
       }
     }
@@ -186,7 +188,7 @@ function getSessionState(sessionId, codeId = null) {
   if (!state) {
     const persistedMemory = desiredMemoryOwnerId ? deps.getMemory?.(desiredMemoryOwnerId, null, desiredMemoryOwnerType) || [] : [];
     const { memories, activeMemoryNames } = buildMemoryStructures(persistedMemory);
-    
+
     // Clean any corrupted memory ranges loaded from database
     Object.values(memories).forEach(memory => {
       if (memory && memory.files) {
@@ -222,7 +224,7 @@ function getSessionState(sessionId, codeId = null) {
     } else if (desiredMemoryOwnerId && state.memoryOwnerId !== desiredMemoryOwnerId) {
       const persistedMemory = deps.getMemory?.(desiredMemoryOwnerId, null, desiredMemoryOwnerType) || [];
       const { memories, activeMemoryNames } = buildMemoryStructures(persistedMemory);
-      
+
       // Clean any corrupted memory ranges loaded from database
       Object.values(memories).forEach(memory => {
         if (memory && memory.files) {
@@ -231,7 +233,7 @@ function getSessionState(sessionId, codeId = null) {
           });
         }
       });
-      
+
       state.memoryOwnerId = desiredMemoryOwnerId;
       state.memoryOwnerType = desiredMemoryOwnerType;
       state.memories = memories;
@@ -251,7 +253,7 @@ function getSessionState(sessionId, codeId = null) {
 
 function waitForUserConfirmation(sessionId, iteration) {
   const key = `${sessionId}-${iteration}`;
-  
+
   return new Promise((resolve) => {
     const timeoutId = setTimeout(() => {
       const entry = confirmationPromises.get(key);
@@ -268,7 +270,7 @@ function waitForUserConfirmation(sessionId, iteration) {
 function resolveUserConfirmation(sessionId, iteration, allowed) {
   const key = `${sessionId}-${iteration}`;
   const entry = confirmationPromises.get(key);
-  
+
   if (entry && typeof entry.resolve === 'function') {
     confirmationPromises.delete(key);
     if (entry.timeoutId) {
@@ -277,7 +279,7 @@ function resolveUserConfirmation(sessionId, iteration, allowed) {
     entry.resolve({ allowed, timedOut: false });
     return true;
   }
-  
+
   return false;
 }
 
@@ -427,7 +429,13 @@ function formatMemoryOutput(state) {
 
   for (const [memName, memory] of Object.entries(state.memories || {})) {
     if (visibleMemories.includes(memName)) {
-      output.push(`===> ACTIVE MEMORY (${memName})`);
+      output.push(`===> ACTIVE MEMORY: ${memName} - (All search results are collected here cumulatively)
+# IMPORTANT: 
+  1. TRUST THE DATA: The content below is the EXACT representation of files in the workspace. If you see syntax errors (e.g., missing braces, incomplete lines) that are NOT followed by an "[unexplored]" marker, they are REAL BUGS in the file that you must fix.
+  2. TRUNCATION LOGIC: Files are ONLY truncated where explicitly marked with "[Line X-Y unexplored]".
+  3. NO REDUNDANT SEARCH: **NEVER** use commands to read/search lines that are already visible in this memory. It is wasted effort. **Target ONLY** the \`[Lines ... unexplored]\` gaps if you need to expand your view.
+  4. DYNAMIC UPDATES: This memory is cumulative and strictly up-to-date.
+        `);
 
       for (const [filePath, fileData] of Object.entries(memory.files || {})) {
         // Calculate total explored lines
@@ -437,7 +445,7 @@ function formatMemoryOutput(state) {
         }
 
         const totalLinesInfo = fileData.totalLines ? ` (${fileData.totalLines} lines total, ${totalExplored} explored)` : '';
-        
+
         // If totalLines is null, try to get it from file system
         if (fileData.totalLines === null) {
           try {
@@ -483,7 +491,7 @@ function formatMemoryOutput(state) {
             output.push(`[Lines ${lastExploredLine + 1}-${fileData.totalLines} unexplored]`);
           }
         }
-        
+
         output.push(''); // Empty line between files
       }
     } else {
@@ -695,7 +703,7 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
         totalLines = parseInt(totalMatch[1], 10);
         continue;
       }
-      
+
       const match = line.match(/^(\d+):(.*)$/);
       if (match) {
         const lineNum = parseInt(match[1], 10);
@@ -822,47 +830,6 @@ function summarizeOutput(output = '', exitCode = 0) {
   return `${singleLine.slice(0, HISTORY_SUMMARY_LENGTH)}…`;
 }
 
-function formatCommandHistory(history = [], lastHidden = null) {
-  if (!history.length) {
-    return 'No commands executed yet.';
-  }
-
-  const recentHistory = history.slice(-MAX_HISTORY);
-  const olderHistory = recentHistory.slice(0, -1); // All but last command
-  const lastCommand = recentHistory.slice(-1)[0]; // Only last command with full output
-
-  const parts = [];
-
-  // Older commands: show ONLY command + summary (no output)
-  if (olderHistory.length > 0) {
-    parts.push('## PREVIOUS COMMANDS:');
-    parts.push(olderHistory.map((entry, index) => {
-      const idx = history.length - recentHistory.length + index + 1;
-      return `#${idx}: ${entry.command}`;
-    }).join('\n'));
-    parts.push(''); // Add blank line after previous commands
-  }
-
-  // Last command: show FULL output for current context
-  if (lastCommand) {
-    const idx = history.length;
-    const output = truncateOutput(lastCommand.output || 'No output', 'full');
-    parts.push(`# LAST COMMAND (iteration #${idx} - dont execute again):`);
-    parts.push(lastCommand.command);
-    parts.push('Full output, not truncated:');
-    parts.push(output);
-    parts.push(`Exit Code: ${lastCommand.exitCode}`);
-  }
-
-  // Add last hidden content if available
-  if (lastHidden) {
-    parts.push('');
-    parts.push(`# INTERNAL THOUGHT/TO-DO CREATED BY YOUR LAST COMMAND:`);
-    parts.push(lastHidden);
-  }
-
-  return parts.join('\n');
-}
 
 function getLastCommand(history = []) {
   if (!history.length) {
@@ -886,7 +853,7 @@ function buildUserPrompt({ userPrompt, instruction, workspacePath, savedState, c
     parts.push(`# WORKSPACE PATH:\n${workspacePath}`);
   }
   if (instruction || currentState) {
-    parts.push(`# [CORE FOCUS] WORKSPACE/STATE INSTRUCTION:\n${instruction}`);
+    parts.push(`# WORKSPACE/STATE INSTRUCTION:\n${instruction}`);
     if (currentState) {
       const { STATE_RULES, AGENT_STATES } = require('./codes-prompt');
       const stateRules = STATE_RULES[currentState] || '';
@@ -898,7 +865,7 @@ function buildUserPrompt({ userPrompt, instruction, workspacePath, savedState, c
   if (savedState) {
     parts.push(`# CONTINUATION FROM PREVIOUS SESSION:\nPrevious session ended in ${savedState} state. Continue from where we left off.`);
   }
-  
+
   return parts.join('\n\n');
 }
 
@@ -979,39 +946,41 @@ function renderSystemPrompt(template, { userPrompt, commandHistory, commandHisto
     : '';
 
   // 2. V2: Build state-specific system prompt
-  const { errorType, includeCommandReference } = detectErrorContext(commandHistory);
+  const { errorType, includeCommandReference } = detectErrorContext(commandHistoryArray);
   const errorGuidance = errorType ? getErrorGuidance(errorType) : '';
 
-  // Build state-aware prompt (includes state rules + format)
-  const statePrompt = buildStatePrompt(
+  // Context separation: 
+  // 1. previousMessagesHistory -> goes to {previous_history} inside common_command (Legacy? No, we put it in history_summary now?)
+  // Actually, previousMessagesHistory is from DB (previous turns). We should append it to history_summary or userPrompt.
+  // For now, let's append it to history_summary.
+
+  const contextPrevious = previousMessagesHistory || '';
+
+  // Build state-aware prompt (returns { systemPrompt, userContext })
+  const { systemPrompt, userContext } = buildStatePrompt(
     currentState,
     iteration,
-    commandHistory,
+    commandHistory, // This is the formatted recent turns
     includeCommandReference || iteration === 0,
     memoryState,
-    currentMemory
+    currentMemory,
+    userPrompt, // userPromptText
+    contextPrevious // historySummary
   );
 
-  // Build final prompt with error guidance if detected
+  // Inject error guidance into system prompt if needed
   const finalSystemPrompt = errorGuidance
-    ? `${statePrompt}\n\n${errorGuidance}`
-    : statePrompt;
+    ? `${systemPrompt}\n\n${errorGuidance}`
+    : systemPrompt;
 
-  const assistantPersona = 'You are Clustrix, a fast and helpful AI coding assistant. You have the capability to use PowerShell commands to explore, read, edit, and execute code in projects.\n\n';
+  // We don't use 'template' anymore for the main structure, as buildStatePrompt handles it via DYNAMIC_CONTEXT_TEMPLATE.
+  // But PROMPT_SUBSEQUENT might still be used for something? 
+  // Actually, buildStatePrompt uses DYNAMIC_CONTEXT_TEMPLATE which replaces PROMPT_SUBSEQUENT's role for the user message.
+  // So we can ignore 'template' argument or use it if we want to wrap the userContext?
+  // PROMPT_SUBSEQUENT in codes-prompt.js is now just a legacy string or we can remove it.
+  // Let's assume buildStatePrompt returns the full User Context string.
 
-  // Inject previous messages history before current user prompt
-  const fullContext = previousMessagesHistory
-    ? `===> PREVIOUS MESSAGE INDEX\n${previousMessagesHistory}---\n\n===> RECENT MESSAGE INDEX\n{user_prompt}`
-    : '{user_prompt}';
-
-  return template
-    .replace('{user_prompt}', assistantPersona + fullContext)
-    .replace('{command_history}', commandHistory)
-    .replace('{last_command}', lastCommand.command)
-    .replace('{last_output}', lastCommand.output)
-    .replace('{summary_reminder}', summaryReminder)
-    .replace('{common_command}', finalSystemPrompt)
-    .replace('{user_prompt}', userPrompt); // Replace the placeholder with actual user prompt
+  return { systemPrompt: finalSystemPrompt, userContext: userContext + summaryReminder };
 }
 
 function parseAgentResponse(text = '') {
@@ -1115,13 +1084,13 @@ function isHighImpactCommand(command = '') {
     .trim()
     .replace(/^\s+/gm, '') // Remove whitespace di awal setiap line
     .toLowerCase();
-  
+
   // Ambil line pertama yang non-empty
   const firstLine = normalized
     .split('\n')
     .map(line => line.trim())
     .find(line => line.length > 0) || '';
-  
+
   const dangerousPatterns = [
     // File/Directory deletion
     'remove-item',
@@ -1133,7 +1102,7 @@ function isHighImpactCommand(command = '') {
     'truncate',
     'shred',
     'wipe',
-    
+
     // Disk operations
     'format-volume',
     'mkfs',
@@ -1142,7 +1111,7 @@ function isHighImpactCommand(command = '') {
     'fdisk',
     'parted',
     'dd ',
-    
+
     // Git operations
     'git checkout',
     'git reset',
@@ -1154,7 +1123,7 @@ function isHighImpactCommand(command = '') {
     'git branch -D',
     'git filter-branch',
     'git gc',
-    
+
     // Process/Service management
     'stop-service',
     'stop-process',
@@ -1162,11 +1131,11 @@ function isHighImpactCommand(command = '') {
     'killall',
     'taskkill',
     'pkill',
-    
+
     // Registry (Windows)
     'reg delete',
     'remove-itemproperty',
-    
+
     // Permission changes
     'chmod',
     'chown',
@@ -1174,7 +1143,7 @@ function isHighImpactCommand(command = '') {
     'set-acl',
     'chgrp',
     'setfacl',
-    
+
     // Network config
     'netsh',
     'iptables',
@@ -1183,7 +1152,7 @@ function isHighImpactCommand(command = '') {
     'ip route',
     'ufw delete',
     'firewall-cmd',
-    
+
     // System config
     'shutdown',
     'restart-computer',
@@ -1195,7 +1164,7 @@ function isHighImpactCommand(command = '') {
     'init ',
     'systemctl stop',
     'systemctl disable',
-    
+
     // Package managers
     'npm uninstall',
     'yarn remove',
@@ -1205,35 +1174,35 @@ function isHighImpactCommand(command = '') {
     'yum remove',
     'pacman -r',
     'brew uninstall',
-    
+
     // Environment/Config
     'set-executionpolicy',
     'setenforce',
-    
+
     // Cron/Scheduled tasks
     'crontab -r',
     'unregister-scheduledtask',
     'schtasks /delete',
-    
+
     // Docker/Container
     'docker rm',
     'docker rmi',
     'docker system prune',
     'docker volume rm',
     'kubectl delete',
-    
+
     // Certificate/Security
     'revoke-',
     'remove-certificate',
-    
+
     // Symbolic links
     'ln -sf',
     'mklink',
-    
+
     // Sudo prefix
     'sudo ',
   ];
-  
+
   // Check if first non-empty line STARTS with any dangerous pattern
   return dangerousPatterns.some(pattern => firstLine.startsWith(pattern));
 }
@@ -1252,25 +1221,25 @@ function isHighImpactCommand(command = '') {
 
 function formatResponseAndCommand({ answer, command, hidden }) {
   const sections = [];
-  
+
   // 1. Format hidden as codeblock with '>' prefix
   if (hidden) {
     sections.push(`<!--hidden-->\n${hidden.trim()}\n<!--/hidden-->\n`);
   }
-  
+
   // 2. Add answer (already handled)
   if (answer) {
     const cleanedAnswer = answer
-      .replace(/^```[\w]*\n?/, '') 
-      .replace(/\n?```$/, '');  
+      .replace(/^```[\w]*\n?/, '')
+      .replace(/\n?```$/, '');
     sections.push(cleanedAnswer);
   }
-  
+
   // 3. Add command (already handled)
   if (command) {
     sections.push(`<!--command-input-->\n${command.trim()}\n<!--/command-input-->\n`);
   }
-  
+
   return sections.length > 0 ? sections.join('\n\n') : null;
 }
 
@@ -1307,7 +1276,7 @@ function mergeUsage(target, usage) {
 function formatTodo(todoText) {
   // Parse todo checklist into structured format
   if (!todoText) return null;
-  
+
   const lines = todoText.split('\n').filter(line => line.trim().startsWith('-'));
   const items = lines.map(line => {
     const match = line.match(/^-\s*\[([ xX])\]\s*(.+)$/);
@@ -1319,14 +1288,14 @@ function formatTodo(todoText) {
     }
     return null;
   }).filter(Boolean);
-  
+
   return items.length > 0 ? items : null;
 }
 
 function formatTodoChunk(todo, checklist, iteration) {
   // Return formatted todo/checklist for sending to renderer
   const content = [];
-  
+
   if (iteration === 0 && todo) {
     // First iteration: show todo list
     content.push('📋 **My Plan:**\n');
@@ -1351,7 +1320,7 @@ function formatTodoChunk(todo, checklist, iteration) {
       content.push(checklist);
     }
   }
-  
+
   return content.length > 0 ? content.join('\n') : null;
 }
 
@@ -1361,7 +1330,7 @@ function ensurePowerShellSession(state, workspacePath) {
   }
   try {
     state.terminal?.dispose();
-  } catch {}
+  } catch { }
   state.terminal = new PowerShellSession({ workspacePath, log });
   state.workspacePath = workspacePath;
   return state.terminal;
@@ -1454,6 +1423,7 @@ function callOpenAICompatibleChat({ baseUrl, provider, apiKey, model, messages }
     req.end();
   });
 }
+
 async function runAgentIteration({
   iteration,
   state,
@@ -1466,6 +1436,7 @@ async function runAgentIteration({
   sessionId,
   isContinuationSession = false,
 }) {
+  // Use formatCommandHistory from codes-prompt.js which returns { summary, recent }
   const commandHistoryText = formatCommandHistory(state.commandHistory, state.lastHidden);
   const lastCommand = getLastCommand(state.commandHistory);
 
@@ -1502,7 +1473,7 @@ async function runAgentIteration({
               iterationIndex.forEach((iter, idx) => {
                 const cmd = iter.command || '[no command]';
                 historyParts.push(`#${idx + 1}: ${cmd}`);
-                
+
                 // // For the last message in history, include output of the last iteration
                 // if (isLastMessage && idx === iterationIndex.length - 1) {
                 //   const output = iter.output || 'No output';
@@ -1532,13 +1503,14 @@ async function runAgentIteration({
   // Pass iteration for dynamic command reference injection
   const memoryState = formatMemoryOutput(state);
   const truncatedMemory = memoryState.length > 150000 ? memoryState.substring(0, 150000) + '\n[Memory truncated, use Show-Memory to read all]' : memoryState;
-  const systemPrompt = renderSystemPrompt(selectPromptTemplate(iteration, isContinuationSession), {
+
+  const { systemPrompt, userContext } = renderSystemPrompt(selectPromptTemplate(iteration, isContinuationSession), {
     userPrompt,
-    commandHistory: commandHistoryText,
+    commandHistory: commandHistoryText.recent, // Pass formatted recent turns
     commandHistoryArray: state.commandHistory,
     lastCommand,
     iteration,
-    previousMessagesHistory,
+    previousMessagesHistory: previousMessagesHistory + (commandHistoryText.summary ? `\n\nPrevious Turns Summary:\n${commandHistoryText.summary}` : ''),
     currentState: state.currentState,
     memoryState: truncatedMemory,
     currentMemory: state.currentMemory,
@@ -1550,24 +1522,42 @@ async function runAgentIteration({
   console.log(systemPrompt.trim());
   console.log('<==>===== END SYSTEM PROMPT =====<==>\n\n');
 
+  console.log('\n\n<==>===== CODE AGENT ITERATION #' + iteration + ' - USER PROMPT =====<==>');
+  console.log(userContext.trim());
+  console.log('<==>===== END USER PROMPT =====<==>\n\n');
+
   // Build messages array - OPTIMIZED for token efficiency
   let messages;
 
   if (iteration === 0) {
     // First iteration OF THIS REQUEST
-    // Previous iterations loaded into system prompt, not message bodies
     messages = [
       { role: 'system', content: systemPrompt.trim() },
-      { role: 'user', content: userPrompt }, // Current request
+      { role: 'user', content: userContext }, // User Context + Request
     ];
 
     // Reset iteration history for this new request
     state.conversationHistory = [
-      { role: 'user', content: userPrompt },
+      { role: 'user', content: userContext },
     ];
   } else {
     // Subsequent iterations: rebuild messages with CURRENT system prompt
     // Include: system + conversationHistory (current request iterations)
+    // IMPORTANT: We need to update the LAST user message with the FRESH context?
+    // Or just append a new context message?
+    // Since conversationHistory tracks the *current request* turns, the first message in it is the User Request.
+    // But we want the context to be fresh.
+    // If we update state.conversationHistory[0], it updates the "User Request" context.
+    // But if we are deep in iteration, the "User Request" might be far back.
+    // Ideally, we want the context to be "near" the end.
+    // But we can't easily insert a user message in the middle without confusing the model (User -> Assistant -> User -> Assistant).
+    // So updating the FIRST message (User Request) with the LATEST context is a common pattern (RAG).
+
+    // Update the content of the first user message in history with the fresh context
+    if (state.conversationHistory.length > 0 && state.conversationHistory[0].role === 'user') {
+      state.conversationHistory[0].content = userContext;
+    }
+
     messages = [
       { role: 'system', content: systemPrompt.trim() },
       ...state.conversationHistory, // Current request's iteration history
@@ -1665,40 +1655,40 @@ function parseMemoryCommand(command) {
 
   // Show memory <name> (or Show-Memory <name> or show-memory <name>)
   const showMatch = trimmed.match(/^show\s+memory\s+(\S+)$/i) ||
-                   trimmed.match(/^show-memory\s+(\S+)$/i) ||
-                   trimmed.match(/^Show-Memory\s+(\S+)$/i);
+    trimmed.match(/^show-memory\s+(\S+)$/i) ||
+    trimmed.match(/^Show-Memory\s+(\S+)$/i);
   if (showMatch) {
     return { type: 'show', name: showMatch[1] };
   }
 
   // Hide memory <name1> <name2> (or Hide-Memory <name1> <name2>)
   const hideMatch = trimmed.match(/^hide\s+memory\s+(.+)$/i) ||
-                   trimmed.match(/^hide-memory\s+(.+)$/i) ||
-                   trimmed.match(/^Hide-Memory\s+(.+)$/i);
+    trimmed.match(/^hide-memory\s+(.+)$/i) ||
+    trimmed.match(/^Hide-Memory\s+(.+)$/i);
   if (hideMatch) {
     return { type: 'hide', names: hideMatch[1].split(/\s+/) };
   }
 
   // Use memory <name1> <name2> (or Use-Memory <name1> <name2>)
   const useMatch = trimmed.match(/^use\s+memory\s+(.+)$/i) ||
-                  trimmed.match(/^use-memory\s+(.+)$/i) ||
-                  trimmed.match(/^Use-Memory\s+(.+)$/i);
+    trimmed.match(/^use-memory\s+(.+)$/i) ||
+    trimmed.match(/^Use-Memory\s+(.+)$/i);
   if (useMatch) {
     return { type: 'use', names: useMatch[1].split(/\s+/) };
   }
 
   // Clear memory <name1> <name2> (or Clear-Memory <name1> <name2>)
   const clearMatch = trimmed.match(/^clear\s+memory\s+(.+)$/i) ||
-                    trimmed.match(/^clear-memory\s+(.+)$/i) ||
-                    trimmed.match(/^Clear-Memory\s+(.+)$/i);
+    trimmed.match(/^clear-memory\s+(.+)$/i) ||
+    trimmed.match(/^Clear-Memory\s+(.+)$/i);
   if (clearMatch) {
     return { type: 'clear', names: clearMatch[1].split(/\s+/) };
   }
 
   // Command | Create memory <name> (or Create-Memory <name>)
   const createMatch = trimmed.match(/^(.+?)\s*\|\s*create\s+memory\s+(\S+)$/i) ||
-                     trimmed.match(/^(.+?)\s*\|\s*create-memory\s+(\S+)$/i) ||
-                     trimmed.match(/^(.+?)\s*\|\s*Create-Memory\s+(\S+)$/i);
+    trimmed.match(/^(.+?)\s*\|\s*create-memory\s+(\S+)$/i) ||
+    trimmed.match(/^(.+?)\s*\|\s*Create-Memory\s+(\S+)$/i);
   if (createMatch) {
     return { type: 'create', name: createMatch[2], actualCommand: createMatch[1].trim() };
   }
@@ -1742,7 +1732,7 @@ async function executeCommand(state, command, options = {}) {
       editResult.files.forEach(file => {
         // Clear old memory for this file
         clearFileFromMemories(state, file.filePath);
-        
+
         // Update memory with entire edited file content
         const fs = require('fs');
         const path = require('path');
@@ -1753,7 +1743,7 @@ async function executeCommand(state, command, options = {}) {
             const lines = content.split(/\r?\n/);
             // Add entire file to memory (start from line 1)
             addToMemory(state, file.filePath, 1, lines.length, lines, state.currentMemory, memoryOwnerId, lines.length);
-            
+
             log('CODES', 3, 'executeCommand', 'Updated memory with full file after edit', {
               filePath: file.filePath,
               totalLines: lines.length,
@@ -1905,20 +1895,20 @@ async function executeCommand(state, command, options = {}) {
     const result = await (disableTimeout || !Number.isFinite(actualTimeoutMs) || actualTimeoutMs <= 0
       ? runPromise
       : new Promise((resolve, reject) => {
-          const timeoutId = setTimeout(() => {
-            reject(new Error('Command execution timeout'));
-          }, actualTimeoutMs);
+        const timeoutId = setTimeout(() => {
+          reject(new Error('Command execution timeout'));
+        }, actualTimeoutMs);
 
-          runPromise
-            .then((value) => {
-              clearTimeout(timeoutId);
-              resolve(value);
-            })
-            .catch((error) => {
-              clearTimeout(timeoutId);
-              reject(error);
-            });
-        }));
+        runPromise
+          .then((value) => {
+            clearTimeout(timeoutId);
+            resolve(value);
+          })
+          .catch((error) => {
+            clearTimeout(timeoutId);
+            reject(error);
+          });
+      }));
 
     const combinedOutput = [result.stdout, result.stderr].filter(Boolean).join('\n');
     const exitCode = typeof result.exitCode === 'number' ? result.exitCode : 0;
@@ -1928,7 +1918,7 @@ async function executeCommand(state, command, options = {}) {
       // For background processes, return success message with captured output
       const outputLines = combinedOutput.split('\n').slice(0, 10); // First 10 lines
       const truncatedOutput = outputLines.join('\n');
-      
+
       // Dispose terminal after background process to ensure clean state for next command
       try {
         state.terminal?.dispose();
@@ -1938,7 +1928,7 @@ async function executeCommand(state, command, options = {}) {
           error: disposeError?.message,
         });
       }
-      
+
       return {
         output: `Command executed, captured output:\n\n${truncatedOutput}`,
         exitCode,
@@ -1992,7 +1982,7 @@ async function executeCommand(state, command, options = {}) {
     };
   } catch (error) {
     const isTimeout = error?.message === 'Command execution timeout';
-    
+
     if (isTimeout) {
       // Terminal execution failed or timeout - dispose and reset terminal
       try {
@@ -2004,7 +1994,7 @@ async function executeCommand(state, command, options = {}) {
         });
       }
 
-      const timeoutMessage = isBackground 
+      const timeoutMessage = isBackground
         ? '[Executed] Background process has been redirected to another terminal'
         : '[Failed] Terminal execution failed or timeout, please try again with different command';
 
@@ -2098,11 +2088,9 @@ async function processCodeRequest({
   let finalAnswer = null; // Track final answer to save to messages table
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
+    // Check if cancellation was requested
     if (typeof shouldCancel === 'function' && shouldCancel()) {
-      log('CODES', 1, 'processCodeRequest', 'Streaming cancelled before iteration', {
-        iteration,
-        sessionId,
-      });
+      log('CODES', 1, 'processCodeRequest', 'Cancellation requested, stopping iteration loop', { sessionId, iteration });
       break;
     }
 
@@ -2118,14 +2106,6 @@ async function processCodeRequest({
       sessionId,
       isContinuationSession,
     });
-
-    if (typeof shouldCancel === 'function' && shouldCancel()) {
-      log('CODES', 1, 'processCodeRequest', 'Streaming cancelled after agent response', {
-        iteration,
-        sessionId,
-      });
-      break;
-    }
 
     usage = mergeUsage(usage, iterationUsage);
 
@@ -2229,7 +2209,7 @@ async function processCodeRequest({
         command: parsed.command,
         iteration,
       }) + '\n';
-      
+
       if (typeof onChunk === 'function') {
         try {
           chunks.push(confirmationChunk);
@@ -2247,10 +2227,10 @@ async function processCodeRequest({
           });
         }
       }
-      
+
       // Wait for user confirmation
       const userDecision = await waitForUserConfirmation(sessionId, iteration);
-      
+
       if (!userDecision.allowed) {
         // User skipped - add system message to guide AI
         const skipMessage = userDecision.timedOut
@@ -2263,18 +2243,18 @@ async function processCodeRequest({
           summary: userDecision.timedOut ? 'Command approval timed out' : 'User skipped destructive command',
           timestamp: Date.now(),
         });
-        
+
         // Add skip message to conversation history
         state.conversationHistory.push({
           role: 'user',
           content: `[SYSTEM] ${skipMessage}`,
         });
-        
+
         // Send skip notification to UI
-        const skipChunk = formatOutput({ 
-          output: skipMessage, 
-          exitCode: 1, 
-          blocked: false 
+        const skipChunk = formatOutput({
+          output: skipMessage,
+          exitCode: 1,
+          blocked: false
         });
         if (skipChunk && typeof onChunk === 'function') {
           try {
@@ -2367,15 +2347,6 @@ async function processCodeRequest({
       exitCode = result.exitCode;
       blocked = result.blocked;
       isTimeout = result.isTimeout;
-    }
-
-    // Check if user cancelled (interrupt button) after command execution
-    if (typeof shouldCancel === 'function' && shouldCancel()) {
-      log('CODES', 1, 'processCodeRequest', 'Streaming cancelled after command execution', {
-        iteration,
-        sessionId,
-      });
-      break;
     }
 
     // Detect ripgrep auto-install - restart terminal and retry ONCE
@@ -2547,19 +2518,19 @@ async function processCodeRequest({
       // Special handling for Show-FileWithLineNumbers with specific range - don't truncate
       // Also don't truncate for main execution output to show full results
       let finalOutput = output;
-      const isSpecificRangeRead = parsed.command && 
+      const isSpecificRangeRead = parsed.command &&
         parsed.command.match(/Show-FileWithLineNumbers\s+-Path\s+"?([^"\s]+)"?\s+-StartLine\s+(\d+)\s+-EndLine\s+(\d+)/i);
-      
+
       if (!isSpecificRangeRead) {
         finalOutput = truncateOutput(output, 'unlimited');
       }
-      
+
       const outputChunk = formatOutput({
         output: finalOutput,
         exitCode,
         blocked,
       });
-      
+
       if (outputChunk && typeof onChunk === 'function') {
         try {
           chunks.push(outputChunk);
@@ -2618,7 +2589,7 @@ function disposeAllCodeSessions() {
   log('CODES', 1, 'disposeAllCodeSessions', 'Disposing all PowerShell sessions', {
     sessionCount: sessionStates.size,
   });
-  
+
   for (const [sessionId, state] of sessionStates.entries()) {
     try {
       if (state.terminal && !state.terminal.isDisposed) {
@@ -2632,7 +2603,7 @@ function disposeAllCodeSessions() {
       });
     }
   }
-  
+
   sessionStates.clear();
   log('CODES', 1, 'disposeAllCodeSessions', 'All PowerShell sessions disposed');
 }
@@ -2646,21 +2617,8 @@ function cancelCodeSession(sessionId) {
     return false;
   }
 
-  try {
-    // Dispose terminal to immediately kill any running commands
-    if (state.terminal && !state.terminal.isDisposed) {
-      state.terminal.dispose();
-      state.terminal = null;
-      log('CODES', 1, 'cancelCodeSession', 'PowerShell terminal disposed', { sessionId });
-    }
-    return true;
-  } catch (error) {
-    log('CODES', 3, 'cancelCodeSession', 'Failed to dispose terminal', {
-      sessionId,
-      error: error?.message || error,
-    });
-    return false;
-  }
+  // Session cleanup handled by force interrupt - no interrupt flag needed
+  return true;
 }
 
 module.exports = {

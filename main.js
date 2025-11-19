@@ -2958,7 +2958,7 @@ ipcMain.on('codes:stream-start', async (event, payload = {}) => {
 
     send('done', {
       usage: result.usage || null,
-      cancelled: false,
+      cancelled: result.cancelled || false,
     });
     finished = true;
   } catch (error) {
@@ -2994,6 +2994,48 @@ ipcMain.on('codes:stream-cancel', (_event, reqId) => {
         sessionId: controller.sessionId,
       });
     }
+  }
+});
+
+ipcMain.handle('codes:set-interrupt', async (_event, sessionId) => {
+  try {
+    // Find and cancel the active codes stream for this session
+    let cancelled = false;
+    for (const [reqId, controller] of codeStreamControllers.entries()) {
+      if (controller.sessionId === sessionId) {
+        controller.cancelled = true;
+        cancelled = true;
+        
+        // Send cancelled done event
+        const event = { sender: { send: () => {} } }; // Mock event for sending
+        event.sender.send(`codes:done-${reqId}`, {
+          usage: null,
+          cancelled: true,
+        });
+        
+        // Clean up controller
+        codeStreamControllers.delete(reqId);
+        
+        log('CODES', 1, 'codes:set-interrupt', 'Force interrupted codes session', {
+          sessionId,
+          reqId,
+        });
+        break;
+      }
+    }
+    
+    if (!cancelled) {
+      log('CODES', 2, 'codes:set-interrupt', 'No active codes stream found for session', {
+        sessionId,
+      });
+    }
+    
+    return { success: true };
+  } catch (error) {
+    log('CODES', 3, 'codes:set-interrupt', 'Failed to force interrupt codes session', {
+      error: error?.message || error,
+    });
+    return { success: false, error: error?.message || error };
   }
 });
 

@@ -1,0 +1,2843 @@
+{
+  "file": "main.js",
+  "fileSize": 197723,
+  "totalLines": 5162,
+  "functions": [
+    {
+      "name": "runStandardStreaming",
+      "line": 3558,
+      "params": [
+        "event",
+        "payload"
+      ],
+      "lines": 999
+    },
+    {
+      "name": "processWithLangChain",
+      "line": 3744,
+      "params": [],
+      "lines": 456
+    },
+    {
+      "name": "processWithoutLangChain",
+      "line": 4202,
+      "params": [],
+      "lines": 354
+    },
+    {
+      "name": "handleOpenAICompatibleStreaming",
+      "line": 4318,
+      "params": [],
+      "lines": 237
+    },
+    {
+      "name": "createWindow",
+      "line": 2041,
+      "params": [],
+      "lines": 204
+    },
+    {
+      "name": "runWebSearchChat",
+      "line": 4890,
+      "params": [
+        "event",
+        "payload"
+      ],
+      "lines": 179
+    },
+    {
+      "name": "handlePerplexityRequest",
+      "line": 3590,
+      "params": [],
+      "lines": 152
+    },
+    {
+      "name": "getDefaultModelConfig",
+      "line": 509,
+      "params": [],
+      "lines": 113
+    },
+    {
+      "name": "handleGeminiStreaming",
+      "line": 4224,
+      "params": [],
+      "lines": 92
+    },
+    {
+      "name": "invokeLLM_nonStream",
+      "line": 5103,
+      "params": [
+        "messages",
+        "options"
+      ],
+      "lines": 58
+    },
+    {
+      "name": "progressCallback",
+      "line": 3792,
+      "params": [
+        "update"
+      ],
+      "lines": 55,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "finalizeTokenUsage",
+      "line": 3457,
+      "params": [
+        "reqId",
+        "event"
+      ],
+      "lines": 48
+    },
+    {
+      "name": "loadCodesFromStorage",
+      "line": 2776,
+      "params": [],
+      "lines": 40
+    },
+    {
+      "name": "ensureTray",
+      "line": 192,
+      "params": [],
+      "lines": 35
+    },
+    {
+      "name": "normalizeUsage",
+      "line": 3391,
+      "params": [
+        "rawUsage"
+      ],
+      "lines": 35
+    },
+    {
+      "name": "loadProjectsFromStorage",
+      "line": 2664,
+      "params": [],
+      "lines": 31
+    },
+    {
+      "name": "normalizeCodeChatRequest",
+      "line": 2857,
+      "params": [
+        "AssignmentPattern"
+      ],
+      "lines": 30
+    },
+    {
+      "name": "createTimestampedBackup",
+      "line": 30,
+      "params": [
+        "filePath",
+        "AssignmentPattern"
+      ],
+      "lines": 27
+    },
+    {
+      "name": "evaluateCloseReadiness",
+      "line": 246,
+      "params": [],
+      "lines": 27
+    },
+    {
+      "name": "recordTokenUsage",
+      "line": 3428,
+      "params": [
+        "reqId",
+        "stage",
+        "rawUsage",
+        "AssignmentPattern"
+      ],
+      "lines": 27
+    },
+    {
+      "name": "extractRequestedSourceCount",
+      "line": 4846,
+      "params": [
+        "query"
+      ],
+      "lines": 21
+    },
+    {
+      "name": "replaceFileWithDownloadedTemp",
+      "line": 59,
+      "params": [
+        "tempPath",
+        "destinationPath"
+      ],
+      "lines": 18
+    },
+    {
+      "name": "finalizeAppQuit",
+      "line": 229,
+      "params": [],
+      "lines": 15
+    },
+    {
+      "name": "detectInsultKeywords",
+      "line": 473,
+      "params": [
+        "userPrompt"
+      ],
+      "lines": 15
+    },
+    {
+      "name": "getModelConfigPath",
+      "line": 630,
+      "params": [],
+      "lines": 15
+    },
+    {
+      "name": "guessContentType",
+      "line": 2268,
+      "params": [
+        "p"
+      ],
+      "lines": 15
+    },
+    {
+      "name": "restoreFromTray",
+      "line": 176,
+      "params": [],
+      "lines": 14
+    },
+    {
+      "name": "createInsultDetectionPrompt",
+      "line": 489,
+      "params": [
+        "userPrompt"
+      ],
+      "lines": 14
+    },
+    {
+      "name": "initTokenTracker",
+      "line": 3377,
+      "params": [
+        "reqId",
+        "sessionId",
+        "messageIndex"
+      ],
+      "lines": 12
+    },
+    {
+      "name": "cleanupTempFile",
+      "line": 79,
+      "params": [
+        "tempPath"
+      ],
+      "lines": 11
+    },
+    {
+      "name": "sendChunk",
+      "line": 4057,
+      "params": [],
+      "lines": 11,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "send",
+      "line": 2919,
+      "params": [
+        "suffix",
+        "data"
+      ],
+      "lines": 9,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "parseTriageJson",
+      "line": 464,
+      "params": [
+        "rawText"
+      ],
+      "lines": 8
+    },
+    {
+      "name": "defBase",
+      "line": 4627,
+      "params": [
+        "p"
+      ],
+      "lines": 6,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "isNotFoundError",
+      "line": 92,
+      "params": [
+        "error"
+      ],
+      "lines": 5
+    },
+    {
+      "name": "clearCloseDelayTimer",
+      "line": 169,
+      "params": [],
+      "lines": 5
+    },
+    {
+      "name": "trackActiveStream",
+      "line": 3363,
+      "params": [
+        "reqId",
+        "metadata"
+      ],
+      "lines": 5
+    },
+    {
+      "name": "untrackActiveStream",
+      "line": 3370,
+      "params": [
+        "reqId"
+      ],
+      "lines": 4
+    },
+    {
+      "name": "sendDone",
+      "line": 4206,
+      "params": [],
+      "lines": 4
+    },
+    {
+      "name": "sendErr",
+      "line": 4211,
+      "params": [
+        "msg"
+      ],
+      "lines": 4
+    },
+    {
+      "name": "safeJoin",
+      "line": 2285,
+      "params": [
+        "base",
+        "rel"
+      ],
+      "lines": 3
+    },
+    {
+      "name": "clearTokenUsage",
+      "line": 3507,
+      "params": [
+        "reqId"
+      ],
+      "lines": 3
+    },
+    {
+      "name": "logHelper",
+      "line": 458,
+      "params": [
+        "context",
+        "func",
+        "message",
+        "AssignmentPattern"
+      ],
+      "lines": 2
+    }
+  ],
+  "classes": [],
+  "imports": [],
+  "exports": [],
+  "variables": [
+    {
+      "line": 3,
+      "kind": "const"
+    },
+    {
+      "name": "path",
+      "line": 4,
+      "kind": "const"
+    },
+    {
+      "name": "fs",
+      "line": 5,
+      "kind": "const"
+    },
+    {
+      "name": "fsp",
+      "line": 6,
+      "kind": "const"
+    },
+    {
+      "name": "https",
+      "line": 7,
+      "kind": "const"
+    },
+    {
+      "name": "http",
+      "line": 8,
+      "kind": "const"
+    },
+    {
+      "name": "url",
+      "line": 9,
+      "kind": "const"
+    },
+    {
+      "name": "mammoth",
+      "line": 10,
+      "kind": "const"
+    },
+    {
+      "line": 11,
+      "kind": "const"
+    },
+    {
+      "name": "xlsx",
+      "line": 12,
+      "kind": "const"
+    },
+    {
+      "line": 13,
+      "kind": "const"
+    },
+    {
+      "line": 14,
+      "kind": "const"
+    },
+    {
+      "line": 15,
+      "kind": "const"
+    },
+    {
+      "name": "ClustrixLangChainService",
+      "line": 17,
+      "kind": "const"
+    },
+    {
+      "line": 18,
+      "kind": "const"
+    },
+    {
+      "line": 19,
+      "kind": "const"
+    },
+    {
+      "line": 20,
+      "kind": "const"
+    },
+    {
+      "name": "DatabaseManager",
+      "line": 21,
+      "kind": "const"
+    },
+    {
+      "name": "SyncManager",
+      "line": 22,
+      "kind": "const"
+    },
+    {
+      "name": "GitHubOAuthHelper",
+      "line": 23,
+      "kind": "const"
+    },
+    {
+      "name": "GitHubStorageService",
+      "line": 24,
+      "kind": "const"
+    },
+    {
+      "name": "SmartBackupService",
+      "line": 25,
+      "kind": "const"
+    },
+    {
+      "line": 26,
+      "kind": "const"
+    },
+    {
+      "line": 27,
+      "kind": "const"
+    },
+    {
+      "line": 28,
+      "kind": "const"
+    },
+    {
+      "name": "dir",
+      "line": 36,
+      "kind": "const"
+    },
+    {
+      "name": "ext",
+      "line": 37,
+      "kind": "const"
+    },
+    {
+      "name": "baseName",
+      "line": 38,
+      "kind": "const"
+    },
+    {
+      "name": "timestamp",
+      "line": 39,
+      "kind": "const"
+    },
+    {
+      "name": "reasonSuffix",
+      "line": 40,
+      "kind": "const"
+    },
+    {
+      "name": "backupPath",
+      "line": 41,
+      "kind": "const"
+    },
+    {
+      "name": "destinationDir",
+      "line": 64,
+      "kind": "const"
+    },
+    {
+      "name": "langchainService",
+      "line": 99,
+      "kind": "let"
+    },
+    {
+      "name": "agentOrchestrator",
+      "line": 100,
+      "kind": "let"
+    },
+    {
+      "name": "db",
+      "line": 101,
+      "kind": "let"
+    },
+    {
+      "name": "useSQLite",
+      "line": 102,
+      "kind": "let"
+    },
+    {
+      "name": "syncManager",
+      "line": 103,
+      "kind": "let"
+    },
+    {
+      "name": "callbackServer",
+      "line": 104,
+      "kind": "let"
+    },
+    {
+      "name": "performanceMonitor",
+      "line": 105,
+      "kind": "let"
+    },
+    {
+      "name": "mainWindow",
+      "line": 106,
+      "kind": "let"
+    },
+    {
+      "name": "tray",
+      "line": 107,
+      "kind": "let"
+    },
+    {
+      "name": "CLOSE_DELAY_MS",
+      "line": 108,
+      "kind": "const"
+    },
+    {
+      "name": "pendingCloseRequest",
+      "line": 109,
+      "kind": "let"
+    },
+    {
+      "name": "closeDelayTimeout",
+      "line": 110,
+      "kind": "let"
+    },
+    {
+      "name": "finalizingCount",
+      "line": 111,
+      "kind": "let"
+    },
+    {
+      "name": "lastFinalizeCompletedAt",
+      "line": 112,
+      "kind": "let"
+    },
+    {
+      "name": "isQuitScheduled",
+      "line": 113,
+      "kind": "let"
+    },
+    {
+      "name": "codeStreamControllers",
+      "line": 114,
+      "kind": "const"
+    },
+    {
+      "name": "iconPath",
+      "line": 196,
+      "kind": "const"
+    },
+    {
+      "name": "contextMenu",
+      "line": 200,
+      "kind": "const"
+    },
+    {
+      "name": "elapsed",
+      "line": 260,
+      "kind": "const"
+    },
+    {
+      "name": "remaining",
+      "line": 261,
+      "kind": "const"
+    },
+    {
+      "name": "rotationInfo",
+      "line": 280,
+      "kind": "const"
+    },
+    {
+      "name": "parsedUrl",
+      "line": 291,
+      "kind": "const"
+    },
+    {
+      "name": "code",
+      "line": 308,
+      "kind": "const"
+    },
+    {
+      "name": "error",
+      "line": 309,
+      "kind": "const"
+    },
+    {
+      "name": "errorDescription",
+      "line": 310,
+      "kind": "const"
+    },
+    {
+      "name": "callbackHtmlPath",
+      "line": 332,
+      "kind": "const"
+    },
+    {
+      "name": "fontPath",
+      "line": 350,
+      "kind": "const"
+    },
+    {
+      "name": "fontPath",
+      "line": 367,
+      "kind": "const"
+    },
+    {
+      "name": "syncConfig",
+      "line": 407,
+      "kind": "const"
+    },
+    {
+      "name": "cloudPath",
+      "line": 417,
+      "kind": "const"
+    },
+    {
+      "name": "newDbPath",
+      "line": 429,
+      "kind": "const"
+    },
+    {
+      "name": "newDbExists",
+      "line": 430,
+      "kind": "const"
+    },
+    {
+      "name": "lastTokenStreamId",
+      "line": 462,
+      "kind": "let"
+    },
+    {
+      "name": "jsonMatch",
+      "line": 465,
+      "kind": "const"
+    },
+    {
+      "name": "insultWords",
+      "line": 474,
+      "kind": "const"
+    },
+    {
+      "name": "lowerPrompt",
+      "line": 483,
+      "kind": "const"
+    },
+    {
+      "name": "regex",
+      "line": 485,
+      "kind": "const"
+    },
+    {
+      "name": "systemPrompt",
+      "line": 490,
+      "kind": "const"
+    },
+    {
+      "name": "internalPath",
+      "line": 633,
+      "kind": "const"
+    },
+    {
+      "name": "syncConfig",
+      "line": 637,
+      "kind": "const"
+    },
+    {
+      "name": "cloudPath",
+      "line": 640,
+      "kind": "const"
+    },
+    {
+      "name": "configPath",
+      "line": 650,
+      "kind": "const"
+    },
+    {
+      "name": "raw",
+      "line": 652,
+      "kind": "const"
+    },
+    {
+      "name": "parsed",
+      "line": 653,
+      "kind": "const"
+    },
+    {
+      "name": "configPath",
+      "line": 663,
+      "kind": "const"
+    },
+    {
+      "name": "config",
+      "line": 685,
+      "kind": "const"
+    },
+    {
+      "line": 745,
+      "kind": "const"
+    },
+    {
+      "name": "config",
+      "line": 751,
+      "kind": "const"
+    },
+    {
+      "name": "currentUser",
+      "line": 755,
+      "kind": "const"
+    },
+    {
+      "name": "currentUsername",
+      "line": 756,
+      "kind": "const"
+    },
+    {
+      "name": "cloudToken",
+      "line": 757,
+      "kind": "const"
+    },
+    {
+      "name": "cloudUser",
+      "line": 788,
+      "kind": "const"
+    },
+    {
+      "name": "cloudToken",
+      "line": 789,
+      "kind": "const"
+    },
+    {
+      "name": "cloudDataPath",
+      "line": 817,
+      "kind": "const"
+    },
+    {
+      "name": "cloudDbPath",
+      "line": 818,
+      "kind": "const"
+    },
+    {
+      "name": "tempDbPath",
+      "line": 820,
+      "kind": "let"
+    },
+    {
+      "name": "downloadSucceeded",
+      "line": 821,
+      "kind": "let"
+    },
+    {
+      "name": "remoteMissing",
+      "line": 822,
+      "kind": "let"
+    },
+    {
+      "name": "backupPath",
+      "line": 824,
+      "kind": "const"
+    },
+    {
+      "name": "githubStorage",
+      "line": 827,
+      "kind": "const"
+    },
+    {
+      "name": "tempManager",
+      "line": 867,
+      "kind": "const"
+    },
+    {
+      "name": "cloudConfigPath",
+      "line": 873,
+      "kind": "const"
+    },
+    {
+      "name": "githubStorage",
+      "line": 875,
+      "kind": "const"
+    },
+    {
+      "name": "defaultModelConfig",
+      "line": 884,
+      "kind": "const"
+    },
+    {
+      "name": "https",
+      "line": 897,
+      "kind": "const"
+    },
+    {
+      "name": "profilePicPath",
+      "line": 898,
+      "kind": "const"
+    },
+    {
+      "name": "fileStream",
+      "line": 903,
+      "kind": "const"
+    },
+    {
+      "name": "users",
+      "line": 956,
+      "kind": "const"
+    },
+    {
+      "name": "deleteCloudData",
+      "line": 975,
+      "kind": "const"
+    },
+    {
+      "name": "config",
+      "line": 976,
+      "kind": "const"
+    },
+    {
+      "name": "currentUser",
+      "line": 977,
+      "kind": "const"
+    },
+    {
+      "name": "currentUsername",
+      "line": 978,
+      "kind": "const"
+    },
+    {
+      "name": "cloudToken",
+      "line": 979,
+      "kind": "const"
+    },
+    {
+      "name": "photoPath",
+      "line": 1011,
+      "kind": "const"
+    },
+    {
+      "name": "clientId",
+      "line": 1053,
+      "kind": "const"
+    },
+    {
+      "name": "clientSecret",
+      "line": 1054,
+      "kind": "const"
+    },
+    {
+      "name": "callbackUrl",
+      "line": 1055,
+      "kind": "const"
+    },
+    {
+      "name": "result",
+      "line": 1083,
+      "kind": "const"
+    },
+    {
+      "name": "githubStorage",
+      "line": 1096,
+      "kind": "const"
+    },
+    {
+      "name": "https",
+      "line": 1122,
+      "kind": "const"
+    },
+    {
+      "name": "profilePicPath",
+      "line": 1123,
+      "kind": "const"
+    },
+    {
+      "name": "fileStream",
+      "line": 1128,
+      "kind": "const"
+    },
+    {
+      "name": "config",
+      "line": 1145,
+      "kind": "const"
+    },
+    {
+      "name": "cloudDbPath",
+      "line": 1170,
+      "kind": "const"
+    },
+    {
+      "name": "cloudConfigPath",
+      "line": 1171,
+      "kind": "const"
+    },
+    {
+      "name": "syncSuccess",
+      "line": 1172,
+      "kind": "let"
+    },
+    {
+      "name": "tempDb",
+      "line": 1213,
+      "kind": "const"
+    },
+    {
+      "name": "defaultModelConfig",
+      "line": 1216,
+      "kind": "const"
+    },
+    {
+      "name": "modelConfigPath",
+      "line": 1220,
+      "kind": "const"
+    },
+    {
+      "name": "modelConfigPath",
+      "line": 1236,
+      "kind": "const"
+    },
+    {
+      "name": "metadata",
+      "line": 1241,
+      "kind": "const"
+    },
+    {
+      "name": "Database",
+      "line": 1298,
+      "kind": "const"
+    },
+    {
+      "name": "localDb",
+      "line": 1299,
+      "kind": "let"
+    },
+    {
+      "name": "cloudDb",
+      "line": 1300,
+      "kind": "let"
+    },
+    {
+      "name": "tempCloudPath",
+      "line": 1301,
+      "kind": "let"
+    },
+    {
+      "name": "syncConfig",
+      "line": 1306,
+      "kind": "const"
+    },
+    {
+      "name": "cloudDataPath",
+      "line": 1319,
+      "kind": "const"
+    },
+    {
+      "name": "internalDataPath",
+      "line": 1323,
+      "kind": "const"
+    },
+    {
+      "name": "dbDir",
+      "line": 1329,
+      "kind": "const"
+    },
+    {
+      "name": "dbBackupPath",
+      "line": 1335,
+      "kind": "const"
+    },
+    {
+      "name": "githubStorage",
+      "line": 1339,
+      "kind": "const"
+    },
+    {
+      "name": "localMaxSession",
+      "line": 1350,
+      "kind": "const"
+    },
+    {
+      "name": "localMaxMessage",
+      "line": 1351,
+      "kind": "const"
+    },
+    {
+      "name": "cloudSessions",
+      "line": 1354,
+      "kind": "const"
+    },
+    {
+      "name": "cloudMessages",
+      "line": 1359,
+      "kind": "const"
+    },
+    {
+      "name": "stats",
+      "line": 1376,
+      "kind": "let"
+    },
+    {
+      "name": "existing",
+      "line": 1387,
+      "kind": "const"
+    },
+    {
+      "name": "existing",
+      "line": 1442,
+      "kind": "const"
+    },
+    {
+      "name": "configBackupPath",
+      "line": 1532,
+      "kind": "const"
+    },
+    {
+      "name": "tempConfigPath",
+      "line": 1533,
+      "kind": "const"
+    },
+    {
+      "name": "metadata",
+      "line": 1571,
+      "kind": "const"
+    },
+    {
+      "name": "syncConfig",
+      "line": 1667,
+      "kind": "const"
+    },
+    {
+      "name": "cloudDataPath",
+      "line": 1683,
+      "kind": "const"
+    },
+    {
+      "name": "internalDataPath",
+      "line": 1687,
+      "kind": "const"
+    },
+    {
+      "name": "githubStorage",
+      "line": 1700,
+      "kind": "const"
+    },
+    {
+      "name": "smartBackupResult",
+      "line": 1703,
+      "kind": "let"
+    },
+    {
+      "name": "smartBackup",
+      "line": 1705,
+      "kind": "const"
+    },
+    {
+      "name": "metadata",
+      "line": 1744,
+      "kind": "const"
+    },
+    {
+      "name": "config",
+      "line": 1783,
+      "kind": "const"
+    },
+    {
+      "name": "cloudUser",
+      "line": 1784,
+      "kind": "const"
+    },
+    {
+      "name": "cloudDataPath",
+      "line": 1792,
+      "kind": "const"
+    },
+    {
+      "name": "historyFilePath",
+      "line": 1793,
+      "kind": "const"
+    },
+    {
+      "name": "history",
+      "line": 1801,
+      "kind": "let"
+    },
+    {
+      "name": "historyData",
+      "line": 1804,
+      "kind": "const"
+    },
+    {
+      "name": "config",
+      "line": 1850,
+      "kind": "const"
+    },
+    {
+      "name": "cloudUser",
+      "line": 1851,
+      "kind": "const"
+    },
+    {
+      "name": "cloudDataPath",
+      "line": 1857,
+      "kind": "const"
+    },
+    {
+      "name": "historyFilePath",
+      "line": 1858,
+      "kind": "const"
+    },
+    {
+      "name": "historyData",
+      "line": 1865,
+      "kind": "const"
+    },
+    {
+      "name": "history",
+      "line": 1866,
+      "kind": "const"
+    },
+    {
+      "name": "smartBackup",
+      "line": 1898,
+      "kind": "const"
+    },
+    {
+      "name": "syncConfig",
+      "line": 1907,
+      "kind": "const"
+    },
+    {
+      "name": "cloudDataPath",
+      "line": 1910,
+      "kind": "const"
+    },
+    {
+      "name": "internalDataPath",
+      "line": 1914,
+      "kind": "const"
+    },
+    {
+      "name": "cloudDbPath",
+      "line": 1919,
+      "kind": "let"
+    },
+    {
+      "name": "modifiedChanges",
+      "line": 1920,
+      "kind": "let"
+    },
+    {
+      "name": "applyResult",
+      "line": 1921,
+      "kind": "let"
+    },
+    {
+      "name": "changes",
+      "line": 1927,
+      "kind": "const"
+    },
+    {
+      "name": "finalDb",
+      "line": 1942,
+      "kind": "const"
+    },
+    {
+      "line": 1943,
+      "kind": "const"
+    },
+    {
+      "name": "githubStorage",
+      "line": 1970,
+      "kind": "const"
+    },
+    {
+      "name": "metadata",
+      "line": 1971,
+      "kind": "const"
+    },
+    {
+      "name": "photoPath",
+      "line": 2007,
+      "kind": "const"
+    },
+    {
+      "name": "photoData",
+      "line": 2013,
+      "kind": "const"
+    },
+    {
+      "name": "base64",
+      "line": 2014,
+      "kind": "const"
+    },
+    {
+      "name": "dataUrl",
+      "line": 2015,
+      "kind": "const"
+    },
+    {
+      "name": "win",
+      "line": 2042,
+      "kind": "const"
+    },
+    {
+      "name": "hasActiveStream",
+      "line": 2073,
+      "kind": "const"
+    },
+    {
+      "name": "isFinalizingStreams",
+      "line": 2074,
+      "kind": "const"
+    },
+    {
+      "name": "withinDelay",
+      "line": 2075,
+      "kind": "const"
+    },
+    {
+      "name": "lastLogSignature",
+      "line": 2111,
+      "kind": "let"
+    },
+    {
+      "line": 2113,
+      "kind": "const"
+    },
+    {
+      "name": "signature",
+      "line": 2123,
+      "kind": "const"
+    },
+    {
+      "line": 2133,
+      "kind": "const"
+    },
+    {
+      "name": "config",
+      "line": 2155,
+      "kind": "const"
+    },
+    {
+      "name": "pending",
+      "line": 2158,
+      "kind": "const"
+    },
+    {
+      "name": "cloudDataPath",
+      "line": 2168,
+      "kind": "const"
+    },
+    {
+      "name": "dbPath",
+      "line": 2169,
+      "kind": "const"
+    },
+    {
+      "name": "configPath",
+      "line": 2170,
+      "kind": "const"
+    },
+    {
+      "name": "githubStorage",
+      "line": 2175,
+      "kind": "const"
+    },
+    {
+      "name": "smartBackup",
+      "line": 2179,
+      "kind": "const"
+    },
+    {
+      "name": "smartBackupResult",
+      "line": 2180,
+      "kind": "const"
+    },
+    {
+      "name": "metadata",
+      "line": 2204,
+      "kind": "const"
+    },
+    {
+      "name": "ext",
+      "line": 2269,
+      "kind": "const"
+    },
+    {
+      "name": "candidate",
+      "line": 2286,
+      "kind": "const"
+    },
+    {
+      "name": "raw",
+      "line": 2297,
+      "kind": "const"
+    },
+    {
+      "name": "rel",
+      "line": 2298,
+      "kind": "const"
+    },
+    {
+      "name": "base",
+      "line": 2299,
+      "kind": "const"
+    },
+    {
+      "name": "abs",
+      "line": 2303,
+      "kind": "const"
+    },
+    {
+      "name": "exists",
+      "line": 2306,
+      "kind": "const"
+    },
+    {
+      "name": "data",
+      "line": 2312,
+      "kind": "const"
+    },
+    {
+      "name": "raw",
+      "line": 2325,
+      "kind": "const"
+    },
+    {
+      "name": "rel",
+      "line": 2326,
+      "kind": "let"
+    },
+    {
+      "name": "base",
+      "line": 2337,
+      "kind": "const"
+    },
+    {
+      "name": "safe",
+      "line": 2338,
+      "kind": "const"
+    },
+    {
+      "name": "base",
+      "line": 2342,
+      "kind": "const"
+    },
+    {
+      "name": "safe",
+      "line": 2343,
+      "kind": "const"
+    },
+    {
+      "name": "exists",
+      "line": 2348,
+      "kind": "const"
+    },
+    {
+      "name": "data",
+      "line": 2354,
+      "kind": "const"
+    },
+    {
+      "name": "sessions",
+      "line": 2414,
+      "kind": "const"
+    },
+    {
+      "name": "transformed",
+      "line": 2415,
+      "kind": "const"
+    },
+    {
+      "name": "messages",
+      "line": 2416,
+      "kind": "const"
+    },
+    {
+      "name": "metadata",
+      "line": 2417,
+      "kind": "const"
+    },
+    {
+      "name": "_x_think",
+      "line": 2420,
+      "kind": "const"
+    },
+    {
+      "name": "_x_think_updates",
+      "line": 2421,
+      "kind": "const"
+    },
+    {
+      "name": "msgMetadata",
+      "line": 2466,
+      "kind": "const"
+    },
+    {
+      "name": "parsedWebSearchData",
+      "line": 2467,
+      "kind": "const"
+    },
+    {
+      "name": "settings",
+      "line": 2490,
+      "kind": "const"
+    },
+    {
+      "name": "currentSessionIds",
+      "line": 2517,
+      "kind": "const"
+    },
+    {
+      "name": "allSessions",
+      "line": 2518,
+      "kind": "const"
+    },
+    {
+      "name": "existingMessages",
+      "line": 2534,
+      "kind": "const"
+    },
+    {
+      "name": "existingIndices",
+      "line": 2535,
+      "kind": "const"
+    },
+    {
+      "line": 2541,
+      "kind": "const"
+    },
+    {
+      "name": "insertedCount",
+      "line": 2554,
+      "kind": "let"
+    },
+    {
+      "name": "skippedCount",
+      "line": 2555,
+      "kind": "let"
+    },
+    {
+      "name": "i",
+      "line": 2556,
+      "kind": "let"
+    },
+    {
+      "line": 2557,
+      "kind": "const"
+    },
+    {
+      "name": "artifacts",
+      "line": 2600,
+      "kind": "const"
+    },
+    {
+      "name": "currentArtifactIds",
+      "line": 2636,
+      "kind": "const"
+    },
+    {
+      "name": "allArtifacts",
+      "line": 2637,
+      "kind": "const"
+    },
+    {
+      "name": "projects",
+      "line": 2667,
+      "kind": "const"
+    },
+    {
+      "name": "files",
+      "line": 2671,
+      "kind": "const"
+    },
+    {
+      "name": "currentProjectIds",
+      "line": 2725,
+      "kind": "const"
+    },
+    {
+      "name": "allProjects",
+      "line": 2726,
+      "kind": "const"
+    },
+    {
+      "name": "codes",
+      "line": 2779,
+      "kind": "const"
+    },
+    {
+      "name": "workspaceMetadata",
+      "line": 2782,
+      "kind": "let"
+    },
+    {
+      "name": "metadata",
+      "line": 2789,
+      "kind": "let"
+    },
+    {
+      "name": "newCodeIds",
+      "line": 2837,
+      "kind": "const"
+    },
+    {
+      "name": "existingCodes",
+      "line": 2838,
+      "kind": "const"
+    },
+    {
+      "name": "sessionId",
+      "line": 2862,
+      "kind": "const"
+    },
+    {
+      "name": "userPrompt",
+      "line": 2867,
+      "kind": "const"
+    },
+    {
+      "name": "provider",
+      "line": 2872,
+      "kind": "const"
+    },
+    {
+      "name": "model",
+      "line": 2873,
+      "kind": "const"
+    },
+    {
+      "name": "baseUrl",
+      "line": 2874,
+      "kind": "const"
+    },
+    {
+      "name": "apiKey",
+      "line": 2875,
+      "kind": "const"
+    },
+    {
+      "name": "codeId",
+      "line": 2876,
+      "kind": "const"
+    },
+    {
+      "name": "request",
+      "line": 2897,
+      "kind": "const"
+    },
+    {
+      "name": "reqId",
+      "line": 2909,
+      "kind": "const"
+    },
+    {
+      "name": "request",
+      "line": 2915,
+      "kind": "const"
+    },
+    {
+      "name": "controllerState",
+      "line": 2916,
+      "kind": "const"
+    },
+    {
+      "name": "finished",
+      "line": 2930,
+      "kind": "let"
+    },
+    {
+      "name": "result",
+      "line": 2939,
+      "kind": "const"
+    },
+    {
+      "name": "controller",
+      "line": 2986,
+      "kind": "const"
+    },
+    {
+      "name": "resolved",
+      "line": 3017,
+      "kind": "const"
+    },
+    {
+      "name": "previewsDir",
+      "line": 3086,
+      "kind": "const"
+    },
+    {
+      "name": "previewId",
+      "line": 3094,
+      "kind": "const"
+    },
+    {
+      "name": "filePath",
+      "line": 3095,
+      "kind": "const"
+    },
+    {
+      "name": "previewsDir",
+      "line": 3104,
+      "kind": "const"
+    },
+    {
+      "name": "filePath",
+      "line": 3105,
+      "kind": "const"
+    },
+    {
+      "name": "window",
+      "line": 3117,
+      "kind": "const"
+    },
+    {
+      "line": 3123,
+      "kind": "const"
+    },
+    {
+      "name": "results",
+      "line": 3147,
+      "kind": "const"
+    },
+    {
+      "name": "extension",
+      "line": 3149,
+      "kind": "const"
+    },
+    {
+      "name": "fileInfo",
+      "line": 3150,
+      "kind": "const"
+    },
+    {
+      "name": "stats",
+      "line": 3153,
+      "kind": "const"
+    },
+    {
+      "name": "buffer",
+      "line": 3159,
+      "kind": "const"
+    },
+    {
+      "name": "isValidDocx",
+      "line": 3162,
+      "kind": "const"
+    },
+    {
+      "name": "result",
+      "line": 3172,
+      "kind": "const"
+    },
+    {
+      "name": "cleanContent",
+      "line": 3193,
+      "kind": "const"
+    },
+    {
+      "name": "isLikelyBase64",
+      "line": 3194,
+      "kind": "const"
+    },
+    {
+      "name": "hasBinaryChars",
+      "line": 3197,
+      "kind": "const"
+    },
+    {
+      "name": "decodedContent",
+      "line": 3202,
+      "kind": "const"
+    },
+    {
+      "name": "decodedHasBinary",
+      "line": 3205,
+      "kind": "const"
+    },
+    {
+      "name": "decodedWordCount",
+      "line": 3206,
+      "kind": "const"
+    },
+    {
+      "name": "hasIndonesianChars",
+      "line": 3207,
+      "kind": "const"
+    },
+    {
+      "name": "htmlResult",
+      "line": 3242,
+      "kind": "const"
+    },
+    {
+      "name": "cheerio",
+      "line": 3245,
+      "kind": "const"
+    },
+    {
+      "name": "$",
+      "line": 3246,
+      "kind": "const"
+    },
+    {
+      "name": "textFromHtml",
+      "line": 3247,
+      "kind": "const"
+    },
+    {
+      "name": "seriousWarnings",
+      "line": 3265,
+      "kind": "const"
+    },
+    {
+      "name": "parser",
+      "line": 3293,
+      "kind": "const"
+    },
+    {
+      "name": "pdfText",
+      "line": 3294,
+      "kind": "const"
+    },
+    {
+      "name": "workbook",
+      "line": 3323,
+      "kind": "const"
+    },
+    {
+      "name": "fullText",
+      "line": 3324,
+      "kind": "let"
+    },
+    {
+      "name": "window",
+      "line": 3345,
+      "kind": "const"
+    },
+    {
+      "line": 3351,
+      "kind": "const"
+    },
+    {
+      "name": "activeStreams",
+      "line": 3361,
+      "kind": "const"
+    },
+    {
+      "name": "tokenUsageTrackers",
+      "line": 3375,
+      "kind": "const"
+    },
+    {
+      "name": "prompt",
+      "line": 3394,
+      "kind": "const"
+    },
+    {
+      "name": "completion",
+      "line": 3395,
+      "kind": "const"
+    },
+    {
+      "name": "total",
+      "line": 3398,
+      "kind": "let"
+    },
+    {
+      "name": "safePrompt",
+      "line": 3400,
+      "kind": "const"
+    },
+    {
+      "name": "safeCompletion",
+      "line": 3401,
+      "kind": "const"
+    },
+    {
+      "name": "normalized",
+      "line": 3414,
+      "kind": "const"
+    },
+    {
+      "name": "tracker",
+      "line": 3430,
+      "kind": "const"
+    },
+    {
+      "name": "usage",
+      "line": 3431,
+      "kind": "const"
+    },
+    {
+      "name": "tracker",
+      "line": 3459,
+      "kind": "const"
+    },
+    {
+      "name": "usageData",
+      "line": 3471,
+      "kind": "const"
+    },
+    {
+      "name": "elapsedMs",
+      "line": 3480,
+      "kind": "const"
+    },
+    {
+      "name": "elapsedSeconds",
+      "line": 3481,
+      "kind": "const"
+    },
+    {
+      "name": "reqId",
+      "line": 3559,
+      "kind": "const"
+    },
+    {
+      "name": "messages",
+      "line": 3560,
+      "kind": "let"
+    },
+    {
+      "name": "model",
+      "line": 3561,
+      "kind": "const"
+    },
+    {
+      "name": "provider",
+      "line": 3562,
+      "kind": "const"
+    },
+    {
+      "name": "sessionId",
+      "line": 3563,
+      "kind": "const"
+    },
+    {
+      "name": "session",
+      "line": 3564,
+      "kind": "const"
+    },
+    {
+      "line": 3567,
+      "kind": "const"
+    },
+    {
+      "name": "BASE_URL",
+      "line": 3574,
+      "kind": "const"
+    },
+    {
+      "name": "API_KEY",
+      "line": 3575,
+      "kind": "const"
+    },
+    {
+      "line": 3576,
+      "kind": "const"
+    },
+    {
+      "name": "isPerplexity",
+      "line": 3577,
+      "kind": "const"
+    },
+    {
+      "name": "thinkStartTime",
+      "line": 3592,
+      "kind": "const"
+    },
+    {
+      "name": "url",
+      "line": 3595,
+      "kind": "const"
+    },
+    {
+      "name": "bodyObj",
+      "line": 3596,
+      "kind": "const"
+    },
+    {
+      "name": "body",
+      "line": 3601,
+      "kind": "const"
+    },
+    {
+      "name": "headers",
+      "line": 3603,
+      "kind": "const"
+    },
+    {
+      "name": "https",
+      "line": 3611,
+      "kind": "const"
+    },
+    {
+      "name": "req",
+      "line": 3612,
+      "kind": "const"
+    },
+    {
+      "name": "data",
+      "line": 3613,
+      "kind": "let"
+    },
+    {
+      "name": "errorMsg",
+      "line": 3618,
+      "kind": "const"
+    },
+    {
+      "name": "response",
+      "line": 3626,
+      "kind": "const"
+    },
+    {
+      "name": "thinkDuration",
+      "line": 3637,
+      "kind": "const"
+    },
+    {
+      "name": "content",
+      "line": 3680,
+      "kind": "const"
+    },
+    {
+      "name": "words",
+      "line": 3682,
+      "kind": "const"
+    },
+    {
+      "name": "usage",
+      "line": 3693,
+      "kind": "const"
+    },
+    {
+      "name": "usageWithCost",
+      "line": 3694,
+      "kind": "const"
+    },
+    {
+      "name": "errorMsg",
+      "line": 3711,
+      "kind": "const"
+    },
+    {
+      "name": "errorMsg",
+      "line": 3722,
+      "kind": "const"
+    },
+    {
+      "name": "errorMsg",
+      "line": 3735,
+      "kind": "const"
+    },
+    {
+      "name": "isProject",
+      "line": 3753,
+      "kind": "const"
+    },
+    {
+      "name": "lastMessage",
+      "line": 3759,
+      "kind": "const"
+    },
+    {
+      "name": "projectFiles",
+      "line": 3762,
+      "kind": "let"
+    },
+    {
+      "name": "projects",
+      "line": 3765,
+      "kind": "const"
+    },
+    {
+      "name": "project",
+      "line": 3766,
+      "kind": "const"
+    },
+    {
+      "name": "baseUrl",
+      "line": 3782,
+      "kind": "const"
+    },
+    {
+      "name": "aiMessageIndex",
+      "line": 3783,
+      "kind": "const"
+    },
+    {
+      "name": "reactStartPayload",
+      "line": 3784,
+      "kind": "const"
+    },
+    {
+      "name": "aiMessageIndex",
+      "line": 3794,
+      "kind": "const"
+    },
+    {
+      "name": "agentResponse",
+      "line": 3848,
+      "kind": "let"
+    },
+    {
+      "name": "foundUrlsData",
+      "line": 3851,
+      "kind": "const"
+    },
+    {
+      "name": "hasInsultKeywords",
+      "line": 3860,
+      "kind": "const"
+    },
+    {
+      "name": "agentResult",
+      "line": 3863,
+      "kind": "const"
+    },
+    {
+      "name": "availableFiles",
+      "line": 3899,
+      "kind": "let"
+    },
+    {
+      "name": "projects",
+      "line": 3903,
+      "kind": "const"
+    },
+    {
+      "name": "project",
+      "line": 3904,
+      "kind": "const"
+    },
+    {
+      "name": "shouldUseReact",
+      "line": 3919,
+      "kind": "const"
+    },
+    {
+      "name": "modelInfo",
+      "line": 3932,
+      "kind": "const"
+    },
+    {
+      "name": "projectFiles",
+      "line": 3936,
+      "kind": "const"
+    },
+    {
+      "name": "aiMessageIndex",
+      "line": 3943,
+      "kind": "const"
+    },
+    {
+      "name": "hasInsultKeywords",
+      "line": 3946,
+      "kind": "const"
+    },
+    {
+      "name": "reactResult",
+      "line": 3950,
+      "kind": "const"
+    },
+    {
+      "name": "responseText",
+      "line": 3984,
+      "kind": "let"
+    },
+    {
+      "name": "thinkingContent",
+      "line": 4001,
+      "kind": "let"
+    },
+    {
+      "name": "mainContent",
+      "line": 4002,
+      "kind": "let"
+    },
+    {
+      "name": "jsonResponse",
+      "line": 4004,
+      "kind": "const"
+    },
+    {
+      "name": "thinkingMatch",
+      "line": 4013,
+      "kind": "const"
+    },
+    {
+      "name": "thinkingChunks",
+      "line": 4022,
+      "kind": "const"
+    },
+    {
+      "name": "mainChunks",
+      "line": 4032,
+      "kind": "const"
+    },
+    {
+      "name": "chunks",
+      "line": 4055,
+      "kind": "const"
+    },
+    {
+      "name": "index",
+      "line": 4056,
+      "kind": "let"
+    },
+    {
+      "name": "filesForAI",
+      "line": 4078,
+      "kind": "let"
+    },
+    {
+      "name": "projects",
+      "line": 4081,
+      "kind": "const"
+    },
+    {
+      "name": "project",
+      "line": 4082,
+      "kind": "const"
+    },
+    {
+      "name": "shouldUseReact",
+      "line": 4092,
+      "kind": "const"
+    },
+    {
+      "name": "aiMessageIndex",
+      "line": 4102,
+      "kind": "const"
+    },
+    {
+      "name": "projectFiles",
+      "line": 4110,
+      "kind": "const"
+    },
+    {
+      "name": "hasInsultKeywords",
+      "line": 4119,
+      "kind": "const"
+    },
+    {
+      "name": "reactResult",
+      "line": 4121,
+      "kind": "const"
+    },
+    {
+      "name": "responseText",
+      "line": 4150,
+      "kind": "let"
+    },
+    {
+      "name": "thinkingContent",
+      "line": 4162,
+      "kind": "let"
+    },
+    {
+      "name": "finalAnswer",
+      "line": 4163,
+      "kind": "let"
+    },
+    {
+      "name": "thinkingChunks",
+      "line": 4164,
+      "kind": "const"
+    },
+    {
+      "name": "answerChunks",
+      "line": 4171,
+      "kind": "const"
+    },
+    {
+      "name": "BASE_URL",
+      "line": 4203,
+      "kind": "const"
+    },
+    {
+      "name": "API_KEY",
+      "line": 4204,
+      "kind": "const"
+    },
+    {
+      "name": "url",
+      "line": 4226,
+      "kind": "const"
+    },
+    {
+      "name": "lastUserMessage",
+      "line": 4228,
+      "kind": "const"
+    },
+    {
+      "name": "hasInsultKeywords",
+      "line": 4229,
+      "kind": "const"
+    },
+    {
+      "name": "messagesToProcess",
+      "line": 4231,
+      "kind": "let"
+    },
+    {
+      "name": "insultDetectionPrompt",
+      "line": 4234,
+      "kind": "const"
+    },
+    {
+      "name": "contents",
+      "line": 4242,
+      "kind": "const"
+    },
+    {
+      "name": "role",
+      "line": 4244,
+      "kind": "const"
+    },
+    {
+      "name": "body",
+      "line": 4248,
+      "kind": "const"
+    },
+    {
+      "name": "opts",
+      "line": 4249,
+      "kind": "const"
+    },
+    {
+      "name": "req",
+      "line": 4261,
+      "kind": "const"
+    },
+    {
+      "name": "acc",
+      "line": 4262,
+      "kind": "let"
+    },
+    {
+      "name": "j",
+      "line": 4270,
+      "kind": "const"
+    },
+    {
+      "name": "text",
+      "line": 4271,
+      "kind": "let"
+    },
+    {
+      "name": "internalReasoningMatch",
+      "line": 4276,
+      "kind": "const"
+    },
+    {
+      "name": "reasoning",
+      "line": 4278,
+      "kind": "const"
+    },
+    {
+      "name": "usage",
+      "line": 4289,
+      "kind": "const"
+    },
+    {
+      "name": "url",
+      "line": 4319,
+      "kind": "const"
+    },
+    {
+      "name": "lastUserMessage",
+      "line": 4320,
+      "kind": "const"
+    },
+    {
+      "name": "hasInsultKeywords",
+      "line": 4321,
+      "kind": "const"
+    },
+    {
+      "name": "messagesToSend",
+      "line": 4323,
+      "kind": "let"
+    },
+    {
+      "name": "insultDetectionPrompt",
+      "line": 4326,
+      "kind": "const"
+    },
+    {
+      "name": "bodyObj",
+      "line": 4334,
+      "kind": "let"
+    },
+    {
+      "name": "body",
+      "line": 4336,
+      "kind": "const"
+    },
+    {
+      "name": "headers",
+      "line": 4338,
+      "kind": "const"
+    },
+    {
+      "name": "opts",
+      "line": 4363,
+      "kind": "const"
+    },
+    {
+      "name": "req",
+      "line": 4372,
+      "kind": "const"
+    },
+    {
+      "name": "err",
+      "line": 4374,
+      "kind": "let"
+    },
+    {
+      "name": "ctype",
+      "line": 4380,
+      "kind": "const"
+    },
+    {
+      "name": "isSSE",
+      "line": 4381,
+      "kind": "const"
+    },
+    {
+      "name": "acc",
+      "line": 4384,
+      "kind": "let"
+    },
+    {
+      "name": "j",
+      "line": 4389,
+      "kind": "const"
+    },
+    {
+      "name": "think",
+      "line": 4390,
+      "kind": "let"
+    },
+    {
+      "name": "text",
+      "line": 4401,
+      "kind": "let"
+    },
+    {
+      "name": "internalReasoningMatch",
+      "line": 4409,
+      "kind": "const"
+    },
+    {
+      "name": "reasoning",
+      "line": 4411,
+      "kind": "const"
+    },
+    {
+      "name": "usage",
+      "line": 4424,
+      "kind": "const"
+    },
+    {
+      "name": "buffer",
+      "line": 4449,
+      "kind": "let"
+    },
+    {
+      "name": "contentBuffer",
+      "line": 4450,
+      "kind": "let"
+    },
+    {
+      "name": "inInternalReasoning",
+      "line": 4451,
+      "kind": "let"
+    },
+    {
+      "name": "reasoningBuffer",
+      "line": 4452,
+      "kind": "let"
+    },
+    {
+      "name": "rawEvent",
+      "line": 4459,
+      "kind": "const"
+    },
+    {
+      "name": "lines",
+      "line": 4462,
+      "kind": "const"
+    },
+    {
+      "name": "dataLines",
+      "line": 4463,
+      "kind": "const"
+    },
+    {
+      "name": "isDone",
+      "line": 4464,
+      "kind": "let"
+    },
+    {
+      "name": "m",
+      "line": 4468,
+      "kind": "const"
+    },
+    {
+      "name": "payload",
+      "line": 4474,
+      "kind": "const"
+    },
+    {
+      "name": "j",
+      "line": 4477,
+      "kind": "const"
+    },
+    {
+      "name": "rdelta",
+      "line": 4479,
+      "kind": "let"
+    },
+    {
+      "name": "delta",
+      "line": 4490,
+      "kind": "let"
+    },
+    {
+      "name": "beforeReasoning",
+      "line": 4502,
+      "kind": "const"
+    },
+    {
+      "name": "endIndex",
+      "line": 4513,
+      "kind": "const"
+    },
+    {
+      "line": 4561,
+      "kind": "const"
+    },
+    {
+      "name": "r",
+      "line": 4568,
+      "kind": "const"
+    },
+    {
+      "name": "text",
+      "line": 4578,
+      "kind": "const"
+    },
+    {
+      "name": "model",
+      "line": 4579,
+      "kind": "let"
+    },
+    {
+      "name": "provider",
+      "line": 4580,
+      "kind": "let"
+    },
+    {
+      "line": 4583,
+      "kind": "const"
+    },
+    {
+      "name": "isMainModelPerplexity",
+      "line": 4584,
+      "kind": "const"
+    },
+    {
+      "name": "API_KEY",
+      "line": 4589,
+      "kind": "let"
+    },
+    {
+      "name": "configPath",
+      "line": 4596,
+      "kind": "const"
+    },
+    {
+      "name": "config",
+      "line": 4598,
+      "kind": "const"
+    },
+    {
+      "name": "zhipuProvider",
+      "line": 4599,
+      "kind": "const"
+    },
+    {
+      "name": "extraHdr",
+      "line": 4626,
+      "kind": "const"
+    },
+    {
+      "name": "BASE_URL",
+      "line": 4635,
+      "kind": "const"
+    },
+    {
+      "name": "sys",
+      "line": 4637,
+      "kind": "const"
+    },
+    {
+      "name": "MAX_RETRIES",
+      "line": 4639,
+      "kind": "const"
+    },
+    {
+      "name": "lastError",
+      "line": 4640,
+      "kind": "let"
+    },
+    {
+      "name": "attempt",
+      "line": 4643,
+      "kind": "let"
+    },
+    {
+      "name": "url",
+      "line": 4647,
+      "kind": "const"
+    },
+    {
+      "name": "body",
+      "line": 4649,
+      "kind": "const"
+    },
+    {
+      "name": "title",
+      "line": 4655,
+      "kind": "const"
+    },
+    {
+      "name": "req",
+      "line": 4656,
+      "kind": "const"
+    },
+    {
+      "name": "acc",
+      "line": 4663,
+      "kind": "let"
+    },
+    {
+      "name": "j",
+      "line": 4668,
+      "kind": "const"
+    },
+    {
+      "name": "usage",
+      "line": 4672,
+      "kind": "const"
+    },
+    {
+      "name": "t",
+      "line": 4686,
+      "kind": "let"
+    },
+    {
+      "name": "attempt",
+      "line": 4734,
+      "kind": "let"
+    },
+    {
+      "name": "u",
+      "line": 4738,
+      "kind": "const"
+    },
+    {
+      "name": "body",
+      "line": 4740,
+      "kind": "const"
+    },
+    {
+      "name": "headers",
+      "line": 4750,
+      "kind": "const"
+    },
+    {
+      "name": "resText",
+      "line": 4765,
+      "kind": "const"
+    },
+    {
+      "name": "req",
+      "line": 4766,
+      "kind": "const"
+    },
+    {
+      "name": "acc",
+      "line": 4773,
+      "kind": "let"
+    },
+    {
+      "name": "j",
+      "line": 4783,
+      "kind": "const"
+    },
+    {
+      "name": "usage",
+      "line": 4787,
+      "kind": "const"
+    },
+    {
+      "name": "t",
+      "line": 4802,
+      "kind": "let"
+    },
+    {
+      "name": "patterns",
+      "line": 4847,
+      "kind": "const"
+    },
+    {
+      "name": "match",
+      "line": 4858,
+      "kind": "const"
+    },
+    {
+      "name": "num",
+      "line": 4860,
+      "kind": "const"
+    },
+    {
+      "name": "TRIAGE_SYSTEM_PROMPT",
+      "line": 4869,
+      "kind": "const"
+    },
+    {
+      "line": 4891,
+      "kind": "const"
+    },
+    {
+      "name": "userQuery",
+      "line": 4895,
+      "kind": "const"
+    },
+    {
+      "name": "conversationHistory",
+      "line": 4901,
+      "kind": "const"
+    },
+    {
+      "name": "optimizedHistory",
+      "line": 4902,
+      "kind": "const"
+    },
+    {
+      "name": "triageMessages",
+      "line": 4908,
+      "kind": "const"
+    },
+    {
+      "name": "triageResult",
+      "line": 4915,
+      "kind": "const"
+    },
+    {
+      "name": "triageResponse",
+      "line": 4922,
+      "kind": "const"
+    },
+    {
+      "name": "imageCount",
+      "line": 4942,
+      "kind": "const"
+    },
+    {
+      "name": "includeImages",
+      "line": 4945,
+      "kind": "const"
+    },
+    {
+      "name": "explicitCount",
+      "line": 4948,
+      "kind": "const"
+    },
+    {
+      "name": "aiSuggestedCount",
+      "line": 4949,
+      "kind": "const"
+    },
+    {
+      "name": "resultCount",
+      "line": 4950,
+      "kind": "const"
+    },
+    {
+      "name": "searchResults",
+      "line": 4968,
+      "kind": "const"
+    },
+    {
+      "name": "webResults",
+      "line": 4996,
+      "kind": "const"
+    },
+    {
+      "name": "imageResults",
+      "line": 4997,
+      "kind": "const"
+    },
+    {
+      "name": "urlsToScrape",
+      "line": 4998,
+      "kind": "const"
+    },
+    {
+      "name": "scrapedContent",
+      "line": 5010,
+      "kind": "const"
+    },
+    {
+      "name": "nonEmptyContent",
+      "line": 5011,
+      "kind": "const"
+    },
+    {
+      "name": "searchContext",
+      "line": 5021,
+      "kind": "let"
+    },
+    {
+      "name": "result",
+      "line": 5035,
+      "kind": "const"
+    },
+    {
+      "name": "lastUserMessage",
+      "line": 5039,
+      "kind": "const"
+    },
+    {
+      "name": "hasInsultKeywords",
+      "line": 5040,
+      "kind": "const"
+    },
+    {
+      "name": "finalMessages",
+      "line": 5042,
+      "kind": "let"
+    },
+    {
+      "name": "insultDetectionPrompt",
+      "line": 5045,
+      "kind": "const"
+    },
+    {
+      "name": "time",
+      "line": 5083,
+      "kind": "const"
+    },
+    {
+      "name": "cpuUsage",
+      "line": 5084,
+      "kind": "const"
+    },
+    {
+      "name": "heapUsed",
+      "line": 5085,
+      "kind": "const"
+    },
+    {
+      "name": "heapTotal",
+      "line": 5086,
+      "kind": "const"
+    },
+    {
+      "name": "rss",
+      "line": 5087,
+      "kind": "const"
+    },
+    {
+      "name": "external",
+      "line": 5088,
+      "kind": "const"
+    },
+    {
+      "line": 5105,
+      "kind": "const"
+    },
+    {
+      "name": "u",
+      "line": 5106,
+      "kind": "const"
+    },
+    {
+      "name": "body",
+      "line": 5107,
+      "kind": "const"
+    },
+    {
+      "name": "headers",
+      "line": 5108,
+      "kind": "const"
+    },
+    {
+      "name": "req",
+      "line": 5119,
+      "kind": "const"
+    },
+    {
+      "name": "acc",
+      "line": 5120,
+      "kind": "let"
+    },
+    {
+      "name": "j",
+      "line": 5126,
+      "kind": "const"
+    },
+    {
+      "name": "usage",
+      "line": 5130,
+      "kind": "const"
+    }
+  ]
+}

@@ -2,19 +2,17 @@ let deps = {
   log: () => {},
 };
 
-function log(context, level, func, message, details = {}) {
-  try {
-    deps.log?.(context, level, func, message, details);
-  } catch (error) {
-    console.debug(`[codes:${func}]`, message, details, error);
-  }
-}
+let activeCodeStreamCancelFn = null;
 
-export function configureCodeChat(options = {}) {
-  deps = {
-    ...deps,
-    ...options,
-  };
+export function cancelActiveCodeStream() {
+  if (activeCodeStreamCancelFn) {
+    try {
+      activeCodeStreamCancelFn();
+      activeCodeStreamCancelFn = null;
+    } catch (error) {
+      log('CODES', 3, 'cancelActiveCodeStream', 'Failed to cancel code stream', { error: error.message });
+    }
+  }
 }
 
 export async function runCodeChatStream({
@@ -46,16 +44,18 @@ export async function runCodeChatStream({
       const resolveOnce = (value) => {
         if (settled) return;
         settled = true;
+        activeCodeStreamCancelFn = null;
         resolve(value);
       };
       const rejectOnce = (error) => {
         if (settled) return;
         settled = true;
+        activeCodeStreamCancelFn = null;
         reject(error);
       };
 
       try {
-        window.api.codes.stream(payload, (event) => {
+        const streamResult = window.api.codes.stream(payload, (event) => {
           if (!event || typeof event !== 'object') {
             return;
           }
@@ -77,6 +77,10 @@ export async function runCodeChatStream({
             });
           }
         });
+
+        if (streamResult?.cancel) {
+          activeCodeStreamCancelFn = streamResult.cancel;
+        }
       } catch (error) {
         rejectOnce(error);
       }

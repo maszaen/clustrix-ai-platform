@@ -70,12 +70,12 @@ const STATE_RESPONSE_FORMATS = {
     useAnswer: false,
   },
   [AGENT_STATES.UNDERSTAND]: {
-    format: '<state><Next state></state>\n<hidden>detailed analysis of memory/files</hidden>\n<checklist>\n- [x] Previous Task\n- [/] Current Task\n- [ ] Next Task\n</checklist>\n<answer>key insights for user</answer>',
+    format: '<state><Next state></state>\n<hidden>super detailed analysis of memory/files you want to edit</hidden>\n(CHECKLIST IS OPTIONAL, ONLY WRITE CHECKLIST IF YOU WANT TO CHANGE THE CHECKLIST OR MARK DONE)<checklist>\n- [x] <previous_task>\n- [/] <current_task>\n- [ ] <next_task> - [] <next_task>\n</checklist>\n<answer>key insights for user</answer>',
     useHidden: true,
     useAnswer: true,
   },
   [AGENT_STATES.EDIT]: {
-    format: '<state><Next state></state>\n<hidden>analyzing what needs to be changed</hidden>\n<checklist>\n- [x] Analyzed files\n- [/] Edit file.js\n- [ ] Verify changes\n</checklist>\n<answer>what is being changed and why</answer>\n<cmd>edit command</cmd>',
+    format: '<state><Next state></state>\n<hidden>analyzing what\'s next needs to be changed</hidden>\n(CHECKLIST IS OPTIONAL, ONLY WRITE CHECKLIST IF YOU WANT TO CHANGE THE CHECKLIST OR MARK DONE)<checklist>\n- [x] Analyzed files\n- [/] Edit file.js\n- [ ] Verify changes\n</checklist>\n<answer>what is being changed and why</answer>\n<cmd>edit command for one file bulk edit (multiple <set> tag is supported)</cmd>',
     useHidden: true,
     useAnswer: true,
   },
@@ -100,7 +100,7 @@ const STATE_RESPONSE_FORMATS = {
 // STATE-SPECIFIC RULES
 // ===================================
 const STATE_RULES = {
-  [AGENT_STATES.EXPLORE]: `Think in <hidden>, don't explain trivial navigation to user
+  [AGENT_STATES.EXPLORE]: `Think in <hidden>
 Commands:
   - ALWAYS use Search-InFiles for recursive search (FAST, safe, no hangs!)
     Example: Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
@@ -226,12 +226,12 @@ Clustrix enjoys helping humans and sees its role as an intelligent and kind assi
   - If unsure, use UNDERSTAND to analyze what you have
 
 # CORE RULES
-  1. Use <hidden> for internal thinking in EVERY state (MANDATORY except DONE) - extend your analysis and create next todo for you or summary
+  1. Use <hidden> for internal thinking or summary of current action or what you want to do next in EVERY state (MANDATORY except DONE) - extend your analysis and create next todo for you or summary
   2. Use <checklist> in EVERY response (MANDATORY).
      - Create a checklist of tasks to complete the user request.
      - Update it in every turn: [ ] Pending, [/] In Progress, [x] Done.
      - If plans change, REWRITE the checklist with new items.
-     - This checklist must be "Production Ready" - detailed and accurate.
+     - Only write <checklist> tags when you want to check it or change it, do not change the previous checklist.
   3. Use <answer> ONLY when you need to inform user (state-specific)
   4. Search: Use Search-InFiles not Get-ChildItem -Recurse
   5. Edit: ALWAYS confirm line numbers first (Show-FileWithLineNumbers)

@@ -725,6 +725,20 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
       hasNewContent = hasNewContent || added;
       return { captured: true, hasNewContent };
     }
+
+    // Fallback: if structured parsing fails, still stash raw lines into memory
+    const rawContent = lines
+      .filter(line => !/^\[Total lines in file:/i.test(line) && line.trim() !== '')
+      .map((line, idx) => {
+        const m = line.match(/^\s*\d+\s*:\s?(.*)$/);
+        return m ? m[1] : line;
+      });
+
+    if (rawContent.length > 0) {
+      const added = addToMemory(state, filePath, 1, rawContent.length, rawContent, memoryName, memoryOwnerId, totalLines || rawContent.length);
+      hasNewContent = hasNewContent || added;
+      return { captured: true, hasNewContent };
+    }
     return false;
   }
 
@@ -968,7 +982,8 @@ function renderSystemPrompt(template, { userPrompt, commandHistory, commandHisto
     memoryState,
     currentMemory,
     userPrompt, // userPromptText
-    contextPrevious // historySummary
+    contextPrevious, // historySummary
+    lastHidden
   );
 
   // Inject error guidance into system prompt if needed
@@ -2390,6 +2405,11 @@ async function processCodeRequest({
       exitCode = result.exitCode;
       blocked = result.blocked;
       isTimeout = result.isTimeout;
+
+      // Ensure output is always delivered to the user when a command was requested
+      if ((output === undefined || output === null || output === '') && parsed.command) {
+        output = 'Command completed with no output.';
+      }
     }
 
     // Detect ripgrep auto-install - restart terminal and retry ONCE

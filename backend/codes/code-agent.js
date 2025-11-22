@@ -2017,17 +2017,14 @@ async function executeCommand(state, command, options = {}) {
     const isSearchCommand = /^\s*(Search-InFiles|rg\b)/i.test(command);
     const isShowFileCommand = /^\s*Show-FileWithLineNumbers\b/i.test(command);
 
-    // Return memory state if captured, otherwise return raw output
+    // Return actual command output (memory is already updated by captureFileOutput)
+    // This ensures AI and user can see the actual search results
     let output;
     if (capturedToMemory) {
-      if (isSearchCommand) {
-        output = hasNewMemoryContent
-          ? 'Search result already saved in memory.'
-          : 'You have explored this line, search result saved to memory.';
-      } else if (isShowFileCommand) {
-        output = hasNewMemoryContent
-          ? 'File content saved to memory.'
-          : 'You have explored this line, search result saved to memory.';
+      if (isSearchCommand || isShowFileCommand) {
+        // Show actual output from search/file viewing commands
+        // Memory was already updated in the background (delayed update pattern)
+        output = combinedOutput || 'Command completed with no output.';
       } else {
         output = `${combinedOutput}\n\n[Content saved to memory '${memoryName}'.\nTip: Use 'Show-Memory ${memoryName}' to view more (only if memory is truncated).]`;
       }

@@ -1325,7 +1325,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       // Wrap text content with <p> for consistent styling
       const parsedContent = parseInlineMarkdown(content, globalReferences);
       if (isTaskList) {
-        const checkboxHtml = `<input type="checkbox"${isChecked ? ' checked' : ''} disabled> `;
+        const checkboxHtml = `<input class="tasklist" type="checkbox"${isChecked ? ' checked' : ''} disabled> `;
         html += `<li><p>${checkboxHtml}${parsedContent}</p></li>`;
       } else {
         html += `<li><p>${parsedContent}</p></li>`;

@@ -7910,6 +7910,50 @@ button:disabled .btn-icon {
   transform: rotate(45deg);
 }
 
+li:has(p .tasklist) .tasklist {
+  transform: translateY(1.5px);
+}
+
+/* li:has(p .tasklist) p > * {
+  margin-top: 4px;
+}
+
+li:has(p .tasklist) p > .tasklist {
+  margin-top: 0;
+} */
+
+.tasklist {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--border-active);
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  margin-right: 4px;
+  transition: var(--transition-fast);
+  position: relative;
+  align-items: center;
+  display: inline-flex;
+}
+
+.tasklist:checked {
+  background: var(--primary);
+  border-color: var(--primary-light);
+}
+
+/* tanda centang */
+.tasklist:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 3px;
+  height: 7px;
+  border: 2px solid var(--primary-light);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
 .chat-item.select-mode,
 .project-item.select-mode,
 .artifact-item.select-mode {
@@ -10637,3 +10681,4 @@ button:disabled .btn-icon {
   word-wrap: break-word !important;
   overflow-wrap: break-word !important;
 }
+

@@ -7934,6 +7934,7 @@ li:has(p .tasklist) p > .tasklist {
   position: relative;
   align-items: center;
   display: inline-flex;
+  flex-shrink: 0;
 }
 
 .tasklist:checked {
@@ -7952,6 +7953,55 @@ li:has(p .tasklist) p > .tasklist {
   border: 2px solid var(--primary-light);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+}
+
+/* Default semua p dengan tasklist → muted */
+li:has(.tasklist) p {
+  color: var(--fg-muted);
+  display: inline-block;
+}
+
+li:has(.tasklist) {
+  list-style: none;
+}
+
+ul:has(.tasklist) {
+  padding: 0;
+}
+
+/* Yang checked → coret semuanya (checkbox + teks) */
+li:has(.tasklist:checked) p {
+  text-decoration: line-through;
+  text-decoration-color: var(--icon);
+  text-decoration-thickness: 1px;
+}
+
+/* Checkbox juga ikut kena coret karena inline */
+.tasklist:checked {
+  text-decoration: line-through;
+  text-decoration-color: var(--border-active);
+  text-decoration-thickness: 2px;
+}
+
+/* First unchecked → fg normal */
+li:has(.tasklist:not(:checked)) p {
+  color: var(--fg);
+  
+}
+
+li:has(.tasklist:not(:checked)) p .tasklist {  
+  border: 1px solid var(--fg);
+  background: var(--bg-secondary);
+}
+
+/* Unchecked yang ADA unchecked sebelumnya → balik ke muted */
+li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) p {
+  color: var(--fg-muted);
+}
+
+li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
+  border: 1px solid var(--border-active);
+  background: var(--bg-secondary);
 }
 
 .chat-item.select-mode,

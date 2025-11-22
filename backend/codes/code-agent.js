@@ -1327,7 +1327,7 @@ function formatTodoChunk(todo, checklist, iteration) {
     }
   }
 
-  return content.length > 0 ? content.join('\n') : null;
+  return content.length > 0 ? content.join('\n') + '\n\n' : null;
 }
 
 function ensurePowerShellSession(state, workspacePath) {

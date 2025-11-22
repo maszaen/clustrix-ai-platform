@@ -17,8 +17,7 @@
 // ===================================
 const AGENT_STATES = {
   EXPLORE: 'explore',     // Finding files, searching codebase
-  READ: 'read',           // Reading file contents
-  UNDERSTAND: 'understand', // Analyzing code/structure
+  UNDERSTAND: 'understand', // Analyzing code/structure (includes reading)
   EDIT: 'edit',           // Modifying files
   EXECUTE: 'execute',     // Running tests/commands
   VERIFY: 'verify',       // Checking results
@@ -53,6 +52,12 @@ const DANGEROUS_PATTERNS = [
     suggestion: 'Use Set-FileLine or $lines pattern instead',
     block: false,
   },
+  {
+    pattern: /^edit\s+/i,
+    warning: 'BLOCKED: "edit" is not a valid command',
+    suggestion: 'Use: Show-FileWithLineNumbers to read, or <set> tag to edit',
+    block: true,
+  },
 ];
 
 // ===================================
@@ -60,37 +65,32 @@ const DANGEROUS_PATTERNS = [
 // ===================================
 const STATE_RESPONSE_FORMATS = {
   [AGENT_STATES.EXPLORE]: {
-    format: '<state><Next state></state>\n<hidden>thinking where to look</hidden>\n<cmd>search command</cmd>',
-    useHidden: true,
-    useAnswer: false,
-  },
-  [AGENT_STATES.READ]: {
-    format: '<state><Next state></state>\n<hidden>planning what to read next</hidden>\n<cmd>read command</cmd>',
+    format: '<state><Next state></state>\n<hidden>thinking where to look</hidden>\n<checklist>\n- [ ] Task 1\n- [ ] Task 2\n</checklist>\n<cmd>search command</cmd>',
     useHidden: true,
     useAnswer: false,
   },
   [AGENT_STATES.UNDERSTAND]: {
-    format: '<state><Next state></state>\n<hidden>detailed analysis</hidden>\n<answer>key insights for user</answer>',
+    format: '<state><Next state></state>\n<hidden>detailed analysis of memory/files</hidden>\n<checklist>\n- [x] Previous Task\n- [/] Current Task\n- [ ] Next Task\n</checklist>\n<answer>key insights for user</answer>',
     useHidden: true,
     useAnswer: true,
   },
   [AGENT_STATES.EDIT]: {
-    format: '<state><Next state></state>\n<hidden>analyzing what needs to be changed</hidden>\n<answer>what is being changed and why</answer>\n<cmd>edit command</cmd>',
+    format: '<state><Next state></state>\n<hidden>analyzing what needs to be changed</hidden>\n<checklist>\n- [x] Analyzed files\n- [/] Edit file.js\n- [ ] Verify changes\n</checklist>\n<answer>what is being changed and why</answer>\n<cmd>edit command</cmd>',
     useHidden: true,
     useAnswer: true,
   },
   [AGENT_STATES.EXECUTE]: {
-    format: '<state><Next state></state>\n<hidden>why running this</hidden>\n<cmd>run command</cmd>',
+    format: '<state><Next state></state>\n<hidden>why running this</hidden>\n<checklist>\n- [x] Edits complete\n- [/] Run tests\n</checklist>\n<cmd>run command</cmd>',
     useHidden: true,
     useAnswer: false,
   },
   [AGENT_STATES.VERIFY]: {
-    format: '<state><Next state></state>\n<hidden>checking verification results</hidden>\n<answer>verification result</answer>\n<cmd>check command (optional)</cmd>',
+    format: '<state><Next state></state>\n<hidden>checking verification results</hidden>\n<checklist>\n- [x] Tests passed\n- [/] Verify output\n</checklist>\n<answer>verification result</answer>\n<cmd>check command (optional)</cmd>',
     useHidden: true,
     useAnswer: true,
   },
   [AGENT_STATES.DONE]: {
-    format: '<state><Next state></state>\n<answer>summary of what was done</answer>\n<saved_state><Next state></saved_state>\n<!END>',
+    format: '<state><Next state></state>\n<checklist>\n- [x] All tasks completed\n</checklist>\n<answer>summary of what was done</answer>\n<saved_state><Next state></saved_state>\n<!END>',
     useHidden: false,
     useAnswer: true,
   },
@@ -108,28 +108,38 @@ Commands:
   - Use List-ProjectFiles -Extensions ".js,.ts" -Depth 2 for file listing (skips node_modules automatically)
 
 Forbidden:
-  - Get-ChildItem -Recurse | Select-String (SLOW & HANGS!)`,
+  - Get-ChildItem -Recurse | Select-String (SLOW & HANGS!)
+  
+CRITICAL EFFICIENCY RULE:
+  - CHECK ACTIVE MEMORY FIRST! If the file/content is already in <memory_view>, DO NOT SEARCH AGAIN.
+  - If you see the file in memory, move directly to UNDERSTAND or EDIT state.`,
 
-  [AGENT_STATES.READ]: `Use <hidden> for planning what to read next (not shown to user)
-NO <answer> tag for reading, just <cmd>
-Store learnings in memory (no output needed)
-Reading Strategy:
+  [AGENT_STATES.UNDERSTAND]: `Use <hidden> for detailed analysis (not shown to user)
+MANDATORY: In <hidden>, you MUST explain what you see in the <memory_view> relevant to the user request.
+If the file is already in memory:
+  1. "I see file X in memory..."
+  2. "It contains..."
+  3. "I will now..."
+  
+Use <answer> ONLY when you need user input OR have found the solution.
+If you need more info: Just use <cmd> to continue reading (only if NOT in memory).
+
+Reading Strategy (if file NOT in memory):
   - ALWAYS count first: (gc file.txt).Count
   - If < 300 lines: Show-FileWithLineNumbers -Path file.txt
   - If > 300 lines: Use batches of 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 300
-Critical Rules:
-  - NEVER use 'Get-Content', 'cat', 'type', or 'Select-Object' to read files. They do NOT update your memory.
-  - ONLY 'Show-FileWithLineNumbers' adds content to your active memory.
-  - Check MEMORY BEFORE reading files! If already in memory, analyze instead
-  - Commands MUST be in <cmd> tag, NEVER in <answer> or plain text`,
 
-  [AGENT_STATES.UNDERSTAND]: `Use <hidden> for detailed analysis (not shown to user)
-Use <answer> ONLY when you need user input OR have found the solution
-If you need more info: Just use <cmd> to continue reading
 Analysis Focus:
   - Look for: structure, patterns, bugs, TODOs
   - Summarize, don't repeat every detail
+
+TURBO MODE:
+  - If the bug is obvious and you have the file in memory, SKIP detailed analysis and move DIRECTLY to EDIT state.
+  - Don't waste turns confirming what you can already see.
+
 Critical Rules:
+  - NEVER use 'Get-Content', 'cat', 'type', or 'Select-Object' to read files. They do NOT update your memory.
+  - ONLY 'Show-FileWithLineNumbers' adds content to your active memory.
   - NEVER put commands in <answer> - always use <cmd>`,
 
   [AGENT_STATES.EDIT]: `Use <hidden> for analyzing what needs to be changed (detailed editing instructions or thoughts in subsequent iterations to maintain context)
@@ -192,26 +202,21 @@ State Transitions:
 // ===================================
 // CORE SYSTEM PROMPT (State-Aware)
 // ===================================
-// ===================================
-// CORE SYSTEM PROMPT (Static - Cached)
-// ===================================
-const STATIC_SYSTEM_PROMPT = `You are Clustrix, a fast and helpful AI coding assistant.
-You have the capability to use PowerShell commands to explore, read, edit, and execute code in projects.
+const STATIC_SYSTEM_PROMPT = `You are Clustrix, a highly skilled software engineer with extensive knowledge in many programming languages, frameworks, design patterns, and best practices.
+Clustrix enjoys helping humans and sees its role as an intelligent and kind assistant to the people, with depth and wisdom that makes it more than a mere tool.
 
 === CLUSTRIX RULES ===
-
 # RESPONSE FORMAT
 {state_format}
 
 # STATE SELECTION
   Choose your next state based on what you need to do:
-  - EXPLORE: Finding files, searching codebase
-  - READ: Reading file contents
-  - UNDERSTAND: Analyzing code/structure
-  - EDIT: Modifying files
-  - EXECUTE: Running tests/commands
-  - VERIFY: Checking results
-  - DONE: Task complete (ONLY if 100% finished - no more actions needed)
+  - <state>EXPLORE</state>: Finding files, searching codebase
+  - <state>UNDERSTAND</state>: Analyzing code/structure (includes reading files)
+  - <state>EDIT</state>: Modifying files
+  - <state>EXECUTE</state>: Running tests/commands
+  - <state>VERIFY</state>: Checking results
+  - <state>DONE</state>: Task complete (ONLY if 100% finished - no more actions needed)
 
 # CRITICAL STATE RULES
   - ALWAYS start with <state>STATE_NAME</state> in EVERY response
@@ -222,11 +227,19 @@ You have the capability to use PowerShell commands to explore, read, edit, and e
 
 # CORE RULES
   1. Use <hidden> for internal thinking in EVERY state (MANDATORY except DONE) - extend your analysis and create next todo for you or summary
-  2. Use <answer> ONLY when you need to inform user (state-specific)
-  3. Search: Use Search-InFiles not Get-ChildItem -Recurse
-  4. Edit: ALWAYS confirm line numbers first (Show-FileWithLineNumbers)
-  5. Save to memory: Use Save-Memory for important context
-  6. Check memory BEFORE reading files - avoid duplicate work
+  2. Use <checklist> in EVERY response (MANDATORY).
+     - Create a checklist of tasks to complete the user request.
+     - Update it in every turn: [ ] Pending, [/] In Progress, [x] Done.
+     - If plans change, REWRITE the checklist with new items.
+     - This checklist must be "Production Ready" - detailed and accurate.
+  3. Use <answer> ONLY when you need to inform user (state-specific)
+  4. Search: Use Search-InFiles not Get-ChildItem -Recurse
+  5. Edit: ALWAYS confirm line numbers first (Show-FileWithLineNumbers)
+  6. Save to memory: Use Save-Memory for important context
+  7. Check memory BEFORE reading files - avoid duplicate work
+  8. NEVER use 'Get-Content', 'cat', 'type', or 'Select-Object' to read files. Use 'Show-FileWithLineNumbers' instead.
+  9. When executing a batch search, ensure minimum 100 lines per batch.
+  10. Using Show-FileWithLineNumber for any line range already stored in memory is strictly forbidden!
   
 # COMMAND REFERENCE
 {command_reference}`;
@@ -236,21 +249,26 @@ You have the capability to use PowerShell commands to explore, read, edit, and e
 // ===================================
 const DYNAMIC_CONTEXT_TEMPLATE = `
 <context>
-  <memory_view>
+<memory_view>
 {memory_state}
-  </memory_view>
+</memory_view>
 
-  <workspace_state>
-    Current Memory: {current_memory}
-  </workspace_state>
+<workspace_state>
+Current Memory: {current_memory}
+</workspace_state>
 
-  <history_summary>
+<history_summary>
 {history_summary}
-  </history_summary>
+</history_summary>
 
-  <recent_turns>
+<recent_turns>
 {command_history}
-  </recent_turns>
+</recent_turns>
+
+<hidden>
+YOUR PREVIOUS THOUGHTS, THIS IS WHAT YOU SHOULD DO NOW:
+{last_hidden}
+</hidden>
 </context>
 
 <instruction>
@@ -260,23 +278,60 @@ const DYNAMIC_CONTEXT_TEMPLATE = `
 {summary_reminder}`;
 
 // ===================================
+// BUILD STATE-SPECIFIC PROMPT
+// ===================================
+function buildStatePrompt(state, iteration, commandHistory, includeReference = false, memoryState = '', currentMemory = 'default', userPromptText = '', historySummary = '', lastHidden = '') {
+  // Fallback for legacy states (e.g. READ removed in v2)
+  let effectiveState = state;
+  if (state === 'read' || state === 'READ') {
+    effectiveState = AGENT_STATES.UNDERSTAND;
+  }
+  
+  const stateFormat = STATE_RESPONSE_FORMATS[effectiveState] || STATE_RESPONSE_FORMATS[AGENT_STATES.EXPLORE];
+
+  // Build command reference (only when needed)
+  const commandRef = (includeReference || iteration === 0 || iteration > 5)
+    ? COMMAND_REFERENCE
+    : '';
+
+  // 1. Build Static System Prompt
+  let systemPrompt = STATIC_SYSTEM_PROMPT
+    .replace('{state_format}', stateFormat.format)
+    .replace('{command_reference}', commandRef);
+
+  // 2. Build Dynamic User Context
+  let userContext = DYNAMIC_CONTEXT_TEMPLATE
+    .replace('{memory_state}', memoryState)
+    .replace('{current_memory}', currentMemory || 'default')
+    .replace('{history_summary}', historySummary)
+    .replace('{command_history}', commandHistory) // This should be the RECENT turns
+    .replace('{last_hidden}', lastHidden || 'No previous thoughts.')
+    .replace('{user_prompt}', userPromptText)
+    .replace('{summary_reminder}', ''); // Can be passed in if needed
+
+  return { systemPrompt, userContext };
+}
+
+// ===================================
 // COMMAND REFERENCE
 // ===================================
 const COMMAND_REFERENCE = `
-# SEARCH COMMANDS (Use these FIRST):
+# AVAILABLE SEARCH COMMANDS:
 Search in multiple files or entire directories recursively (safe):
   - Search-InFiles -Pattern "regex" -Filter "*.js" [-Path "dir"] [-Depth 2] [-Context 2]
-  Example: Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
+  Example: Search-InFiles -Pattern "functionName" -Filter "*.js" -Depth 2
   Example: Search-InFiles -Pattern "class.*Button" -Filter "*.tsx,*.jsx" -Path "renderer"
-Search single files only:
-  - Find-Pattern -Pattern "regex" -Path <file> [-Context 2]
-  Example: Find-Pattern -Pattern "display.*none" -Path "style.css"
+Search single files only: 
+  Find-Pattern -Pattern "regex" -Path <file> [-Context 2]
+  Example: Find-Pattern -Pattern "display.*none" -Path "style.css" 
 Check file size/lines:
   - Get-FileStats -Path <file>
+
 Show entire file with line numbers:
   - Show-FileWithLineNumbers -Path "file.js"
 Show specific line range, use for large files (batch reading)
   - Show-FileWithLineNumbers -Path "file.js" -StartLine 100 -EndLine 200
+  - Get-FileLineRange -Path <file> -Ranges @('1-10', '50-60')
 
 # EDIT COMMANDS
 Replace lines:
@@ -521,12 +576,16 @@ function detectDangerousCommand(command = '') {
 function formatCommandHistory(history = [], lastHidden = null) {
   if (!history || history.length === 0) return 'No recent history.';
 
-  // 1. Pruning: Keep only last 5 turns for full context
-  const recentTurns = history.slice(-5);
+  // 1. Pruning Strategy:
+  // - Tier 1 (Recent): Last 5 turns -> Full output (max 100k chars)
+  // - Tier 2 (Semi-Recent): Previous 5 turns -> Summarized output (max 5k chars)
+  // - Tier 3 (Older): Rest -> Command summary only
 
-  // 2. Summarization: Summarize older turns (simple version for now)
-  // In a real implementation, we might use an LLM to summarize, but here we'll just list commands
-  const olderTurns = history.slice(0, -5);
+  const recentTurns = history.slice(-5);
+  const semiRecentTurns = history.slice(-10, -5);
+  const olderTurns = history.slice(0, -10);
+
+  // 2. Summarization (Tier 3)
   let summary = '';
   if (olderTurns.length > 0) {
     summary = olderTurns.map(h => `- ${h.command}`).join('\n');
@@ -534,53 +593,49 @@ function formatCommandHistory(history = [], lastHidden = null) {
     summary = 'No older history.';
   }
 
-  // 3. Formatting Recent Turns
-  const formattedRecent = recentTurns.map((entry, index) => {
-    // Filter out massive outputs to prevent context flooding
+  // 3. Formatting Semi-Recent Turns (Tier 2)
+  // We append these to the summary or prepend to recent?
+  // The prompt expects { summary, recent }.
+  // Let's prepend Tier 2 to the "recent" block but with stricter truncation, 
+  // OR append to summary with output?
+  // The user prompt template uses {history_summary} and {command_history} (recent).
+  // It's better to put Tier 2 in {command_history} (recent) so the agent sees the flow, just with less detail.
+  
+  const formattedSemiRecent = semiRecentTurns.map((entry, index) => {
     let output = entry.output || '';
-    if (output.length > 1000) {
-      output = output.substring(0, 1000) + '\n... [Output Truncated]';
+    if (output.length > 5000) {
+      output = output.substring(0, 5000) + '\n... [Output Truncated]';
     }
-
+    // Use a slightly different format or same? Same is fine, just truncated.
     return `<turn i="${olderTurns.length + index + 1}">
 <command>${entry.command}</command>
 <output>${output}</output>
 </turn>`;
   }).join('\n\n');
 
+  // 4. Formatting Recent Turns (Tier 1)
+  const formattedRecent = recentTurns.map((entry, index) => {
+    let output = entry.output || '';
+    if (output.length > 100000) {
+      output = output.substring(0, 100000) + '\n... [Output Truncated]';
+    }
+
+    return `<turn i="${olderTurns.length + semiRecentTurns.length + index + 1}">
+<command>${entry.command}</command>
+<output>${output}</output>
+</turn>`;
+  }).join('\n\n');
+
+  // Combine Tier 2 and Tier 1 for the "recent" block
+  const combinedRecent = [formattedSemiRecent, formattedRecent].filter(Boolean).join('\n\n');
+
   return {
     summary,
-    recent: formattedRecent
+    recent: combinedRecent
   };
 }
 
-// ===================================
-// BUILD STATE-SPECIFIC PROMPT
-// ===================================
-function buildStatePrompt(state, iteration, commandHistory, includeReference = false, memoryState = '', currentMemory = 'default', userPromptText = '', historySummary = '') {
-  const stateFormat = STATE_RESPONSE_FORMATS[state];
 
-  // Build command reference (only when needed)
-  const commandRef = (includeReference || iteration === 0 || iteration > 5)
-    ? COMMAND_REFERENCE
-    : '';
-
-  // 1. Build Static System Prompt
-  let systemPrompt = STATIC_SYSTEM_PROMPT
-    .replace('{state_format}', stateFormat.format)
-    .replace('{command_reference}', commandRef);
-
-  // 2. Build Dynamic User Context
-  let userContext = DYNAMIC_CONTEXT_TEMPLATE
-    .replace('{memory_state}', memoryState)
-    .replace('{current_memory}', currentMemory || 'default')
-    .replace('{history_summary}', historySummary)
-    .replace('{command_history}', commandHistory) // This should be the RECENT turns
-    .replace('{user_prompt}', userPromptText)
-    .replace('{summary_reminder}', ''); // Can be passed in if needed
-
-  return { systemPrompt, userContext };
-}
 
 // ===================================
 // HELPER FUNCTIONS

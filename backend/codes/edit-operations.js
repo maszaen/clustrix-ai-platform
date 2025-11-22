@@ -473,4 +473,3 @@ module.exports = {
   parseSetOperations,
   applySetOperations,
 };
-

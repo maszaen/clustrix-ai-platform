@@ -433,7 +433,7 @@ function formatMemoryOutput(state) {
 # IMPORTANT: 
   1. TRUST THE DATA: The content below is the EXACT representation of files in the workspace. If you see syntax errors (e.g., missing braces, incomplete lines) that are NOT followed by an "[unexplored]" marker, they are REAL BUGS in the file that you must fix.
   2. TRUNCATION LOGIC: Files are ONLY truncated where explicitly marked with "[Line X-Y unexplored]".
-  3. NO REDUNDANT SEARCH: **NEVER** use commands to read/search lines that are already visible in this memory. It is wasted effort. **Target ONLY** the \`[Lines ... unexplored]\` gaps if you need to expand your view.
+  3. NO REDUNDANT SEARCH: Using Show-FileWithLineNumber for any line range already stored in memory is strictly forbidden!. If necessary **Target ONLY** the \`[Lines ... unexplored]\` gaps if you need to expand your view.
   4. DYNAMIC UPDATES: This memory is cumulative and strictly up-to-date.
         `);
 
@@ -444,8 +444,11 @@ function formatMemoryOutput(state) {
           totalExplored += range.lines.length;
         }
 
-        const totalLinesInfo = fileData.totalLines ? ` (${fileData.totalLines} lines total, ${totalExplored} explored)` : '';
-
+        const totalLinesInfo = fileData.totalLines
+        ? (totalExplored >= fileData.totalLines
+          ? ` (This file is fully explored. Content here is exact, live, always up to date, and reflects every change in the workspace. Searching this file is strictly forbidden. ${fileData.totalLines} lines total)`
+          : ` (${fileData.totalLines} lines total, ${totalExplored} explored. Content shown is exact, live, always up to date, and reflects every change in the workspace)`)
+        : '';
         // If totalLines is null, try to get it from file system
         if (fileData.totalLines === null) {
           try {
@@ -1279,11 +1282,14 @@ function formatTodo(todoText) {
 
   const lines = todoText.split('\n').filter(line => line.trim().startsWith('-'));
   const items = lines.map(line => {
-    const match = line.match(/^-\s*\[([ xX])\]\s*(.+)$/);
+    // V2: Support [ ] [x] [/]
+    const match = line.match(/^-\s*\[([ xX\/])\]\s*(.+)$/);
     if (match) {
       return {
         checked: match[1].toLowerCase() === 'x',
+        status: match[1], // ' ', 'x', '/'
         text: match[2].trim(),
+        original: line,
       };
     }
     return null;
@@ -1296,28 +1302,28 @@ function formatTodoChunk(todo, checklist, iteration) {
   // Return formatted todo/checklist for sending to renderer
   const content = [];
 
-  if (iteration === 0 && todo) {
-    // First iteration: show todo list
-    content.push('📋 **My Plan:**\n');
-    const items = formatTodo(todo);
+  // V2: Prioritize checklist if available (mandatory in new prompt)
+  const listContent = checklist || todo;
+  
+  if (listContent) {
+    // Always show checklist/plan
+    const header = iteration === 0 ? '\n## Planning:\n' : '\n## Checkpoint Progress:\n';
+    content.push(header);
+    
+    const items = formatTodo(listContent);
     if (items) {
       items.forEach(item => {
-        content.push(`- [${item.checked ? 'x' : ' '}] ${item.text}`);
+        const icon = item.checked ? '- [x]' : (item.text.startsWith('[') ? '' : '- [ ]'); // Handle [/] as in-progress if needed, or just simple check
+        // Custom handling for [/] (In Progress)
+        let displayIcon = icon;
+        if (item.original && item.original.includes('[/]')) {
+          displayIcon = '- [ ]';
+        }
+        
+        content.push(`${displayIcon} ${item.text}`);
       });
     } else {
-      content.push(todo);
-    }
-  } else if (iteration > 0 && checklist) {
-    // Subsequent iterations: show checklist
-    content.push('✓ **Progress:**\n');
-    const items = formatTodo(checklist);
-    if (items) {
-      items.forEach(item => {
-        const icon = item.checked ? '✅' : '⬜';
-        content.push(`${icon} ${item.text}`);
-      });
-    } else {
-      content.push(checklist);
+      content.push(listContent);
     }
   }
 
@@ -1469,19 +1475,10 @@ async function runAgentIteration({
             historyParts.push(''); // blank line
 
             if (iterationIndex.length > 0) {
-              historyParts.push(`# INDEX ${i + 1} PREVIOUS COMMAND:`);
+              historyParts.push(`# INDEX ${i + 1} PREVIOUS TERMINAL COMMAND:`);
               iterationIndex.forEach((iter, idx) => {
                 const cmd = iter.command || '[no command]';
                 historyParts.push(`#${idx + 1}: ${cmd}`);
-
-                // // For the last message in history, include output of the last iteration
-                // if (isLastMessage && idx === iterationIndex.length - 1) {
-                //   const output = iter.output || 'No output';
-                //   const exitCode = iter.exit_code ?? 0;
-                //   historyParts.push(`Command output #${idx + 1}:`);
-                //   historyParts.push(output);
-                //   historyParts.push(`Exit Code: ${exitCode}`);
-                // }
               });
               historyParts.push(''); // blank line after history
             }
@@ -1504,8 +1501,36 @@ async function runAgentIteration({
   const memoryState = formatMemoryOutput(state);
   const truncatedMemory = memoryState.length > 150000 ? memoryState.substring(0, 150000) + '\n[Memory truncated, use Show-Memory to read all]' : memoryState;
 
+  // REDUNDANT READ DETECTION
+  let redundancyWarning = '';
+  if (lastCommand && lastCommand.command) {
+    const readMatch = lastCommand.command.match(/^(?:Show-FileWithLineNumbers|Get-Content|cat|type)\s+(?:-Path\s+)?["']?([^"'\s]+)["']?/i);
+    if (readMatch) {
+      const filePath = readMatch[1];
+      // Check if this file was ALREADY in memory before this command (heuristic: it's in memoryState now, and we just read it)
+      // A better check would be if it was in memory *before* the command, but checking current memory is a good proxy 
+      // if we assume the agent shouldn't re-read what it already has.
+      // However, we need to be careful not to warn on the *first* read.
+      // We can check if the file is in `state.memories` and if the `ranges` cover the whole file or significant part.
+      
+      // For now, let's use a simpler heuristic: If the agent read a file, and that file is in memory, 
+      // remind them to check memory next time.
+      // But the user specifically asked for a warning if they read content *already* in memory.
+      // Since we don't track "memory state before command" easily here without passing it, 
+      // we will add a generic reminder if the last command was a read.
+      
+      // IMPROVED LOGIC: Check if the file is fully explored in memory.
+      const normalizedPath = filePath.replace(/\\/g, '/');
+      const fileMemory = Object.values(state.memories).flatMap(m => m.files ? Object.values(m.files) : []).find(f => f?.filePath?.endsWith(normalizedPath) || (f?.filePath && normalizedPath.endsWith(f.filePath)));
+      
+      if (fileMemory && fileMemory.ranges.length > 0) {
+         redundancyWarning = `\n\n!!! SYSTEM ALERT: You just executed a READ command on '${filePath}'.\nCHECK MEMORY FIRST! If this file was already in your memory, you just wasted a turn.\nRead the user prompt, then read the memory below, summarize based on the user input, then switch to EDIT state if necessary.`;
+      }
+    }
+  }
+
   const { systemPrompt, userContext } = renderSystemPrompt(selectPromptTemplate(iteration, isContinuationSession), {
-    userPrompt,
+    userPrompt: userPrompt + redundancyWarning, // Inject warning into user prompt
     commandHistory: commandHistoryText.recent, // Pass formatted recent turns
     commandHistoryArray: state.commandHistory,
     lastCommand,
@@ -1716,6 +1741,21 @@ async function executeCommand(state, command, options = {}) {
   // Check if this is a background process
   const isBackground = isBackgroundProcess(command);
   const actualTimeoutMs = isBackground ? BACKGROUND_PROCESS_TIMEOUT_MS : timeoutMs;
+
+  // INTERCEPTION: Redirect standard read commands to our custom helper
+  // This ensures we always get line numbers and consistent formatting
+  if (command.match(/^(?:Get-Content|gc|cat|type)\s+(?:-Path\s+)?["']?([^"'\s]+)["']?$/i)) {
+    const match = command.match(/^(?:Get-Content|gc|cat|type)\s+(?:-Path\s+)?["']?([^"'\s]+)["']?$/i);
+    if (match) {
+      const filePath = match[1];
+      const newCommand = `Show-FileWithLineNumbers -Path "${filePath}"`;
+      log('CODES', 1, 'executeCommand', 'Intercepted read command, redirecting to helper', {
+        original: command,
+        redirected: newCommand
+      });
+      command = newCommand;
+    }
+  }
 
   try {
     const editResult = applySetOperations(command, { workspacePath: state.workspacePath || process.cwd() });
@@ -2079,8 +2119,6 @@ async function processCodeRequest({
   });
 
   // Get current message index for this request
-  const existingMessages = db?.getMessages?.(sessionId) || [];
-
   const chunks = [];
   let usage = null;
   let lastCommandErrorPattern = null;
@@ -2088,6 +2126,11 @@ async function processCodeRequest({
   let finalAnswer = null; // Track final answer to save to messages table
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
+    // RATE LIMIT PROTECTION: Wait 2 seconds between iterations
+    if (iteration > 0) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
     // Check if cancellation was requested
     if (typeof shouldCancel === 'function' && shouldCancel()) {
       log('CODES', 1, 'processCodeRequest', 'Cancellation requested, stopping iteration loop', { sessionId, iteration });
@@ -2307,7 +2350,7 @@ async function processCodeRequest({
               }
 
               if (rangeFullyCovered) {
-                loopDetectedOutput = '[SYSTEM] You have explored this line in this file, try another search.';
+                loopDetectedOutput = '[SYSTEM] You have explored this line in this file, try another search. read the memory below, you dont need to search this again!!!!!!!!!!!!!!';
                 log('CODES', 2, 'processCodeRequest', 'Smart file read detection: requested range already in memory', {
                   iteration,
                   requestedPath,
@@ -2480,38 +2523,8 @@ async function processCodeRequest({
       }
     }
 
-    // Detect repeated failure pattern (e.g., same syntax error twice in a row)
-    if (exitCode !== 0 && parsed.command && parsed.command.includes('-replace')) {
-      const errorPattern = output.substring(0, 100); // First 100 chars of error
-      if (errorPattern === lastCommandErrorPattern) {
-        sameErrorCount += 1;
-        if (sameErrorCount >= 2) {
-          log('CODES', 2, 'processCodeRequest', 'Breaking loop: same -replace error repeated twice', {
-            iteration,
-            errorPattern,
-            sameErrorCount,
-          });
-          // Add message to history so AI knows to try different approach
-          const loopBreakerMsg = 'LOOP BREAKER: Same -replace command failed twice. Try a different approach (multi-step instead of single -replace).';
-          state.commandHistory.push({
-            command: '[SYSTEM]',
-            output: loopBreakerMsg,
-            exitCode: 1,
-            summary: 'Repeated -replace failure - suggest multi-step approach',
-            timestamp: Date.now(),
-          });
-          // Add to conversation history
-          state.conversationHistory.push({
-            role: 'user',
-            content: `[SYSTEM] ${loopBreakerMsg}`,
-          });
-          break; // Break iteration loop
-        }
-      } else {
-        lastCommandErrorPattern = errorPattern;
-        sameErrorCount = 1; // Reset count when error changes
-      }
-    }
+    // Loop breaker logic removed as per user request (never stop stream)
+    // if (exitCode !== 0 && parsed.command && parsed.command.includes('-replace')) { ... }
 
     // STEP 3: Send output AFTER executing (but NOT if timeout - keep error in history for AI only)
     if (!isTimeout) {
@@ -2557,7 +2570,7 @@ async function processCodeRequest({
       break;
     }
 
-    if (!parsed.command || parsed.done) {
+    if (parsed.done) {
       break;
     }
   }

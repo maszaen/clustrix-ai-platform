@@ -208,6 +208,7 @@ function getSessionState(sessionId, codeId = null) {
       instruction: '',
       editHistory: [],
       lastHidden: null, // Store last hidden content for prompt
+      lastChecklist: null, // Store last checklist for prompt
       // Memory system: cumulative file view
       memories,
       activeMemoryNames, // Visible memories
@@ -954,7 +955,7 @@ function detectErrorContext(commandHistory = []) {
   return { errorType, includeCommandReference };
 }
 
-function renderSystemPrompt(template, { userPrompt, commandHistory, commandHistoryArray, lastCommand, iteration = 0, previousMessagesHistory = '', currentState, memoryState, currentMemory, lastHidden }) {
+function renderSystemPrompt(template, { userPrompt, commandHistory, commandHistoryArray, lastCommand, iteration = 0, previousMessagesHistory = '', currentState, memoryState, currentMemory, lastHidden, lastChecklist }) {
   const lastOutputLines = (lastCommand.output || '').split(/\r?\n/).length;
 
   // 1. Summary REMINDER for PROMPT_SUBSEQUENT (task section)
@@ -983,7 +984,8 @@ function renderSystemPrompt(template, { userPrompt, commandHistory, commandHisto
     currentMemory,
     userPrompt, // userPromptText
     contextPrevious, // historySummary
-    lastHidden
+    lastHidden,
+    lastChecklist
   );
 
   // Inject error guidance into system prompt if needed
@@ -1555,6 +1557,7 @@ async function runAgentIteration({
     memoryState: truncatedMemory,
     currentMemory: state.currentMemory,
     lastHidden: state.lastHidden,
+    lastChecklist: state.lastChecklist,
   });
 
   // Debug: Log processed prompt for each iteration
@@ -1649,6 +1652,9 @@ async function runAgentIteration({
   // Store last hidden content for next prompt
   if (parsed.hidden) {
     state.lastHidden = parsed.hidden;
+  }
+  if (parsed.checklist) {
+    state.lastChecklist = parsed.checklist;
   }
 
   // Store assistant's response in conversation history

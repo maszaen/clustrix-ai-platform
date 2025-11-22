@@ -90,7 +90,7 @@ const STATE_RESPONSE_FORMATS = {
     useAnswer: true,
   },
   [AGENT_STATES.DONE]: {
-    format: '<state><Next state></state>\n<checklist>\n- [x] All tasks completed\n</checklist>\n<answer>summary of what was done</answer>\n<saved_state><Next state></saved_state>\n<!END>',
+    format: '<state><Next state></state>\n<answer>detailed summary of what was done</answer>\n<saved_state><Next state></saved_state>\n<!END>',
     useHidden: false,
     useAnswer: true,
   },
@@ -269,6 +269,10 @@ Current Memory: {current_memory}
 YOUR PREVIOUS THOUGHTS, THIS IS WHAT YOU SHOULD DO NOW:
 {last_hidden}
 </hidden>
+
+<checklist>
+{last_checklist}
+</checklist>
 </context>
 
 <instruction>
@@ -280,7 +284,7 @@ YOUR PREVIOUS THOUGHTS, THIS IS WHAT YOU SHOULD DO NOW:
 // ===================================
 // BUILD STATE-SPECIFIC PROMPT
 // ===================================
-function buildStatePrompt(state, iteration, commandHistory, includeReference = false, memoryState = '', currentMemory = 'default', userPromptText = '', historySummary = '', lastHidden = '') {
+function buildStatePrompt(state, iteration, commandHistory, includeReference = false, memoryState = '', currentMemory = 'default', userPromptText = '', historySummary = '', lastHidden = '', lastChecklist = '') {
   // Fallback for legacy states (e.g. READ removed in v2)
   let effectiveState = state;
   if (state === 'read' || state === 'READ') {
@@ -306,6 +310,7 @@ function buildStatePrompt(state, iteration, commandHistory, includeReference = f
     .replace('{history_summary}', historySummary)
     .replace('{command_history}', commandHistory) // This should be the RECENT turns
     .replace('{last_hidden}', lastHidden || 'No previous thoughts.')
+    .replace('{last_checklist}', lastChecklist || 'No previous checklist.')
     .replace('{user_prompt}', userPromptText)
     .replace('{summary_reminder}', ''); // Can be passed in if needed
 

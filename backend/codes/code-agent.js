@@ -2225,6 +2225,9 @@ async function processCodeRequest({
       break;
     }
 
+    // Store previous checklist before this iteration
+    const previousChecklist = state.lastChecklist;
+
     const { parsed, usage: iterationUsage } = await runAgentIteration({
       iteration,
       state,
@@ -2260,8 +2263,9 @@ async function processCodeRequest({
     }
 
     // STEP 0: Send todo/checklist if present (for planning & progress tracking)
+    // Skip sending if checklist is identical to previous iteration
     const todoChunk = formatTodoChunk(parsed.todo, parsed.checklist, iteration);
-    if (todoChunk && typeof onChunk === 'function') {
+    if (todoChunk && typeof onChunk === 'function' && !(parsed.checklist && previousChecklist && parsed.checklist.trim() === previousChecklist.trim())) {
       try {
         chunks.push(todoChunk);
         onChunk(todoChunk, {

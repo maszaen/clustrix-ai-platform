@@ -1,6 +1,6 @@
 require('./env.js');
 
-const { app, BrowserWindow, ipcMain, dialog, session, protocol, net, shell, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, session, protocol, screen, shell, Tray, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
@@ -2039,12 +2039,20 @@ ipcMain.handle('app:restart', async () => {
 });
 
 function createWindow(){
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+  
+  const windowWidth = Math.floor(screenWidth * 0.65);
+  const windowHeight = Math.floor(screenHeight * 0.8);
+
   const win = new BrowserWindow({
-    width: 1300, height: 900,
+    width: windowWidth,
+    height: windowHeight, 
     frame: false,
     minWidth: 650,
     minHeight: 400,
     icon: path.join(__dirname, 'public', 'images', 'favicon.ico'),
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false
@@ -2140,6 +2148,12 @@ function createWindow(){
     else win.maximize();
   });
   ipcMain.on('window:close', () => win.close());
+  ipcMain.on('renderer:ready', () => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+      log('APP', 1, 'renderer:ready', 'Window shown after renderer ready');
+    }
+  });
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url) {
       shell.openExternal(url).catch((error) => log('Failed to open external link', error));

@@ -3387,7 +3387,7 @@ input:checked + .slider:before {
   max-width: 785px;
   margin: 0 !important;
   justify-content: center;
-  border: 1px solid var(--border-light);
+  border: 1px solid transparent !important;
   gap: var(--spacing-md);
   background: var(--bg-secondary);
   border-radius: var(--radius-2xl);
@@ -3417,7 +3417,7 @@ input:checked + .slider:before {
   max-width: 725px;
   justify-content: center;
   margin: 0 auto;
-  border: 1px solid var(--border-light);
+  border: 1px solid transparent !important;
   gap: var(--spacing-md);
   background: var(--bg-secondary);
   border-radius: var(--radius-2xl);
@@ -3426,6 +3426,10 @@ input:checked + .slider:before {
   position: relative;
   border: 1px solid transparent;
   z-index: 2;
+}
+
+.input-container-parent:hover {
+  border: 1px solid var(--border-light) !important;
 }
 
 #input-area::before {
@@ -3469,6 +3473,10 @@ textarea::-webkit-scrollbar {
 
 .input-container:focus-within {
   border-color: var(--primary);
+}
+
+.input-container-parent:has(textarea:focus:not(:placeholder-shown)) {
+  border: 1px solid var(--border-light) !important;
 }
 
 #msg, #msg-central, #project-message-input, #code-message-input {
@@ -4922,7 +4930,7 @@ blockquote blockquote blockquote blockquote::before {
 
   .title-info:has(#chat-title) {
     justify-content: start !important;
-    -webkit-app-region: no-drag;
+    -webkit-app-region: drag;
     width: 40%
   }
 

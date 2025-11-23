@@ -65,27 +65,27 @@ const DANGEROUS_PATTERNS = [
 // ===================================
 const STATE_RESPONSE_FORMATS = {
   [AGENT_STATES.EXPLORE]: {
-    format: '<state><Next state></state>\n<hidden>thinking where to look</hidden>\n<checklist>\n- [ ] Task 1\n- [ ] Task 2\n</checklist>\n<cmd>search command</cmd>',
+    format: '<state><Next state></state>\n<hidden>thinking where to look</hidden>\n<checklist>\n- [ ] <existing or new_task>\n- [ ] <existing or new_task>\n...</checklist>\n<cmd>search command</cmd>',
     useHidden: true,
     useAnswer: false,
   },
   [AGENT_STATES.UNDERSTAND]: {
-    format: '<state><Next state></state>\n<hidden>super detailed analysis of memory/files you want to edit</hidden>\n(CHECKLIST IS OPTIONAL, ONLY WRITE CHECKLIST IF YOU WANT TO CHANGE THE CHECKLIST OR MARK DONE)<checklist>\n- [x] <previous_task>\n- [/] <current_task>\n- [ ] <next_task> - [] <next_task>\n</checklist>\n<answer>key insights for user</answer>',
+    format: '<state><Next state></state>\n<hidden>super detailed analysis of memory/files you want to edit</hidden>\n<checklist>\n- [x] <previous_task>\n- [/] <current_task>\n- [ ] <next or new_task> - [] <next or new_task>...\n</checklist>\n<answer>key insights for user</answer>',
     useHidden: true,
     useAnswer: true,
   },
   [AGENT_STATES.EDIT]: {
-    format: '<state><Next state></state>\n<hidden>analyzing what\'s next needs to be changed</hidden>\n(CHECKLIST IS OPTIONAL, ONLY WRITE CHECKLIST IF YOU WANT TO CHANGE THE CHECKLIST OR MARK DONE)<checklist>\n- [x] Analyzed files\n- [/] Edit file.js\n- [ ] Verify changes\n</checklist>\n<answer>what is being changed and why</answer>\n<cmd>edit command for one file bulk edit (multiple <set> tag is supported)</cmd>',
+    format: '<state><Next state></state>\n<hidden>analyzing what\'s next needs to be changed</hidden>\n<checklist>\n- [x] <previous_task>\n- [/] <current_task>\n- [ ] <next or new_task> - [] <next or new_task>...\n</checklist>\n<answer>what is being changed and why</answer>\n<cmd>edit command for one file bulk edit (multiple <set> tag is supported)</cmd>',
     useHidden: true,
     useAnswer: true,
   },
   [AGENT_STATES.EXECUTE]: {
-    format: '<state><Next state></state>\n<hidden>why running this</hidden>\n<checklist>\n- [x] Edits complete\n- [/] Run tests\n</checklist>\n<cmd>run command</cmd>',
+    format: '<state><Next state></state>\n<hidden>why running this</hidden>\n<checklist>\n- [x] <previous_task>\n- [/] <current_task>\n- [ ] <next or new_task> - [] <next or new_task>...\n</checklist>\n<cmd>run command</cmd>',
     useHidden: true,
     useAnswer: false,
   },
   [AGENT_STATES.VERIFY]: {
-    format: '<state><Next state></state>\n<hidden>checking verification results</hidden>\n<checklist>\n- [x] Tests passed\n- [/] Verify output\n</checklist>\n<answer>verification result</answer>\n<cmd>check command (optional)</cmd>',
+    format: '<state><Next state></state>\n<hidden>checking verification results</hidden>\n<checklist>\n- [x] <previous_task>\n- [/] <current_task>\n- [ ] <next or new_task> - [] <next or new_task>...\n</checklist>\n<answer>verification result</answer>\n<cmd>check command (optional)</cmd>',
     useHidden: true,
     useAnswer: true,
   },
@@ -229,8 +229,8 @@ Clustrix enjoys helping humans and sees its role as an intelligent and kind assi
   1. Use <hidden> for internal thinking or summary of current action or what you want to do next in EVERY state (MANDATORY except DONE) - extend your analysis and create next todo for you or summary
   2. Use <checklist> in EVERY response (MANDATORY).
      - Create a checklist of tasks to complete the user request.
-     - Update it in every turn: [ ] Pending, [/] In Progress, [x] Done.
-     - If plans change, REWRITE the checklist with new items.
+     - Update it if task done: [ ] Pending, [/] In Progress, [x] Done.
+     - If plans change, REWRITE the checklist with new items (only pending checklists can be changed).
      - Only write <checklist> tags when you want to check it or change it, do not change the previous checklist.
   3. Use <answer> ONLY when you need to inform user (state-specific)
   4. Search: Use Search-InFiles not Get-ChildItem -Recurse
@@ -320,8 +320,7 @@ function buildStatePrompt(state, iteration, commandHistory, includeReference = f
 // ===================================
 // COMMAND REFERENCE
 // ===================================
-const COMMAND_REFERENCE = `
-# AVAILABLE SEARCH COMMANDS:
+const COMMAND_REFERENCE = `# AVAILABLE SEARCH COMMANDS:
 Search in multiple files or entire directories recursively (safe):
   - Search-InFiles -Pattern "regex" -Filter "*.js" [-Path "dir"] [-Depth 2] [-Context 2]
   Example: Search-InFiles -Pattern "functionName" -Filter "*.js" -Depth 2

@@ -1038,7 +1038,7 @@ function Search-InFiles {
 
             if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 1) {  # 0 = matches found, 1 = no matches
                 if ($rgOutput) {
-                    $linePattern = '^(?<path>.+?)([:\-])(?<line>\d+)([:\-])(.*)$'
+                    $linePattern = '^(?<path>.+?)([:\-])(?<line>\d+)([:\-])(?<content>.*)$'
                     $matchesByFile = [ordered]@{}
 
                     foreach ($line in $rgOutput) {
@@ -1051,7 +1051,7 @@ function Search-InFiles {
                         if ($line -match $linePattern) {
                             $filePath = $Matches['path']
                             $lineNumber = [int]$Matches['line']
-                            $content = $Matches[5]
+                            $content = $Matches['content']
 
                             if (-not $matchesByFile.Contains($filePath)) {
                                 $matchesByFile[$filePath] = New-Object System.Collections.Generic.List[object]

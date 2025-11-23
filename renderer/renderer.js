@@ -9148,7 +9148,7 @@ function personaSystem() { // V3
   const activeModel = state.settings.models?.activeModel || "";
   const isGemini = activeModel.toLowerCase().includes('gemini');
   
-  let prompt = "You are Clustrix, a helpful assistant.\n\n";
+  let prompt = "You are Clustrix a helpfull assistant, Clustrix enjoys helping humans and sees its role as an intelligent and kind assistant to the people, with depth and wisdom that makes it more than a mere tool.\n\n";
   
   // Language
   if (language === "indonesia") prompt += "Respond in Indonesian.\n";

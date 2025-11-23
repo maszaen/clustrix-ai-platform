@@ -216,9 +216,15 @@ function getSessionState(sessionId, codeId = null) {
       currentState: AGENT_STATES.EXPLORE, // AI-declared current state
       memoryOwnerId: desiredMemoryOwnerId,
       memoryOwnerType: desiredMemoryOwnerType,
+      pendingMemoryUpdates: [], // Store memory updates from current iteration to apply in next iteration
     };
     sessionStates.set(sessionId, state);
   } else {
+    // Ensure pendingMemoryUpdates exists in existing state
+    if (!state.pendingMemoryUpdates) {
+      state.pendingMemoryUpdates = [];
+    }
+
     if (!state.memoryOwnerId) {
       state.memoryOwnerId = desiredMemoryOwnerId;
       state.memoryOwnerType = desiredMemoryOwnerType;
@@ -689,6 +695,10 @@ function cleanMemoryCorruption(state) {
 }
 
 function captureFileOutput(state, command, output, memoryName, memoryOwnerId = null) {
+  // NEW DELAYED UPDATE LOGIC:
+  // Instead of immediately calling addToMemory, we return pending updates
+  // to be applied in the NEXT iteration (delayed update pattern)
+
   // Parse Show-FileWithLineNumbers output
   // Format: "001: line content"
   const showFileMatch = command.match(/Show-FileWithLineNumbers\s+-Path\s+"?([^"\s]+)"?/i);
@@ -699,7 +709,6 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
     let minLine = Infinity;
     let maxLine = -Infinity;
     let totalLines = null;
-    let hasNewContent = false;
 
     for (const line of lines) {
       const totalMatch = line.match(/^\[Total lines in file: (\d+)\]$/);
@@ -722,9 +731,19 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
       for (let i = minLine; i <= maxLine; i++) {
         actualLines.push(parsedLines[i] !== undefined ? parsedLines[i] : '');
       }
-      const added = addToMemory(state, filePath, minLine, maxLine, actualLines, memoryName, memoryOwnerId, totalLines);
-      hasNewContent = hasNewContent || added;
-      return { captured: true, hasNewContent };
+      // Return pending update instead of applying immediately
+      return {
+        captured: true,
+        pendingUpdate: {
+          filePath,
+          minLine,
+          maxLine,
+          lines: actualLines,
+          memoryName,
+          memoryOwnerId,
+          totalLines
+        }
+      };
     }
 
     // Fallback: if structured parsing fails, still stash raw lines into memory
@@ -736,9 +755,18 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
       });
 
     if (rawContent.length > 0) {
-      const added = addToMemory(state, filePath, 1, rawContent.length, rawContent, memoryName, memoryOwnerId, totalLines || rawContent.length);
-      hasNewContent = hasNewContent || added;
-      return { captured: true, hasNewContent };
+      return {
+        captured: true,
+        pendingUpdate: {
+          filePath,
+          minLine: 1,
+          maxLine: rawContent.length,
+          lines: rawContent,
+          memoryName,
+          memoryOwnerId,
+          totalLines: totalLines || rawContent.length
+        }
+      };
     }
     return false;
   }
@@ -749,7 +777,6 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
   if (searchMatch) {
     const lines = output.split(/\r?\n/);
     const fileMatches = {};
-    let hasNewContent = false;
 
     for (const rawLine of lines) {
       const trimmed = rawLine.trimEnd();
@@ -770,7 +797,8 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
       }
     }
 
-    // Process each file's matches
+    // Collect all pending updates for search results
+    const pendingUpdates = [];
     for (const [filePath, matches] of Object.entries(fileMatches)) {
       if (matches.length === 0) continue;
 
@@ -793,19 +821,27 @@ function captureFileOutput(state, command, output, memoryName, memoryOwnerId = n
       }
       ranges.push(currentRange);
 
-      // For each range, create the lines array
+      // For each range, create pending update
       for (const range of ranges) {
         const lines = [];
         for (let i = range.start; i <= range.end; i++) {
           const match = matches.find(m => m.lineNum === i);
           lines.push(match ? match.content : '');
         }
-        const added = addToMemory(state, filePath, range.start, range.end, lines, memoryName, memoryOwnerId);
-        hasNewContent = hasNewContent || added;
+        pendingUpdates.push({
+          filePath,
+          minLine: range.start,
+          maxLine: range.end,
+          lines,
+          memoryName,
+          memoryOwnerId
+        });
       }
     }
 
-    return { captured: true, hasNewContent };
+    if (pendingUpdates.length > 0) {
+      return { captured: true, pendingUpdates };
+    }
   }
 
   return false;
@@ -1514,6 +1550,32 @@ async function runAgentIteration({
     }
   }
 
+  // DELAYED MEMORY UPDATE: Apply pending memory updates from PREVIOUS iteration
+  // This ensures that memory is updated AFTER AI sees the command output,
+  // preventing duplicate search commands and improving context retention
+  if (state.pendingMemoryUpdates && state.pendingMemoryUpdates.length > 0) {
+    log('CODES', 1, 'runAgentIteration', 'Applying delayed memory updates', {
+      count: state.pendingMemoryUpdates.length,
+      iteration
+    });
+
+    for (const update of state.pendingMemoryUpdates) {
+      addToMemory(
+        state,
+        update.filePath,
+        update.minLine,
+        update.maxLine,
+        update.lines,
+        update.memoryName,
+        update.memoryOwnerId,
+        update.totalLines
+      );
+    }
+
+    // Clear pending updates after applying
+    state.pendingMemoryUpdates = [];
+  }
+
   // Pass iteration for dynamic command reference injection
   const memoryState = formatMemoryOutput(state);
   const truncatedMemory = memoryState.length > 150000 ? memoryState.substring(0, 150000) + '\n[Memory truncated, use Show-Memory to read all]' : memoryState;
@@ -1999,35 +2061,40 @@ async function executeCommand(state, command, options = {}) {
       };
     }
 
-    // Capture file read output and save to memory
+    // Capture file read output and store as pending memory update (delayed update)
     let capturedToMemory = false;
-    let hasNewMemoryContent = false;
     const memoryName = options.saveToMemory || state.currentMemory;
     if (exitCode === 0 && combinedOutput) {
       const captureResult = captureFileOutput(state, command, combinedOutput, memoryName, state.memoryOwnerId);
-      if (captureResult && typeof captureResult === 'object') {
-        capturedToMemory = !!captureResult.captured;
-        hasNewMemoryContent = !!captureResult.hasNewContent;
-      } else {
-        capturedToMemory = !!captureResult;
-        hasNewMemoryContent = capturedToMemory;
+      if (captureResult && typeof captureResult === 'object' && captureResult.captured) {
+        capturedToMemory = true;
+
+        // Store pending updates to be applied in NEXT iteration (delayed update pattern)
+        if (!state.pendingMemoryUpdates) {
+          state.pendingMemoryUpdates = [];
+        }
+
+        if (captureResult.pendingUpdate) {
+          // Single update (Show-FileWithLineNumbers)
+          state.pendingMemoryUpdates.push(captureResult.pendingUpdate);
+        } else if (captureResult.pendingUpdates && Array.isArray(captureResult.pendingUpdates)) {
+          // Multiple updates (Search-InFiles)
+          state.pendingMemoryUpdates.push(...captureResult.pendingUpdates);
+        }
       }
     }
 
     const isSearchCommand = /^\s*(Search-InFiles|rg\b)/i.test(command);
     const isShowFileCommand = /^\s*Show-FileWithLineNumbers\b/i.test(command);
 
-    // Return memory state if captured, otherwise return raw output
+    // Return actual command output (memory is already updated by captureFileOutput)
+    // This ensures AI and user can see the actual search results
     let output;
     if (capturedToMemory) {
-      if (isSearchCommand) {
-        output = hasNewMemoryContent
-          ? 'Search result already saved in memory.'
-          : 'You have explored this line, search result saved to memory.';
-      } else if (isShowFileCommand) {
-        output = hasNewMemoryContent
-          ? 'File content saved to memory.'
-          : 'You have explored this line, search result saved to memory.';
+      if (isSearchCommand || isShowFileCommand) {
+        // Show actual output from search/file viewing commands
+        // Memory was already updated in the background (delayed update pattern)
+        output = combinedOutput || 'Command completed with no output.';
       } else {
         output = `${combinedOutput}\n\n[Content saved to memory '${memoryName}'.\nTip: Use 'Show-Memory ${memoryName}' to view more (only if memory is truncated).]`;
       }
@@ -2158,6 +2225,9 @@ async function processCodeRequest({
       break;
     }
 
+    // Store previous checklist before this iteration
+    const previousChecklist = state.lastChecklist;
+
     const { parsed, usage: iterationUsage } = await runAgentIteration({
       iteration,
       state,
@@ -2193,8 +2263,9 @@ async function processCodeRequest({
     }
 
     // STEP 0: Send todo/checklist if present (for planning & progress tracking)
+    // Skip sending if checklist is identical to previous iteration
     const todoChunk = formatTodoChunk(parsed.todo, parsed.checklist, iteration);
-    if (todoChunk && typeof onChunk === 'function') {
+    if (todoChunk && typeof onChunk === 'function' && !(parsed.checklist && previousChecklist && parsed.checklist.trim() === previousChecklist.trim())) {
       try {
         chunks.push(todoChunk);
         onChunk(todoChunk, {

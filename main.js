@@ -2042,8 +2042,13 @@ function createWindow(){
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
   
-  const windowWidth = Math.floor(screenWidth * 0.65);
+  const windowWidth = Math.floor(screenWidth * 0.63);
   const windowHeight = Math.floor(screenHeight * 0.8);
+
+  const factor = primaryDisplay.scaleFactor;
+  
+  // Calculate the desired zoom factor to compensate for system scaling
+  const dynamicZoomFactor = (1.0 / factor) * 0.97;
 
   const win = new BrowserWindow({
     width: windowWidth,
@@ -2059,6 +2064,7 @@ function createWindow(){
     }
   });
 
+  
   mainWindow = win;
 
   win.webContents.on('before-input-event', (event, input) => {
@@ -2165,6 +2171,10 @@ function createWindow(){
   
   // Check and process pending backup and cleanup after restart
   win.webContents.once('did-finish-load', async () => {
+    // Set zoom factor after page has finished loading
+    win.webContents.setZoomFactor(dynamicZoomFactor);
+    console.log('APP', 1, 'createWindow', `Zoom factor set to ${dynamicZoomFactor} (scaleFactor: ${factor})`);
+
     try {
       const config = syncManager.loadSyncConfig();
       

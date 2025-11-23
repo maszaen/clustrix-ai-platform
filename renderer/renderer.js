@@ -11383,6 +11383,13 @@ async function load() {
         overlay.style.display = "none";
       }
     }
+
+    setTimeout(() => {
+      if (window.api && window.api.send) {
+        window.api.send('renderer:ready');
+        log("APP", 1, "load", "Renderer ready event sent to main process");
+      }
+    }, 500);
   }, 50);
 }
 

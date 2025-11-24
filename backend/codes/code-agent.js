@@ -1045,7 +1045,7 @@ function parseAgentResponse(text = '') {
   const cmdMatch = text.match(/<cmd>([\s\S]*?)<\/cmd>/i);
   const stateMatch = text.match(/<state>([\s\S]*?)<\/state>/i);
   const savedStateMatch = text.match(/<saved_state>([\s\S]*?)<\/saved_state>/i);
-  let done = /<!END>/i.test(text);
+  let done = /<!END>/i.test(text) && stateMatch && stateMatch[1].trim().toUpperCase() === 'DONE';
   const todoMatch = text.match(/<todo>([\s\S]*?)<\/todo>/i);
   const checklistMatch = text.match(/<checklist>([\s\S]*?)<\/checklist>/i);
   const summaryMatch = text.match(/<summary>([\s\S]*?)<\/summary>/i);
@@ -1099,25 +1099,32 @@ function parseAgentResponse(text = '') {
   const command = cmdMatch ? cmdMatch[1].trim() : '';
 
   // Auto-detect done: if no command and no hidden, and answer doesn't indicate continuation, we're done
+  // BUT: If AI declared a valid state (not DONE), continue iteration even if no command
   if (!command && !hiddenMatch && !done) {
-    const hasContinuationIndicators = cleanAnswer && (
-      cleanAnswer.toLowerCase().includes('lanjut') ||
-      cleanAnswer.toLowerCase().includes('perlu') ||
-      cleanAnswer.toLowerCase().includes('cek') ||
-      cleanAnswer.toLowerCase().includes('akan') ||
-      cleanAnswer.toLowerCase().includes('menjalankan') ||
-      cleanAnswer.toLowerCase().includes('memperbaiki') ||
-      cleanAnswer.toLowerCase().includes('jika') ||
-      cleanAnswer.toLowerCase().includes('untuk') ||
-      cleanAnswer.toLowerCase().includes('?') ||
-      cleanAnswer.toLowerCase().includes('fokus') ||
-      cleanAnswer.toLowerCase().includes('selanjutnya') ||
-      cleanAnswer.toLowerCase().includes('eksplor') ||
-      cleanAnswer.toLowerCase().includes('benerin')
-    );
-    if (!cleanAnswer || !hasContinuationIndicators) {
-      log('CODES', 2, 'parseAgentResponse', 'Auto-detected done: no command, no meaningful answer with continuation indicators, no hidden content');
-      done = true;
+    const hasValidState = stateMatch && ['EXPLORE', 'UNDERSTAND', 'EDIT', 'EXECUTE', 'VERIFY'].includes(stateMatch[1].trim().toUpperCase());
+    if (hasValidState) {
+      // AI declared next state, continue iteration
+      log('CODES', 2, 'parseAgentResponse', 'Continuing iteration: AI declared valid state', { state: stateMatch[1].trim().toUpperCase() });
+    } else {
+      const hasContinuationIndicators = cleanAnswer && (
+        cleanAnswer.toLowerCase().includes('lanjut') ||
+        cleanAnswer.toLowerCase().includes('perlu') ||
+        cleanAnswer.toLowerCase().includes('cek') ||
+        cleanAnswer.toLowerCase().includes('akan') ||
+        cleanAnswer.toLowerCase().includes('menjalankan') ||
+        cleanAnswer.toLowerCase().includes('memperbaiki') ||
+        cleanAnswer.toLowerCase().includes('jika') ||
+        cleanAnswer.toLowerCase().includes('untuk') ||
+        cleanAnswer.toLowerCase().includes('?') ||
+        cleanAnswer.toLowerCase().includes('fokus') ||
+        cleanAnswer.toLowerCase().includes('selanjutnya') ||
+        cleanAnswer.toLowerCase().includes('eksplor') ||
+        cleanAnswer.toLowerCase().includes('benerin')
+      );
+      if (!cleanAnswer || !hasContinuationIndicators) {
+        log('CODES', 2, 'parseAgentResponse', 'Auto-detected done: no command, no meaningful answer with continuation indicators, no hidden content');
+        done = true;
+      }
     }
   }
 

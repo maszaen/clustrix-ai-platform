@@ -2766,7 +2766,7 @@ input:checked + .slider:before {
 
 .file-extension {
   color: var(--fg-muted);
-  font-size: 13px;
+  font-size: 11px;
   width: fit-content;
 }
 

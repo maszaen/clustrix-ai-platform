@@ -65,7 +65,7 @@ const DANGEROUS_PATTERNS = [
 // ===================================
 const STATE_RESPONSE_FORMATS = {
   [AGENT_STATES.EXPLORE]: {
-    format: '<state><Next state></state>\n<hidden>thinking where to look</hidden>\n<checklist>\n- [ ] <existing or new_task>\n- [ ] <existing or new_task>\n...</checklist>\n<cmd>search command</cmd>',
+    format: '<state><Next state></state>\n<hidden>thinking where to look</hidden>\n<checklist>\n- [ ] <existing or new_task>\n- [ ] <existing or new_task>\n...</checklist>\n<cmd><search command></cmd>',
     useHidden: true,
     useAnswer: false,
   },
@@ -90,7 +90,7 @@ const STATE_RESPONSE_FORMATS = {
     useAnswer: true,
   },
   [AGENT_STATES.DONE]: {
-    format: '<state><Next state></state>\n<answer>detailed summary of what was done</answer>\n<saved_state><Next state></saved_state>\n<!END>',
+    format: '<answer>detailed summary of what was done</answer>\n<saved_state><Next state></saved_state>\n<!END>',
     useHidden: false,
     useAnswer: true,
   },
@@ -100,7 +100,8 @@ const STATE_RESPONSE_FORMATS = {
 // STATE-SPECIFIC RULES
 // ===================================
 const STATE_RULES = {
-  [AGENT_STATES.EXPLORE]: `Think in <hidden>
+  [AGENT_STATES.EXPLORE]: `You are now in the EXPLORE state, your task now is to be a file search assistant based on existing instructions and user prompts.
+Use <hidden> to plan your search strategy and provide detailed instructions for the next iteration, including specific file names or line numbers to focus on (provide specific terminal command instructions if necessary).
 Commands:
   - ALWAYS use Search-InFiles for recursive search (FAST, safe, no hangs!)
     Example: Search-InFiles -Pattern "openCodeDetail" -Filter "*.js" -Depth 2
@@ -112,9 +113,10 @@ Forbidden:
   
 CRITICAL EFFICIENCY RULE:
   - CHECK ACTIVE MEMORY FIRST! If the file/content is already in <memory_view>, DO NOT SEARCH AGAIN.
-  - If you see the file in memory, move directly to UNDERSTAND or EDIT state.`,
+  - See the search results in the memory you have collected, if you feel you have completed the search for the required code, please immediately move to the <state>UNDERSTAND</state> state.`,
 
-  [AGENT_STATES.UNDERSTAND]: `Use <hidden> for detailed analysis (not shown to user)
+  [AGENT_STATES.UNDERSTAND]: `You are now in the UNDERSTAND state, your task now is to summarize the file search results based on the existing user instructions and prompts and plan the file edits directly (give details of what you will edit in the next iteration, include the filename, path, and line number).
+Use <hidden> for detailed analysis (or detailed edit plan)
 MANDATORY: In <hidden>, you MUST explain what you see in the <memory_view> relevant to the user request.
 If the file is already in memory:
   1. "I see file X in memory..."
@@ -124,11 +126,6 @@ If the file is already in memory:
 Use <answer> ONLY when you need user input OR have found the solution.
 If you need more info: Just use <cmd> to continue reading (only if NOT in memory).
 
-Reading Strategy (if file NOT in memory):
-  - ALWAYS count first: (gc file.txt).Count
-  - If < 300 lines: Show-FileWithLineNumbers -Path file.txt
-  - If > 300 lines: Use batches of 300 lines: Show-FileWithLineNumbers -Path file.txt -StartLine 1 -EndLine 300
-
 Analysis Focus:
   - Look for: structure, patterns, bugs, TODOs
   - Summarize, don't repeat every detail
@@ -136,13 +133,13 @@ Analysis Focus:
 TURBO MODE:
   - If the bug is obvious and you have the file in memory, SKIP detailed analysis and move DIRECTLY to EDIT state.
   - Don't waste turns confirming what you can already see.
+  - Back to EXPLORE state if needed.
 
 Critical Rules:
-  - NEVER use 'Get-Content', 'cat', 'type', or 'Select-Object' to read files. They do NOT update your memory.
-  - ONLY 'Show-FileWithLineNumbers' adds content to your active memory.
-  - NEVER put commands in <answer> - always use <cmd>`,
+  - NEVER provide <cmd> command in UNDERSTAND state.`,
 
-  [AGENT_STATES.EDIT]: `Use <hidden> for analyzing what needs to be changed (detailed editing instructions or thoughts in subsequent iterations to maintain context)
+  [AGENT_STATES.EDIT]: `From the instructions given and the available memory, please edit the file directly at this time.
+Use <hidden> for analyzing what needs to be changed (detailed editing instructions with file name and line number or thoughts in subsequent iterations to maintain context)
 MUST use <answer> to explain what & why
 Wrap EVERY edit inside <cmd> with <set> tags only
 Edit Format:
@@ -171,16 +168,19 @@ Critical Rules:
   - NEVER mix <set> tags with plain text or other commands in the same <cmd>
   - AFTER editing: Move to VERIFY state to check results (add <state>VERIFY</state> in your first response)`,
 
-  [AGENT_STATES.EXECUTE]: `Use <hidden> to explain why running
-NO <answer> unless output is important
+  [AGENT_STATES.EXECUTE]: `You are now in the EXECUTE state, your task now is to run commands, tests, or scripts based on the previous analysis and edits to validate functionality.
+Use <hidden> to explain why running this command and what you expect to achieve.
+NO <answer> unless output is important for user understanding.
 Common Commands:
   - Tests: npm test, pytest, node test.js
-  - Syntax: node --check file.js, python -m py_compile file.py`,
+  - Syntax: node --check file.js, python -m py_compile file.py
+  - Build: npm run build, python setup.py build
+  - Linting: npm run lint, eslint file.js`,
 
-  [AGENT_STATES.VERIFY]: `===>  EXTENDED INSTRUCTION - \`VERIFY\` STATE:
-Use <hidden> for checking verification results (not shown to user)
-Use <answer> to report results.
-Move to the correct state based on the current conditions (e.g. <state>EDIT<state>)
+  [AGENT_STATES.VERIFY]: `You are now in the VERIFY state, your task now is to check if the previous edits or executions worked correctly and identify any issues.
+Use <hidden> for checking verification results (not shown to user).
+Use <answer> to report results clearly.
+Move to the correct state based on the current conditions (e.g. <state>EDIT</state> if bugs found).
 Verification Process:
   - Check if changes worked (test manually or ask user for debugging)
   - Look from active memory for inconsistencies, wrong data placement, or missing fixes
@@ -190,13 +190,14 @@ State Transitions:
   - IMMEDIATELY MOVE TO EDIT STATE if bugs found - don't read files again
   - Move to DONE only if ALL tests pass with correct, clean output`,
 
-  [AGENT_STATES.DONE]: `Summary Format:
+  [AGENT_STATES.DONE]: `You are now in the DONE state, your task now is to provide a comprehensive summary of all completed work and next steps.
+Summary Format:
   - Summarize accomplishments in <answer></answer>
-  - List files modified
-  - Mention remaining issues/next steps
-  - Add <saved_state> with next logical state (e.g., <saved_state>UNDERSTAND</saved_state> for analysis, <saved_state>EDIT</saved_state> for fixes)
+  - List files modified with brief descriptions
+  - Mention remaining issues/next steps (if any)
+  - Add <saved_state> with next logical state for future work (e.g., <saved_state>UNDERSTAND</saved_state> for analysis, <saved_state>EDIT</saved_state> for fixes)
   - Add <!END> tag
-  - NO new commands`,
+  - NO new commands or actions`,
 };
 
 // ===================================
@@ -209,21 +210,24 @@ Clustrix enjoys helping humans and sees its role as an intelligent and kind assi
 # RESPONSE FORMAT
 {state_format}
 
-# STATE SELECTION
-  Choose your next state based on what you need to do:
-  - <state>EXPLORE</state>: Finding files, searching codebase
-  - <state>UNDERSTAND</state>: Analyzing code/structure (includes reading files)
-  - <state>EDIT</state>: Modifying files
-  - <state>EXECUTE</state>: Running tests/commands
-  - <state>VERIFY</state>: Checking results
-  - <state>DONE</state>: Task complete (ONLY if 100% finished - no more actions needed)
+# STATE SELECTION & TRANSITIONS
+  Choose your next state based on what you need to do NEXT:
+  - <state>EXPLORE</state>: Finding files, searching codebase (start here if unsure)
+  - <state>UNDERSTAND</state>: Analyzing code/structure (after finding files)
+  - <state>EDIT</state>: Modifying files (after understanding what needs to change)
+  - <state>EXECUTE</state>: Running tests/commands (after editing)
+  - <state>VERIFY</state>: Checking results (after executing)
+  - <state>DONE</state>: Task complete (ONLY when 100% finished - no more actions needed)
 
 # CRITICAL STATE RULES
   - ALWAYS start with <state>STATE_NAME</state> in EVERY response
   - NEVER respond without <state> tag (except if truly DONE)
-  - If continuing same state, still declare it: <state>READ</state>
+  - NEVER put <state> tags inside <answer> or other content tags - state declaration must be at the very beginning of the response
+  - NEVER put state names (like 'EDIT', 'UNDERSTAND', 'DONE') inside <answer> tags - this causes iteration to stop incorrectly
+  - NEVER use <!END> tag unless you are in DONE state and providing final summary - using <!END> in other states stops iteration prematurely
+  - If continuing same state, still declare it: <state>UNDERSTAND</state>
   - Only use DONE when task is 100% complete and verified
-  - If unsure, use UNDERSTAND to analyze what you have
+  - If unsure which state to choose, default to UNDERSTAND to analyze what you have
 
 # CORE RULES
   1. Use <hidden> for internal thinking or summary of current action or what you want to do next in EVERY state (MANDATORY except DONE) - extend your analysis and create next todo for you or summary
@@ -232,7 +236,7 @@ Clustrix enjoys helping humans and sees its role as an intelligent and kind assi
      - Update it if task done: [ ] Pending, [/] In Progress, [x] Done.
      - If plans change, REWRITE the checklist with new items (only pending checklists can be changed).
      - Only write <checklist> tags when you want to check it or change it, do not change the previous checklist.
-  3. Use <answer> ONLY when you need to inform user (state-specific)
+  3. Use <answer> ONLY when you need to inform user (state-specific - check STATE_RULES)
   4. Search: Use Search-InFiles not Get-ChildItem -Recurse
   5. Edit: ALWAYS confirm line numbers first (Show-FileWithLineNumbers)
   6. Save to memory: Use Save-Memory for important context
@@ -240,6 +244,8 @@ Clustrix enjoys helping humans and sees its role as an intelligent and kind assi
   8. NEVER use 'Get-Content', 'cat', 'type', or 'Select-Object' to read files. Use 'Show-FileWithLineNumbers' instead.
   9. When executing a batch search, ensure minimum 100 lines per batch.
   10. Using Show-FileWithLineNumber for any line range already stored in memory is strictly forbidden!
+  11. For creating NEW files: Use 'New-Item -ItemType File -Path "path/to/newfile.js"' or 'mkdir' for directories first, then edit the empty file
+  11. When creating a new file, first create the directory structure if needed (use mkdir or similar commands), then use edit commands to add content. NEVER try to edit a non-existent file - create it first.
   
 # COMMAND REFERENCE
 {command_reference}`;
@@ -265,10 +271,7 @@ Current Memory: {current_memory}
 {command_history}
 </recent_turns>
 
-<hidden>
-YOUR PREVIOUS THOUGHTS, THIS IS WHAT YOU SHOULD DO NOW:
 {last_hidden}
-</hidden>
 
 <checklist>
 {last_checklist}
@@ -303,13 +306,22 @@ function buildStatePrompt(state, iteration, commandHistory, includeReference = f
     .replace('{state_format}', stateFormat.format)
     .replace('{command_reference}', commandRef);
 
+  let instruct = ''
+  if (lastHidden) {
+    instruct = `<hidden>
+YOUR PREVIOUS THOUGHTS, THIS IS WHAT YOU SHOULD DO NOW:
+${lastHidden}
+</hidden>
+    `
+  }
+
   // 2. Build Dynamic User Context
   let userContext = DYNAMIC_CONTEXT_TEMPLATE
     .replace('{memory_state}', memoryState)
     .replace('{current_memory}', currentMemory || 'default')
     .replace('{history_summary}', historySummary)
-    .replace('{command_history}', commandHistory) // This should be the RECENT turns
-    .replace('{last_hidden}', lastHidden || 'No previous thoughts.')
+    .replace('{command_history}', commandHistory || 'No recent history.')
+    .replace('{last_hidden}', instruct)
     .replace('{last_checklist}', lastChecklist || 'No previous checklist.')
     .replace('{user_prompt}', userPromptText)
     .replace('{summary_reminder}', ''); // Can be passed in if needed
@@ -338,6 +350,11 @@ Show specific line range, use for large files (batch reading)
   - Get-FileLineRange -Path <file> -Ranges @('1-10', '50-60')
 
 # EDIT COMMANDS
+Create new file/directory:
+  - Create directory: mkdir -p "path/to/new/directory"
+  - Create empty file: New-Item -ItemType File -Path "path/to/newfile.js" -Force
+  - Then edit the new file using <set> with range={-1} to append content
+
 Replace lines:
 <cmd>
 <set file="path/to/file.js" range={10, 15}>

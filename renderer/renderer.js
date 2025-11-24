@@ -10667,7 +10667,7 @@ function addMessage(
             (file) => `
           <div class="file-pill-bubble">
             ${getFileIcon(esc(file.name))}
-            <div style="display: flex; flex-direction: column;">
+            <div style="display: flex; line-height: 1.2; flex-direction: column;">
               <p>${esc(file.name)}</p>
               <span class="file-extension">${esc(getExtension(file.name))}</span>
             </div>  

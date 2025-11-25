@@ -62,6 +62,7 @@ function Show-FileWithLineNumbers {
     if ($EndLine -lt $totalLines) {
         $remaining = $totalLines - $EndLine
         Write-Output "[${remaining} lines more...]"
+        Write-Output "[Please speciy the search operation with line range.]"
     }
 }
 

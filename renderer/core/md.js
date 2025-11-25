@@ -71,8 +71,43 @@ function transformCommandText(commandText) {
 
   const fullCmd = commandText.trim();
 
+  // Smart split by pipe - respects quoted strings
+  // This prevents splitting on | inside quotes like grep -E "(A|B)"
+  const splitByPipe = (str) => {
+    const parts = [];
+    let current = '';
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      const prevChar = i > 0 ? str[i - 1] : '';
+      
+      // Toggle quote state (ignore escaped quotes)
+      if (char === "'" && prevChar !== '\\' && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote;
+      } else if (char === '"' && prevChar !== '\\' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+      }
+      
+      // Split on pipe only when not inside quotes
+      if (char === '|' && !inSingleQuote && !inDoubleQuote) {
+        parts.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    
+    if (current.trim()) {
+      parts.push(current.trim());
+    }
+    
+    return parts;
+  };
+
   // Check if there are multiple piped commands
-  const pipedCommands = fullCmd.split(/\s*\|\s*/).map(c => c.trim()).filter(c => c);
+  const pipedCommands = splitByPipe(fullCmd).filter(c => c);
   if (pipedCommands.length > 1) {
     // Process each piped command and join with "and"
     const descriptions = pipedCommands.map(singleCmd => {
@@ -559,13 +594,27 @@ function transformSingleCommand(commandText) {
     }
   }
 
+  // LS/DIR - list directory (improved)
   if (cmd.match(/^ls\s*/i) || cmd.match(/^dir\s*/i)) {
-    const args = cmd.substring(cmd.match(/^(?:ls|dir)/i)[0].length).trim();
-    if (args) {
-      return `List directory <code>${esc(args)}</code>`;
-    } else {
-      return 'List directory';
+    const flags = [];
+    // Parse flags - can be combined like -la, -lah, or separate -l -a
+    if (cmd.match(/-[a-zA-Z]*l[a-zA-Z]*/i)) flags.push('detailed');
+    if (cmd.match(/-[a-zA-Z]*a[a-zA-Z]*/i)) flags.push('all');
+    if (cmd.match(/-[a-zA-Z]*R[a-zA-Z]*/i)) flags.push('recursive');
+    if (cmd.match(/-[a-zA-Z]*h[a-zA-Z]*/i)) flags.push('human-readable');
+    
+    // Check for directory argument (after all flags) - must not start with -
+    const dirMatch = cmd.match(/(?:ls|dir)\s+(?:-[a-zA-Z]+\s+)*([^\s-][^\s]*)$/i);
+    if (dirMatch) {
+      const dirname = getFilename(dirMatch[1].replace(/["']/g, ''));
+      if (flags.length > 0) {
+        return `List <strong>${dirname}</strong> <span style="opacity: 0.7">(${flags.join(', ')})</span>`;
+      }
+      return `List <strong>${dirname}</strong>`;
     }
+    
+    if (flags.length > 0) return `List directory <span style="opacity: 0.7">(${flags.join(', ')})</span>`;
+    return 'List directory';
   }
 
   if (cmd.match(/^cat\s+/i) || cmd.match(/^type\s+/i)) {
@@ -597,12 +646,222 @@ function transformSingleCommand(commandText) {
     return 'Create directory';
   }
 
+  // ========== UNIX PIPE COMMANDS ==========
+  
+  // GREP - comprehensive handler for all common flags
   if (cmd.match(/^grep\s+/i)) {
-    const patternMatch = cmd.match(/^grep\s+["']?([^\s"']+)["']?/i);
-    if (patternMatch) {
-      return `Search <code>${esc(patternMatch[1])}</code>`;
+    let pattern = null;
+    let flags = [];
+    let contextInfo = null;
+    
+    // Check for context flags first: -A (after), -B (before), -C (context)
+    const afterMatch = cmd.match(/-A\s*(\d+)/i);
+    const beforeMatch = cmd.match(/-B\s*(\d+)/i);
+    const contextMatch = cmd.match(/-C\s*(\d+)/i);
+    
+    if (contextMatch) {
+      contextInfo = `±${contextMatch[1]} lines`;
+    } else if (afterMatch && beforeMatch) {
+      contextInfo = `-${beforeMatch[1]}/+${afterMatch[1]} lines`;
+    } else if (afterMatch) {
+      contextInfo = `+${afterMatch[1]} lines after`;
+    } else if (beforeMatch) {
+      contextInfo = `-${beforeMatch[1]} lines before`;
     }
-    return 'Search files';
+    
+    // Check for other flags - handle both separate (-i -n) and combined (-in) flags
+    // Use pattern that matches flag anywhere in a flag group
+    if (cmd.match(/-[a-zA-Z]*E[a-zA-Z]*/)) flags.push('regex');
+    if (cmd.match(/-[a-zA-Z]*P[a-zA-Z]*/)) flags.push('perl-regex');
+    if (cmd.match(/-[a-zA-Z]*F[a-zA-Z]*/)) flags.push('fixed');
+    if (cmd.match(/-[a-zA-Z]*i[a-zA-Z]*/)) flags.push('ignore-case');
+    if (cmd.match(/-[a-zA-Z]*v[a-zA-Z]*/)) flags.push('invert');
+    if (cmd.match(/-[a-zA-Z]*w[a-zA-Z]*/)) flags.push('word');
+    if (cmd.match(/-[a-zA-Z]*x[a-zA-Z]*/)) flags.push('line');
+    if (cmd.match(/-[a-zA-Z]*n[a-zA-Z]*/)) flags.push('line-num');
+    if (cmd.match(/-[a-zA-Z]*c[a-zA-Z]*/)) flags.push('count');
+    if (cmd.match(/-[a-zA-Z]*l[a-zA-Z]*/)) flags.push('files-only');
+    if (cmd.match(/-[a-zA-Z]*o[a-zA-Z]*/)) flags.push('only-match');
+    if (cmd.match(/-[a-zA-Z]*[rR][a-zA-Z]*/)) flags.push('recursive');
+    
+    // Extract pattern - remove all flags first, then get the pattern
+    // Pattern can be quoted or unquoted, and may contain special chars
+    let remaining = cmd.replace(/^grep\s+/i, '');
+    // Remove all flag patterns: -X, -X N, --flag, --flag=value
+    remaining = remaining.replace(/-[A-Za-z]\s*\d+/g, ''); // -A 5, -B3, etc
+    remaining = remaining.replace(/--[a-z-]+(=\S+)?/gi, ''); // --color=auto, --include
+    remaining = remaining.replace(/-[A-Za-z]+/g, ''); // -Ei, -rn, etc
+    remaining = remaining.trim();
+    
+    // Now extract pattern (quoted or unquoted)
+    const quotedMatch = remaining.match(/^["'](.+?)["']/);
+    const unquotedMatch = remaining.match(/^([^\s"']+)/);
+    pattern = quotedMatch ? quotedMatch[1] : (unquotedMatch ? unquotedMatch[1] : null);
+    
+    if (pattern) {
+      const shortPattern = pattern.length > 40 ? pattern.substring(0, 37) + '...' : pattern;
+      let desc = `Search for <code>${esc(shortPattern)}</code>`;
+      
+      // Add context info if present
+      if (contextInfo) {
+        desc += ` <span style="opacity: 0.7">(${contextInfo})</span>`;
+      } else if (flags.length > 0 && flags.length <= 3) {
+        desc += ` <span style="opacity: 0.7">(${flags.join(', ')})</span>`;
+      }
+      return desc;
+    }
+    return 'Search in output';
+  }
+
+  // TAIL - see last N lines
+  if (cmd.match(/^tail\s+/i)) {
+    const lineMatch = cmd.match(/^tail\s+(?:-n\s*(\d+)|--lines[=\s](\d+)|-(\d+))/i);
+    if (lineMatch) {
+      const lines = lineMatch[1] || lineMatch[2] || lineMatch[3];
+      return `See last <strong>${lines}</strong> lines`;
+    }
+    return 'See last lines';
+  }
+
+  // HEAD - see first N lines
+  if (cmd.match(/^head\s+/i)) {
+    const lineMatch = cmd.match(/^head\s+(?:-n\s*(\d+)|--lines[=\s](\d+)|-(\d+))/i);
+    if (lineMatch) {
+      const lines = lineMatch[1] || lineMatch[2] || lineMatch[3];
+      return `See first <strong>${lines}</strong> lines`;
+    }
+    return 'See first lines';
+  }
+
+  // AWK - text processing
+  if (cmd.match(/^awk\s+/i)) {
+    const awkMatch = cmd.match(/^awk\s+(?:-F\s*["']?([^"'\s]+)["']?\s+)?["']([^"']+)["']/i);
+    if (awkMatch) {
+      const script = awkMatch[2];
+      if (script.match(/^\{print\s+\$\d+\}$/i)) {
+        const colMatch = script.match(/\$(\d+)/);
+        return `Extract column <strong>${colMatch[1]}</strong>`;
+      }
+      const shortScript = script.length > 35 ? script.substring(0, 32) + '...' : script;
+      return `Process with <code>${esc(shortScript)}</code>`;
+    }
+    return 'Process text';
+  }
+
+  // SED - text substitution
+  if (cmd.match(/^sed\s+/i)) {
+    const sedMatch = cmd.match(/^sed\s+(?:-[a-zA-Z]+\s+)*["']?s[\/|]([^\/|]+)[\/|]([^\/|]*)[\/|]?/i);
+    if (sedMatch) {
+      const search = sedMatch[1].length > 20 ? sedMatch[1].substring(0, 17) + '...' : sedMatch[1];
+      const replace = sedMatch[2].length > 20 ? sedMatch[2].substring(0, 17) + '...' : sedMatch[2];
+      return `Replace <code>${esc(search)}</code> → <code>${esc(replace)}</code>`;
+    }
+    return 'Transform text';
+  }
+
+  // CUT - extract columns
+  if (cmd.match(/^cut\s+/i)) {
+    const fieldMatch = cmd.match(/-f\s*["']?(\d+(?:[,-]\d+)*)["']?/i);
+    const delimMatch = cmd.match(/-d\s*["']?([^"'\s])["']?/i);
+    if (fieldMatch) {
+      let desc = `Extract field(s) <strong>${fieldMatch[1]}</strong>`;
+      if (delimMatch) desc += ` <span style="opacity: 0.7">(delim: ${esc(delimMatch[1])})</span>`;
+      return desc;
+    }
+    return 'Extract columns';
+  }
+
+  // SORT (Unix) - different from Sort-Object
+  if (cmd.match(/^sort(?:\s|$)/i) && !cmd.match(/^Sort-Object/i)) {
+    const flags = [];
+    // Handle both separate (-r -n) and combined (-rn) flags
+    if (cmd.match(/-[a-zA-Z]*r[a-zA-Z]*/i)) flags.push('reverse');
+    if (cmd.match(/-[a-zA-Z]*n[a-zA-Z]*/i)) flags.push('numeric');
+    if (cmd.match(/-[a-zA-Z]*u[a-zA-Z]*/i)) flags.push('unique');
+    if (cmd.match(/-[a-zA-Z]*h[a-zA-Z]*/i)) flags.push('human');
+    if (cmd.match(/-[a-zA-Z]*f[a-zA-Z]*/i)) flags.push('ignore-case');
+    const keyMatch = cmd.match(/-k\s*(\d+)/i);
+    if (keyMatch) flags.push(`col ${keyMatch[1]}`);
+    
+    if (flags.length > 0) return `Sort <span style="opacity: 0.7">(${flags.join(', ')})</span>`;
+    return 'Sort output';
+  }
+
+  // UNIQ - remove duplicates
+  if (cmd.match(/^uniq(?:\s|$)/i)) {
+    if (cmd.match(/-c\b/i)) return 'Count unique lines';
+    if (cmd.match(/-d\b/i)) return 'Show duplicates only';
+    return 'Remove duplicates';
+  }
+
+  // WC - count lines/words
+  if (cmd.match(/^wc(?:\s|$)/i)) {
+    if (cmd.match(/-l\b/i)) return 'Count lines';
+    if (cmd.match(/-w\b/i)) return 'Count words';
+    if (cmd.match(/-c\b/i)) return 'Count bytes';
+    return 'Count lines/words';
+  }
+
+  // TEE (Unix) - write to file and pass through
+  if (cmd.match(/^tee\s+/i) && !cmd.match(/^Tee-Object/i)) {
+    const fileMatch = cmd.match(/^tee\s+(?:-a\s+)?["']?([^\s"']+)["']?/i);
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      const append = cmd.match(/-a\b/i) ? 'Append' : 'Write';
+      return `${append} to <strong>${filename}</strong>`;
+    }
+    return 'Tee output';
+  }
+
+  // XARGS - execute for each
+  if (cmd.match(/^xargs\s+/i)) {
+    const cmdMatch = cmd.match(/^xargs\s+(?:-[a-zA-Z0-9]+\s+)*(\S+)/i);
+    if (cmdMatch) return `Run <code>${esc(cmdMatch[1])}</code> for each`;
+    return 'Execute for each';
+  }
+
+  // FIND - find files
+  if (cmd.match(/^find\s+/i)) {
+    const nameMatch = cmd.match(/-name\s+["']([^"']+)["']/i);
+    const typeMatch = cmd.match(/-type\s+([fd])/i);
+    
+    const parts = [];
+    if (nameMatch) parts.push(`<code>${esc(nameMatch[1])}</code>`);
+    if (typeMatch) parts.push(typeMatch[1] === 'd' ? 'directories' : 'files');
+    
+    if (parts.length > 0) return `Find ${parts.join(' ')}`;
+    return 'Find files';
+  }
+
+  // CHMOD - change permissions
+  if (cmd.match(/^chmod\s+/i)) {
+    const permMatch = cmd.match(/^chmod\s+(\d{3,4}|[ugoa]*[+-=][rwxXst]+)\s+["']?([^\s"']+)["']?/i);
+    if (permMatch) {
+      const filename = getFilename(permMatch[2]);
+      return `Change permissions of <strong>${filename}</strong>`;
+    }
+    return 'Change permissions';
+  }
+
+  // CHOWN - change ownership
+  if (cmd.match(/^chown\s+/i)) {
+    const chownMatch = cmd.match(/^chown\s+(?:-R\s+)?(\S+)\s+["']?([^\s"']+)["']?/i);
+    if (chownMatch) {
+      const filename = getFilename(chownMatch[2]);
+      return `Change owner of <strong>${filename}</strong>`;
+    }
+    return 'Change ownership';
+  }
+
+  // DIFF - compare files
+  if (cmd.match(/^diff\s+/i)) {
+    const diffMatch = cmd.match(/^diff\s+(?:-[a-zA-Z]+\s+)*["']?([^\s"']+)["']?\s+["']?([^\s"']+)["']?/i);
+    if (diffMatch) {
+      const file1 = getFilename(diffMatch[1]);
+      const file2 = getFilename(diffMatch[2]);
+      return `Compare <strong>${file1}</strong> with <strong>${file2}</strong>`;
+    }
+    return 'Compare files';
   }
 
   if (cmd.match(/^curl\s+/i)) {
@@ -621,7 +880,807 @@ function transformSingleCommand(commandText) {
     return 'Download file';
   }
 
-  // PowerShell specific commands
+  // ========== MORE UNIX COMMANDS ==========
+
+  // TR - translate/delete characters
+  if (cmd.match(/^tr\s+/i)) {
+    if (cmd.match(/-d\b/i)) {
+      const charMatch = cmd.match(/-d\s*["']([^"']+)["']/i);
+      if (charMatch) return `Delete chars <code>${esc(charMatch[1])}</code>`;
+      return 'Delete characters';
+    }
+    const trMatch = cmd.match(/^tr\s+(?:-[a-zA-Z]+\s+)*["']([^"']+)["']\s+["']([^"']+)["']/i);
+    if (trMatch) {
+      const from = trMatch[1].length > 15 ? trMatch[1].substring(0, 12) + '...' : trMatch[1];
+      const to = trMatch[2].length > 15 ? trMatch[2].substring(0, 12) + '...' : trMatch[2];
+      return `Translate <code>${esc(from)}</code> → <code>${esc(to)}</code>`;
+    }
+    return 'Translate characters';
+  }
+
+  // REV - reverse lines
+  if (cmd.match(/^rev(?:\s|$)/i)) {
+    return 'Reverse lines';
+  }
+
+  // TAC - reverse file (cat backwards)
+  if (cmd.match(/^tac\s+/i)) {
+    const fileMatch = cmd.match(/^tac\s+["']?([^\s"']+)["']?/i);
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      return `Read <strong>${filename}</strong> reversed`;
+    }
+    return 'Reverse file';
+  }
+
+  // NL - number lines
+  if (cmd.match(/^nl(?:\s|$)/i)) {
+    return 'Number lines';
+  }
+
+  // PASTE - merge lines
+  if (cmd.match(/^paste\s+/i)) {
+    const delimMatch = cmd.match(/-d\s*["']?([^"'\s])["']?/i);
+    if (delimMatch) {
+      return `Merge lines <span style="opacity: 0.7">(delim: ${esc(delimMatch[1])})</span>`;
+    }
+    return 'Merge lines';
+  }
+
+  // COLUMN - format into columns
+  if (cmd.match(/^column\s+/i)) {
+    if (cmd.match(/-t\b/i)) return 'Format as table';
+    return 'Format columns';
+  }
+
+  // FMT - format text
+  if (cmd.match(/^fmt(?:\s|$)/i)) {
+    const widthMatch = cmd.match(/-w\s*(\d+)/i);
+    if (widthMatch) return `Format text <span style="opacity: 0.7">(width: ${widthMatch[1]})</span>`;
+    return 'Format text';
+  }
+
+  // FOLD - wrap lines
+  if (cmd.match(/^fold\s+/i)) {
+    const widthMatch = cmd.match(/-w\s*(\d+)/i);
+    if (widthMatch) return `Wrap at <strong>${widthMatch[1]}</strong> chars`;
+    return 'Wrap lines';
+  }
+
+  // EXPAND/UNEXPAND - tabs to spaces
+  if (cmd.match(/^expand(?:\s|$)/i)) {
+    return 'Tabs to spaces';
+  }
+  if (cmd.match(/^unexpand(?:\s|$)/i)) {
+    return 'Spaces to tabs';
+  }
+
+  // SPLIT - split files
+  if (cmd.match(/^split\s+/i)) {
+    const linesMatch = cmd.match(/-l\s*(\d+)/i);
+    const bytesMatch = cmd.match(/-b\s*(\d+[KMG]?)/i);
+    if (linesMatch) return `Split every <strong>${linesMatch[1]}</strong> lines`;
+    if (bytesMatch) return `Split every <strong>${bytesMatch[1]}</strong>`;
+    return 'Split file';
+  }
+
+  // SEQ - sequence generator
+  if (cmd.match(/^seq\s+/i)) {
+    const nums = cmd.match(/^seq\s+(\d+)(?:\s+(\d+))?(?:\s+(\d+))?/i);
+    if (nums) {
+      if (nums[3]) return `Sequence ${nums[1]} to ${nums[3]} by ${nums[2]}`;
+      if (nums[2]) return `Sequence ${nums[1]} to ${nums[2]}`;
+      return `Sequence 1 to ${nums[1]}`;
+    }
+    return 'Generate sequence';
+  }
+
+  // SHUF - shuffle lines
+  if (cmd.match(/^shuf(?:\s|$)/i)) {
+    const numMatch = cmd.match(/-n\s*(\d+)/i);
+    if (numMatch) return `Random <strong>${numMatch[1]}</strong> lines`;
+    return 'Shuffle lines';
+  }
+
+  // TOUCH - create/update file timestamp
+  if (cmd.match(/^touch\s+/i)) {
+    const fileMatch = cmd.match(/^touch\s+["']?([^\s"']+)["']?/i);
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      return `Touch <strong>${filename}</strong>`;
+    }
+    return 'Touch file';
+  }
+
+  // STAT - file status
+  if (cmd.match(/^stat\s+/i)) {
+    const fileMatch = cmd.match(/^stat\s+["']?([^\s"']+)["']?/i);
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      return `Stats for <strong>${filename}</strong>`;
+    }
+    return 'File stats';
+  }
+
+  // FILE - determine file type
+  if (cmd.match(/^file\s+/i)) {
+    const fileMatch = cmd.match(/^file\s+["']?([^\s"']+)["']?/i);
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      return `Type of <strong>${filename}</strong>`;
+    }
+    return 'File type';
+  }
+
+  // LN - create links
+  if (cmd.match(/^ln\s+/i)) {
+    if (cmd.match(/-s\b/i)) return 'Create symlink';
+    return 'Create link';
+  }
+
+  // DU - disk usage
+  if (cmd.match(/^du\s+/i)) {
+    const flags = [];
+    // Handle both separate (-h -s) and combined (-sh) flags
+    if (cmd.match(/-[a-zA-Z]*h[a-zA-Z]*/i)) flags.push('human');
+    if (cmd.match(/-[a-zA-Z]*s[a-zA-Z]*/i)) flags.push('summary');
+    if (cmd.match(/-[a-zA-Z]*a[a-zA-Z]*/i)) flags.push('all');
+    if (cmd.match(/-d\s*\d+/i) || cmd.match(/--max-depth/i)) flags.push('depth');
+    
+    // Extract path - remove all flags first
+    let remaining = cmd.replace(/^du\s+/i, '');
+    remaining = remaining.replace(/-[a-zA-Z]+\s*/g, '').replace(/-d\s*\d+\s*/g, '').trim();
+    const pathArg = remaining.split(/\s+/)[0];
+    
+    if (pathArg) {
+      // Don't run getFilename on wildcards
+      const displayPath = pathArg.includes('*') ? pathArg : getFilename(pathArg);
+      if (flags.length > 0) {
+        return `Disk usage <strong>${displayPath}</strong> <span style="opacity: 0.7">(${flags.join(', ')})</span>`;
+      }
+      return `Disk usage <strong>${displayPath}</strong>`;
+    }
+    if (flags.length > 0) return `Disk usage <span style="opacity: 0.7">(${flags.join(', ')})</span>`;
+    return 'Disk usage';
+  }
+
+  // DF - disk free
+  if (cmd.match(/^df(?:\s|$)/i)) {
+    if (cmd.match(/-h\b/i)) return 'Disk space (human)';
+    return 'Disk space';
+  }
+
+  // FREE - memory usage
+  if (cmd.match(/^free(?:\s|$)/i)) {
+    if (cmd.match(/-h\b/i)) return 'Memory usage (human)';
+    return 'Memory usage';
+  }
+
+  // UPTIME
+  if (cmd.match(/^uptime(?:\s|$)/i)) {
+    return 'System uptime';
+  }
+
+  // WHOAMI / WHO
+  if (cmd.match(/^whoami(?:\s|$)/i)) {
+    return 'Current user';
+  }
+  if (cmd.match(/^who(?:\s|$)/i)) {
+    return 'Logged in users';
+  }
+
+  // HOSTNAME
+  if (cmd.match(/^hostname(?:\s|$)/i)) {
+    return 'Hostname';
+  }
+
+  // UNAME
+  if (cmd.match(/^uname\s+/i)) {
+    if (cmd.match(/-a\b/i)) return 'System info (all)';
+    return 'System info';
+  }
+
+  // ENV / PRINTENV
+  if (cmd.match(/^(?:env|printenv)(?:\s|$)/i)) {
+    return 'Environment variables';
+  }
+
+  // EXPORT
+  if (cmd.match(/^export\s+/i)) {
+    const varMatch = cmd.match(/^export\s+([A-Za-z_][A-Za-z0-9_]*)=/i);
+    if (varMatch) return `Set env <code>${varMatch[1]}</code>`;
+    return 'Export variable';
+  }
+
+  // SOURCE / DOT
+  if (cmd.match(/^(?:source|\.)\s+/i)) {
+    const fileMatch = cmd.match(/^(?:source|\.)\s+["']?([^\s"']+)["']?/i);
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      return `Source <strong>${filename}</strong>`;
+    }
+    return 'Source file';
+  }
+
+  // KILL / KILLALL
+  if (cmd.match(/^kill\s+/i)) {
+    const signalMatch = cmd.match(/-(\d+|[A-Z]+)/i);
+    const pidMatch = cmd.match(/\s(\d+)$/);
+    if (pidMatch) {
+      if (signalMatch) return `Kill PID ${pidMatch[1]} <span style="opacity: 0.7">(${signalMatch[1]})</span>`;
+      return `Kill PID ${pidMatch[1]}`;
+    }
+    return 'Kill process';
+  }
+  if (cmd.match(/^killall\s+/i)) {
+    const procMatch = cmd.match(/^killall\s+["']?([^\s"']+)["']?/i);
+    if (procMatch) return `Kill all <code>${esc(procMatch[1])}</code>`;
+    return 'Kill processes';
+  }
+
+  // PKILL / PGREP
+  if (cmd.match(/^pkill\s+/i)) {
+    const procMatch = cmd.match(/^pkill\s+["']?([^\s"']+)["']?/i);
+    if (procMatch) return `Kill <code>${esc(procMatch[1])}</code>`;
+    return 'Kill by pattern';
+  }
+  if (cmd.match(/^pgrep\s+/i)) {
+    const procMatch = cmd.match(/^pgrep\s+["']?([^\s"']+)["']?/i);
+    if (procMatch) return `Find PIDs for <code>${esc(procMatch[1])}</code>`;
+    return 'Find PIDs';
+  }
+
+  // TOP / HTOP
+  if (cmd.match(/^(?:top|htop)(?:\s|$)/i)) {
+    return 'Process monitor';
+  }
+
+  // JOBS / BG / FG
+  if (cmd.match(/^jobs(?:\s|$)/i)) {
+    return 'List jobs';
+  }
+  if (cmd.match(/^bg(?:\s|$)/i)) {
+    return 'Background job';
+  }
+  if (cmd.match(/^fg(?:\s|$)/i)) {
+    return 'Foreground job';
+  }
+
+  // NOHUP
+  if (cmd.match(/^nohup\s+/i)) {
+    return 'Run detached';
+  }
+
+  // TIMEOUT
+  if (cmd.match(/^timeout\s+/i)) {
+    const timeMatch = cmd.match(/^timeout\s+(\d+[smhd]?)/i);
+    if (timeMatch) return `Timeout after <strong>${timeMatch[1]}</strong>`;
+    return 'Run with timeout';
+  }
+
+  // WATCH
+  if (cmd.match(/^watch\s+/i)) {
+    const intervalMatch = cmd.match(/-n\s*(\d+)/i);
+    if (intervalMatch) return `Watch every <strong>${intervalMatch[1]}s</strong>`;
+    return 'Watch command';
+  }
+
+  // TIME
+  if (cmd.match(/^time\s+/i)) {
+    return 'Measure time';
+  }
+
+  // SLEEP
+  if (cmd.match(/^sleep\s+/i)) {
+    const timeMatch = cmd.match(/^sleep\s+(\d+[smhd]?)/i);
+    if (timeMatch) return `Sleep <strong>${timeMatch[1]}</strong>`;
+    return 'Sleep';
+  }
+
+  // DATE
+  if (cmd.match(/^date(?:\s|$)/i)) {
+    return 'Current date/time';
+  }
+
+  // CAL
+  if (cmd.match(/^cal(?:\s|$)/i)) {
+    return 'Calendar';
+  }
+
+  // BC - calculator
+  if (cmd.match(/^bc(?:\s|$)/i)) {
+    return 'Calculator';
+  }
+
+  // EXPR - expression evaluator  
+  if (cmd.match(/^expr\s+/i)) {
+    return 'Evaluate expression';
+  }
+
+  // BASE64
+  if (cmd.match(/^base64\s+/i)) {
+    if (cmd.match(/-d\b/i)) return 'Base64 decode';
+    return 'Base64 encode';
+  }
+
+  // MD5SUM / SHA256SUM etc
+  if (cmd.match(/^md5sum?\s+/i)) {
+    return 'MD5 checksum';
+  }
+  if (cmd.match(/^sha\d*sum\s+/i)) {
+    const shaMatch = cmd.match(/^sha(\d*)sum/i);
+    return `SHA${shaMatch[1] || ''} checksum`;
+  }
+
+  // GZIP / GUNZIP / ZCAT
+  if (cmd.match(/^gzip\s+/i)) {
+    if (cmd.match(/-d\b/i)) return 'Decompress (gzip)';
+    return 'Compress (gzip)';
+  }
+  if (cmd.match(/^gunzip\s+/i)) {
+    return 'Decompress (gzip)';
+  }
+  if (cmd.match(/^zcat\s+/i)) {
+    return 'Read compressed';
+  }
+
+  // BZIP2 / BUNZIP2
+  if (cmd.match(/^bzip2\s+/i)) {
+    if (cmd.match(/-d\b/i)) return 'Decompress (bzip2)';
+    return 'Compress (bzip2)';
+  }
+  if (cmd.match(/^bunzip2\s+/i)) {
+    return 'Decompress (bzip2)';
+  }
+
+  // XZ / UNXZ
+  if (cmd.match(/^xz\s+/i)) {
+    if (cmd.match(/-d\b/i)) return 'Decompress (xz)';
+    return 'Compress (xz)';
+  }
+  if (cmd.match(/^unxz\s+/i)) {
+    return 'Decompress (xz)';
+  }
+
+  // TAR
+  if (cmd.match(/^tar\s+/i)) {
+    const flags = cmd.match(/^tar\s+[-]?([a-zA-Z]+)/i);
+    if (flags) {
+      const f = flags[1];
+      if (f.includes('x')) return 'Extract archive';
+      if (f.includes('c')) return 'Create archive';
+      if (f.includes('t')) return 'List archive';
+    }
+    return 'Archive operation';
+  }
+
+  // ZIP / UNZIP
+  if (cmd.match(/^zip\s+/i)) {
+    return 'Create zip';
+  }
+  if (cmd.match(/^unzip\s+/i)) {
+    const fileMatch = cmd.match(/^unzip\s+["']?([^\s"']+)["']?/i);
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      return `Extract <strong>${filename}</strong>`;
+    }
+    return 'Extract zip';
+  }
+
+  // PING
+  if (cmd.match(/^ping\s+/i)) {
+    const countMatch = cmd.match(/-c\s*(\d+)/i);
+    // Extract host - it's the last non-flag argument
+    // Remove all flags first, then get the remaining argument
+    let remaining = cmd.replace(/^ping\s+/i, '');
+    remaining = remaining.replace(/-[a-zA-Z]\s*\d*/g, '').trim(); // Remove -c 4, -W 5, etc
+    remaining = remaining.replace(/-[a-zA-Z]+/g, '').trim(); // Remove standalone flags
+    const host = remaining.split(/\s+/)[0];
+    
+    if (host) {
+      let desc = `Ping <code>${esc(host)}</code>`;
+      if (countMatch) desc += ` <span style="opacity: 0.7">(${countMatch[1]}x)</span>`;
+      return desc;
+    }
+    return 'Ping host';
+  }
+
+  // TRACEROUTE
+  if (cmd.match(/^traceroute\s+/i)) {
+    const hostMatch = cmd.match(/^traceroute\s+["']?([^\s"']+)["']?/i);
+    if (hostMatch) return `Traceroute <code>${esc(hostMatch[1])}</code>`;
+    return 'Traceroute';
+  }
+
+  // DIG / NSLOOKUP / HOST
+  if (cmd.match(/^dig\s+/i)) {
+    const hostMatch = cmd.match(/^dig\s+(?:@\S+\s+)?["']?([^\s"']+)["']?/i);
+    if (hostMatch) return `DNS lookup <code>${esc(hostMatch[1])}</code>`;
+    return 'DNS lookup';
+  }
+  if (cmd.match(/^nslookup\s+/i)) {
+    const hostMatch = cmd.match(/^nslookup\s+["']?([^\s"']+)["']?/i);
+    if (hostMatch) return `DNS lookup <code>${esc(hostMatch[1])}</code>`;
+    return 'DNS lookup';
+  }
+  if (cmd.match(/^host\s+/i)) {
+    const hostMatch = cmd.match(/^host\s+["']?([^\s"']+)["']?/i);
+    if (hostMatch) return `DNS lookup <code>${esc(hostMatch[1])}</code>`;
+    return 'DNS lookup';
+  }
+
+  // NETSTAT / SS
+  if (cmd.match(/^netstat(?:\s|$)/i)) {
+    const flags = [];
+    if (cmd.match(/-t\b/i)) flags.push('TCP');
+    if (cmd.match(/-u\b/i)) flags.push('UDP');
+    if (cmd.match(/-l\b/i)) flags.push('listening');
+    if (cmd.match(/-p\b/i)) flags.push('programs');
+    if (flags.length > 0) return `Network stats <span style="opacity: 0.7">(${flags.join(', ')})</span>`;
+    return 'Network stats';
+  }
+  if (cmd.match(/^ss(?:\s|$)/i)) {
+    const flags = [];
+    if (cmd.match(/-t\b/i)) flags.push('TCP');
+    if (cmd.match(/-u\b/i)) flags.push('UDP');
+    if (cmd.match(/-l\b/i)) flags.push('listening');
+    if (flags.length > 0) return `Socket stats <span style="opacity: 0.7">(${flags.join(', ')})</span>`;
+    return 'Socket stats';
+  }
+
+  // IFCONFIG / IP
+  if (cmd.match(/^ifconfig(?:\s|$)/i)) {
+    return 'Network interfaces';
+  }
+  if (cmd.match(/^ip\s+/i)) {
+    const subCmd = cmd.match(/^ip\s+(addr|link|route|neigh)/i);
+    if (subCmd) {
+      const subCmds = { addr: 'IP addresses', link: 'Interfaces', route: 'Routes', neigh: 'Neighbors' };
+      return subCmds[subCmd[1].toLowerCase()] || 'IP command';
+    }
+    return 'IP command';
+  }
+
+  // SSH / SCP / SFTP
+  if (cmd.match(/^ssh\s+/i)) {
+    const hostMatch = cmd.match(/^ssh\s+(?:-[a-zA-Z]+\s+)*(?:\S+@)?([^\s]+)/i);
+    if (hostMatch) return `SSH to <code>${esc(hostMatch[1])}</code>`;
+    return 'SSH connect';
+  }
+  if (cmd.match(/^scp\s+/i)) {
+    return 'Secure copy';
+  }
+  if (cmd.match(/^sftp\s+/i)) {
+    return 'SFTP transfer';
+  }
+
+  // RSYNC
+  if (cmd.match(/^rsync\s+/i)) {
+    const flags = [];
+    // Handle both separate (-a -v) and combined (-avz) flags
+    if (cmd.match(/-[a-zA-Z]*a[a-zA-Z]*/i)) flags.push('archive');
+    if (cmd.match(/-[a-zA-Z]*v[a-zA-Z]*/i)) flags.push('verbose');
+    if (cmd.match(/-[a-zA-Z]*z[a-zA-Z]*/i)) flags.push('compress');
+    if (cmd.match(/-[a-zA-Z]*r[a-zA-Z]*/i) && !cmd.match(/-a/i)) flags.push('recursive'); // -r if not already -a
+    if (cmd.match(/-[a-zA-Z]*n[a-zA-Z]*/i)) flags.push('dry-run');
+    if (cmd.match(/--delete\b/i)) flags.push('delete');
+    if (cmd.match(/--progress\b/i)) flags.push('progress');
+    if (flags.length > 0) return `Rsync <span style="opacity: 0.7">(${flags.join(', ')})</span>`;
+    return 'Rsync';
+  }
+
+  // SYSTEMCTL
+  if (cmd.match(/^systemctl\s+/i)) {
+    const actionMatch = cmd.match(/^systemctl\s+(start|stop|restart|status|enable|disable|reload)\s+(\S+)/i);
+    if (actionMatch) {
+      const action = actionMatch[1].charAt(0).toUpperCase() + actionMatch[1].slice(1);
+      return `${action} <code>${esc(actionMatch[2])}</code>`;
+    }
+    return 'Systemctl';
+  }
+
+  // SERVICE
+  if (cmd.match(/^service\s+/i)) {
+    const actionMatch = cmd.match(/^service\s+(\S+)\s+(start|stop|restart|status)/i);
+    if (actionMatch) {
+      const action = actionMatch[2].charAt(0).toUpperCase() + actionMatch[2].slice(1);
+      return `${action} <code>${esc(actionMatch[1])}</code>`;
+    }
+    return 'Service command';
+  }
+
+  // JOURNALCTL
+  if (cmd.match(/^journalctl\s+/i)) {
+    if (cmd.match(/-f\b/i)) return 'Follow logs';
+    const unitMatch = cmd.match(/-u\s+(\S+)/i);
+    if (unitMatch) return `Logs for <code>${esc(unitMatch[1])}</code>`;
+    return 'View logs';
+  }
+
+  // DMESG
+  if (cmd.match(/^dmesg(?:\s|$)/i)) {
+    return 'Kernel messages';
+  }
+
+  // LSOF
+  if (cmd.match(/^lsof(?:\s|$)/i)) {
+    const portMatch = cmd.match(/-i\s*:?(\d+)/i);
+    if (portMatch) return `Open files on port <strong>${portMatch[1]}</strong>`;
+    return 'List open files';
+  }
+
+  // FUSER
+  if (cmd.match(/^fuser\s+/i)) {
+    return 'Find process using file';
+  }
+
+  // STRACE / LTRACE
+  if (cmd.match(/^strace\s+/i)) {
+    return 'Trace system calls';
+  }
+  if (cmd.match(/^ltrace\s+/i)) {
+    return 'Trace library calls';
+  }
+
+  // LSCPU / LSBLK / LSUSB / LSPCI
+  if (cmd.match(/^lscpu(?:\s|$)/i)) {
+    return 'CPU info';
+  }
+  if (cmd.match(/^lsblk(?:\s|$)/i)) {
+    return 'Block devices';
+  }
+  if (cmd.match(/^lsusb(?:\s|$)/i)) {
+    return 'USB devices';
+  }
+  if (cmd.match(/^lspci(?:\s|$)/i)) {
+    return 'PCI devices';
+  }
+
+  // MOUNT / UMOUNT
+  if (cmd.match(/^mount(?:\s|$)/i)) {
+    return 'Mount filesystem';
+  }
+  if (cmd.match(/^umount\s+/i)) {
+    return 'Unmount filesystem';
+  }
+
+  // FDISK / PARTED
+  if (cmd.match(/^fdisk\s+/i)) {
+    return 'Partition editor';
+  }
+  if (cmd.match(/^parted\s+/i)) {
+    return 'Partition tool';
+  }
+
+  // MKFS
+  if (cmd.match(/^mkfs\./i)) {
+    return 'Create filesystem';
+  }
+
+  // USERADD / USERDEL / USERMOD
+  if (cmd.match(/^useradd\s+/i)) {
+    const userMatch = cmd.match(/^useradd\s+(?:-\S+\s+)*(\S+)$/i);
+    if (userMatch) return `Add user <code>${esc(userMatch[1])}</code>`;
+    return 'Add user';
+  }
+  if (cmd.match(/^userdel\s+/i)) {
+    return 'Delete user';
+  }
+  if (cmd.match(/^usermod\s+/i)) {
+    return 'Modify user';
+  }
+
+  // GROUPADD / GROUPDEL
+  if (cmd.match(/^groupadd\s+/i)) {
+    return 'Add group';
+  }
+  if (cmd.match(/^groupdel\s+/i)) {
+    return 'Delete group';
+  }
+
+  // PASSWD
+  if (cmd.match(/^passwd(?:\s|$)/i)) {
+    return 'Change password';
+  }
+
+  // SU / SUDO
+  if (cmd.match(/^su(?:\s|$)/i)) {
+    return 'Switch user';
+  }
+  if (cmd.match(/^sudo\s+/i)) {
+    // Get the actual command after sudo
+    const afterSudo = cmd.replace(/^sudo\s+(-\S+\s+)*/i, '').trim();
+    if (afterSudo) {
+      const innerResult = transformSingleCommand(afterSudo);
+      if (innerResult !== afterSudo) {
+        return `Sudo: ${innerResult}`;
+      }
+    }
+    return 'Run as root';
+  }
+
+  // ALIAS / UNALIAS
+  if (cmd.match(/^alias(?:\s|$)/i)) {
+    return 'Define alias';
+  }
+  if (cmd.match(/^unalias\s+/i)) {
+    return 'Remove alias';
+  }
+
+  // HISTORY
+  if (cmd.match(/^history(?:\s|$)/i)) {
+    return 'Command history';
+  }
+
+  // CLEAR
+  if (cmd.match(/^clear(?:\s|$)/i)) {
+    return 'Clear screen';
+  }
+
+  // RESET
+  if (cmd.match(/^reset(?:\s|$)/i)) {
+    return 'Reset terminal';
+  }
+
+  // EXIT
+  if (cmd.match(/^exit(?:\s|$)/i)) {
+    return 'Exit shell';
+  }
+
+  // TRUE / FALSE
+  if (cmd.match(/^true(?:\s|$)/i)) {
+    return 'Return success';
+  }
+  if (cmd.match(/^false(?:\s|$)/i)) {
+    return 'Return failure';
+  }
+
+  // TEST / [ ]
+  if (cmd.match(/^test\s+/i) || cmd.match(/^\[\s+/i)) {
+    return 'Test condition';
+  }
+
+  // READ
+  if (cmd.match(/^read\s+/i)) {
+    const varMatch = cmd.match(/^read\s+(?:-\S+\s+)*(\S+)/i);
+    if (varMatch) return `Read into <code>${varMatch[1]}</code>`;
+    return 'Read input';
+  }
+
+  // PRINTF
+  if (cmd.match(/^printf\s+/i)) {
+    return 'Print formatted';
+  }
+
+  // JQ - JSON processor
+  if (cmd.match(/^jq\s+/i)) {
+    const filterMatch = cmd.match(/^jq\s+["']([^"']+)["']/i);
+    if (filterMatch) {
+      const shortFilter = filterMatch[1].length > 30 ? filterMatch[1].substring(0, 27) + '...' : filterMatch[1];
+      return `JSON query <code>${esc(shortFilter)}</code>`;
+    }
+    return 'Process JSON';
+  }
+
+  // YQ - YAML processor
+  if (cmd.match(/^yq\s+/i)) {
+    return 'Process YAML';
+  }
+
+  // XMLLINT
+  if (cmd.match(/^xmllint\s+/i)) {
+    return 'Process XML';
+  }
+
+  // CONVERT (ImageMagick)
+  if (cmd.match(/^convert\s+/i)) {
+    return 'Convert image';
+  }
+
+  // FFMPEG / FFPROBE
+  if (cmd.match(/^ffmpeg\s+/i)) {
+    return 'Process video/audio';
+  }
+  if (cmd.match(/^ffprobe\s+/i)) {
+    return 'Probe media';
+  }
+
+  // OPEN / XDG-OPEN
+  if (cmd.match(/^(?:open|xdg-open)\s+/i)) {
+    const fileMatch = cmd.match(/^(?:open|xdg-open)\s+["']?([^\s"']+)["']?/i);
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      return `Open <strong>${filename}</strong>`;
+    }
+    return 'Open file';
+  }
+
+  // PBCOPY / PBPASTE (macOS) / XCLIP / XSEL (Linux)
+  if (cmd.match(/^(?:pbcopy|xclip|xsel)(?:\s|$)/i)) {
+    return 'Copy to clipboard';
+  }
+  if (cmd.match(/^pbpaste(?:\s|$)/i)) {
+    return 'Paste from clipboard';
+  }
+
+  // BREW (Homebrew)
+  if (cmd.match(/^brew\s+/i)) {
+    const brewMatch = cmd.match(/^brew\s+(install|uninstall|update|upgrade|search|list|info)\s*(\S*)/i);
+    if (brewMatch) {
+      const action = brewMatch[1].charAt(0).toUpperCase() + brewMatch[1].slice(1);
+      if (brewMatch[2]) return `${action} <code>${esc(brewMatch[2])}</code>`;
+      return action;
+    }
+    return 'Homebrew';
+  }
+
+  // APT / APT-GET / DPKG
+  if (cmd.match(/^apt(?:-get)?\s+/i)) {
+    const aptMatch = cmd.match(/^apt(?:-get)?\s+(install|remove|update|upgrade|search|show)\s*(\S*)/i);
+    if (aptMatch) {
+      const action = aptMatch[1].charAt(0).toUpperCase() + aptMatch[1].slice(1);
+      if (aptMatch[2]) return `${action} <code>${esc(aptMatch[2])}</code>`;
+      return action;
+    }
+    return 'APT package manager';
+  }
+  if (cmd.match(/^dpkg\s+/i)) {
+    return 'DPKG package';
+  }
+
+  // YUM / DNF
+  if (cmd.match(/^(?:yum|dnf)\s+/i)) {
+    const yumMatch = cmd.match(/^(?:yum|dnf)\s+(install|remove|update|search|info)\s*(\S*)/i);
+    if (yumMatch) {
+      const action = yumMatch[1].charAt(0).toUpperCase() + yumMatch[1].slice(1);
+      if (yumMatch[2]) return `${action} <code>${esc(yumMatch[2])}</code>`;
+      return action;
+    }
+    return 'Package manager';
+  }
+
+  // PACMAN
+  if (cmd.match(/^pacman\s+/i)) {
+    if (cmd.match(/-S\b/i)) return 'Install package';
+    if (cmd.match(/-R\b/i)) return 'Remove package';
+    if (cmd.match(/-Q\b/i)) return 'Query packages';
+    if (cmd.match(/-Syu\b/i)) return 'Update system';
+    return 'Pacman';
+  }
+
+  // SNAP
+  if (cmd.match(/^snap\s+/i)) {
+    const snapMatch = cmd.match(/^snap\s+(install|remove|list|find)\s*(\S*)/i);
+    if (snapMatch) {
+      const action = snapMatch[1].charAt(0).toUpperCase() + snapMatch[1].slice(1);
+      if (snapMatch[2]) return `${action} <code>${esc(snapMatch[2])}</code>`;
+      return action;
+    }
+    return 'Snap package';
+  }
+
+  // FLATPAK
+  if (cmd.match(/^flatpak\s+/i)) {
+    const flatpakMatch = cmd.match(/^flatpak\s+(install|uninstall|run|list)\s*(\S*)/i);
+    if (flatpakMatch) {
+      const action = flatpakMatch[1].charAt(0).toUpperCase() + flatpakMatch[1].slice(1);
+      if (flatpakMatch[2]) return `${action} <code>${esc(flatpakMatch[2])}</code>`;
+      return action;
+    }
+    return 'Flatpak';
+  }
+
+  // CRON related
+  if (cmd.match(/^crontab\s+/i)) {
+    if (cmd.match(/-e\b/i)) return 'Edit crontab';
+    if (cmd.match(/-l\b/i)) return 'List crontab';
+    return 'Crontab';
+  }
+
+  // AT
+  if (cmd.match(/^at\s+/i)) {
+    return 'Schedule task';
+  }
   if (cmd.match(/^Get-ChildItem/i) || cmd.match(/^gci\s*/i)) {
     const path = getPath();
     const filter = getParam('Filter');

@@ -1295,7 +1295,7 @@ function formatResponseAndCommand({ answer, command, hidden }) {
     const cleanedAnswer = answer
       .replace(/^```[\w]*\n?/, '')
       .replace(/\n?```$/, '');
-    sections.push(cleanedAnswer);
+    sections.push(`${cleanedAnswer}\n`);
   }
 
   // 3. Add command (already handled)
@@ -1303,7 +1303,7 @@ function formatResponseAndCommand({ answer, command, hidden }) {
     sections.push(`<!--command-input-->\n${command.trim()}\n<!--/command-input-->\n`);
   }
 
-  return sections.length > 0 ? sections.join('\n\n') : null;
+  return sections.length > 0 ? sections.join('\n') : null;
 }
 
 function formatOutput({ output, exitCode, blocked }) {

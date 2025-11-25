@@ -110,6 +110,23 @@ tail-two
     expect(finalLines.slice(-2)).toEqual(['tail-one', 'tail-two']);
   });
 
+  test('unified diff shows workspace-relative path and not temp paths', () => {
+    const command = `
+<set file="${sourceFile}" range={15}>
+<![CDATA[
+unique-line-for-diff
+]]>
+</set>`;
+
+    const result = applySetOperations(command, { workspacePath: workspace });
+    expect(result.success).toBe(true);
+    const fileEntry = result.files[0];
+    // Should contain the workspace relative path (display path)
+    expect(fileEntry.diff).toContain(sourceFile.replace(/\\/g, '/'));
+    // Should NOT contain the system temp directory paths used by git's --no-index
+    expect(fileEntry.diff).not.toContain(os.tmpdir());
+  });
+
   test('rejects ranges that exceed file length', () => {
     const command = `
 <set file="${sourceFile}" range={100, 110}>

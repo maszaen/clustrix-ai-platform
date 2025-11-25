@@ -209,9 +209,37 @@ function generateUnifiedDiff(originalContent, updatedContent, displayPath) {
       return 'No changes detected.';
     }
 
-    return output
-      .replace(new RegExp(originalPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), displayPath)
-      .replace(new RegExp(updatedPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), displayPath);
+    // Replace any appearance of the temporary absolute paths from git's output
+    // with the requested displayPath. Git sometimes prints paths as quoted,
+    // with a/ or b/ prefixes and sometimes uses forward slashes on Windows
+    // (e.g. "a/C:/..."), so we try to account for common variants.
+    const escapeForRegExp = (s) => s.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+    const backslashPath = escapeForRegExp(originalPath);
+    const backslashUpdated = escapeForRegExp(updatedPath);
+    const forwardPath = escapeForRegExp(originalPath.replace(/\\/g, '/'));
+    const forwardUpdated = escapeForRegExp(updatedPath.replace(/\\/g, '/'));
+
+    const replacers = [
+      new RegExp(backslashPath, 'g'),
+      new RegExp(backslashUpdated, 'g'),
+      new RegExp(forwardPath, 'g'),
+      new RegExp(forwardUpdated, 'g'),
+    ];
+
+    let transformed = output;
+    for (const r of replacers) {
+      transformed = transformed.replace(r, displayPath);
+    }
+
+    // Ensure the git headers and path prefixes are set to the displayPath value
+    // Normalize the `diff --git` header first
+    transformed = transformed.replace(/^(diff --git\s+)("?[ab]\/.*?"?\s+"?[ab]\/.*?"?)/m, (m, p1) => `${p1}"a/${displayPath}" "b/${displayPath}"`);
+    // Normalize the unified file header lines (--- and +++)
+    transformed = transformed
+      .replace(/^---\s+.*$/gm, `--- "a/${displayPath}"`)
+      .replace(/^\+\+\+\s+.*$/gm, `+++ "b/${displayPath}"`);
+
+    return transformed;
   } finally {
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -265,7 +293,8 @@ function applySetOperations(command, options = {}) {
 
   const filesMap = new Map();
 
-  operations.forEach((operation, index) => {
+  for (let index = 0; index < operations.length; index++) {
+    const operation = operations[index];
     if (operation.range.start === undefined || operation.range.start === null) {
       throw new Error('range or add attribute must include start line.');
     }
@@ -293,6 +322,27 @@ function applySetOperations(command, options = {}) {
 
     const fileEntry = filesMap.get(operation.file);
     const { lines } = fileEntry;
+
+    // Special handling for empty files and files with only blank lines: ignore range and always append
+    const allBlank = lines.length === 0 || lines.every(l => l.trim() === '');
+    if (allBlank) {
+      if (operation.lines.length === 0) {
+        throw new Error('Cannot perform empty operation on empty file.');
+      }
+      lines.push(...operation.lines);
+      const newStart = 1;
+      const newEnd = operation.lines.length;
+      fileEntry.focusRanges.push({ start: newStart, end: newEnd });
+      fileEntry.history.push({
+        type: 'create',
+        start: 1,
+        end: newEnd,
+        before: '',
+        after: operation.lines.join('\n'),
+        timestamp: new Date().toISOString(),
+      });
+      continue; // Skip normal processing for empty files
+    }
 
     const start = operation.range.start;
     const end = operation.range.end;
@@ -397,7 +447,7 @@ function applySetOperations(command, options = {}) {
       after: result.after,
       timestamp: result.timestamp,
     });
-  });
+  }
 
   const results = [];
 

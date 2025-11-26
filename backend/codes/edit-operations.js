@@ -49,6 +49,9 @@ function parseRange(rangeText) {
     if (!Number.isFinite(line)) {
       throw new Error(`Invalid line value "${captured}" in add attribute.`);
     }
+    if (line === 0) {
+      throw new Error('Line numbers are 1-indexed. Use add={1} to insert at the beginning of the file, not add={0}.');
+    }
     return { start: line, end: null, operation: 'insert' };
   }
 
@@ -70,6 +73,9 @@ function parseRange(rangeText) {
   const start = Number.parseInt(parts[0], 10);
   if (!Number.isFinite(start)) {
     throw new Error(`Invalid start value "${parts[0]}" in range attribute.`);
+  }
+  if (start === 0) {
+    throw new Error('Line numbers are 1-indexed. Use range={1} or range={1, N} to start from the first line, not range={0}.');
   }
 
   let end = null;

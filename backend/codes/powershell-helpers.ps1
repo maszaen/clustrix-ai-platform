@@ -62,7 +62,7 @@ function Show-FileWithLineNumbers {
     if ($EndLine -lt $totalLines) {
         $remaining = $totalLines - $EndLine
         Write-Output "[${remaining} lines more...]"
-        Write-Output "[Please speciy the search operation with line range.]"
+        Write-Output "[Please specify the search operation with line range.]"
     }
 }
 
@@ -180,13 +180,10 @@ function Remove-FileLine {
     # Convert to 0-indexed
     $idx = $LineNumber - 1
     
-    # Remove line by creating new array without that line
-    $newLines = @()
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-        if ($i -ne $idx) {
-            $newLines += $lines[$i]
-        }
-    }
+    # Remove line using ArrayList (O(n) instead of O(n²))
+    $linesList = [System.Collections.ArrayList]@($lines)
+    $linesList.RemoveAt($idx)
+    $newLines = $linesList.ToArray()
     
     # Write back to file
     $newLines | Set-Content -Path $Path -Encoding UTF8
@@ -250,19 +247,16 @@ function Add-FileLine {
     # Convert to 0-indexed
     $idx = $LineNumber - 1
     
-    # Insert line
-    $newLines = @()
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-        if ($i -eq $idx) {
-            $newLines += $NewContent
-        }
-        $newLines += $lines[$i]
+    # Insert line using ArrayList (O(n) instead of O(n²))
+    $linesList = [System.Collections.ArrayList]@($lines)
+    if ($LineNumber -gt $totalLines) {
+        # Append to end
+        $linesList.Add($NewContent) | Out-Null
+    } else {
+        # Insert at position
+        $linesList.Insert($idx, $NewContent)
     }
-    
-    # Handle case where inserting at end
-    if ($LineNumber -eq ($totalLines + 1)) {
-        $newLines += $NewContent
-    }
+    $newLines = $linesList.ToArray()
     
     # Write back to file
     $newLines | Set-Content -Path $Path -Encoding UTF8

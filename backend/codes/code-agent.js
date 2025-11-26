@@ -148,8 +148,23 @@ function ensureIdleTimer() {
       if (now - state.lastUsed > IDLE_TIMEOUT_MS) {
         try {
           state.terminal?.dispose();
-        } catch { }
+        } catch (disposeError) {
+          log('CODES', 2, 'ensureIdleTimer', 'Failed to dispose terminal', { sessionId, error: disposeError?.message });
+        }
+        
+        // Clean up any pending confirmation promises for this session
+        for (const [key, promiseData] of confirmationPromises.entries()) {
+          if (key.startsWith(sessionId)) {
+            if (promiseData.timeoutId) {
+              clearTimeout(promiseData.timeoutId);
+            }
+            confirmationPromises.delete(key);
+            log('CODES', 1, 'ensureIdleTimer', 'Cleaned up orphaned confirmation promise', { key });
+          }
+        }
+        
         sessionStates.delete(sessionId);
+        log('CODES', 1, 'ensureIdleTimer', 'Cleaned up idle session', { sessionId });
       }
     }
   }, 60 * 1000);
@@ -1101,7 +1116,7 @@ function parseAgentResponse(text = '') {
   // Auto-detect done: if no command and no hidden, and answer doesn't indicate continuation, we're done
   // BUT: If AI declared a valid state (not DONE), continue iteration even if no command
   if (!command && !hiddenMatch && !done) {
-    const hasValidState = stateMatch && ['EXPLORE', 'UNDERSTAND', 'EDIT', 'EXECUTE', 'VERIFY'].includes(stateMatch[1].trim().toUpperCase());
+    const hasValidState = stateMatch && ['EXPLORE', 'EDIT', 'EXECUTE', 'VERIFY'].includes(stateMatch[1].trim().toUpperCase());
     if (hasValidState) {
       // AI declared next state, continue iteration
       log('CODES', 2, 'parseAgentResponse', 'Continuing iteration: AI declared valid state', { state: stateMatch[1].trim().toUpperCase() });

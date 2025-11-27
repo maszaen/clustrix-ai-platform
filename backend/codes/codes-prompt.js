@@ -133,13 +133,8 @@ WORKFLOW:
 3. Kalau sudah cukup info → langsung ke <state>EDIT</state>
 4. Kalau butuh info lagi → pakai <cmd> untuk search/read
 
-COMMAND  SEARCH: \`
-<cmd>
-Search-InFiles -Pattern "regex" -Filter "*.js" -Depth 2
-</cmd>
-<hidden>
-Searching for usage of X...
-</hidden>\`
+COMMANDS:
+  Search-InFiles -Pattern "regex" -Filter "*.js" -Depth 2
   Show-FileWithLineNumbers -Path "file.js" [-StartLine N -EndLine M]
   Find-Pattern -Pattern "regex" -Path "file.js"
 
@@ -153,20 +148,19 @@ Gunakan <hidden> untuk analisis perubahan yang akan dilakukan.
 WAJIB pakai <answer> untuk jelaskan ke user.
 
 Format edit:
-<cmd>
-*** Begin Patch
-*** Update File: relative/path.js
-@@ -10,6 +10,5 @@
- context line
--old line 1
--old line 2
-+new line 1
-+new line 2
- context line
-*** End Patch
-</cmd>
+<cmd><set file="relative/path.js" range={start, end}>
+<![CDATA[
+new content here
+]]>
+</set></cmd>
 
-Boleh multiple file operations dalam satu <cmd> untuk bulk edit.
+RANGE RULES:
+  range={10, 15} = DELETE lines 10-15, INSERT new content
+  range={10} = DELETE line 10 only, INSERT new content
+  add={25} = INSERT BEFORE line 25 (no delete)
+  range={-1} = APPEND to end of file
+
+Boleh multiple <set> dalam satu <cmd> untuk bulk edit.
 
 SETELAH EDIT: Pindah ke VERIFY untuk cek hasil, atau tetap EDIT jika belum selesai.`,
 
@@ -218,7 +212,7 @@ Choose your next state:
 === CRITICAL RULES ===
 1. SELALU mulai response dengan <state>STATE_NAME</state>
 2. Pakai <hidden> untuk internal thinking (WAJIB kecuali DONE)
-3. Pakai <checklist> untuk track progress: - [ ] pending, - [/] current, - [x] done
+3. Pakai <checklist> untuk track progress: [ ] pending, [/] current, [x] done
 4. CEK <memory_view> SEBELUM baca file - jangan duplicate!
 5. JANGAN pakai Get-ChildItem -Recurse (pakai Search-InFiles)
 6. <!END> tag HANYA di DONE state
@@ -332,91 +326,53 @@ CREATE FILE:
   New-Item -ItemType File -Path "path/to/newfile.js" -Force
   mkdir -p "path/to/new/directory"
 
-EDIT: \`
-<cmd>
-*** Begin Patch
-*** Update File: path/to/file.js
-@@ ...
-- old code
-+ new code
-*** End Patch
-</cmd>
-<checklist>
-- [ ] Verify changes
-- [ ] Run tests
-</checklist>\`
+EDIT FILE:
+<cmd><set file="path/to/file.js" range={10, 15}>
+<![CDATA[
+new content
+]]>
+</set></cmd>
+
+INSERT (no delete):
+<cmd><set file="path/to/file.js" add={25}>
+<![CDATA[
+inserted content
+]]>
+</set></cmd>
 
 RUN:
-  node script.js | npm test | python script.py | node --check file.js
-
-### 3. EDITING FILES (PATCH SYSTEM)
-You MUST use the **Patch Format** for all file modifications. Do NOT use <set> tags anymore.
-
-**Patch Structure:**
-\`\`\`text
-<cmd>
-*** Begin Patch
-[File Operations]
-*** End Patch
-</cmd>
-\`\`\`
-
-**Supported Operations:**
-
-**A. Update Existing File:**
-\`\`\`text
-*** Update File: path/to/file.js
-@@ ...
--old line
-+new line
-\`\`\`
-- Use \`-\` for lines to remove.
-- Use \`+\` for lines to add.
-- Use space for context lines (crucial for locating the code block).
-- You can have multiple hunks (@@) for one file.
-
-**B. Create New File:**
-\`\`\`text
-*** Add File: path/to/new_file.js
-+const x = 1;
-+console.log(x);
-\`\`\`
-- Every line must start with \`+\`.
-
-**C. Delete File:**
-\`\`\`text
-*** Delete File: path/to/obsolete.js
-\`\`\`
-
-**D. Rename/Move File:**
-\`\`\`text
-*** Update File: old/path.js
-*** Move to: new/path.js
-\`\`\`
-- You can also apply edits during the move.
-
-**Rules:**
-1. **Atomic:** All operations in one patch are applied together. If one fails, all are rolled back.
-2. **Context:** Provide enough context lines (starting with space) for the system to locate the code to replace.
-3. **Precision:** The \`-\` lines must EXACTLY match the existing file content.
-
-### 4. SEARCHING
-- Use \`Search-InFiles\` for broad searches.
-- Use \`Show-FileWithLineNumbers\` to read specific files.
-- You can search multiple files: \`Search-InFiles -Pattern "foo" -Path "src"\`
-`;
+  node script.js | npm test | python script.py | node --check file.js`;
 
 // ===================================
 // ERROR GUIDANCE
 // ===================================
 const ERROR_GUIDANCE = {
+  set_xml_error: `
+===> XML SYNTAX ERROR
+Your <set> tag has malformed XML.
+
+Common Issues:
+- Missing closing tag: </set>
+- Unbalanced CDATA: <![CDATA[ must have matching ]]>
+- Text outside <set> tags in <cmd>
+- Missing file attribute: file="path/to/file.js"
+- Invalid range format: use range={10, 20} not range="10-20"
+
+Correct Format:
+<cmd><set file="path/to/file.js" range={10, 15}>
+<![CDATA[
+new content
+]]>
+</set></cmd>`,
+
   line_numbers_missing: `
 ===> NEED LINE NUMBERS
 You tried editing without precise ranges.
 
 Required Steps:
 1. Show-FileWithLineNumbers -Path <file>
-2. Identify the exact start/end lines`,
+2. Identify the exact start/end lines
+3. Use <set file="..." range={start, end}> for replacement`,
 
   file_too_large: `
 ===> FILE TOO LARGE

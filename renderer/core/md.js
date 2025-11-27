@@ -71,6 +71,34 @@ function transformCommandText(commandText) {
 
   const fullCmd = commandText.trim();
 
+  // Helper for filename extraction
+  const getFilename = (path) => {
+      if (!path) return '';
+      const cleanPath = path.replace(/^["']|["']$/g, '');
+      return cleanPath.split(/[/\\]/).pop() || cleanPath;
+  };
+
+  // Parse *** Begin Patch commands
+  if (fullCmd.includes('*** Begin Patch')) {
+    const files = [];
+    const lines = fullCmd.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('*** Update File:')) files.push(`Update ${getFilename(line.substring(16).trim())}`);
+      else if (line.startsWith('*** Add File:')) files.push(`Create ${getFilename(line.substring(13).trim())}`);
+      else if (line.startsWith('*** Delete File:')) files.push(`Delete ${getFilename(line.substring(16).trim())}`);
+      else if (line.startsWith('*** Move to:')) files.push(`Move to ${getFilename(line.substring(12).trim())}`);
+    }
+    
+    if (files.length > 0) {
+      const unique = [...new Set(files)];
+      if (unique.length > 3) {
+        return `Applying patch to ${unique.slice(0, 3).join(', ')} and ${unique.length - 3} others`;
+      }
+      return `Applying patch: ${unique.join(', ')}`;
+    }
+    return 'Applying file patch';
+  }
+
   // Smart split by pipe - respects quoted strings
   // This prevents splitting on | inside quotes like grep -E "(A|B)"
   const splitByPipe = (str) => {
@@ -2560,10 +2588,29 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     // Helper function to extract filename from path
     function getFilename(path) {
       if (!path) return '';
-      // Remove quotes if present
       const cleanPath = path.replace(/^["']|["']$/g, '');
-      // Get filename from path
       return cleanPath.split(/[/\\]/).pop() || cleanPath;
+    }
+
+    // Parse *** Begin Patch commands
+    if (trimmed.includes('*** Begin Patch')) {
+      const files = [];
+      const lines = trimmed.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('*** Update File:')) files.push(`Update ${getFilename(line.substring(16).trim())}`);
+        else if (line.startsWith('*** Add File:')) files.push(`Create ${getFilename(line.substring(13).trim())}`);
+        else if (line.startsWith('*** Delete File:')) files.push(`Delete ${getFilename(line.substring(16).trim())}`);
+        else if (line.startsWith('*** Move to:')) files.push(`Move to ${getFilename(line.substring(12).trim())}`);
+      }
+      
+      if (files.length > 0) {
+        const unique = [...new Set(files)];
+        if (unique.length > 3) {
+          return `Applying patch to ${unique.slice(0, 3).join(', ')} and ${unique.length - 3} others`;
+        }
+        return `Applying patch: ${unique.join(', ')}`;
+      }
+      return 'Applying file patch';
     }
 
     // Helper function to format range
@@ -2590,13 +2637,6 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       return `Editing ${filename}`;
     }
 
-    // Parse Search-infiles commands (fallback for simple pattern)
-    const searchMatch = trimmed.match(/^Search-infiles\s+(.+)$/i);
-    if (searchMatch) {
-      const pattern = searchMatch[1].trim();
-      return `Searching for pattern '${pattern}'`;
-    }
-
     // Parse Show-FileWithLineNumbers commands
     const showFileMatch = trimmed.match(/^Show-FileWithLineNumbers\s+-Path\s+["']([^"']+)["'](?:\s+-StartLine\s+(\d+))?(?:\s+-EndLine\s+(\d+))?/i);
     if (showFileMatch) {
@@ -2611,7 +2651,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       return `Read ${filename}`;
     }
 
-    // Parse Search-InFiles commands
+    // Parse Search-InFiles commands (Structured)
     const searchInFilesMatch = trimmed.match(/^Search-InFiles\s+-Pattern\s+["']([^"']+)["'](?:\s+-Path\s+["']([^"']+)["'])?(?:\s+-Filter\s+["']([^"']+)["'])?(?:\s+-Depth\s+(\d+))?(?:\s+-Context\s+(\d+))?/i);
     if (searchInFilesMatch) {
       const pattern = searchInFilesMatch[1];
@@ -2620,7 +2660,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const depth = searchInFilesMatch[4];
       const context = searchInFilesMatch[5];
 
-      let description = `Find "${pattern}"`;
+      let description = `Find <code>${pattern}</code>`;
       if (filter) {
         description += ` in ${filter} files`;
       } else {
@@ -2631,6 +2671,13 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         description += ` under ${dirname}`;
       }
       return description;
+    }
+
+    // Parse Search-infiles commands (fallback for simple pattern)
+    const searchMatch = trimmed.match(/^Search-infiles\s+(.+)$/i);
+    if (searchMatch) {
+      const pattern = searchMatch[1].trim();
+      return `Searching for pattern '${pattern}'`;
     }
 
     // Parse Get-FileLineRange commands
@@ -2721,7 +2768,7 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     if (findPatternMatch) {
       const pattern = findPatternMatch[1];
       const path = findPatternMatch[2];
-      let description = `Find pattern "${pattern}"`;
+      let description = `Find pattern <code>${pattern}</code>`;
       if (path) {
         const dirname = getFilename(path);
         description += ` in ${dirname}`;
@@ -2841,6 +2888,81 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     return input;
   }
 
+  // Parse multiple <!--command-input--> tags and optional <!--command-output-->
+  // We need to capture pairs of input and output if they exist
+  // Parse multiple <!--command-input--> tags and optional <!--command-output-->
+  // We use a loop to find inputs, and then look for corresponding outputs
+  const commandInputRegex = /<!--command-input-->([\s\S]*?)<!--\/command-input-->/g;
+  const commandOutputRegex = /<!--command-output-->([\s\S]*?)<!--\/command-output-->/g;
+  
+  // Temporary storage for replacements
+  const replacements = [];
+  let match;
+  
+  // Find all inputs
+  while ((match = commandInputRegex.exec(html)) !== null) {
+    replacements.push({
+      type: 'input',
+      start: match.index,
+      end: match.index + match[0].length,
+      content: match[1].trim(),
+      placeholder: `__COMMAND_GROUP_${commandGroups.length}__`
+    });
+    commandGroups.push({
+      input: match[1].trim(),
+      output: null // Will be filled later
+    });
+  }
+  
+  // Find all outputs
+  while ((match = commandOutputRegex.exec(html)) !== null) {
+    // Find the nearest preceding input
+    let bestInputIndex = -1;
+    let minDistance = Infinity;
+    
+    for (let i = 0; i < replacements.length; i++) {
+      if (replacements[i].type === 'input' && replacements[i].end <= match.index) {
+        const distance = match.index - replacements[i].end;
+        if (distance < minDistance) {
+          minDistance = distance;
+          bestInputIndex = i;
+        }
+      }
+    }
+    
+    if (bestInputIndex !== -1 && minDistance < 1000) { // Assume output follows input within reasonable distance
+      const groupIndex = parseInt(replacements[bestInputIndex].placeholder.replace('__COMMAND_GROUP_', '').replace('__', ''));
+      commandGroups[groupIndex].output = match[1].trim();
+      
+      // Mark this output range for removal (it will be part of the input group's rendering)
+      replacements.push({
+        type: 'output',
+        start: match.index,
+        end: match.index + match[0].length,
+        content: match[1].trim(),
+        placeholder: '' // Remove it
+      });
+    } else {
+      // Orphaned output? Render as standalone?
+      // For now, just leave it or handle it if needed.
+    }
+  }
+  
+  // Sort replacements by start index (descending) to replace without affecting indices
+  replacements.sort((a, b) => b.start - a.start);
+  
+  for (const r of replacements) {
+    if (r.type === 'input') {
+      html = html.substring(0, r.start) + r.placeholder + html.substring(r.end);
+    } else if (r.type === 'output') {
+      html = html.substring(0, r.start) + r.placeholder + html.substring(r.end);
+    }
+  }
+
+  // If no command inputs found, check for legacy format or just return
+  if (commandGroups.length === 0) {
+     // Fallback or just proceed
+  }
   commandGroups.forEach((group, index) => {
     const placeholder = `__COMMAND_GROUP_${index}__`;
     let replacement = '';
@@ -2853,7 +2975,12 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       const toggleButton = group.output ? '<button class="command-toggle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>' : '';
 
       // Transform command text to human-readable format
-      const readableCommand = transformCommandText(group.input);
+      // Transform command text to human-readable format
+      // Try specialized agent parser first, then fallback to general shell parser
+      let readableCommand = parseCommandInput(group.input);
+      if (readableCommand === group.input) {
+        readableCommand = transformCommandText(group.input);
+      }
 
       replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><span class="command-text">' +
         readableCommand +

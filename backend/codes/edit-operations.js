@@ -4,6 +4,7 @@ const os = require('os');
 const { spawnSync } = require('child_process');
 
 function normalizeRelativePath(filePath) {
+  if (!filePath) return filePath;
   return filePath.replace(/\\/g, '/');
 }
 
@@ -525,7 +526,371 @@ function applySetOperations(command, options = {}) {
   };
 }
 
+
+// ==========================================
+// PATCH SYSTEM IMPLEMENTATION
+// ==========================================
+
+function parsePatch(patchText) {
+  const lines = patchText.split(/\r?\n/);
+  const operations = [];
+  let currentOp = null;
+  let inHunk = false;
+
+  // Helper to finalize current operation
+  const finalizeOp = () => {
+    if (currentOp) {
+      if (currentOp.type === 'update' && currentOp.hunks.length === 0 && !currentOp.moveTo) {
+        // Warning: Update without hunks or move?
+      }
+      operations.push(currentOp);
+      currentOp = null;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!trimmed) continue; // Ignore empty lines
+
+    if (trimmed === '*** Begin Patch' || trimmed === '*** End Patch') {
+      continue;
+    }
+
+    // Detect Operation Headers
+    if (trimmed.startsWith('*** Add File: ')) {
+      finalizeOp();
+      currentOp = {
+        type: 'add',
+        file: normalizeRelativePath(trimmed.substring(14).trim()),
+        content: []
+      };
+      inHunk = false;
+      continue;
+    }
+
+    if (trimmed.startsWith('*** Delete File: ')) {
+      finalizeOp();
+      currentOp = {
+        type: 'delete',
+        file: normalizeRelativePath(trimmed.substring(17).trim())
+      };
+      inHunk = false;
+      continue;
+    }
+
+    if (trimmed.startsWith('*** Update File: ')) {
+      finalizeOp();
+      currentOp = {
+        type: 'update',
+        file: normalizeRelativePath(trimmed.substring(17).trim()),
+        hunks: [],
+        moveTo: null
+      };
+      inHunk = false;
+      continue;
+    }
+
+    if (trimmed.startsWith('*** Move to: ')) {
+      if (currentOp && currentOp.type === 'update') {
+        currentOp.moveTo = normalizeRelativePath(trimmed.substring(13).trim());
+      }
+      continue;
+    }
+
+    if (trimmed.startsWith('*** End of File')) {
+      inHunk = false;
+      continue;
+    }
+
+    // Process Content based on Operation Type
+    if (currentOp) {
+      if (currentOp.type === 'add') {
+        if (line.startsWith('+')) {
+          currentOp.content.push(line.substring(1));
+        } else {
+          // Allow content without + prefix for Add File if it's not a header
+          // But strict patch format requires +, let's be lenient or strict?
+          // Ref says: "Every following line is a + line"
+          // We'll strip + if present, otherwise take line as is?
+          // Safer to require + to distinguish from potential future headers, but let's handle both for robustness
+          if (line.startsWith('***')) {
+            // It's a header, loop will catch it next iteration? No, we are inside loop
+            // We need to re-process this line as a header
+            finalizeOp();
+            i--; // Backtrack to process header
+            continue;
+          }
+          currentOp.content.push(line.startsWith('+') ? line.substring(1) : line);
+        }
+      } else if (currentOp.type === 'update') {
+        if (line.startsWith('@@')) {
+          inHunk = true;
+          currentOp.hunks.push({
+            header: line,
+            lines: []
+          });
+        } else if (inHunk) {
+           if (line.startsWith('***')) {
+            finalizeOp();
+            i--;
+            continue;
+          }
+          // Add line to current hunk
+          if (currentOp.hunks.length > 0) {
+            currentOp.hunks[currentOp.hunks.length - 1].lines.push(line);
+          }
+        }
+      }
+    }
+  }
+  finalizeOp();
+  return operations;
+}
+
+function applyPatch(patchText, options = {}) {
+  const { workspacePath } = options;
+  const operations = parsePatch(patchText);
+  const results = [];
+  const backups = []; // For rollback
+
+  try {
+    for (const op of operations) {
+      const { absolutePath, relativePath } = resolveFilePath(workspacePath, op.file);
+      
+      // Backup logic
+      if (fs.existsSync(absolutePath)) {
+        backups.push({
+          path: absolutePath,
+          content: fs.readFileSync(absolutePath, 'utf8'),
+          exists: true
+        });
+      } else {
+        backups.push({
+          path: absolutePath,
+          exists: false
+        });
+      }
+
+      if (op.type === 'add') {
+        if (fs.existsSync(absolutePath)) {
+          throw new Error(`Cannot add file "${op.file}": File already exists.`);
+        }
+        const content = op.content.join('\n');
+        fs.writeFileSync(absolutePath, content, 'utf8');
+        results.push({
+          type: 'add',
+          file: relativePath,
+          summary: `Create file ${relativePath}`
+        });
+      } else if (op.type === 'delete') {
+        if (!fs.existsSync(absolutePath)) {
+          throw new Error(`Cannot delete file "${op.file}": File does not exist.`);
+        }
+        fs.unlinkSync(absolutePath);
+        results.push({
+          type: 'delete',
+          file: relativePath,
+          summary: `Delete file ${relativePath}`
+        });
+      } else if (op.type === 'update') {
+        if (!fs.existsSync(absolutePath)) {
+          throw new Error(`Cannot update file "${op.file}": File does not exist.`);
+        }
+        
+        let content = fs.readFileSync(absolutePath, 'utf8');
+        const lines = content.split(/\r?\n/);
+        let newLines = [...lines];
+        let offset = 0; // Track line count changes
+
+        // Apply hunks
+        // Note: This is a simplified hunk application. 
+        // Real patch application needs fuzzy matching or strict line numbers.
+        // Here we'll use a search-and-replace approach for the context block.
+        
+        for (const hunk of op.hunks) {
+          // Extract search block (lines starting with space or -)
+          const searchLines = hunk.lines
+            .filter(l => l.startsWith(' ') || l.startsWith('-'))
+            .map(l => l.substring(1));
+            
+          // Extract replace block (lines starting with space or +)
+          const replaceLines = hunk.lines
+            .filter(l => l.startsWith(' ') || l.startsWith('+'))
+            .map(l => l.substring(1));
+
+          if (searchLines.length === 0) continue; // Empty hunk?
+
+          // Find the search block in the file
+          // We join with newlines to search as a block
+          const searchBlock = searchLines.join('\n');
+          const fileContent = newLines.join('\n');
+          
+          // Try exact match first
+          let index = fileContent.indexOf(searchBlock);
+          
+          if (index === -1) {
+             // Fallback 1: Try to match ignoring whitespace/indentation
+             const normalize = (str) => str.split('\n').map(l => l.trim()).join('\n');
+             const searchBlockTrimmed = normalize(searchBlock);
+             const fileContentTrimmed = normalize(fileContent);
+             
+             // Find index in trimmed content
+             let trimmedIndex = fileContentTrimmed.indexOf(searchBlockTrimmed);
+             
+             // Fallback 2: Ignore empty lines entirely (aggressive)
+             if (trimmedIndex === -1) {
+                const normalizeNoEmpty = (str) => str.split('\n').map(l => l.trim()).filter(l => l.length > 0).join('\n');
+                const searchBlockNoEmpty = normalizeNoEmpty(searchBlock);
+                const fileContentNoEmpty = normalizeNoEmpty(fileContent);
+                
+                if (fileContentNoEmpty.includes(searchBlockNoEmpty)) {
+                    // We found it ignoring empty lines.
+                    // Now we need to find the actual start line in the original file.
+                    // This is complex, so we'll use a line-by-line matching approach that skips empty lines.
+                    
+                    const searchLinesNonEmpty = searchLines.map(l => l.trim()).filter(l => l.length > 0);
+                    
+                    for (let i = 0; i < newLines.length; i++) {
+                        let match = true;
+                        let fileLineIdx = i;
+                        let searchLineIdx = 0;
+                        
+                        while (searchLineIdx < searchLinesNonEmpty.length) {
+                            if (fileLineIdx >= newLines.length) {
+                                match = false;
+                                break;
+                            }
+                            
+                            const fileLine = newLines[fileLineIdx].trim();
+                            if (fileLine.length === 0) {
+                                fileLineIdx++; // Skip empty file lines
+                                continue;
+                            }
+                            
+                            if (fileLine !== searchLinesNonEmpty[searchLineIdx]) {
+                                match = false;
+                                break;
+                            }
+                            
+                            fileLineIdx++;
+                            searchLineIdx++;
+                        }
+                        
+                        if (match) {
+                            // Found match starting at i (spanning to fileLineIdx)
+                            // We replace the whole range [i, fileLineIdx) with replaceLines
+                            newLines.splice(i, fileLineIdx - i, ...replaceLines);
+                            trimmedIndex = -2; // Mark as handled
+                            break;
+                        }
+                    }
+                }
+              }
+
+            if (trimmedIndex === -2) continue; // Handled by Fallback 2
+
+            if (trimmedIndex !== -1) {
+              // We found it in trimmed version (Fallback 1). Now we need to map back to original indices.
+              let foundLineIndex = -1;
+              const searchLinesTrimmed = searchLines.map(l => l.trim());
+              
+              for (let i = 0; i <= newLines.length - searchLines.length; i++) {
+                let match = true;
+                for (let j = 0; j < searchLines.length; j++) {
+                  if (newLines[i + j].trim() !== searchLinesTrimmed[j]) {
+                    match = false;
+                    break;
+                  }
+                }
+                if (match) {
+                  foundLineIndex = i;
+                  break;
+                }
+              }
+              
+              if (foundLineIndex !== -1) {
+                newLines.splice(foundLineIndex, searchLines.length, ...replaceLines);
+                continue; // Next hunk
+              }
+            }
+            
+            throw new Error(`Hunk failed in "${op.file}": Could not find context block.\nSearch:\n${searchBlock}`);
+          }
+
+          // Exact match replacement
+          const before = fileContent.substring(0, index);
+          const after = fileContent.substring(index + searchBlock.length);
+          const newContent = before + replaceLines.join('\n') + after;
+          newLines = newContent.split('\n');
+        }
+
+        // Handle Move
+        if (op.moveTo) {
+          const { absolutePath: newAbsPath, relativePath: newRelPath } = resolveFilePath(workspacePath, op.moveTo);
+          if (fs.existsSync(newAbsPath) && newAbsPath !== absolutePath) {
+             throw new Error(`Cannot move to "${op.moveTo}": Destination already exists.`);
+          }
+          
+          // Write to new path
+          fs.writeFileSync(newAbsPath, newLines.join('\n'), 'utf8');
+          // Delete old path
+          fs.unlinkSync(absolutePath);
+          
+          results.push({
+            type: 'update',
+            file: relativePath,
+            moveTo: newRelPath,
+            summary: `Update file ${relativePath} (move to ${newRelPath})`
+          });
+        } else {
+          // Just update
+          fs.writeFileSync(absolutePath, newLines.join('\n'), 'utf8');
+          results.push({
+            type: 'update',
+            file: relativePath,
+            summary: `Update file ${relativePath}`
+          });
+        }
+      }
+    }
+
+    return {
+      success: true,
+      results
+    };
+
+  } catch (error) {
+    // ROLLBACK
+    console.error("Patch failed, rolling back...", error);
+    for (const backup of backups.reverse()) {
+      try {
+        if (backup.exists) {
+          // Restore file
+          // Ensure directory exists
+          const dir = path.dirname(backup.path);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(backup.path, backup.content, 'utf8');
+        } else {
+          // File didn't exist, so delete it if it was created
+          if (fs.existsSync(backup.path)) {
+            fs.unlinkSync(backup.path);
+          }
+        }
+      } catch (rollbackError) {
+        console.error(`Rollback failed for ${backup.path}:`, rollbackError);
+      }
+    }
+
+    throw error; // Re-throw to be handled by caller
+  }
+}
+
 module.exports = {
   parseSetOperations,
   applySetOperations,
+  parsePatch,
+  applyPatch
 };
+

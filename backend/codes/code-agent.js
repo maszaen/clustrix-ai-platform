@@ -4,11 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { PowerShellSession } = require('./powershell-session');
-const {
-  parseSetOperations,
-  applySetOperations,
-  applyPatch
-} = require('./edit-operations');
+const { applySetOperations } = require('./edit-operations');
 const { joinEndpoint } = require('../integration/langchain-helpers');
 const { getRipgrepPath } = require('../../utils/ripgrep-path');
 const {
@@ -501,7 +497,7 @@ function formatMemoryOutput(state) {
         for (const range of fileData.ranges) {
           for (let i = 0; i < range.lines.length; i++) {
             const lineNum = range.start + i;
-            output.push(`${lineNum}:${range.lines[i]}`);
+            output.push(`${lineNum}: ${range.lines[i]}`);
           }
 
           // Show gap indicator if there's a next range
@@ -1359,12 +1355,10 @@ function formatTodo(todoText) {
   // Parse todo checklist into structured format
   if (!todoText) return null;
 
-  const lines = todoText.split('\n');
+  const lines = todoText.split('\n').filter(line => line.trim().startsWith('-'));
   const items = lines.map(line => {
-    const trimmed = line.trim();
-    // V2: Support - [ ] and [ ] formats
-    // Match: optional dash, optional space, [status], space, text
-    const match = trimmed.match(/^(?:-\s*)?\[([ xX\/])\]\s*(.+)$/);
+    // V2: Support [ ] [x] [/]
+    const match = line.match(/^-\s*\[([ xX\/])\]\s*(.+)$/);
     if (match) {
       return {
         checked: match[1].toLowerCase() === 'x',
@@ -1806,13 +1800,13 @@ async function runAgentIteration({
   });
 
   // Debug: Log processed prompt for each iteration
-  // console.log('\n\n<==>===== CODE AGENT ITERATION #' + iteration + ' - SYSTEM PROMPT =====<==>');
-  // console.log(systemPrompt.trim());
-  // console.log('<==>===== END SYSTEM PROMPT =====<==>\n\n');
+  console.log('\n\n<==>===== CODE AGENT ITERATION #' + iteration + ' - SYSTEM PROMPT =====<==>');
+  console.log(systemPrompt.trim());
+  console.log('<==>===== END SYSTEM PROMPT =====<==>\n\n');
 
-  // console.log('\n\n<==>===== CODE AGENT ITERATION #' + iteration + ' - USER PROMPT =====<==>');
-  // console.log(userContext.trim());
-  // console.log('<==>===== END USER PROMPT =====<==>\n\n');
+  console.log('\n\n<==>===== CODE AGENT ITERATION #' + iteration + ' - USER PROMPT =====<==>');
+  console.log(userContext.trim());
+  console.log('<==>===== END USER PROMPT =====<==>\n\n');
 
   let finalSystemPrompt = systemPrompt;
   const isClaude = model.toLowerCase().includes('claude');
@@ -1872,11 +1866,6 @@ async function runAgentIteration({
 
     usage = response.usage;
     
-    // DEBUG: Log RAW response content
-    console.log('\n\n<==>===== CLAUDE RAW RESPONSE =====<==>');
-    console.log(JSON.stringify(response.content, null, 2));
-    console.log('<==>===== END CLAUDE RAW RESPONSE =====<==>\n\n');
-    
     // Find tool use
     const toolUseBlock = response.content.find(c => c.type === 'tool_use' && c.name === 'agent_response');
     
@@ -1925,12 +1914,6 @@ async function runAgentIteration({
     });
 
     usage = response.usage;
-    
-    // DEBUG: Log RAW response content
-    console.log('\n\n<==>===== OPENAI RAW RESPONSE =====<==>');
-    console.log(response.content);
-    console.log('<==>===== END OPENAI RAW RESPONSE =====<==>\n\n');
-
     parsed = parseAgentResponse(response.content || '');
 
     // Store assistant's response in conversation history
@@ -2083,74 +2066,6 @@ async function executeCommand(state, command, options = {}) {
   }
 
   try {
-    // Handle Patch Operation
-    if (command.includes('*** Begin Patch')) {
-      const patchResult = applyPatch(command, { workspacePath: state.workspacePath || process.cwd() });
-      if (!patchResult.success) {
-        return {
-          output: patchResult.results.map(r => r.error).join('\n') || 'Patch operation failed.',
-          exitCode: 1,
-          blocked: false,
-          executed: false,
-        };
-      }
-
-      patchResult.results.forEach(file => {
-        // Clear old memory for this file
-        clearFileFromMemories(state, file.filePath);
-
-        // Update memory with entire edited file content
-        const fs = require('fs');
-        const path = require('path');
-        try {
-          const fullPath = path.resolve(state.workspacePath || process.cwd(), file.filePath);
-          if (fs.existsSync(fullPath)) {
-            const content = fs.readFileSync(fullPath, 'utf8');
-            const lines = content.split(/\r?\n/);
-            // Add entire file to memory (start from line 1)
-            addToMemory(state, file.filePath, 1, lines.length, lines, state.currentMemory, memoryOwnerId, lines.length);
-
-            log('CODES', 3, 'executeCommand', 'Updated memory with full file after patch', {
-              filePath: file.filePath,
-              totalLines: lines.length,
-              memoryName: state.currentMemory
-            });
-          }
-        } catch (error) {
-          log('CODES', 2, 'executeCommand', 'Failed to update memory after patch', {
-            filePath: file.filePath,
-            error: error.message
-          });
-        }
-
-        if (!Array.isArray(state.editHistory)) {
-          state.editHistory = [];
-        }
-        file.history.forEach(entry => {
-          state.editHistory.push({
-            ...entry,
-            filePath: file.filePath,
-          });
-        });
-
-        if (state.editHistory.length > 100) {
-          state.editHistory = state.editHistory.slice(-100);
-        }
-      });
-
-      // Clean memory corruption after edit operations
-      cleanMemoryCorruption(state);
-
-      return {
-        output: patchResult.results.map(r => r.summary).join('\n'),
-        exitCode: 0,
-        blocked: false,
-        executed: true,
-        patchResults: patchResult.results, // Return patch results for detailed formatting
-      };
-    }
-
-    // Handle Set Operations
     const editResult = applySetOperations(command, { workspacePath: state.workspacePath || process.cwd() });
     if (editResult) {
       if (!editResult.success) {
@@ -2726,18 +2641,12 @@ async function processCodeRequest({
     let loopDetectedOutput = null;
 
     // CLEAN COMMAND INPUT:
-    // 1. If command contains *** Begin Patch, it's a patch operation.
-    // 2. If command contains <set> tags, strip everything else (legacy support).
-    // 3. If command contains <cmd> tags, extract and merge them.
+    // 1. If command contains <set> tags, strip everything else (prioritize file edits).
+    //    This fixes "Commands mixing <set> tags..." and removes conversational filler.
+    // 2. If command contains <cmd> tags (but no <set>), extract and merge them.
+    //    This fixes cases where Claude wraps commands in <cmd> tags inside the tool argument.
     if (parsed.command) {
-      if (parsed.command.includes('*** Begin Patch')) {
-        // Keep the patch content as is, but maybe trim surrounding whitespace
-        // Ensure we capture from Begin to End
-        const patchMatch = parsed.command.match(/(\*\*\* Begin Patch[\s\S]*?\*\*\* End Patch)/);
-        if (patchMatch) {
-          parsed.command = patchMatch[1];
-        }
-      } else if (parsed.command.includes('<set')) {
+      if (parsed.command.includes('<set')) {
         const setMatches = parsed.command.match(/<set\s+[^>]*?>[\s\S]*?<\/set>/gi);
         if (setMatches) {
           parsed.command = setMatches.join('\n');

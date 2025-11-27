@@ -54,7 +54,7 @@ function Show-FileWithLineNumbers {
     
     for ($i = $startIdx; $i -le $endIdx; $i++) {
         $lineNum = $i + 1
-        Write-Output ("{0:D3}:{1}" -f $lineNum, $lines[$i])
+        Write-Output ("{0:D3}: {1}" -f $lineNum, $lines[$i])
     }
 
     # Add total line count and indication if there are more lines
@@ -818,7 +818,7 @@ function Search-InFiles {
         [string]$Pattern,
 
         [Parameter(Mandatory=$false)]
-        [string[]]$Path = ".",
+        [string]$Path = ".",
 
         [Parameter(Mandatory=$false)]
         [string]$Filter = "*.*",
@@ -1006,6 +1006,9 @@ function Search-InFiles {
     }
 
     if ($rgAvailable) {
+        # Use ripgrep for ultra-fast search
+        Write-Output "Using ripgrep (fast search)..."
+
         try {
             # Build ripgrep command
             $rgArgs = @(
@@ -1355,17 +1358,17 @@ function Find-Pattern {
             # Show context before
             if ($match.Context.PreContext) {
                 foreach ($line in $match.Context.PreContext) {
-                    Write-Output "$line"
+                    Write-Output "  $line"
                 }
             }
 
             # Show matching line (highlighted)
-            Write-Output "$($match.Line.Trim())"
+            Write-Output ">>> $($match.Line.Trim())"
 
             # Show context after
             if ($match.Context.PostContext) {
                 foreach ($line in $match.Context.PostContext) {
-                    Write-Output "$line"
+                    Write-Output "  $line"
                 }
             }
 

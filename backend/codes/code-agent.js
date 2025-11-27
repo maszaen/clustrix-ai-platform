@@ -1429,6 +1429,161 @@ function ensureDirectoryExists(workspacePath) {
   return null;
 }
 
+const CLAUDE_TOOLS = [
+  {
+    name: "agent_response",
+    description: "Submit your response, including state, internal thought, checklist, answer to user, and command to execute.",
+    input_schema: {
+      type: "object",
+      properties: {
+        state: {
+          type: "string",
+          enum: ["EXPLORE", "EDIT", "EXECUTE", "VERIFY", "DONE"],
+          description: "Current state of the agent."
+        },
+        hidden: {
+          type: "string",
+          description: "Internal thought process and analysis. REQUIRED for all states except DONE."
+        },
+        checklist: {
+          type: "string",
+          description: "Markdown checklist of tasks: [ ] pending, [/] in-progress, [x] done."
+        },
+        answer: {
+          type: "string",
+          description: "Response to show to the user. Optional in EXPLORE/EXECUTE, required in EDIT/VERIFY/DONE."
+        },
+        command: {
+          type: "string",
+          description: "PowerShell command to execute. Optional."
+        },
+        saved_state: {
+          type: "string",
+          description: "Next state to save for future sessions (only for DONE state)."
+        },
+        summary: {
+           type: "string",
+           description: "Summary of the command execution (optional)."
+        }
+      },
+      required: ["state", "checklist"]
+    },
+    cache_control: { type: "ephemeral" } // Cache the tool definition
+  }
+];
+
+async function callClaudeChat({ baseUrl, apiKey, model, messages, tools }) {
+  if (!baseUrl) {
+    return Promise.reject(new Error('Base URL is required for code agent requests.'));
+  }
+  if (!model) {
+    return Promise.reject(new Error('Model ID is required for code agent requests.'));
+  }
+
+  return new Promise((resolve, reject) => {
+    let parsedUrl;
+    try {
+      // Anthropic API usually uses /v1/messages
+      // If the user provides a custom baseUrl (e.g. OpenRouter), it might differ.
+      // But for "model id claude", we assume standard Anthropic or compatible.
+      // If baseUrl ends with /v1, we use /v1/messages.
+      // If it's just the host, we append /v1/messages.
+      
+      // Handle OpenRouter or other proxies that might use OpenAI format for Claude?
+      // The user said "create our own system for model id claude", implying native Anthropic format.
+      // But if the baseUrl is e.g. https://openrouter.ai/api/v1, we should append /messages?
+      // Or maybe the user expects us to use the OpenAI-compatible endpoint even for Claude?
+      // No, "ceks dokumentasi dari claude... cara dia mengirimkan setiap iteration".
+      // This implies using the Messages API format.
+      
+      let endpoint = 'messages';
+      if (baseUrl.endsWith('/')) {
+        endpoint = 'messages';
+      } else if (!baseUrl.endsWith('/v1')) {
+         // If base url doesn't end in v1, assume we need to add it? 
+         // Safest is to use joinEndpoint logic but specific for Anthropic
+         // But let's assume the baseUrl provided is the root API url.
+      }
+      
+      // For now, let's assume baseUrl points to the API root (e.g. https://api.anthropic.com/v1)
+      parsedUrl = new URL(joinEndpoint(baseUrl, endpoint));
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    // Extract system message from messages array if present
+    let systemPrompt = '';
+    const apiMessages = [];
+    
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        systemPrompt = msg.content;
+      } else {
+        apiMessages.push(msg);
+      }
+    }
+
+    const bodyObj = {
+      model,
+      messages: apiMessages,
+      system: [
+        {
+          type: 'text',
+          text: systemPrompt,
+          cache_control: { type: 'ephemeral' } // Cache the system prompt
+        }
+      ],
+      max_tokens: 4096, // Claude supports large output
+      tools: tools,
+      tool_choice: { type: "tool", name: "agent_response" }, // Force the tool use
+    };
+    
+    const body = JSON.stringify(bodyObj);
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Length': Buffer.byteLength(body)
+    };
+
+    const options = {
+      method: 'POST',
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port,
+      path: parsedUrl.pathname + parsedUrl.search,
+      protocol: parsedUrl.protocol,
+      headers,
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          return reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage || ''} — ${data.slice(0, 200)}`));
+        }
+        try {
+          const json = JSON.parse(data);
+          resolve({
+            content: json.content, // Array of content blocks
+            usage: json.usage || null,
+            stop_reason: json.stop_reason,
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
 function callOpenAICompatibleChat({ baseUrl, provider, apiKey, model, messages }) {
   if (!baseUrl) {
     return Promise.reject(new Error('Base URL is required for code agent requests.'));
@@ -1653,13 +1808,28 @@ async function runAgentIteration({
   console.log(userContext.trim());
   console.log('<==>===== END USER PROMPT =====<==>\n\n');
 
+  let finalSystemPrompt = systemPrompt;
+  const isClaude = model.toLowerCase().includes('claude');
+
+  if (isClaude) {
+    // Adjust system prompt for Claude to prefer tool use over XML tags
+    finalSystemPrompt = finalSystemPrompt
+      .replace(/=== RESPONSE FORMAT ===[\s\S]*?=== STATE MACHINE ===/, '=== RESPONSE FORMAT ===\nUse the `agent_response` tool to submit your output. Do not use XML tags.\n\n=== STATE MACHINE ===')
+      .replace(/<state>.*?<\/state>/g, '`state` parameter')
+      .replace(/<hidden>.*?<\/hidden>/g, '`hidden` parameter')
+      .replace(/<checklist>.*?<\/checklist>/g, '`checklist` parameter')
+      .replace(/<answer>.*?<\/answer>/g, '`answer` parameter')
+      .replace(/<cmd>.*?<\/cmd>/g, '`command` parameter')
+      .replace(/<!END>/g, 'DONE state');
+  }
+
   // Build messages array - OPTIMIZED for token efficiency
   let messages;
 
   if (iteration === 0) {
     // First iteration OF THIS REQUEST
     messages = [
-      { role: 'system', content: systemPrompt.trim() },
+      { role: 'system', content: finalSystemPrompt.trim() },
       { role: 'user', content: userContext }, // User Context + Request
     ];
 
@@ -1670,50 +1840,110 @@ async function runAgentIteration({
   } else {
     // Subsequent iterations: rebuild messages with CURRENT system prompt
     // Include: system + conversationHistory (current request iterations)
-    // IMPORTANT: We need to update the LAST user message with the FRESH context?
-    // Or just append a new context message?
-    // Since conversationHistory tracks the *current request* turns, the first message in it is the User Request.
-    // But we want the context to be fresh.
-    // If we update state.conversationHistory[0], it updates the "User Request" context.
-    // But if we are deep in iteration, the "User Request" might be far back.
-    // Ideally, we want the context to be "near" the end.
-    // But we can't easily insert a user message in the middle without confusing the model (User -> Assistant -> User -> Assistant).
-    // So updating the FIRST message (User Request) with the LATEST context is a common pattern (RAG).
-
+    
     // Update the content of the first user message in history with the fresh context
     if (state.conversationHistory.length > 0 && state.conversationHistory[0].role === 'user') {
       state.conversationHistory[0].content = userContext;
     }
 
     messages = [
-      { role: 'system', content: systemPrompt.trim() },
+      { role: 'system', content: finalSystemPrompt.trim() },
       ...state.conversationHistory, // Current request's iteration history
     ];
   }
 
-  const response = await callOpenAICompatibleChat({
-    baseUrl,
-    provider,
-    apiKey,
-    model,
-    messages,
-  });
+  let parsed;
+  let usage;
 
-  // V2: Log messages sent to LLM for debugging conversation history
-  // console.log('\n\n=== MESSAGES SENT TO LLM (Iteration #' + iteration + ') ===');
-  // console.log('Total messages:', messages.length);
-  // messages.forEach((msg, idx) => {
-  //   const preview = msg.content.substring(0, 150).replace(/\n/g, ' ');
-  //   console.log(`[${idx}] ${msg.role}: ${preview}${msg.content.length > 150 ? '...' : ''}`);
-  // });
-  // console.log('=== END MESSAGES ===\n');
+  if (isClaude) {
+    const response = await callClaudeChat({
+      baseUrl,
+      apiKey,
+      model,
+      messages,
+      tools: CLAUDE_TOOLS,
+    });
 
-  // // V2: Log raw AI response for debugging
-  // console.log('\n\n=== CODE AGENT ITERATION #' + iteration + ' - RAW AI RESPONSE ===');
-  // console.log(response.content || '(empty response)');
-  // console.log('=== END RAW AI RESPONSE ===\n');
+    usage = response.usage;
+    
+    // Find tool use
+    const toolUseBlock = response.content.find(c => c.type === 'tool_use' && c.name === 'agent_response');
+    
+    if (toolUseBlock) {
+      const args = toolUseBlock.input;
+      parsed = {
+        hidden: args.hidden,
+        answer: args.answer,
+        command: args.command,
+        state: args.state,
+        savedState: args.saved_state,
+        done: args.state === 'DONE',
+        todo: null, // Checklist is preferred
+        checklist: args.checklist,
+        summary: args.summary,
+        toolUseId: toolUseBlock.id, // Capture ID for tool_result
+      };
+      
+      // Store assistant's tool use in conversation history
+      state.conversationHistory.push({
+        role: 'assistant',
+        content: response.content, // Store full content blocks
+      });
+      
+    } else {
+      // Fallback if Claude didn't use tool (rare with tool_choice forced)
+      // Try to parse text content if any
+      const textBlock = response.content.find(c => c.type === 'text');
+      const text = textBlock ? textBlock.text : '';
+      parsed = parseAgentResponse(text);
+      
+      // Store as text message
+      state.conversationHistory.push({
+        role: 'assistant',
+        content: text,
+      });
+    }
 
-  const parsed = parseAgentResponse(response.content || '');
+  } else {
+    const response = await callOpenAICompatibleChat({
+      baseUrl,
+      provider,
+      apiKey,
+      model,
+      messages,
+    });
+
+    usage = response.usage;
+    parsed = parseAgentResponse(response.content || '');
+
+    // Store assistant's response in conversation history
+    // V2: Store CLEANED response (no control tags) to prevent tag leaking
+    // Only store the answer that user actually sees, not internal tags
+    // DON'T add "Command executed: X" - it makes AI mimic that format
+    if (parsed.answer && parsed.answer.trim()) {
+      state.conversationHistory.push({
+        role: 'assistant',
+        content: parsed.answer,
+      });
+    } else if (!parsed.answer && !parsed.command && response.content) {
+      // Fallback: if no parsed answer/command, store raw (for unstructured responses)
+      // But still strip all V2 tags to prevent leaking
+      const strippedContent = response.content
+        .replace(/<hidden>[\s\S]*?<\/hidden>/gi, '')
+        .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
+        .replace(/<answer>[\s\S]*?<\/answer>/gi, '')
+        .replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '')
+        .replace(/<!END>/gi, '')
+        .trim();
+
+      if (strippedContent) {
+        state.conversationHistory.push({
+          role: 'assistant',
+          content: strippedContent,
+        });
+      }
+    }
+  }
 
   // V2: Log parsed response structure for debugging
   console.log('===== PARSED RESPONSE =====');
@@ -1726,6 +1956,7 @@ async function runAgentIteration({
   console.log('Todo:', parsed.todo ? 'present' : 'null');
   console.log('Checklist:', parsed.checklist ? 'present' : 'null');
   console.log('Summary:', parsed.summary ? 'present' : 'null');
+  console.log('ToolUseId:', parsed.toolUseId || 'null');
   console.log('===== END PARSED RESPONSE =====\n\n');
 
   // Update current state based on AI declaration
@@ -1741,37 +1972,9 @@ async function runAgentIteration({
     state.lastChecklist = parsed.checklist;
   }
 
-  // Store assistant's response in conversation history
-  // V2: Store CLEANED response (no control tags) to prevent tag leaking
-  // Only store the answer that user actually sees, not internal tags
-  // DON'T add "Command executed: X" - it makes AI mimic that format
-  if (parsed.answer && parsed.answer.trim()) {
-    state.conversationHistory.push({
-      role: 'assistant',
-      content: parsed.answer,
-    });
-  } else if (!parsed.answer && !parsed.command && response.content) {
-    // Fallback: if no parsed answer/command, store raw (for unstructured responses)
-    // But still strip all V2 tags to prevent leaking
-    const strippedContent = response.content
-      .replace(/<hidden>[\s\S]*?<\/hidden>/gi, '')
-      .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
-      .replace(/<answer>[\s\S]*?<\/answer>/gi, '')
-      .replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '')
-      .replace(/<!END>/gi, '')
-      .trim();
-
-    if (strippedContent) {
-      state.conversationHistory.push({
-        role: 'assistant',
-        content: strippedContent,
-      });
-    }
-  }
-
   return {
     parsed,
-    usage: response.usage,
+    usage,
   };
 }
 
@@ -2325,7 +2528,7 @@ async function processCodeRequest({
       assistantMessage.push(`<cmd>${parsed.command}</cmd>`);
     }
 
-    if (assistantMessage.length > 0) {
+    if (assistantMessage.length > 0 && !parsed.toolUseId) {
       state.conversationHistory.push({
         role: 'assistant',
         content: assistantMessage.join('\n'),
@@ -2436,6 +2639,26 @@ async function processCodeRequest({
     }
 
     let loopDetectedOutput = null;
+
+    // CLEAN COMMAND INPUT:
+    // 1. If command contains <set> tags, strip everything else (prioritize file edits).
+    //    This fixes "Commands mixing <set> tags..." and removes conversational filler.
+    // 2. If command contains <cmd> tags (but no <set>), extract and merge them.
+    //    This fixes cases where Claude wraps commands in <cmd> tags inside the tool argument.
+    if (parsed.command) {
+      if (parsed.command.includes('<set')) {
+        const setMatches = parsed.command.match(/<set\s+[^>]*?>[\s\S]*?<\/set>/gi);
+        if (setMatches) {
+          parsed.command = setMatches.join('\n');
+        }
+      } else if (parsed.command.includes('<cmd>')) {
+        const cmdMatches = parsed.command.match(/<cmd>([\s\S]*?)<\/cmd>/gi);
+        if (cmdMatches) {
+          // Extract content from <cmd> tags
+          parsed.command = cmdMatches.map(m => m.replace(/<\/?cmd>/g, '')).join('\n');
+        }
+      }
+    }
 
     // SMART FILE READ DETECTION: Check if trying to read file that's already fully in memory
     if (parsed.command) {
@@ -2598,13 +2821,27 @@ async function processCodeRequest({
       // V2: Use SIMPLE format to avoid confusing AI (no markdown code blocks!)
       // Use 'older' mode for truncation (max 10 lines) to keep context concise
       const feedbackMessage = exitCode === 0
-        ? `[RESULT] Command successful.\n${truncateOutput(output, 'older')}`
-        : `[ERROR] Command failed (exit ${exitCode}).\n${truncateOutput(output, 'older')}`;
+        ? `[SYSTEM] Command executed successfully.\nOutput:\n${output}`
+        : `[SYSTEM] Command failed with exit code ${exitCode}.\nError Output:\n${output}`;
 
-      state.conversationHistory.push({
-        role: 'user',
-        content: feedbackMessage,
-      });
+      if (parsed.toolUseId) {
+        // Claude Tool Result
+        state.conversationHistory.push({
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: parsed.toolUseId,
+              content: feedbackMessage
+            }
+          ]
+        });
+      } else {
+        state.conversationHistory.push({
+          role: 'user',
+          content: feedbackMessage,
+        });
+      }
 
       // INTERNAL STATE TRANSITION: Update state based on command type and result
       if (exitCode === 0) {

@@ -180,17 +180,18 @@ Common Commands:
 
 Gunakan <hidden> untuk analisis hasil.
 Gunakan <answer> untuk report ke user.
+Gunakan <state> untuk berpindah state.
 
 STATE TRANSITIONS:
   - Ada bug → ke EDIT (jangan baca file lagi, langsung fix)
-  - Jika semua pass langsung ke <state>DONE<state>
-  - Atau jika semua pass langsung tambahkan <!END> tag di akhir untuk mengakhiri`,
+  - Jika semua pass langsung ke DONE state
+  - Atau jika semua pass langsung tambahkan <!END> di akhir untuk mengakhiri`,
 
   [AGENT_STATES.DONE]: `DONE STATE - Task Complete
 
 Summarize semua yang sudah dikerjakan di <answer>.
 Tambah <saved_state> dengan next state untuk future work.
-Tambah <!END> tag.
+Jangan lupa <!END>.
 JANGAN ada command baru di state ini.`,
 };
 
@@ -218,7 +219,7 @@ Choose your next state:
 3. Pakai <checklist> untuk track progress: [ ] pending, [/] current, [x] done
 4. CEK <memory_view> SEBELUM baca file - jangan duplicate!
 5. JANGAN pakai Get-ChildItem -Recurse (pakai Search-InFiles)
-6. <!END> tag HANYA di DONE state
+6. <!END> HANYA di DONE state
 7. Untuk file BARU: New-Item -ItemType File -Path "path/file.js" -Force dulu
 8. JANGAN pakai Get-Content/cat/type - pakai Show-FileWithLineNumbers
 

@@ -180,6 +180,26 @@ function transformSingleCommand(commandText) {
     }
   }
 
+  // PowerShell heredoc with Out-File (@'...'@ | Out-File -FilePath "file.js")
+  if (cmd.match(/^@['"][\s\S]*['"]@\s*\|\s*Out-File/i) || cmd.match(/Out-File\s+-FilePath/i)) {
+    const fileMatch = cmd.match(/-FilePath\s+["']([^"']+)["']/i) || cmd.match(/-FilePath\s+(\S+)/i);
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      return `Write <strong>${filename}</strong>`;
+    }
+    return 'Write file';
+  }
+
+  // PowerShell Set-Content with heredoc (@'...'@ | Set-Content "file.js")
+  if (cmd.match(/^@['"][\s\S]*['"]@\s*\|\s*Set-Content/i)) {
+    const fileMatch = cmd.match(/Set-Content\s+["']([^"']+)["']/i) || cmd.match(/Set-Content\s+-Path\s+["']([^"']+)["']/i);
+    if (fileMatch) {
+      const filename = getFilename(fileMatch[1]);
+      return `Write <strong>${filename}</strong>`;
+    }
+    return 'Write file';
+  }
+
   // PowerShell helper functions
   if (cmd.match(/^Show-FileWithLineNumbers/i)) {
     const path = getPath();

@@ -17,6 +17,7 @@ const {
   formatCommandHistory,
   getErrorGuidance,
 } = require('./codes-prompt');
+const { processClaudeCodeRequest } = require('./code-agent-claude');
 const MAX_ITERATIONS = 200;
 const MAX_HISTORY = 50;
 const MAX_OUTPUT_LINES = 10000; // Increased from 100 to 10000 for full output
@@ -1464,6 +1465,10 @@ const CLAUDE_TOOLS = [
           type: "string",
           description: "Next state to save for future sessions (only for DONE state)."
         },
+        end: {
+          type: "boolean",
+          description: "Explicitly marks this response as terminal/finished; if true, this indicates no further iterations are required.",
+        },
         summary: {
            type: "string",
            description: "Summary of the command execution (optional)."
@@ -1817,13 +1822,13 @@ async function runAgentIteration({
   if (isClaude) {
     // Adjust system prompt for Claude to prefer tool use over XML tags
     finalSystemPrompt = finalSystemPrompt
-      .replace(/=== RESPONSE FORMAT ===[\s\S]*?=== STATE MACHINE ===/, '=== RESPONSE FORMAT ===\nUse the `agent_response` tool to submit your output. Do not use XML tags.\n\n=== STATE MACHINE ===')
+      .replace(/=== RESPONSE FORMAT ===[\s\S]*?=== STATE MACHINE ===/, '=== RESPONSE FORMAT ===\nUse the `agent_response` tool to submit your output. Do not use XML tags.\nIf you are fully finished and want to end iteration, set the `end` boolean to `true` in the tool input.\n\n=== STATE MACHINE ===')
       .replace(/<state>.*?<\/state>/g, '`state` parameter')
       .replace(/<hidden>.*?<\/hidden>/g, '`hidden` parameter')
       .replace(/<checklist>.*?<\/checklist>/g, '`checklist` parameter')
       .replace(/<answer>.*?<\/answer>/g, '`answer` parameter')
       .replace(/<cmd>.*?<\/cmd>/g, '`command` parameter')
-      .replace(/<!END>/g, 'DONE state');
+      .replace(/<!END>/g, 'set the `end` boolean to `true` in the tool input.');
   }
 
   // Build messages array - OPTIMIZED for token efficiency
@@ -1880,17 +1885,32 @@ async function runAgentIteration({
         command: args.command,
         state: args.state,
         savedState: args.saved_state,
-        done: args.state === 'DONE',
+        // Prefer explicit end boolean; fallback to state === 'DONE' for compatibility
+        done: (typeof args.end === 'boolean' ? args.end : (args.state === 'DONE')),
         todo: null, // Checklist is preferred
         checklist: args.checklist,
         summary: args.summary,
         toolUseId: toolUseBlock.id, // Capture ID for tool_result
       };
+      if (typeof args.end === 'boolean' && args.end) {
+        log('CODES', 1, 'runAgentIteration', 'Claude tool signaled end via end flag', { sessionId, iteration });
+      }
       
       // Store assistant's tool use in conversation history
+      // NOTE: response.content can be structured (array/object). Store as JSON string to keep memory serializable
+      // This prevents un-serializable or circular values from later causing failures when persisting sessions
+      let assistantContent = response.content;
+      try {
+        if (Array.isArray(response.content) || typeof response.content === 'object') {
+          assistantContent = JSON.stringify(response.content);
+        }
+      } catch (e) {
+        // Fallback - store a minimal string representation
+        assistantContent = String(response.content);
+      }
       state.conversationHistory.push({
         role: 'assistant',
-        content: response.content, // Store full content blocks
+        content: assistantContent,
       });
       
     } else {
@@ -1919,33 +1939,38 @@ async function runAgentIteration({
     usage = response.usage;
     parsed = parseAgentResponse(response.content || '');
 
-    // Store assistant's response in conversation history
-    // V2: Store CLEANED response (no control tags) to prevent tag leaking
-    // Only store the answer that user actually sees, not internal tags
-    // DON'T add "Command executed: X" - it makes AI mimic that format
-    if (parsed.answer && parsed.answer.trim()) {
-      state.conversationHistory.push({
-        role: 'assistant',
-        content: parsed.answer,
-      });
-    } else if (!parsed.answer && !parsed.command && response.content) {
-      // Fallback: if no parsed answer/command, store raw (for unstructured responses)
-      // But still strip all V2 tags to prevent leaking
-      const strippedContent = response.content
-        .replace(/<hidden>[\s\S]*?<\/hidden>/gi, '')
-        .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
-        .replace(/<answer>[\s\S]*?<\/answer>/gi, '')
-        .replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '')
-        .replace(/<!END>/gi, '')
-        .trim();
+      // Store assistant's response in conversation history
+      // V2: Store CLEANED response (no control tags) to prevent tag leaking
+      // Only store the answer that user actually sees, not internal tags
+      // DON'T add "Command executed: X" - it makes AI mimic that format
+      const pushAssistantContent = (c) => state.conversationHistory.push({ role: 'assistant', content: c });
 
-      if (strippedContent) {
-        state.conversationHistory.push({
-          role: 'assistant',
-          content: strippedContent,
-        });
+      if (parsed.answer && parsed.answer.trim()) {
+        pushAssistantContent(parsed.answer);
+      } else if (!parsed.answer && !parsed.command && response.content) {
+        // Fallback: if no parsed answer/command, store raw (for unstructured responses)
+        // But still strip all V2 tags to prevent leaking
+        let strippedContent = response.content;
+        try {
+          if (typeof response.content === 'object') {
+            // If it's an object/array, convert to stable string form
+            strippedContent = JSON.stringify(response.content);
+          }
+        } catch (e) {
+          strippedContent = String(response.content);
+        }
+        strippedContent = String(strippedContent)
+          .replace(/<hidden>[\s\S]*?<\/hidden>/gi, '')
+          .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
+          .replace(/<answer>[\s\S]*?<\/answer>/gi, '')
+          .replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '')
+          .replace(/<!END>/gi, '')
+          .trim();
+
+        if (strippedContent) {
+          pushAssistantContent(strippedContent);
+        }
       }
-    }
   }
 
   // V2: Log parsed response structure for debugging

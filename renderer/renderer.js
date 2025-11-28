@@ -13051,13 +13051,28 @@ function createStreamHandler(streamId, text, isFirstInteraction = false) {
           modelInfo.thinkingUpdate = session._x_think_updates[messageIndex];
         }
 
-        session.messages[messageIndex] = ["ai", finalMessageToSave, modelInfo];
+        // Ensure modelInfo is JSON-serializable when saving to DB
+        const sanitizeModelInfo = (info) => {
+          try {
+            return info ? JSON.parse(JSON.stringify(info)) : {};
+          } catch (err) {
+            if (!info || typeof info !== 'object') return {};
+            const safe = {};
+            const allowed = ['model', 'provider', 'modelLabel', 'webSearchPages', 'thinkContent', 'thinkingUpdate'];
+            for (const k of allowed) {
+              if (k in info) safe[k] = info[k];
+            }
+            return safe;
+          }
+        };
+        const safeModelInfo = sanitizeModelInfo(modelInfo);
+        session.messages[messageIndex] = ["ai", finalMessageToSave, safeModelInfo];
 
         // Track updated message for incremental save
         if (!session._newMessages) {
           session._newMessages = [];
         }
-        session._newMessages.push([messageIndex, ["ai", finalMessageToSave, modelInfo]]);
+        session._newMessages.push([messageIndex, ["ai", finalMessageToSave, safeModelInfo]]);
         markSessionDirty(session.id);
 
         log(

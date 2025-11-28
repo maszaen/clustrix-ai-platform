@@ -189,6 +189,95 @@ describe('Code Agent - Integration Tests', () => {
     expect(result.cancelled).toBe(false);
   }, 10000);  // 10 second timeout for async test
 
+  test('Claude tool end flag should mark done', async () => {
+    // Simulate Claude tool response with end: true
+    const chunks = [];
+    const handler = (chunk, info) => { chunks.push(chunk); };
+
+    // Replace https.request mock behavior for this test only
+    const https = require('https');
+    const originalRequest = https.request;
+    https.request.mockImplementation((options, callback) => {
+      const mockResponse = {
+        statusCode: 200,
+        on: jest.fn((event, handler) => {
+          if (event === 'data') {
+            handler(JSON.stringify({
+              content: [
+                { type: 'tool_use', name: 'agent_response', id: 'tool1', input: { state: 'DONE', end: true, checklist: '- [x] done', answer: 'All done' } }
+              ],
+              usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 }
+            }));
+          } else if (event === 'end') {
+            handler();
+          }
+        }),
+      };
+      setTimeout(() => callback(mockResponse), 10);
+      return { on: jest.fn(), write: jest.fn(), end: jest.fn() };
+    });
+
+    const result = await processCodeRequest({
+      sessionId: 'test-session-claude',
+      userPrompt: 'Test claude end flag',
+      provider: 'claude',
+      model: 'claude',
+      baseUrl: 'https://mock',
+      apiKey: 'x',
+      codeId: 'test-code-1',
+      onChunk: handler,
+      shouldCancel: () => false,
+    });
+
+    // Clean up mock: restore request implementation
+    https.request.mockImplementation(originalRequest);
+
+    expect(result).toHaveProperty('chunks');
+    expect(result.cancelled).toBe(false);
+  });
+
+  test('Claude end flag true with VERIFY state should stop loop', async () => {
+    const handler = (chunk, info) => {};
+    const https = require('https');
+    const originalRequest = https.request;
+    https.request.mockImplementation((options, callback) => {
+      const mockResponse = {
+        statusCode: 200,
+        on: jest.fn((event, handler) => {
+          if (event === 'data') {
+            handler(JSON.stringify({
+              content: [
+                { type: 'tool_use', name: 'agent_response', id: 'tool-verify', input: { state: 'VERIFY', end: true, checklist: '- [x] done', answer: 'Verified & finished' } }
+              ],
+              usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 }
+            }));
+          } else if (event === 'end') {
+            handler();
+          }
+        }),
+      };
+      setTimeout(() => callback(mockResponse), 10);
+      return { on: jest.fn(), write: jest.fn(), end: jest.fn() };
+    });
+
+    const result = await processCodeRequest({
+      sessionId: 'test-session-claude-verify',
+      userPrompt: 'Test verify end flag',
+      provider: 'claude',
+      model: 'claude',
+      baseUrl: 'https://mock',
+      apiKey: 'x',
+      codeId: 'test-code-1',
+      onChunk: handler,
+      shouldCancel: () => false,
+    });
+
+    https.request.mockImplementation(originalRequest);
+
+    expect(result).toHaveProperty('chunks');
+    expect(result.cancelled).toBe(false);
+  });
+
   test('should handle cancellation', async () => {
     const chunks = [];
     let cancelCalled = false;

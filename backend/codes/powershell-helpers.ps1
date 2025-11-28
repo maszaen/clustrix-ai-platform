@@ -54,7 +54,7 @@ function Show-FileWithLineNumbers {
     
     for ($i = $startIdx; $i -le $endIdx; $i++) {
         $lineNum = $i + 1
-        Write-Output ("{0:D3}: {1}" -f $lineNum, $lines[$i])
+        Write-Output ("{0}:{1}" -f $lineNum, $lines[$i])
     }
 
     # Add total line count and indication if there are more lines
@@ -405,11 +405,10 @@ function Search-FileWithContext {
             $startIdx = [Math]::Max(0, $i - $ContextBefore)
             $endIdx = [Math]::Min($totalLines - 1, $i + $ContextAfter)
 
-            Write-Output "--- Match at line $lineNum ---"
+            Write-Output "/$Path"
             for ($j = $startIdx; $j -le $endIdx; $j++) {
                 $num = $j + 1
-                $prefix = if ($j -eq $i) { ">>>" } else { "   " }
-                Write-Output ("{0} {1:D3}: {2}" -f $prefix, $num, $lines[$j])
+                Write-Output ("{0}:{1}" -f $num, $lines[$j])
             }
             Write-Output ""
         }
@@ -464,7 +463,7 @@ function Get-FileLineRange {
             Write-Output "=== Lines $start-$end ==="
             for ($i = $start - 1; $i -lt $end; $i++) {
                 $lineNum = $i + 1
-                Write-Output ("{0:D3}: {1}" -f $lineNum, $lines[$i])
+                Write-Output ("{0}:{1}" -f $lineNum, $lines[$i])
             }
             Write-Output ""
         } else {
@@ -1069,7 +1068,7 @@ function Search-InFiles {
                         $fileIndex = 0
                         foreach ($entry in $matchesByFile.GetEnumerator()) {
                             $fileIndex++
-                            Write-Output $entry.Key
+                            Write-Output "/$($entry.Key)"
                             $sortedMatches = $entry.Value | Sort-Object LineNumber
                             foreach ($match in $sortedMatches) {
                                 Write-Output ("{0}:{1}" -f $match.LineNumber, $match.Content)
@@ -1144,7 +1143,7 @@ function Search-InFiles {
         foreach ($group in $groupedMatches) {
             $groupIndex++
             $relativePath = Resolve-Path -Relative $group.Name
-            Write-Output $relativePath
+            Write-Output "/$relativePath"
 
             foreach ($match in $group.Group) {
                 if ($match.Context -and $match.Context.PreContext) {
@@ -1273,10 +1272,10 @@ function Search-InFiles {
         $groupedMatches = $allMatches | Group-Object -Property Path
         foreach ($group in $groupedMatches) {
             $relativePath = Resolve-Path -Relative $group.Name
-            Write-Output "=== $relativePath ==="
-
+            Write-Output "/$relativePath"
+            
             foreach ($match in $group.Group) {
-                Write-Output "Line $($match.LineNumber): $($match.Line.Trim())"
+                Write-Output ("{0}:{1}" -f $match.LineNumber, $match.Line.Trim())
 
                 if ($Context -gt 0 -and $match.Context) {
                     if ($match.Context.PreContext) {
@@ -1352,27 +1351,29 @@ function Find-Pattern {
         Write-Output "Found $($matches.Count) matches:"
         Write-Output ""
 
+        Write-Output "/$Path"
         foreach ($match in $matches) {
-            Write-Output "--- Line $($match.LineNumber) ---"
-
             # Show context before
             if ($match.Context.PreContext) {
+                $startLine = $match.LineNumber - $match.Context.PreContext.Count
+                $ctxIdx = 0
                 foreach ($line in $match.Context.PreContext) {
-                    Write-Output "  $line"
+                    Write-Output ("{0}:{1}" -f ($startLine + $ctxIdx), $line)
+                    $ctxIdx++
                 }
             }
 
-            # Show matching line (highlighted)
-            Write-Output ">>> $($match.Line.Trim())"
+            # Show matching line
+            Write-Output ("{0}:{1}" -f $match.LineNumber, $match.Line)
 
             # Show context after
             if ($match.Context.PostContext) {
+                $ctxIdx = 1
                 foreach ($line in $match.Context.PostContext) {
-                    Write-Output "  $line"
+                    Write-Output ("{0}:{1}" -f ($match.LineNumber + $ctxIdx), $line)
+                    $ctxIdx++
                 }
             }
-
-            Write-Output ""
         }
     } catch {
         Write-Error "Error searching file: $_"

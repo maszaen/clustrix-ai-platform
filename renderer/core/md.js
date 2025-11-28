@@ -69,7 +69,13 @@ const EMAIL_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" 
 function transformCommandText(commandText) {
   if (!commandText) return commandText;
 
-  const fullCmd = commandText.trim();
+  let fullCmd = commandText.trim();
+  
+  // Handle <cmd>...</cmd> wrapper - extract inner content
+  const cmdWrapperMatch = fullCmd.match(/^<cmd>\s*([\s\S]*?)\s*<\/cmd>$/i);
+  if (cmdWrapperMatch) {
+    fullCmd = cmdWrapperMatch[1].trim();
+  }
 
   // Smart split by pipe - respects quoted strings
   // This prevents splitting on | inside quotes like grep -E "(A|B)"
@@ -1958,6 +1964,11 @@ function transformSingleCommand(commandText) {
       return `Tee output to <strong>${filename}</strong>`;
     }
     return 'Tee output';
+  }
+
+  // If no match but contains XML/HTML-like tags, escape to prevent rendering issues
+  if (cmd.match(/<[a-zA-Z]|<!\[CDATA\[/)) {
+    return esc(cmd);
   }
 
   // If no match, return original command as-is (for compatibility)

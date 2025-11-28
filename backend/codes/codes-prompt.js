@@ -183,7 +183,8 @@ Gunakan <answer> untuk report ke user.
 
 STATE TRANSITIONS:
   - Ada bug → ke EDIT (jangan baca file lagi, langsung fix)
-  - Semua pass → ke DONE`,
+  - Jika semua pass langsung ke <state>DONE<state>
+  - Atau jika semua pass langsung tambahkan <!END> tag di akhir untuk mengakhiri`,
 
   [AGENT_STATES.DONE]: `DONE STATE - Task Complete
 

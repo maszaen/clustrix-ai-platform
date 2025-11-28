@@ -2976,9 +2976,7 @@ ipcMain.on('codes:stream-start', async (event, payload = {}) => {
       shouldCancel: () => controllerState.cancelled,
     });
 
-    if (controllerState.cancelled) {
-      return;
-    }
+
 
     send('done', {
       usage: result.usage || null,

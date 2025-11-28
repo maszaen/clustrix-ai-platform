@@ -215,35 +215,35 @@ function generateUnifiedDiff(originalContent, updatedContent, displayPath) {
       return 'No changes detected.';
     }
 
-    // Replace any appearance of the temporary absolute paths from git's output
-    // with the requested displayPath. Git sometimes prints paths as quoted,
-    // with a/ or b/ prefixes and sometimes uses forward slashes on Windows
-    // (e.g. "a/C:/..."), so we try to account for common variants.
-    const escapeForRegExp = (s) => s.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
-    const backslashPath = escapeForRegExp(originalPath);
-    const backslashUpdated = escapeForRegExp(updatedPath);
-    const forwardPath = escapeForRegExp(originalPath.replace(/\\/g, '/'));
-    const forwardUpdated = escapeForRegExp(updatedPath.replace(/\\/g, '/'));
+    // Clean up git diff output to standard unified diff format
+    // Process line by line for precise control
+    const lines = output.split('\n');
+    const cleanedLines = [];
 
-    const replacers = [
-      new RegExp(backslashPath, 'g'),
-      new RegExp(backslashUpdated, 'g'),
-      new RegExp(forwardPath, 'g'),
-      new RegExp(forwardUpdated, 'g'),
-    ];
-
-    let transformed = output;
-    for (const r of replacers) {
-      transformed = transformed.replace(r, displayPath);
+    for (const line of lines) {
+      // Fix diff --git header line
+      if (line.startsWith('diff --git')) {
+        cleanedLines.push(`diff --git a/${displayPath} b/${displayPath}`);
+      }
+      // Fix --- line
+      else if (line.startsWith('---')) {
+        cleanedLines.push(`--- a/${displayPath}`);
+      }
+      // Fix +++ line
+      else if (line.startsWith('+++')) {
+        cleanedLines.push(`+++ b/${displayPath}`);
+      }
+      // Skip index line (optional, but keep for compatibility)
+      else if (line.startsWith('index ')) {
+        cleanedLines.push(line);
+      }
+      // Keep all other lines as-is (@@, context, +, -, etc)
+      else {
+        cleanedLines.push(line);
+      }
     }
 
-    // Ensure the git headers and path prefixes are set to the displayPath value
-    // Normalize the `diff --git` header first
-    transformed = transformed.replace(/^(diff --git\s+)("?[ab]\/.*?"?\s+"?[ab]\/.*?"?)/m, (m, p1) => `${p1}"a/${displayPath}" "b/${displayPath}"`);
-    // Normalize the unified file header lines (--- and +++)
-    transformed = transformed
-      .replace(/^---\s+.*$/gm, `--- "a/${displayPath}"`)
-      .replace(/^\+\+\+\s+.*$/gm, `+++ "b/${displayPath}"`);
+    const transformed = cleanedLines.join('\n');
 
     return transformed;
   } finally {

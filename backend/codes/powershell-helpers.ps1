@@ -52,17 +52,23 @@ function Show-FileWithLineNumbers {
     if ($startIdx -lt 0) { $startIdx = 0 }
     if ($endIdx -ge $totalLines) { $endIdx = $totalLines - 1 }
     
+    # Output header with file path and total lines
+    $relativePath = $Path -replace '\\', '/'
+    if (-not $relativePath.StartsWith('/')) {
+        $relativePath = "/$relativePath"
+    }
+    Write-Output "$relativePath [$totalLines lines]"
+
     for ($i = $startIdx; $i -le $endIdx; $i++) {
         $lineNum = $i + 1
-        Write-Output ("{0}:{1}" -f $lineNum, $lines[$i])
+        $content = $lines[$i] -replace '^\s+', ''
+        Write-Output ("{0}:{1}" -f $lineNum, $content)
     }
 
-    # Add total line count and indication if there are more lines
-    Write-Output "[Total lines in file: $totalLines]"
-    if ($EndLine -lt $totalLines) {
-        $remaining = $totalLines - $EndLine
-        Write-Output "[${remaining} lines more...]"
-        Write-Output "[Please specify the search operation with line range.]"
+    # Add range indicator if not showing full file
+    if ($StartLine -gt 1 -or $EndLine -lt $totalLines) {
+        Write-Output ""
+        Write-Output "[Showing $StartLine-$EndLine of $totalLines lines]"
     }
 }
 
@@ -109,7 +115,6 @@ function Set-FileLine {
     if ($Backup) {
         $backupPath = "$Path.backup"
         Copy-Item -Path $Path -Destination $backupPath -Force
-        Write-Output "Backup created: $backupPath"
     }
     
     $lines = Get-Content -Path $Path -Encoding UTF8
@@ -126,7 +131,16 @@ function Set-FileLine {
     
     # Write back to file
     $lines | Set-Content -Path $Path -Encoding UTF8
-    Write-Output "Line $LineNumber replaced successfully"
+
+    $relativePath = $Path -replace '\\', '/'
+    if (-not $relativePath.StartsWith('/')) {
+        $relativePath = "/$relativePath"
+    }
+    
+    Write-Output "Updated $relativePath line $LineNumber"
+    Write-Output ""
+    $displayContent = $NewContent -replace '^\s+', ''
+    Write-Output ("{0}:{1}" -f $LineNumber, $displayContent)
 }
 
 function Remove-FileLine {
@@ -166,7 +180,6 @@ function Remove-FileLine {
     if ($Backup) {
         $backupPath = "$Path.backup"
         Copy-Item -Path $Path -Destination $backupPath -Force
-        Write-Output "Backup created: $backupPath"
     }
     
     $lines = Get-Content -Path $Path -Encoding UTF8
@@ -179,6 +192,7 @@ function Remove-FileLine {
     
     # Convert to 0-indexed
     $idx = $LineNumber - 1
+    $removedLine = $lines[$idx]
     
     # Remove line using ArrayList (O(n) instead of O(n²))
     $linesList = [System.Collections.ArrayList]@($lines)
@@ -187,7 +201,13 @@ function Remove-FileLine {
     
     # Write back to file
     $newLines | Set-Content -Path $Path -Encoding UTF8
-    Write-Output "Line $LineNumber removed successfully"
+
+    $relativePath = $Path -replace '\\', '/'
+    if (-not $relativePath.StartsWith('/')) {
+        $relativePath = "/$relativePath"
+    }
+    
+    Write-Output "Removed $relativePath line $LineNumber"
 }
 
 function Add-FileLine {
@@ -233,7 +253,6 @@ function Add-FileLine {
     if ($Backup) {
         $backupPath = "$Path.backup"
         Copy-Item -Path $Path -Destination $backupPath -Force
-        Write-Output "Backup created: $backupPath"
     }
     
     $lines = Get-Content -Path $Path -Encoding UTF8
@@ -260,7 +279,16 @@ function Add-FileLine {
     
     # Write back to file
     $newLines | Set-Content -Path $Path -Encoding UTF8
-    Write-Output "Line inserted at position $LineNumber successfully"
+
+    $relativePath = $Path -replace '\\', '/'
+    if (-not $relativePath.StartsWith('/')) {
+        $relativePath = "/$relativePath"
+    }
+    
+    Write-Output "Inserted $relativePath line $LineNumber"
+    Write-Output ""
+    $displayContent = $NewContent -replace '^\s+', ''
+    Write-Output ("{0}:{1}" -f $LineNumber, $displayContent)
 }
 
 function Set-MultipleLines {
@@ -301,7 +329,6 @@ function Set-MultipleLines {
     if ($Backup) {
         $backupPath = "$Path.backup"
         Copy-Item -Path $Path -Destination $backupPath -Force
-        Write-Output "Backup created: $backupPath"
     }
 
     $lines = Get-Content -Path $Path -Encoding UTF8
@@ -320,28 +347,15 @@ function Set-MultipleLines {
         }
     }
 
-    # Report invalid lines with actionable guidance (single summary, no spam)
+    # Report invalid lines
     if ($invalidLines.Count -gt 0) {
         $sortedInvalid = $invalidLines | Sort-Object
-        $minInvalid = $sortedInvalid[0]
-        $maxInvalid = $sortedInvalid[-1]
+        Write-Error "Invalid line numbers: $($sortedInvalid -join ', ') (file has $totalLines lines)"
+    }
 
-        Write-Output ""
-        Write-Output "========================================"
-        Write-Output "WARNING: Some edits are out of range"
-        Write-Output "========================================"
-        Write-Output ""
-        Write-Output "File has $totalLines lines (range: 1-$totalLines)"
-        Write-Output "Skipped $($invalidLines.Count) invalid line numbers: $minInvalid-$maxInvalid"
-        Write-Output ""
-        Write-Output "SOLUTION:"
-        Write-Output "  1. Read file first: Show-FileWithLineNumbers -Path `"$Path`""
-        Write-Output "  2. Check actual line count"
-        Write-Output "  3. Use Set-Content to rewrite entire file if adding new content"
-        Write-Output ""
-        Write-Output "Proceeding with $($validEdits.Count) valid edits only..."
-        Write-Output "========================================"
-        Write-Output ""
+    if ($validEdits.Count -eq 0) {
+        Write-Error "No valid edits to apply"
+        return
     }
 
     # Apply valid replacements only
@@ -353,7 +367,27 @@ function Set-MultipleLines {
 
     # Write back to file
     $lines | Set-Content -Path $Path -Encoding UTF8
-    Write-Output "Successfully replaced $changedCount lines"
+
+    $relativePath = $Path -replace '\\', '/'
+    if (-not $relativePath.StartsWith('/')) {
+        $relativePath = "/$relativePath"
+    }
+
+    $sortedLineNums = $validEdits.Keys | Sort-Object
+    $minLine = $sortedLineNums | Select-Object -First 1
+    $maxLine = $sortedLineNums | Select-Object -Last 1
+
+    if ($minLine -eq $maxLine) {
+        Write-Output "Updated $relativePath line $minLine"
+    } else {
+        Write-Output "Updated $relativePath lines $minLine-$maxLine"
+    }
+    Write-Output ""
+
+    foreach ($lineNum in $sortedLineNums) {
+        $displayContent = $validEdits[$lineNum] -replace '^\s+', ''
+        Write-Output ("{0}:{1}" -f $lineNum, $displayContent)
+    }
 }
 
 function Search-FileWithContext {
@@ -397,20 +431,46 @@ function Search-FileWithContext {
 
     $lines = Get-Content -Path $Path -Encoding UTF8
     $totalLines = $lines.Count
-    $matches = @()
+    $matchResults = @()
 
     for ($i = 0; $i -lt $totalLines; $i++) {
         if ($lines[$i] -match $Pattern) {
             $lineNum = $i + 1
             $startIdx = [Math]::Max(0, $i - $ContextBefore)
             $endIdx = [Math]::Min($totalLines - 1, $i + $ContextAfter)
-
-            Write-Output "/$Path"
-            for ($j = $startIdx; $j -le $endIdx; $j++) {
-                $num = $j + 1
-                Write-Output ("{0}:{1}" -f $num, $lines[$j])
+            $matchResults += @{
+                StartIdx = $startIdx
+                EndIdx = $endIdx
             }
+        }
+    }
+
+    if ($matchResults.Count -eq 0) {
+        Write-Output "No results found."
+        return
+    }
+
+    $resultWord = if ($matchResults.Count -eq 1) { "result" } else { "results" }
+    Write-Output "Found $($matchResults.Count) $resultWord`:"
+    Write-Output ""
+
+    $relativePath = $Path -replace '\\', '/'
+    if (-not $relativePath.StartsWith('/')) {
+        $relativePath = "/$relativePath"
+    }
+    Write-Output $relativePath
+
+    $isFirst = $true
+    foreach ($match in $matchResults) {
+        if (-not $isFirst) {
             Write-Output ""
+        }
+        $isFirst = $false
+
+        for ($j = $match.StartIdx; $j -le $match.EndIdx; $j++) {
+            $num = $j + 1
+            $content = $lines[$j] -replace '^\s+', ''
+            Write-Output ("{0}:{1}" -f $num, $content)
         }
     }
 }
@@ -445,8 +505,11 @@ function Get-FileLineRange {
     $lines = Get-Content -Path $Path -Encoding UTF8
     $totalLines = $lines.Count
 
-    Write-Output "File: $Path (Total lines: $totalLines)"
-    Write-Output ""
+    $relativePath = $Path -replace '\\', '/'
+    if (-not $relativePath.StartsWith('/')) {
+        $relativePath = "/$relativePath"
+    }
+    Write-Output "$relativePath [$totalLines lines]"
 
     foreach ($range in $Ranges) {
         if ($range -match '^(\d+)-(\d+)$') {
@@ -460,12 +523,12 @@ function Get-FileLineRange {
                 continue
             }
 
-            Write-Output "=== Lines $start-$end ==="
+            Write-Output ""
             for ($i = $start - 1; $i -lt $end; $i++) {
                 $lineNum = $i + 1
-                Write-Output ("{0}:{1}" -f $lineNum, $lines[$i])
+                $content = $lines[$i] -replace '^\s+', ''
+                Write-Output ("{0}:{1}" -f $lineNum, $content)
             }
-            Write-Output ""
         } else {
             Write-Warning "Invalid range format: $range (use 'start-end', e.g., '1-50')"
         }
@@ -519,10 +582,22 @@ function Find-DuplicateLines {
     }
 
     if ($duplicates.Count -eq 0) {
-        Write-Output "No duplicate lines found."
+        Write-Output "No results found."
     } else {
-        Write-Output "Found $($duplicates.Count) duplicate lines:"
-        $duplicates | Format-Table -AutoSize
+        $resultWord = if ($duplicates.Count -eq 1) { "result" } else { "results" }
+        Write-Output "Found $($duplicates.Count) $resultWord`:"
+        Write-Output ""
+
+        $relativePath = $Path -replace '\\', '/'
+        if (-not $relativePath.StartsWith('/')) {
+            $relativePath = "/$relativePath"
+        }
+        Write-Output $relativePath
+
+        foreach ($dup in $duplicates) {
+            $content = $dup.Content -replace '^\s+', ''
+            Write-Output ("{0}:{1} (duplicate of line {2})" -f $dup.Line, $content, $dup.FirstSeenAt)
+        }
     }
 }
 
@@ -752,16 +827,19 @@ function List-ProjectFiles {
     }
 
     if ($files.Count -eq 0) {
-        Write-Output "No files found matching the provided filters."
+        Write-Output "No files found."
         return
     }
 
-    $sep = [System.IO.Path]::DirectorySeparatorChar
+    $fileWord = if ($files.Count -eq 1) { "file" } else { "files" }
+    Write-Output "Found $($files.Count) $fileWord`:"
+    Write-Output ""
+
     $grouped = $files | Group-Object -Property Directory | Sort-Object { $_.Name }
 
     foreach ($group in $grouped) {
         $dirName = $group.Name
-        $displayDir = if ($dirName -eq '.' -or [string]::IsNullOrWhiteSpace($dirName)) { ".${sep}" } else { ($dirName -replace '[\/]', "$sep") + $sep }
+        $displayDir = if ($dirName -eq '.' -or [string]::IsNullOrWhiteSpace($dirName)) { "/" } else { "/" + ($dirName -replace '\\', '/') + "/" }
         Write-Output $displayDir
 
         $fileEntries = $group.Group | Sort-Object -Property FileName
@@ -770,7 +848,7 @@ function List-ProjectFiles {
 
         foreach ($file in $fileEntries) {
             $sizeLabel = "{0:N1} KB" -f ([math]::Round($file.SizeBytes / 1KB, 1))
-            $lineLabel = if ($file.LineCount -ge 0) { "{0} lines" -f $file.LineCount } else { "lines ?" }
+            $lineLabel = if ($file.LineCount -ge 0) { "{0} lines" -f $file.LineCount } else { "? lines" }
             $format = "  {0,-$maxNameLength}  {1,8}   {2}"
             $line = $format -f $file.FileName, $sizeLabel, $lineLabel
             if ($Absolute.IsPresent) {
@@ -836,9 +914,6 @@ function Search-InFiles {
         Write-Error "Path not found: $Path"
         return
     }
-
-    Write-Output "Searching for pattern: $Pattern"
-    Write-Output "Path: $Path | Filter: $Filter | Depth: $Depth"
 
     # Check if ripgrep is available
     $rgCommand = if ($RgPath -and (Test-Path $RgPath)) {
@@ -1005,9 +1080,6 @@ function Search-InFiles {
     }
 
     if ($rgAvailable) {
-        # Use ripgrep for ultra-fast search
-        Write-Output "Using ripgrep (fast search)..."
-
         try {
             # Build ripgrep command
             $rgArgs = @(
@@ -1055,31 +1127,39 @@ function Search-InFiles {
                     }
 
                     if ($matchesByFile.Count -eq 0) {
-                        Write-Output "No matches found."
+                        Write-Output "No results found."
                     } else {
                         $totalMatches = 0
                         foreach ($entry in $matchesByFile.GetEnumerator()) {
                             $totalMatches += $entry.Value.Count
                         }
 
-                        Write-Output "Found $totalMatches matches:"
+                        $resultWord = if ($totalMatches -eq 1) { "result" } else { "results" }
+                        Write-Output "Found $totalMatches $resultWord`:"
                         Write-Output ""
 
-                        $fileIndex = 0
+                        $isFirst = $true
                         foreach ($entry in $matchesByFile.GetEnumerator()) {
-                            $fileIndex++
-                            Write-Output "/$($entry.Key)"
+                            if (-not $isFirst) {
+                                Write-Output ""
+                            }
+                            $isFirst = $false
+
+                            $filePath = $entry.Key -replace '\\', '/'
+                            if (-not $filePath.StartsWith('/')) {
+                                $filePath = "/$filePath"
+                            }
+                            Write-Output $filePath
+
                             $sortedMatches = $entry.Value | Sort-Object LineNumber
                             foreach ($match in $sortedMatches) {
-                                Write-Output ("{0}:{1}" -f $match.LineNumber, $match.Content)
-                            }
-                            if ($fileIndex -lt $matchesByFile.Count) {
-                                Write-Output "--"
+                                $content = $match.Content -replace '^\s+', ''
+                                Write-Output ("{0}:{1}" -f $match.LineNumber, $content)
                             }
                         }
                     }
                 } else {
-                    Write-Output "No matches found."
+                    Write-Output "No results found."
                 }
             } else {
                 Write-Warning "Ripgrep execution failed with exit code $LASTEXITCODE"
@@ -1102,9 +1182,6 @@ function Search-InFiles {
 
     if (-not $rgAvailable) {
         # PowerShell fallback implementation
-        Write-Output "Using PowerShell Select-String (slower)..."
-        Write-Output ""
-
         $filters = $Filter -split ','
         $allMatches = @()
 
@@ -1131,163 +1208,51 @@ function Search-InFiles {
         }
 
         if ($allMatches.Count -eq 0) {
-            Write-Output "No matches found."
+            Write-Output "No results found."
             return
         }
 
-        Write-Output "Found $($allMatches.Count) matches:"
+        $resultWord = if ($allMatches.Count -eq 1) { "result" } else { "results" }
+        Write-Output "Found $($allMatches.Count) $resultWord`:"
         Write-Output ""
 
         $groupedMatches = $allMatches | Group-Object -Property Path
-        $groupIndex = 0
+        $isFirst = $true
         foreach ($group in $groupedMatches) {
-            $groupIndex++
-            $relativePath = Resolve-Path -Relative $group.Name
-            Write-Output "/$relativePath"
+            if (-not $isFirst) {
+                Write-Output ""
+            }
+            $isFirst = $false
+
+            $relativePath = (Resolve-Path -Relative $group.Name) -replace '\\', '/'
+            if (-not $relativePath.StartsWith('/')) {
+                $relativePath = "/$relativePath"
+            }
+            Write-Output $relativePath
 
             foreach ($match in $group.Group) {
                 if ($match.Context -and $match.Context.PreContext) {
                     $preCount = $match.Context.PreContext.Count
                     for ($i = 0; $i -lt $preCount; $i++) {
                         $lineNumber = $match.LineNumber - ($preCount - $i)
-                        Write-Output ("{0}:{1}" -f $lineNumber, $match.Context.PreContext[$i])
+                        $content = $match.Context.PreContext[$i] -replace '^\s+', ''
+                        Write-Output ("{0}:{1}" -f $lineNumber, $content)
                     }
                 }
 
-                Write-Output ("{0}:{1}" -f $match.LineNumber, $match.Line)
+                $mainContent = $match.Line -replace '^\s+', ''
+                Write-Output ("{0}:{1}" -f $match.LineNumber, $mainContent)
 
                 if ($match.Context -and $match.Context.PostContext) {
                     for ($i = 0; $i -lt $match.Context.PostContext.Count; $i++) {
                         $lineNumber = $match.LineNumber + $i + 1
-                        Write-Output ("{0}:{1}" -f $lineNumber, $match.Context.PostContext[$i])
+                        $content = $match.Context.PostContext[$i] -replace '^\s+', ''
+                        Write-Output ("{0}:{1}" -f $lineNumber, $content)
                     }
                 }
-            }
-
-            if ($groupIndex -lt $groupedMatches.Count) {
-                Write-Output "--"
             }
         }
         return
-    }
-
-    # Build ripgrep command
-    $rgArgs = @(
-        $Pattern,
-        $Path,
-        '--line-number',
-        '--heading',
-        '--color', 'never',
-        '--max-depth', $Depth.ToString()
-    )
-
-    # Add context if requested
-    if ($Context -gt 0) {
-        $rgArgs += '-C'
-        $rgArgs += $Context.ToString()
-    }
-
-    # Handle file filters (convert "*.js,*.html" to multiple --glob arguments)
-    if ($Filter -ne "*.*") {
-        $filters = $Filter -split ','
-        foreach ($f in $filters) {
-            $f = $f.Trim()
-            $rgArgs += '--glob'
-            $rgArgs += $f
-        }
-    }
-
-    # Add common exclusions for extra speed (ripgrep already ignores these by default, but explicit is better)
-    $excludes = @(
-        'node_modules',
-        '.git',
-        'dist',
-        'build',
-        '.next',
-        '.nuxt',
-        'coverage',
-        '__pycache__',
-        '*.min.js',
-        '*.bundle.js'
-    )
-
-    foreach ($exclude in $excludes) {
-        $rgArgs += '--glob'
-        $rgArgs += "!$exclude"
-    }
-
-    try {
-        # Execute ripgrep
-        $output = & rg @rgArgs 2>&1
-
-        if ($LASTEXITCODE -eq 0) {
-            # Matches found
-            Write-Output $output
-        } elseif ($LASTEXITCODE -eq 1) {
-            # No matches found (not an error)
-            Write-Output "No matches found."
-        } else {
-            # Actual error
-            Write-Error "Ripgrep error: $output"
-        }
-    } catch {
-        Write-Error "Failed to execute ripgrep: $_"
-        Write-Output ""
-        Write-Output "Falling back to PowerShell Select-String (slower)..."
-
-        # Fallback to original PowerShell method if ripgrep fails
-        $filters = $Filter -split ','
-        $allMatches = @()
-
-        foreach ($f in $filters) {
-            $f = $f.Trim()
-            try {
-                $files = Get-ChildItem -Path $Path -Filter $f -Depth $Depth -File -ErrorAction SilentlyContinue |
-                         Where-Object { $_.FullName -notmatch 'node_modules|\.git|dist|build' }
-
-                foreach ($file in $files) {
-                    if ($Context -gt 0) {
-                        $matches = Select-String -Path $file.FullName -Pattern $Pattern -Context $Context -ErrorAction SilentlyContinue
-                    } else {
-                        $matches = Select-String -Path $file.FullName -Pattern $Pattern -ErrorAction SilentlyContinue
-                    }
-
-                    if ($matches) {
-                        $allMatches += $matches
-                    }
-                }
-            } catch {
-                Write-Warning "Error searching $f : $_"
-            }
-        }
-
-        if ($allMatches.Count -eq 0) {
-            Write-Output "No matches found."
-            return
-        }
-
-        Write-Output "Found $($allMatches.Count) matches:"
-        Write-Output ""
-
-        $groupedMatches = $allMatches | Group-Object -Property Path
-        foreach ($group in $groupedMatches) {
-            $relativePath = Resolve-Path -Relative $group.Name
-            Write-Output "/$relativePath"
-            
-            foreach ($match in $group.Group) {
-                Write-Output ("{0}:{1}" -f $match.LineNumber, $match.Line.Trim())
-
-                if ($Context -gt 0 -and $match.Context) {
-                    if ($match.Context.PreContext) {
-                        $match.Context.PreContext | ForEach-Object { Write-Output "  - $_" }
-                    }
-                    if ($match.Context.PostContext) {
-                        $match.Context.PostContext | ForEach-Object { Write-Output "  + $_" }
-                    }
-                }
-            }
-            Write-Output ""
-        }
     }
 }
 
@@ -1331,48 +1296,61 @@ function Find-Pattern {
         return
     }
 
-    Write-Output "Searching in: $Path"
-    Write-Output "Pattern: $Pattern"
-    Write-Output ""
-
     try {
         # Use Select-String with context (FAST - native regex, no file loading!)
-        $matches = if ($CaseSensitive) {
+        $matchResults = if ($CaseSensitive) {
             Select-String -Path $Path -Pattern $Pattern -Context $Context -CaseSensitive
         } else {
             Select-String -Path $Path -Pattern $Pattern -Context $Context
         }
 
-        if (-not $matches) {
-            Write-Output "No matches found."
+        if (-not $matchResults) {
+            Write-Output "No results found."
             return
         }
 
-        Write-Output "Found $($matches.Count) matches:"
+        $resultWord = if ($matchResults.Count -eq 1) { "result" } else { "results" }
+        Write-Output "Found $($matchResults.Count) $resultWord`:"
         Write-Output ""
 
-        Write-Output "/$Path"
-        foreach ($match in $matches) {
+        $relativePath = $Path -replace '\\', '/'
+        if (-not $relativePath.StartsWith('/')) {
+            $relativePath = "/$relativePath"
+        }
+        Write-Output $relativePath
+
+        $isFirst = $true
+        foreach ($match in $matchResults) {
+            if (-not $isFirst) {
+                Write-Output ""
+            }
+            $isFirst = $false
+
             # Show context before
             if ($match.Context.PreContext) {
                 $startLine = $match.LineNumber - $match.Context.PreContext.Count
                 $ctxIdx = 0
                 foreach ($line in $match.Context.PreContext) {
-                    Write-Output ("{0}:{1}" -f ($startLine + $ctxIdx), $line)
+                    $content = $line -replace '^\s+', ''
+                    Write-Output ("{0}:{1}" -f ($startLine + $ctxIdx), $content)
                     $ctxIdx++
                 }
             }
 
             # Show matching line
-            Write-Output ("{0}:{1}" -f $match.LineNumber, $match.Line)
+            $mainContent = $match.Line -replace '^\s+', ''
+            Write-Output ("{0}:{1}" -f $match.LineNumber, $mainContent)
 
             # Show context after
             if ($match.Context.PostContext) {
                 $ctxIdx = 1
                 foreach ($line in $match.Context.PostContext) {
-                    Write-Output ("{0}:{1}" -f ($match.LineNumber + $ctxIdx), $line)
+                    $content = $line -replace '^\s+', ''
+                    Write-Output ("{0}:{1}" -f ($match.LineNumber + $ctxIdx), $content)
                     $ctxIdx++
                 }
+            }
+        }
             }
         }
     } catch {
@@ -1413,18 +1391,20 @@ function Get-FileStats {
         $reader.Close()
     } catch {
         Write-Warning "Could not count lines: $_"
-        $lineCount = "unknown"
+        $lineCount = "?"
     }
 
-    [PSCustomObject]@{
-        Path = $file.FullName
-        Name = $file.Name
-        SizeKB = [math]::Round($file.Length / 1KB, 2)
-        SizeMB = [math]::Round($file.Length / 1MB, 2)
-        Lines = $lineCount
-        Extension = $file.Extension
-        LastModified = $file.LastWriteTime
-    } | Format-List
+    $relativePath = $Path -replace '\\', '/'
+    if (-not $relativePath.StartsWith('/')) {
+        $relativePath = "/$relativePath"
+    }
+
+    $sizeKB = [math]::Round($file.Length / 1KB, 1)
+    
+    Write-Output $relativePath
+    Write-Output "  Size: $sizeKB KB"
+    Write-Output "  Lines: $lineCount"
+    Write-Output "  Modified: $($file.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
 }
 
 # Note: Functions are automatically available after dot-sourcing this script

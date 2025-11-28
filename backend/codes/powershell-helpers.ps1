@@ -61,7 +61,7 @@ function Show-FileWithLineNumbers {
 
     for ($i = $startIdx; $i -le $endIdx; $i++) {
         $lineNum = $i + 1
-        $content = $lines[$i] -replace '^\s+', ''
+        $content = $lines[$i]
         Write-Output ("{0}:{1}" -f $lineNum, $content)
     }
 
@@ -139,7 +139,7 @@ function Set-FileLine {
     
     Write-Output "Updated $relativePath line $LineNumber"
     Write-Output ""
-    $displayContent = $NewContent -replace '^\s+', ''
+    $displayContent = $NewContent
     Write-Output ("{0}:{1}" -f $LineNumber, $displayContent)
 }
 
@@ -287,7 +287,7 @@ function Add-FileLine {
     
     Write-Output "Inserted $relativePath line $LineNumber"
     Write-Output ""
-    $displayContent = $NewContent -replace '^\s+', ''
+    $displayContent = $NewContent
     Write-Output ("{0}:{1}" -f $LineNumber, $displayContent)
 }
 
@@ -385,7 +385,7 @@ function Set-MultipleLines {
     Write-Output ""
 
     foreach ($lineNum in $sortedLineNums) {
-        $displayContent = $validEdits[$lineNum] -replace '^\s+', ''
+        $displayContent = $validEdits[$lineNum]
         Write-Output ("{0}:{1}" -f $lineNum, $displayContent)
     }
 }
@@ -469,7 +469,7 @@ function Search-FileWithContext {
 
         for ($j = $match.StartIdx; $j -le $match.EndIdx; $j++) {
             $num = $j + 1
-            $content = $lines[$j] -replace '^\s+', ''
+            $content = $lines[$j]
             Write-Output ("{0}:{1}" -f $num, $content)
         }
     }
@@ -526,7 +526,7 @@ function Get-FileLineRange {
             Write-Output ""
             for ($i = $start - 1; $i -lt $end; $i++) {
                 $lineNum = $i + 1
-                $content = $lines[$i] -replace '^\s+', ''
+                $content = $lines[$i]
                 Write-Output ("{0}:{1}" -f $lineNum, $content)
             }
         } else {
@@ -595,7 +595,7 @@ function Find-DuplicateLines {
         Write-Output $relativePath
 
         foreach ($dup in $duplicates) {
-            $content = $dup.Content -replace '^\s+', ''
+            $content = $dup.Content
             Write-Output ("{0}:{1} (duplicate of line {2})" -f $dup.Line, $content, $dup.FirstSeenAt)
         }
     }
@@ -1153,7 +1153,7 @@ function Search-InFiles {
 
                             $sortedMatches = $entry.Value | Sort-Object LineNumber
                             foreach ($match in $sortedMatches) {
-                                $content = $match.Content -replace '^\s+', ''
+                                $content = $match.Content
                                 Write-Output ("{0}:{1}" -f $match.LineNumber, $content)
                             }
                         }
@@ -1235,18 +1235,18 @@ function Search-InFiles {
                     $preCount = $match.Context.PreContext.Count
                     for ($i = 0; $i -lt $preCount; $i++) {
                         $lineNumber = $match.LineNumber - ($preCount - $i)
-                        $content = $match.Context.PreContext[$i] -replace '^\s+', ''
+                        $content = $match.Context.PreContext[$i]
                         Write-Output ("{0}:{1}" -f $lineNumber, $content)
                     }
                 }
 
-                $mainContent = $match.Line -replace '^\s+', ''
+                $mainContent = $match.Line
                 Write-Output ("{0}:{1}" -f $match.LineNumber, $mainContent)
 
                 if ($match.Context -and $match.Context.PostContext) {
                     for ($i = 0; $i -lt $match.Context.PostContext.Count; $i++) {
                         $lineNumber = $match.LineNumber + $i + 1
-                        $content = $match.Context.PostContext[$i] -replace '^\s+', ''
+                        $content = $match.Context.PostContext[$i]
                         Write-Output ("{0}:{1}" -f $lineNumber, $content)
                     }
                 }
@@ -1331,26 +1331,24 @@ function Find-Pattern {
                 $startLine = $match.LineNumber - $match.Context.PreContext.Count
                 $ctxIdx = 0
                 foreach ($line in $match.Context.PreContext) {
-                    $content = $line -replace '^\s+', ''
+                    $content = $line
                     Write-Output ("{0}:{1}" -f ($startLine + $ctxIdx), $content)
                     $ctxIdx++
                 }
             }
 
             # Show matching line
-            $mainContent = $match.Line -replace '^\s+', ''
+            $mainContent = $match.Line
             Write-Output ("{0}:{1}" -f $match.LineNumber, $mainContent)
 
             # Show context after
             if ($match.Context.PostContext) {
                 $ctxIdx = 1
                 foreach ($line in $match.Context.PostContext) {
-                    $content = $line -replace '^\s+', ''
+                    $content = $line
                     Write-Output ("{0}:{1}" -f ($match.LineNumber + $ctxIdx), $content)
                     $ctxIdx++
                 }
-            }
-        }
             }
         }
     } catch {

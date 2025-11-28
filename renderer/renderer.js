@@ -13547,6 +13547,7 @@ async function startStream(
         log('STREAM', 1, 'codes:interrupted', 'Codes stream was cancelled by interrupt', {
           sessionId: session.id,
           messageIndex: aiMessageIndex,
+          hasUsage: !!result?.usage
         });
         
         // Get partial response
@@ -13577,6 +13578,41 @@ async function startStream(
             attachCodeBlockListeners(div);
             renderMathInElement(div);
           });
+        }
+
+        // Apply usage if available (even on cancel)
+        if (result?.usage) {
+          const usageResult = applyStreamUsageToSession(
+            session,
+            aiMessageIndex,
+            result.usage,
+            {
+              ensureTokenFields,
+              provider: modelOptions.provider,
+              model: modelOptions.model,
+            },
+          );
+
+          if (usageResult.shouldUpdateTokensUI) {
+            updateTokensUI(session);
+          }
+          
+          // Fix: Ensure model label is preserved/updated
+          if (usageResult.messageMeta) {
+            // Try to get label from existing state or fetch it
+            const config = getActiveChatConfig();
+            const meta = getModelMeta(state.settings?.models, modelOptions.provider, modelOptions.model);
+            if (meta && meta.label) {
+              usageResult.messageMeta.label = meta.label;
+            }
+          }
+
+          if (usageResult.persisted) {
+            log('STREAM', 2, 'codes:interrupted', 'Applied usage stats for cancelled stream', {
+              usage: result.usage,
+              label: usageResult.messageMeta?.label
+            });
+          }
         }
         
         // Finalize message

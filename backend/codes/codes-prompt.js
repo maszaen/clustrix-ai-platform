@@ -65,7 +65,7 @@ const DANGEROUS_PATTERNS = [
 // ===================================
 const STATE_RESPONSE_FORMATS = {
   [AGENT_STATES.EXPLORE]: {
-    format: `<state>EXPLORE</state>
+    format: `<state><Next state EXPLORE or EDIT></state>
 <hidden>
 Berikan analisis kode yang sudah ditemukan di memory.
 Jika sudah siap: instruksi lengkap untuk edit (file path + info line numbers + perubahan).
@@ -82,7 +82,7 @@ Jika butuh info lagi: jalankan command search sekarang, dan jelaskan apa yang ma
     useAnswer: false,
   },
   [AGENT_STATES.EDIT]: {
-    format: `<state>EDIT</state>
+    format: `<state><Next state EDIT or EXECUTE or EXPLORE again></state>
 <hidden>analyzing what needs to be changed</hidden>
 <checklist>- [/] current edit task</checklist>
 <answer>what is being changed and why</answer>
@@ -91,24 +91,21 @@ Jika butuh info lagi: jalankan command search sekarang, dan jelaskan apa yang ma
     useAnswer: true,
   },
   [AGENT_STATES.EXECUTE]: {
-    format: `<state>EXECUTE</state>
+    format: `<state><Next state EDIT or EXPLORE again></state>
 <hidden>why running this command</hidden>
-<checklist>- [/] running test/command</checklist>
 <cmd>run command</cmd>`,
     useHidden: true,
     useAnswer: false,
   },
   [AGENT_STATES.VERIFY]: {
-    format: `<state>VERIFY</state>
+    format: `<state><Next state DONE or EXPLORE again></state>
 <hidden>checking verification results</hidden>
-<checklist>- [/] verifying results</checklist>
 <answer>verification result</answer>`,
     useHidden: true,
     useAnswer: true,
   },
   [AGENT_STATES.DONE]: {
-    format: `<state>DONE</state>
-<answer>detailed summary of what was done</answer>
+    format: `<answer>detailed summary of what was done</answer>
 <saved_state>Next state for future work</saved_state>
 <!END>`,
     useHidden: false,
@@ -137,6 +134,11 @@ COMMANDS:
   Search-InFiles -Pattern "regex" -Filter "*.js" -Depth 2
   Show-FileWithLineNumbers -Path "file.js" [-StartLine N -EndLine M]
   Find-Pattern -Pattern "regex" -Path "file.js"
+  List-ProjectFiles -Depth 2 [-Extensions "*.js,*.ts"]
+  Get-FileLineRange -Path "file.js" -Ranges @('1-10', '50-60')
+  Search-FileWithContext -Path "file.js" -Pattern "regex" -ContextBefore 2 -ContextAfter 2
+  Get-FileStats -Path "file.js"
+  Find-DuplicateLines -Path "file.js"
 
 TURBO MODE: Kalau bug sudah jelas dari memory, LANGSUNG ke EDIT tanpa search lagi.
 
@@ -318,6 +320,13 @@ SEARCH (single file):
 READ FILE:
   Show-FileWithLineNumbers -Path "file.js"
   Show-FileWithLineNumbers -Path "file.js" -StartLine 100 -EndLine 200
+  Search-InFiles -Pattern "regex" -Filter "*.js" -Depth 2
+  Find-Pattern -Pattern "regex" -Path "file.js"
+  List-ProjectFiles -Depth 2 -Extensions "*.js,*.ts"
+  Get-FileLineRange -Path "file.js" -Ranges @('1-10', '50-60')
+  Search-FileWithContext -Path "file.js" -Pattern "regex" -ContextBefore 2 -ContextAfter 2
+  Get-FileStats -Path "file.js"
+  Find-DuplicateLines -Path "file.js"
 
 FILE STATS:
   Get-FileStats -Path <file>
@@ -327,16 +336,29 @@ CREATE FILE:
   mkdir -p "path/to/new/directory"
 
 EDIT FILE:
-<cmd><set file="path/to/file.js" range={10, 15}>
+<cmd>
+<set file="path/to/file.js" range={10, 15}>
 <![CDATA[
 new content
 ]]>
-</set></cmd>
+</set>
+<set file="path/to/file.js" range={30, 35}>
+<![CDATA[
+new content
+]]>
+</set>
+</cmd>
 
 INSERT (no delete):
 <cmd><set file="path/to/file.js" add={25}>
 <![CDATA[
 inserted content
+]]>
+</set></cmd>
+
+DELETE (only delete):
+<cmd><set file="path/to/file.js" range={10, 15}>
+<![CDATA[
 ]]>
 </set></cmd>
 

@@ -497,7 +497,7 @@ function formatMemoryOutput(state) {
         for (const range of fileData.ranges) {
           for (let i = 0; i < range.lines.length; i++) {
             const lineNum = range.start + i;
-            output.push(`${lineNum}: ${range.lines[i]}`);
+            output.push(`${lineNum}:${range.lines[i]}`);
           }
 
           // Show gap indicator if there's a next range
@@ -1355,10 +1355,13 @@ function formatTodo(todoText) {
   // Parse todo checklist into structured format
   if (!todoText) return null;
 
-  const lines = todoText.split('\n').filter(line => line.trim().startsWith('-'));
+  const lines = todoText.split('\n');
   const items = lines.map(line => {
     // V2: Support [ ] [x] [/]
-    const match = line.match(/^-\s*\[([ xX\/])\]\s*(.+)$/);
+    const trimmed = line.trim();
+    // V2: Support - [ ] and [ ] formats
+    // Match: optional dash, optional space, [status], space, text
+    const match = trimmed.match(/^(?:-\s*)?\[([ xX\/])\]\s*(.+)$/);
     if (match) {
       return {
         checked: match[1].toLowerCase() === 'x',

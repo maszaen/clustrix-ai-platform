@@ -2046,15 +2046,49 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
 
   // Third pass: replace with grouped placeholders
   let srcAfterCommandExtraction = truncatedSrc;
+
+  // helper: escape regex meta-chars for literal matching
+  const escapeForRegex = (s = '') => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
   commandGroups.forEach((group, index) => {
-    const inputMatch = group.input ? `<!--command-input-->\n${group.input}\n<!--/command-input-->\n` : '';
-    const outputMatch = group.output ? `<!--command-output-->\n${group.output}\n<!--/command-output-->\n` : '';
-    const combinedMatch = (inputMatch + outputMatch).trim();
-    if (combinedMatch) {
-      const placeholder = `__COMMAND_GROUP_${index}__`;
-      srcAfterCommandExtraction = srcAfterCommandExtraction.replace(combinedMatch, placeholder);
+    const placeholder = `__COMMAND_GROUP_${index}__`;
+
+    // If both input and output exist: match input block then output block,
+    // allow any amount of whitespace/newlines between/around
+    if (group.input && group.output) {
+      const inEsc = escapeForRegex(group.input.trim());
+      const outEsc = escapeForRegex(group.output.trim());
+      const bothPattern = new RegExp(
+        `<!--command-input-->[\\s\\S]*?${inEsc}[\\s\\S]*?<!--\\/command-input-->[\\s\\S]*?<!--command-output-->[\\s\\S]*?${outEsc}[\\s\\S]*?<!--\\/command-output-->`,
+        'g'
+      );
+      srcAfterCommandExtraction = srcAfterCommandExtraction.replace(bothPattern, placeholder);
+      return;
+    }
+
+    // Only input block
+    if (group.input) {
+      const inEsc = escapeForRegex(group.input.trim());
+      const inPattern = new RegExp(
+        `<!--command-input-->[\\s\\S]*?${inEsc}[\\s\\S]*?<!--\\/command-input-->`,
+        'g'
+      );
+      srcAfterCommandExtraction = srcAfterCommandExtraction.replace(inPattern, placeholder);
+      return;
+    }
+
+    // Only output block
+    if (group.output) {
+      const outEsc = escapeForRegex(group.output.trim());
+      const outPattern = new RegExp(
+        `<!--command-output-->[\\s\\S]*?${outEsc}[\\s\\S]*?<!--\\/command-output-->`,
+        'g'
+      );
+      srcAfterCommandExtraction = srcAfterCommandExtraction.replace(outPattern, placeholder);
+      return;
     }
   });
+
 
   // Extract hidden content tags
   const hiddenBlocks = [];

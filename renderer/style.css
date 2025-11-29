@@ -8893,7 +8893,7 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   margin: 12px 0;
   padding: 0px;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   background: var(--bg-secondary);
 }
 
@@ -8901,14 +8901,21 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 8.5px;
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg); 
   font-family: var(--font-sans);
   font-weight: normal;
-  padding: 10px 13px 7px 13px;
+  padding: 10px 13px 10px 13px;
   background: transparent;
   border: none;
   color: var(--fg-muted);
   cursor: pointer;
+}
+
+.commands-container .commands-summary:hover {
+  background: var(--hover-bg);
+  color: var(--fg);
 }
 
 .commands-summary-icon {
@@ -8919,13 +8926,17 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   transition: transform 0.2s ease;
 }
 
+.commands-container .commands-summary:hover .commands-summary-icon {
+  color: var(--fg);
+}
+
 .commands-container.expanded .commands-summary-icon {
   transform: rotate(0deg);
 }
 
 .commands-summary-text {
   font-size: 14px;
-  font-weight: thin;
+  font-weight: 100;
 }
 
 .commands-list {
@@ -8947,9 +8958,9 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 .command-input {
   margin: 8px 0;
   border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   overflow: hidden;
+  background: var(--bg-secondary);
   position: relative;
 }
 
@@ -8961,13 +8972,30 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 .command-input .command-header {
   display: flex;
   align-items: center;
-  padding: 8px 13px;
+  padding: 8px 14px;
   gap: 10px;
   min-height: 32px;
+  cursor: pointer;
+}
+
+.command-input .command-header:hover {
+  background: var(--hover-bg);
+}
+
+.command-input .command-header:hover .command-text,
+.command-input .command-header:hover .command-icon,
+.command-input .command-header:hover .command-toggle {
+  color: var(--fg);
 }
 
 .commands-list .command-input {
   border: 0px solid var(--transparent) !important;
+  border-radius: 0;
+}
+
+.commands-list .command-input:last-child {
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
 }
 
 .command-header .command-text {
@@ -9056,7 +9084,6 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 }
 
 .command-input .command-output {
-  background: var(--bg);
   color: var(--fg-muted);
   border-top: 0px solid var(--border);
   padding: 0 16px;
@@ -9075,6 +9102,11 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   max-height: 300px;
   opacity: 1;
   padding: 12px 16px;
+}
+
+.commands-list .command-input:not(:last-child).expanded .command-output {
+  border-bottom: 1px solid var(--border-light);
+  border-radius: 0;
 }
 
 /* Fallback for standalone command-output */
@@ -9096,7 +9128,7 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   margin: 8px 0;
   border-radius: var(--radius-lg);
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   color: var(--fg-muted);
   font-family: var(--font-mono);
   font-size: 14px;

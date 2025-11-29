@@ -2077,7 +2077,7 @@ let commandsContainerListenerRegistered = false;
 function initCommandToggles(container) {
   if (!commandToggleListenerRegistered && typeof document !== 'undefined') {
     document.addEventListener('click', (event) => {
-      const toggle = event.target.closest('.command-toggle');
+      const toggle = event.target.closest('.command-toggle, .command-header');
       if (!toggle) return;
 
       event.preventDefault();
@@ -9018,7 +9018,7 @@ function mdFallback(src, options = {}) {
         return `
           <div class="${classes.join(' ')}">
             <div class="command-header">
-              <svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+              <svg class="command-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M128,128a8,8,0,0,1-3,6.25l-40,32a8,8,0,1,1-10-12.5L107.19,128,75,102.25a8,8,0,1,1,10-12.5l40,32A8,8,0,0,1,128,128Zm48,24H136a8,8,0,0,0,0,16h40a8,8,0,0,0,0-16Zm56-96V200a16,16,0,0,1-16,16H40a16,16,0,0,1-16-16V56A16,16,0,0,1,40,40H216A16,16,0,0,1,232,56ZM216,200V56H40V200H216Z"></path></svg>          
               <span class="command-text">${readableCommand}</span>
               ${toggleButton}
             </div>

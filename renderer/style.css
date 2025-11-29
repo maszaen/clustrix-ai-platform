@@ -8934,10 +8934,18 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 
 .commands-container .command-input {
   margin: 0;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
 }
 
 .commands-container.collapsed .command-input:not(.last-command) {
-  display: none;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.commands-container.expanded .command-input {
+  max-height: 60px;
+  opacity: 1;
 }
 
 .command-input {

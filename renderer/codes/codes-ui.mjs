@@ -1140,7 +1140,7 @@ function ensureListeners() {
     });
 
     composerInput.addEventListener('keydown', (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      if ((event.altKey) && event.key === 'Enter') {
         event.preventDefault();
         event.stopPropagation();
         submitCodeComposer();

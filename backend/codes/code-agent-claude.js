@@ -14,6 +14,7 @@
 const https = require('https');
 const { URL } = require('url');
 const path = require('path');
+const fs = require('fs');
 const { PowerShellSession } = require('./powershell-session');
 const { applySetOperations } = require('./edit-operations');
 const { detectDangerousCommand } = require('./codes-prompt');
@@ -24,6 +25,7 @@ const {
   parseClaudeAgentResponse,
   formatClaudeToolResult,
 } = require('./codes-prompt-claude');
+const { log: appLog } = require('../../utils/logger');
 
 // ===================================
 // CONSTANTS
@@ -37,27 +39,105 @@ const MAX_TOOL_OUTPUT_CHARS = 100000; // ~25k tokens
 // ===================================
 const claudeSessions = new Map();
 
+function claudeLog(level, fn, message, details = {}) {
+  try {
+    appLog('CLAUDE', level, fn, message, details);
+  } catch (error) {
+    try {
+      // Fallback logging to surface issues during debugging
+      console.error('[CLAUDE-AGENT]', message, details, error?.message || error);
+    } catch {}
+  }
+}
+
+function validateWorkspacePath(workspacePath) {
+  const fallback = process.cwd();
+
+  if (!workspacePath || typeof workspacePath !== 'string') {
+    claudeLog(2, 'validateWorkspacePath', 'Missing workspacePath, using process.cwd()', {
+      fallback,
+    });
+    return fallback;
+  }
+
+  const normalized = path.resolve(workspacePath);
+
+  try {
+    if (fs.existsSync(normalized) && fs.statSync(normalized).isDirectory()) {
+      return normalized;
+    }
+
+    claudeLog(2, 'validateWorkspacePath', 'Workspace does not exist, using process.cwd()', {
+      workspacePath,
+      normalized,
+      fallback,
+    });
+    return fallback;
+  } catch (error) {
+    claudeLog(3, 'validateWorkspacePath', 'Workspace validation failed, using process.cwd()', {
+      workspacePath,
+      normalized,
+      fallback,
+      error: error?.message,
+    });
+    return fallback;
+  }
+}
+
 function getClaudeSession(sessionId, workspacePath) {
   if (!claudeSessions.has(sessionId)) {
     claudeSessions.set(sessionId, {
       conversationHistory: [],  // Native message history only
       terminal: null,
-      workspacePath: workspacePath || process.cwd(),
+      workspacePath: validateWorkspacePath(workspacePath || process.cwd()),
       lastUsed: Date.now(),
     });
   }
-  
+
   const session = claudeSessions.get(sessionId);
   session.lastUsed = Date.now();
-  
-  // Ensure terminal
-  if (!session.terminal || session.terminal.isDisposed) {
-    session.terminal = new PowerShellSession({ 
-      workspacePath: session.workspacePath 
+
+  const normalizedWorkspace = validateWorkspacePath(workspacePath || session.workspacePath || process.cwd());
+  if (session.workspacePath !== normalizedWorkspace) {
+    try { session.terminal?.dispose(); } catch {}
+    session.terminal = null;
+    session.workspacePath = normalizedWorkspace;
+    claudeLog(1, 'getClaudeSession', 'Workspace updated for session', {
+      sessionId,
+      workspacePath: normalizedWorkspace,
     });
   }
-  
+
   return session;
+}
+
+function ensureClaudeTerminal(session, { forceNew = false, workspacePathOverride } = {}) {
+  const normalizedWorkspace = validateWorkspacePath(workspacePathOverride || session.workspacePath || process.cwd());
+  const workspaceChanged = session.workspacePath !== normalizedWorkspace;
+  const shouldRecreate = forceNew || workspaceChanged || !session.terminal || session.terminal.isDisposed;
+
+  if (!shouldRecreate) {
+    return session.terminal;
+  }
+
+  try { session.terminal?.dispose(); } catch {}
+
+  try {
+    session.terminal = new PowerShellSession({ workspacePath: normalizedWorkspace, log: claudeLog });
+    session.workspacePath = normalizedWorkspace;
+    claudeLog(1, 'ensureClaudeTerminal', 'Created new PowerShell session', {
+      workspacePath: normalizedWorkspace,
+      executable: session.terminal?.executable,
+    });
+  } catch (error) {
+    claudeLog(4, 'ensureClaudeTerminal', 'Failed to create PowerShell session', {
+      workspacePath: normalizedWorkspace,
+      error: error?.message,
+    });
+    throw error;
+  }
+
+  return session.terminal;
 }
 
 // ===================================
@@ -128,44 +208,90 @@ async function executeRunCommand(session, command) {
   // Check for dangerous commands first
   const warnings = detectDangerousCommand(command);
   const blocked = warnings.find(w => w.block);
-  
+
   if (blocked) {
     return {
       success: false,
       output: `⚠️ COMMAND BLOCKED: ${blocked.warning}\n\nSuggestion: ${blocked.suggestion}`,
     };
   }
-  
+
+  let terminal;
   try {
-    const result = await Promise.race([
-      session.terminal.run(command),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Command timeout (5 minutes)')), COMMAND_TIMEOUT_MS)
-      )
-    ]);
-    
+    terminal = ensureClaudeTerminal(session, { forceNew: false });
+  } catch (error) {
+    return {
+      success: false,
+      output: `Error: ${error.message}`,
+      exitCode: 1,
+    };
+  }
+  let attemptedRecovery = false;
+
+  claudeLog(1, 'executeRunCommand', 'run_command:start', {
+    workspacePath: session.workspacePath,
+    executable: terminal?.executable,
+    command: command.slice(0, 500),
+    terminalDisposed: terminal?.isDisposed,
+  });
+
+  const runWithTerminal = async () => {
+    const result = await terminal.run(command, { timeout: COMMAND_TIMEOUT_MS });
+
     let output = [result.stdout, result.stderr].filter(Boolean).join('\n');
-    
+
     // Truncate if too long
     if (output.length > MAX_TOOL_OUTPUT_CHARS) {
       const half = Math.floor(MAX_TOOL_OUTPUT_CHARS / 2);
-      output = output.slice(0, half) + 
+      output = output.slice(0, half) +
                `\n\n... [TRUNCATED ${output.length - MAX_TOOL_OUTPUT_CHARS} chars] ...\n\n` +
                output.slice(-half);
     }
-    
+
     return {
       success: result.exitCode === 0,
       output: output || 'Command completed with no output.',
       exitCode: result.exitCode,
     };
+  };
+
+  try {
+    const result = await runWithTerminal();
+    claudeLog(1, 'executeRunCommand', 'run_command:complete', {
+      exitCode: result.exitCode,
+      outputPreview: (result.output || '').slice(0, 500),
+    });
+    return result;
   } catch (error) {
+    const busySession = error.message?.includes('PowerShell session is busy running another command');
+    const sessionExited = error.message?.includes('PowerShell session exited');
+
+    if ((busySession || sessionExited || terminal.isDisposed) && !attemptedRecovery) {
+      attemptedRecovery = true;
+
+      try { session.terminal?.dispose(); } catch {}
+      session.terminal = null;
+      terminal = ensureClaudeTerminal(session, { forceNew: true });
+
+      try {
+        return await runWithTerminal();
+      } catch (retryError) {
+        error = retryError; // fall through to generic handler
+      }
+    }
+
     // Dispose terminal on timeout
     if (error.message.includes('timeout')) {
       try { session.terminal?.dispose(); } catch {}
       session.terminal = null;
     }
-    
+
+    claudeLog(3, 'executeRunCommand', 'run_command:error', {
+      workspacePath: session.workspacePath,
+      executable: terminal?.executable,
+      error: error?.message,
+    });
+
     return {
       success: false,
       output: `Error: ${error.message}`,

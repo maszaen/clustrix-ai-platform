@@ -2072,6 +2072,7 @@ window.highlightAllUnder = highlightAllUnder;
 
 // Handle command toggle functionality
 let commandToggleListenerRegistered = false;
+let commandsContainerListenerRegistered = false;
 
 function initCommandToggles(container) {
   if (!commandToggleListenerRegistered && typeof document !== 'undefined') {
@@ -2085,10 +2086,30 @@ function initCommandToggles(container) {
       const commandInput = toggle.closest('.command-input');
       if (!commandInput) return;
 
-      const expanded = commandInput.classList.toggle('expanded');
+      const scope =
+        commandInput.closest('.commands-container') ||
+        commandInput.closest('.chat-message') ||
+        commandInput.closest('.message') ||
+        commandInput.parentElement;
+
       const output = commandInput.querySelector('.command-output');
+      const shouldExpand = !commandInput.classList.contains('expanded');
+
+      if (scope) {
+        const expandedInputs = scope.querySelectorAll('.command-input.expanded');
+        expandedInputs.forEach((other) => {
+          if (other === commandInput) return;
+          other.classList.remove('expanded');
+          const otherOutput = other.querySelector('.command-output');
+          if (otherOutput) {
+            otherOutput.setAttribute('aria-hidden', 'true');
+          }
+        });
+      }
+
+      commandInput.classList.toggle('expanded', shouldExpand);
       if (output) {
-        output.setAttribute('aria-hidden', expanded ? 'false' : 'true');
+        output.setAttribute('aria-hidden', shouldExpand ? 'false' : 'true');
       }
     });
     commandToggleListenerRegistered = true;
@@ -2104,7 +2125,83 @@ function initCommandToggles(container) {
   });
 }
 
+function initCommandsContainers(container) {
+  if (!commandsContainerListenerRegistered && typeof document !== 'undefined') {
+    document.addEventListener('click', (event) => {
+      const summary = event.target.closest('.commands-summary');
+      if (!summary) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const commandsContainer = summary.closest('.commands-container');
+      if (!commandsContainer) return;
+
+      const stepsLabel = summary.dataset.stepsLabel || `${commandsContainer.dataset.steps} steps`;
+      const expanded = !commandsContainer.classList.contains('expanded');
+
+      commandsContainer.classList.toggle('expanded', expanded);
+      commandsContainer.classList.toggle('collapsed', !expanded);
+      summary.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+
+      const summaryText = summary.querySelector('.commands-summary-text');
+      if (summaryText) {
+        summaryText.textContent = expanded ? 'Hide steps' : stepsLabel;
+      }
+      
+      // NO auto-expand when collapsing - just collapse all
+      if (!expanded) {
+        const commands = commandsContainer.querySelectorAll('.command-input');
+        commands.forEach((commandInput) => {
+          commandInput.classList.remove('expanded');
+          const output = commandInput.querySelector('.command-output');
+          if (output) {
+            output.setAttribute('aria-hidden', 'true');
+          }
+        });
+      }
+    });
+
+    commandsContainerListenerRegistered = true;
+  }
+
+  if (!container) return;
+
+  const containers = container.querySelectorAll('.commands-container');
+  containers.forEach((commandsContainer) => {
+    const commands = commandsContainer.querySelectorAll('.command-input');
+    const steps = commands.length;
+    const summary = commandsContainer.querySelector('.commands-summary');
+    const label = `${steps} ${steps === 1 ? 'step' : 'steps'}`;
+
+    if (summary) {
+      summary.dataset.stepsLabel = label;
+      summary.setAttribute('aria-expanded', 'false');
+      const summaryText = summary.querySelector('.commands-summary-text');
+      if (summaryText) {
+        summaryText.textContent = label;
+      }
+    }
+
+    // Always collapsed by default
+    commandsContainer.classList.add('collapsed');
+    commandsContainer.classList.remove('expanded');
+
+    // All commands collapsed, NO auto-expand
+    commands.forEach((commandInput, idx) => {
+      const output = commandInput.querySelector('.command-output');
+      const isLast = idx === commands.length - 1;
+      commandInput.classList.toggle('last-command', isLast);
+      commandInput.classList.remove('expanded');
+      if (output) {
+        output.setAttribute('aria-hidden', 'true');
+      }
+    });
+  });
+}
+
 window.initCommandToggles = initCommandToggles;
+window.initCommandsContainers = initCommandsContainers;
 
 async function loadAllArtifacts() {
   try {
@@ -8768,10 +8865,181 @@ function mdFallback(src, options = {}) {
   // Check if enhancedMarkdownParse is available (loaded from md.js)
   if (typeof enhancedMarkdownParse === 'function') {
     try {
-      const html = enhancedMarkdownParse(src, { isThinkingText: false });
+      // Normalize line endings
+      const cleanSrc = src.trim().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      
+      // === COMMAND GROUPING LOGIC ===
+      // Extract command input/output tags BEFORE markdown processing
+      // Group consecutive commands into containers
+      const commandContainers = [];
+      const blockRegex = /<!--command-(input|output)-->([\s\S]*?)<!--\/command-\1-->/gi;
+      let match;
+      let currentContainer = null;
+      let lastBlock = null;
+
+      while ((match = blockRegex.exec(cleanSrc)) !== null) {
+        const block = {
+          type: match[1],
+          content: match[2].trim(),
+          start: match.index,
+          end: match.index + match[0].length,
+        };
+
+        const betweenText = lastBlock ? cleanSrc.slice(lastBlock.end, block.start) : '';
+        const hasSeparator = betweenText && betweenText.trim() !== '';
+
+        if (!currentContainer || hasSeparator) {
+          if (currentContainer) {
+            commandContainers.push(currentContainer);
+          }
+          currentContainer = { blocks: [], start: block.start };
+        }
+
+        currentContainer.blocks.push(block);
+        currentContainer.end = block.end;
+        lastBlock = block;
+      }
+
+      if (currentContainer) {
+        commandContainers.push(currentContainer);
+      }
+
+      // Convert blocks to grouped commands
+      const groupedContainers = commandContainers.map((container) => {
+        const groups = [];
+        const blocks = container.blocks;
+
+        for (let i = 0; i < blocks.length; i++) {
+          const block = blocks[i];
+          if (block.type === 'input') {
+            const group = { input: block.content };
+            if (i + 1 < blocks.length && blocks[i + 1].type === 'output') {
+              group.output = blocks[i + 1].content;
+              i++;
+            }
+            groups.push(group);
+          } else if (block.type === 'output') {
+            groups.push({ output: block.content });
+          }
+        }
+
+        return { ...container, groups };
+      });
+
+      // Replace containers with placeholders
+      let srcWithPlaceholders = '';
+      let lastIndex = 0;
+
+      groupedContainers.forEach((container, index) => {
+        srcWithPlaceholders += cleanSrc.slice(lastIndex, container.start);
+        srcWithPlaceholders += `__COMMAND_CONTAINER_${index}__`;
+        lastIndex = container.end;
+      });
+
+      srcWithPlaceholders += cleanSrc.slice(lastIndex);
+
+      // Call enhancedMarkdownParse with placeholders
+      const html = enhancedMarkdownParse(srcWithPlaceholders, { isThinkingText: false });
       
       const tempDiv = document.createElement("div");
       tempDiv.innerHTML = html;
+
+      // Helper to escape command output
+      const escapeCommandOutput = (text) =>
+        text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      // Helper to render single command block - ALWAYS COLLAPSED by default
+      const renderCommandBlock = (group, opts = {}) => {
+        const { isLast = false } = opts;
+        const classes = ['command-input'];
+        // NO auto expand - always collapsed
+        if (isLast) classes.push('last-command');
+
+        const outputHtml = group.output
+          ? `<div class="command-output" aria-hidden="true">${escapeCommandOutput(group.output)}</div>`
+          : '';
+
+        const toggleButton = group.output
+          ? '<button class="command-toggle" aria-label="Toggle command output"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>'
+          : '';
+
+        const readableCommand = group.input && typeof transformCommandText === 'function' 
+          ? transformCommandText(group.input) 
+          : (group.input || '');
+
+        return `
+          <div class="${classes.join(' ')}">
+            <div class="command-header">
+              <svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+              <span class="command-text">${readableCommand}</span>
+              ${toggleButton}
+            </div>
+            ${outputHtml}
+          </div>
+        `;
+      };
+
+      // Replace placeholders with grouped command HTML
+      let finalHtml = tempDiv.innerHTML;
+      
+      // Defensive: unwrap placeholders from <p> tags
+      finalHtml = finalHtml.replace(/<p[^>]*>\s*(__COMMAND_CONTAINER_\d+__)\s*<\/p>/gi, '$1');
+
+      groupedContainers.forEach((container, index) => {
+        const placeholder = `__COMMAND_CONTAINER_${index}__`;
+        const { groups } = container;
+
+        if (!groups || groups.length === 0) {
+          finalHtml = finalHtml.replace(placeholder, '');
+          return;
+        }
+
+        // Single command - no container wrapper, always collapsed
+        if (groups.length === 1) {
+          const [group] = groups;
+          if (!group.input && group.output) {
+            const replacement = `<div class="command-output">${escapeCommandOutput(group.output)}</div>`;
+            finalHtml = finalHtml.replace(placeholder, replacement);
+            return;
+          }
+          const replacement = renderCommandBlock(group, { isLast: true });
+          finalHtml = finalHtml.replace(placeholder, replacement);
+          return;
+        }
+
+        // Multiple commands - use container with steps, all collapsed
+        const stepsLabel = `${groups.length} ${groups.length === 1 ? 'step' : 'steps'}`;
+        const commandsHtml = groups
+          .map((group, idx) => renderCommandBlock(group, {
+            isLast: idx === groups.length - 1,
+          }))
+          .join('');
+
+        const replacement = `
+          <div class="commands-container collapsed" data-steps="${groups.length}">
+            <button class="commands-summary" aria-expanded="false">
+              <svg class="commands-summary-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg>
+              <span class="commands-summary-text">${stepsLabel}</span>
+            </button>
+            <div class="commands-list">
+              ${commandsHtml}
+            </div>
+          </div>
+        `;
+
+        finalHtml = finalHtml.replace(placeholder, replacement);
+      });
+
+      tempDiv.innerHTML = finalHtml;
+
+      // Clean up empty <p> tags
+      const allParagraphs = tempDiv.querySelectorAll('p');
+      allParagraphs.forEach(p => {
+        const textContent = p.textContent.trim();
+        if (!textContent && p.children.length === 0) {
+          p.remove();
+        }
+      });
 
       // Add p-has-li class to p tags before ul/ol
       if (typeof addPHasListClass === 'function') {
@@ -8784,8 +9052,8 @@ function mdFallback(src, options = {}) {
       // Highlight code blocks if present
       if (tempDiv.querySelector("pre code")) highlightAllUnder(tempDiv);
       
-      // Highlight command code blocks
-      // if (tempDiv.querySelector(".hidden-content")) highlightAllUnder(tempDiv);
+      // Initialize commands containers (for grouped commands)
+      if (tempDiv.querySelector(".commands-container")) initCommandsContainers(tempDiv);
       
       // Initialize command toggles
       if (tempDiv.querySelector(".command-toggle")) initCommandToggles(tempDiv);

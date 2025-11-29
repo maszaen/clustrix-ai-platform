@@ -188,13 +188,13 @@ class PowerShellSession {
       this.sentinel = `__CLX_DONE_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
       // Encode command to base64 to safely handle multi-line strings, special chars, quotes
-      const cmdBuffer = Buffer.from(command, 'utf16le');
+      const cmdBuffer = Buffer.from(command, 'utf8');
       const base64Cmd = cmdBuffer.toString('base64');
 
       const script = `
 $ErrorActionPreference = 'Stop'
 $clx__exit = 0
-$clx__cmd = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String('${base64Cmd}'))
+$clx__cmd = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${base64Cmd}'))
 try {
   & ([scriptblock]::Create($clx__cmd))
 }

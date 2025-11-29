@@ -8889,6 +8889,57 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 }
 
 /* Command Input/Output Containers */
+.commands-container {
+  margin: 12px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+}
+
+.commands-container .commands-summary {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px 10px 4px;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.commands-summary-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--icon);
+  transform: rotate(180deg);
+  transition: transform 0.2s ease;
+}
+
+.commands-container.expanded .commands-summary-icon {
+  transform: rotate(0deg);
+}
+
+.commands-summary-text {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.commands-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.commands-container .command-input {
+  margin: 0;
+}
+
+.commands-container.collapsed .command-input:not(.last-command) {
+  display: none;
+}
+
 .command-input {
   margin: 8px 0;
   border-radius: var(--radius-md);
@@ -10739,4 +10790,5 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   word-wrap: break-word !important;
   overflow-wrap: break-word !important;
 }
+
 

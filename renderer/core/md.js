@@ -2089,6 +2089,8 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     }
   });
 
+  // Convert command placeholders to unique markers that are treated as block elements
+  srcAfterCommandExtraction = srcAfterCommandExtraction.replace(/__COMMAND_GROUP_(\d+)__/g, '\n\n___COMMAND_BLOCK_START_$1___\n\n');
 
   // Extract hidden content tags
   const hiddenBlocks = [];
@@ -2369,6 +2371,12 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         lastLineWasCodeblock = false;
         continue;
       }
+      
+      // If next line is a command container placeholder, don't create empty paragraph
+      if (/^__COMMAND_CONTAINER_\d+__$/.test(nextLineTrimmed)) {
+        lastLineWasCodeblock = false;
+        continue;
+      }
 
       closeOpenBlocks();
       lastLineWasCodeblock = false;
@@ -2560,11 +2568,17 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
           currentListItemEndPos += textHtml.length;
         }
       } else {
-        // Check if this line is a container tag (brain or prompt) - don't wrap in <p>
-        if (trimmedLine.includes("XCONTAINERX")) {
+        // Check if this line is a container tag (brain or prompt) or command container placeholder - don't wrap in <p>
+        const isCommandContainerPlaceholder = /^__COMMAND_CONTAINER_\d+__$/.test(trimmedLine);
+        if (trimmedLine.includes("XCONTAINERX") || isCommandContainerPlaceholder) {
           flushImageGroup();
           flushParagraph();
-          html += parseInlineMarkdown(line, globalReferences) + '\n';
+          // For command container placeholders, output directly without parseInlineMarkdown
+          if (isCommandContainerPlaceholder) {
+            html += trimmedLine + '\n';
+          } else {
+            html += parseInlineMarkdown(line, globalReferences) + '\n';
+          }
         } else {
           // Check if this line is ONLY an image (no text before/after)
           // Include nested image+link: [![alt](img)](url) should also go to imageBuffer
@@ -2904,10 +2918,8 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
 
     // Return original if no pattern matches
     return input;
-  }
-
+  }  // Replace command block placeholders with actual HTML
   commandGroups.forEach((group, index) => {
-    const placeholder = `__COMMAND_GROUP_${index}__`;
     let replacement = '';
 
     if (group.input) {
@@ -2920,15 +2932,15 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
       // Transform command text to human-readable format
       const readableCommand = transformCommandText(group.input);
 
-      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><span class="command-text">' +
+      replacement = '\n<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><span class="command-text">' +
         readableCommand +
-        '</span>' + toggleButton + '</div>' + outputHtml + '</div>';
+        '</span>' + toggleButton + '</div>' + outputHtml + '</div>\n';
     } else if (group.output) {
       // Standalone output (fallback)
       replacement = '<div class="command-output">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
     }
 
-    finalHtml = finalHtml.replace(placeholder, replacement);
+    finalHtml = finalHtml.replace(`___COMMAND_BLOCK_START_${index}___`, replacement);
   });
 
   // Process hidden blocks
@@ -3484,92 +3496,229 @@ function parseInlineMarkdown(text, globalReferences = {}) {
 }
 
 function addPHasListClass(container) {
-  // Find all p tags and check if their next sibling is ul or ol
+  // Find all p tags and check if they are followed by ul or ol, but skip empty paragraphs and paragraphs containing only commands
   const pTags = container.querySelectorAll('p');
   pTags.forEach(p => {
-    const nextElement = p.nextElementSibling;
-    if (nextElement && (nextElement.tagName === 'UL' || nextElement.tagName === 'OL')) {
-      p.classList.add('p-has-li');
+    // Skip empty paragraphs or paragraphs with only whitespace
+    if (!p.textContent.trim()) return;
+
+    // Skip paragraphs that contain only command blocks
+    const hasNonCommandContent = Array.from(p.childNodes).some(node => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node.textContent.trim().length > 0;
+      }
+      return !node.classList || !node.classList.contains('command-input');
+    });
+    if (!hasNonCommandContent) return;
+
+    let sibling = p.nextElementSibling;
+    while (sibling) {
+      if (sibling.tagName === 'UL' || sibling.tagName === 'OL') {
+        p.classList.add('p-has-li');
+        break;
+      }
+      // Stop if we encounter another paragraph or other block content
+      if (sibling.tagName === 'P' || sibling.tagName === 'DIV' || sibling.tagName === 'H1' || sibling.tagName === 'H2' || sibling.tagName === 'H3' || sibling.tagName === 'H4' || sibling.tagName === 'H5' || sibling.tagName === 'H6') {
+        break;
+      }
+      sibling = sibling.nextElementSibling;
     }
   });
 }
 
 function md(src, options = {}) {
   if (!src) return "";
-  const cleanSrc = src.trim();
+  // Normalize line endings and trim
+  const cleanSrc = src.trim().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
   // Extract command input/output tags BEFORE any markdown processing
-  // Group consecutive input-output pairs into single command units
-  const commandGroups = [];
+  // Group consecutive input-output pairs into single command units and containers
+  const commandContainers = [];
 
-  // First pass: collect all command blocks
-  const allCommandBlocks = [];
-  cleanSrc.replace(/<!--command-(input|output)-->([\s\S]*?)<!--\/command-\1-->/gi, (match, type, content) => {
-    allCommandBlocks.push({ type, content: content.trim() });
-    return match; // Don't replace yet
-  });
+  // First pass: collect all command blocks with their positions
+  const blockRegex = /<!--command-(input|output)-->([\s\S]*?)<!--\/command-\1-->/gi;
+  let match;
+  let currentContainer = null;
+  let lastBlock = null;
 
-  // Second pass: group consecutive input-output pairs
-  for (let i = 0; i < allCommandBlocks.length; i++) {
-    const block = allCommandBlocks[i];
-    if (block.type === 'input') {
-      const group = { input: block.content };
-      // Check if next block is output
-      if (i + 1 < allCommandBlocks.length && allCommandBlocks[i + 1].type === 'output') {
-        group.output = allCommandBlocks[i + 1].content;
-        i++; // Skip the output block since it's grouped
+  while ((match = blockRegex.exec(cleanSrc)) !== null) {
+    const block = {
+      type: match[1],
+      content: match[2].trim(),
+      start: match.index,
+      end: match.index + match[0].length,
+    };
+
+    const betweenText = lastBlock ? cleanSrc.slice(lastBlock.end, block.start) : '';
+    const hasSeparator = betweenText && betweenText.trim() !== '';
+
+    if (!currentContainer || hasSeparator) {
+      if (currentContainer) {
+        commandContainers.push(currentContainer);
       }
-      commandGroups.push(group);
-    } else if (block.type === 'output') {
-      // Standalone output (shouldn't happen in our system, but handle it)
-      commandGroups.push({ output: block.content });
+      currentContainer = { blocks: [], start: block.start };
     }
+
+    currentContainer.blocks.push(block);
+    currentContainer.end = block.end;
+    lastBlock = block;
   }
 
-  // Third pass: replace with grouped placeholders
-  let srcWithPlaceholders = cleanSrc;
-  commandGroups.forEach((group, index) => {
-    const inputMatch = group.input ? `<!--command-input-->\n${group.input}\n<!--/command-input-->\n` : '';
-    const outputMatch = group.output ? `<!--command-output-->\n${group.output}\n<!--/command-output-->\n` : '';
-    const combinedMatch = inputMatch + outputMatch;
-    if (combinedMatch) {
-      const placeholder = `__COMMAND_GROUP_${index}__`;
-      srcWithPlaceholders = srcWithPlaceholders.replace(combinedMatch, placeholder);
+  if (currentContainer) {
+    commandContainers.push(currentContainer);
+  }
+
+  // Second pass: convert blocks to grouped commands inside each container
+  const groupedContainers = commandContainers.map((container) => {
+    const groups = [];
+    const blocks = container.blocks;
+
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      if (block.type === 'input') {
+        const group = { input: block.content };
+        if (i + 1 < blocks.length && blocks[i + 1].type === 'output') {
+          group.output = blocks[i + 1].content;
+          i++;
+        }
+        groups.push(group);
+      } else if (block.type === 'output') {
+        groups.push({ output: block.content });
+      }
     }
+
+    return { ...container, groups };
   });
+
+  // Third pass: replace containers with placeholders
+  let srcWithPlaceholders = '';
+  let lastIndex = 0;
+
+  groupedContainers.forEach((container, index) => {
+    srcWithPlaceholders += cleanSrc.slice(lastIndex, container.start);
+    srcWithPlaceholders += `__COMMAND_CONTAINER_${index}__`;
+    lastIndex = container.end;
+  });
+
+  srcWithPlaceholders += cleanSrc.slice(lastIndex);
 
   const html = enhancedMarkdownParse(srcWithPlaceholders, options);
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = html;
 
-  // Restore command groups
+  // Helper to escape command output text
+  const escapeCommandOutput = (text) =>
+    text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // Helper to render a single command block - ALWAYS COLLAPSED
+  const renderCommandBlock = (group, options = {}) => {
+    const { isLast = false } = options;
+    const classes = ['command-input'];
+    // NO auto expand
+    if (isLast) classes.push('last-command');
+
+    const outputHtml = group.output
+      ? `<div class="command-output" aria-hidden="true">${escapeCommandOutput(group.output)}</div>`
+      : '';
+
+    const toggleButton = group.output
+      ? '<button class="command-toggle" aria-label="Toggle command output"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>'
+      : '';
+
+    const readableCommand = group.input ? transformCommandText(group.input) : '';
+
+    return `
+      <div class="${classes.join(' ')}">
+        <div class="command-header">
+          <svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+          <span class="command-text">${readableCommand}</span>
+          ${toggleButton}
+        </div>
+        ${outputHtml}
+      </div>
+    `;
+  };
+
+  // Render grouped containers
   let finalHtml = tempDiv.innerHTML;
-  commandGroups.forEach((group, index) => {
-    const placeholder = `__COMMAND_GROUP_${index}__`;
-    let replacement = '';
+  
+  // DEFENSIVE FIX: Unwrap placeholders from <p> tags before replacing
+  // Handle cases like <p>__COMMAND_CONTAINER_0__</p> or <p>\n__COMMAND_CONTAINER_0__\n</p>
+  finalHtml = finalHtml.replace(/<p[^>]*>\s*(__COMMAND_CONTAINER_\d+__)\s*<\/p>/gi, '$1');
+  
+  groupedContainers.forEach((container, index) => {
+    const placeholder = `__COMMAND_CONTAINER_${index}__`;
+    const { groups } = container;
 
-    if (group.input) {
-      // Create expandable command input with output
-      const outputHtml = group.output ?
-        '<div class="command-output" aria-hidden="true">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
-
-      const toggleButton = group.output ? '<button class="command-toggle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>' : '';
-
-      // Transform command text to human-readable format
-      const readableCommand = transformCommandText(group.input);
-
-      replacement = '<div class="command-input"><div class="command-header"><svg class="command-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4,17 10,11 4,5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg><span class="command-text">' +
-        readableCommand +
-        '</span>' + toggleButton + '</div>' + outputHtml + '</div>';
-    } else if (group.output) {
-      // Standalone output (fallback)
-      replacement = '<div class="command-output">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+    if (!groups || groups.length === 0) {
+      finalHtml = finalHtml.replace(placeholder, '');
+      return;
     }
+
+    // Single command - no container, always collapsed
+    if (groups.length === 1) {
+      const [group] = groups;
+      if (!group.input && group.output) {
+        const replacement = `<div class="command-output">${escapeCommandOutput(group.output)}</div>`;
+        finalHtml = finalHtml.replace(placeholder, replacement);
+        return;
+      }
+      const replacement = renderCommandBlock(group, { isLast: true });
+      finalHtml = finalHtml.replace(placeholder, replacement);
+      return;
+    }
+
+    const stepsLabel = `${groups.length} ${groups.length === 1 ? 'step' : 'steps'}`;
+    const commandsHtml = groups
+      .map((group, idx) => renderCommandBlock(group, {
+        isLast: idx === groups.length - 1,
+      }))
+      .join('');
+
+    const replacement = `
+      <div class="commands-container collapsed" data-steps="${groups.length}">
+        <button class="commands-summary" aria-expanded="false">
+          <svg class="commands-summary-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg>
+          <span class="commands-summary-text">${stepsLabel}</span>
+        </button>
+        <div class="commands-list">
+          ${commandsHtml}
+        </div>
+      </div>
+    `;
 
     finalHtml = finalHtml.replace(placeholder, replacement);
   });
 
   tempDiv.innerHTML = finalHtml;
+  
+  // DEFENSIVE FIX: Remove all empty <p> tags (including those with only whitespace/newlines)
+  const allParagraphs = tempDiv.querySelectorAll('p');
+  allParagraphs.forEach(p => {
+    // Check if truly empty - no text content and no meaningful child elements
+    const textContent = p.textContent.trim();
+    const hasChildren = p.children.length > 0;
+    
+    // Remove if empty text AND (no children OR only has empty/whitespace children)
+    if (!textContent) {
+      if (!hasChildren) {
+        p.remove();
+      } else {
+        // Check if all children are also empty (like nested empty spans)
+        const hasNonEmptyChild = Array.from(p.children).some(child => {
+          return child.textContent.trim() || 
+                 child.tagName === 'IMG' || 
+                 child.tagName === 'SVG' ||
+                 child.classList.contains('command-input') ||
+                 child.classList.contains('commands-container');
+        });
+        if (!hasNonEmptyChild) {
+          p.remove();
+        }
+      }
+    }
+  });
+  
   addPHasListClass(tempDiv);
 
   if (tempDiv.querySelector("pre code, .command-code, .hidden-content pre code")) {
@@ -3578,6 +3727,7 @@ function md(src, options = {}) {
 
   attachCodeBlockListeners(tempDiv);
 
+  if (tempDiv.querySelector(".commands-container")) initCommandsContainers(tempDiv);
   if (tempDiv.querySelector(".command-toggle")) initCommandToggles(tempDiv);
 
   const processedHtml = tempDiv.innerHTML;

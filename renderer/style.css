@@ -9105,7 +9105,7 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 }
 
 .commands-list .command-input:not(:last-child).expanded .command-output {
-  border-bottom: 1px solid var(--border-light);
+  /* border-bottom: 1px solid var(--border-light); */
   border-radius: 0;
 }
 
@@ -10816,7 +10816,7 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 .message.codes-session .code-block-container pre[class*=language-],
 .message.codes-session .code-block-container pre.hljs {
   max-height: 329px;
-  border: 1px solid var(--border) !important;
+  border: 1px solid var(--border-light) !important;
   overflow-y: auto;
   background: var(--bg);
   border-radius: var(--radius-lg);

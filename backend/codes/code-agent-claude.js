@@ -503,7 +503,8 @@ async function processClaudeCodeRequest({
     // Build messages (NO memory injection - just history)
     const { system, messages } = buildClaudeAgentMessages(
       session.conversationHistory,
-      instruction
+      instruction,
+      session.workspacePath
     );
     
     // Call Claude API
@@ -597,14 +598,8 @@ async function processClaudeCodeRequest({
     
     // No tool calls and stop_reason is end_turn = conversation complete
     if (parsed.toolCalls.length === 0 && response.stop_reason === 'end_turn') {
-      // Send final answer if present
-      if (parsed.answer) {
-        const finalAnswerChunk = `${parsed.answer}\n\n`;
-        chunks.push(finalAnswerChunk);
-        if (onChunk) onChunk(finalAnswerChunk, { type: 'text', iteration, done: false });
-      }
-      
-      // Add final assistant message
+      // For end_turn, text is already in response.content, don't send duplicate finalAnswerChunk
+      // Just add final assistant message and end
       session.conversationHistory.push({
         role: 'assistant',
         content: response.content,

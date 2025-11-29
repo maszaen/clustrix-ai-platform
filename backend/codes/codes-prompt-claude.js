@@ -108,30 +108,44 @@ DELETE LINES (empty content):
     },
   },
   {
-    name: "task_complete",
-    description: `Signal that the task is complete. Use when:
-- All requested changes have been made and verified
-- The question has been fully answered
-- No more actions are needed
+    name: "update_checklist",
+    description: `Update task checklist for complex multi-step tasks. Only use when user prompt requires multiple steps that need tracking.
 
-Always provide a clear summary of what was accomplished.`,
+CHECKLIST FORMAT:
+- [x] Completed task
+- [/] Currently working on this
+- [ ] Pending task
+
+USAGE GUIDELINES:
+- Only send when checklist changes (task completed, started, or status updated)
+- Don't send in every iteration - only when status changes
+- Use for complex tasks that span multiple steps
+- Keep task descriptions clear and actionable`,
     input_schema: {
-      type: "object", 
+      type: "object",
       properties: {
-        summary: {
-          type: "string",
-          description: "Summary of what was accomplished"
-        },
-        files_changed: {
+        checklist: {
           type: "array",
-          items: { type: "string" },
-          description: "List of files that were modified"
+          description: "Array of checklist items",
+          items: {
+            type: "object",
+            properties: {
+              status: {
+                type: "string",
+                enum: ["completed", "in_progress", "pending"],
+                description: "Task status"
+              },
+              task: {
+                type: "string",
+                description: "Task description"
+              }
+            },
+            required: ["status", "task"]
+          }
         }
       },
-      required: ["summary"]
-    },
-    // Cache the last tool to cache ALL tools
-    cache_control: { type: "ephemeral" }
+      required: ["checklist"]
+    }
   }
 ];
 
@@ -139,33 +153,22 @@ Always provide a clear summary of what was accomplished.`,
 // SYSTEM PROMPT FOR CLAUDE
 // Minimal, focused, no memory injection
 // ===================================
-const CLAUDE_SYSTEM_PROMPT = `You are Clustrix, an expert software engineer with deep knowledge of programming languages, frameworks, and best practices.
+const CLAUDE_SYSTEM_PROMPT = `You are Clustrix, an expert software engineer.
 
-## Your Tools
-- **run_command**: Execute PowerShell commands (search, read files, run tests, etc.)
-- **edit_file**: Modify files with precise line-based edits
-- **task_complete**: Signal when the task is fully done
+## Tools
+- run_command: Execute PowerShell commands
+- edit_file: Modify files with line-based edits
+- update_checklist: Update task progress for complex multi-step tasks
 
-## Working Process
-1. **Understand**: Read the request carefully
-2. **Explore**: Search and read relevant files to understand the codebase
-3. **Plan**: Think through your approach before making changes
-4. **Execute**: Make precise edits using exact line numbers
-5. **Verify**: Read edited files to confirm changes are correct
-6. **Complete**: Use task_complete with a summary when done
-
-## Important Guidelines
-- Always use Show-FileWithLineNumbers to read files (gives you line numbers for editing)
-- Use Search-InFiles for fast recursive search (uses ripgrep)
-- When editing, use the exact line numbers from your most recent file read
-- Verify your changes by reading the file after editing
-- Work incrementally on complex tasks
+## Guidelines
+- Use Show-FileWithLineNumbers to read files (get line numbers)
+- Use Search-InFiles for fast recursive search
+- Edit with exact line numbers from recent reads
+- Verify changes by reading files after editing
+- Be concise and efficient
 
 ## Response Style
-Think through your approach, then use the appropriate tool. Be efficient:
-- Don't re-read files you just read (the output is in our conversation)
-- Don't search for things you already found
-- Move forward once you have enough information`;
+Be brief. Think briefly, then use tools. Don't repeat information or state current status.`;
 
 // ===================================
 // BUILD MESSAGES - NO MEMORY INJECTION
@@ -202,18 +205,32 @@ function getClaudeAgentTools() {
 // PARSE CLAUDE RESPONSE
 // ===================================
 function parseClaudeAgentResponse(response) {
+  // Log raw response for debugging
+  console.log('[CLAUDE-RAW-RESPONSE]', JSON.stringify(response, null, 2));
+  
   const result = {
     text: '',
     toolCalls: [],
     isComplete: false,
     completeSummary: null,
-    filesChanged: []
+    filesChanged: [],
+    // Map to standard agent response format
+    hidden: null,
+    answer: '',
+    command: null,
+    state: null,
+    savedState: null,
+    done: false,
+    todo: null,
+    checklist: null,
+    summary: null,
   };
   
   if (!response.content || !Array.isArray(response.content)) {
     return result;
   }
   
+  // Extract text and tool calls
   for (const block of response.content) {
     if (block.type === 'text') {
       result.text += block.text;
@@ -224,12 +241,55 @@ function parseClaudeAgentResponse(response) {
         input: block.input
       });
       
-      if (block.name === 'task_complete') {
-        result.isComplete = true;
-        result.completeSummary = block.input.summary;
-        result.filesChanged = block.input.files_changed || [];
+      if (block.name === 'run_command') {
+        result.command = block.input.command;
+      } else if (block.name === 'edit_file') {
+        // For edit operations, we don't set command since it's handled differently
+        // But we can set a descriptive command for UI
+        result.command = `Edit file: ${block.input.file}`;
       }
     }
+  }
+  
+  // Clean and set answer from text
+  if (result.text) {
+    // Clean text content similar to parseAgentResponse
+    result.answer = result.text
+      .trim();
+    
+    // Don't normalize whitespace - preserve newlines from Claude's response
+    
+    // Extract checklist if present in text
+    const checklistMatch = result.text.match(/<checklist>([\s\S]*?)<\/checklist>/i);
+    if (checklistMatch) {
+      result.checklist = checklistMatch[1].trim();
+      // Remove checklist from answer
+      result.answer = result.answer.replace(/<checklist>[\s\S]*?<\/checklist>/gi, '').trim();
+    }
+    
+    // Extract hidden if present
+    const hiddenMatch = result.text.match(/<hidden>([\s\S]*?)<\/hidden>/i);
+    if (hiddenMatch) {
+      result.hidden = hiddenMatch[1].trim();
+      // Remove hidden from answer
+      result.answer = result.answer.replace(/<hidden>[\s\S]*?<\/hidden>/gi, '').trim();
+    }
+    
+    // If answer becomes empty after cleaning, don't show it
+    if (!result.answer.trim()) {
+      result.answer = '';
+    }
+  }
+  
+  // Set state based on tools used or completion (internal only, don't display)
+  if (result.isComplete) {
+    result.state = 'DONE';
+  } else if (result.toolCalls.some(tc => tc.name === 'run_command')) {
+    result.state = 'EXECUTE';
+  } else if (result.toolCalls.some(tc => tc.name === 'edit_file')) {
+    result.state = 'EDIT';
+  } else if (result.toolCalls.length === 0 && result.text) {
+    result.state = 'EXPLORE';
   }
   
   return result;

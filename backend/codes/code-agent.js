@@ -1433,52 +1433,52 @@ function ensureDirectoryExists(workspacePath) {
   return null;
 }
 
-const CLAUDE_TOOLS = [
-  {
-    name: "agent_response",
-    description: "Submit your response, including state, internal thought, checklist, answer to user, and command to execute.",
-    input_schema: {
-      type: "object",
-      properties: {
-        state: {
-          type: "string",
-          enum: ["EXPLORE", "EDIT", "EXECUTE", "VERIFY", "DONE"],
-          description: "Current state of the agent."
-        },
-        hidden: {
-          type: "string",
-          description: "Internal thought process and analysis. REQUIRED for all states except DONE."
-        },
-        checklist: {
-          type: "string",
-          description: "Markdown checklist of tasks: [ ] pending, [/] in-progress, [x] done."
-        },
-        answer: {
-          type: "string",
-          description: "Response to show to the user. Optional in EXPLORE/EXECUTE, required in EDIT/VERIFY/DONE."
-        },
-        command: {
-          type: "string",
-          description: "PowerShell command to execute. Optional."
-        },
-        saved_state: {
-          type: "string",
-          description: "Next state to save for future sessions (only for DONE state)."
-        },
-        end: {
-          type: "boolean",
-          description: "Explicitly marks this response as terminal/finished; if true, this indicates no further iterations are required.",
-        },
-        summary: {
-           type: "string",
-           description: "Summary of the command execution (optional)."
-        }
-      },
-      required: ["state", "checklist"]
-    },
-    cache_control: { type: "ephemeral" } // Cache the tool definition
-  }
-];
+// const CLAUDE_TOOLS = [
+//   {
+//     name: "agent_response",
+//     description: "Submit your response, including state, internal thought, checklist, answer to user, and command to execute.",
+//     input_schema: {
+//       type: "object",
+//       properties: {
+//         state: {
+//           type: "string",
+//           enum: ["EXPLORE", "EDIT", "EXECUTE", "VERIFY", "DONE"],
+//           description: "Current state of the agent."
+//         },
+//         hidden: {
+//           type: "string",
+//           description: "Internal thought process and analysis. REQUIRED for all states except DONE."
+//         },
+//         checklist: {
+//           type: "string",
+//           description: "Markdown checklist of tasks: [ ] pending, [/] in-progress, [x] done."
+//         },
+//         answer: {
+//           type: "string",
+//           description: "Response to show to the user. Optional in EXPLORE/EXECUTE, required in EDIT/VERIFY/DONE."
+//         },
+//         command: {
+//           type: "string",
+//           description: "PowerShell command to execute. Optional."
+//         },
+//         saved_state: {
+//           type: "string",
+//           description: "Next state to save for future sessions (only for DONE state)."
+//         },
+//         end: {
+//           type: "boolean",
+//           description: "Explicitly marks this response as terminal/finished; if true, this indicates no further iterations are required.",
+//         },
+//         summary: {
+//            type: "string",
+//            description: "Summary of the command execution (optional)."
+//         }
+//       },
+//       required: ["state", "checklist"]
+//     },
+//     cache_control: { type: "ephemeral" } // Cache the tool definition
+//   }
+// ];
 
 async function callClaudeChat({ baseUrl, apiKey, model, messages, tools }) {
   if (!baseUrl) {
@@ -2422,6 +2422,30 @@ async function processCodeRequest({
   shouldCancel,
   db, // Database manager for loading chat history
 }) {
+  const isClaude = model && model.toLowerCase().includes('claude');
+  
+  if (isClaude) {
+    console.log('[CODES] Routing to Claude-native agent (no manual memory)');
+    
+    // Get workspace info from code record
+    const codeRecord = deps.getCodeById?.(codeId);
+    const workspacePath = codeRecord?.workspace_path || codeRecord?.workspacePath || process.cwd();
+    const instruction = codeRecord?.instruction || '';
+    
+    return processClaudeCodeRequest({
+      sessionId,
+      userPrompt,
+      baseUrl: baseUrl || 'https://api.anthropic.com/v1',
+      apiKey,
+      model,
+      workspacePath,
+      instruction,
+      onChunk,
+      shouldCancel,
+      db, // Pass database for loading chat history
+    });
+  }
+
   const state = getSessionState(sessionId, codeId);
   const codeRecord = deps.getCodeById?.(codeId);
   if (codeRecord) {
@@ -2462,8 +2486,6 @@ async function processCodeRequest({
   // Get current message index for this request
   const chunks = [];
   let usage = null;
-  let lastCommandErrorPattern = null;
-  let sameErrorCount = 0;
   let finalAnswer = null; // Track final answer to save to messages table
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {

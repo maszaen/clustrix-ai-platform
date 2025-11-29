@@ -14856,14 +14856,14 @@ function setupTextareaProjectResize() {
 
     // Add Ctrl+Enter to send message
     projectInput.addEventListener("keydown", function (e) {
-      if (e.ctrlKey && e.key === "Enter") {
+      if (e.altKey && e.key === "Enter") {
         e.preventDefault();
         e.stopPropagation();
         log(
           "UI",
           0,
           "event:keydown-CtrlEnter-project",
-          "Ctrl+Enter pressed in project input, sending message",
+          "Alt+Enter pressed in project input, sending message",
         );
         handleProjectSend();
         return false;

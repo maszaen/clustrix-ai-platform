@@ -2091,6 +2091,9 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
 
   // Convert command placeholders to unique markers that are treated as block elements
   srcAfterCommandExtraction = srcAfterCommandExtraction.replace(/__COMMAND_GROUP_(\d+)__/g, '\n\n___COMMAND_BLOCK_START_$1___\n\n');
+  
+  // Remove indentation around command placeholders to prevent them from being treated as list items
+  srcAfterCommandExtraction = srcAfterCommandExtraction.replace(/^(\s*)(___COMMAND_BLOCK_START_\d+___)/gm, '$2');
 
   // Extract hidden content tags
   const hiddenBlocks = [];
@@ -2392,6 +2395,23 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     const isTableHeader = trimmedLine.includes("|") && !listMatch && !hMatch;
     const bqMatch = line.match(/^\s*>\s?(.*)/);
     const isNextLineSeparator = isTableHeader && nextLine.includes("|") && nextLine.includes("-") && !/[^|:-\s]/.test(nextLine);
+
+    // Handle command block placeholders - close any open lists first
+    if (trimmedLine.startsWith("___COMMAND_BLOCK_START_")) {
+      closeOpenBlocks();
+      html += trimmedLine + "\n";
+      lastLineWasCodeblock = false;
+      continue;
+    }
+
+    // Handle command container placeholders - close any open lists first
+    if (trimmedLine.startsWith("__COMMAND_CONTAINER_")) {
+      closeOpenBlocks();
+      html += trimmedLine + "\n";
+      lastLineWasCodeblock = false;
+      continue;
+    }
+
     if (isTableHeader && isNextLineSeparator) {
       let tableHtml = '<div class="table-container"><table>';
       const headers = trimmedLine.split("|").map(h => h.trim()).filter(Boolean);

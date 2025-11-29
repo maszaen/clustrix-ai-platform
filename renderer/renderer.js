@@ -2140,6 +2140,54 @@ function initCommandsContainers(container) {
       const stepsLabel = summary.dataset.stepsLabel || `${commandsContainer.dataset.steps} steps`;
       const expanded = !commandsContainer.classList.contains('expanded');
 
+      // Handle animation for command inputs
+      const commands = commandsContainer.querySelectorAll('.command-input');
+      if (expanded) {
+        // EXPAND: animate hidden commands from 0 to their full height
+        commands.forEach((commandInput, index) => {
+          if (commandInput.classList.contains('last-command')) return; // Last command is always visible
+          
+          // Temporarily show to get scrollHeight
+          commandInput.style.maxHeight = 'none';
+          commandInput.style.opacity = '1';
+          const targetHeight = commandInput.scrollHeight;
+          commandInput.style.maxHeight = '0px';
+          commandInput.style.opacity = '0';
+          
+          // Force reflow
+          commandInput.offsetHeight;
+          
+          // Animate in next frame
+          requestAnimationFrame(() => {
+            commandInput.style.maxHeight = targetHeight + 'px';
+            commandInput.style.opacity = '1';
+            
+            // After animation, set max-height to none for dynamic content
+            setTimeout(() => {
+              commandInput.style.maxHeight = 'none';
+            }, 300);
+          });
+        });
+      } else {
+        // COLLAPSE: animate to 0, then hide
+        commands.forEach((commandInput, index) => {
+          if (commandInput.classList.contains('last-command')) return;
+          
+          // Set current height and animate to 0
+          const currentHeight = commandInput.scrollHeight;
+          commandInput.style.maxHeight = currentHeight + 'px';
+          
+          // Force reflow
+          commandInput.offsetHeight;
+          
+          // Animate to 0
+          requestAnimationFrame(() => {
+            commandInput.style.maxHeight = '0px';
+            commandInput.style.opacity = '0';
+          });
+        });
+      }
+
       commandsContainer.classList.toggle('expanded', expanded);
       commandsContainer.classList.toggle('collapsed', !expanded);
       summary.setAttribute('aria-expanded', expanded ? 'true' : 'false');

@@ -8891,10 +8891,10 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 /* Command Input/Output Containers */
 .commands-container {
   margin: 12px 0;
-  padding: 8px 10px;
+  padding: 0px;
   border-radius: var(--radius-lg);
-  background: var(--bg-secondary);
   border: 1px solid var(--border);
+  background: var(--bg-secondary);
 }
 
 .commands-container .commands-summary {
@@ -8902,16 +8902,18 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 4px 10px 4px;
+  font-family: var(--font-sans);
+  font-weight: normal;
+  padding: 10px 13px 7px 13px;
   background: transparent;
   border: none;
-  color: var(--fg);
+  color: var(--fg-muted);
   cursor: pointer;
 }
 
 .commands-summary-icon {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   color: var(--icon);
   transform: rotate(180deg);
   transition: transform 0.2s ease;
@@ -8923,29 +8925,23 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 
 .commands-summary-text {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: thin;
 }
 
 .commands-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
 .commands-container .command-input {
   margin: 0;
-  transition: max-height 0.3s ease, opacity 0.3s ease;
+  transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .commands-container.collapsed .command-input:not(.last-command) {
   max-height: 0;
   opacity: 0;
   overflow: hidden;
-}
-
-.commands-container.expanded .command-input {
-  max-height: 60px;
-  opacity: 1;
 }
 
 .command-input {
@@ -8965,9 +8961,13 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 .command-input .command-header {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 8px 13px;
   gap: 10px;
   min-height: 32px;
+}
+
+.commands-list .command-input {
+  border: 0px solid var(--transparent) !important;
 }
 
 .command-header .command-text {
@@ -8977,7 +8977,7 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   font-size: 15px;
   line-height: 1.4;
   background: transparent;
-  color: var(--fg);
+  color: var(--fg-muted);
   border: none;
   margin: 2px 0 0 0;
   padding: 0;
@@ -9058,7 +9058,7 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 .command-input .command-output {
   background: var(--bg);
   color: var(--fg-muted);
-  border-top: 1px solid var(--border);
+  border-top: 0px solid var(--border);
   padding: 0 16px;
   font-family: var(--font-mono);
   font-size: 14px;
@@ -9068,7 +9068,7 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   max-height: 0;
   overflow-y: auto;
   opacity: 0;
-  transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+  transition: max-height 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), padding 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .command-input.expanded .command-output {

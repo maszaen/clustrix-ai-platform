@@ -77,6 +77,56 @@ function transformCommandText(commandText) {
     fullCmd = cmdWrapperMatch[1].trim();
   }
 
+  // Smart split by semicolon - respects quoted strings
+  // This handles multiple commands like "cd path; git init"
+  const splitBySemicolon = (str) => {
+    const parts = [];
+    let current = '';
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      const prevChar = i > 0 ? str[i - 1] : '';
+      
+      // Toggle quote state (ignore escaped quotes)
+      if (char === "'" && prevChar !== '\\' && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote;
+      } else if (char === '"' && prevChar !== '\\' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+      }
+      
+      // Split on semicolon only when not inside quotes
+      if (char === ';' && !inSingleQuote && !inDoubleQuote) {
+        parts.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    
+    if (current.trim()) {
+      parts.push(current.trim());
+    }
+    
+    return parts;
+  };
+
+  // Check if there are multiple semicolon-separated commands
+  const semicolonCommands = splitBySemicolon(fullCmd).filter(c => c);
+  if (semicolonCommands.length > 1) {
+    // Process each semicolon command and join with "and"
+    const descriptions = semicolonCommands.map(singleCmd => {
+      const desc = transformSingleCommand(singleCmd);
+      // Return description only if it's different from the original command (meaning it was recognized)
+      return desc !== singleCmd ? desc : null;
+    }).filter(desc => desc);
+
+    if (descriptions.length > 0) {
+      return descriptions.join(' and ');
+    }
+  }
+
   // Smart split by pipe - respects quoted strings
   // This prevents splitting on | inside quotes like grep -E "(A|B)"
   const splitByPipe = (str) => {
@@ -135,14 +185,27 @@ function transformCommandText(commandText) {
 function transformSingleCommand(commandText) {
   const cmd = commandText.trim();
 
-  // Helper: Extract just filename from path (H:\path\to\file.js → file.js)
+  // Helper: Extract filename with parent directory (H:\path\to\client\file.js → client/file.js)
   const getFilename = (path) => {
     if (!path) return path;
     // Remove quotes first
     path = path.replace(/['"]/g, '');
     // Get last part after / or \
     const parts = path.split(/[/\\]/);
-    return parts[parts.length - 1] || path;
+    
+    // If only one part (just filename), return as is
+    if (parts.length === 1) return parts[0];
+    
+    // Return parent/filename (last 2 parts)
+    const filename = parts[parts.length - 1];
+    const parent = parts[parts.length - 2];
+    
+    // If parent exists and is meaningful (not empty, not just drive letter)
+    if (parent && parent.length > 0 && !parent.match(/^[A-Z]:$/i)) {
+      return `${parent}/${filename}`;
+    }
+    
+    return filename || path;
   };
 
   // Helper function to extract parameter value
@@ -167,13 +230,19 @@ function transformSingleCommand(commandText) {
   // XML-style edit commands (sometimes AI outputs these)
   if (cmd.match(/^<set\s+file=/i)) {
     const fileMatch = cmd.match(/file=["']([^"']+)["']/i);
-    const rangeMatch = cmd.match(/range=\{\s*(\d+)\s*,\s*(\d+)\s*\}/i);
+    // Match both range={start, end} and range={single}
+    const rangeMatch = cmd.match(/range=\{\s*(\d+)\s*(?:,\s*(\d+))?\s*\}/i);
 
     if (fileMatch) {
       const filename = getFilename(fileMatch[1]);
       if (rangeMatch) {
         const start = rangeMatch[1];
         const end = rangeMatch[2];
+        // If only one number, it's a single line
+        if (!end) {
+          return `Edit <strong>${filename}</strong>, line ${start}`;
+        }
+        // If two numbers, it's a range
         return `Edit <strong>${filename}</strong>, lines ${start}-${end}`;
       }
       return `Edit <strong>${filename}</strong>`;
@@ -611,9 +680,396 @@ function transformSingleCommand(commandText) {
     }
   }
 
+  // GIT COMMANDS - Comprehensive handler for all common git operations
+  if (cmd.match(/^git\s+/i)) {
+    // git init - Initialize repository
+    if (cmd.match(/^git\s+init\s*$/i)) {
+      return 'Git initialization';
+    }
+    
+    // git clone - Clone repository
+    if (cmd.match(/^git\s+clone\s+/i)) {
+      const urlMatch = cmd.match(/^git\s+clone\s+(?:[-a-zA-Z]+\s+)*["']?([^\s"']+)["']?/i);
+      if (urlMatch) {
+        const url = urlMatch[1];
+        // Extract repo name from URL
+        const repoMatch = url.match(/\/([^/]+?)(?:\.git)?$/);
+        if (repoMatch) {
+          return `Git clone <strong>${repoMatch[1]}</strong>`;
+        }
+        return `Git clone <code>${esc(url)}</code>`;
+      }
+      return 'Git clone';
+    }
+    
+    // git add - Stage files
+    if (cmd.match(/^git\s+add\s+/i)) {
+      const filesMatch = cmd.match(/^git\s+add\s+(.+)$/i);
+      if (filesMatch) {
+        const files = filesMatch[1].trim();
+        if (files === '.') {
+          return 'Git staging all';
+        } else if (files === '-A' || files === '--all') {
+          return 'Git staging all';
+        } else if (files === '-u' || files === '--update') {
+          return 'Git staging tracked';
+        } else {
+          // Show the file/path being added
+          return `Git staging ${files}`;
+        }
+      }
+      return 'Git staging';
+    }
+    
+    // git commit - Commit changes
+    if (cmd.match(/^git\s+commit/i)) {
+      // Extract message from -m flag (handles both single and double quotes)
+      const msgMatch = cmd.match(/-m\s+["']([^"'\n]+)["']/i);
+      if (msgMatch) {
+        // Only show first line if multiline
+        const firstLine = msgMatch[1].split(/\\n|\n/)[0].trim();
+        const shortMsg = firstLine.length > 50 ? firstLine.substring(0, 47) + '...' : firstLine;
+        return `Git commit with message "${shortMsg}"`;
+      }
+      // Check for --amend
+      if (cmd.match(/--amend\b/i)) {
+        return 'Git amend commit';
+      }
+      return 'Git commit';
+    }
+    
+    // git push - Push to remote
+    if (cmd.match(/^git\s+push/i)) {
+      const remoteMatch = cmd.match(/^git\s+push\s+(?:[-a-zA-Z]+\s+)*(\S+)(?:\s+(\S+))?/i);
+      if (remoteMatch) {
+        const remote = remoteMatch[1];
+        const branch = remoteMatch[2];
+        if (branch) {
+          return `Git push to <strong>${remote}/${branch}</strong>`;
+        }
+        return `Git push to <strong>${remote}</strong>`;
+      }
+      if (cmd.match(/-u\b|--set-upstream/i)) {
+        return 'Git push (set upstream)';
+      }
+      if (cmd.match(/--force\b|-f\b/i)) {
+        return 'Git force push';
+      }
+      return 'Git push';
+    }
+    
+    // git pull - Pull from remote
+    if (cmd.match(/^git\s+pull/i)) {
+      const remoteMatch = cmd.match(/^git\s+pull\s+(?:[-a-zA-Z]+\s+)*(\S+)(?:\s+(\S+))?/i);
+      if (remoteMatch) {
+        const remote = remoteMatch[1];
+        const branch = remoteMatch[2];
+        if (branch) {
+          return `Git pull from <strong>${remote}/${branch}</strong>`;
+        }
+        return `Git pull from <strong>${remote}</strong>`;
+      }
+      if (cmd.match(/--rebase\b/i)) {
+        return 'Git pull (rebase)';
+      }
+      return 'Git pull';
+    }
+    
+    // git fetch - Fetch from remote
+    if (cmd.match(/^git\s+fetch/i)) {
+      const remoteMatch = cmd.match(/^git\s+fetch\s+(\S+)/i);
+      if (remoteMatch) {
+        return `Git fetch from <strong>${remoteMatch[1]}</strong>`;
+      }
+      if (cmd.match(/--all\b/i)) {
+        return 'Git fetch all';
+      }
+      return 'Git fetch';
+    }
+    
+    // git branch - Branch operations
+    if (cmd.match(/^git\s+branch/i)) {
+      if (cmd.match(/-d\b/i)) {
+        const branchMatch = cmd.match(/-d\s+(\S+)/i);
+        if (branchMatch) return `Git delete branch <strong>${branchMatch[1]}</strong>`;
+        return 'Git delete branch';
+      }
+      if (cmd.match(/-D\b/i)) {
+        const branchMatch = cmd.match(/-D\s+(\S+)/i);
+        if (branchMatch) return `Git force delete branch <strong>${branchMatch[1]}</strong>`;
+        return 'Git force delete branch';
+      }
+      if (cmd.match(/-m\b/i)) {
+        return 'Git rename branch';
+      }
+      const branchMatch = cmd.match(/^git\s+branch\s+(\S+)/i);
+      if (branchMatch) {
+        return `Git create branch <strong>${branchMatch[1]}</strong>`;
+      }
+      return 'Git list branches';
+    }
+    
+    // git checkout - Checkout branch/files
+    if (cmd.match(/^git\s+checkout/i)) {
+      if (cmd.match(/-b\s+/i)) {
+        const branchMatch = cmd.match(/-b\s+(\S+)/i);
+        if (branchMatch) return `Git create and checkout <strong>${branchMatch[1]}</strong>`;
+        return 'Git create branch';
+      }
+      const targetMatch = cmd.match(/^git\s+checkout\s+(\S+)/i);
+      if (targetMatch) {
+        return `Git checkout <strong>${targetMatch[1]}</strong>`;
+      }
+      return 'Git checkout';
+    }
+    
+    // git switch - Switch branch (modern alternative to checkout)
+    if (cmd.match(/^git\s+switch/i)) {
+      if (cmd.match(/-c\s+/i)) {
+        const branchMatch = cmd.match(/-c\s+(\S+)/i);
+        if (branchMatch) return `Git create and switch to <strong>${branchMatch[1]}</strong>`;
+        return 'Git create branch';
+      }
+      const branchMatch = cmd.match(/^git\s+switch\s+(\S+)/i);
+      if (branchMatch) {
+        return `Git switch to <strong>${branchMatch[1]}</strong>`;
+      }
+      return 'Git switch branch';
+    }
+    
+    // git merge - Merge branches
+    if (cmd.match(/^git\s+merge/i)) {
+      const branchMatch = cmd.match(/^git\s+merge\s+(?:[-a-zA-Z]+\s+)*(\S+)/i);
+      if (branchMatch) {
+        return `Git merge <strong>${branchMatch[1]}</strong>`;
+      }
+      return 'Git merge';
+    }
+    
+    // git rebase - Rebase branch
+    if (cmd.match(/^git\s+rebase/i)) {
+      if (cmd.match(/--continue\b/i)) return 'Git rebase continue';
+      if (cmd.match(/--abort\b/i)) return 'Git rebase abort';
+      if (cmd.match(/--skip\b/i)) return 'Git rebase skip';
+      if (cmd.match(/-i\b|--interactive/i)) {
+        const branchMatch = cmd.match(/(?:-i|--interactive)\s+(\S+)/i);
+        if (branchMatch) return `Git interactive rebase <strong>${branchMatch[1]}</strong>`;
+        return 'Git interactive rebase';
+      }
+      const branchMatch = cmd.match(/^git\s+rebase\s+(\S+)/i);
+      if (branchMatch) {
+        return `Git rebase onto <strong>${branchMatch[1]}</strong>`;
+      }
+      return 'Git rebase';
+    }
+    
+    // git status - Show status
+    if (cmd.match(/^git\s+status/i)) {
+      if (cmd.match(/-s\b|--short/i)) return 'Git status (short)';
+      return 'Git status';
+    }
+    
+    // git log - Show commit history
+    if (cmd.match(/^git\s+log/i)) {
+      if (cmd.match(/--oneline\b/i)) return 'Git log (oneline)';
+      if (cmd.match(/--graph\b/i)) return 'Git log (graph)';
+      if (cmd.match(/-p\b|--patch/i)) return 'Git log (with diff)';
+      const numMatch = cmd.match(/-(\d+)\b/);
+      if (numMatch) return `Git log (last ${numMatch[1]})`;
+      return 'Git log';
+    }
+    
+    // git diff - Show differences
+    if (cmd.match(/^git\s+diff/i)) {
+      if (cmd.match(/--staged\b|--cached\b/i)) return 'Git diff staged';
+      const fileMatch = cmd.match(/^git\s+diff\s+(?:[-a-zA-Z]+\s+)*(\S+)/i);
+      if (fileMatch) {
+        const file = getFilename(fileMatch[1]);
+        return `Git diff <strong>${file}</strong>`;
+      }
+      return 'Git diff';
+    }
+    
+    // git stash - Stash changes
+    if (cmd.match(/^git\s+stash/i)) {
+      if (cmd.match(/\bpop\b/i)) return 'Git stash pop';
+      if (cmd.match(/\bapply\b/i)) return 'Git stash apply';
+      if (cmd.match(/\blist\b/i)) return 'Git stash list';
+      if (cmd.match(/\bdrop\b/i)) return 'Git stash drop';
+      if (cmd.match(/\bclear\b/i)) return 'Git stash clear';
+      if (cmd.match(/\bsave\b/i)) {
+        const msgMatch = cmd.match(/save\s+["']([^"']+)["']/i);
+        if (msgMatch) return `Git stash save "${msgMatch[1]}"`;
+        return 'Git stash save';
+      }
+      return 'Git stash';
+    }
+    
+    // git reset - Reset changes
+    if (cmd.match(/^git\s+reset/i)) {
+      if (cmd.match(/--hard\b/i)) {
+        const refMatch = cmd.match(/--hard\s+(\S+)/i);
+        if (refMatch) return `Git hard reset to <strong>${refMatch[1]}</strong>`;
+        return 'Git hard reset';
+      }
+      if (cmd.match(/--soft\b/i)) {
+        const refMatch = cmd.match(/--soft\s+(\S+)/i);
+        if (refMatch) return `Git soft reset to <strong>${refMatch[1]}</strong>`;
+        return 'Git soft reset';
+      }
+      const refMatch = cmd.match(/^git\s+reset\s+(\S+)/i);
+      if (refMatch) return `Git reset to <strong>${refMatch[1]}</strong>`;
+      return 'Git reset';
+    }
+    
+    // git revert - Revert commit
+    if (cmd.match(/^git\s+revert/i)) {
+      const commitMatch = cmd.match(/^git\s+revert\s+(\S+)/i);
+      if (commitMatch) return `Git revert <strong>${commitMatch[1]}</strong>`;
+      return 'Git revert';
+    }
+    
+    // git cherry-pick - Cherry pick commit
+    if (cmd.match(/^git\s+cherry-pick/i)) {
+      const commitMatch = cmd.match(/^git\s+cherry-pick\s+(\S+)/i);
+      if (commitMatch) return `Git cherry-pick <strong>${commitMatch[1]}</strong>`;
+      return 'Git cherry-pick';
+    }
+    
+    // git tag - Tag operations
+    if (cmd.match(/^git\s+tag/i)) {
+      if (cmd.match(/-d\s+/i)) {
+        const tagMatch = cmd.match(/-d\s+(\S+)/i);
+        if (tagMatch) return `Git delete tag <strong>${tagMatch[1]}</strong>`;
+        return 'Git delete tag';
+      }
+      const tagMatch = cmd.match(/^git\s+tag\s+(\S+)/i);
+      if (tagMatch) return `Git create tag <strong>${tagMatch[1]}</strong>`;
+      return 'Git list tags';
+    }
+    
+    // git remote - Remote operations
+    if (cmd.match(/^git\s+remote/i)) {
+      if (cmd.match(/\badd\b/i)) {
+        const nameMatch = cmd.match(/add\s+(\S+)/i);
+        if (nameMatch) return `Git add remote <strong>${nameMatch[1]}</strong>`;
+        return 'Git add remote';
+      }
+      if (cmd.match(/\bremove\b|\brm\b/i)) {
+        const nameMatch = cmd.match(/(?:remove|rm)\s+(\S+)/i);
+        if (nameMatch) return `Git remove remote <strong>${nameMatch[1]}</strong>`;
+        return 'Git remove remote';
+      }
+      if (cmd.match(/-v\b/i)) return 'Git list remotes (verbose)';
+      return 'Git list remotes';
+    }
+    
+    // git config - Configuration
+    if (cmd.match(/^git\s+config/i)) {
+      if (cmd.match(/--global\b/i)) return 'Git global config';
+      if (cmd.match(/--local\b/i)) return 'Git local config';
+      if (cmd.match(/--list\b/i)) return 'Git list config';
+      return 'Git config';
+    }
+    
+    // git clean - Remove untracked files
+    if (cmd.match(/^git\s+clean/i)) {
+      if (cmd.match(/-f\b/i) && cmd.match(/-d\b/i)) return 'Git clean untracked (force)';
+      if (cmd.match(/-n\b|--dry-run/i)) return 'Git clean (dry run)';
+      return 'Git clean';
+    }
+    
+    // git rm - Remove files
+    if (cmd.match(/^git\s+rm/i)) {
+      if (cmd.match(/--cached\b/i)) {
+        const fileMatch = cmd.match(/--cached\s+(\S+)/i);
+        if (fileMatch) return `Git unstage <strong>${getFilename(fileMatch[1])}</strong>`;
+        return 'Git unstage';
+      }
+      const fileMatch = cmd.match(/^git\s+rm\s+(?:[-a-zA-Z]+\s+)*(\S+)/i);
+      if (fileMatch) return `Git remove <strong>${getFilename(fileMatch[1])}</strong>`;
+      return 'Git remove';
+    }
+    
+    // git mv - Move/rename files
+    if (cmd.match(/^git\s+mv/i)) {
+      const filesMatch = cmd.match(/^git\s+mv\s+(\S+)\s+(\S+)/i);
+      if (filesMatch) {
+        const from = getFilename(filesMatch[1]);
+        const to = getFilename(filesMatch[2]);
+        return `Git move <strong>${from}</strong> to <strong>${to}</strong>`;
+      }
+      return 'Git move';
+    }
+    
+    // git show - Show commit details
+    if (cmd.match(/^git\s+show/i)) {
+      const refMatch = cmd.match(/^git\s+show\s+(\S+)/i);
+      if (refMatch) return `Git show <strong>${refMatch[1]}</strong>`;
+      return 'Git show';
+    }
+    
+    // git restore - Restore files (modern alternative)
+    if (cmd.match(/^git\s+restore/i)) {
+      if (cmd.match(/--staged\b/i)) {
+        const fileMatch = cmd.match(/--staged\s+(\S+)/i);
+        if (fileMatch) return `Git unstage <strong>${getFilename(fileMatch[1])}</strong>`;
+        return 'Git unstage';
+      }
+      const fileMatch = cmd.match(/^git\s+restore\s+(\S+)/i);
+      if (fileMatch) return `Git restore <strong>${getFilename(fileMatch[1])}</strong>`;
+      return 'Git restore';
+    }
+    
+    // git blame - Show who changed what
+    if (cmd.match(/^git\s+blame/i)) {
+      const fileMatch = cmd.match(/^git\s+blame\s+(?:[-a-zA-Z]+\s+)*(\S+)/i);
+      if (fileMatch) return `Git blame <strong>${getFilename(fileMatch[1])}</strong>`;
+      return 'Git blame';
+    }
+    
+    // git reflog - Show reference logs
+    if (cmd.match(/^git\s+reflog/i)) {
+      return 'Git reflog';
+    }
+    
+    // git bisect - Binary search for bugs
+    if (cmd.match(/^git\s+bisect/i)) {
+      if (cmd.match(/\bstart\b/i)) return 'Git bisect start';
+      if (cmd.match(/\bgood\b/i)) return 'Git bisect good';
+      if (cmd.match(/\bbad\b/i)) return 'Git bisect bad';
+      if (cmd.match(/\breset\b/i)) return 'Git bisect reset';
+      return 'Git bisect';
+    }
+    
+    // git submodule - Submodule operations
+    if (cmd.match(/^git\s+submodule/i)) {
+      if (cmd.match(/\badd\b/i)) return 'Git add submodule';
+      if (cmd.match(/\bupdate\b/i)) return 'Git update submodules';
+      if (cmd.match(/\binit\b/i)) return 'Git init submodules';
+      return 'Git submodule';
+    }
+    
+    // git worktree - Worktree operations
+    if (cmd.match(/^git\s+worktree/i)) {
+      if (cmd.match(/\badd\b/i)) return 'Git add worktree';
+      if (cmd.match(/\blist\b/i)) return 'Git list worktrees';
+      if (cmd.match(/\bremove\b/i)) return 'Git remove worktree';
+      return 'Git worktree';
+    }
+    
+    // Fallback for any other git command
+    const gitCmdMatch = cmd.match(/^git\s+(\S+)/i);
+    if (gitCmdMatch) {
+      return `Git ${gitCmdMatch[1]}`;
+    }
+    return 'Git command';
+  }
+
   // Common shell commands
   if (cmd.match(/^cd\s+/i)) {
-    const dirMatch = cmd.match(/^cd\s+["']?([^\s"']+)["']?/i);
+    // FIX: Handle semicolon properly - extract path before semicolon
+    const dirMatch = cmd.match(/^cd\s+["']?([^\s"';]+)["']?/i);
     if (dirMatch) {
       const dirname = getFilename(dirMatch[1]);
       return `Change to <strong>${dirname}</strong>`;

@@ -71,12 +71,6 @@ Berikan analisis kode yang sudah ditemukan di memory.
 Jika sudah siap: instruksi lengkap untuk edit (file path + info line numbers + perubahan).
 Jika butuh info lagi: jalankan command search sekarang, dan jelaskan apa yang mau dicari selanjutnya (command + alasan).
 </hidden>
-<checklist>
-- [x] completed_task
-- [/] in_progress_task
-- [ ] pending_task
-</checklist>
-<answer>Key findings for user (optional)</answer>
 <cmd>search/read command (optional, skip if ready to edit)</cmd>`,
     useHidden: true,
     useAnswer: false,
@@ -84,7 +78,6 @@ Jika butuh info lagi: jalankan command search sekarang, dan jelaskan apa yang ma
   [AGENT_STATES.EDIT]: {
     format: `<state><Next state EDIT or EXECUTE or EXPLORE again></state>
 <hidden>analyzing what needs to be changed</hidden>
-<checklist>- [/] current edit task</checklist>
 <answer>what is being changed and why</answer>
 <cmd><set file="path" range={start,end}><![CDATA[content]]></set></cmd>`,
     useHidden: true,
@@ -185,13 +178,13 @@ Gunakan <state> untuk berpindah state.
 STATE TRANSITIONS:
   - Ada bug → ke EDIT (jangan baca file lagi, langsung fix)
   - Jika semua pass langsung ke DONE state
-  - Atau jika semua pass langsung tambahkan <!END> di akhir untuk mengakhiri`,
+  - Atau jika selesai langsung tambahkan <!END> tag di akhir untuk mengakhiri`,
 
   [AGENT_STATES.DONE]: `DONE STATE - Task Complete
 
 Summarize semua yang sudah dikerjakan di <answer>.
 Tambah <saved_state> dengan next state untuk future work.
-Jangan lupa <!END>.
+Tambah <!END> tag di akhir.
 JANGAN ada command baru di state ini.`,
 };
 
@@ -222,6 +215,23 @@ Choose your next state:
 6. <!END> HANYA di DONE state
 7. Untuk file BARU: New-Item -ItemType File -Path "path/file.js" -Force dulu
 8. JANGAN pakai Get-Content/cat/type - pakai Show-FileWithLineNumbers
+
+## Task Management
+You have access to the Checklist tools (using <checklist> tag) to help you manage and plan tasks. Use these tools VERY frequently to ensure that you are tracking your tasks and giving the user visibility into your progress.
+These tools are also EXTREMELY helpful for planning tasks, and for breaking down larger complex tasks into smaller steps. If you do not use this tool when planning, you may forget to do important tasks - and that is unacceptable.
+
+It is critical that you mark todos as completed as soon as you are done with a task. Do not batch up multiple tasks before marking them as completed.
+
+CHECKLIST FORMAT:
+- [x] Completed task
+- [/] Currently working on this
+- [ ] Pending task
+
+USAGE GUIDELINES:
+- Only send when checklist changes (task completed, started, or status updated)
+- Don't send in every iteration - only when status changes
+- Use for complex tasks that span multiple steps
+- Keep task descriptions clear and actionable
 
 {command_reference}`;
 

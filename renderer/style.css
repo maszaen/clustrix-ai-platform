@@ -867,7 +867,6 @@ hr {
 .icon-btn2:hover {
   background: var(--hover-bg);
   color: var(--fg);
-  transform: translateY(-1px);
 }
 
 .icon-btn2:active {
@@ -2858,7 +2857,7 @@ input:checked + .slider:before {
 .input-container-btn {
   display: flex;
   align-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
   color: var(--fg-muted);
   font-size: 12px;
   font-family: var(--font-display);
@@ -4297,6 +4296,7 @@ textarea::-webkit-scrollbar {
 .table-container table {
   width: 100%;
   border-collapse: collapse;
+  color: var(--fg-muted);
   min-width: 500px;
 }
 
@@ -4314,20 +4314,20 @@ textarea::-webkit-scrollbar {
 
 .table-container th:first-child,
 .table-container td:first-child {
-  border-bottom: 1px solid var(--border);
-  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light);
+  border-right: 1px solid var(--border-light);
   padding-left: 13px;
 }
 
 .table-container th:not(:first-child):not(:last-child),
 .table-container td:not(:first-child):not(:last-child) {
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .table-container th:last-child,
 .table-container td:last-child {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-light);
   padding-right: 13px;
 }
 
@@ -10832,3 +10832,16 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 }
 
 
+/* Cuma apply ke direct children (depth 1) */
+.message.ai .message-text > :not(.code-block-container):not(.table-container):not(.commands-container):not(blockquote):not(.prompt):not(.brain):not(ol):not(ul) {
+  padding-left: var(--spacing-md);
+  padding-right: var(--spacing-md);
+}
+
+.message.ai .thinking-toggle {
+  padding-left: var(--spacing-lg);
+}
+
+.thinking-wrap:has(.thinking-update:empty):has(.thinking-text:empty) {
+  display: none;
+}

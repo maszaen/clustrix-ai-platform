@@ -1439,6 +1439,13 @@ function ensurePowerShellSession(state, workspacePath) {
   try {
     state.terminal?.dispose();
   } catch { }
+  
+  console.log('Creating PowerShell session', {
+    workspacePath,
+    exists: fs.existsSync(workspacePath),
+    isDir: fs.existsSync(workspacePath) && fs.statSync(workspacePath).isDirectory(),
+  });
+  
   state.terminal = new PowerShellSession({ workspacePath, log });
   state.workspacePath = workspacePath;
   return state.terminal;
@@ -2009,30 +2016,34 @@ async function executeCommand(state, command, options = {}) {
   }
 
   // V2: DANGEROUS COMMAND DETECTION & BLOCKING
-  const warnings = detectDangerousCommand(command);
-  const blockedWarnings = warnings.filter(w => w.block);
+  // Skip blocking if command was already confirmed in processCodeRequest
+  const skipBlocking = options.skipBlocking || (requiresConfirmation && confirmationApproved);
+  if (!skipBlocking) {
+    const warnings = detectDangerousCommand(command);
+    const blockedWarnings = warnings.filter(w => w.block);
 
-  if (blockedWarnings.length > 0) {
-    // Command is BLOCKED for safety
-    const blockMessages = blockedWarnings.map(w =>
-      `${w.warning}\n\nSUGGESTION: ${w.suggestion}`
-    ).join('\n\n');
+    if (blockedWarnings.length > 0) {
+      // Command is BLOCKED for safety
+      const blockMessages = blockedWarnings.map(w =>
+        `${w.warning}\n\nSUGGESTION: ${w.suggestion}`
+      ).join('\n\n');
 
-    return {
-      output: `[COMMAND BLOCKED FOR SAFETY]\n\n${blockMessages}\n\nThis command would hang PowerShell. Please try the suggested alternative.`,
-      exitCode: 1,
-      blocked: true,
-      executed: false,
-    };
-  }
+      return {
+        output: `[COMMAND BLOCKED FOR SAFETY]\n\n${blockMessages}\n\nThis command would hang PowerShell. Please try the suggested alternative.`,
+        exitCode: 1,
+        blocked: true,
+        executed: false,
+      };
+    }
 
-  // Show warnings for non-blocking patterns
-  const nonBlockingWarnings = warnings.filter(w => !w.block);
-  if (nonBlockingWarnings.length > 0) {
-    const warnMessages = nonBlockingWarnings.map(w =>
-      `[WARNING] ${w.warning}\nSUGGESTION: ${w.suggestion}`
-    ).join('\n');
-    console.log('\n' + warnMessages + '\n');
+    // Show warnings for non-blocking patterns
+    const nonBlockingWarnings = warnings.filter(w => !w.block);
+    if (nonBlockingWarnings.length > 0) {
+      const warnMessages = nonBlockingWarnings.map(w =>
+        `[WARNING] ${w.warning}\nSUGGESTION: ${w.suggestion}`
+      ).join('\n');
+      console.log('\n' + warnMessages + '\n');
+    }
   }
 
   // Note: High impact commands are now handled in processCodeRequest
@@ -2214,7 +2225,7 @@ async function processCodeRequest({
     
     // Get workspace info from code record
     const codeRecord = deps.getCodeById?.(codeId);
-    const workspacePath = codeRecord?.workspace_path || codeRecord?.workspacePath || process.cwd();
+    const workspacePath = codeRecord?.workspace_path || codeRecord?.workspacePath || require('os').homedir();
     const instruction = codeRecord?.instruction || '';
     
     return processClaudeCodeRequest({
@@ -2258,7 +2269,7 @@ async function processCodeRequest({
     }
   }
 
-  ensurePowerShellSession(state, state.workspacePath || process.cwd());
+  ensurePowerShellSession(state, state.workspacePath || require('os').homedir());
 
   const userPromptWithContext = buildUserPrompt({
     userPrompt,
@@ -2555,6 +2566,7 @@ async function processCodeRequest({
     } else {
       const result = await executeCommand(state, parsed.command, {
         disableTimeout: requiresConfirmation && confirmationApproved,
+        skipBlocking: requiresConfirmation && confirmationApproved,
         sessionId,
         memoryOwnerId: state.memoryOwnerId,
       });

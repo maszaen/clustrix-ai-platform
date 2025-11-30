@@ -12549,6 +12549,7 @@ function handleConfirmationRequest(streamState, confirmData) {
   log("CODES", 1, "handleConfirmationRequest", "Confirmation required for destructive command", {
     command: confirmData.command,
     iteration: confirmData.iteration,
+    toolCallId: confirmData.toolCallId,
   });
 
   if (!streamState || !streamState.aiNode || !streamState.session) {
@@ -12564,8 +12565,10 @@ function handleConfirmationRequest(streamState, confirmData) {
   const loader = aiNode.querySelector(".inline-loader");
   if (loader?.parentNode) loader.parentNode.removeChild(loader);
 
-  // Remove existing confirmation placeholder for this iteration if present
-  const existingBlock = div.querySelector(`.command-approval-placeholder[data-iteration="${confirmData.iteration}"]`);
+  // Remove existing confirmation placeholder
+  const identifier = confirmData.toolCallId || confirmData.iteration;
+  const dataAttr = confirmData.toolCallId ? 'data-tool-call-id' : 'data-iteration';
+  const existingBlock = div.querySelector(`.command-approval-placeholder[${dataAttr}="${identifier}"]`);
   if (existingBlock?.parentNode) {
     existingBlock.parentNode.removeChild(existingBlock);
   }
@@ -12573,22 +12576,28 @@ function handleConfirmationRequest(streamState, confirmData) {
   // Create simple confirmation placeholder (command already rendered by previous chunk)
   const container = document.createElement("div");
   container.classList.add("command-approval-placeholder");
-  container.dataset.iteration = String(confirmData.iteration);
+  if (confirmData.toolCallId) {
+    container.dataset.toolCallId = confirmData.toolCallId;
+  } else {
+    container.dataset.iteration = String(confirmData.iteration);
+  }
   container.style.display = "flex";
   container.style.flexDirection = "column";
   container.style.gap = "8px";
   container.style.marginTop = "12px";
-  container.style.padding = "var(--spacing-lg)";
+  container.style.padding = "var(--spacing-sm) var(--spacing-lg)";
+  container.style.alignItems = "center";
   container.style.borderRadius = "var(--radius-lg)";
-  container.style.border = "1px solid var(--border)";
+  container.style.backgroundColor = "var(--bg-secondary)";
+  container.style.border = "1px solid var(--border-light)";
   container.style.flexDirection = "row";
   container.style.justifyContent = "space-between";
 
   const messageEl = document.createElement("div");
   messageEl.classList.add("confirmation-message");
-  messageEl.textContent = "> Waiting for approval (auto-skip in 15min)";
+  messageEl.textContent = "Waiting for approval (auto-skip in 15min)";
   messageEl.style.color = "var(--fg-muted)";
-  messageEl.style.fontStyle = "italic";
+  messageEl.style.fontFamily = "var(--font-sans)";
 
   const buttonsWrap = document.createElement("div");
   buttonsWrap.classList.add("confirmation-buttons");
@@ -12598,7 +12607,11 @@ function handleConfirmationRequest(streamState, confirmData) {
   const skipBtn = document.createElement("button");
   skipBtn.classList.add("secondary-btn", "confirmation-skip");
   skipBtn.dataset.sessionId = session.id;
-  skipBtn.dataset.iteration = String(confirmData.iteration);
+  if (confirmData.toolCallId) {
+    skipBtn.dataset.toolCallId = confirmData.toolCallId;
+  } else {
+    skipBtn.dataset.iteration = String(confirmData.iteration);
+  }
   skipBtn.style.height = "32px";
   skipBtn.style.fontSize = "13px";
   skipBtn.textContent = "Skip";
@@ -12606,7 +12619,11 @@ function handleConfirmationRequest(streamState, confirmData) {
   const allowBtn = document.createElement("button");
   allowBtn.classList.add("primary-btn", "confirmation-allow");
   allowBtn.dataset.sessionId = session.id;
-  allowBtn.dataset.iteration = String(confirmData.iteration);
+  if (confirmData.toolCallId) {
+    allowBtn.dataset.toolCallId = confirmData.toolCallId;
+  } else {
+    allowBtn.dataset.iteration = String(confirmData.iteration);
+  }
   allowBtn.style.height = "32px";
   allowBtn.style.fontSize = "13px";
   allowBtn.textContent = "Allow";
@@ -12624,7 +12641,7 @@ function handleConfirmationRequest(streamState, confirmData) {
     messageEl.style.color = variant === "error"
       ? "var(--fg-warning, #ff9500)"
       : "var(--fg-muted)";
-    messageEl.style.fontStyle = "italic";
+    messageEl.style.fontFamily = "var(--font-sans)";
     container.dataset.status = variant;
   };
 
@@ -12633,12 +12650,12 @@ function handleConfirmationRequest(streamState, confirmData) {
       try {
         allowBtn.disabled = true;
         skipBtn.disabled = true;
-        allowBtn.textContent = "Allowing...";
-        setStatus("Command allowed. Processing...", "allowed");
+        allowBtn.textContent = "Processing...";
+        setStatus("Command allowed by you", "allowed");
         
         await window.api.codes.confirmCommand({
           sessionId: session.id,
-          iteration: confirmData.iteration,
+          ...(confirmData.toolCallId ? { toolCallId: confirmData.toolCallId } : { iteration: confirmData.iteration }),
           allowed: true,
         });
       } catch (error) {
@@ -12661,10 +12678,11 @@ function handleConfirmationRequest(streamState, confirmData) {
         
         await window.api.codes.confirmCommand({
           sessionId: session.id,
-          iteration: confirmData.iteration,
+          ...(confirmData.toolCallId ? { toolCallId: confirmData.toolCallId } : { iteration: confirmData.iteration }),
           allowed: false,
         });
-  setStatus("Command skipped. AI will try another approach...", "skipped");
+        
+        setStatus("Command skipped. AI will try another approach...", "skipped");
       } catch (error) {
         log("CODES", 3, "handleConfirmationRequest", "Failed to skip command", { error });
         allowBtn.disabled = false;

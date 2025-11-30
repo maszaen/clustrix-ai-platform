@@ -26,6 +26,7 @@ const SmartBackupService = require('./backend/sync/smart-backup-service');
 const { queryUsageStatistics, invalidateUsageStatisticsCache } = require('./backend/data/usage-statistics');
 const { queryBenchmarkStatistics, invalidateBenchmarkStatisticsCache } = require('./backend/data/benchmark-statistics');
 const { initializeCodeAgent, processCodeRequest, resolveUserConfirmation, disposeAllCodeSessions, cancelCodeSession } = require('./backend/codes/code-agent');
+const { resolveClaudeConfirmation } = require('./backend/codes/code-agent-claude');
 
 function createTimestampedBackup(filePath, reason = '') {
   try {
@@ -3061,22 +3062,35 @@ ipcMain.handle('codes:set-interrupt', async (_event, sessionId) => {
   }
 });
 
-ipcMain.handle('codes:confirm-command', async (_event, { sessionId, iteration, allowed }) => {
+ipcMain.handle('codes:confirm-command', async (_event, { sessionId, iteration, toolCallId, allowed }) => {
   try {
-    const resolved = resolveUserConfirmation(sessionId, iteration, allowed);
-    if (resolved) {
-      log('CODES', 1, 'codes:confirm-command', 'User confirmation resolved', {
+    // Handle both code-agent (iteration) and Claude agent (toolCallId)
+    if (iteration !== undefined) {
+      const resolved = resolveUserConfirmation(sessionId, iteration, allowed);
+      if (resolved) {
+        log('CODES', 1, 'codes:confirm-command', 'User confirmation resolved', {
+          sessionId,
+          iteration,
+          allowed,
+        });
+        return { success: true };
+      } else {
+        log('CODES', 2, 'codes:confirm-command', 'No pending confirmation found', {
+          sessionId,
+          iteration,
+        });
+        return { success: false, error: 'No pending confirmation' };
+      }
+    } else if (toolCallId !== undefined) {
+      resolveClaudeConfirmation(sessionId, toolCallId, allowed);
+      log('CODES', 1, 'codes:confirm-command', 'Claude confirmation resolved', {
         sessionId,
-        iteration,
+        toolCallId,
         allowed,
       });
       return { success: true };
     } else {
-      log('CODES', 2, 'codes:confirm-command', 'No pending confirmation found', {
-        sessionId,
-        iteration,
-      });
-      return { success: false, error: 'No pending confirmation' };
+      return { success: false, error: 'Missing iteration or toolCallId' };
     }
   } catch (error) {
     log('CODES', 3, 'codes:confirm-command', 'Failed to resolve confirmation', {

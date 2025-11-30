@@ -1055,13 +1055,13 @@ function renderSystemPrompt(template, { userPrompt, commandHistory, commandHisto
   return { systemPrompt: finalSystemPrompt, userContext: userContext + summaryReminder };
 }
 
-function parseAgentResponse(text = '') {
+function parseAgentResponse(text = '', currentState = null) {
   const hiddenMatch = text.match(/<hidden>([\s\S]*?)<\/hidden>/i);
   const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/i);
   const cmdMatch = text.match(/<cmd>([\s\S]*?)<\/cmd>/i);
   const stateMatch = text.match(/<state>([\s\S]*?)<\/state>/i);
   const savedStateMatch = text.match(/<saved_state>([\s\S]*?)<\/saved_state>/i);
-  let done = /<!END>/i.test(text) && stateMatch && stateMatch[1].trim().toUpperCase() === 'DONE';
+  let done = /<!END>/i.test(text) && currentState === AGENT_STATES.DONE;
   const todoMatch = text.match(/<todo>([\s\S]*?)<\/todo>/i);
   const checklistMatch = text.match(/<checklist>([\s\S]*?)<\/checklist>/i);
   const summaryMatch = text.match(/<summary>([\s\S]*?)<\/summary>/i);
@@ -1095,6 +1095,20 @@ function parseAgentResponse(text = '') {
     cleanAnswer = cleanAnswer.replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '').trim();
   }
 
+  // DETECT STATE IN ANSWER TAG: If answer is only a state name (uppercase), use it as state
+  let detectedStateFromAnswer = null;
+  if (cleanAnswer) {
+    const trimmedAnswer = cleanAnswer.trim().toUpperCase();
+    if (['EXPLORE', 'EDIT', 'EXECUTE', 'VERIFY', 'DONE'].includes(trimmedAnswer)) {
+      detectedStateFromAnswer = trimmedAnswer;
+      cleanAnswer = '';
+      log('CODES', 2, 'parseAgentResponse', 'Detected state name in answer tag, using as next state', {
+        detectedState: detectedStateFromAnswer,
+        originalAnswer: answerMatch[1].trim()
+      });
+    }
+  }
+
   // V2: If no <answer> tag found, check if other structured tags exist
   // Only use fallback if NO structured tags at all (unformatted response)
   if (!answerMatch && text.trim()) {
@@ -1122,24 +1136,26 @@ function parseAgentResponse(text = '') {
       // AI declared next state, continue iteration
       log('CODES', 2, 'parseAgentResponse', 'Continuing iteration: AI declared valid state', { state: stateMatch[1].trim().toUpperCase() });
     } else {
-      const hasContinuationIndicators = cleanAnswer && (
-        cleanAnswer.toLowerCase().includes('lanjut') ||
-        cleanAnswer.toLowerCase().includes('perlu') ||
-        cleanAnswer.toLowerCase().includes('cek') ||
-        cleanAnswer.toLowerCase().includes('akan') ||
-        cleanAnswer.toLowerCase().includes('menjalankan') ||
-        cleanAnswer.toLowerCase().includes('memperbaiki') ||
-        cleanAnswer.toLowerCase().includes('jika') ||
-        cleanAnswer.toLowerCase().includes('untuk') ||
-        cleanAnswer.toLowerCase().includes('?') ||
-        cleanAnswer.toLowerCase().includes('fokus') ||
-        cleanAnswer.toLowerCase().includes('selanjutnya') ||
-        cleanAnswer.toLowerCase().includes('eksplor') ||
-        cleanAnswer.toLowerCase().includes('benerin')
-      );
-      if (!cleanAnswer || !hasContinuationIndicators) {
-        log('CODES', 2, 'parseAgentResponse', 'Auto-detected done: no command, no meaningful answer with continuation indicators, no hidden content');
-        done = true;
+      // const hasContinuationIndicators = cleanAnswer && (
+      //   cleanAnswer.toLowerCase().includes('lanjut') ||
+      //   cleanAnswer.toLowerCase().includes('perlu') ||
+      //   cleanAnswer.toLowerCase().includes('cek') ||
+      //   cleanAnswer.toLowerCase().includes('akan') ||
+      //   cleanAnswer.toLowerCase().includes('menjalankan') ||
+      //   cleanAnswer.toLowerCase().includes('memperbaiki') ||
+      //   cleanAnswer.toLowerCase().includes('jika') ||
+      //   cleanAnswer.toLowerCase().includes('untuk') ||
+      //   cleanAnswer.toLowerCase().includes('?') ||
+      //   cleanAnswer.toLowerCase().includes('fokus') ||
+      //   cleanAnswer.toLowerCase().includes('selanjutnya') ||
+      //   cleanAnswer.toLowerCase().includes('eksplor') ||
+      //   cleanAnswer.toLowerCase().includes('benerin')
+      // );
+      if (!cleanAnswer) {
+        if (currentState === AGENT_STATES.DONE) {
+          log('CODES', 2, 'parseAgentResponse', 'Auto-detected done: no command, no meaningful answer with continuation indicators, no hidden content');
+          done = true;
+        }
       }
     }
   }
@@ -1148,7 +1164,7 @@ function parseAgentResponse(text = '') {
     hidden: hiddenMatch ? hiddenMatch[1].trim() : null, // V2: Internal AI thinking
     answer: cleanAnswer,
     command,
-    state: stateMatch ? stateMatch[1].trim().toUpperCase() : null, // AI-declared state
+    state: detectedStateFromAnswer || (stateMatch ? stateMatch[1].trim().toUpperCase() : null), // Use detected state from answer, or fallback to state tag
     savedState: savedStateMatch ? savedStateMatch[1].trim().toUpperCase() : null, // Saved state for next session
     done,
     todo: todoMatch ? todoMatch[1].trim() : null,
@@ -1202,6 +1218,7 @@ function isHighImpactCommand(command = '') {
     'git branch -D',
     'git filter-branch',
     'git gc',
+    'git init',
 
     // Process/Service management
     'stop-service',
@@ -1286,24 +1303,30 @@ function isHighImpactCommand(command = '') {
   return dangerousPatterns.some(pattern => firstLine.startsWith(pattern));
 }
 
-// function formatIterationOutput({ answer, command, output, exitCode, blocked }) {
-//   // Return structured object instead of combined string
-//   // This allows separate delivery of response+command vs output
-//   return {
-//     answer: answer || null,
-//     command: command || null,
-//     output: output || null,
-//     exitCode,
-//     blocked: !!blocked,
-//   };
-// }
+
 
 function formatResponseAndCommand({ answer, command, hidden }) {
   const sections = [];
 
   // 1. Format hidden as codeblock with '>' prefix
   if (hidden) {
-    sections.push(`<!--hidden-->\n${hidden.trim()}\n<!--/hidden-->\n`);
+    const raw = hidden.trim();
+
+    // Ambil hanya satu baris pertama
+    const firstLine = raw.split(/\r?\n/)[0];
+
+    const commandInput = firstLine
+      .replace(/\b\w+/g, w => w[0].toUpperCase() + w.slice(1))
+      .trim();
+
+    sections.push(
+      `<!--command-input-->\nThought: ${commandInput}\n<!--/command-input-->\n`
+    );
+
+    // Output tetap full tanpa modifikasi
+    sections.push(
+      `<!--command-output-->\n${raw}\n<!--/command-output-->\n`
+    );
   }
 
   // 2. Add answer (already handled)
@@ -1431,165 +1454,6 @@ function ensureDirectoryExists(workspacePath) {
     log('CODES', 3, 'ensureDirectoryExists', 'Workspace validation failed', { error: error?.message });
   }
   return null;
-}
-
-// const CLAUDE_TOOLS = [
-//   {
-//     name: "agent_response",
-//     description: "Submit your response, including state, internal thought, checklist, answer to user, and command to execute.",
-//     input_schema: {
-//       type: "object",
-//       properties: {
-//         state: {
-//           type: "string",
-//           enum: ["EXPLORE", "EDIT", "EXECUTE", "VERIFY", "DONE"],
-//           description: "Current state of the agent."
-//         },
-//         hidden: {
-//           type: "string",
-//           description: "Internal thought process and analysis. REQUIRED for all states except DONE."
-//         },
-//         checklist: {
-//           type: "string",
-//           description: "Markdown checklist of tasks: [ ] pending, [/] in-progress, [x] done."
-//         },
-//         answer: {
-//           type: "string",
-//           description: "Response to show to the user. Optional in EXPLORE/EXECUTE, required in EDIT/VERIFY/DONE."
-//         },
-//         command: {
-//           type: "string",
-//           description: "PowerShell command to execute. Optional."
-//         },
-//         saved_state: {
-//           type: "string",
-//           description: "Next state to save for future sessions (only for DONE state)."
-//         },
-//         end: {
-//           type: "boolean",
-//           description: "Explicitly marks this response as terminal/finished; if true, this indicates no further iterations are required.",
-//         },
-//         summary: {
-//            type: "string",
-//            description: "Summary of the command execution (optional)."
-//         }
-//       },
-//       required: ["state", "checklist"]
-//     },
-//     cache_control: { type: "ephemeral" } // Cache the tool definition
-//   }
-// ];
-
-async function callClaudeChat({ baseUrl, apiKey, model, messages, tools }) {
-  if (!baseUrl) {
-    return Promise.reject(new Error('Base URL is required for code agent requests.'));
-  }
-  if (!model) {
-    return Promise.reject(new Error('Model ID is required for code agent requests.'));
-  }
-
-  return new Promise((resolve, reject) => {
-    let parsedUrl;
-    try {
-      // Anthropic API usually uses /v1/messages
-      // If the user provides a custom baseUrl (e.g. OpenRouter), it might differ.
-      // But for "model id claude", we assume standard Anthropic or compatible.
-      // If baseUrl ends with /v1, we use /v1/messages.
-      // If it's just the host, we append /v1/messages.
-      
-      // Handle OpenRouter or other proxies that might use OpenAI format for Claude?
-      // The user said "create our own system for model id claude", implying native Anthropic format.
-      // But if the baseUrl is e.g. https://openrouter.ai/api/v1, we should append /messages?
-      // Or maybe the user expects us to use the OpenAI-compatible endpoint even for Claude?
-      // No, "ceks dokumentasi dari claude... cara dia mengirimkan setiap iteration".
-      // This implies using the Messages API format.
-      
-      let endpoint = 'messages';
-      if (baseUrl.endsWith('/')) {
-        endpoint = 'messages';
-      } else if (!baseUrl.endsWith('/v1')) {
-         // If base url doesn't end in v1, assume we need to add it? 
-         // Safest is to use joinEndpoint logic but specific for Anthropic
-         // But let's assume the baseUrl provided is the root API url.
-      }
-      
-      // For now, let's assume baseUrl points to the API root (e.g. https://api.anthropic.com/v1)
-      parsedUrl = new URL(joinEndpoint(baseUrl, endpoint));
-    } catch (error) {
-      reject(error);
-      return;
-    }
-
-    // Extract system message from messages array if present
-    let systemPrompt = '';
-    const apiMessages = [];
-    
-    for (const msg of messages) {
-      if (msg.role === 'system') {
-        systemPrompt = msg.content;
-      } else {
-        apiMessages.push(msg);
-      }
-    }
-
-    const bodyObj = {
-      model,
-      messages: apiMessages,
-      system: [
-        {
-          type: 'text',
-          text: systemPrompt,
-          cache_control: { type: 'ephemeral' } // Cache the system prompt
-        }
-      ],
-      max_tokens: 4096, // Claude supports large output
-      tools: tools,
-      tool_choice: { type: "tool", name: "agent_response" }, // Force the tool use
-    };
-    
-    const body = JSON.stringify(bodyObj);
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Length': Buffer.byteLength(body)
-    };
-
-    const options = {
-      method: 'POST',
-      hostname: parsedUrl.hostname,
-      port: parsedUrl.port,
-      path: parsedUrl.pathname + parsedUrl.search,
-      protocol: parsedUrl.protocol,
-      headers,
-    };
-
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          return reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage || ''} — ${data.slice(0, 200)}`));
-        }
-        try {
-          const json = JSON.parse(data);
-          resolve({
-            content: json.content, // Array of content blocks
-            usage: json.usage || null,
-            stop_reason: json.stop_reason,
-          });
-        } catch (error) {
-          reject(error);
-        }
-      });
-    });
-
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
 }
 
 function callOpenAICompatibleChat({ baseUrl, provider, apiKey, model, messages }) {
@@ -1817,19 +1681,6 @@ async function runAgentIteration({
   console.log('<==>===== END USER PROMPT =====<==>\n\n');
 
   let finalSystemPrompt = systemPrompt;
-  const isClaude = model.toLowerCase().includes('claude');
-
-  if (isClaude) {
-    // Adjust system prompt for Claude to prefer tool use over XML tags
-    finalSystemPrompt = finalSystemPrompt
-      .replace(/=== RESPONSE FORMAT ===[\s\S]*?=== STATE MACHINE ===/, '=== RESPONSE FORMAT ===\nUse the `agent_response` tool to submit your output. Do not use XML tags.\nIf you are fully finished and want to end iteration, set the `end` boolean to `true` in the tool input.\n\n=== STATE MACHINE ===')
-      .replace(/<state>.*?<\/state>/g, '`state` parameter')
-      .replace(/<hidden>.*?<\/hidden>/g, '`hidden` parameter')
-      .replace(/<checklist>.*?<\/checklist>/g, '`checklist` parameter')
-      .replace(/<answer>.*?<\/answer>/g, '`answer` parameter')
-      .replace(/<cmd>.*?<\/cmd>/g, '`command` parameter')
-      .replace(/<!END>/g, 'set the `end` boolean to `true` in the tool input.');
-  }
 
   // Build messages array - OPTIMIZED for token efficiency
   let messages;
@@ -1863,114 +1714,48 @@ async function runAgentIteration({
   let parsed;
   let usage;
 
-  if (isClaude) {
-    const response = await callClaudeChat({
-      baseUrl,
-      apiKey,
-      model,
-      messages,
-      tools: CLAUDE_TOOLS,
-    });
+  const response = await callOpenAICompatibleChat({
+    baseUrl,
+    provider,
+    apiKey,
+    model,
+    messages,
+  });
 
-    usage = response.usage;
-    
-    // Find tool use
-    const toolUseBlock = response.content.find(c => c.type === 'tool_use' && c.name === 'agent_response');
-    
-    if (toolUseBlock) {
-      const args = toolUseBlock.input;
-      parsed = {
-        hidden: args.hidden,
-        answer: args.answer,
-        command: args.command,
-        state: args.state,
-        savedState: args.saved_state,
-        // Prefer explicit end boolean; fallback to state === 'DONE' for compatibility
-        done: (typeof args.end === 'boolean' ? args.end : (args.state === 'DONE')),
-        todo: null, // Checklist is preferred
-        checklist: args.checklist,
-        summary: args.summary,
-        toolUseId: toolUseBlock.id, // Capture ID for tool_result
-      };
-      if (typeof args.end === 'boolean' && args.end) {
-        log('CODES', 1, 'runAgentIteration', 'Claude tool signaled end via end flag', { sessionId, iteration });
+  usage = response.usage;
+  parsed = parseAgentResponse(response.content || '', state.currentState);
+
+  // Store assistant's response in conversation history
+  // V2: Store CLEANED response (no control tags) to prevent tag leaking
+  // Only store the answer that user actually sees, not internal tags
+  // DON'T add "Command executed: X" - it makes AI mimic that format
+  const pushAssistantContent = (c) => state.conversationHistory.push({ role: 'assistant', content: c });
+
+  if (parsed.answer && parsed.answer.trim()) {
+    pushAssistantContent(parsed.answer);
+  } else if (!parsed.answer && !parsed.command && response.content) {
+    // Fallback: if no parsed answer/command, store raw (for unstructured responses)
+    // But still strip all V2 tags to prevent leaking
+    let strippedContent = response.content;
+    try {
+      if (typeof response.content === 'object') {
+        // If it's an object/array, convert to stable string form
+        strippedContent = JSON.stringify(response.content);
       }
-      
-      // Store assistant's tool use in conversation history
-      // NOTE: response.content can be structured (array/object). Store as JSON string to keep memory serializable
-      // This prevents un-serializable or circular values from later causing failures when persisting sessions
-      let assistantContent = response.content;
-      try {
-        if (Array.isArray(response.content) || typeof response.content === 'object') {
-          assistantContent = JSON.stringify(response.content);
-        }
-      } catch (e) {
-        // Fallback - store a minimal string representation
-        assistantContent = String(response.content);
-      }
-      state.conversationHistory.push({
-        role: 'assistant',
-        content: assistantContent,
-      });
-      
-    } else {
-      // Fallback if Claude didn't use tool (rare with tool_choice forced)
-      // Try to parse text content if any
-      const textBlock = response.content.find(c => c.type === 'text');
-      const text = textBlock ? textBlock.text : '';
-      parsed = parseAgentResponse(text);
-      
-      // Store as text message
-      state.conversationHistory.push({
-        role: 'assistant',
-        content: text,
-      });
+    } catch (e) {
+      strippedContent = String(response.content);
     }
+    strippedContent = String(strippedContent)
+      .replace(/<hidden>[\s\S]*?<\/hidden>/gi, '')
+      .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
+      .replace(/<answer>[\s\S]*?<\/answer>/gi, '')
+      .replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '')
+      .replace(/<!END>/gi, '')
+      .trim();
 
-  } else {
-    const response = await callOpenAICompatibleChat({
-      baseUrl,
-      provider,
-      apiKey,
-      model,
-      messages,
-    });
-
-    usage = response.usage;
-    parsed = parseAgentResponse(response.content || '');
-
-      // Store assistant's response in conversation history
-      // V2: Store CLEANED response (no control tags) to prevent tag leaking
-      // Only store the answer that user actually sees, not internal tags
-      // DON'T add "Command executed: X" - it makes AI mimic that format
-      const pushAssistantContent = (c) => state.conversationHistory.push({ role: 'assistant', content: c });
-
-      if (parsed.answer && parsed.answer.trim()) {
-        pushAssistantContent(parsed.answer);
-      } else if (!parsed.answer && !parsed.command && response.content) {
-        // Fallback: if no parsed answer/command, store raw (for unstructured responses)
-        // But still strip all V2 tags to prevent leaking
-        let strippedContent = response.content;
-        try {
-          if (typeof response.content === 'object') {
-            // If it's an object/array, convert to stable string form
-            strippedContent = JSON.stringify(response.content);
-          }
-        } catch (e) {
-          strippedContent = String(response.content);
-        }
-        strippedContent = String(strippedContent)
-          .replace(/<hidden>[\s\S]*?<\/hidden>/gi, '')
-          .replace(/<cmd>[\s\S]*?<\/cmd>/gi, '')
-          .replace(/<answer>[\s\S]*?<\/answer>/gi, '')
-          .replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '')
-          .replace(/<!END>/gi, '')
-          .trim();
-
-        if (strippedContent) {
-          pushAssistantContent(strippedContent);
-        }
-      }
+    if (strippedContent) {
+      pushAssistantContent(strippedContent);
+    }
   }
 
   // V2: Log parsed response structure for debugging

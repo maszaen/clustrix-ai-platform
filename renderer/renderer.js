@@ -5376,7 +5376,10 @@ function renderAllMessagesForNavigation(session) {
     }
 
     if (role === "ai" && !isPlaceholder) {
-      hydrateThinkingIfAny(node, session, i);
+      // Skip thinking hydration for code sessions as they don't have thinking UI
+      if (session?.type !== 'code' && !session?.codeId) {
+        hydrateThinkingIfAny(node, session, i);
+      }
       renderMathInElement(node);
     }
 
@@ -10294,8 +10297,10 @@ function renderHistoryLazy() {
   // Process all AI messages with thinking-text in parallel
   for (const { node, role, actualIndex, isIncompleteResponse, isStreamingResume } of createdNodes) {
     if (role === "ai" && !isIncompleteResponse && !isStreamingResume) {
-      // Add async hydration to batch processing
-      processingPromises.push(hydrateThinkingIfAnyAsync(node, current, actualIndex));
+      // Skip thinking hydration for code sessions as they don't have thinking UI
+      if (current?.type !== 'code' && !current?.codeId) {
+        processingPromises.push(hydrateThinkingIfAnyAsync(node, current, actualIndex));
+      }
       renderMathInElement(node);
     }
 
@@ -10506,7 +10511,10 @@ window.loadOlderMessages = async function () {
         fragment.appendChild(node);
 
         if (role === "ai") {
-          formatterPromises.push(hydrateThinkingIfAnyAsync(node, current, actualIndex));
+          // Skip thinking hydration for code sessions as they don't have thinking UI
+          if (current?.type !== 'code' && !current?.codeId) {
+            formatterPromises.push(hydrateThinkingIfAnyAsync(node, current, actualIndex));
+          }
           renderMathInElement(node);
         }
 
@@ -11432,7 +11440,10 @@ function setCurrent(s) {
         stream.aiNode = newNode;
         newNode.classList.add('streaming-active');
         newNode.dataset.streamId = streamId;
-        hydrateThinkingIfAnyAsync(newNode, current, stream.messageIndex);
+        // Skip thinking hydration for code sessions as they don't have thinking UI
+        if (current?.type !== 'code' && !current?.codeId) {
+          hydrateThinkingIfAnyAsync(newNode, current, stream.messageIndex);
+        }
         const contentDiv = newNode.querySelector(".message-text");
         if (contentDiv) {
           // If stream has accumulated content but wasn't rendered (due to switch before synthesis)
@@ -11987,6 +11998,9 @@ async function generateAndSetTitle(session) {
   const userPrompt = session.messages.find((m) => m[0] === "user")?.[1] || "";
   if (!userPrompt) return;
   log("TITLE", 2, "generateAndSetTitle", "Executed");
+
+  // Add 4-second delay to avoid too many requests per second on free AI APIs
+  await new Promise(resolve => setTimeout(resolve, 4000));
 
   // Check if this is a debug session (provider: local or model: debugging)
   const aiMessage = session.messages.find((m) => m[0] === "ai");

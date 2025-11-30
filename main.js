@@ -2043,12 +2043,12 @@ function createWindow(){
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
   
   const windowWidth = Math.floor(screenWidth * 0.63);
-  const windowHeight = Math.floor(screenHeight * 0.8);
+  const windowHeight = Math.floor(screenHeight * 0.85);
 
   const factor = primaryDisplay.scaleFactor;
   
   // Calculate the desired zoom factor to compensate for system scaling
-  const dynamicZoomFactor = (1.0 / factor) * 0.97;
+  const dynamicZoomFactor = (1.0 / factor) * 1;
 
   const win = new BrowserWindow({
     width: windowWidth,

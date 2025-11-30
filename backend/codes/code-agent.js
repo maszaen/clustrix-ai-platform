@@ -1095,12 +1095,12 @@ function parseAgentResponse(text = '', currentState = null) {
     cleanAnswer = cleanAnswer.replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '').trim();
   }
 
-  // DETECT STATE IN ANSWER TAG: If answer is only a state name (uppercase), use it as state
+  // DETECT STATE IN ANSWER TAG: If answer is only a state name (case insensitive), use it as state
   let detectedStateFromAnswer = null;
   if (cleanAnswer) {
-    const trimmedAnswer = cleanAnswer.trim().toUpperCase();
-    if (['EXPLORE', 'EDIT', 'EXECUTE', 'VERIFY', 'DONE'].includes(trimmedAnswer)) {
-      detectedStateFromAnswer = trimmedAnswer;
+    const trimmedAnswer = cleanAnswer.trim().toLowerCase();
+    if (['explore', 'edit', 'execute', 'verify', 'done'].includes(trimmedAnswer)) {
+      detectedStateFromAnswer = trimmedAnswer.toUpperCase(); // Store as uppercase for consistency
       cleanAnswer = '';
       log('CODES', 2, 'parseAgentResponse', 'Detected state name in answer tag, using as next state', {
         detectedState: detectedStateFromAnswer,
@@ -1164,7 +1164,17 @@ function parseAgentResponse(text = '', currentState = null) {
     hidden: hiddenMatch ? hiddenMatch[1].trim() : null, // V2: Internal AI thinking
     answer: cleanAnswer,
     command,
-    state: detectedStateFromAnswer || (stateMatch ? stateMatch[1].trim().toUpperCase() : null), // Use detected state from answer, or fallback to state tag
+    state: (() => {
+      // Priority: detected state from answer > valid state tag > null
+      if (detectedStateFromAnswer) return detectedStateFromAnswer;
+      if (stateMatch) {
+        const stateFromTag = stateMatch[1].trim().toUpperCase();
+        if (stateFromTag && ['EXPLORE', 'EDIT', 'EXECUTE', 'VERIFY', 'DONE'].includes(stateFromTag)) {
+          return stateFromTag;
+        }
+      }
+      return null;
+    })(),
     savedState: savedStateMatch ? savedStateMatch[1].trim().toUpperCase() : null, // Saved state for next session
     done,
     todo: todoMatch ? todoMatch[1].trim() : null,
@@ -2357,6 +2367,13 @@ async function processCodeRequest({
     // V2: Only show "No response provided" if there's NO answer, NO hidden content, AND NO command
     // If hidden/command exists, answer can be intentionally empty (EXPLORE/EXECUTE states)
     let answerToSend = parsed.answer;
+    if (answerToSend) {
+      // Filter out answers that are only state names (e.g., "EDIT", "edit", "EXECUTE")
+      const trimmed = answerToSend.trim().toLowerCase();
+      if (['explore', 'edit', 'execute', 'verify', 'done'].includes(trimmed)) {
+        answerToSend = null;
+      }
+    }
     if (!answerToSend && !parsed.hidden && !parsed.command) {
       answerToSend = 'No response provided.';
     }

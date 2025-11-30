@@ -81,7 +81,7 @@ body.dark-contrast-theme {
   --fg-death: #7a7e82; /* digelapin dikit */
   --surface: #1a1a1a; /* digelapin dari #1f1f1f */
   --surface-secondary: #3a3c3e; /* diterangin dari #333537 */
-  --border: #555b5b; /* diterangin dari #4a5050 */
+  --border: #313737; /* diterangin dari #4a5050 #555b5b */ 
   --border-light: #313737; /* digelapin dari #3c4141 */
   --border-input: #555b5b; /* match border */
   --border-active: #868686; /* diterangin dari #797979 */

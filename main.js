@@ -2043,7 +2043,7 @@ function createWindow(){
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
   
-  const windowWidth = Math.floor(screenWidth * 0.63);
+  const windowWidth = Math.floor(screenWidth * 0.69);
   const windowHeight = Math.floor(screenHeight * 0.85);
 
   const factor = primaryDisplay.scaleFactor;

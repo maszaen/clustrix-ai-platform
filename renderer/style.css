@@ -681,7 +681,7 @@ hr {
   top: 0;
   bottom: 0;
   z-index: 100;
-  width: 260px;
+  width: 292px;
 
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: width;
@@ -2468,8 +2468,8 @@ input:checked + .slider:before {
   flex-direction: column;
   height: 100vh;
   
-  margin-left: 260px;
-  width: calc(100% - 260px);
+  margin-left: 292px;
+  width: calc(100% - 292px);
   background: var(--bg);
   min-width: 0; 
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -5049,7 +5049,7 @@ blockquote blockquote blockquote blockquote::before {
 
 @media (min-width: 999px) and (max-width: 1300px) {
   #app {
-    grid-template-columns: 260px 1fr;
+    grid-template-columns: 292px 1fr;
   }
   
   .message.user .message-row {

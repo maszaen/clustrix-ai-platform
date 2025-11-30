@@ -28,6 +28,212 @@ const {
 const { log: appLog } = require('../../utils/logger');
 
 // ===================================
+// HIGH IMPACT COMMAND DETECTION (Same as code-agent.js)
+// ===================================
+function isHighImpactCommand(command = '') {
+  // Remove leading/trailing whitespace dan normalize newlines
+  const normalized = command
+    .trim()
+    .replace(/^\s+/gm, '') // Remove whitespace di awal setiap line
+    .toLowerCase();
+
+  // Ambil line pertama yang non-empty
+  const firstLine = normalized
+    .split('\n')
+    .map(line => line.trim())
+    .find(line => line.length > 0) || '';
+
+  const dangerousPatterns = [
+    // File/Directory deletion
+    'remove-item',
+    'rm ',
+    'rmdir',
+    'del ',
+    'format-',
+    'clear-content',
+    'truncate',
+    'shred',
+    'wipe',
+
+    // Disk operations
+    'format-volume',
+    'mkfs',
+    'new-partition',
+    'diskpart',
+    'fdisk',
+    'parted',
+    'dd ',
+
+    // Git operations
+    'git checkout',
+    'git reset',
+    'git clean',
+    'git push --force',
+    'git push -f',
+    'git rebase',
+    'git branch -d',
+    'git branch -D',
+    'git filter-branch',
+    'git gc',
+    'git init',
+
+    // Process/Service management
+    'stop-service',
+    'stop-process',
+    'kill ',
+    'killall',
+    'taskkill',
+    'pkill',
+
+    // Registry (Windows)
+    'reg delete',
+    'remove-itemproperty',
+
+    // Permission changes
+    'chmod',
+    'chown',
+    'icacls',
+    'set-acl',
+    'chgrp',
+    'setfacl',
+
+    // Network config
+    'netsh',
+    'iptables',
+    'route delete',
+    'ifconfig',
+    'ip route',
+    'ufw delete',
+    'firewall-cmd',
+
+    // System config
+    'shutdown',
+    'restart-computer',
+    'disable-',
+    'uninstall',
+    'reboot',
+    'halt',
+    'poweroff',
+    'init ',
+    'systemctl stop',
+    'systemctl disable',
+
+    // Package managers
+    'npm uninstall',
+    'yarn remove',
+    'pip uninstall',
+    'apt-get remove',
+    'apt-get purge',
+    'yum remove',
+    'pacman -r',
+    'brew uninstall',
+
+    // Environment/Config
+    'set-executionpolicy',
+    'setenforce',
+
+    // Cron/Scheduled tasks
+    'crontab -r',
+    'unregister-scheduledtask',
+    'schtasks /delete',
+
+    // Docker/Container
+    'docker rm',
+    'docker rmi',
+    'docker system prune',
+    'docker volume rm',
+    'kubectl delete',
+
+    // Certificate/Security
+    'revoke-',
+    'remove-certificate',
+
+    // Symbolic links
+    'ln -sf',
+    'mklink',
+
+    // Sudo prefix
+    'sudo ',
+  ];
+
+  // Check if first non-empty line STARTS with any dangerous pattern
+  return dangerousPatterns.some(pattern => firstLine.startsWith(pattern));
+}
+
+// ===================================
+// CONFIRMATION SYSTEM (Like code-agent.js)
+// ===================================
+const claudeConfirmationPromises = new Map();
+
+function waitForClaudeConfirmation(sessionId, toolCallId) {
+  const key = `${sessionId}-${toolCallId}`;
+
+  claudeLog(1, 'waitForClaudeConfirmation', 'Waiting for confirmation', {
+    sessionId,
+    toolCallId,
+    key,
+  });
+
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      const entry = claudeConfirmationPromises.get(key);
+      if (entry && entry.resolve === resolve) {
+        claudeConfirmationPromises.delete(key);
+        claudeLog(2, 'waitForClaudeConfirmation', 'Confirmation timed out', {
+          sessionId,
+          toolCallId,
+          key,
+        });
+        resolve({ allowed: false, timedOut: true });
+      }
+    }, 5 * 60 * 1000); // 5 minutes timeout
+
+    claudeConfirmationPromises.set(key, { resolve, timeoutId });
+    claudeLog(1, 'waitForClaudeConfirmation', 'Confirmation promise stored', {
+      sessionId,
+      toolCallId,
+      key,
+      mapSize: claudeConfirmationPromises.size,
+    });
+  });
+}
+
+function resolveClaudeConfirmation(sessionId, toolCallId, allowed) {
+  const key = `${sessionId}-${toolCallId}`;
+  const entry = claudeConfirmationPromises.get(key);
+
+  claudeLog(1, 'resolveClaudeConfirmation', 'Attempting to resolve confirmation', {
+    sessionId,
+    toolCallId,
+    key,
+    hasEntry: !!entry,
+    mapSize: claudeConfirmationPromises.size,
+  });
+
+  if (entry && typeof entry.resolve === 'function') {
+    claudeConfirmationPromises.delete(key);
+    if (entry.timeoutId) {
+      clearTimeout(entry.timeoutId);
+    }
+    entry.resolve({ allowed, timedOut: false });
+    claudeLog(1, 'resolveClaudeConfirmation', 'Confirmation resolved successfully', {
+      sessionId,
+      toolCallId,
+      allowed,
+    });
+    return true;
+  }
+
+  claudeLog(2, 'resolveClaudeConfirmation', 'No pending confirmation found', {
+    sessionId,
+    toolCallId,
+    key,
+    mapSize: claudeConfirmationPromises.size,
+  });
+  return false;
+}
+
+// ===================================
 // CONSTANTS
 // ===================================
 const MAX_ITERATIONS = 50;
@@ -51,10 +257,10 @@ function claudeLog(level, fn, message, details = {}) {
 }
 
 function validateWorkspacePath(workspacePath) {
-  const fallback = process.cwd();
+  const fallback = require('os').homedir();
 
   if (!workspacePath || typeof workspacePath !== 'string') {
-    claudeLog(2, 'validateWorkspacePath', 'Missing workspacePath, using process.cwd()', {
+    claudeLog(2, 'validateWorkspacePath', 'Missing workspacePath, using os.homedir()', {
       fallback,
     });
     return fallback;
@@ -63,18 +269,31 @@ function validateWorkspacePath(workspacePath) {
   const normalized = path.resolve(workspacePath);
 
   try {
-    if (fs.existsSync(normalized) && fs.statSync(normalized).isDirectory()) {
+    const exists = fs.existsSync(normalized);
+    const isDir = exists && fs.statSync(normalized).isDirectory();
+    
+    claudeLog(1, 'validateWorkspacePath', 'Checking workspace path', {
+      workspacePath,
+      normalized,
+      exists,
+      isDir,
+      fallback,
+    });
+    
+    if (isDir) {
       return normalized;
     }
 
-    claudeLog(2, 'validateWorkspacePath', 'Workspace does not exist, using process.cwd()', {
+    claudeLog(2, 'validateWorkspacePath', 'Workspace does not exist or not directory, using os.homedir()', {
       workspacePath,
       normalized,
+      exists,
+      isDir,
       fallback,
     });
     return fallback;
   } catch (error) {
-    claudeLog(3, 'validateWorkspacePath', 'Workspace validation failed, using process.cwd()', {
+    claudeLog(3, 'validateWorkspacePath', 'Workspace validation failed, using os.homedir()', {
       workspacePath,
       normalized,
       fallback,
@@ -89,7 +308,7 @@ function getClaudeSession(sessionId, workspacePath) {
     claudeSessions.set(sessionId, {
       conversationHistory: [],  // Native message history only
       terminal: null,
-      workspacePath: validateWorkspacePath(workspacePath || process.cwd()),
+      workspacePath: validateWorkspacePath(workspacePath || require('os').homedir()),
       lastUsed: Date.now(),
     });
   }
@@ -97,7 +316,7 @@ function getClaudeSession(sessionId, workspacePath) {
   const session = claudeSessions.get(sessionId);
   session.lastUsed = Date.now();
 
-  const normalizedWorkspace = validateWorkspacePath(workspacePath || session.workspacePath || process.cwd());
+  const normalizedWorkspace = validateWorkspacePath(workspacePath || session.workspacePath || require('os').homedir());
   if (session.workspacePath !== normalizedWorkspace) {
     try { session.terminal?.dispose(); } catch {}
     session.terminal = null;
@@ -112,7 +331,7 @@ function getClaudeSession(sessionId, workspacePath) {
 }
 
 function ensureClaudeTerminal(session, { forceNew = false, workspacePathOverride } = {}) {
-  const normalizedWorkspace = validateWorkspacePath(workspacePathOverride || session.workspacePath || process.cwd());
+  const normalizedWorkspace = validateWorkspacePath(workspacePathOverride || session.workspacePath || require('os').homedir());
   const workspaceChanged = session.workspacePath !== normalizedWorkspace;
   const shouldRecreate = forceNew || workspaceChanged || !session.terminal || session.terminal.isDisposed;
 
@@ -128,6 +347,7 @@ function ensureClaudeTerminal(session, { forceNew = false, workspacePathOverride
     claudeLog(1, 'ensureClaudeTerminal', 'Created new PowerShell session', {
       workspacePath: normalizedWorkspace,
       executable: session.terminal?.executable,
+      cwd: process.cwd(),
     });
   } catch (error) {
     claudeLog(4, 'ensureClaudeTerminal', 'Failed to create PowerShell session', {
@@ -204,15 +424,15 @@ async function callClaudeAPI({ baseUrl, apiKey, model, system, messages, tools }
 // ===================================
 // EXECUTE POWERSHELL COMMAND
 // ===================================
-async function executeRunCommand(session, command) {
-  // Check for dangerous commands first
-  const warnings = detectDangerousCommand(command);
-  const blocked = warnings.find(w => w.block);
-
-  if (blocked) {
+async function executeRunCommand(session, command, confirmed = false) {
+  // Check for dangerous commands - use same logic as code-agent.js
+  if (!confirmed && isHighImpactCommand(command)) {
+    // Return confirmation required indicator
     return {
       success: false,
-      output: `⚠️ COMMAND BLOCKED: ${blocked.warning}\n\nSuggestion: ${blocked.suggestion}`,
+      output: '',
+      requiresConfirmation: true,
+      command: command,
     };
   }
 
@@ -236,9 +456,28 @@ async function executeRunCommand(session, command) {
   });
 
   const runWithTerminal = async () => {
-    const result = await terminal.run(command, { timeout: COMMAND_TIMEOUT_MS });
-
+    // Debug: check current location first
+    claudeLog(1, 'executeRunCommand', 'Checking current location before command');
+    const locationResult = await terminal.run('Get-Location | Select-Object Path');
+    claudeLog(1, 'executeRunCommand', 'Current location result', {
+      stdout: locationResult.stdout,
+      stderr: locationResult.stderr,
+      exitCode: locationResult.exitCode,
+    });
+    
+    // Use same logic as code-agent.js - direct command execution without base64 encoding
+    const result = await terminal.run(command);
+    
     let output = [result.stdout, result.stderr].filter(Boolean).join('\n');
+
+    // Log raw result for debugging
+    claudeLog(1, 'executeRunCommand', 'raw_result', {
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+      stdoutLength: result.stdout.length,
+      stderrLength: result.stderr.length,
+    });
 
     // Truncate if too long
     if (output.length > MAX_TOOL_OUTPUT_CHARS) {
@@ -390,14 +629,45 @@ function formatChecklist(checklist) {
 // ===================================
 // EXECUTE SINGLE TOOL
 // ===================================
-async function executeTool(session, toolCall) {
+async function executeTool(session, toolCall, confirmed = false, onChunk = null, sessionId = null) {
   const { name, input, id } = toolCall;
   
   console.log(`[CLAUDE-AGENT] Executing: ${name}`, JSON.stringify(input).slice(0, 150));
   
   switch (name) {
     case 'run_command': {
-      const result = await executeRunCommand(session, input.command);
+      const result = await executeRunCommand(session, input.command, confirmed);
+      
+      // Handle confirmation flow
+      if (result.requiresConfirmation) {
+        // Send confirmation request to UI
+        if (onChunk) {
+          const confirmationChunk = JSON.stringify({
+            type: 'confirmation-required',
+            command: input.command,
+            toolCallId: id,
+            sessionId: sessionId, // Use the actual sessionId from processClaudeCodeRequest
+          }) + '\n';
+          onChunk(confirmationChunk, { type: 'confirmation' });
+        }
+        
+        // Wait for user confirmation
+        const confirmation = await waitForClaudeConfirmation(sessionId, id);
+        
+        if (confirmation.allowed) {
+          // User confirmed, execute command
+          console.log(`[CLAUDE-AGENT] User confirmed dangerous command: ${input.command}`);
+          const confirmedResult = await executeRunCommand(session, input.command, true);
+          return formatClaudeToolResult(id, confirmedResult.output, !confirmedResult.success);
+        } else {
+          // User rejected or timed out
+          const skipMessage = confirmation.timedOut 
+            ? 'Command execution timed out - user did not respond within 5 minutes.'
+            : 'User skipped this command, do not try again with this command.';
+          return formatClaudeToolResult(id, skipMessage, false);
+        }
+      }
+      
       return formatClaudeToolResult(id, result.output, !result.success);
     }
     
@@ -431,6 +701,11 @@ async function processClaudeCodeRequest({
   shouldCancel,
   db, // Database for loading chat history
 }) {
+  claudeLog(1, 'processClaudeCodeRequest', 'Starting Claude code request', {
+    sessionId,
+    workspacePath,
+    model,
+  });
   const session = getClaudeSession(sessionId, workspacePath);
   const tools = getClaudeAgentTools();
   
@@ -642,7 +917,7 @@ async function processClaudeCodeRequest({
         }
         
         // Execute tool
-        const result = await executeTool(session, toolCall);
+        const result = await executeTool(session, toolCall, false, onChunk, sessionId);
         toolResults.push(result);
         
         // Send command output to UI (following standard format)
@@ -714,4 +989,5 @@ module.exports = {
   clearClaudeSession,
   disposeClaudeSession,
   getClaudeSession,
+  resolveClaudeConfirmation,
 };

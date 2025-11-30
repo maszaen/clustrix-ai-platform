@@ -10833,7 +10833,7 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 
 
 /* Cuma apply ke direct children (depth 1) */
-.message.ai .message-text > :not(.code-block-container):not(.table-container):not(.commands-container):not(blockquote):not(.prompt):not(.brain):not(ol):not(ul) {
+.message.ai .message-text > :not(.code-block-container):not(.table-container):not(.commands-container):not(blockquote):not(.prompt):not(.brain):not(ol):not(ul):not(.command-input) {
   padding-left: var(--spacing-md);
   padding-right: var(--spacing-md);
 }

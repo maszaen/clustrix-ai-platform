@@ -18,13 +18,15 @@ function detectExecutable() {
 
 function normalizeWorkspacePath(workspacePath) {
   if (!workspacePath || typeof workspacePath !== 'string') {
-    return process.cwd();
+    // Safe fallback to user home, not project directory
+    return require('os').homedir();
   }
 
   if (!path.isAbsolute(workspacePath)) {
-    return path.resolve(process.cwd(), workspacePath);
+    return path.resolve(require('os').homedir(), workspacePath);
   }
 
+  // Don't fallback, use the path as is even if not accessible
   return workspacePath;
 }
 
@@ -42,20 +44,49 @@ class PowerShellSession {
   }
 
   _spawnProcess() {
-    this.process = spawn(this.executable, [
-      '-NoLogo',
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      '-'
-    ], {
-      cwd: this.workspacePath,
-      env: {
-        ...process.env,
-        PSMODULEPATH: process.env.PSMODULEPATH || ''
-      },
-      windowsHide: true
+    console.log('Spawning PowerShell process', {
+      executable: this.executable,
+      workspacePath: this.workspacePath,
+      cwd: process.cwd(),
     });
+    
+    try {
+      this.process = spawn(this.executable, [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        '-'
+      ], {
+        cwd: this.workspacePath,
+        env: {
+          ...process.env,
+          PSMODULEPATH: process.env.PSMODULEPATH || ''
+        },
+        windowsHide: true
+      });
+    } catch (spawnError) {
+      console.log('Spawn failed', {
+        error: spawnError.message,
+        workspacePath: this.workspacePath,
+        fallback: require('os').homedir()
+      });
+      // Fallback to user home directory
+      this.process = spawn(this.executable, [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        '-'
+      ], {
+        cwd: require('os').homedir(),
+        env: {
+          ...process.env,
+          PSMODULEPATH: process.env.PSMODULEPATH || ''
+        },
+        windowsHide: true
+      });
+    }
 
     this.process.stdin.setDefaultEncoding('utf-8');
     this.process.stdout.setEncoding('utf-8');
@@ -70,7 +101,7 @@ class PowerShellSession {
     this.process.stdout.on('data', (chunk) => this._handleStdout(chunk));
     this.process.stderr.on('data', (chunk) => this._handleStderr(chunk));
     this.process.on('error', (error) => {
-      this.log('CODES', 4, 'powershell-session:error', 'PowerShell process error', {
+      console.log('PowerShell process error', {
         error: error?.message || error
       });
       if (this.currentCommand) {
@@ -80,7 +111,7 @@ class PowerShellSession {
     });
 
     this.process.on('exit', (code, signal) => {
-      this.log('CODES', 2, 'powershell-session:exit', 'PowerShell session exited', {
+      console.log('PowerShell session exited', {
         code,
         signal
       });
@@ -148,7 +179,7 @@ class PowerShellSession {
     // Load helper functions into PowerShell session
     const helperPath = path.join(__dirname, 'powershell-helpers.ps1');
     if (!fs.existsSync(helperPath)) {
-      this.log('CODES', 2, 'powershell-session:loadHelpers', 'Helper functions file not found', {
+      console.log('Helper functions file not found', {
         path: helperPath
       });
       return;
@@ -158,9 +189,9 @@ class PowerShellSession {
       const helperScript = fs.readFileSync(helperPath, 'utf8');
       // Inject helper functions into session (don't wait for response)
       this.process.stdin.write(helperScript + '\n');
-      this.log('CODES', 1, 'powershell-session:loadHelpers', 'Helper functions loaded');
+      console.log('Helper functions loaded');
     } catch (error) {
-      this.log('CODES', 3, 'powershell-session:loadHelpers', 'Failed to load helper functions', {
+      console.log('Failed to load helper functions', {
         error: error?.message
       });
     }
@@ -187,16 +218,18 @@ class PowerShellSession {
       this.currentCommand = { resolve, reject };
       this.sentinel = `__CLX_DONE_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-      // Encode command to base64 to safely handle multi-line strings, special chars, quotes
-      const cmdBuffer = Buffer.from(command, 'utf8');
-      const base64Cmd = cmdBuffer.toString('base64');
+      // For simple commands without special characters, execute directly
+      // For complex commands, use base64 encoding
+      const hasSpecialChars = /[`'";\\|&<>]/.test(command);
+      let script;
 
-      const script = `
+      if (!hasSpecialChars && command.length < 1000) {
+        // Execute simple commands directly
+        script = `
 $ErrorActionPreference = 'Stop'
 $clx__exit = 0
-$clx__cmd = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${base64Cmd}'))
 try {
-  & ([scriptblock]::Create($clx__cmd))
+  ${command}
 }
 catch {
   [Console]::Error.WriteLine($_)
@@ -213,6 +246,37 @@ if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) {
 [Console]::Out.WriteLine("EXIT_CODE:$clx__exit")
 [Console]::Out.Flush()
 `;
+      } else {
+        // Use base64 for complex commands
+        const cmdBuffer = Buffer.from(command, 'utf8');
+        const base64Cmd = cmdBuffer.toString('base64');
+
+        script = `
+$ErrorActionPreference = 'Stop'
+$clx__exit = 0
+$clx__cmd = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${base64Cmd}'))
+try {
+  $result = & ([scriptblock]::Create($clx__cmd))
+  if ($result -ne $null) {
+    $result | Out-String
+  }
+}
+catch {
+  [Console]::Error.WriteLine($_)
+  if ($LASTEXITCODE -ne $null) {
+    $clx__exit = [int]$LASTEXITCODE
+  } else {
+    $clx__exit = 1
+  }
+}
+if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) {
+  $clx__exit = [int]$LASTEXITCODE
+}
+[Console]::Out.WriteLine("${this.sentinel}")
+[Console]::Out.WriteLine("EXIT_CODE:$clx__exit")
+[Console]::Out.Flush()
+`;
+      }
 
       try {
         this.process.stdin.write(script + '\n');

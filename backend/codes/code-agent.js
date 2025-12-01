@@ -2027,7 +2027,7 @@ async function executeCommand(state, command, options = {}) {
 
   // V2: DANGEROUS COMMAND DETECTION & BLOCKING
   // Skip blocking if command was already confirmed in processCodeRequest
-  const skipBlocking = options.skipBlocking || (requiresConfirmation && confirmationApproved);
+  const skipBlocking = options.skipBlocking;
   if (!skipBlocking) {
     const warnings = detectDangerousCommand(command);
     const blockedWarnings = warnings.filter(w => w.block);

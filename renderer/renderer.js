@@ -1,5 +1,18 @@
 import { welcomeMessages, filesUploadDark, filesUploadLight, LOADING_VERBS } from './utils/constants.mjs';
-import { svgEmptyStateChats, svgEmptyStateProjects, svgEmptyStateArtifacts } from './utils/svg.mjs'
+import { 
+  svgEmptyStateChats, 
+  svgEmptyStateProjects, 
+  svgEmptyStateArtifacts,
+  svgCmdRemove,
+  svgCmdWrite,
+  svgCmdCopy,
+  svgCmdRun,
+  svgCmdEdit,
+  svgCmdReadFolder,
+  svgCmdReadFile,
+  svgCmdGit,
+  svgCmdMove
+} from './utils/svg.mjs';
 import { showBrowserWarningModal,
   closeDropdownWithAnimation,
   openDropdownWithAnimation,
@@ -9000,6 +9013,118 @@ function mdFallback(src, options = {}) {
         text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
       // Helper to render single command block - ALWAYS COLLAPSED by default
+      const getCommandIcon = (cmd) => {
+        if (!cmd || typeof cmd !== 'string') return null;
+        
+        // Extract actual command from <real-cmd> tag if present
+        const realCmdMatch = cmd.match(/<real-cmd>([^<]+)<\/real-cmd>/);
+        const commandToAnalyze = realCmdMatch ? realCmdMatch[1].trim() : cmd;
+        
+        const lower = commandToAnalyze.toLowerCase().trim();
+        
+        // Skip if multiple commands (contains ; or |)
+        if (lower.includes(';') || lower.includes('|')) return null;
+        
+        // XML-style edit commands (<set file="..." range={...}>)
+        if (lower.match(/<set\s+file=/i)) {
+          return svgCmdEdit || null;
+        }
+        
+        // POWERSHELL-HELPERS.PS1 COMMANDS - Full coverage with imported SVG icons
+        
+        // Edit operations (Set-FileLine, Set-MultipleLines)
+        if (lower.startsWith('set-fileline') || lower.startsWith('set-multiplelines')) {
+          return svgCmdEdit || null;
+        }
+        
+        // Read file operations (Show-FileWithLineNumbers, Get-FileLineRange, Get-FileStats)
+        if (lower.startsWith('show-filewithlinen') || 
+            lower.startsWith('get-filelinerange') ||
+            lower.startsWith('get-filestats')) {
+          return svgCmdReadFile || null;
+        }
+        
+        // Search operations (Search-InFiles, Find-Pattern, Search-FileWithContext, Find-DuplicateLines)
+        if (lower.startsWith('search-infiles') || 
+            lower.startsWith('find-pattern') || 
+            lower.startsWith('search-filewithcontext') ||
+            lower.startsWith('find-duplicatelines')) {
+          return svgCmdReadFile || null;
+        }
+        
+        // Add line operation (Add-FileLine)
+        if (lower.startsWith('add-fileline')) {
+          return svgCmdWrite || null;
+        }
+        
+        // Remove line operation (Remove-FileLine)
+        if (lower.startsWith('remove-fileline')) {
+          return svgCmdRemove || null;
+        }
+        
+        // Replace in file operation (Replace-InFile)
+        if (lower.startsWith('replace-infile')) {
+          return svgCmdEdit || null;
+        }
+        
+        // Directory structure operation (Get-DirectoryStructure)
+        if (lower.startsWith('get-directorystructure')) {
+          return svgCmdReadFolder || null;
+        }
+        
+        // Write file operations (Out-File, Set-Content, heredoc)
+        if (lower.includes('out-file') || lower.includes('set-content') || 
+            lower.match(/@['"]\s*[\s\S]*?['"]\s*@\s*\|/)) {
+          return svgCmdWrite || null;
+        }
+        
+        // Directory listing operations (List-ProjectFiles)
+        if (lower.startsWith('list-projectfiles')) {
+          return svgCmdReadFolder || null;
+        }
+        
+        // Generic PowerShell file/folder operations
+        if (lower.includes('get-childitem') || lower.match(/^(ls|dir)(\s|$)/)) {
+          return svgCmdReadFolder || null;
+        }
+        
+        if (lower.includes('get-content') || lower.match(/^cat\s/)) {
+          return svgCmdReadFile || null;
+        }
+        
+        if (lower.includes('new-item') || lower.match(/^(mkdir|touch)\s/) ||
+            lower.match(/^(echo|write-output).*?>>?/)) {
+          return svgCmdWrite || null;
+        }
+        
+        if (lower.includes('remove-item') || lower.match(/^(rm|del|rmdir)\s/)) {
+          return svgCmdRemove || null;
+        }
+        
+        if (lower.includes('copy-item') || lower.match(/^cp\s/)) {
+          return svgCmdCopy || null;
+        }
+        
+        // Move/Rename operations
+        if (lower.includes('move-item') || lower.includes('rename-item') || lower.match(/^(mv|ren|move)\s/)) {
+          return svgCmdMove || null;
+        }
+        
+        // Git operations
+        if (lower.match(/^git\s/)) {
+          return svgCmdGit || null;
+        }
+        
+        // Execution commands (node, npm, python, etc)
+        if (lower.match(/^(node|npm|yarn|pnpm|python|pwsh|powershell|go\s+run|cargo\s+run|dotnet\s+run)\s/) ||
+            lower.match(/^\.[\\/]/)) {
+          return svgCmdRun || null;
+        }
+        
+        // Default terminal icon for everything else
+        return null;
+      };
+
       const renderCommandBlock = (group, opts = {}) => {
         const { isLast = false } = opts;
         const classes = ['command-input'];
@@ -9018,10 +9143,18 @@ function mdFallback(src, options = {}) {
           ? transformCommandText(group.input) 
           : (group.input || '');
 
+        // Get dynamic icon based on command type
+        const commandIcon = getCommandIcon(group.input) || 
+          `<svg class="command-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="1 0 22 17" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-terminal-icon lucide-square-terminal">
+  <path d="m8 11 2-2-2-2m4 6h4"/>
+  <rect width="18.5" height="14" x="3" y="3" rx="2" ry="2"/>
+</svg>
+`;
+
         return `
           <div class="${classes.join(' ')}">
             <div class="command-header">
-              <svg class="command-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M128,128a8,8,0,0,1-3,6.25l-40,32a8,8,0,1,1-10-12.5L107.19,128,75,102.25a8,8,0,1,1,10-12.5l40,32A8,8,0,0,1,128,128Zm48,24H136a8,8,0,0,0,0,16h40a8,8,0,0,0,0-16Zm56-96V200a16,16,0,0,1-16,16H40a16,16,0,0,1-16-16V56A16,16,0,0,1,40,40H216A16,16,0,0,1,232,56ZM216,200V56H40V200H216Z"></path></svg>          
+              ${commandIcon}
               <span class="command-text">${readableCommand}</span>
               ${toggleButton}
             </div>
@@ -10234,6 +10367,12 @@ function renderHistoryLazy() {
       role = isStreamingResume ? "ai" : "ai_incomplete";
     }
 
+    // Check if this is the last message in a code session that's still streaming
+    const isLastMessageInCodeSession = 
+      current?.type === 'code' && 
+      actualIndex === totalMessages - 1 && 
+      streamManager.isStreamingInSession(current);
+
     let node;
     if (isStreamingResume) {
       node = addMessage("ai", "", {
@@ -10243,7 +10382,7 @@ function renderHistoryLazy() {
       });
     } else {
       node = addMessage(role, content, {
-        final: true, // Always final for historical render
+        final: !isLastMessageInCodeSession, // Don't finalize if code session is still streaming
         index: actualIndex,
         metadata: metadata || {},
       });

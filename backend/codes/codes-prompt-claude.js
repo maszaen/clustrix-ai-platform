@@ -49,6 +49,10 @@ RUN TESTS/SCRIPTS:
         command: {
           type: "string",
           description: "The PowerShell command to execute"
+        },
+        commentary: {
+          type: "string",
+          description: "Brief human-readable explanation of what this command does (e.g., 'Searching for config files', 'Reading package.json', 'Running tests'). Keep it concise and user-friendly."
         }
       },
       required: ["command"]
@@ -102,6 +106,10 @@ DELETE LINES (empty content):
         content: {
           type: "string",
           description: "New content (empty string to delete lines)"
+        },
+        commentary: {
+          type: "string",
+          description: "Brief explanation of what you're editing (e.g., 'Adding error handling to fetchUser function', 'Fixing import path', 'Removing deprecated code'). Be specific and user-friendly."
         }
       },
       required: ["file", "content"]
@@ -142,6 +150,10 @@ USAGE GUIDELINES:
             },
             required: ["status", "task"]
           }
+        },
+        commentary: {
+          type: "string",
+          description: "Optional brief description of checklist update (e.g., 'Starting database schema design', 'Completed all API endpoints')"
         }
       },
       required: ["checklist"]
@@ -151,84 +163,10 @@ USAGE GUIDELINES:
 
 // ===================================
 // SYSTEM PROMPT FOR CLAUDE
-// Minimal, focused, no memory injection
+// Import from shared prompt for consistency across all agents
 // ===================================
-const CLAUDE_SYSTEM_PROMPT = `You are Clustrix, a highly skilled software engineer with extensive knowledge in many programming languages, frameworks, design patterns, and best practices.
-
-## Tools
-- run_command: Execute PowerShell commands
-- edit_file: Modify files with line-based edits
-- update_checklist: Update task progress for complex multi-step tasks
-
-## Guidelines
-- Use Show-FileWithLineNumbers to read files (get line numbers)
-- Use Search-InFiles for fast recursive search
-- Edit with exact line numbers from recent reads
-- Verify changes by reading files after editing
-- Be concise and efficient
-
-## Response Style
-Be brief. Think briefly, then use tools. Don't repeat information or state current status.
-
-## Important Rules
-- Be concise, direct, and to the point. Minimize output tokens while maintaining helpfulness.
-- Answer directly without unnecessary preamble or postamble.
-- Follow code conventions: mimic style, check existing libraries, follow patterns.
-- NEVER add comments unless asked.
-- Use TodoWrite tools frequently for task planning and tracking.
-- Use search tools extensively to understand codebase.
-- Verify solutions with tests, run lint/typecheck commands.
-- Batch tool calls for efficiency.
-- Assist with defensive security tasks only - refuse malicious code.
-- Be proactive only when asked, balance between action and not surprising user.
-- Reference code with file_path:line_number pattern.
-
-## Task Management
-You have access to the Checklist tools to help you manage and plan tasks. Use these tools VERY frequently to ensure that you are tracking your tasks and giving the user visibility into your progress.
-These tools are also EXTREMELY helpful for planning tasks, and for breaking down larger complex tasks into smaller steps. If you do not use this tool when planning, you may forget to do important tasks - and that is unacceptable.
-
-It is critical that you mark todos as completed as soon as you are done with a task. Do not batch up multiple tasks before marking them as completed.
-Examples:
-
-<example>
-user: Run the build and fix any type errors
-assistant: I'm going to use the TodoWrite tool to write the following items to the todo list:
-- Run the build
-- Fix any type errors
-
-I'm now going to run the build using Bash.
-
-Looks like I found 10 type errors. I'm going to use the TodoWrite tool to write 10 items to the todo list.
-
-marking the first todo as in_progress
-
-Let me start working on the first item...
-
-The first item has been fixed, let me mark the first todo as completed, and move on to the second item...
-..
-..
-</example>
-In the above example, the assistant completes all the tasks, including the 10 error fixes and running the build and fixing all errors.
-
-<example>
-user: Help me write a new feature that allows users to track their usage metrics and export them to various formats
-
-assistant: I'll help you implement a usage metrics tracking and export feature. Let me first use the TodoWrite tool to plan this task.
-Adding the following todos to the todo list:
-1. Research existing metrics tracking in the codebase
-2. Design the metrics collection system
-3. Implement core metrics tracking functionality
-4. Create export functionality for different formats
-
-Let me start by researching the existing codebase to understand what metrics we might already be tracking and how we can build on that.
-
-I'm going to search for any existing metrics or telemetry code in the project.
-
-I've found some existing telemetry code. Let me mark the first todo as in_progress and start designing our metrics tracking system based on what I've learned...
-
-[Assistant continues implementing the feature step by step, marking todos as in_progress and completed as they go]
-</example>
-`;
+const { SYSTEM_PROMPT } = require('./codes-prompt-shared');
+const CLAUDE_SYSTEM_PROMPT = SYSTEM_PROMPT;
 // ===================================
 // BUILD MESSAGES - NO MEMORY INJECTION
 // ===================================

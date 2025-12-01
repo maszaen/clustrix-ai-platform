@@ -897,17 +897,32 @@ async function processClaudeCodeRequest({
       
       for (const toolCall of parsed.toolCalls) {
         // Send command input to UI (following standard format)
-        let commandText = '';
-        if (toolCall.name === 'run_command') {
-          commandText = toolCall.input.command;
+        let displayText = '';
+        let actualCommand = '';
+        
+        // Prioritize AI commentary, fallback to humanized command
+        if (toolCall.input.commentary) {
+          displayText = toolCall.input.commentary;
+          // Preserve actual command for icon detection
+          if (toolCall.name === 'run_command') {
+            actualCommand = toolCall.input.command;
+          } else if (toolCall.name === 'edit_file') {
+            actualCommand = `<set file="${toolCall.input.file}" range={${toolCall.input.start_line || 1},${toolCall.input.end_line || 1}}>`;
+          }
+        } else if (toolCall.name === 'run_command') {
+          displayText = toolCall.input.command;
+          actualCommand = toolCall.input.command;
         } else if (toolCall.name === 'edit_file') {
-          commandText = `Edit file: ${toolCall.input.file}`;
+          displayText = `Edit file: ${toolCall.input.file}`;
+          actualCommand = `<set file="${toolCall.input.file}" range={${toolCall.input.start_line || 1},${toolCall.input.end_line || 1}}>`;
         } else if (toolCall.name === 'update_checklist') {
-          commandText = `Update checklist (${toolCall.input.checklist.length} items)`;
+          displayText = `Update checklist (${toolCall.input.checklist.length} items)`;
         }
         
-        if (commandText) {
-          const commandChunk = `<!--command-input-->\n${commandText}\n<!--/command-input-->\n`;
+        if (displayText) {
+          // Include real-cmd tag only if commentary differs from actual command
+          const realCmdTag = actualCommand && actualCommand !== displayText ? `<real-cmd>${actualCommand}</real-cmd>` : '';
+          const commandChunk = `<!--command-input-->\n${displayText}${realCmdTag}\n<!--/command-input-->\n`;
           chunks.push(commandChunk);
           if (onChunk) onChunk(commandChunk, { 
             type: 'command', 

@@ -9035,6 +9035,8 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 .command-input .command-icon {
   color: var(--icon);
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
 }
 
 .command-input .command-code {

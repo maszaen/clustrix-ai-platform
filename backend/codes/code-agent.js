@@ -16,6 +16,7 @@ const {
   getErrorGuidance,
 } = require('./codes-prompt');
 const { processClaudeCodeRequest } = require('./code-agent-claude');
+const { processOpenAICodeRequest } = require('./code-agent-openai');
 const MAX_ITERATIONS = 200;
 const MAX_HISTORY = 50;
 const MAX_OUTPUT_LINES = 10000; // Increased from 100 to 10000 for full output
@@ -1278,7 +1279,9 @@ function formatResponseAndCommand({ answer, command, commentary, hidden }) {
   // 3. Add command (already handled)
   if (command) {
     const inputText = commentary || command.trim();
-    sections.push(`<!--command-input-->\n${inputText}\n<!--/command-input-->\n`);
+    // Include real-cmd tag only if commentary differs from actual command
+    const realCmdTag = commentary && commentary !== command.trim() ? `<real-cmd>${command.trim()}</real-cmd>` : '';
+    sections.push(`<!--command-input-->\n${inputText}${realCmdTag}\n<!--/command-input-->\n`);
   }
 
   return sections.length > 0 ? sections.join('\n') : null;
@@ -2149,15 +2152,20 @@ async function processCodeRequest({
   shouldCancel,
   db, // Database manager for loading chat history
 }) {
-  const isClaude = model && model.toLowerCase().includes('claude');
+  // ===================================
+  // ROUTER: Detect provider and route to appropriate agent
+  // ===================================
+  const modelLower = (model || '').toLowerCase();
+  const providerLower = (provider || '').toLowerCase();
   
-  if (isClaude) {
-    console.log('[CODES] Routing to Claude-native agent (no manual memory)');
-    
-    // Get workspace info from code record
-    const codeRecord = deps.getCodeById?.(codeId);
-    const workspacePath = codeRecord?.workspace_path || codeRecord?.workspacePath || require('os').homedir();
-    const instruction = codeRecord?.instruction || '';
+  // Get workspace info from code record (used by both agents)
+  const codeRecord = deps.getCodeById?.(codeId);
+  const workspacePath = codeRecord?.workspace_path || codeRecord?.workspacePath || require('os').homedir();
+  const instruction = codeRecord?.instruction || '';
+  
+  // Route to Claude native agent
+  if (providerLower === 'anthropic' || modelLower.includes('claude')) {
+    console.log('[CODE-AGENT] Routing to Claude native agent');
     
     return processClaudeCodeRequest({
       sessionId,
@@ -2169,12 +2177,38 @@ async function processCodeRequest({
       instruction,
       onChunk,
       shouldCancel,
-      db, // Pass database for loading chat history
+      db,
     });
   }
+  
+  // Route to OpenAI-style agent (OpenAI, GLM, Deepseek, Gemini, etc)
+  if (providerLower === 'openai' || 
+      providerLower === 'bigmodel' || 
+      providerLower === 'google' ||
+      providerLower === 'gemini' ||
+      modelLower.includes('gpt') || 
+      modelLower.includes('glm') || 
+      modelLower.includes('deepseek') ||
+      modelLower.includes('gemini')) {
+    console.log('[CODE-AGENT] Routing to OpenAI-style agent');
+    return processOpenAICodeRequest({
+      sessionId,
+      userPrompt,
+      baseUrl,
+      apiKey,
+      model,
+      workspacePath,
+      instruction,
+      onChunk,
+      shouldCancel,
+      db,
+    });
+  }
+  
+  // Fallback to legacy manual memory system
+  console.log('[CODE-AGENT] Using legacy manual memory system (fallback)');
 
   const state = getSessionState(sessionId, codeId);
-  const codeRecord = deps.getCodeById?.(codeId);
   if (codeRecord) {
     state.instruction = codeRecord.instruction || '';
     state.workspacePath = ensureDirectoryExists(codeRecord.workspace_path || codeRecord.workspacePath || '') || state.workspacePath;
@@ -2731,6 +2765,7 @@ module.exports = {
   initializeCodeAgent,
   processCodeRequest,
   resolveUserConfirmation,
+  resolveOpenAIConfirmation: require('./code-agent-openai').resolveOpenAIConfirmation,
   disposeAllCodeSessions,
   cancelCodeSession,
 };

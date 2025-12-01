@@ -71,6 +71,9 @@ function transformCommandText(commandText) {
 
   let fullCmd = commandText.trim();
   
+  // Strip <real-cmd> tag (used internally for icon detection, should not be displayed)
+  fullCmd = fullCmd.replace(/<real-cmd>.*?<\/real-cmd>/g, '').trim();
+  
   // Handle <cmd>...</cmd> wrapper - extract inner content
   const cmdWrapperMatch = fullCmd.match(/^<cmd>\s*([\s\S]*?)\s*<\/cmd>$/i);
   if (cmdWrapperMatch) {
@@ -376,6 +379,59 @@ function transformSingleCommand(commandText) {
 
     const filename = getFilename(path);
     return `Get stats for <strong>${filename}</strong>`;
+  }
+
+  if (cmd.match(/^Search-FileWithContext/i)) {
+    const path = getPath();
+    const pattern = getQuotedParam('Pattern') || getParam('Pattern');
+    const context = getParam('ContextBefore') || getParam('ContextAfter');
+
+    if (!path || !pattern) return cmd;
+
+    const filename = getFilename(path);
+    
+    if (context) {
+      return `Search <code>${esc(pattern)}</code> in <strong>${filename}</strong> <span style="opacity: 0.7">(±${context} lines context)</span>`;
+    }
+    
+    return `Search <code>${esc(pattern)}</code> in <strong>${filename}</strong>`;
+  }
+
+  if (cmd.match(/^Find-DuplicateLines/i)) {
+    const path = getPath();
+    const caseSensitive = cmd.match(/-CaseSensitive\s+\$true/i);
+
+    if (!path) return cmd;
+
+    const filename = getFilename(path);
+    
+    if (caseSensitive) {
+      return `Find duplicates in <strong>${filename}</strong> <span style="opacity: 0.7">(case-sensitive)</span>`;
+    }
+    
+    return `Find duplicates in <strong>${filename}</strong>`;
+  }
+
+  if (cmd.match(/^Get-FileLineRange/i)) {
+    const path = getPath();
+    const rangesMatch = cmd.match(/-Ranges\s+@\(([^)]+)\)/i);
+
+    if (!path) return cmd;
+
+    const filename = getFilename(path);
+    
+    if (rangesMatch) {
+      const ranges = rangesMatch[1].split(',').map(r => r.trim().replace(/['"]/g, ''));
+      const rangeCount = ranges.length;
+      
+      if (rangeCount === 1) {
+        return `Read <strong>${filename}</strong>, range ${ranges[0]}`;
+      }
+      
+      return `Read <strong>${filename}</strong>, ${rangeCount} ranges`;
+    }
+    
+    return `Read <strong>${filename}</strong>`;
   }
 
   if (cmd.match(/^Replace-InFile/i)) {

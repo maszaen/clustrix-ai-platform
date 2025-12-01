@@ -1,28 +1,42 @@
 // ===================================================================
-// CODE AGENT V3: OPTIMIZED STATE-BASED PROMPTING SYSTEM
+// CODE AGENT: STATIC PROMPT (NO STATE MACHINE)
 // ===================================================================
-//
-// DESIGN PHILOSOPHY:
-// 1. STATE-BASED: Different states = different prompts & response formats
-// 2. HIDDEN TAG: Internal AI thinking (langsung konten, no sub-tags)
-// 3. COMMAND BLOCKING: Prevent dangerous/stuck commands BEFORE execution
-// 4. CONTEXT COMPRESSION: Smart memory management
-// 5. TOKEN EFFICIENT: Removed redundancies
-//
-// STATES: EXPLORE → EDIT → EXECUTE → VERIFY → DONE
-// (UNDERSTAND merged into EXPLORE for efficiency)
-// ===================================================================
+// Semua aturan ditempatkan pada satu system prompt statis. Tidak ada
+// penentuan state atau <state> tag; AI hanya fokus menjalankan tugas
+// berdasarkan aturan berikut tanpa berpindah state.
 
 // ===================================
-// AGENT STATES (UNDERSTAND merged into EXPLORE)
+// RESPONSE FORMAT & CORE RULES (STATIC)
 // ===================================
-const AGENT_STATES = {
-  EXPLORE: 'explore',   // Finding files + analyzing code (merged with UNDERSTAND)
-  EDIT: 'edit',         // Modifying files
-  EXECUTE: 'execute',   // Running tests/commands
-  VERIFY: 'verify',     // Checking results
-  DONE: 'done',         // Task complete
-};
+const RESPONSE_FORMAT = `
+Gunakan tag berikut:
+- <hidden> untuk penjelasan internal (WAJIB ada di setiap respon). Tidak boleh ada perintah di dalamnya.
+- <checklist> untuk status tugas (kirim hanya ketika berubah). Format: "- [ ] pending task" | "- [/] in progress" | "- [x] done".
+- <cmd> untuk setiap perintah yang perlu dijalankan dengan format:
+  <cmd>
+    <commentary>Alasan singkat</commentary>
+    <execute>command here</execute>
+  </cmd>
+  Satu <cmd> per batch, gabungkan beberapa <execute> jika butuh beberapa langkah berurutan.
+- <answer> untuk laporan ringkas ke user. Jangan ulang output panjang.
+- <todo> untuk daftar tindak lanjut yang belum selesai (opsional jika checklist sudah cukup).
+- <summary> untuk merangkum output command panjang (pakai ketika hasil lebih dari 10 baris).
+- <!END> hanya jika pekerjaan benar-benar selesai.
+
+Hindari tag <state> atau konsep state apapun.`;
+
+const EXECUTION_RULES = `
+PRINSIP KERJA:
+1) Selalu baca <memory_view> sebelum membuka file baru agar tidak duplikat.
+2) Saat butuh membaca file: pakai Show-FileWithLineNumbers, jangan Get-Content/cat/type.
+3) Hindari Get-ChildItem -Recurse; gunakan List-ProjectFiles atau Search-InFiles dengan Depth.
+4) Untuk edit file, gunakan <set> dalam <cmd> dengan instruksi jelas (range/add). Pakai New-Item -Force sebelum menulis ke file baru.
+5) Saat menjalankan perintah, jelaskan alasannya di <commentary>. Jangan jalankan layanan/background tanpa alasan.
+6) Prioritaskan keamanan: jangan eksekusi perintah berbahaya, cek pola terlarang sebelum menjalankan.
+7) Jika command gagal, berikan analisis singkat di <hidden> dan rencana perbaikan.
+8) Gunakan <answer> untuk update ringkas, bukan untuk menempelkan log panjang. Pakai <summary> bila perlu.
+9) Gunakan checklist untuk tugas multi langkah dan perbarui segera ketika status berubah.
+10) Selalu tampilkan <cmd> jika ada perintah yang perlu dijalankan; jika tidak ada, berikan konteks dan rencana di <hidden>.`;
 
 // ===================================
 // DANGEROUS COMMAND PATTERNS (BLOCKING)
@@ -562,178 +576,24 @@ const DANGEROUS_PATTERNS = [
 ];
 
 // ===================================
-// STATE RESPONSE FORMATS
+// CORE SYSTEM PROMPT (Static)
 // ===================================
-const STATE_RESPONSE_FORMATS = {
-  [AGENT_STATES.EXPLORE]: {
-    format: `<state><Next state EXPLORE or EDIT></state>
-<hidden>
-Berikan analisis kode yang sudah ditemukan di memory.
-Jika sudah siap: instruksi lengkap untuk edit (file path + info line numbers + perubahan).
-Jika butuh info lagi: jalankan command search sekarang, dan jelaskan apa yang mau dicari selanjutnya (command + alasan).
-</hidden>
-<cmd>search/read command (optional, skip if ready to edit)</cmd>`,
-    useHidden: true,
-    useAnswer: false,
-  },
-  [AGENT_STATES.EDIT]: {
-    format: `<state><Next state: EDIT or EXECUTE or EXPLORE again></state>
-<hidden>analyzing what needs to be changed</hidden>
-<answer>what is being changed and why</answer>
-<cmd><set file="path" range={start,end}><![CDATA[content]]></set></cmd>`,
-    useHidden: true,
-    useAnswer: true,
-  },
-  [AGENT_STATES.EXECUTE]: {
-    format: `<state><Next state EDIT or EXPLORE again></state>
-<hidden>why running this command</hidden>
-<cmd>run command</cmd>`,
-    useHidden: true,
-    useAnswer: false,
-  },
-  [AGENT_STATES.VERIFY]: {
-    format: `<state><Next state DONE or EXPLORE again></state>
-<hidden>checking verification results</hidden>
-<answer>verification result</answer>`,
-    useHidden: true,
-    useAnswer: true,
-  },
-  [AGENT_STATES.DONE]: {
-    format: `<answer>detailed summary of what was done</answer>
-<saved_state>Next state for future work</saved_state>
-<!END>`,
-    useHidden: false,
-    useAnswer: true,
-  },
-};
-
-// ===================================
-// STATE-SPECIFIC RULES
-// ===================================
-const STATE_RULES = {
-  [AGENT_STATES.EXPLORE]: `EXPLORE STATE - Search & Analyze Combined (merged with UNDERSTAND)
-
-Gunakan <hidden> untuk:
-1. Analisis kode yang sudah ditemukan di <memory_view>
-2. JIKA SUDAH SIAP EDIT: berikan instruksi lengkap (file path + line numbers + apa yang diubah)
-3. JIKA BUTUH INFO LAGI: jelaskan apa yang mau dicari dan command-nya
-
-WORKFLOW:
-1. CEK <memory_view> DULU! Jangan search ulang yang sudah ada
-2. Analisis apa yang kamu lihat di memory
-3. Kalau sudah cukup info → langsung ke <state>EDIT</state>
-4. Kalau butuh info lagi → pakai <cmd> untuk search/read
-
-COMMANDS:
-  Search-InFiles -Pattern "regex" -Filter "*.js" -Depth 2
-  Show-FileWithLineNumbers -Path "file.js" [-StartLine N -EndLine M]
-  Find-Pattern -Pattern "regex" -Path "file.js"
-  List-ProjectFiles -Depth 2 [-Extensions "*.js,*.ts"]
-  Get-FileLineRange -Path "file.js" -Ranges @('1-10', '50-60')
-  Search-FileWithContext -Path "file.js" -Pattern "regex" -ContextBefore 2 -ContextAfter 2
-  Get-FileStats -Path "file.js"
-  Find-DuplicateLines -Path "file.js"
-
-TURBO MODE: Kalau bug sudah jelas dari memory, LANGSUNG ke EDIT tanpa search lagi.
-
-PENTING: Jangan loop search terus-terusan. Setelah dapat info cukup, langsung analisis dan edit.`,
-
-  [AGENT_STATES.EDIT]: `EDIT STATE - Modify Files
-
-Gunakan <hidden> untuk analisis perubahan yang akan dilakukan.
-WAJIB pakai <answer> untuk jelaskan ke user.
-
-Format edit:
-<cmd><set file="relative/path.js" range={start, end}>
-<![CDATA[
-new content here
-]]>
-</set></cmd>
-
-RANGE RULES:
-  range={10, 15} = DELETE lines 10-15, INSERT new content
-  range={10} = DELETE line 10 only, INSERT new content
-  add={25} = INSERT BEFORE line 25 (no delete)
-  range={-1} = APPEND to end of file
-
-Boleh multiple <set> dalam satu <cmd> untuk bulk edit.
-
-SETELAH EDIT: Pindah ke VERIFY untuk cek hasil, atau tetap EDIT jika belum selesai.`,
-
-  [AGENT_STATES.EXECUTE]: `EXECUTE STATE - Run Commands/Tests
-
-Gunakan <hidden> untuk jelaskan kenapa run command ini.
-NO <answer> kecuali output penting untuk user.
-
-Common Commands:
-  - Tests: npm test, pytest, node test.js
-  - Syntax: node --check file.js, python -m py_compile file.py
-  - Build: npm run build`,
-
-  [AGENT_STATES.VERIFY]: `VERIFY STATE - Check Results
-
-Gunakan <hidden> untuk analisis hasil.
-Gunakan <answer> untuk report ke user.
-Gunakan <state> untuk berpindah state.
-
-STATE TRANSITIONS:
-  - Ada bug → ke EDIT (jangan baca file lagi, langsung fix)
-  - Jika semua pass langsung ke DONE state
-  - Atau jika selesai langsung tambahkan <!END> tag di akhir untuk mengakhiri`,
-
-  [AGENT_STATES.DONE]: `DONE STATE - Task Complete
-
-Summarize semua yang sudah dikerjakan di <answer>.
-Tambah <saved_state> dengan next state untuk future work.
-Tambah <!END> tag di akhir.
-JANGAN ada command baru di state ini.`,
-};
-
-// ===================================
-// CORE SYSTEM PROMPT (State-Aware)
-// ===================================
-const STATIC_SYSTEM_PROMPT = `You are Clustrix, a highly skilled software engineer with extensive knowledge in many programming languages, frameworks, design patterns, and best practices.
+const STATIC_SYSTEM_PROMPT = `You are Clustrix, a highly skilled software engineer with extensive knowledge in many programming
+languages, frameworks, design patterns, and best practices.
 
 === RESPONSE FORMAT ===
-{state_format}
+{response_format}
 
-=== STATE MACHINE ===
-EXPLORE → EDIT → EXECUTE → VERIFY → DONE
+=== OPERATING RULES ===
+{execution_rules}
 
-Choose your next state:
-- <state>EXPLORE</state>: Finding files + analyzing code (start here)
-- <state>EDIT</state>: Modifying files (after analyzing)
-- <state>EXECUTE</state>: Running tests/commands (after editing)
-- <state>VERIFY</state>: Checking results (after executing)
-- <state>DONE</state>: Task 100% complete
+## Checklist Guidance
+Gunakan <checklist> untuk merencanakan dan melacak progres. Kirim hanya saat ada perubahan status. Format:
+- [x] tugas selesai
+- [/] sedang dikerjakan
+- [ ] belum mulai
 
-=== CRITICAL RULES ===
-1. SELALU mulai response dengan <state>STATE_NAME</state>
-2. Pakai <hidden> untuk internal thinking (WAJIB kecuali DONE)
-3. Pakai <checklist> untuk track progress: [ ] pending, [/] current, [x] done
-4. CEK <memory_view> SEBELUM baca file - jangan duplicate!
-5. JANGAN pakai Get-ChildItem -Recurse (pakai Search-InFiles)
-6. <!END> HANYA di DONE state
-7. Untuk file BARU: New-Item -ItemType File -Path "path/file.js" -Force dulu
-8. JANGAN pakai Get-Content/cat/type - pakai Show-FileWithLineNumbers
-
-## Task Management
-You have access to the Checklist tools (using <checklist> tag) to help you manage and plan tasks. Use these tools VERY frequently to ensure that you are tracking your tasks and giving the user visibility into your progress.
-These tools are also EXTREMELY helpful for planning tasks, and for breaking down larger complex tasks into smaller steps. If you do not use this tool when planning, you may forget to do important tasks - and that is unacceptable.
-
-It is critical that you mark todos as completed as soon as you are done with a task. Do not batch up multiple tasks before marking them as completed.
-
-CHECKLIST FORMAT:
-- [x] Completed task
-- [/] Currently working on this
-- [ ] Pending task
-
-USAGE GUIDELINES:
-- Only send when checklist changes (task completed, started, or status updated)
-- Don't send in every iteration - only when status changes
-- Use for complex tasks that span multiple steps
-- Keep task descriptions clear and actionable
-
+## Command Reference (gunakan seperlunya)
 {command_reference}`;
 
 // ===================================
@@ -771,30 +631,17 @@ Current Memory: {current_memory}
 {summary_reminder}`;
 
 // ===================================
-// BUILD STATE-SPECIFIC PROMPT
+// BUILD STATIC PROMPT (no state machine)
 // ===================================
-function buildStatePrompt(state, iteration, commandHistory, includeReference = false, memoryState = '', currentMemory = 'default', userPromptText = '', historySummary = '', lastHidden = '', lastChecklist = '') {
-  // Map legacy states to EXPLORE (READ and UNDERSTAND no longer exist)
-  let effectiveState = state;
-  if (state === 'read' || state === 'READ' || state === 'understand' || state === 'UNDERSTAND') {
-    effectiveState = AGENT_STATES.EXPLORE;
-  }
-
-  const stateFormat = STATE_RESPONSE_FORMATS[effectiveState] || STATE_RESPONSE_FORMATS[AGENT_STATES.EXPLORE];
-  const stateRule = STATE_RULES[effectiveState] || STATE_RULES[AGENT_STATES.EXPLORE];
-
-  // Build command reference (only when needed)
+function buildStatePrompt(_state, iteration, commandHistory, includeReference = false, memoryState = '', currentMemory = 'default', userPromptText = '', historySummary = '', lastHidden = '', lastChecklist = '') {
   const commandRef = (includeReference || iteration === 0 || iteration > 5)
     ? COMMAND_REFERENCE
     : '';
 
-  // 1. Build Static System Prompt
   let systemPrompt = STATIC_SYSTEM_PROMPT
-    .replace('{state_format}', stateFormat.format)
+    .replace('{response_format}', RESPONSE_FORMAT)
+    .replace('{execution_rules}', EXECUTION_RULES)
     .replace('{command_reference}', commandRef);
-
-  // Inject state-specific rules
-  systemPrompt += `\n\n=== CURRENT STATE RULES ===\n${stateRule}`;
 
   let instruct = '';
   if (lastHidden) {
@@ -804,7 +651,6 @@ ${lastHidden}
 </hidden>`;
   }
 
-  // 2. Build Dynamic User Context
   let userContext = DYNAMIC_CONTEXT_TEMPLATE
     .replace('{memory_state}', memoryState || 'No files in memory yet.')
     .replace('{current_memory}', currentMemory || 'default')
@@ -981,69 +827,9 @@ Continue solving based on information above.
 <!END>
 
 # FINAL REMINDER:
-  - Every response MUST have <state></state> tag first
-  - Check memory before reading files
-  - Use appropriate state for your current task
-  - Don't end prematurely - analyze what you have first`;
-
-// ===================================
-// STATE DETECTION (Fixed - no more READ state reference)
-// ===================================
-function detectCurrentState(commandHistory = [], lastCommand = '', iteration = 0) {
-  // First iteration = EXPLORE
-  if (iteration === 0) {
-    return AGENT_STATES.EXPLORE;
-  }
-
-  // Check for search/read looping: if >3 in last 5, force to analyze
-  const recentHistory = commandHistory.slice(-5);
-  const searchReadCount = recentHistory.filter(entry =>
-    entry.command && (
-      entry.command.includes('Show-FileWithLineNumbers') ||
-      entry.command.includes('Search-InFiles') ||
-      entry.command.includes('Find-Pattern') ||
-      entry.command.includes('gc ')
-    )
-  ).length;
-
-  if (searchReadCount >= 3) {
-    // Force to stay in EXPLORE but signal to analyze (via prompt)
-    return AGENT_STATES.EXPLORE;
-  }
-
-  // Check last command type
-  if (lastCommand.includes('Show-FileWithLineNumbers') ||
-    lastCommand.includes('Search-InFiles') ||
-    lastCommand.includes('Find-Pattern') ||
-    lastCommand.includes('gc ')) {
-    return AGENT_STATES.EXPLORE; // Changed from READ to EXPLORE
-  }
-
-  if (lastCommand.includes('Set-FileLine') ||
-    lastCommand.includes('Set-MultipleLines') ||
-    lastCommand.includes('<set')) {
-    return AGENT_STATES.EDIT;
-  }
-
-  if (lastCommand.match(/python |node |npm |pytest/)) {
-    return AGENT_STATES.EXECUTE;
-  }
-
-  if (lastCommand.includes('ls') || lastCommand.includes('dir') || lastCommand.includes('Get-ChildItem')) {
-    return AGENT_STATES.EXPLORE;
-  }
-
-  // Check recent history for edit pattern -> should verify
-  const recentCommands = commandHistory.slice(-3);
-  for (const entry of recentCommands) {
-    if (entry.command && (entry.command.includes('Set-FileLine') || entry.command.includes('<set'))) {
-      return AGENT_STATES.VERIFY;
-    }
-  }
-
-  // Default to EXPLORE for analysis
-  return AGENT_STATES.EXPLORE;
-}
+  - Selalu pakai <hidden> untuk alasan/analisis internal
+  - Cek memory sebelum baca file
+  - Jangan ulang command yang sudah ada di history`;
 
 // ===================================
 // DETECT DANGEROUS COMMANDS
@@ -1158,17 +944,15 @@ function getErrorGuidance(errorType = null) {
 // EXPORTS
 // ===================================
 module.exports = {
-  AGENT_STATES,
   DANGEROUS_PATTERNS,
-  STATE_RESPONSE_FORMATS,
-  STATE_RULES,
   STATIC_SYSTEM_PROMPT,
+  RESPONSE_FORMAT,
+  EXECUTION_RULES,
   DYNAMIC_CONTEXT_TEMPLATE,
   COMMAND_REFERENCE,
   ERROR_GUIDANCE,
   PROMPT_FIRST,
   PROMPT_SUBSEQUENT,
-  detectCurrentState,
   detectDangerousCommand,
   buildStatePrompt,
   formatCommandHistory,

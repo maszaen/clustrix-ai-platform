@@ -8,10 +8,8 @@ const { applySetOperations } = require('./edit-operations');
 const { joinEndpoint } = require('../integration/langchain-helpers');
 const { getRipgrepPath } = require('../../utils/ripgrep-path');
 const {
-  AGENT_STATES,
   PROMPT_FIRST,
   PROMPT_SUBSEQUENT,
-  STATIC_SYSTEM_PROMPT,
   detectDangerousCommand,
   buildStatePrompt,
   formatCommandHistory,
@@ -229,7 +227,6 @@ function getSessionState(sessionId, codeId = null) {
       memories,
       activeMemoryNames, // Visible memories
       currentMemory: 'default', // Current working memory for auto-saving
-      currentState: AGENT_STATES.EXPLORE, // AI-declared current state
       memoryOwnerId: desiredMemoryOwnerId,
       memoryOwnerType: desiredMemoryOwnerType,
       pendingMemoryUpdates: [], // Store memory updates from current iteration to apply in next iteration
@@ -915,25 +912,15 @@ function getLastCommand(history = []) {
   };
 }
 
-function buildUserPrompt({ userPrompt, instruction, workspacePath, savedState, currentState }) {
+function buildUserPrompt({ userPrompt, instruction, workspacePath }) {
   const parts = [];
   parts.push(`# USER PROMPT:\n${userPrompt}`);
 
   if (workspacePath) {
     parts.push(`# WORKSPACE PATH:\n${workspacePath}`);
   }
-  if (instruction || currentState) {
-    parts.push(`# WORKSPACE/STATE INSTRUCTION:\n${instruction}`);
-    if (currentState) {
-      const { STATE_RULES, AGENT_STATES } = require('./codes-prompt');
-      const stateRules = STATE_RULES[currentState] || '';
-      if (stateRules) {
-        parts.push(`${stateRules}`);
-      }
-    }
-  }
-  if (savedState) {
-    parts.push(`# CONTINUATION FROM PREVIOUS SESSION:\nPrevious session ended in ${savedState} state. Continue from where we left off.`);
+  if (instruction) {
+    parts.push(`# WORKSPACE INSTRUCTION:\n${instruction}`);
   }
 
   return parts.join('\n\n');
@@ -1007,7 +994,7 @@ function detectErrorContext(commandHistory = []) {
   return { errorType, includeCommandReference };
 }
 
-function renderSystemPrompt(template, { userPrompt, commandHistory, commandHistoryArray, lastCommand, iteration = 0, previousMessagesHistory = '', currentState, memoryState, currentMemory, lastHidden, lastChecklist }) {
+function renderSystemPrompt(template, { userPrompt, commandHistory, commandHistoryArray, lastCommand, iteration = 0, previousMessagesHistory = '', memoryState, currentMemory, lastHidden, lastChecklist }) {
   const lastOutputLines = (lastCommand.output || '').split(/\r?\n/).length;
 
   // 1. Summary REMINDER for PROMPT_SUBSEQUENT (task section)
@@ -1028,7 +1015,7 @@ function renderSystemPrompt(template, { userPrompt, commandHistory, commandHisto
 
   // Build state-aware prompt (returns { systemPrompt, userContext })
   const { systemPrompt, userContext } = buildStatePrompt(
-    currentState,
+    null,
     iteration,
     commandHistory, // This is the formatted recent turns
     includeCommandReference || iteration === 0,
@@ -1055,127 +1042,68 @@ function renderSystemPrompt(template, { userPrompt, commandHistory, commandHisto
   return { systemPrompt: finalSystemPrompt, userContext: userContext + summaryReminder };
 }
 
-function parseAgentResponse(text = '', currentState = null) {
+function parseAgentResponse(text = '') {
   const hiddenMatch = text.match(/<hidden>([\s\S]*?)<\/hidden>/i);
   const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/i);
   const cmdMatch = text.match(/<cmd>([\s\S]*?)<\/cmd>/i);
-  const stateMatch = text.match(/<state>([\s\S]*?)<\/state>/i);
-  const savedStateMatch = text.match(/<saved_state>([\s\S]*?)<\/saved_state>/i);
-  let done = /<!END>/i.test(text) && currentState === AGENT_STATES.DONE;
+  let done = /<!END>/i.test(text);
   const todoMatch = text.match(/<todo>([\s\S]*?)<\/todo>/i);
   const checklistMatch = text.match(/<checklist>([\s\S]*?)<\/checklist>/i);
   const summaryMatch = text.match(/<summary>([\s\S]*?)<\/summary>/i);
 
   // Detect malformed responses: AI outputting "Command executed: X" without tags
-  // This happens when AI forgets to use <cmd> tags
   let extractedCommand = '';
   if (!cmdMatch && text.trim().startsWith('Command executed:')) {
-    // Try to extract command from plain text
-    const commandMatch = text.match(/^Command executed:\s*(.+?)(?:\n|$)/i);
+    const commandMatch = text.match(/^Command executed:\s*(.+?)(?:|$)/i);
     if (commandMatch) {
       extractedCommand = commandMatch[1].trim();
       log('CODES', 2, 'parseAgentResponse', 'Malformed response: AI output plain "Command executed:" without <cmd> tags', {
         extractedCommand: extractedCommand.substring(0, 100),
       });
-      // This is malformed, but we'll treat it as done since there's no actual <cmd> tag
       done = true;
     }
   }
 
-  // Clean answer by removing tags that should not appear in user-facing text
   let cleanAnswer = answerMatch ? answerMatch[1].trim() : '';
   if (cleanAnswer) {
-    // Remove <!END> tag
     cleanAnswer = cleanAnswer.replace(/<!END>/gi, '').trim();
-    // Remove <cmd> tags if they leaked into answer (AI should put cmd in separate tag)
     cleanAnswer = cleanAnswer.replace(/<cmd>[\s\S]*?<\/cmd>/gi, '').trim();
-    // Remove <hidden> tags if they leaked into answer
     cleanAnswer = cleanAnswer.replace(/<hidden>[\s\S]*?<\/hidden>/gi, '').trim();
-    // Remove other V2 tags that shouldn't be in answer
     cleanAnswer = cleanAnswer.replace(/<(?:todo|checklist|summary)>[\s\S]*?<\/(?:todo|checklist|summary)>/gi, '').trim();
   }
 
-  // DETECT STATE IN ANSWER TAG: If answer is only a state name (case insensitive), use it as state
-  let detectedStateFromAnswer = null;
-  if (cleanAnswer) {
-    const trimmedAnswer = cleanAnswer.trim().toLowerCase();
-    if (['explore', 'edit', 'execute', 'verify', 'done'].includes(trimmedAnswer)) {
-      detectedStateFromAnswer = trimmedAnswer.toUpperCase(); // Store as uppercase for consistency
-      cleanAnswer = '';
-      log('CODES', 2, 'parseAgentResponse', 'Detected state name in answer tag, using as next state', {
-        detectedState: detectedStateFromAnswer,
-        originalAnswer: answerMatch[1].trim()
-      });
-    }
-  }
-
-  // V2: If no <answer> tag found, check if other structured tags exist
-  // Only use fallback if NO structured tags at all (unformatted response)
   if (!answerMatch && text.trim()) {
     if (!hiddenMatch && !cmdMatch) {
-      // No structured tags at all - check if it's malformed "Command executed:" text
       if (extractedCommand) {
-        // Don't put the malformed command text in answer
         cleanAnswer = '';
       } else {
-        // Truly unformatted response - fallback to entire text
         cleanAnswer = text.replace(/<[^>]*>/g, '').trim();
       }
     }
-    // else: has hidden/cmd tag but no answer tag = intentional (EXPLORE/READ/EXECUTE state)
-    // answer should remain empty - hidden/cmd content is for specific purposes
   }
 
   const command = cmdMatch ? cmdMatch[1].trim() : '';
 
-  // Auto-detect done: if no command and no hidden, and answer doesn't indicate continuation, we're done
-  // BUT: If AI declared a valid state (not DONE), continue iteration even if no command
-  if (!command && !hiddenMatch && !done) {
-    const hasValidState = stateMatch && ['EXPLORE', 'EDIT', 'EXECUTE', 'VERIFY'].includes(stateMatch[1].trim().toUpperCase());
-    if (hasValidState) {
-      // AI declared next state, continue iteration
-      log('CODES', 2, 'parseAgentResponse', 'Continuing iteration: AI declared valid state', { state: stateMatch[1].trim().toUpperCase() });
+  // Extract commentary and execute from command if present
+  let commentary = null;
+  let execute = null;
+  if (command) {
+    const commentaryMatch = command.match(/<commentary>([\s\S]*?)<\/commentary>/i);
+    const executeMatch = command.match(/<execute>([\s\S]*?)<\/execute>/i);
+    if (commentaryMatch && executeMatch) {
+      commentary = commentaryMatch[1].trim();
+      execute = executeMatch[1].trim();
     } else {
-      // const hasContinuationIndicators = cleanAnswer && (
-      //   cleanAnswer.toLowerCase().includes('lanjut') ||
-      //   cleanAnswer.toLowerCase().includes('perlu') ||
-      //   cleanAnswer.toLowerCase().includes('cek') ||
-      //   cleanAnswer.toLowerCase().includes('akan') ||
-      //   cleanAnswer.toLowerCase().includes('menjalankan') ||
-      //   cleanAnswer.toLowerCase().includes('memperbaiki') ||
-      //   cleanAnswer.toLowerCase().includes('jika') ||
-      //   cleanAnswer.toLowerCase().includes('untuk') ||
-      //   cleanAnswer.toLowerCase().includes('?') ||
-      //   cleanAnswer.toLowerCase().includes('fokus') ||
-      //   cleanAnswer.toLowerCase().includes('selanjutnya') ||
-      //   cleanAnswer.toLowerCase().includes('eksplor') ||
-      //   cleanAnswer.toLowerCase().includes('benerin')
-      // );
-      if (!cleanAnswer) {
-        if (currentState === AGENT_STATES.DONE) {
-          log('CODES', 2, 'parseAgentResponse', 'Auto-detected done: no command, no meaningful answer with continuation indicators, no hidden content');
-          done = true;
-        }
-      }
+      execute = command;
     }
   }
 
   return {
-    hidden: hiddenMatch ? hiddenMatch[1].trim() : null, // V2: Internal AI thinking
+    hidden: hiddenMatch ? hiddenMatch[1].trim() : null,
     answer: cleanAnswer,
     command,
-    state: (() => {
-      // Priority: detected state from answer > valid state tag > null
-      if (detectedStateFromAnswer) return detectedStateFromAnswer;
-      if (stateMatch) {
-        const stateFromTag = stateMatch[1].trim().toUpperCase();
-        if (stateFromTag && ['EXPLORE', 'EDIT', 'EXECUTE', 'VERIFY', 'DONE'].includes(stateFromTag)) {
-          return stateFromTag;
-        }
-      }
-      return null;
-    })(),
-    savedState: savedStateMatch ? savedStateMatch[1].trim().toUpperCase() : null, // Saved state for next session
+    commentary,
+    execute,
     done,
     todo: todoMatch ? todoMatch[1].trim() : null,
     checklist: checklistMatch ? checklistMatch[1].trim() : null,
@@ -1315,7 +1243,7 @@ function isHighImpactCommand(command = '') {
 
 
 
-function formatResponseAndCommand({ answer, command, hidden }) {
+function formatResponseAndCommand({ answer, command, commentary, hidden }) {
   const sections = [];
 
   // 1. Format hidden as codeblock with '>' prefix
@@ -1349,7 +1277,8 @@ function formatResponseAndCommand({ answer, command, hidden }) {
 
   // 3. Add command (already handled)
   if (command) {
-    sections.push(`<!--command-input-->\n${command.trim()}\n<!--/command-input-->\n`);
+    const inputText = commentary || command.trim();
+    sections.push(`<!--command-input-->\n${inputText}\n<!--/command-input-->\n`);
   }
 
   return sections.length > 0 ? sections.join('\n') : null;
@@ -1669,7 +1598,7 @@ async function runAgentIteration({
       const fileMemory = Object.values(state.memories).flatMap(m => m.files ? Object.values(m.files) : []).find(f => f?.filePath?.endsWith(normalizedPath) || (f?.filePath && normalizedPath.endsWith(f.filePath)));
       
       if (fileMemory && fileMemory.ranges.length > 0) {
-         redundancyWarning = `\n\n!!! SYSTEM ALERT: You just executed a READ command on '${filePath}'.\nCHECK MEMORY FIRST! If this file was already in your memory, you just wasted a turn.\nRead the user prompt, then read the memory below, summarize based on the user input, then switch to EDIT state if necessary.`;
+         redundancyWarning = `\n\n!!! SYSTEM ALERT: You just executed a READ command on '${filePath}'.\nCHECK MEMORY FIRST! If this file was already in your memory, you just wasted a turn.\nRead the user prompt, then read the memory below, rangkum sesuai kebutuhan, lalu lanjutkan edit bila diperlukan.`;
       }
     }
   }
@@ -1681,7 +1610,6 @@ async function runAgentIteration({
     lastCommand,
     iteration,
     previousMessagesHistory: previousMessagesHistory + (commandHistoryText.summary ? `\n\nPrevious Turns Summary:\n${commandHistoryText.summary}` : ''),
-    currentState: state.currentState,
     memoryState: truncatedMemory,
     currentMemory: state.currentMemory,
     lastHidden: state.lastHidden,
@@ -1740,7 +1668,7 @@ async function runAgentIteration({
   });
 
   usage = response.usage;
-  parsed = parseAgentResponse(response.content || '', state.currentState);
+  parsed = parseAgentResponse(response.content || '');
 
   // Store assistant's response in conversation history
   // V2: Store CLEANED response (no control tags) to prevent tag leaking
@@ -1780,19 +1708,12 @@ async function runAgentIteration({
   console.log('Hidden:', parsed.hidden ? `"${parsed.hidden.substring(0, 100)}${parsed.hidden.length > 100 ? '...' : ''}"` : 'null');
   console.log('Answer:', parsed.answer ? `"${parsed.answer.substring(0, 100)}${parsed.answer.length > 100 ? '...' : ''}"` : 'null');
   console.log('Command:', parsed.command ? `"${parsed.command.substring(0, 100)}${parsed.command.length > 100 ? '...' : ''}"` : 'null');
-  console.log('State:', parsed.state || 'null');
-  console.log('Saved State:', parsed.savedState || 'null');
   console.log('Done:', parsed.done);
   console.log('Todo:', parsed.todo ? 'present' : 'null');
   console.log('Checklist:', parsed.checklist ? 'present' : 'null');
   console.log('Summary:', parsed.summary ? 'present' : 'null');
   console.log('ToolUseId:', parsed.toolUseId || 'null');
   console.log('===== END PARSED RESPONSE =====\n\n');
-
-  // Update current state based on AI declaration
-  if (parsed.state && AGENT_STATES[parsed.state]) {
-    state.currentState = AGENT_STATES[parsed.state];
-  }
 
   // Store last hidden content for next prompt
   if (parsed.hidden) {
@@ -2259,25 +2180,7 @@ async function processCodeRequest({
     state.workspacePath = ensureDirectoryExists(codeRecord.workspace_path || codeRecord.workspacePath || '') || state.workspacePath;
   }
 
-  // Load saved state from previous session if exists
   let isContinuationSession = false;
-  if (sessionId) {
-    try {
-      const userDataPath = process.env.APPDATA || (os.platform() === 'darwin' ? path.join(os.homedir(), 'Library', 'Application Support') : path.join(os.homedir(), '.config'));
-      const appDataPath = path.join(userDataPath, 'clustrix');
-      const stateFile = path.join(appDataPath, `state-${sessionId}.json`);
-      if (fs.existsSync(stateFile)) {
-        const savedData = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-        if (savedData.lastState) {
-          state.currentState = savedData.lastState;
-          isContinuationSession = true; // Mark as continuation session
-          log('CODES', 1, 'processCodeRequest', 'Loaded saved state from previous session', { sessionId, lastState: savedData.lastState });
-        }
-      }
-    } catch (error) {
-      log('CODES', 2, 'processCodeRequest', 'Failed to load saved state', { error: error.message });
-    }
-  }
 
   ensurePowerShellSession(state, state.workspacePath || require('os').homedir());
 
@@ -2285,8 +2188,6 @@ async function processCodeRequest({
     userPrompt,
     instruction: state.instruction,
     workspacePath: state.workspacePath,
-    savedState: !isContinuationSession && state.currentState !== AGENT_STATES.EXPLORE ? state.currentState : null,
-    currentState: state.currentState,
   });
 
   // Get current message index for this request
@@ -2327,20 +2228,6 @@ async function processCodeRequest({
     // Track final answer if this is meaningful content (not just command)
     if (parsed.answer && parsed.answer.trim() && parsed.done) {
       finalAnswer = parsed.answer.trim();
-    }
-
-    // Save saved_state to local storage if provided
-    if (parsed.savedState && sessionId) {
-      try {
-        const userDataPath = process.env.APPDATA || (os.platform() === 'darwin' ? path.join(os.homedir(), 'Library', 'Application Support') : path.join(os.homedir(), '.config'));
-        const appDataPath = path.join(userDataPath, 'clustrix');
-        if (!fs.existsSync(appDataPath)) fs.mkdirSync(appDataPath, { recursive: true });
-        const stateFile = path.join(appDataPath, `state-${sessionId}.json`);
-        fs.writeFileSync(stateFile, JSON.stringify({ lastState: parsed.savedState, timestamp: Date.now() }));
-        log('CODES', 1, 'processCodeRequest', 'Saved state for next session', { sessionId, savedState: parsed.savedState });
-      } catch (error) {
-        log('CODES', 2, 'processCodeRequest', 'Failed to save state', { error: error.message });
-      }
     }
 
     // STEP 0: Send todo/checklist if present (for planning & progress tracking)
@@ -2403,6 +2290,7 @@ async function processCodeRequest({
       hidden: parsed.hidden,  // ← Pass hidden langsung
       answer: answerToSend,   // ← Pass answer langsung
       command: parsed.command,
+      commentary: parsed.commentary,
     });
 
     if (responseCommandChunk && typeof onChunk === 'function') {
@@ -2578,10 +2466,10 @@ async function processCodeRequest({
 
       log('CODES', 1, 'processCodeRequest', 'Skipped command execution due to loop detection', {
         iteration,
-        command: parsed.command.substring(0, 100),
+        command: (parsed.execute || parsed.command).substring(0, 100),
       });
     } else {
-      const result = await executeCommand(state, parsed.command, {
+      const result = await executeCommand(state, parsed.execute || parsed.command, {
         disableTimeout: requiresConfirmation && confirmationApproved,
         skipBlocking: requiresConfirmation && confirmationApproved,
         sessionId,
@@ -2705,21 +2593,6 @@ async function processCodeRequest({
           role: 'user',
           content: feedbackMessage,
         });
-      }
-
-      // INTERNAL STATE TRANSITION: Update state based on command type and result
-      if (exitCode === 0) {
-        const cmd = parsed.command.toLowerCase();
-        if (cmd.includes('search-infiles') || cmd.includes('list-projectfiles') || cmd.includes('get-childitem')) {
-          state.currentState = AGENT_STATES.READ; // Search done, now read files
-        } else if (cmd.includes('read-file') || cmd.includes('get-content')) {
-          state.currentState = AGENT_STATES.UNDERSTAND; // Read done, now analyze
-        } else if (cmd.includes('-replace') || cmd.includes('set-content') || cmd.includes('out-file')) {
-          state.currentState = AGENT_STATES.EXECUTE; // Edit done, now test/run
-        } else if (cmd.includes('npm test') || cmd.includes('jest') || cmd.includes('run test')) {
-          state.currentState = AGENT_STATES.VERIFY; // Test done, verify results
-        }
-        // Other commands keep current state
       }
 
       // Save iteration to code_iterations table

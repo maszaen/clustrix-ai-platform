@@ -577,7 +577,7 @@ Jika butuh info lagi: jalankan command search sekarang, dan jelaskan apa yang ma
     useAnswer: false,
   },
   [AGENT_STATES.EDIT]: {
-    format: `<state><Next state EDIT or EXECUTE or EXPLORE again></state>
+    format: `<state><Next state: EDIT or EXECUTE or EXPLORE again></state>
 <hidden>analyzing what needs to be changed</hidden>
 <answer>what is being changed and why</answer>
 <cmd><set file="path" range={start,end}><![CDATA[content]]></set></cmd>`,

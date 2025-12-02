@@ -502,7 +502,7 @@ function applySetOperations(command, options = {}) {
 
   const formatted = results.map(result => {
     const header = `File: ${result.filePath}\n`;
-    const totalLinesChange = `${result.originalLineCount === result.newLineCount ? '' : `Total lines changed from ${result.originalLineCount} to ${result.newLineCount} lines`})`
+    const totalLinesChange = `${result.originalLineCount === result.newLineCount ? '' : `Total lines changed from ${result.originalLineCount} to ${result.newLineCount} lines`}`
     const diff = result.diff;
     const snippetText = result.snippets.length === 0
       ? 'No snippet available (file may be empty).'
@@ -516,7 +516,7 @@ function applySetOperations(command, options = {}) {
           return `[${snippet.start}-${snippet.end}] ${result.filePath}\n${body}`;
         }).join('\n\n');
 
-    return `${header}${totalLinesChange}\n\n${diff}\n\nAuto updated memory snippet:\n${snippetText}`;
+    return `${header}${totalLinesChange}\n\n${diff}\n\nChanged file snippet:\n${snippetText}`;
   }).join('\n\n---\n\n');
 
   return {

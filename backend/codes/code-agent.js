@@ -17,6 +17,7 @@ const {
 } = require('./codes-prompt');
 const { processClaudeCodeRequest } = require('./code-agent-claude');
 const { processOpenAICodeRequest } = require('./code-agent-openai');
+const { processGeminiCodeRequest } = require('./code-agent-gemini');
 const MAX_ITERATIONS = 200;
 const MAX_HISTORY = 50;
 const MAX_OUTPUT_LINES = 10000; // Increased from 100 to 10000 for full output
@@ -2181,15 +2182,31 @@ async function processCodeRequest({
     });
   }
   
-  // Route to OpenAI-style agent (OpenAI, GLM, Deepseek, Gemini, etc)
+  // Route to Gemini native agent
+  if (providerLower === 'google' ||
+      providerLower === 'gemini' ||
+      modelLower.includes('gemini')) {
+    console.log('[CODE-AGENT] Routing to Gemini native agent');
+    return processGeminiCodeRequest({
+      sessionId,
+      userPrompt,
+      baseUrl: baseUrl || 'https://generativelanguage.googleapis.com',
+      apiKey,
+      model,
+      workspacePath,
+      instruction,
+      onChunk,
+      shouldCancel,
+      db,
+    });
+  }
+
+  // Route to OpenAI-style agent (OpenAI, GLM, Deepseek, etc)
   if (providerLower === 'openai' || 
       providerLower === 'bigmodel' || 
-      providerLower === 'google' ||
-      providerLower === 'gemini' ||
       modelLower.includes('gpt') || 
       modelLower.includes('glm') || 
-      modelLower.includes('deepseek') ||
-      modelLower.includes('gemini')) {
+      modelLower.includes('deepseek')) {
     console.log('[CODE-AGENT] Routing to OpenAI-style agent');
     return processOpenAICodeRequest({
       sessionId,
@@ -2766,6 +2783,7 @@ module.exports = {
   processCodeRequest,
   resolveUserConfirmation,
   resolveOpenAIConfirmation: require('./code-agent-openai').resolveOpenAIConfirmation,
+  resolveGeminiConfirmation: require('./code-agent-gemini').resolveGeminiConfirmation,
   disposeAllCodeSessions,
   cancelCodeSession,
 };

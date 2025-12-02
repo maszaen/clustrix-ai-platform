@@ -19193,6 +19193,25 @@ async function handleSyncNow() {
           window.api.app.restart();
         }, 500);
       }, 800);
+    } else if (result.needsReauth || result.authError) {
+      // Token expired - auto refresh and retry
+      log('SYNC', 2, 'handleSyncNow', 'Auth error detected, attempting token refresh');
+      showToast('Session expired. Re-authenticating...', 'warning');
+      
+      const refreshResult = await window.api.sync.refreshToken();
+      
+      if (refreshResult.success) {
+        log('SYNC', 1, 'handleSyncNow', 'Token refreshed, retrying sync');
+        showToast('Re-authenticated! Retrying sync...', 'info');
+        
+        // Retry sync (recursive call)
+        await handleSyncNow();
+      } else {
+        log('SYNC', 4, 'handleSyncNow', 'Token refresh failed', { error: refreshResult.error });
+        showToast(`Re-authentication failed: ${refreshResult.error}`, 'error');
+        await window.api.sync.recordActionHistory('sync', 'failed');
+        await loadAndDisplayActionHistory();
+      }
     } else {
       log('SYNC', 4, 'handleSyncNow', 'Sync operation failed', { 
         error: result.error,
@@ -19250,6 +19269,37 @@ async function handleBackupNow() {
       // Record action in history
       await window.api.sync.recordActionHistory('backup', 'success');
       await loadAndDisplayActionHistory();
+    } else if (result.needsReauth || result.authError) {
+      // Token expired - auto refresh and retry
+      log('SYNC', 2, 'handleBackupNow', 'Auth error detected, attempting token refresh');
+      showToast('Session expired. Re-authenticating...', 'warning');
+      
+      const refreshResult = await window.api.sync.refreshToken();
+      
+      if (refreshResult.success) {
+        log('SYNC', 1, 'handleBackupNow', 'Token refreshed, retrying backup');
+        showToast('Re-authenticated! Retrying backup...', 'info');
+        
+        // Retry backup
+        const retryResult = await window.api.sync.backupNow();
+        
+        if (retryResult.success) {
+          log('SYNC', 1, 'handleBackupNow', 'Backup retry succeeded');
+          showToast(`Backed up to: ${retryResult.repository}`, 'success');
+          await window.api.sync.recordActionHistory('backup', 'success');
+          await loadAndDisplayActionHistory();
+        } else {
+          log('SYNC', 4, 'handleBackupNow', 'Backup retry failed', { error: retryResult.error });
+          showToast(`Backup failed: ${retryResult.error}`, 'error');
+          await window.api.sync.recordActionHistory('backup', 'failed');
+          await loadAndDisplayActionHistory();
+        }
+      } else {
+        log('SYNC', 4, 'handleBackupNow', 'Token refresh failed', { error: refreshResult.error });
+        showToast(`Re-authentication failed: ${refreshResult.error}`, 'error');
+        await window.api.sync.recordActionHistory('backup', 'failed');
+        await loadAndDisplayActionHistory();
+      }
     } else {
       log('SYNC', 4, 'handleBackupNow', 'Backup operation failed', { 
         error: result.error,

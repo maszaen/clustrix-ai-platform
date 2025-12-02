@@ -29,19 +29,60 @@ function joinEndpoint(base, path) {
 }
 
 function applyThinkingHints({ provider, model, bodyObj, thinkMode }) {
-  if (!thinkMode) return;
+  if (!thinkMode || thinkMode === 'disabled') return;
 
-  const hints = {
-    'openrouter': {
-      'deepseek/deepseek-r1-distill-llama-70b': true,
-      'deepseek/deepseek-r1': true,
-    },
-    'cerebras': {
-      'qwen-3-235b-a22b-thinking-2507': true,
+  const modelLower = (model || '').toLowerCase();
+  const providerLower = (provider || '').toLowerCase();
+
+  // DeepSeek R1 models - use reasoning_effort parameter
+  if (modelLower.includes('deepseek-r1') || modelLower.includes('deepseek/deepseek-r1')) {
+    bodyObj.reasoning_effort = thinkMode === 'extended' ? 'high' : 'medium';
+    return;
+  }
+
+  // OpenAI o1/o3 models - use reasoning_effort
+  if (modelLower.includes('o1') || modelLower.includes('o3')) {
+    bodyObj.reasoning_effort = thinkMode === 'extended' ? 'high' : 'medium';
+    return;
+  }
+
+  // Claude models - use extended thinking (Anthropic-specific)
+  if (modelLower.includes('claude') && providerLower === 'anthropic') {
+    // Claude uses different API format, handled separately
+    return;
+  }
+
+  // Qwen thinking models
+  if (modelLower.includes('qwen') && modelLower.includes('thinking')) {
+    bodyObj.enable_thinking = true;
+    if (thinkMode === 'extended') {
+      bodyObj.thinking_budget = 32768;
     }
-  };
+    return;
+  }
 
-  if (hints[provider]?.[model]) {
+  // GLM models with reasoning
+  if (modelLower.includes('glm') && (providerLower === 'zhipu' || providerLower === 'bigmodel')) {
+    // GLM uses reasoning_content in response, no special request param needed
+    return;
+  }
+
+  // Generic reasoning flag for OpenRouter models
+  if (providerLower === 'openrouter') {
+    const reasoningModels = [
+      'deepseek/deepseek-r1',
+      'deepseek/deepseek-r1-distill',
+      'qwen/qwen-3-235b',
+      'anthropic/claude-3.5-sonnet',
+    ];
+    
+    if (reasoningModels.some(m => modelLower.includes(m.split('/')[1]))) {
+      bodyObj.reasoning = true;
+    }
+  }
+
+  // Cerebras thinking models
+  if (providerLower === 'cerebras' && modelLower.includes('thinking')) {
     bodyObj.reasoning = true;
   }
 }

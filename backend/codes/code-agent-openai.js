@@ -337,23 +337,43 @@ async function executeRunCommand(session, command, confirmed = false) {
 async function executeEditFile(session, input) {
   const { file, range, insertBefore, append, content } = input;
   
-  let setCommand;
-  if (append) {
-    setCommand = `<set file="${file}" range="-1"><![CDATA[${content}]]></set>`;
-  } else if (insertBefore) {
-    setCommand = `<set file="${file}" add="${insertBefore}"><![CDATA[${content}]]></set>`;
-  } else if (range?.start) {
-    const end = range.end || range.start;
-    setCommand = `<set file="${file}" range="${range.start},${end}"><![CDATA[${content}]]></set>`;
-  } else {
-    return { success: false, output: 'Error: Must specify range, insertBefore, or append' };
+  try {
+    let setCommand;
+    
+    if (append) {
+      setCommand = `<set file="${file}" range={-1}>
+<![CDATA[
+${content}
+]]>
+</set>`;
+    } else if (insertBefore) {
+      setCommand = `<set file="${file}" add={${insertBefore}}>
+<![CDATA[
+${content}
+]]>
+</set>`;
+    } else if (range?.start) {
+      const end = range.end || range.start;
+      setCommand = `<set file="${file}" range={${range.start}, ${end}}>
+<![CDATA[
+${content}
+]]>
+</set>`;
+    } else {
+      return { success: false, output: 'Error: Must specify range, insertBefore, or append' };
+    }
+    
+    const result = applySetOperations(setCommand, { workspacePath: session.workspacePath });
+    return {
+      success: result?.success || false,
+      output: result?.text || 'Edit completed.'
+    };
+  } catch (error) {
+    return {
+      success: false,
+      output: `Edit error: ${error.message}`
+    };
   }
-  
-  const result = applySetOperations(setCommand, { workspacePath: session.workspacePath });
-  return {
-    success: result?.success || false,
-    output: result?.text || 'Edit completed.'
-  };
 }
 
 function formatChecklist(checklist) {

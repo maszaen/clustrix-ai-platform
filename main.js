@@ -963,6 +963,76 @@ ipcMain.handle('sync:listCloudUsers', async () => {
 });
 
 /**
+ * sync:refreshToken
+ * Re-authenticate with GitHub to refresh expired token
+ * Does NOT delete any data - only updates the token
+ * 
+ * Flow: Token expired → auto re-auth → update config → retry operation
+ */
+ipcMain.handle('sync:refreshToken', async () => {
+  try {
+    log('sync:refreshToken', 1, 'handleSync', 'Starting token refresh flow');
+
+    const config = syncManager.loadSyncConfig();
+    
+    if (!config.currentCloudUser) {
+      return { success: false, error: 'No cloud user to refresh token for' };
+    }
+
+    // Get OAuth credentials
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+    const callbackUrl = process.env.GITHUB_CALLBACK_URL || 'http://localhost:2920/oauth/callback';
+
+    if (!clientId || !clientSecret) {
+      return { success: false, error: 'GitHub OAuth not configured' };
+    }
+
+    // Start OAuth flow
+    const oauthHelper = new GitHubOAuthHelper(clientId, clientSecret, callbackUrl);
+    global.githubOAuthHelper = oauthHelper;
+
+    const result = await oauthHelper.startAuthFlow();
+    global.githubOAuthHelper = null;
+
+    if (!result || !result.accessToken) {
+      return { success: false, error: 'OAuth failed - no token received' };
+    }
+
+    // Verify it's the same user (prevent account switch during refresh)
+    if (result.email !== config.currentCloudUser && result.username !== config.currentCloudUsername) {
+      log('sync:refreshToken', 2, 'handleSync', 'Different user logged in during refresh', {
+        expected: config.currentCloudUser,
+        got: result.email
+      });
+      return { 
+        success: false, 
+        error: 'Different GitHub account detected. Please login with the same account or logout first.',
+        accountMismatch: true
+      };
+    }
+
+    // Update token in config (preserve all other settings)
+    config.cloudToken = result.accessToken;
+    config.cloudTokenExpiry = Date.now() + (8 * 60 * 60 * 1000); // 8 hours
+    syncManager.saveSyncConfig(config);
+
+    log('sync:refreshToken', 1, 'handleSync', 'Token refreshed successfully', {
+      user: config.currentCloudUser
+    });
+
+    return { 
+      success: true, 
+      message: 'Token refreshed successfully',
+      user: config.currentCloudUser
+    };
+  } catch (e) {
+    log('sync:refreshToken error', e);
+    return { success: false, error: e.message };
+  }
+});
+
+/**
  * sync:logout
  * Logout from cloud account and schedule backup + cleanup after restart
  * Params: { deleteCloudData?: boolean }
@@ -1649,6 +1719,25 @@ ipcMain.handle('sync:syncNow', async () => {
     }
   } catch (e) {
     log('sync:syncNow error', e);
+    
+    // Check for authentication errors (401, Bad credentials, token expired)
+    const isAuthError = e.message && (
+      e.message.includes('401') ||
+      e.message.includes('Bad credentials') ||
+      e.message.includes('Unauthorized') ||
+      e.message.includes('token') && e.message.toLowerCase().includes('expired')
+    );
+    
+    if (isAuthError) {
+      log('sync:syncNow', 2, 'handleSync', 'Authentication error detected, needs token refresh');
+      return {
+        success: false,
+        error: e.message,
+        needsReauth: true,
+        authError: true
+      };
+    }
+    
     return {
       success: false,
       error: e.message || 'Sync with GitHub failed'
@@ -1764,6 +1853,25 @@ ipcMain.handle('sync:backupNow', async () => {
       };
     } catch (err) {
       log('sync:backupNow', 2, 'handleSync', 'GitHub backup failed', { error: err.message });
+      
+      // Check for authentication errors (401, Bad credentials, token expired)
+      const isAuthError = err.message && (
+        err.message.includes('401') ||
+        err.message.includes('Bad credentials') ||
+        err.message.includes('Unauthorized') ||
+        err.message.includes('token') && err.message.toLowerCase().includes('expired')
+      );
+      
+      if (isAuthError) {
+        log('sync:backupNow', 2, 'handleSync', 'Authentication error detected, needs token refresh');
+        return {
+          success: false,
+          error: err.message,
+          needsReauth: true,
+          authError: true
+        };
+      }
+      
       throw err;
     }
   } catch (e) {
@@ -4286,8 +4394,11 @@ function runStandardStreaming(event, payload) {
 
     function handleGeminiStreaming() {
       try {
-        const url = new URL(`${BASE_URL.replace(/\/+$/,'')}/models/${encodeURIComponent(model)}:generateContent`);
+        // Use streamGenerateContent for true streaming
+        const url = new URL(`${BASE_URL.replace(/\/+$/,'')}/models/${encodeURIComponent(model)}:streamGenerateContent`);
         if (API_KEY) url.searchParams.set('key', API_KEY);
+        url.searchParams.set('alt', 'sse'); // Enable SSE streaming
+        
         const lastUserMessage = messages.slice().reverse().find(m => m.role === 'user');
         const hasInsultKeywords = lastUserMessage && detectInsultKeywords(lastUserMessage.content);
         
@@ -4299,16 +4410,67 @@ function runStandardStreaming(event, payload) {
             { role: 'system', content: insultDetectionPrompt },
             ...messages
           ];
-          logHelper('INSULT_KEYWORD_DETECTED', 'handleGeminiStreaming', 'Insult keywords detected, sending combined insult detection prompt');
+          logHelper('INSULT_KEYWORD_DETECTED', 'handleGeminiStreaming', 'Insult keywords detected');
         }
 
+        // Build contents array (skip system messages - handle separately)
         const contents = [];
+        let systemInstruction = null;
+        
         for (const m of messagesToProcess) {
-          const role = m.role === 'assistant' ? 'model' : 'user';
-          contents.push({ role, parts: [{ text: String(m.content || '') }] });
+          if (m.role === 'system') {
+            // Gemini uses systemInstruction field, not in contents
+            systemInstruction = { parts: [{ text: String(m.content || '') }] };
+          } else {
+            const role = m.role === 'assistant' ? 'model' : 'user';
+            contents.push({ role, parts: [{ text: String(m.content || '') }] });
+          }
         }
 
-        const body = JSON.stringify({ contents });
+        // Build request body with Gemini-specific features
+        const requestBody = { 
+          contents,
+          generationConfig: {
+            maxOutputTokens: 8192,
+            temperature: 0.7
+          }
+        };
+        
+        // Add system instruction if present
+        if (systemInstruction) {
+          requestBody.systemInstruction = systemInstruction;
+        }
+        
+        // Enable thinking for Gemini models with thinking capability
+        // - Gemini 2.5 Pro (gemini-2.5-pro) - has built-in thinking
+        // - Gemini 2.0 Flash Thinking (gemini-2.0-flash-thinking)
+        // - Any model with 'thinking' in name
+        const modelLower = model.toLowerCase();
+        const isThinkingModel = modelLower.includes('thinking') || 
+                                modelLower.includes('2.5-pro') ||
+                                modelLower.includes('2.5-flash') ||
+                                modelLower.includes('2.0-flash');
+        
+        if (isThinkingModel && payload.thinkMode !== 'disabled') {
+          // Gemini 2.5 Pro has higher thinking budget capacity
+          const is25Pro = modelLower.includes('2.5-pro');
+          const defaultBudget = is25Pro ? 16384 : 8192;
+          const extendedBudget = is25Pro ? 32768 : 24576;
+          
+          requestBody.generationConfig.thinkingConfig = {
+            thinkingBudget: payload.thinkMode === 'extended' ? extendedBudget : defaultBudget,
+            // CRITICAL: Include thoughts in response so we can display them
+            includeThoughts: true
+          };
+          logHelper('GEMINI_THINKING', 'handleGeminiStreaming', 'Thinking mode enabled', { 
+            model, 
+            budget: requestBody.generationConfig.thinkingConfig.thinkingBudget,
+            includeThoughts: true,
+            is25Pro
+          });
+        }
+
+        const body = JSON.stringify(requestBody);
         const opts = {
           method: 'POST',
           hostname: url.hostname,
@@ -4316,62 +4478,140 @@ function runStandardStreaming(event, payload) {
           protocol: url.protocol,
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
+            'Accept': 'text/event-stream',
             'Content-Length': Buffer.byteLength(body)
           }
         };
 
+        logHelper('GEMINI_REQUEST', 'handleGeminiStreaming', 'Starting Gemini stream', {
+          model,
+          endpoint: 'streamGenerateContent',
+          hasSystemInstruction: !!systemInstruction,
+          thinkingEnabled: isThinkingModel
+        });
+
         const req = https.request(opts, (res) => {
-          let acc = '';
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            let errData = '';
+            res.on('data', d => errData += d);
+            res.on('end', () => sendErr(`HTTP ${res.statusCode} ${res.statusMessage} — ${errData.slice(0,200)}`));
+            return;
+          }
+
+          let buffer = '';
+          let totalUsage = null;
+          
           res.setEncoding('utf8');
-          res.on('data', d => acc += d);
-          res.on('end', () => {
-            if (res.statusCode < 200 || res.statusCode >= 300) {
-              return sendErr(`HTTP ${res.statusCode} ${res.statusMessage} — ${acc.slice(0,200)}`);
-            }
-            try {
-              const j = JSON.parse(acc);
-              let text = (j.candidates?.[0]?.content?.parts || [])
-                .map(p => p.text || '').join('');
-
-
-              // STEP 2: Handle Gemini's *(Internal Reasoning: ...)* pattern
-              const internalReasoningMatch = text.match(/\*\(Internal Reasoning:\s*([\s\S]*?)\)\*/i);
-              if (internalReasoningMatch) {
-                const reasoning = internalReasoningMatch[1].trim();
-                // Send reasoning as thinking content
-                event.sender.send(`chat:chunk-${reqId}`, { think: reasoning });
-                // Remove the Internal Reasoning from main content
-                text = text.replace(/\*\(Internal Reasoning:\s*[\s\S]*?\)\*/gi, '').trim();
+          res.on('data', (chunk) => {
+            buffer += chunk;
+            
+            // Process SSE events
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+            
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              
+              const jsonStr = line.slice(6).trim();
+              if (!jsonStr || jsonStr === '[DONE]') continue;
+              
+              try {
+                const data = JSON.parse(jsonStr);
+                const parts = data.candidates?.[0]?.content?.parts || [];
+                
+                // Debug: Log raw parts to see Gemini's actual format
+                if (parts.length > 0) {
+                  logHelper('GEMINI_PARTS', 'handleGeminiStreaming', 'Raw parts received', {
+                    partsCount: parts.length,
+                    partKeys: parts.map(p => Object.keys(p)),
+                    hasThought: parts.some(p => p.thought !== undefined),
+                    sample: JSON.stringify(parts[0]).slice(0, 200)
+                  });
+                }
+                
+                for (const part of parts) {
+                  // Handle thinking/reasoning content (Gemini 2.5 Pro / 2.0 Flash Thinking)
+                  // Gemini uses { thought: true, text: "..." } for thinking parts
+                  if (part.thought === true && part.text) {
+                    logHelper('GEMINI_THINKING', 'handleGeminiStreaming', 'Sending thinking chunk', { 
+                      length: part.text.length 
+                    });
+                    event.sender.send(`chat:chunk-${reqId}`, { think: part.text });
+                  } else if (part.text) {
+                    let text = part.text;
+                    
+                    // Handle legacy *(Internal Reasoning: ...)* pattern
+                    const internalMatch = text.match(/\*\(Internal Reasoning:\s*([\s\S]*?)\)\*/i);
+                    if (internalMatch) {
+                      event.sender.send(`chat:chunk-${reqId}`, { think: internalMatch[1].trim() });
+                      text = text.replace(/\*\(Internal Reasoning:\s*[\s\S]*?\)\*/gi, '').trim();
+                    }
+                    
+                    if (text) {
+                      event.sender.send(`chat:chunk-${reqId}`, text);
+                    }
+                  }
+                }
+                
+                // Check for thinking at candidate level (some Gemini versions)
+                const candidateThoughts = data.candidates?.[0]?.groundingMetadata?.thoughts ||
+                                          data.candidates?.[0]?.thoughts ||
+                                          data.modelThoughts;
+                if (candidateThoughts) {
+                  logHelper('GEMINI_CANDIDATE_THOUGHTS', 'handleGeminiStreaming', 'Found candidate-level thoughts', {
+                    type: typeof candidateThoughts
+                  });
+                  const thoughtText = typeof candidateThoughts === 'string' 
+                    ? candidateThoughts 
+                    : JSON.stringify(candidateThoughts);
+                  event.sender.send(`chat:chunk-${reqId}`, { think: thoughtText });
+                }
+                
+                // Track usage from final chunk
+                if (data.usageMetadata) {
+                  totalUsage = data.usageMetadata;
+                  // Log if thinking tokens were used
+                  if (data.usageMetadata.thoughtsTokenCount > 0) {
+                    logHelper('GEMINI_THINKING_USED', 'handleGeminiStreaming', 'Thinking tokens detected', {
+                      thoughtsTokenCount: data.usageMetadata.thoughtsTokenCount
+                    });
+                  }
+                }
+              } catch (parseErr) {
+                // Skip malformed JSON chunks
               }
-
-              if (text) event.sender.send(`chat:chunk-${reqId}`, text);
-
-              // Log token usage if available (Gemini format)
-              if (j?.usageMetadata) {
-                const usage = j.usageMetadata;
-                logHelper('TOKEN_USAGE', 'handleGeminiStreaming', 'Token usage information', {
-                  promptTokenCount: usage.promptTokenCount,
-                  candidatesTokenCount: usage.candidatesTokenCount,
-                  totalTokenCount: usage.totalTokenCount,
-                  provider: 'gemini',
-                  model
-                });
-                recordTokenUsage(reqId, 'final-response', usage, { provider: 'gemini', model });
-              }
-
-              log('PARSED_JSON', 'handleGeminiStreaming', 'Parsed JSON information', {
-                parsedJson: j
-              })
-
-              sendDone();
-            } catch (e) {
-              sendErr('Bad JSON from Gemini');
             }
           });
+          
+          res.on('end', () => {
+            // Process any remaining buffer
+            if (buffer.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(buffer.slice(6));
+                if (data.usageMetadata) totalUsage = data.usageMetadata;
+              } catch {}
+            }
+            
+            // Log token usage
+            if (totalUsage) {
+              logHelper('TOKEN_USAGE', 'handleGeminiStreaming', 'Token usage', {
+                promptTokenCount: totalUsage.promptTokenCount,
+                candidatesTokenCount: totalUsage.candidatesTokenCount,
+                totalTokenCount: totalUsage.totalTokenCount,
+                thoughtsTokenCount: totalUsage.thoughtsTokenCount,
+                provider: 'gemini',
+                model
+              });
+              recordTokenUsage(reqId, 'final-response', totalUsage, { provider: 'gemini', model });
+            }
+            
+            sendDone();
+          });
         });
+        
         req.on('error', e => sendErr(e.message || String(e)));
-        req.write(body); req.end();
+        req.write(body);
+        req.end();
         trackActiveStream(reqId, req);
       } catch (e) {
         sendErr(e.message || String(e));

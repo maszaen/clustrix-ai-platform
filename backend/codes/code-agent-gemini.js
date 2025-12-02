@@ -493,11 +493,16 @@ function formatChecklist(checklist) {
   }).join('\n');
 }
 
-async function executeTool(session, functionCall, confirmed, onChunk, sessionId) {
+async function executeTool(session, functionCall, confirmed, onChunk, sessionId, iteration = 0) {
   const { name, args } = functionCall;
-  const toolCallId = `${name}-${Date.now()}`;
+  // Use stable ID based on session + iteration + function name (not timestamp)
+  // This ensures the same ID is used for confirmation request and resolution
+  const toolCallId = `${sessionId}-${iteration}-${name}`;
   
-  geminiLog(1, 'executeTool', `Executing: ${name}`, { args: JSON.stringify(args).slice(0, 150) });
+  geminiLog(1, 'executeTool', `Executing: ${name}`, { 
+    args: JSON.stringify(args).slice(0, 150),
+    toolCallId 
+  });
   
   switch (name) {
     case 'run_command': {
@@ -826,8 +831,8 @@ async function processGeminiCodeRequest({
           if (onChunk) onChunk(commandChunk, { type: 'command', iteration, toolName: functionCall.name });
         }
         
-        // Execute tool
-        const result = await executeTool(session, functionCall, false, onChunk, sessionId);
+        // Execute tool (pass iteration for stable toolCallId)
+        const result = await executeTool(session, functionCall, false, onChunk, sessionId, iteration);
         
         // Add function response to history (Gemini format)
         session.conversationHistory.push({

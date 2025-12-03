@@ -59,7 +59,7 @@ IMPORTANT: Get-ChildItem -Recurse without -Depth will hang!`,
             },
             commentary: {
               type: "string",
-              description: "Brief human-readable explanation of what this command does"
+              description: "Brief human-readable short explanation of what this command does"
             }
           },
           required: ["command"]
@@ -70,10 +70,10 @@ IMPORTANT: Get-ChildItem -Recurse without -Depth will hang!`,
         description: `Edit a file by replacing, inserting, or deleting lines.
 
 REPLACE LINES: Use range with start and end line numbers
-INSERT BEFORE: Use insertBefore with line number  
+INSERT BEFORE: Use insert_before with line number  
 APPEND TO END: Use append=true
 DELETE LINES: Use range with empty content
-
+You can provide multiple edit operations in multiple files.
 Line numbers are 1-indexed. Always read the file first to get accurate line numbers.`,
         parameters: {
           type: "object",
@@ -84,13 +84,13 @@ Line numbers are 1-indexed. Always read the file first to get accurate line numb
             },
             range_start: {
               type: "integer",
-              description: "Start line number for replace/delete (1-indexed)"
+              description: "Start line number for delete (1-indexed)"
             },
             range_end: {
               type: "integer",
-              description: "End line number for replace/delete (1-indexed, inclusive)"
+              description: "End line number for delete (1-indexed, inclusive)"
             },
-            insertBefore: {
+            insert_before: {
               type: "integer",
               description: "Insert content before this line number"
             },
@@ -100,11 +100,11 @@ Line numbers are 1-indexed. Always read the file first to get accurate line numb
             },
             content: {
               type: "string",
-              description: "New content (empty string to delete lines)"
+              description: "New content goes here (empty string to delete lines)"
             },
             commentary: {
               type: "string",
-              description: "Brief explanation of what you're editing"
+              description: "Brief short explanation of what you're editing"
             }
           },
           required: ["file", "content"]
@@ -442,7 +442,7 @@ async function executeRunCommand(session, command, confirmed = false) {
 }
 
 async function executeEditFile(session, input) {
-  const { file, range_start, range_end, insertBefore, append, content } = input;
+  const { file, range_start, range_end, insert_before, append, content } = input;
   
   try {
     let setCommand;
@@ -453,8 +453,8 @@ async function executeEditFile(session, input) {
 ${content}
 ]]>
 </set>`;
-    } else if (insertBefore) {
-      setCommand = `<set file="${file}" add={${insertBefore}}>
+    } else if (insert_before) {
+      setCommand = `<set file="${file}" add={${insert_before}}>
 <![CDATA[
 ${content}
 ]]>
@@ -467,7 +467,7 @@ ${content}
 ]]>
 </set>`;
     } else {
-      return { success: false, output: 'Error: Must specify range_start/range_end, insertBefore, or append' };
+      return { success: false, output: 'Error: Must specify range_start/range_end, insert_before, or append' };
     }
     
     const result = applySetOperations(setCommand, { workspacePath: session.workspacePath });

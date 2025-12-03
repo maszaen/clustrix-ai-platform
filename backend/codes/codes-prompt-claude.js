@@ -79,6 +79,7 @@ DELETE LINES (empty content):
 ⚠️ IMPORTANT:
   - Line numbers are 1-indexed
   - Always read the file first to get accurate line numbers
+  - You can provide multiple edit operations in multiple files
   - For NEW files, create them first with run_command`,
     input_schema: {
       type: "object",
@@ -105,7 +106,7 @@ DELETE LINES (empty content):
         },
         content: {
           type: "string",
-          description: "New content (empty string to delete lines)"
+          description: "New content goes here (empty string to delete lines)"
         },
         commentary: {
           type: "string",

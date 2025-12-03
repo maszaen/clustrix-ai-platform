@@ -297,10 +297,33 @@ function applySetOperations(command, options = {}) {
     return null;
   }
 
+  // Group operations by file, then sort each group by line number DESCENDING
+  // This ensures edits at higher line numbers are applied first,
+  // preventing line number shifts from affecting subsequent edits
+  const groupedByFile = new Map();
+  for (const op of operations) {
+    const file = op.file;
+    if (!groupedByFile.has(file)) {
+      groupedByFile.set(file, []);
+    }
+    groupedByFile.get(file).push(op);
+  }
+
+  // Sort each file's operations by start line DESCENDING (bottom to top)
+  const sortedOperations = [];
+  for (const [, ops] of groupedByFile) {
+    ops.sort((a, b) => {
+      const aStart = a.range.start === -1 ? Infinity : a.range.start;
+      const bStart = b.range.start === -1 ? Infinity : b.range.start;
+      return bStart - aStart; // Descending order
+    });
+    sortedOperations.push(...ops);
+  }
+
   const filesMap = new Map();
 
-  for (let index = 0; index < operations.length; index++) {
-    const operation = operations[index];
+  for (let index = 0; index < sortedOperations.length; index++) {
+    const operation = sortedOperations[index];
     if (operation.range.start === undefined || operation.range.start === null) {
       throw new Error('range or add attribute must include start line.');
     }

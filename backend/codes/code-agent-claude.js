@@ -543,7 +543,7 @@ async function executeRunCommand(session, command, confirmed = false) {
 // EXECUTE FILE EDIT
 // ===================================
 async function executeEditFile(session, input) {
-  const { file, range, insertBefore, append, content } = input;
+  const { file, range, insert_before, append, content } = input;
   
   try {
     // Build <set> command for edit-operations.js
@@ -555,8 +555,8 @@ async function executeEditFile(session, input) {
 ${content}
 ]]>
 </set>`;
-    } else if (insertBefore) {
-      setCommand = `<set file="${file}" add={${insertBefore}}>
+    } else if (insert_before) {
+      setCommand = `<set file="${file}" add={${insert_before}}>
 <![CDATA[
 ${content}
 ]]>
@@ -571,7 +571,7 @@ ${content}
     } else {
       return {
         success: false,
-        output: 'Error: Must specify range (with start/end), insertBefore, or append',
+        output: 'Error: Must specify range (with start/end), insert_before, or append',
       };
     }
     

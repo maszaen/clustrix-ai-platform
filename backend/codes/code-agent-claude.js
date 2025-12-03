@@ -361,13 +361,12 @@ function ensureClaudeTerminal(session, { forceNew = false, workspacePathOverride
 }
 
 // ===================================
-// CLAUDE API CALL
+// CLAUDE API CALL (STREAMING)
 // ===================================
-async function callClaudeAPI({ baseUrl, apiKey, model, system, messages, tools }) {
+async function callClaudeAPI({ baseUrl, apiKey, model, system, messages, tools, onTextChunk }) {
   return new Promise((resolve, reject) => {
     let endpoint;
     try {
-      // Normalize base URL
       let normalizedBase = baseUrl;
       if (!normalizedBase.includes('/v1')) {
         normalizedBase = normalizedBase.replace(/\/?$/, '/v1');
@@ -384,6 +383,7 @@ async function callClaudeAPI({ baseUrl, apiKey, model, system, messages, tools }
       system,
       messages,
       tools,
+      stream: true, // Enable streaming
     });
     
     const options = {
@@ -400,18 +400,106 @@ async function callClaudeAPI({ baseUrl, apiKey, model, system, messages, tools }
     };
     
     const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        let errorData = '';
+        res.on('data', chunk => errorData += chunk);
+        res.on('end', () => {
+          reject(new Error(`Claude API HTTP ${res.statusCode}: ${errorData.slice(0, 500)}`));
+        });
+        return;
+      }
+      
+      // Accumulate full response while streaming text
+      const fullResponse = {
+        content: [],
+        stop_reason: null,
+        usage: { input_tokens: 0, output_tokens: 0 },
+      };
+      
+      let currentContentBlock = null;
+      let currentBlockIndex = -1;
+      let buffer = '';
+      
+      res.on('data', (chunk) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+        
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr || jsonStr === '[DONE]') continue;
+          
+          try {
+            const event = JSON.parse(jsonStr);
+            
+            switch (event.type) {
+              case 'message_start':
+                if (event.message?.usage) {
+                  fullResponse.usage.input_tokens = event.message.usage.input_tokens || 0;
+                }
+                break;
+                
+              case 'content_block_start':
+                currentBlockIndex = event.index;
+                currentContentBlock = event.content_block;
+                if (currentContentBlock.type === 'text') {
+                  currentContentBlock.text = '';
+                } else if (currentContentBlock.type === 'tool_use') {
+                  currentContentBlock.input = '';
+                }
+                break;
+                
+              case 'content_block_delta':
+                if (event.delta?.type === 'text_delta' && currentContentBlock?.type === 'text') {
+                  const textDelta = event.delta.text || '';
+                  currentContentBlock.text += textDelta;
+                  // Stream text immediately to UI
+                  if (onTextChunk && textDelta) {
+                    onTextChunk(textDelta);
+                  }
+                } else if (event.delta?.type === 'input_json_delta' && currentContentBlock?.type === 'tool_use') {
+                  // Accumulate tool input JSON (don't stream this)
+                  currentContentBlock.input += event.delta.partial_json || '';
+                }
+                break;
+                
+              case 'content_block_stop':
+                if (currentContentBlock) {
+                  // Parse tool input JSON if it's a tool_use block
+                  if (currentContentBlock.type === 'tool_use' && typeof currentContentBlock.input === 'string') {
+                    try {
+                      currentContentBlock.input = JSON.parse(currentContentBlock.input || '{}');
+                    } catch {
+                      currentContentBlock.input = {};
+                    }
+                  }
+                  fullResponse.content.push(currentContentBlock);
+                }
+                currentContentBlock = null;
+                break;
+                
+              case 'message_delta':
+                if (event.delta?.stop_reason) {
+                  fullResponse.stop_reason = event.delta.stop_reason;
+                }
+                if (event.usage?.output_tokens) {
+                  fullResponse.usage.output_tokens = event.usage.output_tokens;
+                }
+                break;
+                
+              case 'message_stop':
+                // Message complete
+                break;
+            }
+          } catch (e) {
+            claudeLog(2, 'callClaudeAPI', 'Failed to parse SSE event', { line, error: e.message });
+          }
+        }
+      });
+      
       res.on('end', () => {
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`Claude API HTTP ${res.statusCode}: ${data.slice(0, 500)}`));
-          return;
-        }
-        try {
-          resolve(JSON.parse(data));
-        } catch (e) {
-          reject(new Error(`Failed to parse Claude response: ${e.message}`));
-        }
+        resolve(fullResponse);
       });
     });
     
@@ -733,7 +821,8 @@ async function processClaudeCodeRequest({
         });
         
         // Load and add assistant response for this message
-        const assistantMessage = dbMessages.find(m => m.role === 'assistant' && m.message_index === msgIndex);
+        // Assistant message is at msgIndex + 1 (user=0, ai=1, user=2, ai=3, etc)
+        const assistantMessage = dbMessages.find(m => m.role === 'assistant' && m.message_index === msgIndex + 1);
         if (assistantMessage) {
           // For Claude, assistant content should be in the format expected by API
           // If it's stored as string, convert to text block format
@@ -782,8 +871,9 @@ async function processClaudeCodeRequest({
       session.workspacePath
     );
     
-    // Call Claude API
+    // Call Claude API with streaming
     let response;
+    let hasStreamedText = false;
     try {
       response = await callClaudeAPI({
         baseUrl,
@@ -792,27 +882,32 @@ async function processClaudeCodeRequest({
         system,
         messages,
         tools,
+        // Stream text chunks directly to UI (no accumulation needed)
+        onTextChunk: (textDelta) => {
+          hasStreamedText = true;
+          if (onChunk) {
+            onChunk(textDelta, { type: 'text', iteration, streaming: true });
+          }
+        },
       });
     } catch (error) {
       console.error('[CLAUDE-AGENT] API Error:', error.message);
-      const errorChunk = `<!--command-output-->\nAPI Error: ${error.message}\n<!--/command-output-->\n\n`;
-      chunks.push(errorChunk);
-      if (onChunk) onChunk(errorChunk, { type: 'error', done: true });
+      if (onChunk) onChunk(`API Error: ${error.message}`, { type: 'error', done: true });
       break;
+    }
+    
+    // Signal text stream complete (if there was text)
+    if (hasStreamedText && onChunk) {
+      onChunk('', { type: 'text-end', iteration });
     }
     
     // Track usage
     if (response.usage) {
       totalUsage.prompt_tokens += response.usage.input_tokens || 0;
       totalUsage.completion_tokens += response.usage.output_tokens || 0;
-      
-      // Log cache stats if available
-      if (response.usage.cache_read_input_tokens) {
-        console.log(`[CLAUDE-AGENT] Cache hit: ${response.usage.cache_read_input_tokens} tokens`);
-      }
     }
     
-    // Parse response
+    // Parse response for tool calls and metadata
     const parsed = parseClaudeAgentResponse(response);
     
     // Send hidden content if present (following standard format)
@@ -822,22 +917,8 @@ async function processClaudeCodeRequest({
       if (onChunk) onChunk(hiddenChunk, { type: 'hidden', iteration, done: false });
     }
     
-    // Send answer content to UI (using standard format like other models)
-    if (parsed.answer) {
-      // Clean answer like other models do
-      const cleanedAnswer = parsed.answer
-        .replace(/^```[\w]*\n?/, '')  // Remove opening code block
-        .replace(/\n?```$/, '')      // Remove closing code block
-        .trim();
-      
-      if (cleanedAnswer) {
-        const answerChunk = `${cleanedAnswer}\n\n`;  // Add double newline like other models
-        chunks.push(answerChunk);
-        if (onChunk) onChunk(answerChunk, { type: 'text', iteration, done: false });
-      }
-    }
-    
-    // Send checklist if present (following standard format)
+    // NOTE: Text already streamed via onTextChunk, don't send again
+    // Only send checklist if present (following standard format)
     if (parsed.checklist) {
       const header = iteration === 0 ? '\n## Planning:\n' : '\n## Checkpoint Progress:\n';
       const checklistChunk = `${header}${parsed.checklist}\n\n`;
@@ -847,13 +928,6 @@ async function processClaudeCodeRequest({
     
     // Check if task complete
     if (parsed.isComplete) {
-      // Send final answer if present
-      if (parsed.answer) {
-        const finalAnswerChunk = `${parsed.answer}\n\n`;
-        chunks.push(finalAnswerChunk);
-        if (onChunk) onChunk(finalAnswerChunk, { type: 'text', iteration, done: false });
-      }
-      
       // Add assistant message to history
       session.conversationHistory.push({
         role: 'assistant',
@@ -873,8 +947,7 @@ async function processClaudeCodeRequest({
     
     // No tool calls and stop_reason is end_turn = conversation complete
     if (parsed.toolCalls.length === 0 && response.stop_reason === 'end_turn') {
-      // For end_turn, text is already in response.content, don't send duplicate finalAnswerChunk
-      // Just add final assistant message and end
+      // Text already streamed, just add to history and end
       session.conversationHistory.push({
         role: 'assistant',
         content: response.content,

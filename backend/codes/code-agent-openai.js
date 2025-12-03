@@ -268,9 +268,9 @@ function resolveOpenAIConfirmation(sessionId, toolCallId, allowed) {
 }
 
 // ===================================
-// OPENAI API CALL
+// OPENAI API CALL (STREAMING)
 // ===================================
-async function callOpenAIAPI({ baseUrl, apiKey, model, messages, tools }) {
+async function callOpenAIAPI({ baseUrl, apiKey, model, messages, tools, onTextChunk }) {
   return new Promise((resolve, reject) => {
     const endpoint = new URL(baseUrl.replace(/\/?$/, '') + '/chat/completions');
     
@@ -278,7 +278,8 @@ async function callOpenAIAPI({ baseUrl, apiKey, model, messages, tools }) {
       model,
       messages,
       tools,
-      tool_choice: "auto"
+      tool_choice: "auto",
+      stream: true
     });
     
     const options = {
@@ -294,19 +295,91 @@ async function callOpenAIAPI({ baseUrl, apiKey, model, messages, tools }) {
     };
     
     const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        let errorData = '';
+        res.on('data', chunk => errorData += chunk);
+        res.on('end', () => {
+          reject(new Error(`OpenAI API HTTP ${res.statusCode}: ${errorData.slice(0, 500)}`));
+        });
+        return;
+      }
+      
+      // Accumulate full response while streaming
+      const fullMessage = {
+        role: 'assistant',
+        content: '',
+        tool_calls: []
+      };
+      const toolCallBuffers = new Map(); // id -> { index, name, arguments }
+      let finishReason = null;
+      let buffer = '';
+      
+      res.on('data', (chunk) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr || jsonStr === '[DONE]') continue;
+          
+          try {
+            const event = JSON.parse(jsonStr);
+            const delta = event.choices?.[0]?.delta;
+            
+            if (!delta) continue;
+            
+            // Stream text content
+            if (delta.content) {
+              fullMessage.content += delta.content;
+              if (onTextChunk) onTextChunk(delta.content);
+            }
+            
+            // Accumulate tool calls
+            if (delta.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index;
+                if (!toolCallBuffers.has(idx)) {
+                  toolCallBuffers.set(idx, {
+                    id: tc.id || '',
+                    type: 'function',
+                    function: { name: '', arguments: '' }
+                  });
+                }
+                const buf = toolCallBuffers.get(idx);
+                if (tc.id) buf.id = tc.id;
+                if (tc.function?.name) buf.function.name += tc.function.name;
+                if (tc.function?.arguments) buf.function.arguments += tc.function.arguments;
+              }
+            }
+            
+            // Capture finish reason
+            if (event.choices?.[0]?.finish_reason) {
+              finishReason = event.choices[0].finish_reason;
+            }
+          } catch (e) {
+            openaiLog(2, 'callOpenAIAPI', 'Failed to parse SSE', { line, error: e.message });
+          }
+        }
+      });
+      
       res.on('end', () => {
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`OpenAI API HTTP ${res.statusCode}: ${data.slice(0, 500)}`));
-          return;
+        // Convert tool call buffers to array
+        if (toolCallBuffers.size > 0) {
+          fullMessage.tool_calls = Array.from(toolCallBuffers.values());
+        } else {
+          delete fullMessage.tool_calls;
         }
         
-        try {
-          resolve(JSON.parse(data));
-        } catch (e) {
-          reject(new Error(`Failed to parse OpenAI response: ${e.message}`));
-        }
+        // Build response in OpenAI format
+        resolve({
+          choices: [{
+            message: fullMessage,
+            finish_reason: finishReason
+          }],
+          usage: null // Streaming doesn't return usage
+        });
       });
     });
     
@@ -496,7 +569,8 @@ async function processOpenAICodeRequest({
       
       session.conversationHistory.push({ role: 'user', content: userMsg.content });
       
-      const assistantMsg = dbMessages.find(m => m.role === 'assistant' && m.message_index === msgIndex);
+      // Assistant message is at msgIndex + 1 (user=0, ai=1, user=2, ai=3, etc)
+      const assistantMsg = dbMessages.find(m => m.role === 'assistant' && m.message_index === msgIndex + 1);
       if (assistantMsg) {
         session.conversationHistory.push({
           role: 'assistant',
@@ -528,7 +602,20 @@ async function processOpenAICodeRequest({
       ...session.conversationHistory
     ];
     
-    const response = await callOpenAIAPI({ baseUrl, apiKey, model, messages, tools: OPENAI_AGENT_TOOLS });
+    let hasStreamedText = false;
+    const response = await callOpenAIAPI({
+      baseUrl, apiKey, model, messages,
+      tools: OPENAI_AGENT_TOOLS,
+      onTextChunk: (textDelta) => {
+        hasStreamedText = true;
+        if (onChunk) onChunk(textDelta, { type: 'text', iteration, streaming: true });
+      }
+    });
+    
+    // Signal text stream complete
+    if (hasStreamedText && onChunk) {
+      onChunk('', { type: 'text-end', iteration });
+    }
     
     if (response.usage) {
       totalUsage.prompt_tokens += response.usage.prompt_tokens || 0;
@@ -536,12 +623,6 @@ async function processOpenAICodeRequest({
     }
     
     const assistantMsg = response.choices[0].message;
-    
-    if (assistantMsg.content) {
-      const answerChunk = `${assistantMsg.content}\n\n`;
-      chunks.push(answerChunk);
-      if (onChunk) onChunk(answerChunk, { type: 'text', iteration });
-    }
     
     if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
       session.conversationHistory.push(assistantMsg);

@@ -80,8 +80,8 @@ REPLACE LINES (delete old content, insert new):
   Example: range={start:10, end:15} replaces lines 10-15
 
 INSERT BEFORE A LINE (no deletion):
-  Use insertBefore with line number
-  Example: insertBefore=25 inserts new content before line 25
+  Use insert_before with line number
+  Example: insert_before=25 inserts new content before line 25
 
 APPEND TO END OF FILE:
   Use append=true
@@ -92,6 +92,7 @@ DELETE LINES (empty content):
 ⚠️ IMPORTANT:
   - Line numbers are 1-indexed
   - Always read the file first to get accurate line numbers
+  - You can provide multiple edit operations in multiple files
   - For NEW files, create them first with run_command`,
       parameters: {
         type: "object",
@@ -108,7 +109,7 @@ DELETE LINES (empty content):
             },
             description: "Line range to replace/delete"
           },
-          insertBefore: {
+          insert_before: {
             type: "integer", 
             description: "Insert content before this line number"
           },
@@ -118,7 +119,7 @@ DELETE LINES (empty content):
           },
           content: {
             type: "string",
-            description: "New content (empty string to delete lines)"
+            description: "New content goes here (empty string to delete lines)"
           },
           commentary: {
             type: "string",
@@ -335,7 +336,7 @@ async function executeRunCommand(session, command, confirmed = false) {
 }
 
 async function executeEditFile(session, input) {
-  const { file, range, insertBefore, append, content } = input;
+  const { file, range, insert_before, append, content } = input;
   
   try {
     let setCommand;
@@ -346,8 +347,8 @@ async function executeEditFile(session, input) {
 ${content}
 ]]>
 </set>`;
-    } else if (insertBefore) {
-      setCommand = `<set file="${file}" add={${insertBefore}}>
+    } else if (insert_before) {
+      setCommand = `<set file="${file}" add={${insert_before}}>
 <![CDATA[
 ${content}
 ]]>
@@ -360,7 +361,7 @@ ${content}
 ]]>
 </set>`;
     } else {
-      return { success: false, output: 'Error: Must specify range, insertBefore, or append' };
+      return { success: false, output: 'Error: Must specify range, insert_before, or append' };
     }
     
     const result = applySetOperations(setCommand, { workspacePath: session.workspacePath });

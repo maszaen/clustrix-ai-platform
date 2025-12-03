@@ -7,6 +7,76 @@ function normalizeRelativePath(filePath) {
   return filePath.replace(/\\/g, '/');
 }
 
+// Fuzzy file suggestion - find similar files when typo occurs
+function findSimilarFiles(workspacePath, targetFile, maxSuggestions = 3) {
+  const targetName = path.basename(targetFile).toLowerCase();
+  const targetDir = path.dirname(targetFile);
+  const searchDir = path.resolve(workspacePath || process.cwd(), targetDir === '.' ? '' : targetDir);
+  
+  if (!fs.existsSync(searchDir)) {
+    // Try parent directory
+    const parentDir = path.resolve(workspacePath || process.cwd());
+    if (!fs.existsSync(parentDir)) return [];
+    return findFilesInDir(parentDir, targetName, maxSuggestions);
+  }
+  
+  return findFilesInDir(searchDir, targetName, maxSuggestions);
+}
+
+function findFilesInDir(dir, targetName, maxSuggestions) {
+  try {
+    const files = fs.readdirSync(dir, { withFileTypes: true });
+    const suggestions = [];
+    
+    for (const file of files) {
+      if (!file.isFile()) continue;
+      const fileName = file.name.toLowerCase();
+      const similarity = calculateSimilarity(targetName, fileName);
+      if (similarity > 0.5) { // 50% similarity threshold
+        suggestions.push({ name: file.name, similarity });
+      }
+    }
+    
+    return suggestions
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, maxSuggestions)
+      .map(s => s.name);
+  } catch {
+    return [];
+  }
+}
+
+// Simple Levenshtein-based similarity (0-1)
+function calculateSimilarity(str1, str2) {
+  const len1 = str1.length;
+  const len2 = str2.length;
+  const maxLen = Math.max(len1, len2);
+  if (maxLen === 0) return 1;
+  
+  // Quick check for exact match or substring
+  if (str1 === str2) return 1;
+  if (str1.includes(str2) || str2.includes(str1)) return 0.8;
+  
+  // Levenshtein distance
+  const matrix = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
+  for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+  for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+  
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  
+  const distance = matrix[len1][len2];
+  return 1 - (distance / maxLen);
+}
+
 function resolveFilePath(workspacePath, filePath) {
   const normalizedRoot = workspacePath ? path.resolve(workspacePath) : process.cwd();
   const absolutePath = path.resolve(normalizedRoot, filePath);
@@ -337,7 +407,13 @@ function applySetOperations(command, options = {}) {
       const { absolutePath, relativePath } = resolveFilePath(workspacePath, operation.file);
       const fileData = readFileWithMetadata(absolutePath);
       if (fileData.content === null) {
-        throw new Error(`File not found: ${operation.file}`);
+        // Try to find similar files for suggestion
+        const suggestions = findSimilarFiles(workspacePath, operation.file);
+        let errorMsg = `File not found: ${operation.file}`;
+        if (suggestions.length > 0) {
+          errorMsg += `\nDid you mean: ${suggestions.join(', ')}?`;
+        }
+        throw new Error(errorMsg);
       }
       filesMap.set(operation.file, {
         absolutePath,

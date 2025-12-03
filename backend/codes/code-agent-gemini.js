@@ -69,26 +69,31 @@ IMPORTANT: Get-ChildItem -Recurse without -Depth will hang!`,
         name: "edit_file",
         description: `Edit a file by replacing, inserting, or deleting lines.
 
-REPLACE LINES: Use range with start and end line numbers
+REPLACE LINES: Use range_start and range_end
 INSERT BEFORE: Use insert_before with line number  
 APPEND TO END: Use append=true
 DELETE LINES: Use range with empty content
-You can provide multiple edit operations in multiple files.
-Line numbers are 1-indexed. Always read the file first to get accurate line numbers.`,
+
+CRITICAL - LINE RANGE PRECISION:
+- Use EXACT line numbers from your most recent file read
+- Do NOT add extra context lines - only include lines you want to change
+- BAD: Editing lines 46-55 when you only need to change lines 50-52
+- GOOD: Editing exactly lines 50-52 with precise content
+- If unsure, re-read the file to get fresh line numbers`,
         parameters: {
           type: "object",
           properties: {
             file: {
               type: "string",
-              description: "Relative path to the file"
+              description: "Relative path to the file (use EXACT path from file read, no typos)"
             },
             range_start: {
               type: "integer",
-              description: "Start line number for delete (1-indexed)"
+              description: "EXACT start line number to replace (1-indexed, from fresh file read)"
             },
             range_end: {
               type: "integer",
-              description: "End line number for delete (1-indexed, inclusive)"
+              description: "EXACT end line number to replace (1-indexed, inclusive, no extra lines)"
             },
             insert_before: {
               type: "integer",
@@ -234,28 +239,26 @@ function resolveGeminiConfirmation(sessionId, toolCallId, allowed) {
 
 
 // ===================================
-// GEMINI API CALL
+// GEMINI API CALL (STREAMING)
 // ===================================
-async function callGeminiAPI({ baseUrl, apiKey, model, contents, tools, systemInstruction }) {
+async function callGeminiAPI({ baseUrl, apiKey, model, contents, tools, systemInstruction, onTextChunk }) {
   return new Promise((resolve, reject) => {
-    // Gemini API endpoint format: /v1beta/models/{model}:generateContent
-    // Or for OpenAI-compatible: /v1/chat/completions
     let endpoint;
     let isOpenAICompatible = false;
     
     try {
-      // Check if using OpenAI-compatible endpoint (e.g., via proxy or AI Studio)
       if (baseUrl.includes('/v1/') && !baseUrl.includes('/v1beta/')) {
         isOpenAICompatible = true;
         endpoint = new URL(baseUrl.replace(/\/?$/, '') + '/chat/completions');
       } else {
-        // Native Gemini API
         let normalizedBase = baseUrl.replace(/\/?$/, '');
         if (!normalizedBase.includes('/v1beta')) {
           normalizedBase += '/v1beta';
         }
-        endpoint = new URL(`${normalizedBase}/models/${model}:generateContent`);
+        // Use streamGenerateContent for streaming
+        endpoint = new URL(`${normalizedBase}/models/${model}:streamGenerateContent`);
         endpoint.searchParams.set('key', apiKey);
+        endpoint.searchParams.set('alt', 'sse');
       }
     } catch (error) {
       reject(new Error(`Invalid base URL: ${baseUrl}`));
@@ -266,7 +269,6 @@ async function callGeminiAPI({ baseUrl, apiKey, model, contents, tools, systemIn
     let headers;
     
     if (isOpenAICompatible) {
-      // Convert to OpenAI format
       const messages = [
         { role: 'system', content: systemInstruction },
         ...contents.map(c => ({
@@ -282,7 +284,8 @@ async function callGeminiAPI({ baseUrl, apiKey, model, contents, tools, systemIn
           type: 'function',
           function: fn
         })),
-        tool_choice: 'auto'
+        tool_choice: 'auto',
+        stream: true
       });
       
       headers = {
@@ -291,7 +294,6 @@ async function callGeminiAPI({ baseUrl, apiKey, model, contents, tools, systemIn
         'Content-Length': Buffer.byteLength(body)
       };
     } else {
-      // Native Gemini format
       body = JSON.stringify({
         contents,
         tools,
@@ -316,7 +318,7 @@ async function callGeminiAPI({ baseUrl, apiKey, model, contents, tools, systemIn
       headers
     };
     
-    geminiLog(1, 'callGeminiAPI', 'Making API request', {
+    geminiLog(1, 'callGeminiAPI', 'Making streaming API request', {
       hostname: endpoint.hostname,
       path: endpoint.pathname,
       model,
@@ -325,60 +327,89 @@ async function callGeminiAPI({ baseUrl, apiKey, model, contents, tools, systemIn
     });
     
     const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        let errorData = '';
+        res.on('data', chunk => errorData += chunk);
+        res.on('end', () => {
+          reject(new Error(`Gemini API HTTP ${res.statusCode}: ${errorData.slice(0, 500)}`));
+        });
+        return;
+      }
+      
+      // Accumulate full response
+      const fullResponse = {
+        candidates: [{
+          content: { role: 'model', parts: [] },
+          finishReason: 'STOP'
+        }],
+        usageMetadata: { promptTokenCount: 0, candidatesTokenCount: 0 }
+      };
+      
+      let accumulatedText = '';
+      const functionCalls = [];
+      let buffer = '';
+      
+      res.on('data', (chunk) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+          
+          try {
+            const event = JSON.parse(jsonStr);
+            
+            if (isOpenAICompatible) {
+              // OpenAI streaming format
+              const delta = event.choices?.[0]?.delta;
+              if (delta?.content) {
+                accumulatedText += delta.content;
+                if (onTextChunk) onTextChunk(delta.content);
+              }
+              if (event.choices?.[0]?.finish_reason) {
+                fullResponse.candidates[0].finishReason = 
+                  event.choices[0].finish_reason === 'tool_calls' ? 'TOOL_CALLS' : 'STOP';
+              }
+            } else {
+              // Native Gemini streaming format
+              const candidate = event.candidates?.[0];
+              if (candidate?.content?.parts) {
+                for (const part of candidate.content.parts) {
+                  if (part.text) {
+                    accumulatedText += part.text;
+                    if (onTextChunk) onTextChunk(part.text);
+                  }
+                  if (part.functionCall) {
+                    functionCalls.push(part.functionCall);
+                  }
+                }
+              }
+              if (candidate?.finishReason) {
+                fullResponse.candidates[0].finishReason = candidate.finishReason;
+              }
+              if (event.usageMetadata) {
+                fullResponse.usageMetadata = event.usageMetadata;
+              }
+            }
+          } catch (e) {
+            geminiLog(2, 'callGeminiAPI', 'Failed to parse SSE', { line, error: e.message });
+          }
+        }
+      });
+      
       res.on('end', () => {
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          geminiLog(3, 'callGeminiAPI', 'API error response', {
-            statusCode: res.statusCode,
-            response: data.slice(0, 500)
-          });
-          reject(new Error(`Gemini API HTTP ${res.statusCode}: ${data.slice(0, 500)}`));
-          return;
+        // Build final response
+        if (accumulatedText) {
+          fullResponse.candidates[0].content.parts.push({ text: accumulatedText });
+        }
+        for (const fc of functionCalls) {
+          fullResponse.candidates[0].content.parts.push({ functionCall: fc });
         }
         
-        try {
-          const parsed = JSON.parse(data);
-          
-          // If OpenAI-compatible, convert response back to Gemini format
-          if (isOpenAICompatible && parsed.choices) {
-            const choice = parsed.choices[0];
-            const converted = {
-              candidates: [{
-                content: {
-                  role: 'model',
-                  parts: []
-                },
-                finishReason: choice.finish_reason === 'tool_calls' ? 'TOOL_CALLS' : 'STOP'
-              }],
-              usageMetadata: {
-                promptTokenCount: parsed.usage?.prompt_tokens || 0,
-                candidatesTokenCount: parsed.usage?.completion_tokens || 0
-              }
-            };
-            
-            if (choice.message?.content) {
-              converted.candidates[0].content.parts.push({ text: choice.message.content });
-            }
-            
-            if (choice.message?.tool_calls) {
-              for (const tc of choice.message.tool_calls) {
-                converted.candidates[0].content.parts.push({
-                  functionCall: {
-                    name: tc.function.name,
-                    args: JSON.parse(tc.function.arguments)
-                  }
-                });
-              }
-            }
-            
-            resolve(converted);
-          } else {
-            resolve(parsed);
-          }
-        } catch (e) {
-          reject(new Error(`Failed to parse Gemini response: ${e.message}`));
-        }
+        resolve(fullResponse);
       });
     });
     
@@ -693,7 +724,8 @@ async function processGeminiCodeRequest({
           content: userMsg.content
         });
         
-        const assistantMsg = dbMessages.find(m => m.role === 'assistant' && m.message_index === msgIndex);
+        // Assistant message is at msgIndex + 1 (user=0, ai=1, user=2, ai=3, etc)
+        const assistantMsg = dbMessages.find(m => m.role === 'assistant' && m.message_index === msgIndex + 1);
         if (assistantMsg) {
           session.conversationHistory.push({
             role: 'model',
@@ -737,8 +769,9 @@ async function processGeminiCodeRequest({
     // Build contents for API
     const contents = buildGeminiContents(session.conversationHistory);
     
-    // Call Gemini API
+    // Call Gemini API with streaming
     let response;
+    let hasStreamedText = false;
     try {
       response = await callGeminiAPI({
         baseUrl,
@@ -746,14 +779,21 @@ async function processGeminiCodeRequest({
         model,
         contents,
         tools: GEMINI_AGENT_TOOLS,
-        systemInstruction
+        systemInstruction,
+        onTextChunk: (textDelta) => {
+          hasStreamedText = true;
+          if (onChunk) onChunk(textDelta, { type: 'text', iteration, streaming: true });
+        }
       });
     } catch (error) {
       geminiLog(3, 'processGeminiCodeRequest', 'API Error', { error: error.message });
-      const errorChunk = `<!--command-output-->\nAPI Error: ${error.message}\n<!--/command-output-->\n\n`;
-      chunks.push(errorChunk);
-      if (onChunk) onChunk(errorChunk, { type: 'error', done: true });
+      if (onChunk) onChunk(`API Error: ${error.message}`, { type: 'error', done: true });
       break;
+    }
+    
+    // Signal text stream complete
+    if (hasStreamedText && onChunk) {
+      onChunk('', { type: 'text-end', iteration });
     }
     
     // Track usage
@@ -762,23 +802,8 @@ async function processGeminiCodeRequest({
       totalUsage.completion_tokens += response.usageMetadata.candidatesTokenCount || 0;
     }
     
-    // Parse response
+    // Parse response (text already streamed)
     const parsed = parseGeminiResponse(response);
-    
-    // Send text content to UI
-    if (parsed.text) {
-      const cleanedText = parsed.text
-        .replace(/^```[\w]*\n?/, '')
-        .replace(/\n?```$/, '')
-        .replace(/<!END>/g, '')
-        .trim();
-      
-      if (cleanedText) {
-        const textChunk = `${cleanedText}\n\n`;
-        chunks.push(textChunk);
-        if (onChunk) onChunk(textChunk, { type: 'text', iteration, done: false });
-      }
-    }
     
     // Check if complete
     if (parsed.isComplete || (parsed.functionCalls.length === 0 && parsed.finishReason === 'STOP')) {

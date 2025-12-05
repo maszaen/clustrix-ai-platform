@@ -225,6 +225,19 @@ class DatabaseManager {
 
       CREATE INDEX IF NOT EXISTS idx_edit_history_session ON edit_history(session_id, created_at DESC);
 
+      CREATE TABLE IF NOT EXISTS conversation_summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        summary_text TEXT NOT NULL,
+        summarized_until_index INTEGER NOT NULL,
+        token_count INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_conversation_summaries_session ON conversation_summaries(session_id, created_at DESC);
+
       CREATE TABLE IF NOT EXISTS drafts (
         id TEXT PRIMARY KEY,
         content TEXT NOT NULL,
@@ -907,6 +920,36 @@ class DatabaseManager {
 
   clearEditHistory(sessionId) {
     return this.db.prepare(`DELETE FROM edit_history WHERE session_id = ?`).run(sessionId);
+  }
+
+  // Conversation summary methods
+  saveConversationSummary(sessionId, summaryText, summarizedUntilIndex, tokenCount = 0) {
+    const stmt = this.db.prepare(`
+      INSERT INTO conversation_summaries (session_id, summary_text, summarized_until_index, token_count, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    return stmt.run(sessionId, summaryText, summarizedUntilIndex, tokenCount, Date.now());
+  }
+
+  getLatestSummary(sessionId) {
+    return this.db.prepare(`
+      SELECT * FROM conversation_summaries 
+      WHERE session_id = ? 
+      ORDER BY created_at DESC 
+      LIMIT 1
+    `).get(sessionId);
+  }
+
+  getAllSummaries(sessionId) {
+    return this.db.prepare(`
+      SELECT * FROM conversation_summaries 
+      WHERE session_id = ? 
+      ORDER BY created_at ASC
+    `).all(sessionId);
+  }
+
+  deleteSummaries(sessionId) {
+    return this.db.prepare(`DELETE FROM conversation_summaries WHERE session_id = ?`).run(sessionId);
   }
 
   // Migration: Add thinking_update column if it doesn't exist

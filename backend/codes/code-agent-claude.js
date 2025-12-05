@@ -26,6 +26,13 @@ const {
   formatClaudeToolResult,
 } = require('./codes-prompt-claude');
 const { log: appLog } = require('../../utils/logger');
+const { 
+  loadHistoryWithSummary,
+  checkNeedsSummarization,
+  performSummarization,
+  formatSummaryForContext,
+  estimateHistoryTokens
+} = require('./context-manager');
 
 // ===================================
 // HIGH IMPACT COMMAND DETECTION (Same as code-agent.js)
@@ -631,7 +638,9 @@ async function executeRunCommand(session, command, confirmed = false) {
 // EXECUTE FILE EDIT
 // ===================================
 async function executeEditFile(session, input, sessionId, db) {
-  const { file, range, insert_before, append, content } = input;
+  // Support both camelCase (insertBefore) and snake_case (insert_before)
+  const { file, range, insertBefore, insert_before, append, content } = input;
+  const insertLine = insertBefore || insert_before;
   
   try {
     // Build <set> command for edit-operations.js
@@ -643,8 +652,8 @@ async function executeEditFile(session, input, sessionId, db) {
 ${content}
 ]]>
 </set>`;
-    } else if (insert_before) {
-      setCommand = `<set file="${file}" add={${insert_before}}>
+    } else if (insertLine) {
+      setCommand = `<set file="${file}" add={${insertLine}}>
 <![CDATA[
 ${content}
 ]]>
@@ -881,55 +890,49 @@ async function processClaudeCodeRequest({
   let totalUsage = { prompt_tokens: 0, completion_tokens: 0 };
   const chunks = [];
   
-  // Reset conversation history for new request, but load previous conversations
+  // Reset conversation history for new request
   session.conversationHistory = [];
   
-  // Load previous conversation history from database (like other models)
+  // Load previous conversation history with summary support
+  let conversationSummary = null;
+  let summarizedUntilIndex = -1;
+  
   if (db && sessionId) {
     try {
-      const dbMessages = db.getMessages?.(sessionId) || [];
+      const historyResult = loadHistoryWithSummary(sessionId, db, model);
+      conversationSummary = historyResult.summary;
+      summarizedUntilIndex = historyResult.summarizedUntilIndex;
       
-      // Get last 2 user messages BEFORE current one (to avoid context limit)
-      const userMessages = dbMessages.filter(m => m.role === 'user').slice(-3, -1);
-      
-      for (const userMsg of userMessages) {
-        const msgIndex = userMsg.message_index;
-        
-        // Add user message
-        session.conversationHistory.push({
-          role: 'user',
-          content: userMsg.content,
-        });
-        
-        // Load and add assistant response for this message
-        // Assistant message is at msgIndex + 1 (user=0, ai=1, user=2, ai=3, etc)
-        const assistantMessage = dbMessages.find(m => m.role === 'assistant' && m.message_index === msgIndex + 1);
-        if (assistantMessage) {
-          // For Claude, assistant content should be in the format expected by API
-          // If it's stored as string, convert to text block format
-          let assistantContent = assistantMessage.content;
+      // Add loaded messages to conversation history
+      for (const msg of historyResult.messages) {
+        if (msg.role === 'user') {
+          session.conversationHistory.push({ role: 'user', content: msg.content });
+        } else if (msg.role === 'assistant') {
+          let assistantContent = msg.content;
           if (typeof assistantContent === 'string') {
             assistantContent = [{ type: 'text', text: assistantContent }];
           }
-          
-          session.conversationHistory.push({
-            role: 'assistant',
-            content: assistantContent,
-          });
+          session.conversationHistory.push({ role: 'assistant', content: assistantContent });
         }
       }
       
-      console.log(`[CLAUDE-AGENT] Loaded ${userMessages.length} previous conversations from database`);
+      claudeLog(1, 'processClaudeCodeRequest', 'History loaded', {
+        messagesLoaded: historyResult.messages.length,
+        hasSummary: !!conversationSummary
+      });
     } catch (error) {
-      console.error('[CLAUDE-AGENT] Failed to load conversation history:', error.message);
+      console.error('[CLAUDE-AGENT] Failed to load history:', error.message);
     }
   }
   
+  // Build current user prompt - prepend summary if exists
+  let currentPrompt = userPrompt;
+  if (conversationSummary) {
+    currentPrompt = formatSummaryForContext(conversationSummary) + userPrompt;
+  }
+  
   // Add current user prompt to conversation history
-  session.conversationHistory.push({
-    role: 'user',
-    content: userPrompt,
-  });
+  session.conversationHistory.push({ role: 'user', content: currentPrompt });
   
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     // Check cancellation
@@ -944,6 +947,39 @@ async function processClaudeCodeRequest({
     }
     
     console.log(`\n[CLAUDE-AGENT] === Iteration ${iteration + 1} ===`);
+    
+    // Check if we need to summarize (context limit reached)
+    const limitCheck = checkNeedsSummarization(session.conversationHistory, model);
+    if (limitCheck.needsSummarization && db && sessionId) {
+      claudeLog(1, 'processClaudeCodeRequest', 'Context limit reached, summarizing...', {
+        currentTokens: limitCheck.currentTokens,
+        targetTokens: limitCheck.targetTokens
+      });
+      
+      const apiConfig = { baseUrl, apiKey, model, provider: 'anthropic' };
+      const summarizeResult = await performSummarization(
+        sessionId, db, 
+        session.conversationHistory.map((m, i) => ({ ...m, messageIndex: summarizedUntilIndex + i + 1 })),
+        conversationSummary,
+        summarizedUntilIndex,
+        apiConfig,
+        onChunk
+      );
+      
+      if (summarizeResult.success) {
+        // Update summary state
+        conversationSummary = summarizeResult.summary;
+        summarizedUntilIndex = summarizeResult.summarizedUntilIndex;
+        
+        // Reset history with new summary
+        session.conversationHistory = [{
+          role: 'user',
+          content: formatSummaryForContext(conversationSummary) + userPrompt
+        }];
+        
+        claudeLog(1, 'processClaudeCodeRequest', 'History summarized and reset');
+      }
+    }
     
     // Build messages (NO memory injection - just history)
     const { system, messages } = buildClaudeAgentMessages(

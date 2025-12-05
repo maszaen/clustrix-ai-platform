@@ -9000,12 +9000,10 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 
 .command-header .command-text {
   width: 100%;
-  display: block;
   flex: 1;
   font-size: 15px;
   line-height: 1.4;
   background: transparent;
-  color: var(--fg-muted);
   border: none;
   margin: 2px 0 0 0;
   padding: 0;
@@ -9013,7 +9011,37 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   overflow: hidden;
   text-overflow: ellipsis;
   min-height: 1.4em;
+
+
+  color: var(--fg-muted);
 }
+
+@keyframes shimmer2 {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.message.ai:not(:has(.message-actions > *)) .command-input:not(.expanded):not(:hover):not(:has(.command-output)) .command-text {
+  position: relative;
+    display: inline-block;
+    background: linear-gradient(90deg,
+        var(--fg-muted) 0%,
+        var(--fg-muted) 40%,
+        var(--fg) 50%,
+        var(--fg-muted) 60%,
+        var(--fg-muted) 100%);
+    background-size: 200% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  
+    animation: shimmer2 2s linear infinite;
+} 
 
 .command-input.expanded .command-header .command-text {
   width: 100%;
@@ -9029,6 +9057,7 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   white-space: wrap !important;
   overflow: hidden;
   text-overflow: ellipsis;
+  animation: none;
   min-height: 1.4em;
 }
 

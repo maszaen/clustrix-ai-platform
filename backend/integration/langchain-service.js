@@ -12,6 +12,7 @@ const fsp = require('fs').promises; // Add async file operations
 const FileSummarizer = require('./file-summarizer');
 const LocalEmbeddingEngine = require('./local-embedding-engine');
 const ReasoningActionAgent = require('./reasoning-action-agent');
+const { ResearchAgentV2 } = require('./research-agent-v2');
 
 class ClustrixLangChainService {
   constructor(app) {
@@ -34,7 +35,11 @@ class ClustrixLangChainService {
     this.localEmbedding = new LocalEmbeddingEngine(app);
     
     // Initialize RE+ACT agent (REASONING + ACTION)
-    this.reasoningAgent = new ReasoningActionAgent(this);
+    // ResearchAgentV2 uses native tool calling for better context management
+    // Set USE_LEGACY_RESEARCH=1 to use old ReasoningActionAgent
+    this.reasoningAgent = process.env.USE_LEGACY_RESEARCH === '1'
+      ? new ReasoningActionAgent(this)
+      : new ResearchAgentV2(this);
     
     // Track vectorized messages to avoid duplicates
     this.vectorizedMessages = new Set();

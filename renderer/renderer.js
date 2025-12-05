@@ -12796,6 +12796,7 @@ function handleConfirmationRequest(streamState, confirmData) {
           sessionId: session.id,
           ...(confirmData.toolCallId ? { toolCallId: confirmData.toolCallId } : { iteration: confirmData.iteration }),
           allowed: true,
+          provider: confirmData.provider,
         });
       } catch (error) {
         log("CODES", 3, "handleConfirmationRequest", "Failed to allow command", { error });
@@ -12819,6 +12820,7 @@ function handleConfirmationRequest(streamState, confirmData) {
           sessionId: session.id,
           ...(confirmData.toolCallId ? { toolCallId: confirmData.toolCallId } : { iteration: confirmData.iteration }),
           allowed: false,
+          provider: confirmData.provider,
         });
         
         setStatus("Command skipped. AI will try another approach...", "skipped");

@@ -360,8 +360,13 @@ function computeContextRanges(totalLines, focusRanges) {
   return merged;
 }
 
+// Generate short edit ID
+function generateEditId() {
+  return `edit-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
 function applySetOperations(command, options = {}) {
-  const { workspacePath } = options;
+  const { workspacePath, sessionId, db } = options;
   const operations = parseSetOperations(command);
   if (!operations) {
     return null;
@@ -452,17 +457,11 @@ function applySetOperations(command, options = {}) {
     const start = operation.range.start;
     const end = operation.range.end;
     const operationType = operation.range.operation;
-    const isAppend = start === -1;
     const hasEnd = end !== null && end !== undefined;
     const contentLines = operation.text === '' ? [] : [...operation.lines];
 
-    if (isAppend && hasEnd) {
-      throw new Error('Append operations (range={-1}) cannot include an end value.');
-    }
-
-    if (!isAppend && start < 1) {
-      throw new Error(`Invalid start line ${start}. Line numbers must be positive integers or -1 for append.`);
-    }
+    // Defensive: treat start=-1 or any negative as append (AI sometimes uses range={-1})
+    const isAppend = start < 1;
 
     const result = {
       type: null,
@@ -526,8 +525,8 @@ function applySetOperations(command, options = {}) {
       result.focusEnd = focusLine;
       result.before = removed.join('\n');
       result.after = '';
-    } else if (!hasEnd && isAppend) {
-      // Append to end (legacy support)
+    } else if (isAppend) {
+      // Append to end - defensive: ignore end value if provided with negative start
       if (contentLines.length === 0) {
         throw new Error('Append operations must include content to add.');
       }
@@ -580,7 +579,31 @@ function applySetOperations(command, options = {}) {
 
     fs.writeFileSync(absolutePath, newContent, 'utf8');
 
+    // Generate edit ID and save to database if available
+    const editId = generateEditId();
+    const lastHistory = history[history.length - 1] || {};
+    
+    if (db && sessionId) {
+      try {
+        db.saveEditHistory(
+          sessionId,
+          editId,
+          relativePath,
+          lastHistory.type || 'edit',
+          lastHistory.start || null,
+          lastHistory.end || null,
+          lastHistory.before || '',
+          lastHistory.after || '',
+          diffText
+        );
+      } catch (e) {
+        // Don't fail edit if DB save fails
+        console.error('[EDIT] Failed to save edit history:', e.message);
+      }
+    }
+
     results.push({
+      editId,
       filePath: relativePath,
       absolutePath,
       originalLineCount: original.lines.length,
@@ -625,7 +648,275 @@ function applySetOperations(command, options = {}) {
   };
 }
 
+// Apply a single reverse patch to content
+function applyReversePatch(content, edit) {
+  const lines = content.split(/\r?\n/);
+  const beforeLines = edit.before_content ? edit.before_content.split('\n') : [];
+  const afterLines = edit.after_content ? edit.after_content.split('\n') : [];
+  
+  // Handle empty after_content (was an insert operation)
+  if (afterLines.length === 0 || (afterLines.length === 1 && afterLines[0] === '')) {
+    if (beforeLines.length === 0 || (beforeLines.length === 1 && beforeLines[0] === '')) {
+      return { success: true, content }; // Nothing to undo
+    }
+    // For insert undo: find and remove the before_content (which was inserted)
+    const beforeStr = beforeLines.join('\n');
+    const contentStr = lines.join('\n');
+    const matchIndex = contentStr.indexOf(beforeStr);
+    if (matchIndex !== -1) {
+      const newContent = contentStr.substring(0, matchIndex) + 
+                         contentStr.substring(matchIndex + beforeStr.length);
+      // Clean up potential double newlines
+      return { success: true, content: newContent.replace(/\n\n\n+/g, '\n\n') };
+    }
+    return { success: false, error: 'Cannot find inserted content to remove' };
+  }
+  
+  // Handle empty before_content (was a delete operation - need to restore)
+  if (beforeLines.length === 0 || (beforeLines.length === 1 && beforeLines[0] === '')) {
+    // This was a delete - we need to find where to insert back
+    // Use range_start as hint, but verify context
+    if (edit.range_start && edit.range_start > 0) {
+      const insertIdx = Math.min(edit.range_start - 1, lines.length);
+      lines.splice(insertIdx, 0, ...afterLines);
+      return { success: true, content: lines.join('\n') };
+    }
+    return { success: false, error: 'Cannot determine where to restore deleted content' };
+  }
+  
+  // Standard replace undo: find after_content and replace with before_content
+  // Strategy 1: Try exact match at original range first
+  if (edit.range_start && edit.range_start > 0) {
+    const startIdx = edit.range_start - 1;
+    const currentSlice = lines.slice(startIdx, startIdx + afterLines.length);
+    
+    if (currentSlice.join('\n') === afterLines.join('\n')) {
+      lines.splice(startIdx, afterLines.length, ...beforeLines);
+      return { success: true, content: lines.join('\n') };
+    }
+  }
+  
+  // Strategy 2: Fuzzy search - find after_content anywhere in file
+  const afterStr = afterLines.join('\n');
+  const contentStr = lines.join('\n');
+  
+  const matchIndex = contentStr.indexOf(afterStr);
+  if (matchIndex !== -1) {
+    const newContent = contentStr.substring(0, matchIndex) + 
+                       beforeLines.join('\n') + 
+                       contentStr.substring(matchIndex + afterStr.length);
+    return { success: true, content: newContent };
+  }
+  
+  // Strategy 3: Line-by-line fuzzy match (for when whitespace differs slightly)
+  for (let i = 0; i <= lines.length - afterLines.length; i++) {
+    const slice = lines.slice(i, i + afterLines.length);
+    const sliceTrimmed = slice.map(l => l.trim()).join('\n');
+    const afterTrimmed = afterLines.map(l => l.trim()).join('\n');
+    
+    if (sliceTrimmed === afterTrimmed) {
+      lines.splice(i, afterLines.length, ...beforeLines);
+      return { success: true, content: lines.join('\n') };
+    }
+  }
+  
+  // Content has changed - cannot safely undo
+  return { 
+    success: false, 
+    error: `Content mismatch - the edited region has been modified since edit ${edit.id}` 
+  };
+}
+
+// Cascading undo - undo from newest to target edit
+function undoEdit(editId, options = {}) {
+  const { workspacePath, db, sessionId, dryRun = false } = options;
+  
+  if (!db) {
+    return { success: false, output: 'Database not available for undo operation.', isWarning: true };
+  }
+  
+  const targetEdit = db.getEditById(editId);
+  if (!targetEdit) {
+    return { success: false, output: `Edit not found: ${editId}`, isWarning: false };
+  }
+  
+  // Get all edits that need to be undone (from newest to target, inclusive)
+  const editsToUndo = db.getEditsAfter(sessionId || targetEdit.session_id, editId);
+  if (!editsToUndo || editsToUndo.length === 0) {
+    return { success: false, output: `No edits found to undo.`, isWarning: false };
+  }
+  
+  // Group edits by file
+  const editsByFile = new Map();
+  for (const edit of editsToUndo) {
+    if (!editsByFile.has(edit.file_path)) {
+      editsByFile.set(edit.file_path, []);
+    }
+    editsByFile.get(edit.file_path).push(edit);
+  }
+  
+  // Process each file
+  const results = [];
+  const allEditIds = [];
+  let hasConflict = false;
+  const conflicts = [];
+  
+  for (const [filePath, fileEdits] of editsByFile) {
+    try {
+      const { absolutePath, relativePath } = resolveFilePath(workspacePath, filePath);
+      
+      // Read current file content
+      const currentContent = fs.existsSync(absolutePath) 
+        ? fs.readFileSync(absolutePath, 'utf8') 
+        : '';
+      
+      // Apply reverse patches in order (newest first - they're already sorted DESC)
+      let workingContent = currentContent;
+      const appliedEdits = [];
+      
+      for (const edit of fileEdits) {
+        const result = applyReversePatch(workingContent, edit);
+        if (!result.success) {
+          hasConflict = true;
+          conflicts.push({
+            file: relativePath,
+            editId: edit.id,
+            error: result.error
+          });
+          break; // Stop processing this file on conflict
+        }
+        workingContent = result.content;
+        appliedEdits.push(edit.id);
+      }
+      
+      if (appliedEdits.length > 0) {
+        // Generate diff from current to final state
+        const diff = generateUnifiedDiff(currentContent, workingContent, relativePath);
+        
+        results.push({
+          filePath: relativePath,
+          absolutePath,
+          originalContent: currentContent,
+          newContent: workingContent,
+          diff,
+          editCount: appliedEdits.length,
+          editIds: appliedEdits
+        });
+        
+        allEditIds.push(...appliedEdits);
+      }
+    } catch (error) {
+      hasConflict = true;
+      conflicts.push({
+        file: filePath,
+        editId: null,
+        error: error.message
+      });
+    }
+  }
+  
+  // Build output message
+  let output = '';
+  
+  if (editsToUndo.length > 1) {
+    output += `[CASCADING UNDO]: This will revert ${editsToUndo.length} edits (from newest to edit ${editId})\n\n`;
+    output += `Edits to undo:\n`;
+    for (const edit of editsToUndo) {
+      const time = new Date(edit.created_at).toLocaleTimeString();
+      output += `  • [${edit.id}] ${edit.file_path} - ${edit.operation_type} (${time})\n`;
+    }
+    output += '\n';
+  }
+  
+  if (hasConflict) {
+    output += `❌ CONFLICT DETECTED:\n`;
+    for (const conflict of conflicts) {
+      output += `  • ${conflict.file}: ${conflict.error}\n`;
+    }
+    output += `\nSome files have been modified since the edit. Cannot safely undo.\n`;
+    return { success: false, output, isWarning: true };
+  }
+  
+  if (results.length === 0) {
+    return { success: false, output: 'No changes to apply.', isWarning: false };
+  }
+  
+  // Show diff preview
+  output += `📝 Changes to apply:\n\n`;
+  for (const result of results) {
+    output += `File: ${result.filePath} (${result.editCount} edit${result.editCount > 1 ? 's' : ''})\n`;
+    output += result.diff + '\n\n';
+  }
+  
+  // If dry run, return preview without applying
+  if (dryRun) {
+    return { 
+      success: true, 
+      output, 
+      isWarning: true,
+      preview: true,
+      results,
+      editIds: allEditIds
+    };
+  }
+  
+  // Apply changes
+  for (const result of results) {
+    fs.writeFileSync(result.absolutePath, result.newContent, 'utf8');
+  }
+  
+  // Remove undone edits from history
+  if (allEditIds.length > 0) {
+    db.deleteEditHistoryBatch(allEditIds);
+  }
+  
+  output += `[DONE] Successfully undone ${allEditIds.length} edit${allEditIds.length > 1 ? 's' : ''}.`;
+  
+  return { 
+    success: true, 
+    output,
+    isWarning: false,
+    editIds: allEditIds,
+    results
+  };
+}
+
+// Get formatted edit history for display
+function getFormattedEditHistory(sessionId, db, limit = 10) {
+  if (!db) return 'Database not available.';
+  
+  const edits = db.getEditHistory(sessionId, limit);
+  if (!edits || edits.length === 0) {
+    return 'No edit history found for this session.';
+  }
+  
+  return edits.map(edit => {
+    const time = new Date(edit.created_at).toLocaleTimeString();
+    return `[${edit.id}] ${edit.file_path} - ${edit.operation_type} (${time})\n${edit.diff || 'No diff available'}`;
+  }).join('\n\n---\n\n');
+}
+
+// Get formatted memory for display
+function getFormattedMemory(sessionId, db) {
+  if (!db) return 'Database not available.';
+  
+  const memories = db.getMemory(sessionId, null, 'code');
+  if (!memories || memories.length === 0) {
+    return 'No explored files in memory for this session.';
+  }
+  
+  return memories.map(mem => {
+    const lines = Array.isArray(mem.content) ? mem.content : [];
+    const preview = lines.slice(0, 5).join('\n');
+    const more = lines.length > 5 ? `\n... (${lines.length - 5} more lines)` : '';
+    return `[${mem.memory_name}] ${mem.file_path}:${mem.start_line}-${mem.end_line} (${mem.total_lines || '?'} total)\n${preview}${more}`;
+  }).join('\n\n');
+}
+
 module.exports = {
   parseSetOperations,
   applySetOperations,
+  undoEdit,
+  getFormattedEditHistory,
+  getFormattedMemory,
 };

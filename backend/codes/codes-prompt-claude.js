@@ -159,6 +159,41 @@ USAGE GUIDELINES:
       },
       required: ["checklist"]
     }
+  },
+  {
+    name: "show_history",
+    description: `Show memory (explored file ranges) and/or edit history for this session. Use this to recall what files you've read and what edits you've made.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        show_memory: {
+          type: "boolean",
+          description: "Show explored file ranges from memory"
+        },
+        show_edit_history: {
+          type: "boolean",
+          description: "Show recent edit history with edit IDs and diffs"
+        }
+      }
+    }
+  },
+  {
+    name: "undo_edit",
+    description: `Undo a previous edit by its ID. Use show_history first to see available edit IDs.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        edit_id: {
+          type: "string",
+          description: "The edit ID to undo (from show_history)"
+        },
+        reason: {
+          type: "string",
+          description: "Brief reason for undoing this edit"
+        }
+      },
+      required: ["edit_id"]
+    }
   }
 ];
 

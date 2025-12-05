@@ -17,6 +17,12 @@ const { PowerShellSession } = require('./powershell-session');
 const { applySetOperations, undoEdit, getFormattedEditHistory, getFormattedMemory } = require('./edit-operations');
 const { log: appLog } = require('../../utils/logger');
 const { SYSTEM_PROMPT } = require('./codes-prompt-shared');
+const { 
+  loadHistoryWithSummary,
+  checkNeedsSummarization,
+  performSummarization,
+  formatSummaryForContext
+} = require('./context-manager');
 
 // ===================================
 // GEMINI TOOLS (function declarations)
@@ -831,42 +837,39 @@ async function processGeminiCodeRequest({
   
   // Reset conversation history
   session.conversationHistory = [];
+  let conversationSummary = null;
+  let summarizedUntilIndex = -1;
   
-  // Load previous conversations from database (last 2 like other agents)
+  // Load previous conversations with summary support
   if (db && sessionId) {
     try {
-      const dbMessages = db.getMessages?.(sessionId) || [];
-      const userMessages = dbMessages.filter(m => m.role === 'user').slice(-3, -1);
+      const historyResult = loadHistoryWithSummary(sessionId, db, model);
+      conversationSummary = historyResult.summary;
+      summarizedUntilIndex = historyResult.summarizedUntilIndex;
       
-      for (const userMsg of userMessages) {
-        const msgIndex = userMsg.message_index;
-        
+      for (const msg of historyResult.messages) {
         session.conversationHistory.push({
-          role: 'user',
-          content: userMsg.content
+          role: msg.role === 'assistant' ? 'model' : msg.role,
+          content: msg.content
         });
-        
-        // Assistant message is at msgIndex + 1 (user=0, ai=1, user=2, ai=3, etc)
-        const assistantMsg = dbMessages.find(m => m.role === 'assistant' && m.message_index === msgIndex + 1);
-        if (assistantMsg) {
-          session.conversationHistory.push({
-            role: 'model',
-            content: assistantMsg.content
-          });
-        }
       }
       
-      geminiLog(1, 'processGeminiCodeRequest', `Loaded ${userMessages.length} previous conversations`);
+      geminiLog(1, 'processGeminiCodeRequest', 'History loaded', {
+        messagesLoaded: historyResult.messages.length,
+        hasSummary: !!conversationSummary
+      });
     } catch (error) {
       geminiLog(3, 'processGeminiCodeRequest', 'Failed to load history', { error: error.message });
     }
   }
   
-  // Add current user prompt
-  session.conversationHistory.push({
-    role: 'user',
-    content: userPrompt
-  });
+  // Build current user prompt - prepend summary if exists
+  let currentPrompt = userPrompt;
+  if (conversationSummary) {
+    currentPrompt = formatSummaryForContext(conversationSummary) + userPrompt;
+  }
+  
+  session.conversationHistory.push({ role: 'user', content: currentPrompt });
   
   // Build system instruction
   const systemInstruction = instruction
@@ -881,12 +884,28 @@ async function processGeminiCodeRequest({
       break;
     }
     
-    // Rate limit protection
-    if (iteration > 0) {
-      await new Promise(r => setTimeout(r, 1500));
-    }
+    if (iteration > 0) await new Promise(r => setTimeout(r, 1500));
     
     geminiLog(1, 'processGeminiCodeRequest', `=== Iteration ${iteration + 1} ===`);
+    
+    // Check if we need to summarize
+    const limitCheck = checkNeedsSummarization(session.conversationHistory, model);
+    if (limitCheck.needsSummarization && db && sessionId) {
+      geminiLog(1, 'processGeminiCodeRequest', 'Context limit reached, summarizing...');
+      
+      const apiConfig = { baseUrl, apiKey, model, provider: 'google' };
+      const summarizeResult = await performSummarization(
+        sessionId, db,
+        session.conversationHistory.map((m, i) => ({ ...m, messageIndex: summarizedUntilIndex + i + 1 })),
+        conversationSummary, summarizedUntilIndex, apiConfig, onChunk
+      );
+      
+      if (summarizeResult.success) {
+        conversationSummary = summarizeResult.summary;
+        summarizedUntilIndex = summarizeResult.summarizedUntilIndex;
+        session.conversationHistory = [{ role: 'user', content: formatSummaryForContext(conversationSummary) + userPrompt }];
+      }
+    }
     
     // Build contents for API
     const contents = buildGeminiContents(session.conversationHistory);

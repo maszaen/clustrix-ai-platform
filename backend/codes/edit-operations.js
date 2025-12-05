@@ -2,6 +2,49 @@ const fs = require('fs');
 const path = require('path');
 const Diff = require('diff');
 
+// Atomic write with backup - prevents data loss on crash
+function safeWriteFile(filePath, content) {
+  const backupPath = filePath + '.bak';
+  const tempPath = filePath + '.tmp';
+  
+  try {
+    // 1. Write to temp file first
+    fs.writeFileSync(tempPath, content, 'utf8');
+    
+    // 2. Backup original if exists
+    if (fs.existsSync(filePath)) {
+      fs.copyFileSync(filePath, backupPath);
+    }
+    
+    // 3. Try atomic rename first, fallback to copy+delete on Windows
+    try {
+      fs.renameSync(tempPath, filePath);
+    } catch (renameErr) {
+      // Windows often fails rename due to file locks - use copy+delete
+      fs.copyFileSync(tempPath, filePath);
+      fs.unlinkSync(tempPath);
+    }
+    
+    // 4. Remove backup on success
+    if (fs.existsSync(backupPath)) {
+      try { fs.unlinkSync(backupPath); } catch { /* ignore */ }
+    }
+  } catch (e) {
+    // Restore from backup if available
+    if (fs.existsSync(backupPath)) {
+      try {
+        fs.copyFileSync(backupPath, filePath);
+        fs.unlinkSync(backupPath);
+      } catch { /* ignore restore errors */ }
+    }
+    // Cleanup temp
+    if (fs.existsSync(tempPath)) {
+      try { fs.unlinkSync(tempPath); } catch { /* ignore */ }
+    }
+    throw e;
+  }
+}
+
 function normalizeRelativePath(filePath) {
   return filePath.replace(/\\/g, '/');
 }
@@ -31,7 +74,7 @@ function findFilesInDir(dir, targetName, maxSuggestions) {
       if (!file.isFile()) continue;
       const fileName = file.name.toLowerCase();
       const similarity = calculateSimilarity(targetName, fileName);
-      if (similarity > 0.5) { // 50% similarity threshold
+      if (similarity > 0.7) { // 70% similarity threshold (higher = fewer false positives)
         suggestions.push({ name: file.name, similarity });
       }
     }
@@ -412,15 +455,25 @@ function applySetOperations(command, options = {}) {
       let fileData = readFileWithMetadata(absolutePath);
       
       if (fileData.content === null) {
-        // File doesn't exist - check if we should create it
+        // File doesn't exist - check for similar files first (typo detection)
+        const suggestions = findSimilarFiles(workspacePath, operation.file);
+        const highSimilarity = suggestions.length > 0;
+        
         if (operation.lines.length > 0) {
-          // Allow file creation if content is provided
-          // Ensure parent directory exists
+          // Content provided - but check if this might be a typo
+          if (highSimilarity) {
+            // Likely a typo - warn user instead of creating wrong file
+            let errorMsg = `File not found: ${operation.file}`;
+            errorMsg += `\nDid you mean: ${suggestions.join(', ')}?`;
+            errorMsg += '\nIf you want to create a NEW file, use a more distinct name.';
+            throw new Error(errorMsg);
+          }
+          
+          // No similar files - safe to create new file
           const parentDir = path.dirname(absolutePath);
           if (!fs.existsSync(parentDir)) {
             fs.mkdirSync(parentDir, { recursive: true });
           }
-          // Create empty file data for new file
           fileData = {
             content: '',
             lines: [],
@@ -429,9 +482,8 @@ function applySetOperations(command, options = {}) {
           };
         } else {
           // No content provided - suggest similar files
-          const suggestions = findSimilarFiles(workspacePath, operation.file);
           let errorMsg = `File not found: ${operation.file}`;
-          if (suggestions.length > 0) {
+          if (highSimilarity) {
             errorMsg += `\nDid you mean: ${suggestions.join(', ')}?`;
           }
           errorMsg += '\nTo create a new file, provide content in the <set> tag.';
@@ -597,7 +649,7 @@ function applySetOperations(command, options = {}) {
       lines: effectiveLines.slice(range.start - 1, range.end),
     }));
 
-    fs.writeFileSync(absolutePath, newContent, 'utf8');
+    safeWriteFile(absolutePath, newContent);
 
     // Generate edit ID and save to database if available
     const editId = generateEditId();
@@ -678,57 +730,83 @@ function applyReversePatch(content, edit) {
     return { success: true, content };
   }
   
-  // Strategy 1: Use diff package with structured patch (most reliable)
-  // Create a patch from before->after, then reverse it to get after->before
-  const structuredPatch = createStructuredPatch(beforeContent, afterContent, edit.file_path);
-  const reversed = reversePatch(structuredPatch);
-  
-  // Try to apply the reversed patch with fuzz factor
-  const patchResult = Diff.applyPatch(content, reversed, { fuzzFactor: 2 });
-  if (patchResult !== false) {
-    return { success: true, content: patchResult };
-  }
-  
-  // Strategy 2: Direct string replacement (fallback)
   const lines = content.split(/\r?\n/);
-  const beforeLines = beforeContent ? beforeContent.split('\n') : [];
-  const afterLines = afterContent ? afterContent.split('\n') : [];
   
-  // Handle insert undo (after is empty, need to remove before)
+  // PRIORITY 1: Handle DELETE undo (afterContent is empty = content was deleted)
+  // Must use position-based restoration because diff package has no position context
   if (!afterContent || afterContent.trim() === '') {
     if (!beforeContent || beforeContent.trim() === '') {
       return { success: true, content };
     }
-    const beforeStr = beforeLines.join('\n');
-    const matchIndex = content.indexOf(beforeStr);
-    if (matchIndex !== -1) {
-      const newContent = content.substring(0, matchIndex) + 
-                         content.substring(matchIndex + beforeStr.length);
-      return { success: true, content: newContent.replace(/\n\n\n+/g, '\n\n') };
-    }
-  }
-  
-  // Handle delete undo (before is empty, need to restore after)
-  if (!beforeContent || beforeContent.trim() === '') {
+    // For DELETE undo, preserve ALL lines - the content was stored with join('\n')
+    // so split('\n') gives us back the exact lines that were deleted
+    const deleteBeforeLines = beforeContent.split('\n');
+    // DO NOT pop trailing empty - it might be an intentional blank line that was deleted
+    
+    // Restore deleted content at original position
     if (edit.range_start && edit.range_start > 0) {
       const insertIdx = Math.min(edit.range_start - 1, lines.length);
-      lines.splice(insertIdx, 0, ...afterLines);
+      lines.splice(insertIdx, 0, ...deleteBeforeLines);
       return { success: true, content: lines.join('\n') };
     }
   }
   
-  // Strategy 3: Exact match at original range
+  // For other operations, filter trailing empty lines
+  const beforeLines = beforeContent ? beforeContent.split('\n').filter((l, i, arr) => !(i === arr.length - 1 && l === '')) : [];
+  const afterLines = afterContent ? afterContent.split('\n').filter((l, i, arr) => !(i === arr.length - 1 && l === '')) : [];
+  
+  // PRIORITY 2: Handle INSERT/APPEND undo (beforeContent is empty = content was inserted)
+  if (!beforeContent || beforeContent.trim() === '') {
+    // Find and remove the inserted content
+    if (edit.range_start && edit.range_start > 0 && afterLines.length > 0) {
+      const startIdx = edit.range_start - 1;
+      const currentSlice = lines.slice(startIdx, startIdx + afterLines.length);
+      if (currentSlice.join('\n') === afterLines.join('\n')) {
+        lines.splice(startIdx, afterLines.length);
+        // Clean up trailing empty lines if this was an append
+        while (lines.length > 0 && lines[lines.length - 1] === '') {
+          lines.pop();
+        }
+        return { success: true, content: lines.join('\n') + '\n' };
+      }
+    }
+    // Fallback: search anywhere and remove with surrounding newline
+    const afterStr = afterLines.join('\n');
+    // Try to match with preceding newline (for appended content)
+    const matchWithNewline = content.indexOf('\n' + afterStr);
+    if (matchWithNewline !== -1) {
+      const newContent = content.substring(0, matchWithNewline) + 
+                         content.substring(matchWithNewline + 1 + afterStr.length);
+      return { success: true, content: newContent };
+    }
+    // Try exact match
+    const matchIndex = content.indexOf(afterStr);
+    if (matchIndex !== -1) {
+      const newContent = content.substring(0, matchIndex) + 
+                         content.substring(matchIndex + afterStr.length);
+      return { success: true, content: newContent.replace(/\n\n\n+/g, '\n\n') };
+    }
+  }
+  
+  // PRIORITY 3: Handle REPLACE undo - try position-based first
   if (edit.range_start && edit.range_start > 0 && afterLines.length > 0) {
     const startIdx = edit.range_start - 1;
     const currentSlice = lines.slice(startIdx, startIdx + afterLines.length);
-    
     if (currentSlice.join('\n') === afterLines.join('\n')) {
       lines.splice(startIdx, afterLines.length, ...beforeLines);
       return { success: true, content: lines.join('\n') };
     }
   }
   
-  // Strategy 4: Fuzzy search anywhere in file
+  // PRIORITY 4: Use diff package for complex replacements
+  const structuredPatch = createStructuredPatch(beforeContent, afterContent, edit.file_path);
+  const reversed = reversePatch(structuredPatch);
+  const patchResult = Diff.applyPatch(content, reversed, { fuzzFactor: 2 });
+  if (patchResult !== false) {
+    return { success: true, content: patchResult };
+  }
+  
+  // PRIORITY 5: Fuzzy search anywhere in file
   if (afterLines.length > 0) {
     const afterStr = afterLines.join('\n');
     const matchIndex = content.indexOf(afterStr);
@@ -852,7 +930,7 @@ function undoEdit(editId, options = {}) {
   let output = '';
   
   if (editsToUndo.length > 1) {
-    output += `[CASCADING UNDO]: This will revert ${editsToUndo.length} edits (from newest to edit ${editId})\n\n`;
+    output += `[CASCADING UNDO] This will revert ${editsToUndo.length} edits (from newest to edit ${editId})\n\n`;
     output += `Edits to undo:\n`;
     for (const edit of editsToUndo) {
       const time = new Date(edit.created_at).toLocaleTimeString();
@@ -862,7 +940,7 @@ function undoEdit(editId, options = {}) {
   }
   
   if (hasConflict) {
-    output += `❌ CONFLICT DETECTED:\n`;
+    output += `CONFLICT DETECTED:\n`;
     for (const conflict of conflicts) {
       output += `  • ${conflict.file}: ${conflict.error}\n`;
     }
@@ -875,7 +953,7 @@ function undoEdit(editId, options = {}) {
   }
   
   // Show diff preview
-  output += `📝 Changes to apply:\n\n`;
+  output += `Changes to apply:\n`;
   for (const result of results) {
     output += `File: ${result.filePath} (${result.editCount} edit${result.editCount > 1 ? 's' : ''})\n`;
     output += result.diff + '\n\n';
@@ -893,9 +971,9 @@ function undoEdit(editId, options = {}) {
     };
   }
   
-  // Apply changes
+  // Apply changes with atomic writes
   for (const result of results) {
-    fs.writeFileSync(result.absolutePath, result.newContent, 'utf8');
+    safeWriteFile(result.absolutePath, result.newContent);
   }
   
   // Remove undone edits from history

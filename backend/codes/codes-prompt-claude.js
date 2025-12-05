@@ -67,8 +67,8 @@ REPLACE LINES (delete old content, insert new):
   Example: range={start:10, end:15} replaces lines 10-15
 
 INSERT BEFORE A LINE (no deletion):
-  Use insertBefore with line number
-  Example: insertBefore=25 inserts new content before line 25
+  Use insert_before with line number
+  Example: insert_before=25 inserts new content before line 25
 
 APPEND TO END OF FILE:
   Use append=true
@@ -96,7 +96,7 @@ DELETE LINES (empty content):
           },
           description: "Line range to replace/delete"
         },
-        insertBefore: {
+        insert_before: {
           type: "integer", 
           description: "Insert content before this line number"
         },

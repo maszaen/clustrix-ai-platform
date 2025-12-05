@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
-const { spawnSync } = require('child_process');
+const Diff = require('diff');
 
 function normalizeRelativePath(filePath) {
   return filePath.replace(/\\/g, '/');
@@ -258,73 +257,71 @@ function composeFileContent(lines, newline, trailingNewline) {
 }
 
 function generateUnifiedDiff(originalContent, updatedContent, displayPath) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codes-agent-'));
-  const originalPath = path.join(tmpDir, 'original');
-  const updatedPath = path.join(tmpDir, 'updated');
-
-  try {
-    fs.writeFileSync(originalPath, originalContent, 'utf8');
-    fs.writeFileSync(updatedPath, updatedContent, 'utf8');
-
-    const diffResult = spawnSync('git', [
-      'diff',
-      '--no-index',
-      '--color=never',
-      '-U5',
-      originalPath,
-      updatedPath,
-    ], {
-      encoding: 'utf8',
-      maxBuffer: 5 * 1024 * 1024,
-    });
-
-    if (diffResult.error) {
-      return 'Diff unavailable (git not accessible).';
-    }
-
-    const output = diffResult.stdout || '';
-    if (!output.trim()) {
-      return 'No changes detected.';
-    }
-
-    // Clean up git diff output to standard unified diff format
-    // Process line by line for precise control
-    const lines = output.split('\n');
-    const cleanedLines = [];
-
-    for (const line of lines) {
-      // Fix diff --git header line
-      if (line.startsWith('diff --git')) {
-        cleanedLines.push(`diff --git a/${displayPath} b/${displayPath}`);
-      }
-      // Fix --- line
-      else if (line.startsWith('---')) {
-        cleanedLines.push(`--- a/${displayPath}`);
-      }
-      // Fix +++ line
-      else if (line.startsWith('+++')) {
-        cleanedLines.push(`+++ b/${displayPath}`);
-      }
-      // Skip index line (optional, but keep for compatibility)
-      else if (line.startsWith('index ')) {
-        cleanedLines.push(line);
-      }
-      // Keep all other lines as-is (@@, context, +, -, etc)
-      else {
-        cleanedLines.push(line);
-      }
-    }
-
-    const transformed = cleanedLines.join('\n');
-
-    return transformed;
-  } finally {
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors
-    }
+  // Use diff package instead of spawning git
+  const patch = Diff.createPatch(
+    displayPath,
+    originalContent,
+    updatedContent,
+    'original',
+    'modified',
+    { context: 5 }
+  );
+  
+  if (!patch || patch.trim() === '') {
+    return 'No changes detected.';
   }
+  
+  // Check if there are actual changes (not just header lines like --- and +++)
+  const lines = patch.split('\n');
+  const hasChanges = lines.some(l => l.startsWith('+') || l.startsWith('-'));
+  if (!hasChanges) {
+    return 'No changes detected.';
+  }
+  
+  // Truncate if too long to avoid API issues
+  if (patch.length > 50000) {
+    const truncated = patch.slice(0, 50000);
+    const lastNewline = truncated.lastIndexOf('\n');
+    return truncated.slice(0, lastNewline) + '\n\n... [diff truncated, too large] ...';
+  }
+  
+  return patch;
+}
+
+// Create a structured patch for storage (used for undo)
+function createStructuredPatch(originalContent, updatedContent, filePath) {
+  return Diff.structuredPatch(
+    filePath,
+    filePath,
+    originalContent,
+    updatedContent,
+    'original',
+    'modified',
+    { context: 3 }
+  );
+}
+
+// Reverse a structured patch for undo
+function reversePatch(patch) {
+  // Swap oldFileName/newFileName and reverse hunks
+  const reversed = {
+    oldFileName: patch.newFileName,
+    newFileName: patch.oldFileName,
+    oldHeader: patch.newHeader,
+    newHeader: patch.oldHeader,
+    hunks: patch.hunks.map(hunk => ({
+      oldStart: hunk.newStart,
+      oldLines: hunk.newLines,
+      newStart: hunk.oldStart,
+      newLines: hunk.oldLines,
+      lines: hunk.lines.map(line => {
+        if (line.startsWith('+')) return '-' + line.slice(1);
+        if (line.startsWith('-')) return '+' + line.slice(1);
+        return line;
+      })
+    }))
+  };
+  return reversed;
 }
 
 function computeContextRanges(totalLines, focusRanges) {
@@ -671,45 +668,57 @@ function applySetOperations(command, options = {}) {
   };
 }
 
-// Apply a single reverse patch to content
+// Apply a single reverse patch to content using diff package
 function applyReversePatch(content, edit) {
-  const lines = content.split(/\r?\n/);
-  const beforeLines = edit.before_content ? edit.before_content.split('\n') : [];
-  const afterLines = edit.after_content ? edit.after_content.split('\n') : [];
+  const beforeContent = edit.before_content || '';
+  const afterContent = edit.after_content || '';
   
-  // Handle empty after_content (was an insert operation)
-  if (afterLines.length === 0 || (afterLines.length === 1 && afterLines[0] === '')) {
-    if (beforeLines.length === 0 || (beforeLines.length === 1 && beforeLines[0] === '')) {
-      return { success: true, content }; // Nothing to undo
-    }
-    // For insert undo: find and remove the before_content (which was inserted)
-    const beforeStr = beforeLines.join('\n');
-    const contentStr = lines.join('\n');
-    const matchIndex = contentStr.indexOf(beforeStr);
-    if (matchIndex !== -1) {
-      const newContent = contentStr.substring(0, matchIndex) + 
-                         contentStr.substring(matchIndex + beforeStr.length);
-      // Clean up potential double newlines
-      return { success: true, content: newContent.replace(/\n\n\n+/g, '\n\n') };
-    }
-    return { success: false, error: 'Cannot find inserted content to remove' };
+  // Nothing to undo
+  if (!beforeContent && !afterContent) {
+    return { success: true, content };
   }
   
-  // Handle empty before_content (was a delete operation - need to restore)
-  if (beforeLines.length === 0 || (beforeLines.length === 1 && beforeLines[0] === '')) {
-    // This was a delete - we need to find where to insert back
-    // Use range_start as hint, but verify context
+  // Strategy 1: Use diff package with structured patch (most reliable)
+  // Create a patch from before->after, then reverse it to get after->before
+  const structuredPatch = createStructuredPatch(beforeContent, afterContent, edit.file_path);
+  const reversed = reversePatch(structuredPatch);
+  
+  // Try to apply the reversed patch with fuzz factor
+  const patchResult = Diff.applyPatch(content, reversed, { fuzzFactor: 2 });
+  if (patchResult !== false) {
+    return { success: true, content: patchResult };
+  }
+  
+  // Strategy 2: Direct string replacement (fallback)
+  const lines = content.split(/\r?\n/);
+  const beforeLines = beforeContent ? beforeContent.split('\n') : [];
+  const afterLines = afterContent ? afterContent.split('\n') : [];
+  
+  // Handle insert undo (after is empty, need to remove before)
+  if (!afterContent || afterContent.trim() === '') {
+    if (!beforeContent || beforeContent.trim() === '') {
+      return { success: true, content };
+    }
+    const beforeStr = beforeLines.join('\n');
+    const matchIndex = content.indexOf(beforeStr);
+    if (matchIndex !== -1) {
+      const newContent = content.substring(0, matchIndex) + 
+                         content.substring(matchIndex + beforeStr.length);
+      return { success: true, content: newContent.replace(/\n\n\n+/g, '\n\n') };
+    }
+  }
+  
+  // Handle delete undo (before is empty, need to restore after)
+  if (!beforeContent || beforeContent.trim() === '') {
     if (edit.range_start && edit.range_start > 0) {
       const insertIdx = Math.min(edit.range_start - 1, lines.length);
       lines.splice(insertIdx, 0, ...afterLines);
       return { success: true, content: lines.join('\n') };
     }
-    return { success: false, error: 'Cannot determine where to restore deleted content' };
   }
   
-  // Standard replace undo: find after_content and replace with before_content
-  // Strategy 1: Try exact match at original range first
-  if (edit.range_start && edit.range_start > 0) {
+  // Strategy 3: Exact match at original range
+  if (edit.range_start && edit.range_start > 0 && afterLines.length > 0) {
     const startIdx = edit.range_start - 1;
     const currentSlice = lines.slice(startIdx, startIdx + afterLines.length);
     
@@ -719,31 +728,32 @@ function applyReversePatch(content, edit) {
     }
   }
   
-  // Strategy 2: Fuzzy search - find after_content anywhere in file
-  const afterStr = afterLines.join('\n');
-  const contentStr = lines.join('\n');
-  
-  const matchIndex = contentStr.indexOf(afterStr);
-  if (matchIndex !== -1) {
-    const newContent = contentStr.substring(0, matchIndex) + 
-                       beforeLines.join('\n') + 
-                       contentStr.substring(matchIndex + afterStr.length);
-    return { success: true, content: newContent };
-  }
-  
-  // Strategy 3: Line-by-line fuzzy match (for when whitespace differs slightly)
-  for (let i = 0; i <= lines.length - afterLines.length; i++) {
-    const slice = lines.slice(i, i + afterLines.length);
-    const sliceTrimmed = slice.map(l => l.trim()).join('\n');
-    const afterTrimmed = afterLines.map(l => l.trim()).join('\n');
-    
-    if (sliceTrimmed === afterTrimmed) {
-      lines.splice(i, afterLines.length, ...beforeLines);
-      return { success: true, content: lines.join('\n') };
+  // Strategy 4: Fuzzy search anywhere in file
+  if (afterLines.length > 0) {
+    const afterStr = afterLines.join('\n');
+    const matchIndex = content.indexOf(afterStr);
+    if (matchIndex !== -1) {
+      const newContent = content.substring(0, matchIndex) + 
+                         beforeLines.join('\n') + 
+                         content.substring(matchIndex + afterStr.length);
+      return { success: true, content: newContent };
     }
   }
   
-  // Content has changed - cannot safely undo
+  // Strategy 5: Line-by-line fuzzy match (whitespace tolerant)
+  if (afterLines.length > 0) {
+    for (let i = 0; i <= lines.length - afterLines.length; i++) {
+      const slice = lines.slice(i, i + afterLines.length);
+      const sliceTrimmed = slice.map(l => l.trim()).join('\n');
+      const afterTrimmed = afterLines.map(l => l.trim()).join('\n');
+      
+      if (sliceTrimmed === afterTrimmed) {
+        lines.splice(i, afterLines.length, ...beforeLines);
+        return { success: true, content: lines.join('\n') };
+      }
+    }
+  }
+  
   return { 
     success: false, 
     error: `Content mismatch - the edited region has been modified since edit ${edit.id}` 

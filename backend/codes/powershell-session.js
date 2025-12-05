@@ -229,7 +229,10 @@ class PowerShellSession {
 $ErrorActionPreference = 'Stop'
 $clx__exit = 0
 try {
-  ${command}
+  $clx__result = ${command}
+  if ($clx__result -ne $null) {
+    $clx__result | Out-String | Write-Host -NoNewline
+  }
 }
 catch {
   [Console]::Error.WriteLine($_)
@@ -242,6 +245,7 @@ catch {
 if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) {
   $clx__exit = [int]$LASTEXITCODE
 }
+[Console]::Out.Flush()
 [Console]::Out.WriteLine("${this.sentinel}")
 [Console]::Out.WriteLine("EXIT_CODE:$clx__exit")
 [Console]::Out.Flush()
@@ -256,9 +260,9 @@ $ErrorActionPreference = 'Stop'
 $clx__exit = 0
 $clx__cmd = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${base64Cmd}'))
 try {
-  $result = & ([scriptblock]::Create($clx__cmd))
-  if ($result -ne $null) {
-    $result | Out-String
+  $clx__result = & ([scriptblock]::Create($clx__cmd))
+  if ($clx__result -ne $null) {
+    $clx__result | Out-String | Write-Host -NoNewline
   }
 }
 catch {
@@ -272,6 +276,7 @@ catch {
 if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) {
   $clx__exit = [int]$LASTEXITCODE
 }
+[Console]::Out.Flush()
 [Console]::Out.WriteLine("${this.sentinel}")
 [Console]::Out.WriteLine("EXIT_CODE:$clx__exit")
 [Console]::Out.Flush()

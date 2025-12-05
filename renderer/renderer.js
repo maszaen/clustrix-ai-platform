@@ -7808,7 +7808,7 @@ function getRandomLoadingVerb() {
   } while (newVerb === lastUsedVerb);
   
   lastUsedVerb = newVerb;
-  return newVerb + "...";
+  return newVerb;
 }
 
 // Morph from oldWord to newWord character by character with cursor

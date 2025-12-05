@@ -239,8 +239,8 @@ contextBridge.exposeInMainWorld('api', {
       };
     },
     chat: (payload) => ipcRenderer.invoke('codes:chat', payload),
-    confirmCommand: ({ sessionId, iteration, toolCallId, allowed }) => 
-      ipcRenderer.invoke('codes:confirm-command', { sessionId, iteration, toolCallId, allowed }),
+    confirmCommand: ({ sessionId, iteration, toolCallId, allowed, provider }) => 
+      ipcRenderer.invoke('codes:confirm-command', { sessionId, iteration, toolCallId, allowed, provider }),
   },
   usage: {
     fetchStats: (filters) => ipcRenderer.invoke('usage:fetchStats', filters),

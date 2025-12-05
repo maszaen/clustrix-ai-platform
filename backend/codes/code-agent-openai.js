@@ -14,7 +14,7 @@ const { URL } = require('url');
 const path = require('path');
 const fs = require('fs');
 const { PowerShellSession } = require('./powershell-session');
-const { applySetOperations } = require('./edit-operations');
+const { applySetOperations, undoEdit, getFormattedEditHistory, getFormattedMemory } = require('./edit-operations');
 const { log: appLog } = require('../../utils/logger');
 
 // ===================================
@@ -174,6 +174,47 @@ USAGE GUIDELINES:
           }
         },
         required: ["checklist"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "show_history",
+      description: `Show memory (explored file ranges) and/or edit history for this session. Use this to recall what files you've read and what edits you've made.`,
+      parameters: {
+        type: "object",
+        properties: {
+          show_memory: {
+            type: "boolean",
+            description: "Show explored file ranges from memory"
+          },
+          show_edit_history: {
+            type: "boolean",
+            description: "Show recent edit history with edit IDs and diffs"
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "undo_edit",
+      description: `Undo a previous edit by its ID. Use show_history first to see available edit IDs.`,
+      parameters: {
+        type: "object",
+        properties: {
+          edit_id: {
+            type: "string",
+            description: "The edit ID to undo (from show_history)"
+          },
+          reason: {
+            type: "string",
+            description: "Brief reason for undoing this edit"
+          }
+        },
+        required: ["edit_id"]
       }
     }
   }
@@ -408,7 +449,7 @@ async function executeRunCommand(session, command, confirmed = false) {
   };
 }
 
-async function executeEditFile(session, input) {
+async function executeEditFile(session, input, sessionId, db) {
   const { file, range, insert_before, append, content } = input;
   
   try {
@@ -437,10 +478,15 @@ ${content}
       return { success: false, output: 'Error: Must specify range, insert_before, or append' };
     }
     
-    const result = applySetOperations(setCommand, { workspacePath: session.workspacePath });
+    const result = applySetOperations(setCommand, { 
+      workspacePath: session.workspacePath,
+      sessionId,
+      db
+    });
     return {
       success: result?.success || false,
-      output: result?.text || 'Edit completed.'
+      output: result?.text || 'Edit completed.',
+      editId: result?.files?.[0]?.editId || null
     };
   } catch (error) {
     return {
@@ -459,7 +505,7 @@ function formatChecklist(checklist) {
   }).join('\n');
 }
 
-async function executeTool(session, toolCall, confirmed, onChunk, sessionId) {
+async function executeTool(session, toolCall, confirmed, onChunk, sessionId, db = null) {
   const name = toolCall.function.name;
   const id = toolCall.id;
   const input = JSON.parse(toolCall.function.arguments);
@@ -473,7 +519,8 @@ async function executeTool(session, toolCall, confirmed, onChunk, sessionId) {
           type: 'confirmation-required',
           command: input.command,
           toolCallId: id,
-          sessionId
+          sessionId,
+          provider: 'openai'
         }) + '\n';
         onChunk(confirmationChunk, { type: 'confirmation' });
         
@@ -490,8 +537,12 @@ async function executeTool(session, toolCall, confirmed, onChunk, sessionId) {
     }
     
     case 'edit_file': {
-      const result = await executeEditFile(session, input);
-      return { tool_call_id: id, output: result.output };
+      const result = await executeEditFile(session, input, sessionId, db);
+      let output = result.output;
+      if (result.editId) {
+        output += `\n\nEdit ID: ${result.editId}`;
+      }
+      return { tool_call_id: id, output };
     }
     
     case 'update_checklist': {
@@ -499,12 +550,86 @@ async function executeTool(session, toolCall, confirmed, onChunk, sessionId) {
       return { tool_call_id: id, output: checklistText };
     }
     
+    case 'show_history': {
+      // Build display text based on what's being shown
+      const parts = [];
+      if (input.show_memory) parts.push('Memory');
+      if (input.show_edit_history) parts.push('Edit History');
+      const displayText = parts.length > 0 ? `Show ${parts.join(' & ')}` : 'Show History';
+      
+      if (onChunk) {
+        const commandChunk = `<!--command-input-->\n${displayText}\n<!--/command-input-->\n`;
+        onChunk(commandChunk, { type: 'command', toolName: 'show_history' });
+      }
+      
+      let output = '';
+      if (input.show_memory) {
+        output += '## Explored Files (Memory)\n\n' + getFormattedMemory(sessionId, db);
+      }
+      if (input.show_edit_history) {
+        if (output) output += '\n\n---\n\n';
+        output += '## Edit History\n\n' + getFormattedEditHistory(sessionId, db);
+      }
+      if (!output) {
+        output = 'Specify show_memory=true and/or show_edit_history=true';
+      }
+      return { tool_call_id: id, output };
+    }
+    
+    case 'undo_edit': {
+      // Send command-input tag first
+      const displayText = `Undo Edit "${input.edit_id}"`;
+      if (onChunk) {
+        const commandChunk = `<!--command-input-->\n${displayText}\n<!--/command-input-->\n`;
+        onChunk(commandChunk, { type: 'command', toolName: 'undo_edit' });
+      }
+      
+      // First, do a dry run to get preview
+      const preview = undoEdit(input.edit_id, { 
+        workspacePath: session.workspacePath, 
+        db, 
+        sessionId,
+        dryRun: true 
+      });
+      
+      if (!preview.success) {
+        return { tool_call_id: id, output: preview.output };
+      }
+      
+      // Undo always requires confirmation
+      if (onChunk) {
+        const confirmationChunk = JSON.stringify({
+          type: 'confirmation-required',
+          command: displayText,
+          toolCallId: id,
+          sessionId: sessionId,
+          provider: 'openai',
+          preview: preview.output,
+        }) + '\n';
+        onChunk(confirmationChunk, { type: 'confirmation' });
+      }
+      
+      const confirmation = await waitForOpenAIConfirmation(sessionId, id);
+      
+      if (confirmation.allowed) {
+        const result = undoEdit(input.edit_id, { 
+          workspacePath: session.workspacePath, 
+          db, 
+          sessionId,
+          dryRun: false 
+        });
+        return { tool_call_id: id, output: result.output };
+      } else {
+        const skipMessage = confirmation.timedOut 
+          ? 'Undo operation timed out - user did not respond.'
+          : 'User cancelled the undo operation.';
+        return { tool_call_id: id, output: skipMessage };
+      }
+    }
+    
     default: {
-      // DEFENSIVE: If model calls unknown tool that looks like a PowerShell command,
-      // automatically route it to run_command instead of failing
       openaiLog(2, 'executeTool', `Unknown tool "${name}" - attempting to route to run_command`, { toolCall });
       
-      // Check if this looks like a PowerShell helper function
       const psHelpers = [
         'List-ProjectFiles', 'Search-InFiles', 'Show-FileWithLineNumbers',
         'Get-FileStats', 'Set-FileLine', 'Remove-FileLine', 'Add-FileLine',
@@ -516,7 +641,6 @@ async function executeTool(session, toolCall, confirmed, onChunk, sessionId) {
       const isPS = psHelpers.some(helper => name.toLowerCase() === helper.toLowerCase());
       
       if (isPS) {
-        // Reconstruct PowerShell command from tool call arguments
         const args = Object.entries(input)
           .filter(([key]) => key !== 'commentary')
           .map(([key, val]) => {
@@ -535,10 +659,9 @@ async function executeTool(session, toolCall, confirmed, onChunk, sessionId) {
         return { tool_call_id: id, output: result.output, exitCode: result.exitCode };
       }
       
-      // If not a known PS helper, return error with helpful message
       return { 
         tool_call_id: id, 
-        output: `Error: Unknown tool "${name}". If this is a PowerShell command, use the run_command tool instead. Available tools: run_command, edit_file, update_checklist.` 
+        output: `Error: Unknown tool "${name}". Available tools: run_command, edit_file, update_checklist, show_history, undo_edit.` 
       };
     }
   }
@@ -665,7 +788,7 @@ async function processOpenAICodeRequest({
         if (onChunk) onChunk(commandChunk, { type: 'command', iteration, toolName: toolCall.function.name });
       }
       
-      const result = await executeTool(session, toolCall, false, onChunk, sessionId);
+      const result = await executeTool(session, toolCall, false, onChunk, sessionId, db);
       
       session.conversationHistory.push({
         role: 'tool',

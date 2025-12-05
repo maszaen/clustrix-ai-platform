@@ -27,6 +27,8 @@ const { queryUsageStatistics, invalidateUsageStatisticsCache } = require('./back
 const { queryBenchmarkStatistics, invalidateBenchmarkStatisticsCache } = require('./backend/data/benchmark-statistics');
 const { initializeCodeAgent, processCodeRequest, resolveUserConfirmation, disposeAllCodeSessions, cancelCodeSession } = require('./backend/codes/code-agent');
 const { resolveClaudeConfirmation } = require('./backend/codes/code-agent-claude');
+const { resolveOpenAIConfirmation } = require('./backend/codes/code-agent-openai');
+const { resolveGeminiConfirmation } = require('./backend/codes/code-agent-gemini');
 
 function createTimestampedBackup(filePath, reason = '') {
   try {
@@ -3170,9 +3172,9 @@ ipcMain.handle('codes:set-interrupt', async (_event, sessionId) => {
   }
 });
 
-ipcMain.handle('codes:confirm-command', async (_event, { sessionId, iteration, toolCallId, allowed }) => {
+ipcMain.handle('codes:confirm-command', async (_event, { sessionId, iteration, toolCallId, allowed, provider }) => {
   try {
-    // Handle both code-agent (iteration) and Claude agent (toolCallId)
+    // Handle code-agent (iteration) - legacy
     if (iteration !== undefined) {
       const resolved = resolveUserConfirmation(sessionId, iteration, allowed);
       if (resolved) {
@@ -3190,13 +3192,32 @@ ipcMain.handle('codes:confirm-command', async (_event, { sessionId, iteration, t
         return { success: false, error: 'No pending confirmation' };
       }
     } else if (toolCallId !== undefined) {
-      resolveClaudeConfirmation(sessionId, toolCallId, allowed);
-      log('CODES', 1, 'codes:confirm-command', 'Claude confirmation resolved', {
+      // Route to correct agent based on provider
+      let resolved = false;
+      
+      if (provider === 'openai' || provider === 'glm' || provider === 'deepseek') {
+        resolved = resolveOpenAIConfirmation(sessionId, toolCallId, allowed);
+      } else if (provider === 'gemini') {
+        resolved = resolveGeminiConfirmation(sessionId, toolCallId, allowed);
+      } else {
+        // Default to Claude, also try others as fallback
+        resolved = resolveClaudeConfirmation(sessionId, toolCallId, allowed);
+        if (!resolved) {
+          resolved = resolveOpenAIConfirmation(sessionId, toolCallId, allowed);
+        }
+        if (!resolved) {
+          resolved = resolveGeminiConfirmation(sessionId, toolCallId, allowed);
+        }
+      }
+      
+      log('CODES', 1, 'codes:confirm-command', 'Confirmation resolved', {
         sessionId,
         toolCallId,
         allowed,
+        provider: provider || 'auto',
+        resolved,
       });
-      return { success: true };
+      return { success: resolved };
     } else {
       return { success: false, error: 'Missing iteration or toolCallId' };
     }

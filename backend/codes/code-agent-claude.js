@@ -16,7 +16,7 @@ const { URL } = require('url');
 const path = require('path');
 const fs = require('fs');
 const { PowerShellSession } = require('./powershell-session');
-const { applySetOperations } = require('./edit-operations');
+const { applySetOperations, undoEdit, getFormattedEditHistory, getFormattedMemory } = require('./edit-operations');
 const { detectDangerousCommand } = require('./codes-prompt');
 const {
   CLAUDE_AGENT_TOOLS,
@@ -630,7 +630,7 @@ async function executeRunCommand(session, command, confirmed = false) {
 // ===================================
 // EXECUTE FILE EDIT
 // ===================================
-async function executeEditFile(session, input) {
+async function executeEditFile(session, input, sessionId, db) {
   const { file, range, insert_before, append, content } = input;
   
   try {
@@ -664,7 +664,9 @@ ${content}
     }
     
     const result = applySetOperations(setCommand, { 
-      workspacePath: session.workspacePath 
+      workspacePath: session.workspacePath,
+      sessionId,
+      db
     });
     
     if (!result) {
@@ -677,6 +679,7 @@ ${content}
     return {
       success: result.success,
       output: result.text || 'Edit completed.',
+      editId: result.files?.[0]?.editId || null
     };
   } catch (error) {
     return {
@@ -717,7 +720,7 @@ function formatChecklist(checklist) {
 // ===================================
 // EXECUTE SINGLE TOOL
 // ===================================
-async function executeTool(session, toolCall, confirmed = false, onChunk = null, sessionId = null) {
+async function executeTool(session, toolCall, confirmed = false, onChunk = null, sessionId = null, db = null) {
   const { name, input, id } = toolCall;
   
   console.log(`[CLAUDE-AGENT] Executing: ${name}`, JSON.stringify(input).slice(0, 150));
@@ -728,27 +731,23 @@ async function executeTool(session, toolCall, confirmed = false, onChunk = null,
       
       // Handle confirmation flow
       if (result.requiresConfirmation) {
-        // Send confirmation request to UI
         if (onChunk) {
           const confirmationChunk = JSON.stringify({
             type: 'confirmation-required',
             command: input.command,
             toolCallId: id,
-            sessionId: sessionId, // Use the actual sessionId from processClaudeCodeRequest
+            sessionId: sessionId,
           }) + '\n';
           onChunk(confirmationChunk, { type: 'confirmation' });
         }
         
-        // Wait for user confirmation
         const confirmation = await waitForClaudeConfirmation(sessionId, id);
         
         if (confirmation.allowed) {
-          // User confirmed, execute command
           console.log(`[CLAUDE-AGENT] User confirmed dangerous command: ${input.command}`);
           const confirmedResult = await executeRunCommand(session, input.command, true);
           return formatClaudeToolResult(id, confirmedResult.output, !confirmedResult.success);
         } else {
-          // User rejected or timed out
           const skipMessage = confirmation.timedOut 
             ? 'Command execution timed out - user did not respond within 5 minutes.'
             : 'User skipped this command, do not try again with this command.';
@@ -760,13 +759,95 @@ async function executeTool(session, toolCall, confirmed = false, onChunk = null,
     }
     
     case 'edit_file': {
-      const result = await executeEditFile(session, input);
-      return formatClaudeToolResult(id, result.output, !result.success);
+      const result = await executeEditFile(session, input, sessionId, db);
+      let output = result.output;
+      if (result.editId) {
+        output += `\n\nEdit ID: ${result.editId}`;
+      }
+      return formatClaudeToolResult(id, output, !result.success);
     }
     
     case 'update_checklist': {
       const checklistText = formatChecklist(input.checklist);
       return formatClaudeToolResult(id, checklistText);
+    }
+    
+    case 'show_history': {
+      // Build display text based on what's being shown
+      const parts = [];
+      if (input.show_memory) parts.push('Memory');
+      if (input.show_edit_history) parts.push('Edit History');
+      const displayText = parts.length > 0 ? `Show ${parts.join(' & ')}` : 'Show History';
+      
+      if (onChunk) {
+        const commandChunk = `<!--command-input-->\n${displayText}\n<!--/command-input-->\n`;
+        onChunk(commandChunk, { type: 'command', toolName: 'show_history' });
+      }
+      
+      let output = '';
+      if (input.show_memory) {
+        output += '## Explored Files (Memory)\n\n' + getFormattedMemory(sessionId, db);
+      }
+      if (input.show_edit_history) {
+        if (output) output += '\n\n---\n\n';
+        output += '## Edit History\n\n' + getFormattedEditHistory(sessionId, db);
+      }
+      if (!output) {
+        output = 'Specify show_memory=true and/or show_edit_history=true';
+      }
+      return formatClaudeToolResult(id, output);
+    }
+    
+    case 'undo_edit': {
+      // Send command-input tag first
+      const displayText = `Undo Edit "${input.edit_id}"`;
+      if (onChunk) {
+        const commandChunk = `<!--command-input-->\n${displayText}\n<!--/command-input-->\n`;
+        onChunk(commandChunk, { type: 'command', toolName: 'undo_edit' });
+      }
+      
+      // First, do a dry run to get preview
+      const preview = undoEdit(input.edit_id, { 
+        workspacePath: session.workspacePath, 
+        db, 
+        sessionId,
+        dryRun: true 
+      });
+      
+      if (!preview.success) {
+        return formatClaudeToolResult(id, preview.output, true);
+      }
+      
+      // Undo always requires confirmation
+      if (onChunk) {
+        const confirmationChunk = JSON.stringify({
+          type: 'confirmation-required',
+          command: displayText,
+          toolCallId: id,
+          sessionId: sessionId,
+          provider: 'claude',
+          preview: preview.output,
+        }) + '\n';
+        onChunk(confirmationChunk, { type: 'confirmation' });
+      }
+      
+      const confirmation = await waitForClaudeConfirmation(sessionId, id);
+      
+      if (confirmation.allowed) {
+        // Execute actual undo
+        const result = undoEdit(input.edit_id, { 
+          workspacePath: session.workspacePath, 
+          db, 
+          sessionId,
+          dryRun: false 
+        });
+        return formatClaudeToolResult(id, result.output, !result.success);
+      } else {
+        const skipMessage = confirmation.timedOut 
+          ? 'Undo operation timed out - user did not respond.'
+          : 'User cancelled the undo operation.';
+        return formatClaudeToolResult(id, skipMessage, false);
+      }
     }
     
     default:
@@ -1005,7 +1086,7 @@ async function processClaudeCodeRequest({
         }
         
         // Execute tool
-        const result = await executeTool(session, toolCall, false, onChunk, sessionId);
+        const result = await executeTool(session, toolCall, false, onChunk, sessionId, db);
         toolResults.push(result);
         
         // Send command output to UI (following standard format)

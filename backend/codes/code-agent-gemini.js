@@ -14,7 +14,7 @@ const { URL } = require('url');
 const path = require('path');
 const fs = require('fs');
 const { PowerShellSession } = require('./powershell-session');
-const { applySetOperations } = require('./edit-operations');
+const { applySetOperations, undoEdit, getFormattedEditHistory, getFormattedMemory } = require('./edit-operations');
 const { log: appLog } = require('../../utils/logger');
 const { SYSTEM_PROMPT } = require('./codes-prompt-shared');
 
@@ -67,49 +67,50 @@ IMPORTANT: Get-ChildItem -Recurse without -Depth will hang!`,
       },
       {
         name: "edit_file",
-        description: `Edit a file by replacing, inserting, or deleting lines.
+        description: `Edit an existing file by replacing lines, inserting new lines, or appending to the end.
 
-REPLACE LINES: Use range_start and range_end
-INSERT BEFORE: Use insert_before with line number  
-APPEND TO END: Use append=true
-DELETE LINES: Use range with empty content
+OPERATION MODES (Mutually Exclusive - Choose One):
+1. REPLACE LINES: Use 'range_start' and 'range_end' with the new 'content'.
+2. DELETE LINES: Use 'range_start' and 'range_end' with empty 'content'.
+3. INSERT LINES: Use 'insert_before' to add 'content' before a specific line.
+4. APPEND: Set 'append' to true to add 'content' at the end of the file.
 
-CRITICAL - LINE RANGE PRECISION:
-- Use EXACT line numbers from your most recent file read
-- Do NOT add extra context lines - only include lines you want to change
-- BAD: Editing lines 46-55 when you only need to change lines 50-52
-- GOOD: Editing exactly lines 50-52 with precise content
-- If unsure, re-read the file to get fresh line numbers`,
+CRITICAL RULES:
+- LINE NUMBERS: Must be 1-indexed and based on the MOST RECENT file read.
+- PRECISION: Only include the lines you intend to modify. Do not include context lines.
+- EXCLUSIVITY: Do not mix 'range_start'/'range_end' with 'insert_before' or 'append'.
+- INSERTION: To insert, simply specify the line number to insert before. Do not use range parameters.
+- APPENDING: To append, strictly set 'append' to true. Do not use range parameters or negative numbers.`,
         parameters: {
           type: "object",
           properties: {
             file: {
               type: "string",
-              description: "Relative path to the file (use EXACT path from file read, no typos)"
+              description: "Relative path to the file (must match exact path from file read)."
             },
             range_start: {
               type: "integer",
-              description: "EXACT start line number to replace (1-indexed, from fresh file read)"
+              description: "Start line number to replace/delete (1-indexed). Required for REPLACE/DELETE mode."
             },
             range_end: {
               type: "integer",
-              description: "EXACT end line number to replace (1-indexed, inclusive, no extra lines)"
+              description: "End line number to replace/delete (1-indexed, inclusive). Required for REPLACE/DELETE mode."
             },
             insert_before: {
               type: "integer",
-              description: "Insert content before this line number"
+              description: "Line number to insert content BEFORE. Use only for INSERT mode."
             },
             append: {
               type: "boolean",
-              description: "Append content to end of file"
+              description: "Set to true to append content to the end of the file. Use only for APPEND mode."
             },
             content: {
               type: "string",
-              description: "New content goes here (empty string to delete lines)"
+              description: "The text content to write. Use an empty string to delete lines."
             },
             commentary: {
               type: "string",
-              description: "Brief short explanation of what you're editing"
+              description: "Brief short explanation of what you're editing."
             }
           },
           required: ["file", "content"]
@@ -149,6 +150,42 @@ Only send when checklist changes.`,
             }
           },
           required: ["checklist"]
+        }
+      },
+      {
+        name: "show_history",
+        description: `Show memory (explored file ranges) and/or edit history for this session.
+Use this to recall what files you've read and what edits you've made.`,
+        parameters: {
+          type: "object",
+          properties: {
+            show_memory: {
+              type: "boolean",
+              description: "Show explored file ranges from memory"
+            },
+            show_edit_history: {
+              type: "boolean",
+              description: "Show recent edit history with edit IDs and diffs"
+            }
+          }
+        }
+      },
+      {
+        name: "undo_edit",
+        description: `Undo a previous edit by its ID. Use show_history first to see available edit IDs.`,
+        parameters: {
+          type: "object",
+          properties: {
+            edit_id: {
+              type: "string",
+              description: "The edit ID to undo (from show_history)"
+            },
+            reason: {
+              type: "string",
+              description: "Brief reason for undoing this edit"
+            }
+          },
+          required: ["edit_id"]
         }
       }
     ]
@@ -472,7 +509,7 @@ async function executeRunCommand(session, command, confirmed = false) {
   }
 }
 
-async function executeEditFile(session, input) {
+async function executeEditFile(session, input, sessionId, db) {
   const { file, range_start, range_end, insert_before, append, content } = input;
   
   try {
@@ -501,11 +538,16 @@ ${content}
       return { success: false, output: 'Error: Must specify range_start/range_end, insert_before, or append' };
     }
     
-    const result = applySetOperations(setCommand, { workspacePath: session.workspacePath });
+    const result = applySetOperations(setCommand, { 
+      workspacePath: session.workspacePath,
+      sessionId,
+      db
+    });
     
     return {
       success: result?.success || false,
-      output: result?.text || 'Edit completed.'
+      output: result?.text || 'Edit completed.',
+      editId: result?.files?.[0]?.editId || null
     };
   } catch (error) {
     return {
@@ -524,10 +566,8 @@ function formatChecklist(checklist) {
   }).join('\n');
 }
 
-async function executeTool(session, functionCall, confirmed, onChunk, sessionId, iteration = 0) {
+async function executeTool(session, functionCall, confirmed, onChunk, sessionId, iteration = 0, db = null) {
   const { name, args } = functionCall;
-  // Use stable ID based on session + iteration + function name (not timestamp)
-  // This ensures the same ID is used for confirmation request and resolution
   const toolCallId = `${sessionId}-${iteration}-${name}`;
   
   geminiLog(1, 'executeTool', `Executing: ${name}`, { 
@@ -544,7 +584,8 @@ async function executeTool(session, functionCall, confirmed, onChunk, sessionId,
           type: 'confirmation-required',
           command: args.command,
           toolCallId,
-          sessionId
+          sessionId,
+          provider: 'gemini'
         }) + '\n';
         onChunk(confirmationChunk, { type: 'confirmation' });
         
@@ -561,13 +602,94 @@ async function executeTool(session, functionCall, confirmed, onChunk, sessionId,
     }
     
     case 'edit_file': {
-      const result = await executeEditFile(session, args);
-      return { name, output: result.output };
+      const result = await executeEditFile(session, args, sessionId, db);
+      let output = result.output;
+      if (result.editId) {
+        output += `\n\nEdit ID: ${result.editId}`;
+      }
+      return { name, output };
     }
     
     case 'update_checklist': {
       const checklistText = formatChecklist(args.checklist);
       return { name, output: checklistText };
+    }
+    
+    case 'show_history': {
+      // Build display text based on what's being shown
+      const parts = [];
+      if (args.show_memory) parts.push('Memory');
+      if (args.show_edit_history) parts.push('Edit History');
+      const displayText = parts.length > 0 ? `Show ${parts.join(' & ')}` : 'Show History';
+      
+      if (onChunk) {
+        const commandChunk = `<!--command-input-->\n${displayText}\n<!--/command-input-->\n`;
+        onChunk(commandChunk, { type: 'command', toolName: 'show_history' });
+      }
+      
+      let output = '';
+      if (args.show_memory) {
+        output += '## Explored Files (Memory)\n\n' + getFormattedMemory(sessionId, db);
+      }
+      if (args.show_edit_history) {
+        if (output) output += '\n\n---\n\n';
+        output += '## Edit History\n\n' + getFormattedEditHistory(sessionId, db);
+      }
+      if (!output) {
+        output = 'Specify show_memory=true and/or show_edit_history=true';
+      }
+      return { name, output };
+    }
+    
+    case 'undo_edit': {
+      // Send command-input tag first
+      const displayText = `Undo Edit "${args.edit_id}"`;
+      if (onChunk) {
+        const commandChunk = `<!--command-input-->\n${displayText}\n<!--/command-input-->\n`;
+        onChunk(commandChunk, { type: 'command', toolName: 'undo_edit' });
+      }
+      
+      // First, do a dry run to get preview
+      const preview = undoEdit(args.edit_id, { 
+        workspacePath: session.workspacePath, 
+        db, 
+        sessionId,
+        dryRun: true 
+      });
+      
+      if (!preview.success) {
+        return { name, output: preview.output };
+      }
+      
+      // Undo always requires confirmation
+      if (onChunk) {
+        const confirmationChunk = JSON.stringify({
+          type: 'confirmation-required',
+          command: displayText,
+          toolCallId,
+          sessionId,
+          provider: 'gemini',
+          preview: preview.output,
+        }) + '\n';
+        onChunk(confirmationChunk, { type: 'confirmation' });
+      }
+      
+      const confirmation = await waitForGeminiConfirmation(sessionId, toolCallId);
+      
+      if (confirmation.allowed) {
+        const result = undoEdit(args.edit_id, { 
+          workspacePath: session.workspacePath, 
+          db, 
+          sessionId,
+          dryRun: false 
+        });
+        return { name, output: result.output };
+      } else {
+        const skipMessage = confirmation.timedOut 
+          ? 'Undo operation timed out - user did not respond.'
+          : 'User cancelled the undo operation.';
+        return { name, output: skipMessage };
+      }
     }
     
     default: {
@@ -595,7 +717,7 @@ async function executeTool(session, functionCall, confirmed, onChunk, sessionId,
         return { name, output: result.output, exitCode: result.exitCode };
       }
       
-      return { name, output: `Error: Unknown tool "${name}". Use run_command, edit_file, or update_checklist.` };
+      return { name, output: `Error: Unknown tool "${name}". Use run_command, edit_file, update_checklist, show_history, or undo_edit.` };
     }
   }
 }
@@ -856,8 +978,8 @@ async function processGeminiCodeRequest({
           if (onChunk) onChunk(commandChunk, { type: 'command', iteration, toolName: functionCall.name });
         }
         
-        // Execute tool (pass iteration for stable toolCallId)
-        const result = await executeTool(session, functionCall, false, onChunk, sessionId, iteration);
+        // Execute tool (pass iteration for stable toolCallId and db for edit history)
+        const result = await executeTool(session, functionCall, false, onChunk, sessionId, iteration, db);
         
         // Add function response to history (Gemini format)
         session.conversationHistory.push({

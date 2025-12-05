@@ -210,6 +210,21 @@ class DatabaseManager {
 
       CREATE INDEX IF NOT EXISTS idx_memory_session ON memory(session_id, owner_type, memory_name);
 
+      CREATE TABLE IF NOT EXISTS edit_history (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        operation_type TEXT NOT NULL,
+        range_start INTEGER,
+        range_end INTEGER,
+        before_content TEXT,
+        after_content TEXT,
+        diff TEXT,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_edit_history_session ON edit_history(session_id, created_at DESC);
+
       CREATE TABLE IF NOT EXISTS drafts (
         id TEXT PRIMARY KEY,
         content TEXT NOT NULL,
@@ -844,6 +859,54 @@ class DatabaseManager {
   clearAllMemory(sessionId, ownerType = 'code') {
     const normalizedType = ownerType === 'session' ? 'session' : 'code';
     return this.db.prepare(`DELETE FROM memory WHERE session_id = ? AND owner_type = ?`).run(sessionId, normalizedType);
+  }
+
+  // Edit history methods
+  saveEditHistory(sessionId, editId, filePath, operationType, rangeStart, rangeEnd, beforeContent, afterContent, diff) {
+    const stmt = this.db.prepare(`
+      INSERT INTO edit_history (id, session_id, file_path, operation_type, range_start, range_end, before_content, after_content, diff, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    return stmt.run(editId, sessionId, filePath, operationType, rangeStart, rangeEnd, beforeContent, afterContent, diff, Date.now());
+  }
+
+  getEditHistory(sessionId, limit = 20) {
+    return this.db.prepare(`
+      SELECT * FROM edit_history 
+      WHERE session_id = ? 
+      ORDER BY created_at DESC 
+      LIMIT ?
+    `).all(sessionId, limit);
+  }
+
+  getEditById(editId) {
+    return this.db.prepare(`SELECT * FROM edit_history WHERE id = ?`).get(editId);
+  }
+
+  deleteEditHistory(editId) {
+    return this.db.prepare(`DELETE FROM edit_history WHERE id = ?`).run(editId);
+  }
+
+  // Get all edits after a specific edit (for cascading undo)
+  getEditsAfter(sessionId, editId) {
+    const targetEdit = this.getEditById(editId);
+    if (!targetEdit) return [];
+    return this.db.prepare(`
+      SELECT * FROM edit_history 
+      WHERE session_id = ? AND created_at >= ?
+      ORDER BY created_at DESC
+    `).all(sessionId, targetEdit.created_at);
+  }
+
+  // Delete multiple edits by IDs
+  deleteEditHistoryBatch(editIds) {
+    if (!editIds || editIds.length === 0) return;
+    const placeholders = editIds.map(() => '?').join(',');
+    return this.db.prepare(`DELETE FROM edit_history WHERE id IN (${placeholders})`).run(...editIds);
+  }
+
+  clearEditHistory(sessionId) {
+    return this.db.prepare(`DELETE FROM edit_history WHERE session_id = ?`).run(sessionId);
   }
 
   // Migration: Add thinking_update column if it doesn't exist

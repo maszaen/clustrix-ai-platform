@@ -1775,6 +1775,7 @@ input:checked + .slider:before {
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2045,6 +2046,7 @@ input:checked + .slider:before {
   display: -webkit-box;
   align-items: start;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2125,6 +2127,7 @@ input:checked + .slider:before {
   padding-top: 4px; /* Sedikit jarak dari header */
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2456,10 +2459,6 @@ input:checked + .slider:before {
   font-weight: var(--font-normal);
   color: var(--icon);
   margin-bottom: var(--spacing-lg);
-}
-
-#central-input-container {
-  /* sengaja empty */
 }
 
 .chat-area {
@@ -2944,7 +2943,8 @@ input:checked + .slider:before {
 }
 
 .message-actions .model-info-tag {
-  -webkit-user-select: none !important; 
+  user-select: none;
+  -webkit-user-select: none !important;
   -moz-user-select: none !important;  
   -ms-user-select: none !important;
   display: flex;
@@ -4531,6 +4531,7 @@ blockquote blockquote blockquote blockquote::before {
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 5;
+  line-clamp: 5;
   -webkit-box-orient: vertical;
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   word-wrap: break-word;
@@ -4540,6 +4541,7 @@ blockquote blockquote blockquote blockquote::before {
 /* Expanded state with smooth animation */
 .user-text-content.expanded {
   -webkit-line-clamp: unset;
+  line-clamp: unset;
   display: block;
   animation: expandContent 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
 }
@@ -4910,10 +4912,6 @@ blockquote blockquote blockquote blockquote::before {
     transition: opacity 0.4s ease, visibility 0.4s ease, background 0.4s ease;
     pointer-events: none;
     backdrop-filter: blur(0px);
-  }
-
-  .titlebar {
-    /* padding: 50px var(--spacing-md); */
   }
   
   .mobile-sidebar-backdrop.active {
@@ -5733,6 +5731,7 @@ a:focus-visible {
   border: none;
   appearance: none;
   -webkit-appearance: none;
+  user-select: none;
   -webkit-user-select: none !important; 
   -moz-user-select: none !important;  
   -ms-user-select: none !important;
@@ -6103,6 +6102,7 @@ a:focus-visible {
   font-family: var(--font-sans);
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6317,6 +6317,7 @@ a:focus-visible {
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   font-family: var(--font-sans);
 }
@@ -6330,6 +6331,7 @@ a:focus-visible {
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   font-family: var(--font-sans);
 }
@@ -7227,6 +7229,7 @@ button:disabled .btn-icon {
   margin: 0 0 8px 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.4;
@@ -7238,6 +7241,7 @@ button:disabled .btn-icon {
   margin: 8px 0;
   display: -webkit-box;
   -webkit-line-clamp: 5;
+  line-clamp: 5;
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.5;
@@ -8012,11 +8016,6 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   background: var(--bg-secondary);
 }
 
-.chat-item.select-mode,
-.project-item.select-mode,
-.artifact-item.select-mode {
-}
-
 .chat-item.select-mode .chat-item-checkbox-wrapper,
 .chat-item.selected .chat-item-checkbox-wrapper,
 .project-item.select-mode .project-item-checkbox-wrapper,
@@ -8140,10 +8139,6 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   margin-right: 6px;
   font-weight: bold;
 } */
-
-.artifact-item:hover {
-
-}
 
 .artifact-header {
   padding: 9px 0px 12px 0px;
@@ -8397,12 +8392,6 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   transform: scale(0.9);
 }
 
-/* Artifact menu hover and persistent states */
-.artifact-item:has(.artifact-menu-dropdown.clicked-open),
-.artifact-item:has(.artifact-menu-dropdown.persistent-open) {
-  /* Keep menu visible when active */
-}
-
 .artifact-item:hover .artifact-menu-btn {
   opacity: 1;
   visibility: visible;
@@ -8633,6 +8622,7 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
   /* Efek potong teks setelah 3 baris */
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
@@ -8710,9 +8700,6 @@ li:has(.tasklist:not(:checked)) ~ li:has(.tasklist:not(:checked)) .tasklist {
 .file-empty-state-icon small {
   text-align: center;
   color: var(--fg-muted);
-} 
-
-.file-empty-state-icon svg {
 } 
 
 .announcement {

@@ -72,7 +72,8 @@ function transformCommandText(commandText) {
   let fullCmd = commandText.trim();
   
   // Strip <real-cmd> tag (used internally for icon detection, should not be displayed)
-  fullCmd = fullCmd.replace(/<real-cmd>.*?<\/real-cmd>/g, '').trim();
+  // Use [\s\S] to match any character including newlines
+  fullCmd = fullCmd.replace(/<real-cmd>[\s\S]*?<\/real-cmd>/g, '').trim();
   
   // Handle <cmd>...</cmd> wrapper - extract inner content
   const cmdWrapperMatch = fullCmd.match(/^<cmd>\s*([\s\S]*?)\s*<\/cmd>$/i);

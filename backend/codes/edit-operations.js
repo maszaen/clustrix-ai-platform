@@ -144,8 +144,9 @@ function parseRange(rangeText) {
   if (!Number.isFinite(start)) {
     throw new Error(`Invalid start value "${parts[0]}" in range attribute.`);
   }
-  if (start === 0) {
-    throw new Error('Line numbers are 1-indexed. Use range={1} or range={1, N} to start from the first line, not range={0}.');
+  // Treat negative or zero as append request
+  if (start < 1) {
+    return { start: -1, end: null, operation: 'append' };
   }
 
   let end = null;
@@ -248,7 +249,8 @@ function composeFileContent(lines, newline, trailingNewline) {
   }
 
   if (working.length === 0) {
-    return '';
+    // Preserve trailing newline for empty files if original had one
+    return shouldAppendNewline ? newline : '';
   }
 
   const joined = working.join(newline);
@@ -410,16 +412,36 @@ function applySetOperations(command, options = {}) {
 
     if (!filesMap.has(operation.file)) {
       const { absolutePath, relativePath } = resolveFilePath(workspacePath, operation.file);
-      const fileData = readFileWithMetadata(absolutePath);
+      let fileData = readFileWithMetadata(absolutePath);
+      
       if (fileData.content === null) {
-        // Try to find similar files for suggestion
-        const suggestions = findSimilarFiles(workspacePath, operation.file);
-        let errorMsg = `File not found: ${operation.file}`;
-        if (suggestions.length > 0) {
-          errorMsg += `\nDid you mean: ${suggestions.join(', ')}?`;
+        // File doesn't exist - check if we should create it
+        if (operation.lines.length > 0) {
+          // Allow file creation if content is provided
+          // Ensure parent directory exists
+          const parentDir = path.dirname(absolutePath);
+          if (!fs.existsSync(parentDir)) {
+            fs.mkdirSync(parentDir, { recursive: true });
+          }
+          // Create empty file data for new file
+          fileData = {
+            content: '',
+            lines: [],
+            newline: '\n',
+            trailingNewline: true,
+          };
+        } else {
+          // No content provided - suggest similar files
+          const suggestions = findSimilarFiles(workspacePath, operation.file);
+          let errorMsg = `File not found: ${operation.file}`;
+          if (suggestions.length > 0) {
+            errorMsg += `\nDid you mean: ${suggestions.join(', ')}?`;
+          }
+          errorMsg += '\nTo create a new file, provide content in the <set> tag.';
+          throw new Error(errorMsg);
         }
-        throw new Error(errorMsg);
       }
+      
       filesMap.set(operation.file, {
         absolutePath,
         relativePath,
@@ -427,6 +449,7 @@ function applySetOperations(command, options = {}) {
         lines: [...fileData.lines],
         focusRanges: [],
         history: [],
+        isNewFile: fileData.content === '',
       });
     }
 
@@ -872,7 +895,7 @@ function undoEdit(editId, options = {}) {
   
   output += `[DONE] Successfully undone ${allEditIds.length} edit${allEditIds.length > 1 ? 's' : ''}.`;
   
-  return { 
+  return {  
     success: true, 
     output,
     isWarning: false,

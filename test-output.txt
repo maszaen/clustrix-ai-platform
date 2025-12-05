@@ -1,0 +1,265 @@
+[ENV] No .env found in userData, using hardcoded values
+
+Local Index: Loaded 0 documents, 0 vocabulary terms
+
+Initializing LangChain service...
+
+Found API key for provider: openrouter
+
+Initializing embeddings with openrouter provider...
+
+Attempting OpenRouter embeddings...
+
+OpenRouter embeddings not supported, using text similarity
+
+Using simple text-based embeddings...
+
+LangChain: No existing vector store file found, starting fresh
+
+LangChain service initialized successfully
+
+APP 1 createWindow Zoom factor set to 0.9615384968074834 (scaleFactor: 1.0399999618530273)
+
+MAIN: chat:stream-start invoked {
+
+  reqId: 'mitelili-j73khk',
+
+  webSearchEnabled: false,
+
+  aiMessageIndex: 1
+
+}
+
+MAIN: webSearchEnabled is falsey, using standard streaming
+
+Failed to load scenarios.json: ENOENT: no such file or directory, open 'H:\VSCode\Clustrix-AI-Platform\backend\debug\scenarios.json'
+
+LangChain: Vectorizing chat history for session session_1764967927395_t9sxhz (2 messages)
+
+LangChain: Successfully vectorized 0 chat messages for session session_1764967927395_t9sxhz
+
+RE+ACT check called with: sessionType=project, uploadedFiles=0, message="tolong cari di web, info sumatra terbaru setelah b..."
+
+Regular RE+ACT decision: USE (0 files, analysis keywords: true)
+
+RE+ACT decision: USE (no uploaded files, intent-based)
+
+[RESEARCH-V2] initializeSession: Session session_1764967927395_t9sxhz {
+
+  filesCount: 0,
+
+  model: 'gemini-2.5-pro',
+
+  provider: 'gemini',
+
+  hasSearchConfig: false,
+
+  searchProvider: 'none',
+
+  hasSerpKey: false,
+
+  hasGoogleKey: false
+
+}
+
+MAIN: Sending REACT_START chat-update { reqId: 'mitelili-j73khk', aiMessageIndex: 1 }
+
+[RESEARCH-V2] initializeSession: Session session_1764967927395_t9sxhz {
+
+  filesCount: 0,
+
+  model: 'gemini-2.5-pro',
+
+  provider: 'gemini',
+
+  hasSearchConfig: true,
+
+  searchProvider: 'google',
+
+  hasSerpKey: false,
+
+  hasGoogleKey: true
+
+}
+
+[RESEARCH-V2] processWithReasoningAction: Starting {
+
+  sessionId: 'session_1764967927395_t9sxhz',
+
+  model: 'gemini-2.5-pro',
+
+  filesCount: 0
+
+}
+
+[RESEARCH-V2] detectProvider: Detecting { model: 'gemini-2.5-pro', provider: 'gemini' }
+
+[RESEARCH-V2] processWithResearchAgent: Routing request {
+
+  sessionId: 'session_1764967927395_t9sxhz',
+
+  model: 'gemini-2.5-pro',
+
+  provider: 'gemini',
+
+  filesCount: 0,
+
+  hasSearchConfig: true,
+
+  searchProvider: 'google'
+
+}
+
+[RESEARCH-GEMINI] processResearchRequest: Starting {
+
+  sessionId: 'session_1764967927395_t9sxhz',
+
+  model: 'gemini-2.5-pro',
+
+  filesCount: 0
+
+}
+
+[RESEARCH-GEMINI] processResearchRequest: Setting search config { provider: 'google', hasSerpKey: false, hasGoogleKey: true }
+
+[RESEARCH-GEMINI] processResearchRequest: Iteration 1 {}
+
+Local Index: Saved 0 documents to disk
+
+[RESEARCH-GEMINI] processResearchRequest: Tool call: web_search {
+
+  params: {
+
+    commentary: 'Mencari informasi umum tentang bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa paling signifikan.',
+
+    query: 'bencana alam terkini di Sumatra'
+
+  }
+
+}
+
+[RESEARCH-TOOLS] executeResearchTool: Executing: web_search {
+
+  params: {
+
+    commentary: 'Mencari informasi umum tentang bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa paling signifikan.',
+
+    query: 'bencana alam terkini di Sumatra'
+
+  }
+
+}
+
+webSearch: query="bencana alam terkini di Sumatra", isResearch=true
+
+webSearch adaptive params: maxResults=5, fetchCount=3, maxChars=12000, timeout=7000ms
+
+[RESEARCH-TOOLS] executeResearchTool: Completed: web_search { resultCount: 5 }
+
+[RESEARCH-GEMINI] processResearchRequest: Iteration 2 {}
+
+[RESEARCH-GEMINI] processResearchRequest: Tool call: web_search {
+
+  params: {
+
+    query: 'jumlah korban dan dampak banjir longsor Aceh Sumatra Utara Sumatra Barat November Desember 2025',
+
+    commentary: 'Mencari informasi rinci mengenai jumlah korban jiwa, orang hilang, dan dampak kerusakan akibat banjir dan longsor di provinsi-provinsi Sumatra yang terdampak.'
+
+  }
+
+}
+
+[RESEARCH-TOOLS] executeResearchTool: Executing: web_search {
+
+  params: {
+
+    query: 'jumlah korban dan dampak banjir longsor Aceh Sumatra Utara Sumatra Barat November Desember 2025',
+
+    commentary: 'Mencari informasi rinci mengenai jumlah korban jiwa, orang hilang, dan dampak kerusakan akibat banjir dan longsor di provinsi-provinsi Sumatra yang terdampak.'
+
+  }
+
+}
+
+webSearch: query="jumlah korban dan dampak banjir longsor Aceh Sumatra Utara Sumatra Barat November Desember 2025", isResearch=false
+
+webSearch adaptive params: maxResults=5, fetchCount=3, maxChars=4000, timeout=4000ms
+
+[RESEARCH-TOOLS] executeResearchTool: Completed: web_search { resultCount: 5 }
+
+[RESEARCH-GEMINI] processResearchRequest: Iteration 3 {}
+
+[RESEARCH-GEMINI] processResearchRequest: Tool call: web_search {
+
+  params: {
+
+    commentary: 'Mencari analisis dari para ahli mengenai penyebab banjir dan longsor di Sumatra, serta informasi tentang upaya penanganan bencana yang dilakukan oleh pemerintah dan organisasi terkait.',
+
+    query: 'analisis ahli penyebab banjir longsor Sumatra dan penanganan bencana'
+
+  }
+
+}
+
+[RESEARCH-TOOLS] executeResearchTool: Executing: web_search {
+
+  params: {
+
+    commentary: 'Mencari analisis dari para ahli mengenai penyebab banjir dan longsor di Sumatra, serta informasi tentang upaya penanganan bencana yang dilakukan oleh pemerintah dan organisasi terkait.',
+
+    query: 'analisis ahli penyebab banjir longsor Sumatra dan penanganan bencana'
+
+  }
+
+}
+
+webSearch: query="analisis ahli penyebab banjir longsor Sumatra dan penanganan bencana", isResearch=true
+
+webSearch adaptive params: maxResults=5, fetchCount=3, maxChars=12000, timeout=7000ms
+
+[RESEARCH-TOOLS] executeResearchTool: Completed: web_search { resultCount: 5 }
+
+[RESEARCH-GEMINI] processResearchRequest: Iteration 4 {}
+
+[RESEARCH-GEMINI] processResearchRequest: Tool call: synthesize {
+
+  params: {
+
+    is_synthesis: true,
+
+    commentary: 'Informasi yang terkumpul sudah cukup untuk menyusun analisis komprehensif. Saya telah mendapatkan data mengenai skala bencana, jumlah korban, analisis penyebab dari para ahli, dan langkah-langkah penanganan awal oleh pemerintah. Sekarang saya akan mensintesis informasi ini untuk memberikan jawaban yang lengkap.'
+
+  }
+
+}
+
+[RESEARCH-GEMINI] processResearchRequest: Synthesis requested {}
+
+[RESEARCH-GEMINI] processResearchRequest: Iteration 5 {}
+
+[RESEARCH-GEMINI] processResearchRequest: Final response received {}
+
+[RESEARCH-GEMINI] processResearchRequest: Complete { historyLength: 9, responseLength: 0 }
+
+[RESEARCH-V2] processWithResearchAgent: Complete { provider: 'gemini', responseLength: 0 }
+
+
+
+di UI cursed, rusak.
+
+
+
+seperti yg gua bilang, SATU ITERATION SATU THINKING-UPDATE-TITLE, SATU THINKING-UPDATE-CONTENT (THINKING-TOGGLE ITU BUKAN OUTPUT DARI TOOLS, TAPI DARI THINKING-UPDATE-TITLE).
+
+
+
+BABIIIIIIIIIIIIIIII
+
+
+
+NIH NJING!:
+
+UI NYA JELEK, JADING TOLOL!
+
+<div class="thinking-update"><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Web_search</div><div class="thinking-update-content">Mencari informasi umum mengenai bencana alam terbaru yang terjadi di Sumatra untuk mengidentifikasi peristiwa spesifik yang paling signifikan dan baru-baru ini terjadi. Ini akan menjadi dasar untuk pencarian yang lebih mendalam.</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Web_search</div><div class="thinking-update-content">Setelah mengidentifikasi banjir lahar dingin di Sumatera Barat sebagai bencana utama, pencarian ini difokuskan untuk mengumpulkan data spesifik mengenai dampak, jumlah korban, dan kerusakan infrastruktur akibat bencana tersebut.</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Web_search</div><div class="thinking-update-content">Pencarian ini bertujuan untuk menemukan informasi terbaru mengenai upaya penanganan pasca-bencana, status tanggap darurat, dan langkah-langkah pemulihan yang diambil oleh pemerintah dan lembaga terkait.</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Web_search</div><div class="thinking-update-content">Setelah mengidentifikasi banjir lahar dingin di Sumatera Barat sebagai bencana utama, pencarian ini difokuskan untuk mengumpulkan data spesifik mengenai dampak, jumlah korban, dan kerusakan infrastruktur akibat bencana tersebut.</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Web_search</div><div class="thinking-update-content">Pencarian ini bertujuan untuk menemukan informasi terbaru mengenai upaya penanganan pasca-bencana, status tanggap darurat, dan langkah-langkah pemulihan yang diambil oleh pemerintah dan lembaga terkait.</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Mencari informasi umum mengenai bencana alam terbaru yang terjadi di Sumatra untuk mengidentifikasi peristiwa spesifik yang paling signifikan dan baru-baru ini terjadi. Ini akan menjadi dasar untuk pencarian yang lebih mendalam. → Setelah mengidentifikasi banjir lahar dingin di Sumatera Barat sebagai bencana utama, pencarian ini difokuskan untuk mengumpulkan data spesifik mengenai dampak, jumlah korban, dan kerusakan infrastruktur akibat bencana tersebut. → Pencarian ini bertujuan untuk menemukan informasi terbaru mengenai upaya penanganan pasca-bencana, status tanggap darurat, dan langkah-langkah pemulihan yang diambil oleh pemerintah dan lembaga terkait.</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><p>[web_search] [1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: <a class="link" href="https://www.bbc.com/indonesia/articles/cg5m2p71gpjo" target="_blank" rel="noopener noreferrer">https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 27 Nov 2025 ... Pengiriman bantuan. Pemerintah pusat mengirimkan ...</p><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: ... banjir lahar dingin yang melanda Sumatra Barat pada 11 Mei. 202...</p><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Ben...</p></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Reasoning</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><p>[web_search] [1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: <a class="link" href="https://www.bbc.com/indonesia/articles/cg5m2p71gpjo" target="_blank" rel="noopener noreferrer">https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 27 Nov 2025 ... Pengiriman bantuan. Pemerintah pusat mengirimkan ...</p><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: ... banjir lahar dingin yang melanda Sumatra Barat pada 11 Mei. 202...</p><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Ben...</p></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Keywords</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><ol><li><p>[web_search] [1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: <a class="link" href="https://www.bbc.com/indonesia/articles/cg5m2p71gpjo" target="_blank" rel="noopener noreferrer">https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 27 Nov 2025 ... Pengiriman bantuan. Pemerintah pusat mengirimkan ...</p></li></ol><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: ... banjir lahar dingin yang melanda Sumatra Barat pada 11 Mei. 202...</p><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Ben...</p></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Mencari bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa spesifik.</div><div class="thinking-update-content">Mencari bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa spesifik.:<br>[1] Sepanjang 2024 Sumut Alami 677 Kejadian Bencana - Diskominfo ...<br>URL: https://diskominfo.sumutprov.go.id/page/berita/sepanjang-2024-sumut-alami-677-kejadian-bencana<br>Snippet: 8 Jan 2025 ... Sepanjang tahun 2024, Provinsi Sumatera Utara (Sumut) mengalami ... Bencana alam yang terjadi memberikan da</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Mencari informasi umum mengenai bencana alam terbaru yang terjadi di Sumatra untuk mengidentifikasi peristiwa spesifik yang paling signifikan dan baru-baru ini terjadi. Ini akan menjadi dasar untuk pencarian yang lebih mendalam. → Setelah mengidentifikasi banjir lahar dingin di Sumatera Barat sebagai bencana utama, pencarian ini difokuskan untuk mengumpulkan data spesifik mengenai dampak, jumlah korban, dan kerusakan infrastruktur akibat bencana tersebut. → Pencarian ini bertujuan untuk menemukan informasi terbaru mengenai upaya penanganan pasca-bencana, status tanggap darurat, dan langkah-langkah pemulihan yang diambil oleh pemerintah dan lembaga terkait.</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><p>[web_search] [1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: <a class="link" href="https://www.bbc.com/indonesia/articles/cg5m2p71gpjo" target="_blank" rel="noopener noreferrer">https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 27 Nov 2025 ... Pengiriman bantuan. Pemerintah pusat mengirimkan ...</p><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: ... banjir lahar dingin yang melanda Sumatra Barat pada 11 Mei. 202...</p><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Ben...</p></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Reasoning</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><p>[web_search] [1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: <a class="link" href="https://www.bbc.com/indonesia/articles/cg5m2p71gpjo" target="_blank" rel="noopener noreferrer">https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 27 Nov 2025 ... Pengiriman bantuan. Pemerintah pusat mengirimkan ...</p><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: ... banjir lahar dingin yang melanda Sumatra Barat pada 11 Mei. 202...</p><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Ben...</p></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Keywords</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><ol><li><p>[web_search] [1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: <a class="link" href="https://www.bbc.com/indonesia/articles/cg5m2p71gpjo" target="_blank" rel="noopener noreferrer">https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 27 Nov 2025 ... Pengiriman bantuan. Pemerintah pusat mengirimkan ...</p></li></ol><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: ... banjir lahar dingin yang melanda Sumatra Barat pada 11 Mei. 202...</p><p>[web_search] [1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Ben...</p></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Mencari bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa spesifik.</div><div class="thinking-update-content">Mencari bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa spesifik.:<br>[1] Sepanjang 2024 Sumut Alami 677 Kejadian Bencana - Diskominfo ...<br>URL: https://diskominfo.sumutprov.go.id/page/berita/sepanjang-2024-sumut-alami-677-kejadian-bencana<br>Snippet: 8 Jan 2025 ... Sepanjang tahun 2024, Provinsi Sumatera Utara (Sumut) mengalami ... Bencana alam yang terjadi memberikan da</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Reasoning</div><div class="thinking-update-content">Mencari bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa spesifik.:<br>[1] Sepanjang 2024 Sumut Alami 677 Kejadian Bencana - Diskominfo ...<br>URL: https://diskominfo.sumutprov.go.id/page/berita/sepanjang-2024-sumut-alami-677-kejadian-bencana<br>Snippet: 8 Jan 2025 ... Sepanjang tahun 2024, Provinsi Sumatera Utara (Sumut) mengalami ... Bencana alam yang terjadi memberikan da</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Reasoning</div><div class="thinking-update-content">Mencari bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa spesifik.:<br>[1] Sepanjang 2024 Sumut Alami 677 Kejadian Bencana - Diskominfo ...<br>URL: https://diskominfo.sumutprov.go.id/page/berita/sepanjang-2024-sumut-alami-677-kejadian-bencana<br>Snippet: 8 Jan 2025 ... Sepanjang tahun 2024, Provinsi Sumatera Utara (Sumut) mengalami ... Bencana alam yang terjadi memberikan da</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Keywords</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><ol><li><p>Mencari bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa spesifik.:<br>[1] Sepanjang 2024 Sumut Alami 677 Kejadian Bencana - Diskominfo ...<br>URL: <a class="link" href="https://diskominfo.sumutprov.go.id/page/berita/sepanjang-2024-sumut-alami-677-kejadian-bencana" target="_blank" rel="noopener noreferrer">https://diskominfo.sumutprov.go.id/page/berita/sepanjang-2024-sumut-alami-677-kejadian-bencana<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 8 Jan 2025 ... Sepanjang tahun 2024, Provinsi Sumatera Utara (Sumut) mengalami ... Bencana alam yang terjadi memberikan da</p></li></ol></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Fokus pada banjir bandang di Sumatera Barat sebagai studi kasus untuk analisis mendalam, mencari detail dampak, korban, dan penanganan.</div><div class="thinking-update-content">Fokus pada banjir bandang di Sumatera Barat sebagai studi kasus untuk analisis mendalam, mencari detail dampak, korban, dan penanganan.:<br>[1] BANJIR BANDANG SUMATRA BARAT<br>URL: https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Bencana (BNPB) merilis dampak terbesar berada di Kabupaten Tanah Datar dengan jumlah korban&nbsp;...<br>Content</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Keywords</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><ol><li><p>Mencari bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa spesifik.:<br>[1] Sepanjang 2024 Sumut Alami 677 Kejadian Bencana - Diskominfo ...<br>URL: <a class="link" href="https://diskominfo.sumutprov.go.id/page/berita/sepanjang-2024-sumut-alami-677-kejadian-bencana" target="_blank" rel="noopener noreferrer">https://diskominfo.sumutprov.go.id/page/berita/sepanjang-2024-sumut-alami-677-kejadian-bencana<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 8 Jan 2025 ... Sepanjang tahun 2024, Provinsi Sumatera Utara (Sumut) mengalami ... Bencana alam yang terjadi memberikan da</p></li></ol></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Fokus pada banjir bandang di Sumatera Barat sebagai studi kasus untuk analisis mendalam, mencari detail dampak, korban, dan penanganan.</div><div class="thinking-update-content">Fokus pada banjir bandang di Sumatera Barat sebagai studi kasus untuk analisis mendalam, mencari detail dampak, korban, dan penanganan.:<br>[1] BANJIR BANDANG SUMATRA BARAT<br>URL: https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Bencana (BNPB) merilis dampak terbesar berada di Kabupaten Tanah Datar dengan jumlah korban&nbsp;...<br>Content</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Reasoning</div><div class="thinking-update-content">Fokus pada banjir bandang di Sumatera Barat sebagai studi kasus untuk analisis mendalam, mencari detail dampak, korban, dan penanganan.:<br>[1] BANJIR BANDANG SUMATRA BARAT<br>URL: https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Bencana (BNPB) merilis dampak terbesar berada di Kabupaten Tanah Datar dengan jumlah korban&nbsp;...<br>Content</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Reasoning</div><div class="thinking-update-content">Fokus pada banjir bandang di Sumatera Barat sebagai studi kasus untuk analisis mendalam, mencari detail dampak, korban, dan penanganan.:<br>[1] BANJIR BANDANG SUMATRA BARAT<br>URL: https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Bencana (BNPB) merilis dampak terbesar berada di Kabupaten Tanah Datar dengan jumlah korban&nbsp;...<br>Content</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Keywords</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><ol><li><p>Fokus pada banjir bandang di Sumatera Barat sebagai studi kasus untuk analisis mendalam, mencari detail dampak, korban, dan penanganan.:<br>[1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Bencana (BNPB) merilis dampak terbesar berada di Kabupaten Tanah Datar dengan jumlah korban ...<br>Content</p></li></ol></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Mencari analisis ahli tentang penyebab banjir bandang Sumatera Barat untuk melengkapi data dari BNPB dan Kemenko PMK.</div><div class="thinking-update-content">Mencari analisis ahli tentang penyebab banjir bandang Sumatera Barat untuk melengkapi data dari BNPB dan Kemenko PMK.:<br>[1] Ahli Ungkap Penyebab Banjir Bandang di Sumbar Menimbulkan ...<br>URL: https://www.metrotvnews.com/read/KvJCaoJd-ahli-ungkap-penyebab-banjir-bandang-di-sumbar-menimbulkan-banyak-korban<br>Snippet: 14 Mei 2024 ... Banjir lahar dingin melanda beberapa kawasan di Sumatra Barat Sejak Sabtu, 11 Mei 2024.<br>Co</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Keywords</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><ol><li><p>Fokus pada banjir bandang di Sumatera Barat sebagai studi kasus untuk analisis mendalam, mencari detail dampak, korban, dan penanganan.:<br>[1] BANJIR BANDANG SUMATRA BARAT<br>URL: <a class="link" href="https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf" target="_blank" rel="noopener noreferrer">https://www.bnpb.go.id/storage/app/media/RESILIENSI%20SEPTEMBER%202024%20-%20Page.pdf<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: Perkembangan hingga 8 Juni 2024, Badan Nasional Penanggulangan. Bencana (BNPB) merilis dampak terbesar berada di Kabupaten Tanah Datar dengan jumlah korban ...<br>Content</p></li></ol></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Mencari analisis ahli tentang penyebab banjir bandang Sumatera Barat untuk melengkapi data dari BNPB dan Kemenko PMK.</div><div class="thinking-update-content">Mencari analisis ahli tentang penyebab banjir bandang Sumatera Barat untuk melengkapi data dari BNPB dan Kemenko PMK.:<br>[1] Ahli Ungkap Penyebab Banjir Bandang di Sumbar Menimbulkan ...<br>URL: https://www.metrotvnews.com/read/KvJCaoJd-ahli-ungkap-penyebab-banjir-bandang-di-sumbar-menimbulkan-banyak-korban<br>Snippet: 14 Mei 2024 ... Banjir lahar dingin melanda beberapa kawasan di Sumatra Barat Sejak Sabtu, 11 Mei 2024.<br>Co</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Reasoning</div><div class="thinking-update-content">Mencari analisis ahli tentang penyebab banjir bandang Sumatera Barat untuk melengkapi data dari BNPB dan Kemenko PMK.:<br>[1] Ahli Ungkap Penyebab Banjir Bandang di Sumbar Menimbulkan ...<br>URL: https://www.metrotvnews.com/read/KvJCaoJd-ahli-ungkap-penyebab-banjir-bandang-di-sumbar-menimbulkan-banyak-korban<br>Snippet: 14 Mei 2024 ... Banjir lahar dingin melanda beberapa kawasan di Sumatra Barat Sejak Sabtu, 11 Mei 2024.<br>Co</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Reasoning</div><div class="thinking-update-content">Mencari analisis ahli tentang penyebab banjir bandang Sumatera Barat untuk melengkapi data dari BNPB dan Kemenko PMK.:<br>[1] Ahli Ungkap Penyebab Banjir Bandang di Sumbar Menimbulkan ...<br>URL: https://www.metrotvnews.com/read/KvJCaoJd-ahli-ungkap-penyebab-banjir-bandang-di-sumbar-menimbulkan-banyak-korban<br>Snippet: 14 Mei 2024 ... Banjir lahar dingin melanda beberapa kawasan di Sumatra Barat Sejak Sabtu, 11 Mei 2024.<br>Co</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Keywords</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><ol><li><p>Mencari analisis ahli tentang penyebab banjir bandang Sumatera Barat untuk melengkapi data dari BNPB dan Kemenko PMK.:<br>[1] Ahli Ungkap Penyebab Banjir Bandang di Sumbar Menimbulkan ...<br>URL: <a class="link" href="https://www.metrotvnews.com/read/KvJCaoJd-ahli-ungkap-penyebab-banjir-bandang-di-sumbar-menimbulkan-banyak-korban" target="_blank" rel="noopener noreferrer">https://www.metrotvnews.com/read/KvJCaoJd-ahli-ungkap-penyebab-banjir-bandang-di-sumbar-menimbulkan-banyak-korban<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 14 Mei 2024 ... Banjir lahar dingin melanda beberapa kawasan di Sumatra Barat Sejak Sabtu, 11 Mei 2024.<br>Co</p></li></ol></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Mencari informasi umum tentang bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa paling signifikan.</div><div class="thinking-update-content">Mencari informasi umum tentang bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa paling signifikan.:<br>[1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<br>Snippet: 27 Nov 2025 ... Pengiriman bantuan. Pemerintah pusat mengirimkan bantuan penanganan bencana alam ke tiga provinsi terdampak—Aceh, Sumatra Utara, dan Sumatra&nbsp;...<br>Cont</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Keywords</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><ol><li><p>Mencari analisis ahli tentang penyebab banjir bandang Sumatera Barat untuk melengkapi data dari BNPB dan Kemenko PMK.:<br>[1] Ahli Ungkap Penyebab Banjir Bandang di Sumbar Menimbulkan ...<br>URL: <a class="link" href="https://www.metrotvnews.com/read/KvJCaoJd-ahli-ungkap-penyebab-banjir-bandang-di-sumbar-menimbulkan-banyak-korban" target="_blank" rel="noopener noreferrer">https://www.metrotvnews.com/read/KvJCaoJd-ahli-ungkap-penyebab-banjir-bandang-di-sumbar-menimbulkan-banyak-korban<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 14 Mei 2024 ... Banjir lahar dingin melanda beberapa kawasan di Sumatra Barat Sejak Sabtu, 11 Mei 2024.<br>Co</p></li></ol></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Mencari informasi umum tentang bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa paling signifikan.</div><div class="thinking-update-content">Mencari informasi umum tentang bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa paling signifikan.:<br>[1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<br>Snippet: 27 Nov 2025 ... Pengiriman bantuan. Pemerintah pusat mengirimkan bantuan penanganan bencana alam ke tiga provinsi terdampak—Aceh, Sumatra Utara, dan Sumatra&nbsp;...<br>Cont</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Reasoning</div><div class="thinking-update-content">Mencari informasi umum tentang bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa paling signifikan.:<br>[1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<br>Snippet: 27 Nov 2025 ... Pengiriman bantuan. Pemerintah pusat mengirimkan bantuan penanganan bencana alam ke tiga provinsi terdampak—Aceh, Sumatra Utara, dan Sumatra&nbsp;...<br>Cont</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Reasoning</div><div class="thinking-update-content">Mencari informasi umum tentang bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa paling signifikan.:<br>[1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<br>Snippet: 27 Nov 2025 ... Pengiriman bantuan. Pemerintah pusat mengirimkan bantuan penanganan bencana alam ke tiga provinsi terdampak—Aceh, Sumatra Utara, dan Sumatra&nbsp;...<br>Cont</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Mencari informasi rinci mengenai jumlah korban jiwa, orang hilang, dan dampak kerusakan akibat banjir dan longsor di provinsi-provinsi Sumatra yang terdampak.</div><div class="thinking-update-content">Mencari informasi rinci mengenai jumlah korban jiwa, orang hilang, dan dampak kerusakan akibat banjir dan longsor di provinsi-provinsi Sumatra yang terdampak.:<br>[1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<br>Snippet: 27 Nov 2025 ... Jumlah korban meninggal dunia setelah banjir dan longsor menerjang sejumlah daerah di Aceh, Sumatra Utara, dan Sumatra Barat terus bertambah&nbsp;...<br>Cont</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Mencari informasi rinci mengenai jumlah korban jiwa, orang hilang, dan dampak kerusakan akibat banjir dan longsor di provinsi-provinsi Sumatra yang terdampak.</div><div class="thinking-update-content">Mencari informasi rinci mengenai jumlah korban jiwa, orang hilang, dan dampak kerusakan akibat banjir dan longsor di provinsi-provinsi Sumatra yang terdampak.:<br>[1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<br>Snippet: 27 Nov 2025 ... Jumlah korban meninggal dunia setelah banjir dan longsor menerjang sejumlah daerah di Aceh, Sumatra Utara, dan Sumatra Barat terus bertambah&nbsp;...<br>Cont</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Keywords</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><ol><li><p>Mencari informasi umum tentang bencana alam terbaru di Sumatra untuk mengidentifikasi peristiwa paling signifikan.:<br>[1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: <a class="link" href="https://www.bbc.com/indonesia/articles/cg5m2p71gpjo" target="_blank" rel="noopener noreferrer">https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 27 Nov 2025 ... Pengiriman bantuan. Pemerintah pusat mengirimkan bantuan penanganan bencana alam ke tiga provinsi terdampak—Aceh, Sumatra Utara, dan Sumatra ...<br>Cont</p></li></ol></div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Reasoning</div><div class="thinking-update-content">Mencari informasi rinci mengenai jumlah korban jiwa, orang hilang, dan dampak kerusakan akibat banjir dan longsor di provinsi-provinsi Sumatra yang terdampak.:<br>[1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<br>Snippet: 27 Nov 2025 ... Jumlah korban meninggal dunia setelah banjir dan longsor menerjang sejumlah daerah di Aceh, Sumatra Utara, dan Sumatra Barat terus bertambah&nbsp;...<br>Cont</div></div><div class="thinking-update-item"><div class="thinking-update-title" style="opacity: 1; transition: opacity 0.3s;">Keywords</div><div class="thinking-update-content" style="opacity: 1; transition: opacity 0.25s;"><ol><li><p>Mencari informasi rinci mengenai jumlah korban jiwa, orang hilang, dan dampak kerusakan akibat banjir dan longsor di provinsi-provinsi Sumatra yang terdampak.:<br>[1] Banjir Sumatra: Apa perkembangan terbaru di Aceh, Sumut, dan ...<br>URL: <a class="link" href="https://www.bbc.com/indonesia/articles/cg5m2p71gpjo" target="_blank" rel="noopener noreferrer">https://www.bbc.com/indonesia/articles/cg5m2p71gpjo<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-up-right-icon lucide-arrow-up-right"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a><br>Snippet: 27 Nov 2025 ... Jumlah korban meninggal dunia setelah banjir dan longsor menerjang sejumlah daerah di Aceh, Sumatra Utara, dan Sumatra Barat terus bertambah ...<br>Cont</p></li></ol></div></div></div>

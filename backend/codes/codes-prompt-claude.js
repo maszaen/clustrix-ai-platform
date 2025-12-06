@@ -14,6 +14,7 @@
 // ===================================================================
 
 const { WEB_SEARCH_TOOL_CLAUDE } = require('./web-search-tool');
+const { READ_IMAGE_TOOL_CLAUDE } = require('./image-tool');
 
 // ===================================
 // CLAUDE TOOLS - Functional, Not Meta
@@ -197,7 +198,8 @@ USAGE GUIDELINES:
       required: ["edit_id"]
     }
   },
-  WEB_SEARCH_TOOL_CLAUDE
+  WEB_SEARCH_TOOL_CLAUDE,
+  READ_IMAGE_TOOL_CLAUDE
 ];
 
 // ===================================

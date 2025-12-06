@@ -3324,7 +3324,9 @@ ipcMain.handle('files:open-dialog', async (event) => {
           'js', 'ts', 'tsx', 'java', 'py', 'go', 'rs',
           'c', 'cpp', 'h', 'hpp',
           'sh', 'bat',
-          'toml', 'conf', 'properties'
+          'toml', 'conf', 'properties',
+          // Image files for vision models
+          'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'
         ]
       }
     ]
@@ -3515,6 +3517,26 @@ ipcMain.handle('files:open-dialog', async (event) => {
           fullText += xlsx.utils.sheet_to_csv(workbook.Sheets[sheetName]) + '\n\n';
         });
         fileInfo.content = fullText.trim();
+      } else if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(extension)) {
+        // Handle image files - store as base64 for vision models
+        const imageBuffer = await fsp.readFile(filePath);
+        const mimeTypes = {
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.png': 'image/png',
+          '.gif': 'image/gif',
+          '.webp': 'image/webp',
+          '.bmp': 'image/bmp',
+        };
+        fileInfo.base64 = imageBuffer.toString('base64');
+        fileInfo.mimeType = mimeTypes[extension] || 'image/jpeg';
+        fileInfo.isImage = true;
+        fileInfo.content = `[Image: ${fileInfo.name}]`; // Placeholder for non-vision contexts
+        fileInfo.path = filePath; // Keep path for reference
+        logHelper('FILE_READER', 'image-upload', `Image file loaded: ${fileInfo.name}`, {
+          size: fileInfo.size,
+          mimeType: fileInfo.mimeType
+        });
       } else {
         fileInfo.content = await fsp.readFile(filePath, 'utf-8');
       }
@@ -3752,6 +3774,85 @@ function runStandardStreaming(event, payload) {
   const sessionId = payload.sessionId || 'default';
   const session = payload.session || {};
 
+  // Process images from uploaded files for vision-capable models
+  const { processMessagesWithImages, processMessagesWithFilesAPI, extractImages } = require('./backend/chat/image-handler');
+  const uploadedFiles = session.uploadedFiles || [];
+  
+  console.log('[IMAGE-DEBUG] runStandardStreaming called', {
+    provider,
+    model,
+    uploadedFilesCount: uploadedFiles.length,
+    uploadedFileNames: uploadedFiles.map(f => f.name),
+    hasBase64: uploadedFiles.some(f => f.base64),
+    hasIsImage: uploadedFiles.some(f => f.isImage)
+  });
+  
+  const images = extractImages(uploadedFiles);
+  console.log('[IMAGE-DEBUG] extractImages result', {
+    imageCount: images.length,
+    imageNames: images.map(i => i.name)
+  });
+  
+  // If there are images, try Files API first for large files, otherwise use inline base64
+  if (images.length > 0) {
+    const BASE_URL_EARLY = getBaseUrl(provider, payload);
+    const API_KEY_EARLY = getApiKey(provider, payload);
+    const totalImageSize = images.reduce((sum, img) => sum + (img.size || 0), 0);
+    const useFilesAPI = totalImageSize > 4 * 1024 * 1024; // Use Files API for images > 4MB total
+    
+    console.log('[IMAGE-DEBUG] Processing images', {
+      totalImageSize,
+      useFilesAPI,
+      hasApiKey: !!API_KEY_EARLY
+    });
+    
+    if (useFilesAPI && API_KEY_EARLY) {
+      // Use Files API for large images (async)
+      processMessagesWithFilesAPI(messages, uploadedFiles, provider, model, {
+        baseUrl: BASE_URL_EARLY,
+        apiKey: API_KEY_EARLY
+      }).then(imageResult => {
+        console.log('[IMAGE-DEBUG] Files API result', imageResult);
+        if (imageResult.hasImages) {
+          messages = imageResult.messages;
+          logHelper('IMAGE', 'runStandardStreaming', `Uploaded ${imageResult.imageCount} image(s) via Files API`, {
+            model, provider, imageCount: imageResult.imageCount
+          });
+        }
+        continueStreaming(messages);
+      }).catch(err => {
+        console.log('[IMAGE-DEBUG] Files API error', err.message);
+        logHelper('IMAGE', 'runStandardStreaming', 'Files API failed, using inline base64', { error: err.message });
+        const imageResult = processMessagesWithImages(messages, uploadedFiles, provider, model);
+        if (imageResult.hasImages) messages = imageResult.messages;
+        continueStreaming(messages);
+      });
+      return; // Wait for async Files API
+    } else {
+      // Use inline base64 for smaller images
+      const imageResult = processMessagesWithImages(messages, uploadedFiles, provider, model);
+      console.log('[IMAGE-DEBUG] Inline processing result', {
+        hasImages: imageResult.hasImages,
+        imageCount: imageResult.imageCount,
+        warning: imageResult.warning
+      });
+      if (imageResult.hasImages) {
+        messages = imageResult.messages;
+        console.log('[IMAGE-DEBUG] Messages updated with images');
+        logHelper('IMAGE', 'runStandardStreaming', `Processed ${imageResult.imageCount} image(s) inline`, {
+          model, provider, imageCount: imageResult.imageCount
+        });
+      }
+      if (imageResult.warning) {
+        logHelper('IMAGE', 'runStandardStreaming', imageResult.warning, { model, provider });
+      }
+    }
+  }
+  
+  continueStreaming(messages);
+  
+  function continueStreaming(msgs) {
+    messages = msgs || messages; // Update messages from parameter
   // Check if this is a debug request (provider: local or model: debugging)
   const { isDebugRequest, handleDebugRequest } = require('./backend/debug/response-debugger');
   if (isDebugRequest(provider, model)) {
@@ -4313,13 +4414,22 @@ function runStandardStreaming(event, payload) {
         if (API_KEY) url.searchParams.set('key', API_KEY);
         url.searchParams.set('alt', 'sse'); // Enable SSE streaming
         
+        console.log('[GEMINI-DEBUG] handleGeminiStreaming called', {
+          messageCount: messages.length,
+          lastMessageHasImages: messages[messages.length - 1]?._images?.length > 0
+        });
+        
         const lastUserMessage = messages.slice().reverse().find(m => m.role === 'user');
-        const hasInsultKeywords = lastUserMessage && detectInsultKeywords(lastUserMessage.content);
+        // Handle case where content might be an object (with images)
+        const lastUserContent = typeof lastUserMessage?.content === 'string' 
+          ? lastUserMessage.content 
+          : (lastUserMessage?.content || '');
+        const hasInsultKeywords = lastUserMessage && typeof lastUserContent === 'string' && detectInsultKeywords(lastUserContent);
         
         let messagesToProcess = messages;
         
         if (hasInsultKeywords) {
-          const insultDetectionPrompt = createInsultDetectionPrompt(lastUserMessage.content);
+          const insultDetectionPrompt = createInsultDetectionPrompt(lastUserContent);
           messagesToProcess = [
             { role: 'system', content: insultDetectionPrompt },
             ...messages
@@ -4331,13 +4441,69 @@ function runStandardStreaming(event, payload) {
         const contents = [];
         let systemInstruction = null;
         
+        console.log('[GEMINI-DEBUG] Building contents from messagesToProcess', {
+          messageCount: messagesToProcess.length,
+          hasImagesInAny: messagesToProcess.some(m => m._images && m._images.length > 0),
+          hasUploadedFilesInAny: messagesToProcess.some(m => m._uploadedFiles && m._uploadedFiles.length > 0)
+        });
+        
         for (const m of messagesToProcess) {
           if (m.role === 'system') {
             // Gemini uses systemInstruction field, not in contents
             systemInstruction = { parts: [{ text: String(m.content || '') }] };
           } else {
             const role = m.role === 'assistant' ? 'model' : 'user';
-            contents.push({ role, parts: [{ text: String(m.content || '') }] });
+            
+            console.log('[GEMINI-DEBUG] Processing message', {
+              role: m.role,
+              hasImages: !!(m._images && m._images.length > 0),
+              hasUploadedFiles: !!(m._uploadedFiles && m._uploadedFiles.length > 0),
+              imageCount: m._images?.length || 0
+            });
+            
+            // Check if message has uploaded files from Files API
+            if (m._uploadedFiles && Array.isArray(m._uploadedFiles) && m._uploadedFiles.length > 0) {
+              const parts = [];
+              const textContent = typeof m.content === 'string' ? m.content : '';
+              if (textContent) {
+                parts.push({ text: textContent });
+              }
+              // Add files via fileData (Files API)
+              for (const file of m._uploadedFiles) {
+                if (file.fileUri) {
+                  parts.push({
+                    fileData: {
+                      mimeType: file.mimeType,
+                      fileUri: file.fileUri
+                    }
+                  });
+                }
+              }
+              contents.push({ role, parts });
+              logHelper('GEMINI_FILES_API', 'handleGeminiStreaming', `Added ${m._uploadedFiles.length} file(s) via Files API`);
+            }
+            // Check if message has images attached (inline base64)
+            else if (m._images && Array.isArray(m._images) && m._images.length > 0) {
+              // Build parts with text and images for Gemini format
+              const parts = [];
+              const textContent = typeof m.content === 'string' ? m.content : '';
+              if (textContent) {
+                parts.push({ text: textContent });
+              }
+              // Add images as inline data
+              for (const img of m._images) {
+                parts.push({
+                  inlineData: {
+                    mimeType: img.mimeType,
+                    data: img.base64
+                  }
+                });
+              }
+              contents.push({ role, parts });
+              logHelper('GEMINI_IMAGE', 'handleGeminiStreaming', `Added ${m._images.length} image(s) inline`);
+            } else {
+              contents.push({ role, parts: [{ text: String(m.content || '') }] });
+            }
           }
         }
 
@@ -4535,12 +4701,25 @@ function runStandardStreaming(event, payload) {
     function handleOpenAICompatibleStreaming() {
       const url = new URL(joinEndpoint(BASE_URL, 'chat/completions'));
       const lastUserMessage = messages.slice().reverse().find(m => m.role === 'user');
-      const hasInsultKeywords = lastUserMessage && detectInsultKeywords(lastUserMessage.content);
+      
+      // Handle case where content might be an array (with images)
+      let lastUserContent = '';
+      if (lastUserMessage) {
+        if (typeof lastUserMessage.content === 'string') {
+          lastUserContent = lastUserMessage.content;
+        } else if (Array.isArray(lastUserMessage.content)) {
+          // Extract text from array content
+          const textParts = lastUserMessage.content.filter(p => p.type === 'text');
+          lastUserContent = textParts.map(p => p.text).join(' ');
+        }
+      }
+      
+      const hasInsultKeywords = lastUserContent && detectInsultKeywords(lastUserContent);
       
       let messagesToSend = messages;
       
       if (hasInsultKeywords) {
-        const insultDetectionPrompt = createInsultDetectionPrompt(lastUserMessage.content);
+        const insultDetectionPrompt = createInsultDetectionPrompt(lastUserContent);
         messagesToSend = [
           { role: 'system', content: insultDetectionPrompt },
           ...messages
@@ -4771,6 +4950,7 @@ function runStandardStreaming(event, payload) {
       trackActiveStream(reqId, req);
     }
   }
+  } // End of continueStreaming()
 }
 
 ipcMain.on('chat:stream-cancel', (event, reqId) => {

@@ -24,6 +24,7 @@ const {
   formatSummaryForContext
 } = require('./context-manager');
 const { executeWebSearch, WEB_SEARCH_TOOL_GEMINI } = require('./web-search-tool');
+const { executeReadImage, READ_IMAGE_TOOL_GEMINI } = require('./image-tool');
 
 // ===================================
 // GEMINI TOOLS (function declarations)
@@ -220,6 +221,35 @@ queries: ["latest Node.js version 2024", "Node.js 22 new features"]`,
             }
           },
           required: ["queries"]
+        }
+      },
+      {
+        name: "read_image",
+        description: `Analyze an image from the workspace using vision AI.
+
+USE THIS TOOL WHEN:
+- User uploads or references an image file
+- You need to understand image content (screenshots, diagrams, UI mockups)
+- Analyzing visual elements in code documentation
+
+SUPPORTED FORMATS: .jpg, .jpeg, .png, .gif, .webp, .bmp`,
+        parameters: {
+          type: "object",
+          properties: {
+            image_path: {
+              type: "string",
+              description: "Relative path to the image file in workspace"
+            },
+            prompt: {
+              type: "string",
+              description: "What to analyze or ask about the image (optional)"
+            },
+            commentary: {
+              type: "string",
+              description: "Brief explanation of why you're analyzing this image"
+            }
+          },
+          required: ["image_path"]
         }
       }
     ]
@@ -600,7 +630,7 @@ function formatChecklist(checklist) {
   }).join('\n');
 }
 
-async function executeTool(session, functionCall, confirmed, onChunk, sessionId, iteration = 0, db = null) {
+async function executeTool(session, functionCall, confirmed, onChunk, sessionId, iteration = 0, db = null, apiConfig = null) {
   const { name, args } = functionCall;
   const toolCallId = `${sessionId}-${iteration}-${name}`;
   
@@ -729,6 +759,14 @@ async function executeTool(session, functionCall, confirmed, onChunk, sessionId,
     case 'web_search': {
       // Note: command-input tag is emitted in main loop (when commentary exists), not here
       const result = await executeWebSearch(args, db);
+      return { name, output: result.output };
+    }
+    
+    case 'read_image': {
+      const result = await executeReadImage(args, {
+        workspacePath: session.workspacePath,
+        apiConfig: apiConfig || {}
+      });
       return { name, output: result.output };
     }
     
@@ -1022,6 +1060,8 @@ async function processGeminiCodeRequest({
           displayText = `Update checklist (${functionCall.args.checklist?.length || 0} items)`;
         } else if (functionCall.name === 'web_search') {
           displayText = `Web search: ${functionCall.args.queries?.slice(0, 2).join(', ')}${functionCall.args.queries?.length > 2 ? '...' : ''}`;
+        } else if (functionCall.name === 'read_image') {
+          displayText = `Analyze image: ${functionCall.args.image_path}`;
         }
         
         if (displayText) {
@@ -1034,7 +1074,7 @@ async function processGeminiCodeRequest({
         }
         
         // Execute tool (pass iteration for stable toolCallId and db for edit history)
-        const result = await executeTool(session, functionCall, false, onChunk, sessionId, iteration, db);
+        const result = await executeTool(session, functionCall, false, onChunk, sessionId, iteration, db, { baseUrl, apiKey, model, provider: 'google' });
         
         // Add function response to history (Gemini format)
         session.conversationHistory.push({

@@ -34,6 +34,7 @@ const {
   estimateHistoryTokens
 } = require('./context-manager');
 const { executeWebSearch, WEB_SEARCH_TOOL_CLAUDE } = require('./web-search-tool');
+const { executeReadImage, READ_IMAGE_TOOL_CLAUDE } = require('./image-tool');
 
 // ===================================
 // HIGH IMPACT COMMAND DETECTION (Same as code-agent.js)
@@ -730,7 +731,7 @@ function formatChecklist(checklist) {
 // ===================================
 // EXECUTE SINGLE TOOL
 // ===================================
-async function executeTool(session, toolCall, confirmed = false, onChunk = null, sessionId = null, db = null) {
+async function executeTool(session, toolCall, confirmed = false, onChunk = null, sessionId = null, db = null, apiConfig = null) {
   const { name, input, id } = toolCall;
   
   console.log(`[CLAUDE-AGENT] Executing: ${name}`, JSON.stringify(input).slice(0, 150));
@@ -866,8 +867,16 @@ async function executeTool(session, toolCall, confirmed = false, onChunk = null,
       return formatClaudeToolResult(id, result.output, !result.success);
     }
     
+    case 'read_image': {
+      const result = await executeReadImage(input, {
+        workspacePath: session.workspacePath,
+        apiConfig: apiConfig || {}
+      });
+      return formatClaudeToolResult(id, result.output, !result.success);
+    }
+    
     default:
-      return formatClaudeToolResult(id, `Unknown tool: ${name}. Available: run_command, edit_file, update_checklist, show_history, undo_edit, web_search.`, true);
+      return formatClaudeToolResult(id, `Unknown tool: ${name}. Available: run_command, edit_file, update_checklist, show_history, undo_edit, web_search, read_image.`, true);
   }
 }
 
@@ -1116,6 +1125,8 @@ async function processClaudeCodeRequest({
           displayText = `Update checklist (${toolCall.input.checklist.length} items)`;
         } else if (toolCall.name === 'web_search') {
           displayText = `Web search: ${toolCall.input.queries?.slice(0, 2).join(', ')}${toolCall.input.queries?.length > 2 ? '...' : ''}`;
+        } else if (toolCall.name === 'read_image') {
+          displayText = `Analyze image: ${toolCall.input.image_path}`;
         }
         
         if (displayText) {
@@ -1131,7 +1142,7 @@ async function processClaudeCodeRequest({
         }
         
         // Execute tool
-        const result = await executeTool(session, toolCall, false, onChunk, sessionId, db);
+        const result = await executeTool(session, toolCall, false, onChunk, sessionId, db, { baseUrl, apiKey, model, provider: 'anthropic' });
         toolResults.push(result);
         
         // Send command output to UI (following standard format)

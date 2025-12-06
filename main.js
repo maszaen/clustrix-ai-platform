@@ -15,7 +15,6 @@ const { optimizeMessages } = require('./utils/message-optimizer');
 const { PerformanceMonitor, MONITORING_ENABLED } = require('./utils/performance-monitor');
 
 const ClustrixLangChainService = require('./backend/integration/langchain-service');
-const { MultiAgentOrchestrator } = require('./backend/integration/langchain-agents');
 const { getBaseUrl, getApiKey, joinEndpoint, applyThinkingHints } = require('./backend/integration/langchain-helpers');
 const { performWebSearch, scrapeUrls } = require('./backend/search/web-search');
 const DatabaseManager = require('./backend/data/database-manager');
@@ -100,7 +99,6 @@ function isNotFoundError(error) {
 }
 
 let langchainService = null;
-let agentOrchestrator = null;
 let db = null;
 let useSQLite = false;
 let syncManager = null;
@@ -400,7 +398,6 @@ app.whenReady().then(async () => {
   syncManager.ensureDirectories();
 
   langchainService = new ClustrixLangChainService(app);
-  agentOrchestrator = new MultiAgentOrchestrator(langchainService);
   log('LangChain services initialized');
   if (!process.env || Object.keys(process.env).length === 0) {
     log('Warning: No environment variables loaded. Check your .env file and dotenv setup.');
@@ -3773,7 +3770,7 @@ function runStandardStreaming(event, payload) {
     return handlePerplexityRequest();
   }
   
-  if (langchainService && agentOrchestrator) {
+  if (langchainService) {
     processWithLangChain();
   } else {
     processWithoutLangChain();
@@ -4039,229 +4036,125 @@ function runStandardStreaming(event, payload) {
             }
           };
           let agentResponse = null;
-          if (provider === 'openai') {
-            if (projectFiles && projectFiles.length > 0) {
-              const foundUrlsData = projectFiles.map(f => ({
-                title: f.name,
-                link: `file://${f.name}`,
-                snippet: f.content.substring(0, 200) + (f.content.length > 200 ? '...' : '')
-              }));
-              event.sender.send('search:status', { step: 'FOUND_URLS', data: foundUrlsData });
-            }
+          
+          // Use ResearchAgentV2 for all providers (unified path)
+          // projectFiles already loaded above from storage
+          const availableFiles = projectFiles || session.uploadedFiles || [];
+          
+          log(`MAIN: Research agent using ${availableFiles.length} files for processing`);
+          
+          const shouldUseReact = await langchainService.shouldUseReasoningAction(
+            lastMessage.content,
+            availableFiles,
+            session.type,
+            session.messages
+          );
+          
+          if (shouldUseReact) {
+            log('MAIN: Using ResearchAgentV2 for research query...');
             
             try {
-              const hasInsultKeywords = detectInsultKeywords(lastMessage.content);
+              if (availableFiles && availableFiles.length > 0) {
+                const filesForUI = availableFiles.map(f => ({
+                  title: f.name,
+                  link: `file://${f.name}`,
+                  snippet: f.content.substring(0, 200) + (f.content.length > 200 ? '...' : '')
+                }));
+                event.sender.send('search:status', { step: 'FOUND_URLS', data: filesForUI });
+              }
               
+              const hasInsultKeywords = detectInsultKeywords(lastMessage.content);
               event.sender.send('chat-update', reactStartPayload);
-              const agentResult = await agentOrchestrator.processComplexRequest(
+
+              const reactResult = await langchainService.processWithReasoningAction(
                 lastMessage.content,
                 sessionId,
-                session,
+                availableFiles,
                 model,
+                provider,
                 getApiKey(provider, payload),
-                {
-                  provider,
-                  baseUrl,
-                  searchApiConfig: payload.searchApiConfig,
-                  progressCallback,
-                  logHelper,
-                  systemPrompt: hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null
-                }
+                baseUrl,
+                payload.searchApiConfig || null,
+                progressCallback,
+                hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null,
+                session.messages || [],
+                payload.language || 'autodetect'
               );
-              if (agentResult && typeof agentResult === 'object' && !Array.isArray(agentResult)) {
-                if (Array.isArray(agentResult.usageBreakdown)) {
-                  for (const entry of agentResult.usageBreakdown) {
-                    if (entry?.usage) {
-                      recordTokenUsage(reqId, entry.stage || 'research-agent', entry.usage, {
-                        provider: entry.provider || provider,
-                        model: entry.model || model,
-                      });
-                    }
+
+              log(`MAIN: Research completed with ${reactResult.actionsExecuted} actions`);
+              if (Array.isArray(reactResult.usageBreakdown)) {
+                for (const entry of reactResult.usageBreakdown) {
+                  if (entry?.usage) {
+                    recordTokenUsage(reqId, entry.stage || 'research-agent', entry.usage, {
+                      provider: entry.provider || provider,
+                      model: entry.model || model,
+                    });
                   }
                 }
-                agentResponse = agentResult.text || '';
+              }
+
+              let responseText = '';
+              if (typeof reactResult === 'string') {
+                responseText = reactResult;
+              } else if (reactResult && reactResult.response && typeof reactResult.response.response === 'string') {
+                responseText = reactResult.response.response;
+              } else if (reactResult && typeof reactResult.response === 'string') {
+                responseText = reactResult.response;
+              } else if (reactResult && reactResult.finalResponse && typeof reactResult.finalResponse === 'string') {
+                responseText = reactResult.finalResponse;
               } else {
-                agentResponse = agentResult || '';
+                log("MAIN: Research returned malformed response, using fallback", { reactResult });
+                responseText = 'Research completed but response format was unexpected. Please try rephrasing your question.';
               }
-            } catch (error) {
-              log('MAIN: Agent orchestrator failed, falling back to standard processing:', error.message);
-            }
-          } else {
-            log(`MAIN: Agent orchestrator only supports OpenAI, checking if RE+ACT pattern needed for ${provider}...`);
-            
-            let availableFiles = session.uploadedFiles || [];
-            
-            if (session.type === 'project' && session.projectId) {
-              try {
-                const projects = await loadProjectsFromStorage();
-                const project = projects.find(p => p.id === session.projectId);
-                if (project && project.files) {
-                  availableFiles = project.files;
-                  log(`MAIN: Using ${availableFiles.length} project files for AI processing`);
-                }
-              } catch (error) {
-                log('MAIN: Error loading project files:', error);
-                availableFiles = session.uploadedFiles || [];
-              }
-            }
-            
-            log('DEBUG: session.messages length:', session.messages ? session.messages.length : 'undefined');
-            log('DEBUG: last message (AI):', session.messages && session.messages.length > 0 ? JSON.stringify(session.messages[session.messages.length - 1]) : 'no messages');
-            log('DEBUG: second-to-last message (user):', session.messages && session.messages.length > 1 ? JSON.stringify(session.messages[session.messages.length - 2]) : 'no user message');
-            
-            const shouldUseReact = await langchainService.shouldUseReasoningAction(
-              lastMessage.content,
-              availableFiles,
-              session.type,
-              session.messages
-            );
-            
-            log(`MAIN: RE+ACT check - sessionType: ${session.type}, uploadedFiles: ${session.uploadedFiles ? session.uploadedFiles.length : 0}, sessionMessageFiles: ${session.messages && session.messages.length > 1 ? (session.messages[session.messages.length - 2][2] && session.messages[session.messages.length - 2][2].files ? session.messages[session.messages.length - 2][2].files.length : 0) : 0}, query: "${lastMessage.content.slice(0, 50)}..."`);
-            
-            if (shouldUseReact) {
-              log('MAIN: Using RE+ACT pattern for complex project query analysis...');
 
+              if (responseText && typeof responseText === 'string' && responseText.length > 0) {
+                log(`MAIN: Research response received (${responseText.length} chars), streaming...`);
+
+                let thinkingContent = '';
+                let mainContent = responseText;
                 try {
-                  // NOTE: initializeSession is called inside langchain-service.processWithReasoningAction
-                  // Do NOT call it here to avoid duplicate initialization
-                  if (availableFiles && availableFiles.length > 0) {
-                    const projectFiles = availableFiles.map(f => ({
-                      title: f.name,
-                      link: `file://${f.name}`,
-                      snippet: f.content.substring(0, 200) + (f.content.length > 200 ? '...' : '')
-                    }));
-                    event.sender.send('search:status', { step: 'FOUND_URLS', data: projectFiles });
+                  const jsonResponse = JSON.parse(responseText);
+                  if (jsonResponse.reasoning) {
+                    thinkingContent = jsonResponse.reasoning;
+                    mainContent = jsonResponse.response || jsonResponse.content || '';
                   }
-                  const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
-
-                  console.debug('MAIN: Sending REACT_START chat-update', { reqId: reqId, aiMessageIndex });
-                  const hasInsultKeywords = detectInsultKeywords(lastMessage.content);
-                  
-                  event.sender.send('chat-update', reactStartPayload);
-
-                const reactResult = await langchainService.processWithReasoningAction(
-                  lastMessage.content,
-                  sessionId,
-                  availableFiles,
-                  model,
-                  provider,
-                  getApiKey(provider, payload),
-                  baseUrl,
-                  payload.searchApiConfig || null,
-                  progressCallback,  // Pass progress callback
-                  hasInsultKeywords ? createInsultDetectionPrompt(lastMessage.content) : null,  // Only pass insult detection if keywords detected
-                  session.messages || [],  // Pass session messages for conversation context
-                  payload.language || 'autodetect'  // Pass language setting
-                );
-
-                log(`MAIN: RE+ACT completed with ${reactResult.actionsExecuted} actions`);
-                log(`MAIN: RE+ACT usageBreakdown: ${JSON.stringify(reactResult.usageBreakdown, null, 2)}`);
-                if (Array.isArray(reactResult.usageBreakdown)) {
-                  log(`MAIN: Processing ${reactResult.usageBreakdown.length} usage entries from RE+ACT`);
-                  for (const entry of reactResult.usageBreakdown) {
-                    log(`MAIN: Recording usage for stage ${entry.stage}: ${JSON.stringify(entry.usage)}`);
-                    if (entry?.usage) {
-                      recordTokenUsage(reqId, entry.stage || 'reasoning-action', entry.usage, {
-                        provider: entry.provider || provider,
-                        model: entry.model || model,
-                      });
-                      log(`MAIN: Successfully recorded usage for ${entry.stage}`);
-                    } else {
-                      log(`MAIN: Skipping entry ${entry.stage} - no usage data`);
-                    }
+                } catch (e) {
+                  const thinkingMatch = responseText.match(/<thinking>([\s\S]*?)<\/thinking>/i);
+                  if (thinkingMatch) {
+                    thinkingContent = thinkingMatch[1].trim();
+                    mainContent = responseText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
                   }
-                } else {
-                  log(`MAIN: usageBreakdown is not an array or missing`);
                 }
-                let responseText = '';
-                if (typeof reactResult === 'string') {
-                  responseText = reactResult;
-                } else if (reactResult && reactResult.response && typeof reactResult.response.response === 'string') {
-                  responseText = reactResult.response.response;
-                } else if (reactResult && typeof reactResult.response === 'string') {
-                  responseText = reactResult.response;
-                } else if (reactResult && reactResult.finalResponse && typeof reactResult.finalResponse === 'string') {
-                  responseText = reactResult.finalResponse;
-                } else {
-                  log("MAIN: RE+ACT returned malformed response, using fallback", { reactResult });
-                  responseText = 'RE+ACT analysis completed but response format was unexpected. Please try rephrasing your question.';
-                }
-                if (responseText && typeof responseText === 'string' && responseText.length > 0) {
-                  log(`MAIN: RE+ACT response received (${responseText.length} chars), starting streaming...`);
-                  log(`MAIN: RE+ACT response preview: ${responseText.substring(0, 200)}...`);
 
-                  let thinkingContent = '';
-                  let mainContent = responseText;
-                  try {
-                    const jsonResponse = JSON.parse(responseText);
-                    log(`MAIN: RE+ACT parsed JSON successfully, has reasoning: ${!!jsonResponse.reasoning}`);
-                    if (jsonResponse.reasoning) {
-                      thinkingContent = jsonResponse.reasoning;
-                      mainContent = jsonResponse.response || jsonResponse.content || '';
-                      log(`MAIN: RE+ACT parsed JSON response - thinking: ${thinkingContent.length} chars, main: ${mainContent.length} chars`);
-                    }
-                  } catch (e) {
-                    log(`MAIN: RE+ACT JSON parse failed: ${e.message}, trying HTML tags`);
-                    const thinkingMatch = responseText.match(/<thinking>([\s\S]*?)<\/thinking>/i);
-                    if (thinkingMatch) {
-                      thinkingContent = thinkingMatch[1].trim();
-                      mainContent = responseText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
-                      log(`MAIN: RE+ACT parsed HTML tags - thinking: ${thinkingContent.length} chars, main: ${mainContent.length} chars`);
-                    }
-                  }
-                  if (thinkingContent) {
-                    log(`MAIN: RE+ACT sending thinking content (${thinkingContent.length} chars)`);
-                    const thinkingChunks = thinkingContent.split(' ');
-                    for (const chunk of thinkingChunks) {
-                      if (chunk.trim()) {
-                        event.sender.send(`chat:chunk-${reqId}`, { think: chunk + ' ' });
-                        await new Promise(r => setTimeout(r, 30));
-                      }
-                    }
-                  } else {
-                    log(`MAIN: RE+ACT no thinking content found`);
-                  }
-                  const mainChunks = mainContent.split(' ');
-                  for (const chunk of mainChunks) {
+                if (thinkingContent) {
+                  const thinkingChunks = thinkingContent.split(' ');
+                  for (const chunk of thinkingChunks) {
                     if (chunk.trim()) {
-                      event.sender.send(`chat:chunk-${reqId}`, chunk + ' ');
+                      event.sender.send(`chat:chunk-${reqId}`, { think: chunk + ' ' });
                       await new Promise(r => setTimeout(r, 30));
                     }
                   }
+                }
 
-                  log('MAIN: RE+ACT streaming completed');
-                  finalizeTokenUsage(reqId, event);
-                  event.sender.send(`chat:done-${reqId}`);
-                  untrackActiveStream(reqId);
-                  return;
-                }              } catch (reactError) {
-                log('MAIN: RE+ACT processing failed for project session, falling back:', reactError.message);
-                log('MAIN: Full RE+ACT error:', reactError);
-              }
-            } else {
-              log('MAIN: RE+ACT not needed for this query, using standard processing');
-            }
-          }
-          if (agentResponse) {
-            log(`MAIN: Agent response received (${agentResponse.length} chars), starting streaming...`);
-            const chunks = agentResponse.split(' ');
-            let index = 0;
-            const sendChunk = () => {
-              if (index < chunks.length) {
-                event.sender.send(`chat:chunk-${reqId}`, chunks[index] + ' ');
-                index++;
-                setTimeout(sendChunk, 50); // Simulate streaming
-              } else {
-                log('MAIN: Agent streaming completed');
+                const mainChunks = mainContent.split(' ');
+                for (const chunk of mainChunks) {
+                  if (chunk.trim()) {
+                    event.sender.send(`chat:chunk-${reqId}`, chunk + ' ');
+                    await new Promise(r => setTimeout(r, 30));
+                  }
+                }
+
+                log('MAIN: Research streaming completed');
                 finalizeTokenUsage(reqId, event);
                 event.sender.send(`chat:done-${reqId}`);
                 untrackActiveStream(reqId);
+                return;
               }
-            };
-            sendChunk();
-            return;
+            } catch (reactError) {
+              log('MAIN: Research processing failed, falling back:', reactError.message);
+            }
           } else {
-            log('MAIN: No agent response received, falling back to standard processing');
+            log('MAIN: Research not needed for this query, using standard processing');
           }
         }
       } else {

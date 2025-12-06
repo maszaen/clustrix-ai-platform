@@ -23,6 +23,7 @@ const {
   performSummarization,
   formatSummaryForContext
 } = require('./context-manager');
+const { executeWebSearch, WEB_SEARCH_TOOL_GEMINI } = require('./web-search-tool');
 
 // ===================================
 // GEMINI TOOLS (function declarations)
@@ -192,6 +193,33 @@ Use this to recall what files you've read and what edits you've made.`,
             }
           },
           required: ["edit_id"]
+        }
+      },
+      {
+        name: "web_search",
+        description: `Search the web for current information. Use when you need up-to-date info not in your training data.
+
+USAGE:
+- Provide 2-6 search queries for comprehensive results
+- Queries should be specific and varied
+- Results include scraped web content
+
+EXAMPLE:
+queries: ["latest Node.js version 2024", "Node.js 22 new features"]`,
+        parameters: {
+          type: "object",
+          properties: {
+            queries: {
+              type: "array",
+              items: { type: "string" },
+              description: "Array of search queries (min 2, max 6)"
+            },
+            commentary: {
+              type: "string",
+              description: "Brief explanation of why you're searching"
+            }
+          },
+          required: ["queries"]
         }
       }
     ]
@@ -698,6 +726,12 @@ async function executeTool(session, functionCall, confirmed, onChunk, sessionId,
       }
     }
     
+    case 'web_search': {
+      // Note: command-input tag is emitted in main loop (when commentary exists), not here
+      const result = await executeWebSearch(args, db);
+      return { name, output: result.output };
+    }
+    
     default: {
       // Auto-route PowerShell helpers
       const psHelpers = [
@@ -723,7 +757,7 @@ async function executeTool(session, functionCall, confirmed, onChunk, sessionId,
         return { name, output: result.output, exitCode: result.exitCode };
       }
       
-      return { name, output: `Error: Unknown tool "${name}". Use run_command, edit_file, update_checklist, show_history, or undo_edit.` };
+      return { name, output: `Error: Unknown tool "${name}". Use run_command, edit_file, update_checklist, show_history, undo_edit, web_search.` };
     }
   }
 }
@@ -986,6 +1020,8 @@ async function processGeminiCodeRequest({
           actualCommand = `<set file="${functionCall.args.file}">`;
         } else if (functionCall.name === 'update_checklist') {
           displayText = `Update checklist (${functionCall.args.checklist?.length || 0} items)`;
+        } else if (functionCall.name === 'web_search') {
+          displayText = `Web search: ${functionCall.args.queries?.slice(0, 2).join(', ')}${functionCall.args.queries?.length > 2 ? '...' : ''}`;
         }
         
         if (displayText) {

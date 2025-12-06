@@ -33,6 +33,7 @@ const {
   formatSummaryForContext,
   estimateHistoryTokens
 } = require('./context-manager');
+const { executeWebSearch, WEB_SEARCH_TOOL_CLAUDE } = require('./web-search-tool');
 
 // ===================================
 // HIGH IMPACT COMMAND DETECTION (Same as code-agent.js)
@@ -859,8 +860,14 @@ async function executeTool(session, toolCall, confirmed = false, onChunk = null,
       }
     }
     
+    case 'web_search': {
+      // Note: command-input tag is emitted in main loop (when commentary exists), not here
+      const result = await executeWebSearch(input, db);
+      return formatClaudeToolResult(id, result.output, !result.success);
+    }
+    
     default:
-      return formatClaudeToolResult(id, `Unknown tool: ${name}`, true);
+      return formatClaudeToolResult(id, `Unknown tool: ${name}. Available: run_command, edit_file, update_checklist, show_history, undo_edit, web_search.`, true);
   }
 }
 
@@ -1107,6 +1114,8 @@ async function processClaudeCodeRequest({
           actualCommand = `<set file="${toolCall.input.file}" range={${toolCall.input.start_line || 1},${toolCall.input.end_line || 1}}>`;
         } else if (toolCall.name === 'update_checklist') {
           displayText = `Update checklist (${toolCall.input.checklist.length} items)`;
+        } else if (toolCall.name === 'web_search') {
+          displayText = `Web search: ${toolCall.input.queries?.slice(0, 2).join(', ')}${toolCall.input.queries?.length > 2 ? '...' : ''}`;
         }
         
         if (displayText) {

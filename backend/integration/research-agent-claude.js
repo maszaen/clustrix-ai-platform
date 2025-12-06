@@ -33,7 +33,7 @@ function getSystemPrompt() {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
   });
   
-  const prompt = `You are Clustrix Research Assistant. You MUST use tools to gather information before answering.
+  const promptText = `You are Clustrix Research Assistant. You MUST use tools to gather information before answering.
 
 CURRENT DATE: ${dateStr}
 
@@ -58,9 +58,16 @@ RULES:
 - Cite sources with [Title](URL) format
 - Use the user's language (Indonesian/English)`;
 
-  console.log('[RESEARCH-CLAUDE] getSystemPrompt: Generated', { dateStr, promptLength: prompt.length });
-  console.log('[RESEARCH-CLAUDE] SYSTEM_PROMPT:\n', prompt);
-  return prompt;
+  console.log('[RESEARCH-CLAUDE] getSystemPrompt: Generated', { dateStr, promptLength: promptText.length });
+  
+  // Return as array with cache_control (same as coding agent)
+  return [
+    {
+      type: 'text',
+      text: promptText,
+      cache_control: { type: 'ephemeral' }
+    }
+  ];
 }
 
 // ===================================

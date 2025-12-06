@@ -1084,51 +1084,36 @@ async function processSearchStatusQueue() {
 
     switch (status.step) {
       case "DECIDED":
-        // Check if this is project session (has reasoning but no search_queries)
-        const isProjectSession = !status.data.search_queries || status.data.search_queries.length === 0;
-        
-        if (isProjectSession) {
-          // Project session analysis
-          thinkEl.toggle.querySelector(".thinking-toggle-content span").textContent =
-            `Planning analysis approach...`;
-          if (!thinkEl.body.classList.contains("expanded")) {
-            thinkEl.toggle.click();
-          }
-
-          const reasoning = status.data.reasoning || "Analyzing project structure and determining optimal analysis approach...";
-          const userFriendlyReasoning = reasoning.length > 200 ? 
-            reasoning.substring(0, 200) + "..." : 
-            reasoning;
-          
-          // Save to database via appendThinkingUpdate
-          await appendThinkingUpdate(aiNode, {
-            title: "Planning Analysis",
-            content: userFriendlyReasoning
-          }, sess, messageIndex);
-        } else {
-          // Web search session
-          thinkEl.toggle.querySelector(".thinking-toggle-content span").textContent =
-            `Searching for "${status.data.summary_key}"...`;
-          if (!thinkEl.body.classList.contains("expanded")) {
-            thinkEl.toggle.click();
-          }
-
-          // Save reasoning
-          await appendThinkingUpdate(aiNode, {
-            title: "Reasoning",
-            content: status.data.reasoning
-          }, sess, messageIndex);
-          
-          // Save keywords as list
-          const keywordsList = status.data.search_queries
-            .map((q, i) => `${i + 1}. ${q}`)
-            .join('\n');
-          
-          await appendThinkingUpdate(aiNode, {
-            title: "Keywords",
-            content: keywordsList
-          }, sess, messageIndex);
+        // NOTE: Research Agent V2 sends thinking updates via chat-update THINKING
+        // This DECIDED handler is only for legacy web search flow (runWebSearchChat)
+        // Skip if no valid search_queries (research agent doesn't send this)
+        if (!status.data.search_queries || status.data.search_queries.length === 0) {
+          // Project session or research agent - skip legacy handling
+          break;
         }
+        
+        // Legacy web search session only
+        thinkEl.toggle.querySelector(".thinking-toggle-content span").textContent =
+          `Searching for "${status.data.summary_key}"...`;
+        if (!thinkEl.body.classList.contains("expanded")) {
+          thinkEl.toggle.click();
+        }
+
+        // Save reasoning
+        await appendThinkingUpdate(aiNode, {
+          title: "Reasoning",
+          content: status.data.reasoning
+        }, sess, messageIndex);
+        
+        // Save keywords as list
+        const keywordsList = status.data.search_queries
+          .map((q, i) => `${i + 1}. ${q}`)
+          .join('\n');
+        
+        await appendThinkingUpdate(aiNode, {
+          title: "Keywords",
+          content: keywordsList
+        }, sess, messageIndex);
         break;
 
       case "FOUND_URLS":

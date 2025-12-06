@@ -28,7 +28,15 @@ function log(level, fn, msg, details = {}) {
 // ===================================
 // SYSTEM PROMPT
 // ===================================
-const RESEARCH_SYSTEM_PROMPT = `You are Clustrix Research Assistant. You MUST use tools to gather information before answering.
+function getSystemPrompt() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { 
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+  });
+  
+  const prompt = `You are Clustrix Research Assistant. You MUST use tools to gather information before answering.
+
+CURRENT DATE: ${dateStr}
 
 CRITICAL: You MUST call at least one tool before providing your final answer. Never answer directly without using tools first.
 
@@ -50,6 +58,11 @@ RULES:
 - If no files, use web_search
 - Cite sources with [Title](URL) format
 - Use the user's language (Indonesian/English)`;
+
+  console.log('[RESEARCH-OPENAI] getSystemPrompt: Generated', { dateStr, promptLength: prompt.length });
+  console.log('[RESEARCH-OPENAI] SYSTEM_PROMPT:\n', prompt);
+  return prompt;
+}
 
 // ===================================
 // SESSION STATE
@@ -76,13 +89,18 @@ async function callOpenAI({ baseUrl, apiKey, model, messages, tools, onTextChunk
   return new Promise((resolve, reject) => {
     const endpoint = new URL(baseUrl.replace(/\/?$/, '') + '/chat/completions');
     
-    const body = JSON.stringify({
+    // Build request body - only include tools if provided
+    const requestBody = {
       model,
       messages,
-      tools,
-      tool_choice: "auto",
       stream: true
-    });
+    };
+    if (tools) {
+      requestBody.tools = tools;
+      requestBody.tool_choice = "auto";
+    }
+    
+    const body = JSON.stringify(requestBody);
     
     const req = https.request({
       method: 'POST',
@@ -179,14 +197,17 @@ async function processResearchRequest({
   progressCallback = null,
   shouldCancel = null
 }) {
-  log(1, 'processResearchRequest', 'Starting', { 
+  console.log('[RESEARCH-OPENAI] processResearchRequest: ========== STARTING ==========');
+  console.log('[RESEARCH-OPENAI] processResearchRequest: Input params', { 
     sessionId, 
     model, 
     baseUrl,
     hasApiKey: !!apiKey,
     filesCount: files.length,
     hasSearchConfig: !!searchApiConfig,
-    hasProgressCallback: !!progressCallback
+    hasProgressCallback: !!progressCallback,
+    userQueryLength: userQuery.length,
+    userQueryPreview: userQuery.substring(0, 100)
   });
   
   const session = getSession(sessionId);
@@ -211,7 +232,7 @@ async function processResearchRequest({
   
   // Reset conversation for new request
   session.conversationHistory = [
-    { role: 'system', content: RESEARCH_SYSTEM_PROMPT },
+    { role: 'system', content: getSystemPrompt() },
     { role: 'user', content: userQuery }
   ];
   
@@ -227,28 +248,34 @@ async function processResearchRequest({
   }
   
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+    console.log('[RESEARCH-OPENAI] processResearchRequest: ========== ITERATION', iteration + 1, '==========');
+    
     if (shouldCancel && shouldCancel()) {
-      log(1, 'processResearchRequest', 'Cancelled');
+      console.log('[RESEARCH-OPENAI] processResearchRequest: Cancelled by user');
       break;
     }
     
     if (iteration > 0) await new Promise(r => setTimeout(r, 500));
     
-    log(1, 'processResearchRequest', `Iteration ${iteration + 1}`);
+    console.log('[RESEARCH-OPENAI] processResearchRequest: Conversation history length', session.conversationHistory.length);
+    console.log('[RESEARCH-OPENAI] processResearchRequest: MESSAGES:', JSON.stringify(session.conversationHistory, null, 2));
     
     // Call OpenAI
     let response;
     try {
+      console.log('[RESEARCH-OPENAI] processResearchRequest: Calling OpenAI API...');
       response = await callOpenAI({
         baseUrl,
         apiKey,
         model,
         messages: session.conversationHistory,
         tools: RESEARCH_TOOLS_OPENAI,
-        onTextChunk: null // Text streaming handled by final response
+        onTextChunk: null
       });
+      console.log('[RESEARCH-OPENAI] processResearchRequest: OpenAI API call complete');
+      console.log('[RESEARCH-OPENAI] processResearchRequest: RAW RESPONSE:', JSON.stringify(response, null, 2));
     } catch (error) {
-      log(3, 'processResearchRequest', 'API Error', { error: error.message });
+      console.log('[RESEARCH-OPENAI] processResearchRequest: API ERROR', { error: error.message, stack: error.stack });
       if (progressCallback) {
         progressCallback({ type: 'error', content: error.message });
       }
@@ -258,18 +285,94 @@ async function processResearchRequest({
     const assistantMsg = response.message;
     session.conversationHistory.push(assistantMsg);
     
-    log(1, 'processResearchRequest', 'API response received', {
+    console.log('[RESEARCH-OPENAI] processResearchRequest: Response analysis', {
       hasContent: !!assistantMsg.content,
       contentLength: assistantMsg.content?.length || 0,
       hasToolCalls: !!assistantMsg.tool_calls,
-      toolCallsCount: assistantMsg.tool_calls?.length || 0
+      toolCallsCount: assistantMsg.tool_calls?.length || 0,
+      contentPreview: assistantMsg.content?.substring(0, 200) || 'none'
     });
     
     // No tool calls = final response
     if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
       finalResponse = assistantMsg.content || '';
-      log(1, 'processResearchRequest', 'Final response (no tools)', { responseLength: finalResponse.length });
+      console.log('[RESEARCH-OPENAI] processResearchRequest: Final response (no tools)', { responseLength: finalResponse.length });
       break;
+    }
+    
+    // Check if any tool call is synthesis
+    const synthesisCall = assistantMsg.tool_calls.find(tc => {
+      try {
+        const args = JSON.parse(tc.function.arguments);
+        return args.is_synthesis === true;
+      } catch { return false; }
+    });
+    if (synthesisCall) {
+      console.log('[RESEARCH-OPENAI] processResearchRequest: SYNTHESIS CALL DETECTED');
+      
+      // Build summary from all tool results in conversation history
+      const findings = [];
+      for (const msg of session.conversationHistory) {
+        if (msg.role === 'tool') {
+          findings.push(msg.content.substring(0, 2000));
+        }
+      }
+      const summaryText = findings.join('\n\n---\n\n');
+      console.log('[RESEARCH-OPENAI] processResearchRequest: Built findings summary', { findingsCount: findings.length, summaryLength: summaryText.length });
+      
+      // Create synthesis prompt for NEW agent call
+      const synthesisPrompt = `Based on the research findings below, provide a comprehensive answer to the user's question.
+
+USER QUESTION: ${userQuery}
+
+RESEARCH FINDINGS:
+${summaryText}
+
+INSTRUCTIONS:
+- Synthesize all findings into a clear, comprehensive response
+- Use the user's language (Indonesian if they asked in Indonesian)
+- Cite sources with [Title](URL) format
+- Be thorough but concise
+- Structure your response with clear sections if needed`;
+
+      console.log('[RESEARCH-OPENAI] processResearchRequest: Calling NEW agent for synthesis...');
+      
+      // Send thinking status for synthesis
+      if (progressCallback) {
+        progressCallback({
+          type: 'searching',
+          data: { summarizedQuery: 'Synthesizing findings...' }
+        });
+      }
+      
+      // Call OpenAI with FRESH context (no tools, just synthesis)
+      try {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        
+        const synthesisResponse = await callOpenAI({
+          baseUrl,
+          apiKey,
+          model,
+          messages: [
+            { role: 'system', content: `You are a research assistant. Your task is to synthesize research findings into a comprehensive answer. Current date: ${dateStr}` },
+            { role: 'user', content: synthesisPrompt }
+          ],
+          tools: null, // No tools for synthesis
+          onTextChunk: progressCallback ? (chunk) => {
+            progressCallback({ type: 'content', content: chunk });
+          } : null
+        });
+        
+        finalResponse = synthesisResponse.message?.content || '';
+        console.log('[RESEARCH-OPENAI] processResearchRequest: Synthesis complete', { responseLength: finalResponse.length });
+      } catch (synthError) {
+        console.log('[RESEARCH-OPENAI] processResearchRequest: Synthesis error', { error: synthError.message });
+        // Fallback to content from research phase
+        finalResponse = assistantMsg.content || '';
+      }
+      
+      break; // Exit the main iteration loop
     }
     
     // Execute ALL tool calls in this iteration
@@ -285,26 +388,19 @@ async function processResearchRequest({
         params = {};
       }
       
-      log(1, 'processResearchRequest', `Tool call: ${toolName}`, { params });
+      console.log('[RESEARCH-OPENAI] processResearchRequest: TOOL CALL', { toolName, params });
       
-      // Check if this is synthesis call
-      if (params.is_synthesis === true) {
-        log(1, 'processResearchRequest', 'Synthesis requested, ending iteration loop');
-        finalResponse = assistantMsg.content || '';
-        break;
-      }
-      
-      // Use AI's short commentary for thinking toggle
-      const commentary = params.commentary || params.query || params.pattern || params.file_name || toolName;
+      // Use query/pattern as short title (NOT commentary which is too long)
+      const shortTitle = params.query || params.pattern || params.file_name || params.url || toolName;
       if (!iterationCommentary) {
-        iterationCommentary = commentary;  // Use first tool's commentary
+        iterationCommentary = shortTitle;
       }
       
-      // Update thinking toggle with commentary (short text)
+      // Update thinking toggle with short title
       if (progressCallback) {
         progressCallback({
           type: 'searching',
-          data: { summarizedQuery: commentary }  // This updates thinking toggle text
+          data: { summarizedQuery: shortTitle }
         });
       }
       
@@ -323,24 +419,23 @@ async function processResearchRequest({
         toolName,
         result,
         formattedResult,
-        commentary,
+        commentary: params.commentary || '',
         count: Array.isArray(result.data) ? result.data.length : (result.success ? 1 : 0)
       });
     }
     
     // ONE thinking update per iteration
+    // Title = short query/keyword, Content = tool output
     if (progressCallback && iterationResults.length > 0) {
-      // Title = short commentary (first tool's commentary)
-      // Content = all tool outputs combined
       const combinedContent = iterationResults.map(r => 
-        `${r.commentary}:\n${r.formattedResult.substring(0, 300)}`
-      ).join('\n\n---\n\n');
+        r.formattedResult.substring(0, 400)
+      ).join('\n\n');
       
       progressCallback({
         type: 'thinking_log',
         entry: {
-          stage: iterationCommentary,  // Short title for thinking-update-title
-          text: combinedContent.substring(0, 1000)  // Tool outputs for thinking-update-content
+          stage: iterationCommentary,  // Short title (query keyword)
+          text: combinedContent.substring(0, 1200)  // Tool output
         }
       });
       

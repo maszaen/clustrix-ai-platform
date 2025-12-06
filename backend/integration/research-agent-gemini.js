@@ -27,7 +27,15 @@ function log(level, fn, msg, details = {}) {
 // ===================================
 // SYSTEM PROMPT
 // ===================================
-const RESEARCH_SYSTEM_PROMPT = `You are Clustrix Research Assistant. You MUST use tools to gather information before answering.
+function getSystemPrompt() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { 
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+  });
+  
+  const prompt = `You are Clustrix Research Assistant. You MUST use tools to gather information before answering.
+
+CURRENT DATE: ${dateStr}
 
 CRITICAL: You MUST call at least one tool before providing your final answer. Never answer directly without using tools first.
 
@@ -50,6 +58,11 @@ RULES:
 - Cite sources with [Title](URL) format
 - Use the user's language (Indonesian/English)`;
 
+  console.log('[RESEARCH-GEMINI] getSystemPrompt: Generated system prompt', { dateStr, promptLength: prompt.length });
+  console.log('[RESEARCH-GEMINI] SYSTEM_PROMPT:\n', prompt);
+  return prompt;
+}
+
 // ===================================
 // SESSION STATE
 // ===================================
@@ -71,7 +84,15 @@ function getSession(sessionId) {
 // ===================================
 // GEMINI API CALL (STREAMING)
 // ===================================
-async function callGemini({ baseUrl, apiKey, model, contents, tools, systemInstruction, onTextChunk }) {
+async function callGemini({ baseUrl, apiKey, model, contents, tools, systemInstruction, onTextChunk, onThinkingChunk }) {
+  console.log('[RESEARCH-GEMINI] callGemini: Starting API call', { 
+    baseUrl, 
+    model, 
+    contentsLength: contents.length,
+    hasTools: !!tools,
+    hasSystemInstruction: !!systemInstruction
+  });
+  
   return new Promise((resolve, reject) => {
     let endpoint;
     let isOpenAICompatible = false;
@@ -80,6 +101,7 @@ async function callGemini({ baseUrl, apiKey, model, contents, tools, systemInstr
       if (baseUrl.includes('/v1/') && !baseUrl.includes('/v1beta/')) {
         isOpenAICompatible = true;
         endpoint = new URL(baseUrl.replace(/\/?$/, '') + '/chat/completions');
+        console.log('[RESEARCH-GEMINI] callGemini: Using OpenAI-compatible endpoint', { endpoint: endpoint.href });
       } else {
         let normalizedBase = baseUrl.replace(/\/?$/, '');
         if (!normalizedBase.includes('/v1beta')) {
@@ -88,8 +110,10 @@ async function callGemini({ baseUrl, apiKey, model, contents, tools, systemInstr
         endpoint = new URL(`${normalizedBase}/models/${model}:streamGenerateContent`);
         endpoint.searchParams.set('key', apiKey);
         endpoint.searchParams.set('alt', 'sse');
+        console.log('[RESEARCH-GEMINI] callGemini: Using Gemini native endpoint', { endpoint: endpoint.href });
       }
     } catch (error) {
+      console.log('[RESEARCH-GEMINI] callGemini: Invalid base URL', { baseUrl, error: error.message });
       reject(new Error(`Invalid base URL: ${baseUrl}`));
       return;
     }
@@ -122,12 +146,24 @@ async function callGemini({ baseUrl, apiKey, model, contents, tools, systemInstr
         'Content-Length': Buffer.byteLength(body)
       };
     } else {
-      body = JSON.stringify({
+      // Build request body for Gemini native
+      const requestBody = {
         contents,
-        tools,
         systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
-        generationConfig: { maxOutputTokens: 8192, temperature: 0.7 }
-      });
+        generationConfig: { 
+          maxOutputTokens: 8192, 
+          temperature: 0.7,
+          // Enable thinking output for Gemini 2.5 Pro
+          thinkingConfig: {
+            includeThoughts: true
+          }
+        }
+      };
+      // Only include tools if provided
+      if (tools) {
+        requestBody.tools = tools;
+      }
+      body = JSON.stringify(requestBody);
       
       headers = {
         'Content-Type': 'application/json',
@@ -173,39 +209,69 @@ async function callGemini({ baseUrl, apiKey, model, contents, tools, systemInstr
           
           try {
             const event = JSON.parse(jsonStr);
+            console.log('[RESEARCH-GEMINI] callGemini: RAW SSE EVENT:', JSON.stringify(event, null, 2));
             
             if (isOpenAICompatible) {
               const delta = event.choices?.[0]?.delta;
               if (delta?.content) {
                 accumulatedText += delta.content;
+                console.log('[RESEARCH-GEMINI] callGemini: OpenAI text chunk', { chunkLength: delta.content.length });
                 if (onTextChunk) onTextChunk(delta.content);
               }
               if (event.choices?.[0]?.finish_reason) {
                 fullResponse.candidates[0].finishReason = 
                   event.choices[0].finish_reason === 'tool_calls' ? 'TOOL_CALLS' : 'STOP';
+                console.log('[RESEARCH-GEMINI] callGemini: OpenAI finish reason', { reason: event.choices[0].finish_reason });
               }
             } else {
               const candidate = event.candidates?.[0];
               if (candidate?.content?.parts) {
+                console.log('[RESEARCH-GEMINI] callGemini: Gemini parts received', { partsCount: candidate.content.parts.length });
                 for (const part of candidate.content.parts) {
+                  console.log('[RESEARCH-GEMINI] callGemini: Processing part', { 
+                    hasText: !!part.text, 
+                    hasThought: !!part.thought,
+                    hasFunctionCall: !!part.functionCall,
+                    partKeys: Object.keys(part)
+                  });
+                  
+                  // Check if this is a thinking part (thought=true means text is thinking content)
+                  if (part.thought === true && part.text) {
+                    console.log('[RESEARCH-GEMINI] callGemini: NATIVE THINKING DETECTED', { textLength: part.text.length, preview: part.text.substring(0, 200) });
+                    if (onThinkingChunk) onThinkingChunk(part.text);
+                    // Don't add thinking to accumulated response, skip to next part
+                    continue;
+                  }
+                  
+                  // Regular text content (not thinking)
                   if (part.text) {
                     accumulatedText += part.text;
+                    console.log('[RESEARCH-GEMINI] callGemini: Text chunk', { textLength: part.text.length, preview: part.text.substring(0, 100) });
                     if (onTextChunk) onTextChunk(part.text);
                   }
+                  
                   if (part.functionCall) {
+                    console.log('[RESEARCH-GEMINI] callGemini: Function call detected', { name: part.functionCall.name, args: part.functionCall.args });
                     functionCalls.push(part.functionCall);
                   }
                 }
               }
+              // Also check for thoughts at candidate level
+              if (candidate?.groundingMetadata?.thoughtsText) {
+                console.log('[RESEARCH-GEMINI] callGemini: GROUNDING THOUGHTS DETECTED', { thoughtsLength: candidate.groundingMetadata.thoughtsText.length });
+                if (onThinkingChunk) onThinkingChunk(candidate.groundingMetadata.thoughtsText);
+              }
               if (candidate?.finishReason) {
                 fullResponse.candidates[0].finishReason = candidate.finishReason;
+                console.log('[RESEARCH-GEMINI] callGemini: Gemini finish reason', { reason: candidate.finishReason });
               }
               if (event.usageMetadata) {
                 fullResponse.usageMetadata = event.usageMetadata;
+                console.log('[RESEARCH-GEMINI] callGemini: Usage metadata', event.usageMetadata);
               }
             }
           } catch (e) {
-            log(2, 'callGemini', 'Parse error', { error: e.message });
+            console.log('[RESEARCH-GEMINI] callGemini: Parse error', { error: e.message, jsonStr: jsonStr.substring(0, 200) });
           }
         }
       });
@@ -217,11 +283,22 @@ async function callGemini({ baseUrl, apiKey, model, contents, tools, systemInstr
         for (const fc of functionCalls) {
           fullResponse.candidates[0].content.parts.push({ functionCall: fc });
         }
+        console.log('[RESEARCH-GEMINI] callGemini: Response complete', {
+          textLength: accumulatedText.length,
+          functionCallsCount: functionCalls.length,
+          finishReason: fullResponse.candidates[0].finishReason,
+          usage: fullResponse.usageMetadata
+        });
+        console.log('[RESEARCH-GEMINI] callGemini: FULL RESPONSE:', JSON.stringify(fullResponse, null, 2));
         resolve(fullResponse);
       });
     });
     
-    req.on('error', reject);
+    req.on('error', (err) => {
+      console.log('[RESEARCH-GEMINI] callGemini: Request error', { error: err.message });
+      reject(err);
+    });
+    console.log('[RESEARCH-GEMINI] callGemini: Sending request body', { bodyLength: body.length });
     req.write(body);
     req.end();
   });
@@ -282,38 +359,51 @@ async function processResearchRequest({
   progressCallback = null,
   shouldCancel = null
 }) {
-  log(1, 'processResearchRequest', 'Starting', { sessionId, model, filesCount: files.length });
+  console.log('[RESEARCH-GEMINI] processResearchRequest: ========== STARTING ==========');
+  console.log('[RESEARCH-GEMINI] processResearchRequest: Input params', { 
+    sessionId, 
+    model, 
+    baseUrl,
+    filesCount: files.length,
+    hasSearchConfig: !!searchApiConfig,
+    hasProgressCallback: !!progressCallback,
+    userQueryLength: userQuery.length,
+    userQueryPreview: userQuery.substring(0, 100)
+  });
   
   const session = getSession(sessionId);
   const usageBreakdown = [];
   
   // Load files into search engine
   if (files.length > 0) {
+    console.log('[RESEARCH-GEMINI] processResearchRequest: Loading files', { count: files.length, names: files.map(f => f.name) });
     session.searchEngine.loadProjectFiles(files);
   }
+  
   // CRITICAL: Set search config BEFORE any web search
-  // This ensures SerpAPI/Google is used, not DuckDuckGo fallback
   if (searchApiConfig) {
-    log(1, 'processResearchRequest', 'Setting search config', { 
+    console.log('[RESEARCH-GEMINI] processResearchRequest: Setting search config', { 
       provider: searchApiConfig.provider,
       hasSerpKey: !!searchApiConfig.serpApiKey,
       hasGoogleKey: !!searchApiConfig.googleApiKey
     });
     session.searchEngine.setSearchConfig(searchApiConfig);
   } else {
-    log(2, 'processResearchRequest', 'No search config provided - web search may use fallback');
+    console.log('[RESEARCH-GEMINI] processResearchRequest: WARNING - No search config provided');
   }
   
   // Reset conversation for new request
   session.conversationHistory = [
     { role: 'user', content: userQuery }
   ];
+  console.log('[RESEARCH-GEMINI] processResearchRequest: Conversation initialized', { historyLength: session.conversationHistory.length });
   
   const MAX_ITERATIONS = 15;
   let finalResponse = '';
   
-  // Send initial searching status (like old agent)
+  // Send initial searching status
   if (progressCallback) {
+    console.log('[RESEARCH-GEMINI] processResearchRequest: Sending initial searching status');
     progressCallback({
       type: 'searching',
       data: { summarizedQuery: `Analyzing: "${userQuery.substring(0, 50)}${userQuery.length > 50 ? '...' : ''}"` }
@@ -321,32 +411,46 @@ async function processResearchRequest({
   }
   
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+    console.log('[RESEARCH-GEMINI] processResearchRequest: ========== ITERATION', iteration + 1, '==========');
+    
     if (shouldCancel && shouldCancel()) {
-      log(1, 'processResearchRequest', 'Cancelled');
+      console.log('[RESEARCH-GEMINI] processResearchRequest: Cancelled by user');
       break;
     }
     
     if (iteration > 0) await new Promise(r => setTimeout(r, 500));
     
-    log(1, 'processResearchRequest', `Iteration ${iteration + 1}`);
-    
     // Build contents
     const contents = buildContents(session.conversationHistory);
+    console.log('[RESEARCH-GEMINI] processResearchRequest: Built contents', { contentsLength: contents.length });
+    console.log('[RESEARCH-GEMINI] processResearchRequest: CONTENTS:', JSON.stringify(contents, null, 2));
     
     // Call Gemini
     let response;
     try {
+      console.log('[RESEARCH-GEMINI] processResearchRequest: Calling Gemini API...');
       response = await callGemini({
         baseUrl,
         apiKey,
         model,
         contents,
         tools: RESEARCH_TOOLS_GEMINI,
-        systemInstruction: RESEARCH_SYSTEM_PROMPT,
-        onTextChunk: null // Text streaming handled by final response
+        systemInstruction: getSystemPrompt(),
+        onTextChunk: progressCallback ? (chunk) => {
+          // Stream text content to UI
+          progressCallback({ type: 'content', content: chunk });
+        } : null,
+        onThinkingChunk: progressCallback ? (chunk) => {
+          console.log('[RESEARCH-GEMINI] processResearchRequest: NATIVE THINKING CHUNK RECEIVED', { chunkLength: chunk.length, preview: chunk.substring(0, 200) });
+          progressCallback({
+            type: 'thinking_stream',
+            content: chunk
+          });
+        } : null
       });
+      console.log('[RESEARCH-GEMINI] processResearchRequest: Gemini API call complete');
     } catch (error) {
-      log(3, 'processResearchRequest', 'API Error', { error: error.message });
+      console.log('[RESEARCH-GEMINI] processResearchRequest: API ERROR', { error: error.message, stack: error.stack });
       if (progressCallback) {
         progressCallback({ type: 'error', content: error.message });
       }
@@ -355,6 +459,7 @@ async function processResearchRequest({
     
     // Track usage
     if (response.usageMetadata) {
+      console.log('[RESEARCH-GEMINI] processResearchRequest: Usage', response.usageMetadata);
       usageBreakdown.push({
         stage: `iteration-${iteration + 1}`,
         usage: {
@@ -367,7 +472,7 @@ async function processResearchRequest({
     
     const candidate = response.candidates?.[0];
     if (!candidate?.content?.parts) {
-      log(2, 'processResearchRequest', 'No content in response');
+      console.log('[RESEARCH-GEMINI] processResearchRequest: No content in response, breaking');
       break;
     }
     
@@ -381,47 +486,142 @@ async function processResearchRequest({
     const textParts = candidate.content.parts.filter(p => p.text);
     const functionCalls = candidate.content.parts.filter(p => p.functionCall);
     
-    // No function calls = final response
+    console.log('[RESEARCH-GEMINI] processResearchRequest: Response analysis', {
+      textPartsCount: textParts.length,
+      functionCallsCount: functionCalls.length,
+      textPreview: textParts.length > 0 ? textParts[0].text.substring(0, 200) : 'none'
+    });
+    
+    // No function calls = final response (synthesis phase)
     if (functionCalls.length === 0) {
       finalResponse = textParts.map(p => p.text).join('\n');
-      log(1, 'processResearchRequest', 'Final response received');
+      console.log('[RESEARCH-GEMINI] processResearchRequest: SYNTHESIS COMPLETE - No more function calls');
+      console.log('[RESEARCH-GEMINI] processResearchRequest: Final response length', finalResponse.length);
       break;
     }
     
-    // Execute ALL function calls in this iteration
-    const iterationResults = [];
-    let iterationCommentary = '';
+    // Check if any function call is synthesis
+    const synthesisCall = functionCalls.find(fc => fc.functionCall.args?.is_synthesis === true);
+    if (synthesisCall) {
+      console.log('[RESEARCH-GEMINI] processResearchRequest: SYNTHESIS CALL DETECTED');
+      
+      // Build summary from all findings in conversation history
+      const findings = [];
+      for (const msg of session.conversationHistory) {
+        if (msg.role === 'function') {
+          findings.push(`[${msg.name}]: ${msg.content.substring(0, 2000)}`);
+        }
+      }
+      const summaryText = findings.join('\n\n---\n\n');
+      console.log('[RESEARCH-GEMINI] processResearchRequest: Built findings summary', { findingsCount: findings.length, summaryLength: summaryText.length });
+      
+      // Create synthesis prompt for NEW agent call
+      const synthesisPrompt = `Based on the research findings below, provide a comprehensive answer to the user's question.
+
+USER QUESTION: ${userQuery}
+
+RESEARCH FINDINGS:
+${summaryText}
+
+INSTRUCTIONS:
+- Synthesize all findings into a clear, comprehensive response
+- Use the user's language (Indonesian if they asked in Indonesian)
+- Cite sources with [Title](URL) format
+- Be thorough but concise
+- Structure your response with clear sections if needed`;
+
+      console.log('[RESEARCH-GEMINI] processResearchRequest: Calling NEW agent for synthesis...');
+      
+      // Send thinking status for synthesis
+      if (progressCallback) {
+        progressCallback({
+          type: 'searching',
+          data: { summarizedQuery: 'Synthesizing findings...' }
+        });
+      }
+      
+      // Call Gemini with FRESH context (no tools, just synthesis)
+      try {
+        const synthesisResponse = await callGemini({
+          baseUrl,
+          apiKey,
+          model,
+          contents: [{ role: 'user', parts: [{ text: synthesisPrompt }] }],
+          tools: null, // No tools for synthesis
+          systemInstruction: `You are a research assistant. Your task is to synthesize research findings into a comprehensive answer. Current date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`,
+          onTextChunk: progressCallback ? (chunk) => {
+            progressCallback({ type: 'content', content: chunk });
+          } : null,
+          onThinkingChunk: progressCallback ? (chunk) => {
+            console.log('[RESEARCH-GEMINI] processResearchRequest: SYNTHESIS THINKING CHUNK', { chunkLength: chunk.length });
+            progressCallback({ type: 'thinking_stream', content: chunk });
+          } : null
+        });
+        
+        // Track synthesis usage
+        if (synthesisResponse.usageMetadata) {
+          usageBreakdown.push({
+            stage: 'synthesis',
+            usage: {
+              prompt_tokens: synthesisResponse.usageMetadata.promptTokenCount,
+              completion_tokens: synthesisResponse.usageMetadata.candidatesTokenCount
+            },
+            model
+          });
+        }
+        
+        const synthCandidate = synthesisResponse.candidates?.[0];
+        if (synthCandidate?.content?.parts) {
+          finalResponse = synthCandidate.content.parts
+            .filter(p => p.text)
+            .map(p => p.text)
+            .join('\n');
+        }
+        
+        console.log('[RESEARCH-GEMINI] processResearchRequest: Synthesis complete', { responseLength: finalResponse.length });
+      } catch (synthError) {
+        console.log('[RESEARCH-GEMINI] processResearchRequest: Synthesis error', { error: synthError.message });
+        // Fallback to text from research phase
+        finalResponse = textParts.map(p => p.text).join('\n');
+      }
+      
+      break; // Exit the main iteration loop
+    }
+    
+    // Execute each function call - ONE thinking-update per tool
+    console.log('[RESEARCH-GEMINI] processResearchRequest: Executing', functionCalls.length, 'function calls');
     
     for (const fc of functionCalls) {
       const toolName = fc.functionCall.name;
       const params = fc.functionCall.args || {};
       
-      log(1, 'processResearchRequest', `Tool call: ${toolName}`, { params });
+      console.log('[RESEARCH-GEMINI] processResearchRequest: TOOL CALL', { toolName, params });
       
-      // Check if this is synthesis call
-      if (params.is_synthesis === true) {
-        log(1, 'processResearchRequest', 'Synthesis requested');
-        finalResponse = textParts.map(p => p.text).join('\n');
-        break;
-      }
+      // Title = query/pattern (short keyword)
+      const shortTitle = params.query || params.pattern || params.file_name || params.url || toolName;
+      const commentary = params.commentary || '';
       
-      // Use AI's short commentary
-      const commentary = params.commentary || params.query || params.pattern || params.file_name || toolName;
-      if (!iterationCommentary) {
-        iterationCommentary = commentary;
-      }
+      console.log('[RESEARCH-GEMINI] processResearchRequest: Tool metadata', { shortTitle, commentary });
       
       // Update thinking toggle
       if (progressCallback) {
+        console.log('[RESEARCH-GEMINI] processResearchRequest: Sending searching status', { summarizedQuery: shortTitle });
         progressCallback({
           type: 'searching',
-          data: { summarizedQuery: commentary }
+          data: { summarizedQuery: shortTitle }
         });
       }
       
       // Execute tool
+      console.log('[RESEARCH-GEMINI] processResearchRequest: Executing tool', toolName);
       const result = await executeResearchTool(toolName, params, session.searchEngine);
       const formattedResult = formatToolResult(toolName, result);
+      
+      console.log('[RESEARCH-GEMINI] processResearchRequest: Tool result', { 
+        success: result.success, 
+        dataLength: Array.isArray(result.data) ? result.data.length : 'N/A',
+        formattedResultLength: formattedResult.length
+      });
       
       // Add function response to conversation
       session.conversationHistory.push({
@@ -430,46 +630,39 @@ async function processResearchRequest({
         content: formattedResult
       });
       
-      iterationResults.push({
-        toolName,
-        result,
-        formattedResult,
-        commentary,
-        count: Array.isArray(result.data) ? result.data.length : (result.success ? 1 : 0)
-      });
-    }
-    
-    // ONE thinking update per iteration
-    if (progressCallback && iterationResults.length > 0) {
-      const combinedContent = iterationResults.map(r => 
-        `${r.commentary}:\n${r.formattedResult.substring(0, 300)}`
-      ).join('\n\n---\n\n');
-      
-      progressCallback({
-        type: 'thinking_log',
-        entry: {
-          stage: iterationCommentary,
-          text: combinedContent.substring(0, 1000)
-        }
-      });
-      
-      const totalCount = iterationResults.reduce((sum, r) => sum + r.count, 0);
-      progressCallback({
-        type: 'reading_complete',
-        data: {
-          pageCount: totalCount,
-          actionType: iterationCommentary,
-          actionIndex: iteration,
-          success: iterationResults.every(r => r.result.success)
-        }
-      });
+      // ONE thinking-update per tool
+      if (progressCallback) {
+        console.log('[RESEARCH-GEMINI] processResearchRequest: Sending thinking_log', { stage: shortTitle, text: commentary });
+        progressCallback({
+          type: 'thinking_log',
+          entry: {
+            stage: shortTitle,
+            text: commentary
+          }
+        });
+        
+        const resultCount = Array.isArray(result.data) ? result.data.length : (result.success ? 1 : 0);
+        console.log('[RESEARCH-GEMINI] processResearchRequest: Sending reading_complete', { pageCount: resultCount });
+        progressCallback({
+          type: 'reading_complete',
+          data: {
+            pageCount: resultCount,
+            actionType: shortTitle,
+            actionIndex: iteration,
+            success: result.success
+          }
+        });
+      }
     }
   }
   
-  log(1, 'processResearchRequest', 'Complete', { 
+  console.log('[RESEARCH-GEMINI] processResearchRequest: ========== COMPLETE ==========');
+  console.log('[RESEARCH-GEMINI] processResearchRequest: Final stats', { 
     historyLength: session.conversationHistory.length,
-    responseLength: finalResponse.length
+    responseLength: finalResponse.length,
+    usageBreakdownCount: usageBreakdown.length
   });
+  console.log('[RESEARCH-GEMINI] processResearchRequest: FINAL RESPONSE:\n', finalResponse);
   
   return {
     response: finalResponse,

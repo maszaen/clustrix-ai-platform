@@ -1,4 +1,5 @@
 import { welcomeMessages, filesUploadDark, filesUploadLight, LOADING_VERBS } from './utils/constants.mjs';
+import { isAndroid, platform } from './utils/platform.mjs';
 import { 
   svgEmptyStateChats, 
   svgEmptyStateProjects, 
@@ -19863,6 +19864,18 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
   }, 3000);
+
+  // Hide window controls on Android (Capacitor)
+  if (isAndroid) {
+    const windowControls = document.querySelector('.window-controls');
+    if (windowControls) {
+      ['#minimize-btn', '#maximize-btn', '#close-btn'].forEach(sel => {
+        const btn = windowControls.querySelector(sel);
+        if (btn) btn.style.display = 'none';
+      });
+    }
+    log('PLATFORM', 1, 'init', 'Android platform detected, window controls hidden');
+  }
 });
 
 window.addEventListener("error", (event) => {

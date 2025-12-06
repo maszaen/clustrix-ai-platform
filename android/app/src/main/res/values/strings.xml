@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Clustrix</string>
+    <string name="title_activity_main">Clustrix</string>
+    <string name="package_name">com.zaen.clustrix</string>
+    <string name="custom_url_scheme">com.zaen.clustrix</string>
+</resources>

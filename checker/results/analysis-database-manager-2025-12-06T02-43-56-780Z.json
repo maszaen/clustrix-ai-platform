@@ -1,0 +1,581 @@
+{
+  "file": "backend/data/database-manager.js",
+  "fileSize": 31313,
+  "totalLines": 962,
+  "functions": [
+    {
+      "name": "ensureColumn",
+      "line": 273,
+      "params": [
+        "table",
+        "column",
+        "definition"
+      ],
+      "lines": 13,
+      "type": "arrow/expression"
+    },
+    {
+      "name": "log",
+      "line": 10,
+      "params": [
+        "context",
+        "level",
+        "func",
+        "message",
+        "AssignmentPattern"
+      ],
+      "lines": 2
+    }
+  ],
+  "classes": [
+    {
+      "name": "DatabaseManager",
+      "line": 14,
+      "methods": [
+        {
+          "name": "constructor",
+          "kind": "constructor",
+          "lines": 33
+        },
+        {
+          "name": "initSchema",
+          "kind": "method",
+          "lines": 262
+        },
+        {
+          "name": "migrateMemoryTable",
+          "kind": "method",
+          "lines": 51
+        },
+        {
+          "name": "getAllSessions",
+          "kind": "method",
+          "lines": 18
+        },
+        {
+          "name": "getSession",
+          "kind": "method",
+          "lines": 4
+        },
+        {
+          "name": "saveSession",
+          "kind": "method",
+          "lines": 62
+        },
+        {
+          "name": "deleteSession",
+          "kind": "method",
+          "lines": 4
+        },
+        {
+          "name": "getMessages",
+          "kind": "method",
+          "lines": 6
+        },
+        {
+          "name": "upsertMessage",
+          "kind": "method",
+          "lines": 53
+        },
+        {
+          "name": "addMessage",
+          "kind": "method",
+          "lines": 40
+        },
+        {
+          "name": "deleteMessagesForSession",
+          "kind": "method",
+          "lines": 4
+        },
+        {
+          "name": "getMessagesForSession",
+          "kind": "method",
+          "lines": 6
+        },
+        {
+          "name": "getAllArtifacts",
+          "kind": "method",
+          "lines": 7
+        },
+        {
+          "name": "getArtifact",
+          "kind": "method",
+          "lines": 4
+        },
+        {
+          "name": "saveArtifact",
+          "kind": "method",
+          "lines": 22
+        },
+        {
+          "name": "deleteArtifact",
+          "kind": "method",
+          "lines": 4
+        },
+        {
+          "name": "getAllProjects",
+          "kind": "method",
+          "lines": 5
+        },
+        {
+          "name": "getProject",
+          "kind": "method",
+          "lines": 4
+        },
+        {
+          "name": "saveProject",
+          "kind": "method",
+          "lines": 28
+        },
+        {
+          "name": "deleteProject",
+          "kind": "method",
+          "lines": 4
+        },
+        {
+          "name": "getProjectFiles",
+          "kind": "method",
+          "lines": 5
+        },
+        {
+          "name": "saveProjectFile",
+          "kind": "method",
+          "lines": 20
+        },
+        {
+          "name": "deleteProjectFiles",
+          "kind": "method",
+          "lines": 4
+        },
+        {
+          "name": "getAllCodes",
+          "kind": "method",
+          "lines": 5
+        },
+        {
+          "name": "getCode",
+          "kind": "method",
+          "lines": 4
+        },
+        {
+          "name": "saveCode",
+          "kind": "method",
+          "lines": 25
+        },
+        {
+          "name": "deleteCode",
+          "kind": "method",
+          "lines": 10
+        },
+        {
+          "name": "addCodeIteration",
+          "kind": "method",
+          "lines": 19
+        },
+        {
+          "name": "getCodeIterations",
+          "kind": "method",
+          "lines": 14
+        },
+        {
+          "name": "getSetting",
+          "kind": "method",
+          "lines": 5
+        },
+        {
+          "name": "saveSetting",
+          "kind": "method",
+          "lines": 6
+        },
+        {
+          "name": "getAllSettings",
+          "kind": "method",
+          "lines": 7
+        },
+        {
+          "name": "transaction",
+          "kind": "method",
+          "lines": 2
+        },
+        {
+          "name": "backup",
+          "kind": "method",
+          "lines": 2
+        },
+        {
+          "name": "saveMemory",
+          "kind": "method",
+          "lines": 8
+        },
+        {
+          "name": "getMemory",
+          "kind": "method",
+          "lines": 16
+        },
+        {
+          "name": "deleteMemory",
+          "kind": "method",
+          "lines": 7
+        },
+        {
+          "name": "clearAllMemory",
+          "kind": "method",
+          "lines": 3
+        },
+        {
+          "name": "saveEditHistory",
+          "kind": "method",
+          "lines": 6
+        },
+        {
+          "name": "getEditHistory",
+          "kind": "method",
+          "lines": 7
+        },
+        {
+          "name": "getEditById",
+          "kind": "method",
+          "lines": 2
+        },
+        {
+          "name": "deleteEditHistory",
+          "kind": "method",
+          "lines": 2
+        },
+        {
+          "name": "getEditsAfter",
+          "kind": "method",
+          "lines": 8
+        },
+        {
+          "name": "deleteEditHistoryBatch",
+          "kind": "method",
+          "lines": 4
+        },
+        {
+          "name": "clearEditHistory",
+          "kind": "method",
+          "lines": 2
+        },
+        {
+          "name": "saveConversationSummary",
+          "kind": "method",
+          "lines": 6
+        },
+        {
+          "name": "getLatestSummary",
+          "kind": "method",
+          "lines": 7
+        },
+        {
+          "name": "getAllSummaries",
+          "kind": "method",
+          "lines": 6
+        },
+        {
+          "name": "deleteSummaries",
+          "kind": "method",
+          "lines": 2
+        },
+        {
+          "name": "close",
+          "kind": "method",
+          "lines": 2
+        }
+      ],
+      "lines": 945
+    }
+  ],
+  "imports": [],
+  "exports": [],
+  "variables": [
+    {
+      "name": "Database",
+      "line": 1,
+      "kind": "const"
+    },
+    {
+      "name": "path",
+      "line": 2,
+      "kind": "const"
+    },
+    {
+      "line": 3,
+      "kind": "const"
+    },
+    {
+      "line": 4,
+      "kind": "const"
+    },
+    {
+      "name": "userDataPath",
+      "line": 24,
+      "kind": "const"
+    },
+    {
+      "name": "columns",
+      "line": 275,
+      "kind": "const"
+    },
+    {
+      "name": "hasColumn",
+      "line": 276,
+      "kind": "const"
+    },
+    {
+      "name": "tableExists",
+      "line": 316,
+      "kind": "const"
+    },
+    {
+      "name": "columns",
+      "line": 321,
+      "kind": "const"
+    },
+    {
+      "name": "hasOwnerType",
+      "line": 322,
+      "kind": "const"
+    },
+    {
+      "name": "foreignKeys",
+      "line": 323,
+      "kind": "const"
+    },
+    {
+      "name": "referencesCodes",
+      "line": 324,
+      "kind": "const"
+    },
+    {
+      "name": "ownerColumn",
+      "line": 346,
+      "kind": "const"
+    },
+    {
+      "name": "columns",
+      "line": 369,
+      "kind": "const"
+    },
+    {
+      "name": "hasDeletedColumn",
+      "line": 370,
+      "kind": "const"
+    },
+    {
+      "name": "deviceId",
+      "line": 395,
+      "kind": "const"
+    },
+    {
+      "name": "messages",
+      "line": 399,
+      "kind": "const"
+    },
+    {
+      "name": "hash",
+      "line": 400,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 402,
+      "kind": "const"
+    },
+    {
+      "name": "createdAt",
+      "line": 428,
+      "kind": "const"
+    },
+    {
+      "name": "updatedAt",
+      "line": 429,
+      "kind": "const"
+    },
+    {
+      "name": "deviceId",
+      "line": 474,
+      "kind": "const"
+    },
+    {
+      "name": "now",
+      "line": 475,
+      "kind": "const"
+    },
+    {
+      "name": "existing",
+      "line": 478,
+      "kind": "const"
+    },
+    {
+      "name": "createdAt",
+      "line": 484,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 493,
+      "kind": "const"
+    },
+    {
+      "name": "deviceId",
+      "line": 529,
+      "kind": "const"
+    },
+    {
+      "name": "now",
+      "line": 530,
+      "kind": "const"
+    },
+    {
+      "name": "messageCreatedAt",
+      "line": 533,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 535,
+      "kind": "const"
+    },
+    {
+      "name": "artifacts",
+      "line": 584,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 599,
+      "kind": "const"
+    },
+    {
+      "name": "result",
+      "line": 605,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 642,
+      "kind": "const"
+    },
+    {
+      "name": "createdAt",
+      "line": 648,
+      "kind": "const"
+    },
+    {
+      "name": "updatedAt",
+      "line": 649,
+      "kind": "const"
+    },
+    {
+      "name": "instruction",
+      "line": 650,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 685,
+      "kind": "const"
+    },
+    {
+      "name": "binaryContent",
+      "line": 691,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 726,
+      "kind": "const"
+    },
+    {
+      "name": "createdAt",
+      "line": 733,
+      "kind": "const"
+    },
+    {
+      "name": "updatedAt",
+      "line": 734,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 766,
+      "kind": "const"
+    },
+    {
+      "name": "row",
+      "line": 803,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 810,
+      "kind": "const"
+    },
+    {
+      "name": "rows",
+      "line": 818,
+      "kind": "const"
+    },
+    {
+      "name": "settings",
+      "line": 819,
+      "kind": "const"
+    },
+    {
+      "name": "normalizedType",
+      "line": 836,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 837,
+      "kind": "const"
+    },
+    {
+      "name": "now",
+      "line": 841,
+      "kind": "const"
+    },
+    {
+      "name": "normalizedType",
+      "line": 846,
+      "kind": "const"
+    },
+    {
+      "name": "rows",
+      "line": 856,
+      "kind": "const"
+    },
+    {
+      "name": "normalizedType",
+      "line": 864,
+      "kind": "const"
+    },
+    {
+      "name": "normalizedType",
+      "line": 873,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 879,
+      "kind": "const"
+    },
+    {
+      "name": "targetEdit",
+      "line": 905,
+      "kind": "const"
+    },
+    {
+      "name": "placeholders",
+      "line": 917,
+      "kind": "const"
+    },
+    {
+      "name": "stmt",
+      "line": 927,
+      "kind": "const"
+    }
+  ]
+}

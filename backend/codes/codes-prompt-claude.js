@@ -13,6 +13,8 @@
 // - anthropic.com/engineering/building-effective-agents
 // ===================================================================
 
+const { WEB_SEARCH_TOOL_CLAUDE } = require('./web-search-tool');
+
 // ===================================
 // CLAUDE TOOLS - Functional, Not Meta
 // ===================================
@@ -194,7 +196,8 @@ USAGE GUIDELINES:
       },
       required: ["edit_id"]
     }
-  }
+  },
+  WEB_SEARCH_TOOL_CLAUDE
 ];
 
 // ===================================

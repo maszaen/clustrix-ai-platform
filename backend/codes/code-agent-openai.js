@@ -22,6 +22,7 @@ const {
   performSummarization,
   formatSummaryForContext
 } = require('./context-manager');
+const { executeWebSearch, WEB_SEARCH_TOOL_OPENAI } = require('./web-search-tool');
 
 // ===================================
 // OPENAI TOOLS (converted from Claude format)
@@ -223,7 +224,8 @@ USAGE GUIDELINES:
         required: ["edit_id"]
       }
     }
-  }
+  },
+  WEB_SEARCH_TOOL_OPENAI
 ];
 
 // ===================================
@@ -633,6 +635,12 @@ async function executeTool(session, toolCall, confirmed, onChunk, sessionId, db 
       }
     }
     
+    case 'web_search': {
+      // Note: command-input tag is emitted in main loop, not here (to avoid double emit)
+      const result = await executeWebSearch(input, db);
+      return { tool_call_id: id, output: result.output };
+    }
+    
     default: {
       openaiLog(2, 'executeTool', `Unknown tool "${name}" - attempting to route to run_command`, { toolCall });
       
@@ -667,7 +675,7 @@ async function executeTool(session, toolCall, confirmed, onChunk, sessionId, db 
       
       return { 
         tool_call_id: id, 
-        output: `Error: Unknown tool "${name}". Available tools: run_command, edit_file, update_checklist, show_history, undo_edit.` 
+        output: `Error: Unknown tool "${name}". Available tools: run_command, edit_file, update_checklist, show_history, undo_edit, web_search.` 
       };
     }
   }
@@ -799,6 +807,8 @@ async function processOpenAICodeRequest({
         actualCommand = `<set file="${args.file}" range={${args.start_line || 1},${args.end_line || 1}}>`;
       } else if (toolCall.function.name === 'update_checklist') {
         displayText = `Update checklist (${args.checklist?.length || 0} items)`;
+      } else if (toolCall.function.name === 'web_search') {
+        displayText = `Web search: ${args.queries?.slice(0, 2).join(', ')}${args.queries?.length > 2 ? '...' : ''}`;
       }
       
       if (displayText) {

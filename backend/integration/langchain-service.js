@@ -12,6 +12,7 @@ const fsp = require('fs').promises; // Add async file operations
 const FileSummarizer = require('./file-summarizer');
 const LocalEmbeddingEngine = require('./local-embedding-engine');
 const { ResearchAgentV2 } = require('./research-agent-v2');
+const { getDataPath } = require('../../utils/portable');
 
 class ClustrixLangChainService {
   constructor(app) {
@@ -24,8 +25,8 @@ class ClustrixLangChainService {
     });
     
     // Vector store data file
-    this.vectorDataFile = path.join(app.getPath('userData'), 'vector_data.json');
-    this.sessionMemoryFile = path.join(app.getPath('userData'), 'session_memory.json');
+    this.vectorDataFile = path.join(getDataPath(), 'vector_data.json');
+    this.sessionMemoryFile = path.join(getDataPath(), 'session_memory.json');
     
     // Initialize file summarizer (LOCAL PROCESSING)
     this.fileSummarizer = new FileSummarizer(this);
@@ -44,7 +45,8 @@ class ClustrixLangChainService {
 
   // Helper method to get correct config path based on sync mode
   async getModelConfigPath() {
-    const syncConfigPath = path.join(this.app.getPath('userData'), 'sync-config.json');
+    const dataPath = getDataPath();
+    const syncConfigPath = path.join(dataPath, 'sync-config.json');
     let currentMode = 'internal';
     let currentCloudUser = null;
 
@@ -59,9 +61,9 @@ class ClustrixLangChainService {
     }
 
     if (currentMode === 'cloud' && currentCloudUser) {
-      return path.join(this.app.getPath('userData'), 'database', 'sync', currentCloudUser, 'ai-model.conf.json');
+      return path.join(dataPath, 'database', 'sync', currentCloudUser, 'ai-model.conf.json');
     } else {
-      return path.join(this.app.getPath('userData'), 'database', 'internal', 'ai-model.conf.json');
+      return path.join(dataPath, 'database', 'internal', 'ai-model.conf.json');
     }
   }
 

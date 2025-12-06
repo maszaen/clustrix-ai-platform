@@ -1,12 +1,13 @@
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
+const { getDataPath } = require('../../utils/portable');
 
 class FileSummarizer {
   constructor(langchainService) {
     this.langchainService = langchainService;
     this.summaryCache = new Map();
-    this.summaryFile = path.join(langchainService.app.getPath('userData'), 'file_summaries.json');
+    this.summaryFile = path.join(getDataPath(), 'file_summaries.json');
     this.loadSummaryCache();
   }
 

@@ -333,24 +333,7 @@ async function processResearchRequest({
     
     // Extract text and tool_use blocks
     const textBlocks = response.content.filter(b => b.type === 'text');
-    let toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
-    
-    // FALLBACK: If no tool_use blocks, parse TAGs from text (Claude without tool support)
-    if (toolUseBlocks.length === 0 && textBlocks.length > 0) {
-      const fullText = textBlocks.map(b => b.text).join('\n');
-      const parsedTags = parseToolTagsFromText(fullText);
-      
-      if (parsedTags.length > 0) {
-        console.log('[RESEARCH-CLAUDE] processResearchRequest: Parsed TAGs from text', { count: parsedTags.length });
-        // Convert parsed tags to tool_use format
-        toolUseBlocks = parsedTags.map((tag, idx) => ({
-          type: 'tool_use',
-          id: `tag_${Date.now()}_${idx}`,
-          name: tag.name,
-          input: tag.params
-        }));
-      }
-    }
+    const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
     
     // No tool calls = final response
     if (toolUseBlocks.length === 0) {

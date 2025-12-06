@@ -27,7 +27,15 @@ function log(level, fn, msg, details = {}) {
 // ===================================
 // SYSTEM PROMPT
 // ===================================
-const RESEARCH_SYSTEM_PROMPT = `You are Clustrix Research Assistant. You MUST use tools to gather information before answering.
+function getSystemPrompt() {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { 
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+  });
+  
+  const prompt = `You are Clustrix Research Assistant. You MUST use tools to gather information before answering.
+
+CURRENT DATE: ${dateStr}
 
 CRITICAL: You MUST call at least one tool before providing your final answer. Never answer directly without using tools first.
 
@@ -49,6 +57,11 @@ RULES:
 - If no files, use web_search
 - Cite sources with [Title](URL) format
 - Use the user's language (Indonesian/English)`;
+
+  console.log('[RESEARCH-CLAUDE] getSystemPrompt: Generated', { dateStr, promptLength: prompt.length });
+  console.log('[RESEARCH-CLAUDE] SYSTEM_PROMPT:\n', prompt);
+  return prompt;
+}
 
 // ===================================
 // SESSION STATE
@@ -85,14 +98,19 @@ async function callClaude({ baseUrl, apiKey, model, system, messages, tools, onT
       return;
     }
     
-    const body = JSON.stringify({
+    // Build request body - only include tools if provided
+    const requestBody = {
       model,
       max_tokens: 4096,
       system,
       messages,
-      tools,
       stream: true
-    });
+    };
+    if (tools) {
+      requestBody.tools = tools;
+    }
+    
+    const body = JSON.stringify(requestBody);
     
     const req = https.request({
       method: 'POST',
@@ -213,38 +231,51 @@ async function processResearchRequest({
   progressCallback = null,
   shouldCancel = null
 }) {
-  log(1, 'processResearchRequest', 'Starting', { sessionId, model, filesCount: files.length });
+  console.log('[RESEARCH-CLAUDE] processResearchRequest: ========== STARTING ==========');
+  console.log('[RESEARCH-CLAUDE] processResearchRequest: Input params', { 
+    sessionId, 
+    model, 
+    baseUrl,
+    filesCount: files.length,
+    hasSearchConfig: !!searchApiConfig,
+    hasProgressCallback: !!progressCallback,
+    userQueryLength: userQuery.length,
+    userQueryPreview: userQuery.substring(0, 100)
+  });
   
   const session = getSession(sessionId);
   const usageBreakdown = [];
   
   // Load files into search engine
   if (files.length > 0) {
+    console.log('[RESEARCH-CLAUDE] processResearchRequest: Loading files', { count: files.length });
     session.searchEngine.loadProjectFiles(files);
   }
+  
   // CRITICAL: Set search config BEFORE any web search
-  // This ensures SerpAPI/Google is used, not DuckDuckGo fallback
   if (searchApiConfig) {
-    log(1, 'processResearchRequest', 'Setting search config', { 
+    console.log('[RESEARCH-CLAUDE] processResearchRequest: Setting search config', { 
       provider: searchApiConfig.provider,
       hasSerpKey: !!searchApiConfig.serpApiKey,
       hasGoogleKey: !!searchApiConfig.googleApiKey
     });
     session.searchEngine.setSearchConfig(searchApiConfig);
   } else {
-    log(2, 'processResearchRequest', 'No search config provided - web search may use fallback');
+    console.log('[RESEARCH-CLAUDE] processResearchRequest: WARNING - No search config provided');
   }
   
   // Reset conversation for new request
   session.conversationHistory = [
     { role: 'user', content: userQuery }
   ];
+  console.log('[RESEARCH-CLAUDE] processResearchRequest: Conversation initialized');
   
   const MAX_ITERATIONS = 15;
   let finalResponse = '';
   
-  // Send initial searching status (like old agent)
+  // Send initial searching status
   if (progressCallback) {
+    console.log('[RESEARCH-CLAUDE] processResearchRequest: Sending initial searching status');
     progressCallback({
       type: 'searching',
       data: { summarizedQuery: `Analyzing: "${userQuery.substring(0, 50)}${userQuery.length > 50 ? '...' : ''}"` }
@@ -252,29 +283,33 @@ async function processResearchRequest({
   }
   
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+    console.log('[RESEARCH-CLAUDE] processResearchRequest: ========== ITERATION', iteration + 1, '==========');
+    
     if (shouldCancel && shouldCancel()) {
-      log(1, 'processResearchRequest', 'Cancelled');
+      console.log('[RESEARCH-CLAUDE] processResearchRequest: Cancelled by user');
       break;
     }
     
     if (iteration > 0) await new Promise(r => setTimeout(r, 500));
     
-    log(1, 'processResearchRequest', `Iteration ${iteration + 1}`);
-    
     // Call Claude
     let response;
     try {
+      console.log('[RESEARCH-CLAUDE] processResearchRequest: Calling Claude API...');
+      console.log('[RESEARCH-CLAUDE] processResearchRequest: MESSAGES:', JSON.stringify(session.conversationHistory, null, 2));
       response = await callClaude({
         baseUrl,
         apiKey,
         model,
-        system: RESEARCH_SYSTEM_PROMPT,
+        system: getSystemPrompt(),
         messages: session.conversationHistory,
         tools: RESEARCH_TOOLS_CLAUDE,
-        onTextChunk: null // Text streaming handled by final response
+        onTextChunk: null
       });
+      console.log('[RESEARCH-CLAUDE] processResearchRequest: Claude API call complete');
+      console.log('[RESEARCH-CLAUDE] processResearchRequest: RAW RESPONSE:', JSON.stringify(response, null, 2));
     } catch (error) {
-      log(3, 'processResearchRequest', 'API Error', { error: error.message });
+      console.log('[RESEARCH-CLAUDE] processResearchRequest: API ERROR', { error: error.message, stack: error.stack });
       if (progressCallback) {
         progressCallback({ type: 'error', content: error.message });
       }
@@ -298,13 +333,113 @@ async function processResearchRequest({
     
     // Extract text and tool_use blocks
     const textBlocks = response.content.filter(b => b.type === 'text');
-    const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
+    let toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
+    
+    // FALLBACK: If no tool_use blocks, parse TAGs from text (Claude without tool support)
+    if (toolUseBlocks.length === 0 && textBlocks.length > 0) {
+      const fullText = textBlocks.map(b => b.text).join('\n');
+      const parsedTags = parseToolTagsFromText(fullText);
+      
+      if (parsedTags.length > 0) {
+        console.log('[RESEARCH-CLAUDE] processResearchRequest: Parsed TAGs from text', { count: parsedTags.length });
+        // Convert parsed tags to tool_use format
+        toolUseBlocks = parsedTags.map((tag, idx) => ({
+          type: 'tool_use',
+          id: `tag_${Date.now()}_${idx}`,
+          name: tag.name,
+          input: tag.params
+        }));
+      }
+    }
     
     // No tool calls = final response
     if (toolUseBlocks.length === 0) {
       finalResponse = textBlocks.map(b => b.text).join('\n');
-      log(1, 'processResearchRequest', 'Final response received');
+      console.log('[RESEARCH-CLAUDE] processResearchRequest: Final response (no tools)', { responseLength: finalResponse.length });
       break;
+    }
+    
+    // Check if any tool call is synthesis
+    const synthesisCall = toolUseBlocks.find(tu => tu.input?.is_synthesis === true);
+    if (synthesisCall) {
+      console.log('[RESEARCH-CLAUDE] processResearchRequest: SYNTHESIS CALL DETECTED');
+      
+      // Build summary from all tool results in conversation history
+      const findings = [];
+      for (const msg of session.conversationHistory) {
+        if (msg.role === 'user' && Array.isArray(msg.content)) {
+          for (const block of msg.content) {
+            if (block.type === 'tool_result') {
+              findings.push(block.content.substring(0, 2000));
+            }
+          }
+        }
+      }
+      const summaryText = findings.join('\n\n---\n\n');
+      console.log('[RESEARCH-CLAUDE] processResearchRequest: Built findings summary', { findingsCount: findings.length, summaryLength: summaryText.length });
+      
+      // Create synthesis prompt for NEW agent call
+      const synthesisPrompt = `Based on the research findings below, provide a comprehensive answer to the user's question.
+
+USER QUESTION: ${userQuery}
+
+RESEARCH FINDINGS:
+${summaryText}
+
+INSTRUCTIONS:
+- Synthesize all findings into a clear, comprehensive response
+- Use the user's language (Indonesian if they asked in Indonesian)
+- Cite sources with [Title](URL) format
+- Be thorough but concise
+- Structure your response with clear sections if needed`;
+
+      console.log('[RESEARCH-CLAUDE] processResearchRequest: Calling NEW agent for synthesis...');
+      
+      // Send thinking status for synthesis
+      if (progressCallback) {
+        progressCallback({
+          type: 'searching',
+          data: { summarizedQuery: 'Synthesizing findings...' }
+        });
+      }
+      
+      // Call Claude with FRESH context (no tools, just synthesis)
+      try {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        
+        const synthesisResponse = await callClaude({
+          baseUrl,
+          apiKey,
+          model,
+          system: `You are a research assistant. Your task is to synthesize research findings into a comprehensive answer. Current date: ${dateStr}`,
+          messages: [{ role: 'user', content: synthesisPrompt }],
+          tools: null, // No tools for synthesis
+          onTextChunk: progressCallback ? (chunk) => {
+            progressCallback({ type: 'content', content: chunk });
+          } : null
+        });
+        
+        // Track synthesis usage
+        if (synthesisResponse.usage) {
+          usageBreakdown.push({
+            stage: 'synthesis',
+            usage: synthesisResponse.usage,
+            model
+          });
+        }
+        
+        const synthTextBlocks = synthesisResponse.content?.filter(b => b.type === 'text') || [];
+        finalResponse = synthTextBlocks.map(b => b.text).join('\n');
+        
+        console.log('[RESEARCH-CLAUDE] processResearchRequest: Synthesis complete', { responseLength: finalResponse.length });
+      } catch (synthError) {
+        console.log('[RESEARCH-CLAUDE] processResearchRequest: Synthesis error', { error: synthError.message });
+        // Fallback to text from research phase
+        finalResponse = textBlocks.map(b => b.text).join('\n');
+      }
+      
+      break; // Exit the main iteration loop
     }
     
     // Execute ALL tool calls in this iteration
@@ -316,26 +451,19 @@ async function processResearchRequest({
       const toolName = toolUse.name;
       const params = toolUse.input || {};
       
-      log(1, 'processResearchRequest', `Tool call: ${toolName}`, { params });
+      console.log('[RESEARCH-CLAUDE] processResearchRequest: TOOL CALL', { toolName, params });
       
-      // Check if this is synthesis call
-      if (params.is_synthesis === true) {
-        log(1, 'processResearchRequest', 'Synthesis requested');
-        finalResponse = response.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
-        break;
-      }
-      
-      // Use AI's short commentary
-      const commentary = params.commentary || params.query || params.pattern || params.file_name || toolName;
+      // Use query/pattern as short title (NOT commentary which is too long)
+      const shortTitle = params.query || params.pattern || params.file_name || params.url || toolName;
       if (!iterationCommentary) {
-        iterationCommentary = commentary;
+        iterationCommentary = shortTitle;
       }
       
-      // Update thinking toggle
+      // Update thinking toggle with short title
       if (progressCallback) {
         progressCallback({
           type: 'searching',
-          data: { summarizedQuery: commentary }
+          data: { summarizedQuery: shortTitle }
         });
       }
       
@@ -353,22 +481,23 @@ async function processResearchRequest({
         toolName,
         result,
         formattedResult,
-        commentary,
+        commentary: params.commentary || '',
         count: Array.isArray(result.data) ? result.data.length : (result.success ? 1 : 0)
       });
     }
     
     // ONE thinking update per iteration
+    // Title = short query/keyword, Content = tool output
     if (progressCallback && iterationResults.length > 0) {
       const combinedContent = iterationResults.map(r => 
-        `${r.commentary}:\n${r.formattedResult.substring(0, 300)}`
-      ).join('\n\n---\n\n');
+        r.formattedResult.substring(0, 400)
+      ).join('\n\n');
       
       progressCallback({
         type: 'thinking_log',
         entry: {
-          stage: iterationCommentary,
-          text: combinedContent.substring(0, 1000)
+          stage: iterationCommentary,  // Short title (query keyword)
+          text: combinedContent.substring(0, 1200)  // Tool output
         }
       });
       

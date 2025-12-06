@@ -3995,14 +3995,15 @@ function runStandardStreaming(event, payload) {
                   }
                 }
               });
-              
-              // Also send to search:status for backward compatibility
-              event.sender.send('search:status', {
-                step: 'DECIDED',
+            } else if (update.type === 'thinking_stream') {
+              // Stream thinking text from Gemini native during synthesis (plain text append)
+              const aiMessageIndex = session.messages ? session.messages.length - 1 : 0;
+              event.sender.send('chat-update', {
+                type: 'THINKING',
+                messageIndex: aiMessageIndex,
                 data: {
-                  reasoning: update.entry?.text || update.content || '',
-                  summary_key: update.entry?.text || update.content || '',
-                  search_queries: [update.entry?.text || update.content || '']
+                  sessionId: session?.id || null,
+                  think: update.content || ''  // Plain string = appendThinking in renderer
                 }
               });
             } else if (update.type === 'searching') {
@@ -4121,9 +4122,8 @@ function runStandardStreaming(event, payload) {
               log('MAIN: Using RE+ACT pattern for complex project query analysis...');
 
                 try {
-                  const modelInfo = { provider, model, apiKey: getApiKey(provider, payload), baseUrl };
-                  langchainService.reasoningAgent.initializeSession(sessionId, availableFiles || [], modelInfo);
-                  log(`MAIN: ReasoningAgent initialized for session ${sessionId} with ${availableFiles ? availableFiles.length : 0} files.`);
+                  // NOTE: initializeSession is called inside langchain-service.processWithReasoningAction
+                  // Do NOT call it here to avoid duplicate initialization
                   if (availableFiles && availableFiles.length > 0) {
                     const projectFiles = availableFiles.map(f => ({
                       title: f.name,

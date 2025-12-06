@@ -391,6 +391,9 @@ class DatabaseManager {
   }
   
   saveSession(session) {
+    // DEBUG: Log ALL sessions yang di-save untuk track project_id issue
+    console.log(`[DB:saveSession] id=${session.id}, projectId=${session.projectId}, type=${session.type}, isProject=${session.isProject}, name=${(session.name || '').substring(0, 30)}`);
+    
     // Use cached device ID (set once in constructor)
     const deviceId = this._cachedDeviceId;
     
@@ -640,9 +643,16 @@ class DatabaseManager {
   
   saveProject(project) {
     const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO projects 
+      INSERT INTO projects 
       (id, name, description, instruction, created_at, updated_at, is_favorite, metadata)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        name = excluded.name,
+        description = excluded.description,
+        instruction = excluded.instruction,
+        updated_at = excluded.updated_at,
+        is_favorite = excluded.is_favorite,
+        metadata = excluded.metadata
     `);
     
     const createdAt = project.created_at ? Date.parse(project.created_at) : Date.now();

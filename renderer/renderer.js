@@ -168,7 +168,8 @@ const domCache = {
 
 const THINKING_TIMER = new WeakMap();
 const SESSIONS_PER_PAGE = 70;
-const BROWSER_MODE = typeof window.api === "undefined";
+const isCapacitorNative = typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform?.();
+const BROWSER_MODE = typeof window.api === "undefined" && !isCapacitorNative;
 
 // Streaming renders only need structural markup; skip expensive artifact hydration hooks
 const STREAMING_FALLBACK_OPTIONS = { skipArtifactHydration: true };

@@ -391,9 +391,6 @@ class DatabaseManager {
   }
   
   saveSession(session) {
-    // DEBUG: Log ALL sessions yang di-save untuk track project_id issue
-    console.log(`[DB:saveSession] id=${session.id}, projectId=${session.projectId}, type=${session.type}, isProject=${session.isProject}, name=${(session.name || '').substring(0, 30)}`);
-    
     // Use cached device ID (set once in constructor)
     const deviceId = this._cachedDeviceId;
     

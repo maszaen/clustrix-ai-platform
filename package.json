@@ -1,6 +1,6 @@
 {
   "name": "clustrix",
-  "version": "35.8.0",
+  "version": "35.9.0",
   "private": true,
   "description": "Clustrix - A smart AI chat assistant.",
   "author": "Maszaen Corporation",
@@ -33,8 +33,11 @@
       "!README.md"
     ],
     "win": {
-      "target": "nsis",
+      "target": ["nsis", "portable"],
       "icon": "public/images/favicon.ico"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.exe"
     },
     "nsis": {
       "oneClick": false,

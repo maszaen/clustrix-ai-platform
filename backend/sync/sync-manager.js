@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { log } = require('../../utils/logger');
+const { getDataPath } = require('../../utils/portable');
 
 /**
  * SyncManager
@@ -14,7 +15,7 @@ const { log } = require('../../utils/logger');
 class SyncManager {
   constructor(app) {
     this.app = app;
-    this.userDataRoot = app.getPath('userData');
+    this.userDataRoot = getDataPath();
     this.databaseRoot = path.join(this.userDataRoot, 'database');
     this.internalDbDir = path.join(this.databaseRoot, 'internal');
     this.syncDbRoot = path.join(this.databaseRoot, 'sync');

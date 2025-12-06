@@ -6,6 +6,7 @@ const {
   generateSessionHash, 
   getCurrentTimestamp 
 } = require('../sync/sync-helpers');
+const { isPortableMode, getDatabasePath, ensureDataDirectories } = require('../../utils/portable');
 
 function log(context, level, func, message, details = {}) {
   logWithContext(context, func, message, details);
@@ -20,9 +21,10 @@ class DatabaseManager {
       // customDbDir should be full path to database directory
       dbPath = path.join(customDbDir, 'clustrix.db');
     } else {
-      // Default: internal database
-      const userDataPath = app.getPath('userData');
-      dbPath = userDataPath === ':memory:' ? ':memory:' : path.join(userDataPath, 'database', 'internal', 'clustrix.db');
+      // Default: internal database (supports portable mode)
+      ensureDataDirectories();
+      const basePath = getDatabasePath();
+      dbPath = basePath === ':memory:' ? ':memory:' : path.join(basePath, 'internal', 'clustrix.db');
     }
     
     this.db = new Database(dbPath);

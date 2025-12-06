@@ -4,6 +4,7 @@ const { app, BrowserWindow, ipcMain, dialog, session, protocol, screen, shell, T
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
+const { isPortableMode, getDataPath } = require('./utils/portable');
 const https = require('https');
 const http = require('http');
 const url = require('url');
@@ -274,11 +275,12 @@ function evaluateCloseReadiness() {
 }
 
 app.whenReady().then(async () => {
-  setLogFile(path.join(app.getPath('userData'), 'app.log'));
+  const dataPath = getDataPath();
+  setLogFile(path.join(dataPath, 'app.log'));
   setDebug(process.env.CLUSTRIX_DEBUG !== 'false');
   
   // Rotate log dengan checkpoint (max 3 sessions)
-  const rotationInfo = rotateLogWithCheckpoint(app.getPath('userData'));
+  const rotationInfo = rotateLogWithCheckpoint(dataPath);
   log('APP', 'startup', 'Session started', {
     timestamp: rotationInfo.timestamp,
     rotated: rotationInfo.rotated,
@@ -630,7 +632,7 @@ function getDefaultModelConfig() {
 function getModelConfigPath() {
   if (!syncManager) {
     // Fallback to internal if syncManager not initialized yet
-    const internalPath = path.join(app.getPath('userData'), 'database', 'internal');
+    const internalPath = path.join(getDataPath(), 'database', 'internal');
     return path.join(internalPath, 'ai-model.conf.json');
   }
   
@@ -895,7 +897,7 @@ ipcMain.handle('sync:switchMode', async (_evt, params) => {
         try {
           log('sync:switchMode', 1, 'handleSync', 'Downloading profile picture...', { url: config.profileUrl });
           const https = require('https');
-          const profilePicPath = path.join(app.getPath('userData'), 'current-profile-photo.jpg');
+          const profilePicPath = path.join(getDataPath(), 'current-profile-photo.jpg');
 
           await new Promise((resolve, reject) => {
             https.get(config.profileUrl, (response) => {
@@ -1078,7 +1080,7 @@ ipcMain.handle('sync:logout', async (_evt, params = {}) => {
     
     // Delete profile photo
     try {
-      const photoPath = path.join(app.getPath('userData'), 'current-profile-photo.jpg');
+      const photoPath = path.join(getDataPath(), 'current-profile-photo.jpg');
       if (fs.existsSync(photoPath)) {
         fs.unlinkSync(photoPath);
         log('sync:logout', 1, 'handleSync', 'Deleted profile photo');
@@ -1190,7 +1192,7 @@ ipcMain.handle('sync:startOAuth', async (evt) => {
       try {
         log('sync:startOAuth', 1, 'handleSync', 'Downloading profile picture...', { url: result.profileUrl });
         const https = require('https');
-        const profilePicPath = path.join(app.getPath('userData'), 'current-profile-photo.jpg');
+        const profilePicPath = path.join(getDataPath(), 'current-profile-photo.jpg');
         
         await new Promise((resolve, reject) => {
           https.get(result.profileUrl, (response) => {
@@ -2112,7 +2114,7 @@ ipcMain.handle('sync:resolveConflicts', async (_evt, resolutions) => {
  */
 ipcMain.handle('app:getProfilePhoto', async () => {
   try {
-    const photoPath = path.join(app.getPath('userData'), 'current-profile-photo.jpg');
+    const photoPath = path.join(getDataPath(), 'current-profile-photo.jpg');
     
     if (!fs.existsSync(photoPath)) {
       return { success: false, error: 'No profile photo found' };
@@ -3272,7 +3274,7 @@ ipcMain.handle('benchmark:fetchStats', async (_evt, filters = {}) => {
 
 // HTML Preview handlers
 ipcMain.handle('html-preview:create', async (_evt, htmlContent) => {
-  const previewsDir = path.join(app.getPath('userData'), 'html-previews');
+  const previewsDir = path.join(getDataPath(), 'html-previews');
   
   // Create directory if not exists
   if (!fs.existsSync(previewsDir)) {
@@ -3290,7 +3292,7 @@ ipcMain.handle('html-preview:create', async (_evt, htmlContent) => {
 });
 
 ipcMain.handle('html-preview:delete', async (_evt, previewId) => {
-  const previewsDir = path.join(app.getPath('userData'), 'html-previews');
+  const previewsDir = path.join(getDataPath(), 'html-previews');
   const filePath = path.join(previewsDir, `${previewId}.html`);
   
   // Delete file if exists

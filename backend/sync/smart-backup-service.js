@@ -16,6 +16,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { app } = require('electron');
 const { logWithContext } = require('../../utils/logger');
+const { getDataPath } = require('../../utils/portable');
 const {
   getDeviceId,
   getLastBackupTime,
@@ -34,7 +35,7 @@ class SmartBackupService {
     this.localDbPath = localDbPath;
     this.githubStorage = githubStorageService;
     this.tempDir = path.join(path.dirname(localDbPath), 'temp');
-    this.lockFilePath = path.join(app.getPath('userData'), 'backup.lock');
+    this.lockFilePath = path.join(getDataPath(), 'backup.lock');
     this.conflictResolver = new ConflictResolver();
     
     // Ensure temp directory exists

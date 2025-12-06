@@ -7,6 +7,7 @@
 const path = require('path');
 const fs = require('fs');
 const fsp = require('fs').promises;
+const { getDataPath } = require('../../utils/portable');
 
 class LocalEmbeddingEngine {
   constructor(app) {
@@ -14,7 +15,7 @@ class LocalEmbeddingEngine {
     this.documentIndex = new Map(); // fileName -> TF-IDF vector
     this.vocabulary = new Map(); // word -> global frequency
     this.idfCache = new Map(); // word -> IDF score
-    this.indexFile = path.join(app.getPath('userData'), 'local_index.json');
+    this.indexFile = path.join(getDataPath(), 'local_index.json');
     
     // Stop words for better relevance
     this.stopWords = new Set([

@@ -295,7 +295,59 @@ async function processResearchRequest({
     
     // No tool calls = final response
     if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
-      finalResponse = assistantMsg.content || '';
+      // Check if we have tool results but no synthesis was called
+      const hasToolResults = session.conversationHistory.some(msg => msg.role === 'tool');
+      
+      if (hasToolResults && (!assistantMsg.content || assistantMsg.content.length < 100)) {
+        // Force synthesis if we have findings but empty/short response
+        console.log('[RESEARCH-OPENAI] processResearchRequest: Empty response with findings, forcing synthesis...');
+        
+        const findings = [];
+        for (const msg of session.conversationHistory) {
+          if (msg.role === 'tool') {
+            findings.push(msg.content.substring(0, 2000));
+          }
+        }
+        const summaryText = findings.join('\n\n---\n\n');
+        
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        
+        const synthesisPrompt = `Based on the research findings below, provide a comprehensive answer to the user's question.
+
+USER QUESTION: ${userQuery}
+
+RESEARCH FINDINGS:
+${summaryText}
+
+INSTRUCTIONS:
+- Synthesize all findings into a clear, comprehensive response
+- Use the user's language (Indonesian if they asked in Indonesian)
+- Cite sources with [Title](URL) format
+- Be thorough but concise`;
+
+        try {
+          const synthesisResponse = await callOpenAI({
+            baseUrl,
+            apiKey,
+            model,
+            messages: [
+              { role: 'system', content: `You are a research assistant. Synthesize findings into a comprehensive answer. Current date: ${dateStr}` },
+              { role: 'user', content: synthesisPrompt }
+            ],
+            tools: null,
+            onTextChunk: progressCallback ? (chunk) => {
+              progressCallback({ type: 'content', content: chunk });
+            } : null
+          });
+          finalResponse = synthesisResponse.message?.content || assistantMsg.content || '';
+        } catch (e) {
+          finalResponse = assistantMsg.content || '';
+        }
+      } else {
+        finalResponse = assistantMsg.content || '';
+      }
+      
       console.log('[RESEARCH-OPENAI] processResearchRequest: Final response (no tools)', { responseLength: finalResponse.length });
       break;
     }

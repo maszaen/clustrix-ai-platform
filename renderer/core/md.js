@@ -3456,9 +3456,9 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
     let replacement = '';
 
     if (group.input) {
-      // Create expandable command input with output
+      // Create expandable command input with output (with powershell syntax highlighting)
       const outputHtml = group.output ?
-        '<div class="command-output" aria-hidden="true">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '';
+        '<div class="command-output" aria-hidden="true"><pre style="margin:0;background:transparent;border:none;padding:0;"><code class="language-powershell">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</code></pre></div>' : '';
 
       const toggleButton = group.output ? '<button class="command-toggle"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg></button>' : '';
 
@@ -3469,8 +3469,8 @@ function enhancedMarkdownParse(src, options = {}, sharedCodeBlocks = null) {
         readableCommand +
         '</span>' + toggleButton + '</div>' + outputHtml + '</div>\n';
     } else if (group.output) {
-      // Standalone output (fallback)
-      replacement = '<div class="command-output">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+      // Standalone output (fallback) with powershell syntax highlighting
+      replacement = '<div class="command-output"><pre style="margin:0;background:transparent;border:none;padding:0;"><code class="language-powershell">' + group.output.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</code></pre></div>';
     }
 
     finalHtml = finalHtml.replace(`___COMMAND_BLOCK_START_${index}___`, replacement);
@@ -3642,7 +3642,7 @@ function processMarkdownFormatting(text, globalReferences = {}) {
   });
   const tldList = ["com", "net", "org", "io", "gov", "edu", "co", "info", "biz", "online", "app", "id", "me", "site", "tech", "dev", "ai", "cloud", "shop", "store", "live", "blog", "club", "news", "xyz", "link", "cloud", "space", "page", "pro", "design", "agency", "group", "company", "inc", "us", "uk", "au", "ca", "de", "fr", "es", "it", "nl", "se", "no", "fi", "ru", "cn", "jp", "br", "in", "cz", "pl", "be", "ch", "at", "sg", "hk", "nz", "mx", "ar", "cl", "kr", "za", "ae", "sa"];
   const tldPattern = tldList.join("|");
-  const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
+  const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?![a-zA-Z0-9])(?:\\/[^\\s<>"]*)?)', "gi");
   html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl, offset) => {
     // Skip if inside href, src attributes, or near placeholders
     if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`) ||
@@ -3953,7 +3953,7 @@ function parseInlineMarkdown(text, globalReferences = {}) {
   });
   const tldList = ["com", "net", "org", "io", "gov", "edu", "co", "info", "biz", "online", "app", "id", "me", "site", "tech", "dev", "ai", "cloud", "shop", "store", "live", "blog", "club", "news", "xyz", "link", "cloud", "space", "page", "pro", "design", "agency", "group", "company", "inc", "us", "uk", "au", "ca", "de", "fr", "es", "it", "nl", "se", "no", "fi", "ru", "cn", "jp", "br", "in", "cz", "pl", "be", "ch", "at", "sg", "hk", "nz", "mx", "ar", "cl", "kr", "za", "ae", "sa"];
   const tldPattern = tldList.join("|");
-  const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?:\\/[^\\s<>"]*)?)', "gi");
+  const autoLinkRegex = new RegExp('(\\b(?:https?:\\/\\/|www\\.)[^\\s<>"]+)' + "|" + "(?<!\\w)([a-zA-Z0-9.-]+\\.(?:" + tldPattern + ')(?![a-zA-Z0-9])(?:\\/[^\\s<>"]*)?)', "gi");
   html = html.replace(autoLinkRegex, (match, protocolUrl, domainUrl, offset) => {
     // Skip if inside href, src attributes, or near placeholders
     if (html.includes(`href="${match}"`) || html.includes(`src="${match}"`) ||
@@ -4151,7 +4151,7 @@ function md(src, options = {}) {
     if (isLast) classes.push('last-command');
 
     const outputHtml = group.output
-      ? `<div class="command-output" aria-hidden="true">${escapeCommandOutput(group.output)}</div>`
+      ? `<div class="command-output" aria-hidden="true"><pre style="margin:0;background:transparent;border:none;padding:0;"><code class="language-powershell">${escapeCommandOutput(group.output)}</code></pre></div>`
       : '';
 
     const toggleButton = group.output
@@ -4192,7 +4192,7 @@ function md(src, options = {}) {
     if (groups.length === 1) {
       const [group] = groups;
       if (!group.input && group.output) {
-        const replacement = `<div class="command-output">${escapeCommandOutput(group.output)}</div>`;
+        const replacement = `<div class="command-output"><pre style="margin:0;background:transparent;border:none;padding:0;"><code class="language-powershell">${escapeCommandOutput(group.output)}</code></pre></div>`;
         finalHtml = finalHtml.replace(placeholder, replacement);
         return;
       }

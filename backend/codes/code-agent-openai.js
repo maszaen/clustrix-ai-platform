@@ -23,6 +23,7 @@ const {
   formatSummaryForContext
 } = require('./context-manager');
 const { executeWebSearch, WEB_SEARCH_TOOL_OPENAI } = require('./web-search-tool');
+const { executeReadImage, READ_IMAGE_TOOL_OPENAI } = require('./image-tool');
 
 // ===================================
 // OPENAI TOOLS (converted from Claude format)
@@ -225,7 +226,8 @@ USAGE GUIDELINES:
       }
     }
   },
-  WEB_SEARCH_TOOL_OPENAI
+  WEB_SEARCH_TOOL_OPENAI,
+  READ_IMAGE_TOOL_OPENAI
 ];
 
 // ===================================
@@ -513,7 +515,7 @@ function formatChecklist(checklist) {
   }).join('\n');
 }
 
-async function executeTool(session, toolCall, confirmed, onChunk, sessionId, db = null) {
+async function executeTool(session, toolCall, confirmed, onChunk, sessionId, db = null, apiConfig = null) {
   const name = toolCall.function.name;
   const id = toolCall.id;
   const input = JSON.parse(toolCall.function.arguments);
@@ -638,6 +640,14 @@ async function executeTool(session, toolCall, confirmed, onChunk, sessionId, db 
     case 'web_search': {
       // Note: command-input tag is emitted in main loop, not here (to avoid double emit)
       const result = await executeWebSearch(input, db);
+      return { tool_call_id: id, output: result.output };
+    }
+    
+    case 'read_image': {
+      const result = await executeReadImage(input, {
+        workspacePath: session.workspacePath,
+        apiConfig: apiConfig || {}
+      });
       return { tool_call_id: id, output: result.output };
     }
     
@@ -809,6 +819,8 @@ async function processOpenAICodeRequest({
         displayText = `Update checklist (${args.checklist?.length || 0} items)`;
       } else if (toolCall.function.name === 'web_search') {
         displayText = `Web search: ${args.queries?.slice(0, 2).join(', ')}${args.queries?.length > 2 ? '...' : ''}`;
+      } else if (toolCall.function.name === 'read_image') {
+        displayText = `Analyze image: ${args.image_path}`;
       }
       
       if (displayText) {
@@ -819,7 +831,7 @@ async function processOpenAICodeRequest({
         if (onChunk) onChunk(commandChunk, { type: 'command', iteration, toolName: toolCall.function.name });
       }
       
-      const result = await executeTool(session, toolCall, false, onChunk, sessionId, db);
+      const result = await executeTool(session, toolCall, false, onChunk, sessionId, db, { baseUrl, apiKey, model, provider: 'openai' });
       
       session.conversationHistory.push({
         role: 'tool',

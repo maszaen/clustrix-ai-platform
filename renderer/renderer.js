@@ -9117,7 +9117,7 @@ function mdFallback(src, options = {}) {
         if (isLast) classes.push('last-command');
 
         const outputHtml = group.output
-          ? `<div class="command-output" aria-hidden="true">${escapeCommandOutput(group.output)}</div>`
+          ? `<div class="command-output" aria-hidden="true"><pre style="margin:0;background:transparent;border:none;padding:0;"><code class="language-powershell">${escapeCommandOutput(group.output)}</code></pre></div>`
           : '';
 
         const toggleButton = group.output
@@ -9167,7 +9167,7 @@ function mdFallback(src, options = {}) {
         if (groups.length === 1) {
           const [group] = groups;
           if (!group.input && group.output) {
-            const replacement = `<div class="command-output">${escapeCommandOutput(group.output)}</div>`;
+            const replacement = `<div class="command-output"><pre style="margin:0;background:transparent;border:none;padding:0;"><code class="language-powershell">${escapeCommandOutput(group.output)}</code></pre></div>`;
             finalHtml = finalHtml.replace(placeholder, replacement);
             return;
           }
@@ -14160,6 +14160,7 @@ async function startStream(
     return;
   }
 
+  console.log('[WEBSEARCH-DEBUG] state.settings.webSearchEnabled =', state.settings.webSearchEnabled, typeof state.settings.webSearchEnabled);
   try { console.debug('RENDERER: starting chat.stream', { sessionId: session.id, webSearchEnabled: state.settings.webSearchEnabled, model: act.model, provider: act.platform }); } catch (e) {}
 
   const controller = window.api.chat.stream(
@@ -14439,6 +14440,8 @@ async function send() {
     metadata: { files: filesToAttach },
   });
 
+  // IMPORTANT: Copy uploadedFiles before clearing for use in stream
+  const filesForStream = [...(current.uploadedFiles || [])];
   current.uploadedFiles = [];
   renderUploadedFiles();
 
@@ -14495,8 +14498,17 @@ async function send() {
   const messagesForAI = (current.type === "project" || current.isProject) 
     ? buildMessagesForProject(current) 
     : buildMessages();
+  
+  // Pass files to stream (they were cleared from current.uploadedFiles above)
+  const sessionWithFiles = { ...current, uploadedFiles: filesForStream };
+  console.log('[RENDERER-DEBUG] Starting stream with files:', {
+    filesCount: filesForStream.length,
+    fileNames: filesForStream.map(f => f.name),
+    hasBase64: filesForStream.some(f => f.base64)
+  });
+  
   startStream(
-    current,
+    sessionWithFiles,
     originalText,
     aiNode,
     aiMessageIndex,
@@ -14605,7 +14617,16 @@ async function sendFromWelcome() {
 
   scheduleThinkingText(aiNode);
   const messagesForAI = buildMessages();
-  startStream(s, userTextForUI, aiNode, aiMessageIndex, true, messagesForAI);
+  
+  // Pass files to stream
+  const sessionWithFiles = { ...s, uploadedFiles: filesToAttach };
+  console.log('[RENDERER-DEBUG] sendFromWelcome with files:', {
+    filesCount: filesToAttach.length,
+    fileNames: filesToAttach.map(f => f.name),
+    hasBase64: filesToAttach.some(f => f.base64)
+  });
+  
+  startStream(sessionWithFiles, userTextForUI, aiNode, aiMessageIndex, true, messagesForAI);
 }
 
 async function regenerateFromIndex(aiIndex) {

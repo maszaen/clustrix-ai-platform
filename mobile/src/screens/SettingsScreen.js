@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { DEFAULT_PROVIDERS } from '../services/api';
+import ContextMenu from '../components/ContextMenu';
+import InputModal from '../components/InputModal';
+import ConfirmModal from '../components/ConfirmModal';
 
 const COLORS = {
   bg: '#000000ff',
@@ -16,22 +19,198 @@ const COLORS = {
   borderLight: '#3c4141',
 };
 
-const PROVIDERS = [
-  { id: 'openrouter', name: 'OpenRouter', models: ['openai/gpt-4o-mini', 'openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.5-pro-preview-06-05'] },
-  { id: 'google', name: 'Gemini', models: ['gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash-preview-05-20', 'gemini-1.5-pro'] },
-  { id: 'openai', name: 'OpenAI', models: ['gpt-4o-mini', 'gpt-4o', 'o1-mini'] },
-  { id: 'anthropic', name: 'Claude', models: ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022'] },
-  { id: 'groq', name: 'Groq', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'] },
-  { id: 'megallm', name: 'MegaLLM', models: ['gpt-4o', 'claude-sonnet-4-20250514'] },
-  { id: 'custom', name: 'Custom', models: [] },
+const DEFAULT_PROVIDERS_LIST = [
+  { id: 'openrouter', name: 'OpenRouter' },
+  { id: 'google', name: 'Gemini' },
+  { id: 'openai', name: 'OpenAI' },
+  { id: 'anthropic', name: 'Claude' },
+  { id: 'groq', name: 'Groq' },
+  { id: 'megallm', name: 'MegaLLM' },
+  { id: 'custom', name: 'Custom' },
 ];
 
-export default function SettingsScreen({ onClose }) {
-  const { settings, updateSettings } = useApp();
-  const [localSettings, setLocalSettings] = useState(settings);
-  const [showApiKey, setShowApiKey] = useState(false);
+const DEFAULT_MODELS = [
+  { provider: 'openrouter', model_id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini', is_default: true },
+  { provider: 'openrouter', model_id: 'openai/gpt-4o', label: 'GPT-4o', is_default: true },
+  { provider: 'openrouter', model_id: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet', is_default: true },
+  { provider: 'openrouter', model_id: 'google/gemini-2.5-pro-preview-06-05', label: 'Gemini 2.5 Pro', is_default: true },
+  { provider: 'google', model_id: 'gemini-2.5-pro-preview-06-05', label: 'Gemini 2.5 Pro', is_default: true },
+  { provider: 'google', model_id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash', is_default: true },
+  { provider: 'openai', model_id: 'gpt-4o-mini', label: 'GPT-4o Mini', is_default: true },
+  { provider: 'openai', model_id: 'gpt-4o', label: 'GPT-4o', is_default: true },
+  { provider: 'anthropic', model_id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', is_default: true },
+  { provider: 'groq', model_id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', is_default: true },
+  { provider: 'megallm', model_id: 'gpt-4o', label: 'GPT-4o', is_default: true },
+];
 
-  const selectedProvider = PROVIDERS.find(p => p.id === localSettings.provider) || PROVIDERS[0];
+const LANGUAGES = [
+  { id: 'autodetect', name: 'Auto-detect' },
+  { id: 'english', name: 'English' },
+  { id: 'indonesia', name: 'Indonesian' },
+];
+
+// Dropdown Select Component
+function DropdownSelect({ label, value, options, onSelect, renderOption }) {
+  const [visible, setVisible] = useState(false);
+  const selected = options.find(o => o.id === value || o.model_id === value);
+  
+  return (
+    <View>
+      <TouchableOpacity style={styles.dropdown} onPress={() => setVisible(true)}>
+        <Text style={styles.dropdownText}>
+          {renderOption ? renderOption(selected) : (selected?.name || selected?.label || 'Select...')}
+        </Text>
+        <Ionicons name="chevron-down" size={18} color={COLORS.fgMuted} />
+      </TouchableOpacity>
+      
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
+          <View style={styles.dropdownModal}>
+            <Text style={styles.dropdownModalTitle}>{label}</Text>
+            <FlatList
+              data={options}
+              keyExtractor={(item) => item.id || item.model_id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.dropdownItem, (item.id === value || item.model_id === value) && styles.dropdownItemActive]}
+                  onPress={() => { onSelect(item); setVisible(false); }}
+                >
+                  <Text style={[styles.dropdownItemText, (item.id === value || item.model_id === value) && styles.dropdownItemTextActive]}>
+                    {renderOption ? renderOption(item) : (item.name || item.label)}
+                  </Text>
+                  {(item.id === value || item.model_id === value) && (
+                    <Ionicons name="checkmark" size={18} color={COLORS.primary} />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+}
+
+// Main Settings Menu
+function SettingsMenu({ onNavigate }) {
+  return (
+    <View style={styles.menuContainer}>
+      <TouchableOpacity style={styles.menuItem} onPress={() => onNavigate('instructions')}>
+        <View style={styles.menuItemLeft}>
+          <Ionicons name="person-outline" size={22} color={COLORS.fgMuted} />
+          <View style={styles.menuItemText}>
+            <Text style={styles.menuItemTitle}>Custom Instructions</Text>
+            <Text style={styles.menuItemDesc}>Persona and preferences</Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={COLORS.fgMuted} />
+      </TouchableOpacity>
+      
+      <TouchableOpacity style={styles.menuItem} onPress={() => onNavigate('models')}>
+        <View style={styles.menuItemLeft}>
+          <Ionicons name="cube-outline" size={22} color={COLORS.fgMuted} />
+          <View style={styles.menuItemText}>
+            <Text style={styles.menuItemTitle}>Models List</Text>
+            <Text style={styles.menuItemDesc}>AI providers and models</Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={COLORS.fgMuted} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// Custom Instructions Screen
+function CustomInstructionsScreen({ settings, onUpdate, onBack }) {
+  const [persona, setPersona] = useState(settings.persona || { name: '', work: '', prefs: '' });
+  const [language, setLanguage] = useState(settings.language || 'autodetect');
+
+  const handleSave = () => {
+    onUpdate({ persona, language });
+    Alert.alert('Saved', 'Custom instructions saved');
+    onBack();
+  };
+
+  return (
+    <ScrollView style={styles.subContainer} contentContainerStyle={styles.content}>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Your Name</Text>
+        <TextInput
+          style={styles.input}
+          value={persona.name}
+          onChangeText={(text) => setPersona({ ...persona, name: text })}
+          placeholder="What should I call you?"
+          placeholderTextColor={COLORS.fgMuted}
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Your Work</Text>
+        <TextInput
+          style={styles.input}
+          value={persona.work}
+          onChangeText={(text) => setPersona({ ...persona, work: text })}
+          placeholder="What do you do? (e.g., Software Engineer)"
+          placeholderTextColor={COLORS.fgMuted}
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Preferences</Text>
+        <TextInput
+          style={[styles.input, styles.inputMultiline]}
+          value={persona.prefs}
+          onChangeText={(text) => setPersona({ ...persona, prefs: text })}
+          placeholder="How should I respond? (e.g., Be concise, use examples)"
+          placeholderTextColor={COLORS.fgMuted}
+          multiline
+          numberOfLines={4}
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Response Language</Text>
+        <DropdownSelect
+          label="Select Language"
+          value={language}
+          options={LANGUAGES}
+          onSelect={(item) => setLanguage(item.id)}
+        />
+      </View>
+
+      <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+        <Text style={styles.saveBtnText}>Save Instructions</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
+
+// Models List Screen
+function ModelsListScreen({ settings, customModels, customProviders, onUpdate, onAddModel, onDeleteModel, onRenameModel, onAddProvider, onDeleteProvider, onRenameProvider, onBack }) {
+  const [localSettings, setLocalSettings] = useState({
+    provider: settings.provider || 'openrouter',
+    model: settings.model || '',
+    apiKey: settings.apiKey || '',
+    baseUrl: settings.baseUrl || '',
+  });
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [contextMenu, setContextMenu] = useState({ visible: false, item: null, type: null, position: { x: 0, y: 0 } });
+  const [addModelModal, setAddModelModal] = useState(false);
+  const [addProviderModal, setAddProviderModal] = useState(false);
+  const [renameModal, setRenameModal] = useState({ visible: false, item: null, type: null });
+  const [confirmDelete, setConfirmDelete] = useState({ visible: false, item: null, type: null });
+
+  // Combine default and custom providers
+  const allProviders = [...DEFAULT_PROVIDERS_LIST, ...customProviders.map(p => ({ id: p.id, name: p.name, base_url: p.base_url, is_custom: true }))];
+
+  // Get models for current provider
+  const getModelsForProvider = (providerId) => {
+    const defaultModels = DEFAULT_MODELS.filter(m => m.provider === providerId);
+    const custom = customModels.filter(m => m.provider === providerId);
+    return [...defaultModels, ...custom];
+  };
+
+  const availableModels = getModelsForProvider(localSettings.provider);
 
   const handleSave = () => {
     if (!localSettings.apiKey) {
@@ -42,84 +221,187 @@ export default function SettingsScreen({ onClose }) {
       Alert.alert('Missing Model', 'Please select or enter a model');
       return;
     }
-    updateSettings(localSettings);
-    Alert.alert('Saved', 'Settings saved');
-    onClose?.();
+    onUpdate(localSettings);
+    Alert.alert('Saved', 'Model settings saved');
+    onBack();
   };
 
-  const handleProviderChange = (providerId) => {
-    const provider = PROVIDERS.find(p => p.id === providerId);
+  const handleProviderChange = (provider) => {
+    const models = getModelsForProvider(provider.id);
     setLocalSettings({
       ...localSettings,
-      provider: providerId,
-      model: provider?.models[0] || '',
+      provider: provider.id,
+      model: models[0]?.model_id || '',
       baseUrl: '',
     });
   };
 
+  const handleItemLongPress = (item, type, event) => {
+    if (item.is_default) return;
+    setContextMenu({
+      visible: true,
+      item,
+      type,
+      position: { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY },
+    });
+  };
+
+  const handleAddModel = (values) => {
+    onAddModel({
+      provider: localSettings.provider,
+      model_id: values.model_id,
+      label: values.label || values.model_id,
+    });
+    setAddModelModal(false);
+  };
+
+  const handleAddProvider = (values) => {
+    onAddProvider({
+      name: values.name,
+      base_url: values.base_url,
+    });
+    setAddProviderModal(false);
+  };
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header */}
-      <Text style={styles.headerTitle}>Settings</Text>
-      {/* Current Config */}
-      <View style={styles.configBox}>
-        <Text style={styles.configLabel}>Current: {selectedProvider.name} / {localSettings.model || 'Not set'}</Text>
+    <ScrollView style={styles.subContainer} contentContainerStyle={styles.content}>
+      <ContextMenu
+        visible={contextMenu.visible}
+        position={contextMenu.position}
+        options={[
+          { label: 'Rename', icon: 'pencil-outline', onPress: () => setRenameModal({ visible: true, item: contextMenu.item, type: contextMenu.type }) },
+          { label: 'Delete', icon: 'trash-outline', danger: true, onPress: () => setConfirmDelete({ visible: true, item: contextMenu.item, type: contextMenu.type }) },
+        ]}
+        onClose={() => setContextMenu({ ...contextMenu, visible: false })}
+      />
+      
+      <ConfirmModal
+        visible={confirmDelete.visible}
+        title={`Delete ${confirmDelete.type === 'provider' ? 'Provider' : 'Model'}`}
+        message={`Delete "${confirmDelete.item?.name || confirmDelete.item?.label}"?`}
+        confirmText="Delete"
+        danger
+        onConfirm={() => {
+          if (confirmDelete.type === 'provider') {
+            onDeleteProvider(confirmDelete.item.id);
+          } else {
+            onDeleteModel(confirmDelete.item.id);
+          }
+          setConfirmDelete({ visible: false, item: null, type: null });
+        }}
+        onCancel={() => setConfirmDelete({ visible: false, item: null, type: null })}
+      />
+      
+      <InputModal
+        visible={renameModal.visible}
+        title={`Rename ${renameModal.type === 'provider' ? 'Provider' : 'Model'}`}
+        fields={[{ 
+          key: renameModal.type === 'provider' ? 'name' : 'label', 
+          placeholder: renameModal.type === 'provider' ? 'Provider name' : 'Model name', 
+          value: renameModal.item?.name || renameModal.item?.label || '', 
+          required: true 
+        }]}
+        onSubmit={(values) => {
+          if (renameModal.type === 'provider') {
+            onRenameProvider(renameModal.item.id, { name: values.name });
+          } else {
+            onRenameModel(renameModal.item.id, { label: values.label });
+          }
+          setRenameModal({ visible: false, item: null, type: null });
+        }}
+        onCancel={() => setRenameModal({ visible: false, item: null, type: null })}
+      />
+      
+      <InputModal
+        visible={addModelModal}
+        title="Add Custom Model"
+        fields={[
+          { key: 'model_id', label: 'Model ID', placeholder: 'e.g., gpt-4-turbo', required: true },
+          { key: 'label', label: 'Display Name', placeholder: 'e.g., GPT-4 Turbo' },
+        ]}
+        submitText="Add"
+        onSubmit={handleAddModel}
+        onCancel={() => setAddModelModal(false)}
+      />
+      
+      <InputModal
+        visible={addProviderModal}
+        title="Add Custom Provider"
+        fields={[
+          { key: 'name', label: 'Provider Name', placeholder: 'e.g., My API', required: true },
+          { key: 'base_url', label: 'Base URL', placeholder: 'https://api.example.com/v1', required: true },
+        ]}
+        submitText="Add"
+        onSubmit={handleAddProvider}
+        onCancel={() => setAddProviderModal(false)}
+      />
+
+      {/* Provider Dropdown */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Provider</Text>
+          <TouchableOpacity onPress={() => setAddProviderModal(true)}>
+            <Ionicons name="add-circle-outline" size={19} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+        <DropdownSelect
+          label="Select Provider"
+          value={localSettings.provider}
+          options={allProviders}
+          onSelect={handleProviderChange}
+        />
+        {/* Custom providers chips */}
+        {customProviders.length > 0 && (
+          <View style={styles.modelChips}>
+            {customProviders.map(provider => (
+              <TouchableOpacity
+                key={provider.id}
+                style={[styles.modelChip, localSettings.provider === provider.id && styles.modelChipActive]}
+                onPress={() => handleProviderChange(provider)}
+                onLongPress={(e) => handleItemLongPress(provider, 'provider', e)}
+              >
+                <Text style={[styles.modelChipText, localSettings.provider === provider.id && styles.modelChipTextActive]}>
+                  {provider.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
-      {/* Provider */}
+      {/* Model Dropdown */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Provider</Text>
-        <View style={styles.providerGrid}>
-          {PROVIDERS.map(provider => (
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Model</Text>
+          <TouchableOpacity onPress={() => setAddModelModal(true)}>
+            <Ionicons name="add-circle-outline" size={19} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+        <DropdownSelect
+          label="Select Model"
+          value={localSettings.model}
+          options={availableModels}
+          onSelect={(item) => setLocalSettings({ ...localSettings, model: item.model_id })}
+          renderOption={(item) => item?.label || item?.model_id || 'Select...'}
+        />
+        <Text style={styles.hint}>Long press custom models to rename/delete</Text>
+        
+        {/* Custom models chips for long press */}
+        {availableModels.filter(m => !m.is_default).length > 0 && (
+        <View style={styles.modelChips}>
+          {availableModels.filter(m => !m.is_default).map(model => (
             <TouchableOpacity
-              key={provider.id}
-              style={[styles.providerBtn, localSettings.provider === provider.id && styles.providerBtnActive]}
-              onPress={() => handleProviderChange(provider.id)}
+              key={model.id || model.model_id}
+              style={[styles.modelChip, localSettings.model === model.model_id && styles.modelChipActive]}
+              onPress={() => setLocalSettings({ ...localSettings, model: model.model_id })}
+              onLongPress={(e) => handleItemLongPress(model, 'model', e)}
             >
-              <Text style={[styles.providerBtnText, localSettings.provider === provider.id && styles.providerBtnTextActive]}>
-                {provider.name}
+              <Text style={[styles.modelChipText, localSettings.model === model.model_id && styles.modelChipTextActive]}>
+                {model.label}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
-      </View>
-
-      {/* Model */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Model</Text>
-        {selectedProvider.id === 'custom' ? (
-          <TextInput
-            style={styles.input}
-            value={localSettings.model}
-            onChangeText={(text) => setLocalSettings({ ...localSettings, model: text })}
-            placeholder="Enter model name"
-            placeholderTextColor={COLORS.fgMuted}
-            autoCapitalize="none"
-          />
-        ) : (
-          <>
-            <View style={styles.modelList}>
-              {selectedProvider.models.map(model => (
-                <TouchableOpacity
-                  key={model}
-                  style={[styles.modelBtn, localSettings.model === model && styles.modelBtnActive]}
-                  onPress={() => setLocalSettings({ ...localSettings, model })}
-                >
-                  <Text style={[styles.modelBtnText, localSettings.model === model && styles.modelBtnTextActive]}>
-                    {model}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TextInput
-              style={[styles.input, { marginTop: 10 }]}
-              value={selectedProvider.models.includes(localSettings.model) ? '' : localSettings.model}
-              onChangeText={(text) => setLocalSettings({ ...localSettings, model: text })}
-              placeholder="Or enter custom model..."
-              placeholderTextColor={COLORS.fgMuted}
-              autoCapitalize="none"
-            />
-          </>
         )}
       </View>
 
@@ -144,9 +426,7 @@ export default function SettingsScreen({ onClose }) {
 
       {/* Base URL */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          Base URL {selectedProvider.id === 'custom' ? '' : '(Optional)'}
-        </Text>
+        <Text style={styles.sectionTitle}>Base URL (Optional)</Text>
         <TextInput
           style={styles.input}
           value={localSettings.baseUrl}
@@ -157,92 +437,104 @@ export default function SettingsScreen({ onClose }) {
         />
       </View>
 
-      {/* Save */}
       <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-        <Text style={styles.saveBtnText}>Save Settings</Text>
+        <Text style={styles.saveBtnText}>Save Model Settings</Text>
       </TouchableOpacity>
-
-      
     </ScrollView>
   );
 }
 
+export default function SettingsScreen({ onClose }) {
+  const { settings, updateSettings, customModels, addCustomModel, updateCustomModel, deleteCustomModel, customProviders, addCustomProvider, updateCustomProvider, deleteCustomProvider } = useApp();
+  const [currentScreen, setCurrentScreen] = useState('menu');
+
+  const getTitle = () => {
+    switch (currentScreen) {
+      case 'instructions': return 'Custom Instructions';
+      case 'models': return 'Models List';
+      default: return 'Settings';
+    }
+  };
+
+  const handleBack = () => {
+    if (currentScreen === 'menu') {
+      onClose?.();
+    } else {
+      setCurrentScreen('menu');
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
+          {currentScreen !== 'menu' && (
+              <Ionicons name="chevron-back" size={24} color={COLORS.fg} />
+            )}
+          <Text style={[styles.headerTitle, currentScreen === 'menu' && styles.headerTitleCenter]}>
+            {getTitle()}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {currentScreen === 'menu' && <SettingsMenu onNavigate={setCurrentScreen} />}
+      {currentScreen === 'instructions' && (
+        <CustomInstructionsScreen settings={settings} onUpdate={updateSettings} onBack={() => setCurrentScreen('menu')} />
+      )}
+      {currentScreen === 'models' && (
+        <ModelsListScreen 
+          settings={settings} 
+          customModels={customModels}
+          customProviders={customProviders}
+          onUpdate={updateSettings} 
+          onAddModel={addCustomModel}
+          onDeleteModel={deleteCustomModel}
+          onRenameModel={updateCustomModel}
+          onAddProvider={addCustomProvider}
+          onDeleteProvider={deleteCustomProvider}
+          onRenameProvider={updateCustomProvider}
+          onBack={() => setCurrentScreen('menu')} 
+        />
+      )}
+    </View>
+  );
+}
+
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
-  content: {
-    padding: 16,
-    paddingTop: 8,
-    paddingBottom: 40,
-  },
-  headerTitle: {
-    color: COLORS.fg,
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    color: COLORS.fgMuted,
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  providerGrid: {
+  container: { flex: 1, backgroundColor: COLORS.bgSecondary },
+  header: {
+    display: 'flex',
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  providerBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: COLORS.bgSecondary,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  providerBtnActive: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
-  },
-  providerBtnText: {
-    color: COLORS.fgMuted,
-    fontSize: 13,
-  },
-  providerBtnTextActive: {
-    color: COLORS.fg,
-    fontWeight: '500',
-  },
-  modelList: {
-    gap: 6,
-  },
-  modelBtn: {
+  backBtn: {
+    marginRight: 8, flexDirection: 'row', gap: 8,
+    alignItems: 'center',
+},
+  headerTitle: { color: COLORS.fg, fontSize: 18, fontWeight: '600'  },
+  headerTitleCenter: { flex: 1, textAlign: 'center' },
+  menuContainer: { padding: 16 },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 12,
-    borderRadius: 8,
-    backgroundColor: COLORS.bgSecondary,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 12,
+    marginBottom: 12,
   },
-  modelBtnActive: {
-    borderColor: COLORS.primary,
-  },
-  modelBtnText: {
-    color: COLORS.fgMuted,
-    fontSize: 13,
-  },
-  modelBtnTextActive: {
-    color: COLORS.primary,
-  },
-  inputRow: {
-    position: 'relative',
-  },
+  menuItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  menuItemText: { gap: 2 },
+  menuItemTitle: { color: COLORS.fg, fontSize: 16, fontWeight: '500' },
+  menuItemDesc: { color: COLORS.fgMuted, fontSize: 13 },
+  subContainer: { flex: 1 },
+  content: { padding: 16, paddingBottom: 40 },
+  section: { marginBottom: 20 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0, paddingRight: 12},
+  sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 12, marginBottom: 6},
   input: {
     backgroundColor: COLORS.inputBg,
     borderRadius: 8,
@@ -252,11 +544,64 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
-  eyeBtn: {
-    position: 'absolute',
-    right: 12,
-    top: 14,
+  inputMultiline: { minHeight: 100, textAlignVertical: 'top' },
+  inputRow: { position: 'relative' },
+  eyeBtn: { position: 'absolute', right: 12, top: 14 },
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 8,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
   },
+  dropdownText: { color: COLORS.fg, fontSize: 14 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  dropdownModal: {
+    backgroundColor: COLORS.bg,
+    borderRadius: 12,
+    maxHeight: 400,
+    overflow: 'hidden',
+  },
+  dropdownModalTitle: {
+    color: COLORS.fg,
+    fontSize: 16,
+    fontWeight: '600',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  dropdownItemActive: { backgroundColor: COLORS.bgSecondary },
+  dropdownItemText: { color: COLORS.fgMuted, fontSize: 14 },
+  dropdownItemTextActive: { color: COLORS.fg },
+  hint: { color: COLORS.fgMuted, fontSize: 11, marginTop: 8 },
+  modelChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  modelChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: COLORS.bgSecondary,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  modelChipActive: { borderColor: COLORS.primary },
+  modelChipText: { color: COLORS.fgMuted, fontSize: 12 },
+  modelChipTextActive: { color: COLORS.primary },
   saveBtn: {
     backgroundColor: COLORS.accent,
     padding: 14,
@@ -264,20 +609,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  saveBtnText: {
-    color: COLORS.fg,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  configBox: {
-    marginBottom: 20,
-    padding: 12,
-    backgroundColor: COLORS.bgSecondary,
-    borderRadius: 8,
-  },
-  configLabel: {
-    color: COLORS.fgMuted,
-    fontSize: 12,
-    textAlign: 'center',
-  },
+  saveBtnText: { color: COLORS.fg, fontSize: 15, fontWeight: '600' },
 });

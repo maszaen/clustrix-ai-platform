@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { View, FlatList, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useApp } from '../context/AppContext';
-import { streamChat, generateTitle } from '../services/api';
+import { streamChat, generateTitle, buildSystemPrompt } from '../services/api';
 import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -169,10 +169,13 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     setTimeout(() => setNewMessageId(null), 500);
     
+    // Build system prompt with persona settings
+    const systemPrompt = buildSystemPrompt(settings);
+    
     // For new session, messages state is empty, so just use the user message
     const apiMessages = isNewSession 
-      ? [{ role: 'user', content: text }]
-      : [...messages.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: text }];
+      ? [{ role: 'system', content: systemPrompt }, { role: 'user', content: text }]
+      : [{ role: 'system', content: systemPrompt }, ...messages.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: text }];
 
     setIsStreaming(true);
     setStreamingContent('');

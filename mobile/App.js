@@ -232,7 +232,7 @@ function MainApp() {
               onToggleFavorite={toggleFavorite}
               onRename={renameSession}
             />
-            <TouchableOpacity style={styles.sidebarSettingsBtn} onPress={() => { closeSidebar(); setTimeout(openSettings, 300); }}>
+            <TouchableOpacity style={styles.sidebarSettingsBtn} onPress={() => { closeSidebar(); setTimeout(openSettings, 100); }}>
               <Ionicons name="options-outline" size={20} color={COLORS.fgMuted} />
               <Text style={styles.sidebarSettingsText}>Personalization</Text>
             </TouchableOpacity>
@@ -260,7 +260,7 @@ function MainApp() {
 
           <TouchableOpacity
             style={[styles.floatingLogoBtn, { top: insets.top + 13 }]}
-            onPress={() => setTimeout(openSettings, 300)}
+            onPress={() => setTimeout(openSettings, 40)}
             activeOpacity={0.7}
           >
             <View style={styles.logo}>
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: SCREEN_HEIGHT * 0.9,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bgSecondary,
     borderTopLeftRadius: 23,
     // borderTopColor: COLORS.borderLight,
     // borderWidth: 1.5,

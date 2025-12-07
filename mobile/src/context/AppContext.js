@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting } from '../database/db';
+import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider } from '../database/db';
 import { generateSessionId } from '../utils/ids';
 
 const AppContext = createContext(null);
@@ -19,17 +19,23 @@ export function AppProvider({ children }) {
   const [messages, setMessages] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [customModels, setCustomModels] = useState([]);
+  const [customProviders, setCustomProviders] = useState([]);
 
   // Initialize database and load data
   useEffect(() => {
     async function init() {
       await initDatabase();
-      const [loadedSessions, loadedSettings] = await Promise.all([
+      const [loadedSessions, loadedSettings, loadedModels, loadedProviders] = await Promise.all([
         getAllSessions(),
         getSetting('app_settings'),
+        getAllCustomModels(),
+        getAllCustomProviders(),
       ]);
       setSessions(loadedSessions || []);
       if (loadedSettings) setSettings({ ...DEFAULT_SETTINGS, ...loadedSettings });
+      setCustomModels(loadedModels || []);
+      setCustomProviders(loadedProviders || []);
       setIsReady(true);
     }
     init();
@@ -158,6 +164,66 @@ export function AppProvider({ children }) {
     await saveSetting('app_settings', merged);
   }, [settings]);
 
+  // Add custom model
+  const addCustomModel = useCallback(async (model) => {
+    const newModel = {
+      id: `model-${Date.now()}`,
+      ...model,
+      is_default: false,
+      created_at: Date.now(),
+    };
+    await saveCustomModel(newModel);
+    setCustomModels(prev => [newModel, ...prev]);
+    return newModel;
+  }, []);
+
+  // Update custom model
+  const updateCustomModel = useCallback(async (id, updates) => {
+    const model = customModels.find(m => m.id === id);
+    if (!model || model.is_default) return;
+    const updated = { ...model, ...updates };
+    await saveCustomModel(updated);
+    setCustomModels(prev => prev.map(m => m.id === id ? updated : m));
+  }, [customModels]);
+
+  // Delete custom model
+  const deleteCustomModel = useCallback(async (id) => {
+    const model = customModels.find(m => m.id === id);
+    if (!model || model.is_default) return;
+    await dbDeleteCustomModel(id);
+    setCustomModels(prev => prev.filter(m => m.id !== id));
+  }, [customModels]);
+
+  // Add custom provider
+  const addCustomProvider = useCallback(async (provider) => {
+    const newProvider = {
+      id: `provider-${Date.now()}`,
+      ...provider,
+      is_default: false,
+      created_at: Date.now(),
+    };
+    await saveCustomProvider(newProvider);
+    setCustomProviders(prev => [newProvider, ...prev]);
+    return newProvider;
+  }, []);
+
+  // Update custom provider
+  const updateCustomProvider = useCallback(async (id, updates) => {
+    const provider = customProviders.find(p => p.id === id);
+    if (!provider || provider.is_default) return;
+    const updated = { ...provider, ...updates };
+    await saveCustomProvider(updated);
+    setCustomProviders(prev => prev.map(p => p.id === id ? updated : p));
+  }, [customProviders]);
+
+  // Delete custom provider
+  const deleteCustomProvider = useCallback(async (id) => {
+    const provider = customProviders.find(p => p.id === id);
+    if (!provider || provider.is_default) return;
+    await dbDeleteCustomProvider(id);
+    setCustomProviders(prev => prev.filter(p => p.id !== id));
+  }, [customProviders]);
+
   const value = {
     isReady,
     sessions,
@@ -176,6 +242,14 @@ export function AppProvider({ children }) {
     updateSettings,
     toggleFavorite,
     renameSession,
+    customModels,
+    addCustomModel,
+    updateCustomModel,
+    deleteCustomModel,
+    customProviders,
+    addCustomProvider,
+    updateCustomProvider,
+    deleteCustomProvider,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -34,6 +34,23 @@ export async function initDatabase() {
     );
     
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, message_index);
+    
+    CREATE TABLE IF NOT EXISTS custom_models (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      model_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      is_default INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+    
+    CREATE TABLE IF NOT EXISTS custom_providers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      is_default INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
   `);
   
   return db;
@@ -104,4 +121,47 @@ export async function saveSetting(key, value) {
     'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
     [key, JSON.stringify(value)]
   );
+}
+
+// Custom Models
+export async function getAllCustomModels() {
+  return await db.getAllAsync('SELECT * FROM custom_models ORDER BY created_at DESC');
+}
+
+export async function saveCustomModel(model) {
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT INTO custom_models (id, provider, model_id, label, is_default, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       provider = excluded.provider,
+       model_id = excluded.model_id,
+       label = excluded.label`,
+    [model.id, model.provider, model.model_id, model.label, model.is_default ? 1 : 0, model.created_at || now]
+  );
+}
+
+export async function deleteCustomModel(id) {
+  await db.runAsync('DELETE FROM custom_models WHERE id = ? AND is_default = 0', [id]);
+}
+
+// Custom Providers
+export async function getAllCustomProviders() {
+  return await db.getAllAsync('SELECT * FROM custom_providers ORDER BY created_at DESC');
+}
+
+export async function saveCustomProvider(provider) {
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT INTO custom_providers (id, name, base_url, is_default, created_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       name = excluded.name,
+       base_url = excluded.base_url`,
+    [provider.id, provider.name, provider.base_url, provider.is_default ? 1 : 0, provider.created_at || now]
+  );
+}
+
+export async function deleteCustomProvider(id) {
+  await db.runAsync('DELETE FROM custom_providers WHERE id = ? AND is_default = 0', [id]);
 }

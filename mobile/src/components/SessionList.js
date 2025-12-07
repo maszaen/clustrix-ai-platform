@@ -1,30 +1,18 @@
 import { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, TextInput, Dimensions } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 
 const COLORS = {
   bg: '#000000ff',
   bgSecondary: '#282A2C',
+  inputBg: '#282A2D',
   fg: '#FCFCFC',
   fgMuted: '#BDC1C6',
   accent: '#0e4bae',
   primary: '#D3E3FD',
   borderLight: '#3c4141',
-  hover: '#333537',
+  hover: '#1a1a1a',
 };
-
-function formatTime(timestamp) {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now - date;
-  
-  if (diff < 60000) return 'Now';
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
-  if (diff < 604800000) return `${Math.floor(diff / 86400000)}d`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
 
 function SessionItem({ session, isActive, onSelect, onDelete }) {
   const handleDelete = () => {
@@ -45,30 +33,18 @@ function SessionItem({ session, isActive, onSelect, onDelete }) {
       onLongPress={handleDelete}
       activeOpacity={0.7}
     >
-      <View style={styles.sessionIcon}>
-        <Ionicons 
-          name={isActive ? "chatbubble" : "chatbubble-outline"} 
-          size={18} 
-          color={isActive ? COLORS.primary : COLORS.fgMuted} 
-        />
-      </View>
-      <View style={styles.sessionInfo}>
-        <Text 
-          style={[styles.sessionTitle, isActive && styles.sessionTitleActive]} 
-          numberOfLines={1}
-        >
-          {session.name || 'New Chat'}
-        </Text>
-        <Text style={styles.sessionTime}>{formatTime(session.updated_at)}</Text>
-      </View>
+      <Text 
+        style={[styles.sessionTitle, isActive && styles.sessionTitleActive]} 
+        numberOfLines={1}
+      >
+        {session.name || 'New Chat'}
+      </Text>
     </TouchableOpacity>
   );
 }
 
 export default function SessionList({ sessions, currentSession, onSelect, onDelete, onNew }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const insets = useSafeAreaInsets();
-  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
   const filteredSessions = searchQuery 
     ? sessions.filter(s => s.name?.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -93,16 +69,15 @@ export default function SessionList({ sessions, currentSession, onSelect, onDele
         ) : null}
       </View>
       {/* New Chat Button */}
-      <TouchableOpacity style={styles.newChatBtn} onPress={onNew} activeOpacity={0.8}>
-        <Ionicons name="add" size={20} color={COLORS.fg} />
+      <TouchableOpacity style={styles.newChatBtn} onPress={onNew} activeOpacity={0.7}>
+        <Ionicons name="pencil" size={18} color={COLORS.fg} />
         <Text style={styles.newChatText}>New Chat</Text>
       </TouchableOpacity>
 
       
       
 
-      {/* Divider */}
-      <View style={styles.divider} />
+
 
       {/* Sessions */}
       <FlatList
@@ -137,94 +112,62 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: SIDEBAR_PADDING,
-    paddingVertical: 12,
-    paddingTop: 8,
-  },
   newChatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     marginHorizontal: SIDEBAR_PADDING,
-    paddingVertical: 10,
-    backgroundColor: COLORS.accent,
-    borderRadius: 20,
-    gap: 8,
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: SIDEBAR_PADDING,
+    borderRadius: 10,
+    gap: 10,
   },
   newChatText: {
     color: COLORS.fg,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: SIDEBAR_PADDING,
-    marginTop: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: COLORS.bg,
-    borderRadius: 8,
-    gap: 8,
+    height: 45,
+    paddingHorizontal: 14,
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 50,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderLight,
+    gap: 10,
   },
   searchInput: {
     flex: 1,
     color: COLORS.fg,
-    fontSize: 14,
+    fontSize: 16,
     padding: 0,
   },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.borderLight,
-    marginHorizontal: SIDEBAR_PADDING,
-    marginTop: 12,
-    marginBottom: 6,
-  },
   sessionList: {
-    paddingHorizontal: 6,
     paddingBottom: 20,
   },
   sessionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    paddingHorizontal: SIDEBAR_PADDING,
     marginBottom: 2,
   },
   sessionItemActive: {
     backgroundColor: COLORS.hover,
   },
-  sessionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: COLORS.bgSecondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  sessionInfo: {
-    flex: 1,
-  },
   sessionTitle: {
     color: COLORS.fgMuted,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '500',
-    marginBottom: 2,
   },
   sessionTitleActive: {
     color: COLORS.fg,
   },
-  sessionTime: {
-    color: COLORS.fgMuted,
-    fontSize: 12,
-    opacity: 0.7,
-  },
   emptyContainer: {
     alignItems: 'center',
     paddingTop: 40,
+    paddingHorizontal: SIDEBAR_PADDING,
     gap: 12,
   },
   emptyText: {

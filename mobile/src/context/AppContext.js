@@ -68,6 +68,12 @@ export function AppProvider({ children }) {
     setCurrentSession(session);
   }, []);
 
+  // Clear current session (go to welcome page)
+  const clearCurrentSession = useCallback(() => {
+    setCurrentSession(null);
+    setMessages([]);
+  }, []);
+
   // Delete session
   const deleteSession = useCallback(async (id) => {
     await dbDeleteSession(id);
@@ -123,6 +129,7 @@ export function AppProvider({ children }) {
     setMessages,
     createSession,
     selectSession,
+    clearCurrentSession,
     deleteSession,
     updateSession,
     appendMessage,

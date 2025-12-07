@@ -101,15 +101,20 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
     }, 100);
   }, []);
 
-  // Reset on session change - show skeleton overlay
+  // Reset on session change - show skeleton overlay ONLY if session has messages
   useEffect(() => {
     isInitialLoad.current = true;
     hasScrolledInitial.current = false;
     initialScrollDone.current = false;
     setVisibleCount(12);
-    // Always show skeleton when switching to session with messages
-    setShowSkeleton(true);
-    skeletonOpacity.setValue(1);
+    // Only show skeleton when switching to existing session with messages
+    // Don't show skeleton for new sessions or when streaming
+    if (currentSession && messages.length > 0 && !isStreaming) {
+      setShowSkeleton(true);
+      skeletonOpacity.setValue(1);
+    } else {
+      setShowSkeleton(false);
+    }
   }, [currentSession?.id]);
 
   // Scroll during streaming
@@ -135,14 +140,20 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
   }, [currentSession]);
 
   const handleSend = async (text) => {
-    // Disable skeleton for new messages
+    // Disable skeleton for new messages - IMPORTANT: do this first
     hasScrolledInitial.current = true;
+    initialScrollDone.current = true;
     setShowSkeleton(false);
+    skeletonOpacity.setValue(0);
     
     let session = sessionRef.current;
+    let isNewSession = false;
     if (!session) {
       session = await createSession('New Chat');
       sessionRef.current = session;
+      isNewSession = true;
+      // Wait for state to update after createSession
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     const newMsgKey = `msg-${messages.length}`;
@@ -151,10 +162,10 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     setTimeout(() => setNewMessageId(null), 500);
     
-    const apiMessages = [
-      ...messages.map(m => ({ role: m.role, content: m.content })),
-      { role: 'user', content: text }
-    ];
+    // For new session, messages state is empty, so just use the user message
+    const apiMessages = isNewSession 
+      ? [{ role: 'user', content: text }]
+      : [...messages.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: text }];
 
     setIsStreaming(true);
     setStreamingContent('');

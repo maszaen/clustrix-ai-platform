@@ -88,6 +88,7 @@ export async function streamChat({ messages, model, provider, baseUrl, apiKey, o
 
 /**
  * OpenAI streaming with XMLHttpRequest for real-time chunks
+ * Supports native reasoning_content for o1/o3 models
  */
 function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError }) {
   return new Promise((resolve) => {
@@ -116,8 +117,20 @@ function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
         
         try {
           const json = JSON.parse(data);
+          
+          // Native OpenAI reasoning (o1/o3 models)
+          let reasoning = json.choices?.[0]?.delta?.reasoning_content 
+            || json.choices?.[0]?.delta?.reasoning 
+            || json.choices?.[0]?.delta?.thoughts
+            || json.delta?.thinking
+            || '';
+          if (Array.isArray(reasoning)) reasoning = reasoning.map(p => p?.text ?? p).join('');
+          if (reasoning) onThink?.(reasoning);
+          
+          // Regular content
           const content = json.choices?.[0]?.delta?.content || '';
           if (content) {
+            // Fallback: parse <think> tags
             const result = parseThinking(content, isThinking, thinkingBuffer);
             isThinking = result.stillThinking;
             thinkingBuffer = result.stillThinking ? result.thinking : '';
@@ -201,7 +214,8 @@ function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onT
             const content = json.delta?.text || json.delta?.thinking || '';
             if (content) {
               if (isThinkingBlock) {
-                thinkingBuffer += content;
+                // Stream thinking content in real-time
+                onThink?.(content);
               } else {
                 onChunk?.(content);
               }
@@ -209,10 +223,6 @@ function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onT
           }
           
           if (json.type === 'content_block_stop') {
-            if (isThinkingBlock && thinkingBuffer) {
-              onThink?.(thinkingBuffer);
-              thinkingBuffer = '';
-            }
             isThinkingBlock = false;
           }
         } catch {}
@@ -235,16 +245,29 @@ function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onT
 
 /**
  * Gemini streaming with XMLHttpRequest and alt=sse
+ * Supports native thinking (thought: true) for Gemini 2.5 Pro / 2.0 Flash Thinking
  */
 function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError }) {
   return new Promise((resolve) => {
     const { contents, systemInstruction } = formatMessagesGemini(messages);
     const url = `${baseUrl}/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`;
     
+    // Check if model supports native thinking
+    const modelLower = model.toLowerCase();
+    const isThinkingModel = modelLower.includes('thinking') || modelLower.includes('2.5-pro') || modelLower.includes('2.5-flash');
+    
     const body = { 
       contents,
       generationConfig: { maxOutputTokens: 8192 },
     };
+    
+    // Enable thinking for supported models
+    if (isThinkingModel) {
+      body.generationConfig.thinkingConfig = {
+        thinkingBudget: modelLower.includes('2.5-pro') ? 16384 : 8192,
+        includeThoughts: true
+      };
+    }
     
     if (systemInstruction) {
       body.systemInstruction = { parts: [{ text: systemInstruction }] };
@@ -271,14 +294,29 @@ function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
         if (!line.startsWith('data: ')) continue;
         try {
           const json = JSON.parse(line.slice(6));
-          const content = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const parts = json.candidates?.[0]?.content?.parts || [];
           
-          if (content) {
-            const result = parseThinking(content, isThinking, thinkingBuffer);
-            isThinking = result.stillThinking;
-            thinkingBuffer = result.stillThinking ? result.thinking : '';
-            if (result.text) onChunk?.(result.text);
-            if (result.thinking && !result.stillThinking) onThink?.(result.thinking);
+          for (const part of parts) {
+            // Native Gemini thinking: { thought: true, text: "..." }
+            if (part.thought === true && part.text) {
+              onThink?.(part.text);
+            } else if (part.text) {
+              let text = part.text;
+              
+              // Fallback: parse <think> tags or *(Internal Reasoning: ...)* pattern
+              const internalMatch = text.match(/\*\(Internal Reasoning:\s*([\s\S]*?)\)\*/i);
+              if (internalMatch) {
+                onThink?.(internalMatch[1].trim());
+                text = text.replace(/\*\(Internal Reasoning:\s*[\s\S]*?\)\*/gi, '').trim();
+              }
+              
+              // Also check for <think> tags
+              const result = parseThinking(text, isThinking, thinkingBuffer);
+              isThinking = result.stillThinking;
+              thinkingBuffer = result.stillThinking ? result.thinking : '';
+              if (result.text) onChunk?.(result.text);
+              if (result.thinking && !result.stillThinking) onThink?.(result.thinking);
+            }
           }
         } catch {}
       }

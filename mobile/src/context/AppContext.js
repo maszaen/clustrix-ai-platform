@@ -84,32 +84,72 @@ export function AppProvider({ children }) {
     }
   }, [currentSession]);
 
-  // Update session
-  const updateSession = useCallback(async (updates) => {
-    if (!currentSession) return;
-    const updated = { ...currentSession, ...updates, updated_at: Date.now() };
+  // Update session (accepts optional targetSession for welcome screen flow)
+  const updateSession = useCallback(async (updates, targetSession = null) => {
+    const session = targetSession || currentSession;
+    if (!session) return;
+    const updated = { ...session, ...updates, updated_at: Date.now() };
     await saveSession(updated);
     setCurrentSession(updated);
     setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
   }, [currentSession]);
 
-  // Add message to current session
-  const appendMessage = useCallback(async (role, content, metadata = {}) => {
-    if (!currentSession) return;
-    const messageIndex = messages.length;
-    await addMessage(currentSession.id, role, content, metadata, messageIndex);
-    const newMsg = { role, content, message_index: messageIndex, ...metadata };
+  // Add message to current session (or specified session for welcome screen flow)
+  const appendMessage = useCallback(async (role, content, metadata = {}, targetSession = null) => {
+    const session = targetSession || currentSession;
+    if (!session) return;
+    
+    // For new sessions, we need to get current message count from state
+    const messageIndex = targetSession ? 0 : messages.length;
+    await addMessage(session.id, role, content, metadata, targetSession ? metadata._messageIndex ?? messageIndex : messageIndex);
+    const newMsg = { role, content, message_index: targetSession ? metadata._messageIndex ?? messageIndex : messageIndex, ...metadata };
     setMessages(prev => [...prev, newMsg]);
     
     // Update session timestamp
-    await saveSession({ ...currentSession, updated_at: Date.now() });
+    await saveSession({ ...session, updated_at: Date.now() });
     setSessions(prev => {
       const updated = prev.map(s => 
-        s.id === currentSession.id ? { ...s, updated_at: Date.now() } : s
+        s.id === session.id ? { ...s, updated_at: Date.now() } : s
       );
       return updated.sort((a, b) => b.updated_at - a.updated_at);
     });
   }, [currentSession, messages]);
+
+  // Toggle favorite session
+  const toggleFavorite = useCallback(async (sessionId) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    
+    const updated = { ...session, is_favorite: !session.is_favorite, updated_at: Date.now() };
+    await saveSession(updated);
+    
+    if (currentSession?.id === sessionId) {
+      setCurrentSession(updated);
+    }
+    
+    setSessions(prev => {
+      const newSessions = prev.map(s => s.id === sessionId ? updated : s);
+      return newSessions.sort((a, b) => b.updated_at - a.updated_at);
+    });
+  }, [sessions, currentSession]);
+
+  // Rename session
+  const renameSession = useCallback(async (sessionId, newName) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    
+    const updated = { ...session, name: newName, updated_at: Date.now() };
+    await saveSession(updated);
+    
+    if (currentSession?.id === sessionId) {
+      setCurrentSession(updated);
+    }
+    
+    setSessions(prev => {
+      const newSessions = prev.map(s => s.id === sessionId ? updated : s);
+      return newSessions.sort((a, b) => b.updated_at - a.updated_at);
+    });
+  }, [sessions, currentSession]);
 
   // Update settings
   const updateSettings = useCallback(async (newSettings) => {
@@ -134,6 +174,8 @@ export function AppProvider({ children }) {
     updateSession,
     appendMessage,
     updateSettings,
+    toggleFavorite,
+    renameSession,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

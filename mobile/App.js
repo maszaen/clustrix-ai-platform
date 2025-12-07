@@ -40,7 +40,7 @@ const COLORS = {
 
 function MainApp() {
   const insets = useSafeAreaInsets();
-  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession } = useApp();
+  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession } = useApp();
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
@@ -229,6 +229,8 @@ function MainApp() {
               onSelect={(session) => { selectSession(session); closeSidebar(); }}
               onDelete={deleteSession}
               onNew={handleNewChat}
+              onToggleFavorite={toggleFavorite}
+              onRename={renameSession}
             />
             <TouchableOpacity style={styles.sidebarSettingsBtn} onPress={() => { closeSidebar(); setTimeout(openSettings, 300); }}>
               <Ionicons name="options-outline" size={20} color={COLORS.fgMuted} />

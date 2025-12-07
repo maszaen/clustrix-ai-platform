@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   PanResponder,
   Easing,
+  BackHandler,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -121,13 +122,15 @@ function MainApp() {
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gs) => gs.dy > 10,
       onPanResponderMove: (_, gs) => {
-        if (gs.dy > 0) settingsAnim.setValue(gs.dy);
+        // Only allow swipe down, clamp at 20 minimum (can't go higher)
+        const newValue = Math.max(20, 20 + gs.dy);
+        settingsAnim.setValue(newValue);
       },
       onPanResponderRelease: (_, gs) => {
         if (gs.dy > 100 || gs.vy > 0.5) {
           closeSettings();
         } else {
-          Animated.spring(settingsAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
+          Animated.spring(settingsAnim, { toValue: 20, useNativeDriver: true, tension: 65, friction: 11 }).start();
         }
       },
     })
@@ -169,6 +172,22 @@ function MainApp() {
       Animated.timing(settingsOverlayAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
     ]).start(() => setShowSettings(false));
   }, [settingsAnim, settingsOverlayAnim]);
+
+  // Back button handler
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (showSettings) {
+        closeSettings();
+        return true;
+      }
+      if (sidebarOpen) {
+        closeSidebar();
+        return true;
+      }
+      return false;
+    });
+    return () => backHandler.remove();
+  }, [showSettings, sidebarOpen, closeSettings, closeSidebar]);
 
   const handleNewChat = useCallback(() => {
     if (!currentSession || messages.length === 0) {
@@ -212,8 +231,8 @@ function MainApp() {
               onNew={handleNewChat}
             />
             <TouchableOpacity style={styles.sidebarSettingsBtn} onPress={() => { closeSidebar(); setTimeout(openSettings, 300); }}>
-              <Ionicons name="settings-outline" size={20} color={COLORS.fgMuted} />
-              <Text style={styles.sidebarSettingsText}>Settings</Text>
+              <Ionicons name="options-outline" size={20} color={COLORS.fgMuted} />
+              <Text style={styles.sidebarSettingsText}>Personalization</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -356,14 +375,13 @@ const styles = StyleSheet.create({
   sidebarSettingsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 17,
     paddingBottom: 40,
-    borderTopWidth: 1,
     borderTopColor: COLORS.borderLight,
   },
   sidebarSettingsText: {
     color: COLORS.fgMuted,
-    fontSize: 15,
+    fontSize: 16,
     marginLeft: 12,
   },
   settingsOverlay: {
@@ -372,7 +390,7 @@ const styles = StyleSheet.create({
   },
   settingsBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   settingsSheet: {
     position: 'absolute',
@@ -381,8 +399,10 @@ const styles = StyleSheet.create({
     right: 0,
     height: SCREEN_HEIGHT * 0.9,
     backgroundColor: COLORS.bg,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 23,
+    // borderTopColor: COLORS.borderLight,
+    // borderWidth: 1.5,
+    borderTopRightRadius: 23,
   },
   settingsHandle: {
     width: 40,
@@ -395,7 +415,7 @@ const styles = StyleSheet.create({
   },
   pageOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     zIndex: 100,
   },
 });

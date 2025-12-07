@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext';
 import { DEFAULT_PROVIDERS } from '../services/api';
 
 const COLORS = {
-  bg: '#1b1c1d',
+  bg: '#000000ff',
   bgSecondary: '#282A2C',
   inputBg: '#1f1f1f',
   fg: '#FCFCFC',
@@ -61,7 +61,11 @@ export default function SettingsScreen({ onClose }) {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Header */}
       <Text style={styles.headerTitle}>Settings</Text>
-      
+      {/* Current Config */}
+      <View style={styles.configBox}>
+        <Text style={styles.configLabel}>Current: {selectedProvider.name} / {localSettings.model || 'Not set'}</Text>
+      </View>
+
       {/* Provider */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Provider</Text>
@@ -158,10 +162,7 @@ export default function SettingsScreen({ onClose }) {
         <Text style={styles.saveBtnText}>Save Settings</Text>
       </TouchableOpacity>
 
-      {/* Current Config */}
-      <View style={styles.configBox}>
-        <Text style={styles.configLabel}>Current: {selectedProvider.name} / {localSettings.model || 'Not set'}</Text>
-      </View>
+      
     </ScrollView>
   );
 }
@@ -269,7 +270,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   configBox: {
-    marginTop: 20,
+    marginBottom: 20,
     padding: 12,
     backgroundColor: COLORS.bgSecondary,
     borderRadius: 8,

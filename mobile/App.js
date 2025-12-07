@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -35,72 +35,61 @@ const COLORS = {
 
 function MainApp() {
   const insets = useSafeAreaInsets();
-  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, createSession } = useApp();
+  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession } = useApp();
   const [showSidebar, setShowSidebar] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
   
   const sidebarAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const settingsAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const settingsOverlayAnim = useRef(new Animated.Value(0)).current;
 
-  const startSidebarDrag = () => {
-    if (showSidebar || isDraggingSidebar) return;
-    setShowSidebar(true);
-    sidebarAnim.setValue(-SIDEBAR_WIDTH);
-    overlayAnim.setValue(0);
-    setIsDraggingSidebar(true);
-  };
-
-  // Swipe right to open sidebar from chat
-  const dragToSidebar = useRef(
+  // Swipe from left edge to open sidebar
+  const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dx) > 10 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
-      onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dx) > 10 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
-      onPanResponderGrant: (_, gs) => {
-        if (gs.dx > 0) startSidebarDrag();
-      },
+      onStartShouldSetPanResponder: (evt) => evt.nativeEvent.pageX < 30,
+      onMoveShouldSetPanResponder: (evt, gs) => 
+        evt.nativeEvent.pageX < 50 && gs.dx > 10 && Math.abs(gs.dx) > Math.abs(gs.dy),
       onPanResponderMove: (_, gs) => {
-        if (gs.dx <= 0) return;
-        if (!showSidebar) startSidebarDrag();
-        const progress = Math.min(gs.dx / SIDEBAR_WIDTH, 1);
-        sidebarAnim.setValue(Math.min(gs.dx - SIDEBAR_WIDTH, 0));
-        overlayAnim.setValue(progress);
+        if (gs.dx > 0) {
+          const value = Math.min(gs.dx - SIDEBAR_WIDTH, 0);
+          sidebarAnim.setValue(value);
+          overlayAnim.setValue(Math.min(gs.dx / SIDEBAR_WIDTH, 1));
+        }
       },
       onPanResponderRelease: (_, gs) => {
-        if (gs.dx > SIDEBAR_WIDTH * 0.3 || gs.vx > 0.4) {
+        if (gs.dx > SIDEBAR_WIDTH * 0.3 || gs.vx > 0.5) {
           openSidebar();
         } else {
           closeSidebar();
         }
       },
-      onPanResponderTerminate: () => {
-        if (isDraggingSidebar) closeSidebar();
-      },
     })
   ).current;
 
-  const sidebarPan = useRef(
+  // Swipe sidebar to close
+  const sidebarPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > 10,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dx < -10,
       onPanResponderMove: (_, gs) => {
-        if (gs.dx < 0) sidebarAnim.setValue(gs.dx);
+        if (gs.dx < 0) {
+          sidebarAnim.setValue(gs.dx);
+          overlayAnim.setValue(1 + gs.dx / SIDEBAR_WIDTH);
+        }
       },
       onPanResponderRelease: (_, gs) => {
-        if (gs.dx < -80 || gs.vx < -0.5) {
+        if (gs.dx < -60 || gs.vx < -0.5) {
           closeSidebar();
         } else {
-          Animated.spring(sidebarAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }).start();
+          Animated.spring(sidebarAnim, { toValue: 0, useNativeDriver: true, tension: 80, friction: 12 }).start();
+          Animated.spring(overlayAnim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 12 }).start();
         }
       },
     })
   ).current;
-  
-  const settingsPan = useRef(
+
+  const settingsPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gs) => gs.dy > 10,
@@ -117,47 +106,44 @@ function MainApp() {
     })
   ).current;
 
-  const openSidebar = () => {
+  const openSidebar = useCallback(() => {
     setShowSidebar(true);
     Animated.parallel([
-      Animated.timing(sidebarAnim, { toValue: 0, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(overlayAnim, { toValue: 1, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.spring(sidebarAnim, { toValue: 0, useNativeDriver: true, tension: 80, friction: 12 }),
+      Animated.spring(overlayAnim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 12 }),
     ]).start();
-  };
+  }, [sidebarAnim, overlayAnim]);
 
-  const closeSidebar = () => {
+  const closeSidebar = useCallback(() => {
     Animated.parallel([
-      Animated.timing(sidebarAnim, { toValue: -SIDEBAR_WIDTH, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(overlayAnim, { toValue: 0, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-    ]).start(() => {
-      setShowSidebar(false);
-      setIsDraggingSidebar(false);
-    });
-  };
+      Animated.timing(sidebarAnim, { toValue: -SIDEBAR_WIDTH, duration: 200, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+      Animated.timing(overlayAnim, { toValue: 0, duration: 200, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
+    ]).start(() => setShowSidebar(false));
+  }, [sidebarAnim, overlayAnim]);
 
-  const openSettings = () => {
+  const openSettings = useCallback(() => {
     setShowSettings(true);
     Animated.parallel([
       Animated.spring(settingsAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }),
       Animated.timing(settingsOverlayAnim, { toValue: 1, duration: 280, useNativeDriver: true }),
     ]).start();
-  };
+  }, [settingsAnim, settingsOverlayAnim]);
 
-  const closeSettings = () => {
+  const closeSettings = useCallback(() => {
     Animated.parallel([
-      Animated.timing(settingsAnim, { toValue: SCREEN_HEIGHT, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(settingsAnim, { toValue: SCREEN_HEIGHT, duration: 250, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
       Animated.timing(settingsOverlayAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
     ]).start(() => setShowSettings(false));
-  };
+  }, [settingsAnim, settingsOverlayAnim]);
 
-  const handleNewChat = async () => {
-    if (currentSession && messages.length === 0) {
+  const handleNewChat = useCallback(() => {
+    if (!currentSession || messages.length === 0) {
       closeSidebar();
       return;
     }
-    await createSession();
+    clearCurrentSession();
     closeSidebar();
-  };
+  }, [currentSession, messages, clearCurrentSession, closeSidebar]);
 
   if (!isReady) {
     return (
@@ -170,13 +156,11 @@ function MainApp() {
   }
 
   return (
-    <View style={styles.container} {...dragToSidebar.panHandlers}>
+    <View style={styles.container} {...panResponder.panHandlers}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
-      {/* Chat Screen - FULL SCREEN, no header space */}
       <ChatScreen topInset={insets.top} bottomInset={insets.bottom} />
 
-      {/* Floating gradient header - bg to transparent */}
       <LinearGradient
         colors={[COLORS.bg, COLORS.bg, 'transparent']}
         locations={[0, 0.6, 1]}
@@ -184,9 +168,6 @@ function MainApp() {
         pointerEvents="none"
       />
 
-      {/* Bottom fade gradient */}
-      
-      {/* Floating menu button - ABSOLUTE, separate from header */}
       <TouchableOpacity 
         style={[styles.floatingMenuBtn, { top: insets.top + 8 }]} 
         onPress={openSidebar}
@@ -195,18 +176,16 @@ function MainApp() {
         <Ionicons name="menu" size={22} color={COLORS.fg} />
       </TouchableOpacity>
 
-      {/* Sidebar Overlay */}
       {showSidebar && (
         <TouchableWithoutFeedback onPress={closeSidebar}>
           <Animated.View style={[styles.overlay, { opacity: overlayAnim }]} />
         </TouchableWithoutFeedback>
       )}
 
-      {/* Sidebar */}
       {showSidebar && (
         <Animated.View 
           style={[styles.sidebar, { paddingTop: insets.top, transform: [{ translateX: sidebarAnim }] }]}
-          {...sidebarPan.panHandlers}
+          {...sidebarPanResponder.panHandlers}
         >
           <View style={styles.sidebarContent}>
             <SessionList
@@ -224,13 +203,15 @@ function MainApp() {
         </Animated.View>
       )}
 
-      {/* Settings Bottom Sheet */}
       {showSettings && (
         <View style={styles.settingsOverlay}>
           <TouchableWithoutFeedback onPress={closeSettings}>
             <Animated.View style={[styles.settingsBackdrop, { opacity: settingsOverlayAnim }]} />
           </TouchableWithoutFeedback>
-          <Animated.View style={[styles.settingsSheet, { transform: [{ translateY: settingsAnim }] }]} {...settingsPan.panHandlers}>
+          <Animated.View 
+            style={[styles.settingsSheet, { transform: [{ translateY: settingsAnim }] }]}
+            {...settingsPanResponder.panHandlers}
+          >
             <View style={styles.settingsHandle} />
             <SettingsScreen onClose={closeSettings} />
           </Animated.View>
@@ -266,7 +247,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
   },
-  // Floating gradient header - bg to transparent
   floatingHeader: {
     position: 'absolute',
     top: 0,
@@ -274,8 +254,6 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 5,
   },
- 
-  // Floating menu button - separate from header
   floatingMenuBtn: {
     position: 'absolute',
     left: 16,

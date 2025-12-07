@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { View, FlatList, StyleSheet, Text, Platform, Keyboard } from 'react-native';
+import { View, FlatList, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useApp } from '../context/AppContext';
 import { streamChat, generateTitle } from '../services/api';
@@ -172,14 +172,18 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
   return (
     <View style={styles.container}>
       {!currentSession && displayMessages.length === 0 ? (
-        <View style={[styles.emptyState, { paddingTop: topInset }]}>
-          <Text style={styles.emptyTitle}>Clustrix</Text>
-          <Text style={styles.emptySubtitle}>Start a conversation</Text>
-        </View>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={[styles.emptyState, { paddingTop: topInset }]}>
+            <Text style={styles.emptyTitle}>Clustrix</Text>
+            <Text style={styles.emptySubtitle}>Start a conversation</Text>
+          </View>
+        </TouchableWithoutFeedback>
       ) : displayMessages.length === 0 ? (
-        <View style={[styles.emptyState, { paddingTop: topInset }]}>
-          <Text style={styles.emptySubtitle}>Send a message to begin</Text>
-        </View>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View style={[styles.emptyState, { paddingTop: topInset }]}>
+            <Text style={styles.emptySubtitle}>Send a message to begin</Text>
+          </View>
+        </TouchableWithoutFeedback>
       ) : (
         <FlatList
           ref={flatListRef}

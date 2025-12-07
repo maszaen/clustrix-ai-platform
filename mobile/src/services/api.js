@@ -171,6 +171,25 @@ export async function streamChat({ messages, model, provider, baseUrl, apiKey, o
   }
 }
 
+// Extract a readable error message from XHR responses to surface failures in release builds
+function extractXhrError(xhr) {
+  // Default fallback combines status code + text for quick debugging
+  let message = `Request failed (${xhr.status || 'unknown'}${xhr.statusText ? ` ${xhr.statusText}` : ''})`;
+
+  try {
+    // Many providers return structured JSON errors – attempt to parse for clarity
+    const parsed = JSON.parse(xhr.responseText || '{}');
+    const providerMessage = parsed.error?.message || parsed.message || parsed.error || null;
+    if (providerMessage) {
+      message = providerMessage;
+    }
+  } catch (_) {
+    // Ignore JSON parse failures; keep fallback message
+  }
+
+  return message;
+}
+
 /**
  * OpenAI streaming with XMLHttpRequest for real-time chunks
  * Supports native reasoning_content for o1/o3 models
@@ -225,14 +244,22 @@ function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
         } catch {}
       }
     };
-    
+
     xhr.onload = () => {
+      // Production builds sometimes return fast failures (e.g., 401/429) without streaming;
+      // proactively surface them so the UI can show an error bubble instead of disappearing.
+      if (xhr.status && xhr.status >= 400) {
+        onError?.(extractXhrError(xhr));
+        return resolve();
+      }
+
       onDone?.();
       resolve();
     };
-    
+
     xhr.onerror = () => {
-      onError?.(xhr.statusText || 'Network error');
+      // Network layer issue – pass a readable message to the UI
+      onError?.(extractXhrError(xhr));
       resolve();
     };
     
@@ -315,12 +342,18 @@ function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onT
     };
     
     xhr.onload = () => {
+      // Surface HTTP-level errors so the caller can render a visible failure state
+      if (xhr.status && xhr.status >= 400) {
+        onError?.(extractXhrError(xhr));
+        return resolve();
+      }
+
       onDone?.();
       resolve();
     };
-    
+
     xhr.onerror = () => {
-      onError?.(xhr.statusText || 'Network error');
+      onError?.(extractXhrError(xhr));
       resolve();
     };
     
@@ -406,14 +439,20 @@ function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
         } catch {}
       }
     };
-    
+
     xhr.onload = () => {
+      // Surface HTTP-level errors so the caller can render a visible failure state
+      if (xhr.status && xhr.status >= 400) {
+        onError?.(extractXhrError(xhr));
+        return resolve();
+      }
+
       onDone?.();
       resolve();
     };
-    
+
     xhr.onerror = () => {
-      onError?.(xhr.statusText || 'Network error');
+      onError?.(extractXhrError(xhr));
       resolve();
     };
     

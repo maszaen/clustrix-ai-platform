@@ -1,4 +1,5 @@
-# Clustrix AI - Style Requirements & Design System
+# Clustrix AI - Style Requirements & Design System (Deprecated, but still works)
+> To see real implementation, check renderer/style.css
 
 ## Overview
 Dokumen ini menjelaskan sistem desain, pola styling, dan requirements untuk styling aplikasi Clustrix AI berdasarkan analisis mendalam dari `renderer/style.css`.

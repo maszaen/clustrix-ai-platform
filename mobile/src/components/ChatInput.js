@@ -1,7 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
-import { View, TextInput, TouchableOpacity, StyleSheet, Platform, Keyboard } from 'react-native';
+import { useState, useRef } from 'react';
+import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
 const COLORS = {
   bg: '#1b1c1d',
   surface: '#1f1f1f',
@@ -11,29 +10,14 @@ const COLORS = {
   accent: '#0e4bae',
   borderLight: '#3c4141',
 };
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function ChatInput({ onSend, isStreaming, onStop }) {
   const [text, setText] = useState('');
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const inputRef = useRef(null);
+  const insets = useSafeAreaInsets();
 
-  // Android needs manual keyboard tracking
-  useEffect(() => {
-    if (Platform.OS !== 'android') return;
-    
-    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    
-    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboardHeight(0);
-    });
-    
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
 
   const handleSend = () => {
     if (!text.trim() || isStreaming) return;
@@ -41,11 +25,15 @@ export default function ChatInput({ onSend, isStreaming, onStop }) {
     setText('');
   };
 
-  // Android: add keyboard height as margin
-  const androidStyle = Platform.OS === 'android' ? { marginBottom: keyboardHeight } : {};
-
   return (
-    <View style={[styles.wrapper, androidStyle]}>
+    <View style={styles.wrapper} pointerEvents="box-none">
+      <LinearGradient
+        colors={['transparent', 'transparent', COLORS.bg]}
+        locations={[0, 0.5, 1]}
+        style={[styles.bottomFade, { height: insets.bottom + 178 }]}
+        pointerEvents="none"
+      />
+      
       <View style={styles.container}>
         <TextInput
           ref={inputRef}
@@ -72,17 +60,20 @@ export default function ChatInput({ onSend, isStreaming, onStop }) {
             <Ionicons name="arrow-up" size={20} color={COLORS.fg} />
           </TouchableOpacity>
         )}
-      </View>
+    </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
-    backgroundColor: COLORS.bg,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: 10,
+    paddingHorizontal: 10,
+    paddingTop: 0,
   },
   container: {
     flexDirection: 'row',
@@ -94,6 +85,15 @@ const styles = StyleSheet.create({
     paddingLeft: 16,
     paddingRight: 6,
     paddingVertical: 6,
+    zIndex: 100,
+  },
+  // Bottom fade gradient
+  bottomFade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
   },
   input: {
     flex: 1,
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#e81123',
+    backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },

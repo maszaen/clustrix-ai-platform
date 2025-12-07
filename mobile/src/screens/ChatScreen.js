@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { View, FlatList, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { WebView } from 'react-native-webview';
 import { useApp } from '../context/AppContext';
 import { streamChat, generateTitle, buildSystemPrompt } from '../services/api';
 import ChatMessage from '../components/ChatMessage';
@@ -11,8 +12,213 @@ const COLORS = {
   bg: '#000000ff',
   fg: '#FCFCFC',
   fgMuted: '#BDC1C6',
-  skeleton: '#232425'
+  skeleton: '#232425',
+  accent: '#6366f1',
 };
+
+// Welcome messages by time of day - matching Electron exactly
+const WELCOME_MESSAGES = {
+  pagi: [
+    "Morning, [USERNAME]! What's up?",
+    "Rise and grind, [USERNAME]!",
+    "Good morning, [USERNAME]!",
+    "Morning check-in, [USERNAME]!",
+  ],
+  siang: [
+    "Good afternoon, [USERNAME]!",
+    "Hey [USERNAME], what's good?",
+    "Midday check-in, [USERNAME]!",
+    "Afternoon vibes, [USERNAME]!",
+  ],
+  sore: [
+    "Evening vibes, [USERNAME]!",
+    "Good evening, [USERNAME]!",
+    "Evening check-in, [USERNAME]!",
+    "Hey [USERNAME], what's up?",
+  ],
+  malam: [
+    "Night session, [USERNAME]!",
+    "Evening, [USERNAME]!",
+    "Late night work, [USERNAME]?",
+    "Night check-in, [USERNAME]!",
+  ],
+  anytime: [
+    "What's new, [USERNAME]?",
+    "Hey there, [USERNAME]!",
+    "Yo [USERNAME], what's the mission?",
+    "What's poppin', [USERNAME]?",
+    "Back again, [USERNAME]?",
+    "Let's get it, [USERNAME]!",
+    "Another day, another slay, [USERNAME]!",
+    "Ready to get things done, [USERNAME]?",
+  ],
+};
+
+function getWelcomeMessage(username = 'friend') {
+  const hour = new Date().getHours();
+  let timeMessages = [];
+  if (hour >= 5 && hour < 12) timeMessages = WELCOME_MESSAGES.pagi;
+  else if (hour >= 12 && hour < 15) timeMessages = WELCOME_MESSAGES.siang;
+  else if (hour >= 15 && hour < 19) timeMessages = WELCOME_MESSAGES.sore;
+  else timeMessages = WELCOME_MESSAGES.malam;
+  
+  const allMessages = [...timeMessages, ...WELCOME_MESSAGES.anytime];
+  const msg = allMessages[Math.floor(Math.random() * allMessages.length)];
+  return msg.replace(/\[USERNAME\]/g, username);
+}
+
+// Diamond Logo using WebView with exact CSS from Electron
+const DIAMOND_LOGO_HTML = (accentColor) => `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { 
+      width: 100%; 
+      height: 100%; 
+      background: transparent; 
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    figure {
+      --size: 110px;
+      --duration: 5s;
+      --pull: -0.15;
+      perspective: 30rem;
+      display: grid;
+      grid-template-areas: "figure";
+      place-items: center;
+      width: var(--size);
+      height: var(--size);
+      animation: spin-logo var(--duration) ease-in-out infinite;
+    }
+    
+    figure > div {
+      --radius: calc(var(--size) / 4);
+      --deg: calc(var(--i) * (360deg / 10));
+      --transform-start: translate3d(
+          calc(cos(var(--deg)) * var(--radius)),
+          calc(sin(var(--deg)) * var(--radius)),
+          0
+        )
+        rotate(calc(var(--deg)));
+      grid-area: figure;
+      background-color: ${accentColor || 'hsl(225, 100%, 60%)'};
+      width: calc(var(--size) / 4);
+      height: calc(var(--size) / 4);
+      clip-path: polygon(25% 25%, 100% 50%, 25% 75%, 0% 50%);
+      transform: var(--transform-start);
+      transform-style: preserve-3d;
+      animation: diamonds var(--duration) cubic-bezier(0.87, 0, 0.13, 1) infinite;
+    }
+    
+    @keyframes diamonds {
+      0%, 20% {
+        transform: var(--transform-start);
+      }
+      50% {
+        clip-path: polygon(75% 25%, 100% 50%, 75% 75%, 0% 50%);
+        transform: translate3d(
+            calc(cos(var(--deg)) * var(--radius) * var(--pull)),
+            calc(sin(var(--deg)) * var(--radius) * var(--pull)),
+            5rem
+          )
+          rotate(calc(var(--deg) + 90deg));
+      }
+    }
+    
+    @keyframes spin-logo {
+      0%, 20% { transform: translateY(0); }
+      50% { transform: translateY(20px); }
+      80%, 100% { transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <figure>
+    <div style="--i: 1"></div>
+    <div style="--i: 2"></div>
+    <div style="--i: 3"></div>
+    <div style="--i: 4"></div>
+    <div style="--i: 5"></div>
+    <div style="--i: 6"></div>
+    <div style="--i: 7"></div>
+    <div style="--i: 8"></div>
+    <div style="--i: 9"></div>
+    <div style="--i: 10"></div>
+    <div style="--i: 11"></div>
+    <div style="--i: 12"></div>
+  </figure>
+</body>
+</html>
+`;
+
+// Diamond Logo component using WebView for exact CSS animation
+function DiamondLogo({ accentColor }) {
+  return (
+    <View style={styles.logoContainer}>
+      <WebView
+        source={{ html: DIAMOND_LOGO_HTML(accentColor) }}
+        style={styles.logoWebView}
+        scrollEnabled={false}
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        androidLayerType="hardware"
+        originWhitelist={['*']}
+        javaScriptEnabled={true}
+      />
+    </View>
+  );
+}
+
+// Welcome Screen with diamond logo and typewriter effect
+function WelcomeScreen({ username, accentColor }) {
+  const [displayText, setDisplayText] = useState('');
+  const isMountedRef = useRef(true);
+  const welcomeMessage = useRef(getWelcomeMessage(username || 'friend')).current;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    let i = 0;
+    const timers = [];
+    
+    const typeChar = () => {
+      if (!isMountedRef.current) return;
+      if (i < welcomeMessage.length) {
+        setDisplayText(welcomeMessage.slice(0, i + 1));
+        i++;
+        const char = welcomeMessage[i - 1];
+        // Match Electron: punctuation = 350ms delay, normal = 30 + random(40)
+        const delay = /[.,?!;:\-–]/.test(char) ? 350 : 30 + Math.random() * 40;
+        const t = setTimeout(typeChar, delay);
+        timers.push(t);
+      }
+    };
+    
+    // Initial delay before typing starts
+    const starter = setTimeout(typeChar, 100);
+    timers.push(starter);
+    
+    return () => { 
+      isMountedRef.current = false;
+      timers.forEach(t => clearTimeout(t));
+    };
+  }, [welcomeMessage]);
+
+  return (
+    <View style={styles.welcomeContainer}>
+      <DiamondLogo accentColor={accentColor} />
+      <Text style={styles.welcomeText}>{displayText}</Text>
+    </View>
+  );
+}
 
 export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
   const { 
@@ -297,23 +503,17 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
     );
   }, [hasMoreMessages, loadingMore, handleLoadMore]);
 
-  // Calculate input container bottom padding
-  const inputPaddingBottom = keyboardVisible 
-    ? (Platform.OS === 'ios' ? 8 : 8)
-    : (bottomInset > 0 ? bottomInset : 16);
-
   return (
     <View style={styles.container}>
       {!currentSession && displayMessages.length === 0 ? (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={[styles.emptyState, { paddingTop: topInset, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 65 : 75 }]}>
-            <Text style={styles.emptyTitle}>Clustrix</Text>
-            <Text style={styles.emptySubtitle}>Start a conversation</Text>
+            <WelcomeScreen username={settings.persona?.name} />
           </View>
         </TouchableWithoutFeedback>
       ) : displayMessages.length === 0 ? (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={[styles.emptyState, { paddingTop: topInset, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 65 : 75 }]}>
+          <View style={[styles.emptyState, { paddingTop: topInset, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 65 : 75 }]}>
             <Text style={styles.emptySubtitle}>Send a message to begin</Text>
           </View>
         </TouchableWithoutFeedback>
@@ -419,15 +619,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  emptyTitle: {
-    color: COLORS.fg,
-    fontSize: 32,
-    fontWeight: '600',
-  },
   emptySubtitle: {
     color: COLORS.fgMuted,
     fontSize: 16,
     marginTop: 8,
+  },
+  welcomeContainer: {
+    alignItems: 'center',
+    gap: 0,
+  },
+  logoContainer: {
+    width: 150,
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoWebView: {
+    width: 150,
+    height: 150,
+    backgroundColor: 'transparent',
+  },
+  welcomeText: {
+    color: COLORS.fg,
+    fontSize: 24,
+    fontWeight: '500',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  cursor: {
+    color: COLORS.fgMuted,
+    fontWeight: '300',
   },
   inputContainer: {
     position: 'absolute',

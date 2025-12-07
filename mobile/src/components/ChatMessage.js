@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 
@@ -224,20 +226,51 @@ export default function ChatMessage({ message, isUser, isNew }) {
   return (
     <View style={styles.aiContainer}>
       {hasThinking && (
-        <TouchableOpacity 
-          style={styles.thinkToggle} 
-          onPress={() => setShowThinking(!showThinking)}
-        >
-          <Text style={styles.thinkToggleText}>
-            {showThinking ? '▼ Hide thinking' : '▶ Show thinking'}
-          </Text>
-        </TouchableOpacity>
-      )}
-      
-      {showThinking && thinkingContent && (
-        <View style={styles.thinkingBlock}>
-          <Text style={styles.thinkingText}>{thinkingContent}</Text>
-        </View>
+        <>
+          <TouchableOpacity 
+            style={styles.thinkToggle} 
+            onPress={() => setShowThinking(!showThinking)}
+            activeOpacity={0.7}
+          >
+            <Ionicons 
+              name={showThinking ? "chevron-down" : "chevron-forward"} 
+              size={14} 
+              color={COLORS.fgMuted} 
+            />
+            <Text style={styles.thinkToggleText}>
+              {showThinking ? 'Hide thinking' : 'Show thinking'}
+            </Text>
+          </TouchableOpacity>
+          
+          {showThinking && thinkingContent && (
+            <View style={styles.thinkingWrapper}>
+              {/* Top fade gradient */}
+              <LinearGradient
+                colors={[COLORS.bg, COLORS.thinkBg]}
+                style={styles.thinkingGradientTop}
+                pointerEvents="none"
+              />
+              
+              <ScrollView 
+                style={styles.thinkingBlock}
+                contentContainerStyle={styles.thinkingContent}
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+              >
+                <Markdown style={thinkingMarkdownStyles} rules={markdownRules}>
+                  {thinkingContent}
+                </Markdown>
+              </ScrollView>
+              
+              {/* Bottom fade gradient */}
+              <LinearGradient
+                colors={[COLORS.thinkBg, COLORS.bg]}
+                style={styles.thinkingGradientBottom}
+                pointerEvents="none"
+              />
+            </View>
+          )}
+        </>
       )}
       
       {isLoading ? (
@@ -291,19 +324,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   thinkToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginBottom: 8,
   },
   thinkToggleText: {
     color: COLORS.fgMuted,
     fontSize: 13,
   },
-  thinkingBlock: {
-    backgroundColor: COLORS.thinkBg,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.borderLight,
-    padding: 12,
+  thinkingWrapper: {
+    position: 'relative',
     marginBottom: 12,
-    borderRadius: 4,
+  },
+  thinkingBlock: {
+    maxHeight: 300,
+    backgroundColor: COLORS.thinkBg,
+    borderRadius: 8,
+  },
+  thinkingContent: {
+    padding: 12,
+    paddingVertical: 20,
+  },
+  thinkingGradientTop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 20,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    zIndex: 1,
+  },
+  thinkingGradientBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 20,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    zIndex: 1,
   },
   thinkingText: {
     color: COLORS.fgMuted,
@@ -396,4 +457,64 @@ const markdownStyles = {
   table: { borderWidth: 1, borderColor: COLORS.borderLight, borderRadius: 10 },
   th: { backgroundColor: 'transparent', padding: 8, borderBottomWidth: 0, borderColor: COLORS.borderLight },
   td: { padding: 8, borderTopWidth: 1, borderColor: COLORS.borderLight, backgroundColor: 'transparent', },
+};
+
+// Thinking markdown styles - muted colors
+const thinkingMarkdownStyles = {
+  body: { color: COLORS.fgMuted, fontSize: 13, lineHeight: 19 },
+  heading1: { color: COLORS.fgMuted, fontSize: 16, fontWeight: '600', marginVertical: 6 },
+  heading2: { color: COLORS.fgMuted, fontSize: 15, fontWeight: '600', marginVertical: 4 },
+  heading3: { color: COLORS.fgMuted, fontSize: 14, fontWeight: '600', marginVertical: 3 },
+  paragraph: { marginVertical: 3 },
+  code_inline: { 
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    color: '#7a9fd4',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  fence: { 
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    padding: 10, 
+    borderRadius: 6, 
+    marginVertical: 6,
+  },
+  fenceContent: {
+    color: '#8a9199',
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 16,
+  },
+  code_block: { 
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    padding: 10, 
+    borderRadius: 6, 
+    marginVertical: 6,
+    color: '#8a9199',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  link: { color: '#a3c4f3' },
+  blockquote: { 
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderLeftWidth: 2, 
+    color: COLORS.fgMuted,
+    borderLeftColor: COLORS.borderLight, 
+    paddingLeft: 10, 
+    marginLeft: 0,
+    borderRadius: 4,
+  },
+  list_item: { marginVertical: 2 },
+  bullet_list: { marginVertical: 3 },
+  ordered_list: { marginVertical: 3 },
+  strong: { fontWeight: '600', color: COLORS.fgMuted },
+  em: { fontStyle: 'italic' },
+  hr: { backgroundColor: COLORS.borderLight, height: 1, marginVertical: 8 },
 };

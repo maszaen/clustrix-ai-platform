@@ -193,8 +193,9 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
         triggerHaptic();
       },
       onThink: (think) => {
-        fullThinking = think;
-        setThinkingContent(think);
+        // Append thinking content (Gemini native streams thinking in chunks)
+        fullThinking += think;
+        setThinkingContent(fullThinking);
       },
       onDone: async () => {
         // Keep streaming content visible while saving

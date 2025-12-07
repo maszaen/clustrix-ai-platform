@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   },
   thinkToggleText: {
     color: COLORS.fgMuted,
-    fontSize: 12,
+    fontSize: 13,
   },
   thinkingBlock: {
     backgroundColor: COLORS.thinkBg,
@@ -317,11 +317,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   loaderDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 11,
+    height: 11,
+    borderRadius: 7,
     backgroundColor: COLORS.fgMuted,
-    marginRight: 10,
+    marginRight: 12,
   },
   loaderText: {
     color: COLORS.fgMuted,

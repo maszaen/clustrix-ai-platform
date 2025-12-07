@@ -148,17 +148,24 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
     
     let session = sessionRef.current;
     let isNewSession = false;
+    
+    // WELCOME SCREEN FLOW: Create session first, then append messages
     if (!session) {
       session = await createSession('New Chat');
       sessionRef.current = session;
       isNewSession = true;
-      // Wait for state to update after createSession
-      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     const newMsgKey = `msg-${messages.length}`;
     setNewMessageId(newMsgKey);
-    await appendMessage('user', text, {});
+    
+    // For new session from welcome screen, pass session directly to appendMessage
+    if (isNewSession) {
+      await appendMessage('user', text, { _messageIndex: 0 }, session);
+    } else {
+      await appendMessage('user', text, {});
+    }
+    
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     setTimeout(() => setNewMessageId(null), 500);
     
@@ -192,25 +199,42 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
       onDone: async () => {
         // Keep streaming content visible while saving
         const content = fullThinking ? `<thinking>${fullThinking}</thinking>\n\n${fullContent}` : fullContent;
-        await appendMessage('assistant', content, {
-          model: settings.model,
-          provider: settings.provider,
-          thinkContent: fullThinking || null,
-        });
+        
+        // For new session, pass session and correct message index
+        if (isNewSession) {
+          await appendMessage('assistant', content, {
+            model: settings.model,
+            provider: settings.provider,
+            thinkContent: fullThinking || null,
+            _messageIndex: 1,
+          }, session);
+        } else {
+          await appendMessage('assistant', content, {
+            model: settings.model,
+            provider: settings.provider,
+            thinkContent: fullThinking || null,
+          });
+        }
+        
         // Clear streaming AFTER message is saved
         setIsStreaming(false);
         setStreamingContent('');
         setThinkingContent('');
         
-        if (messages.length === 0) {
+        // Generate title for new session
+        if (isNewSession) {
           const title = await generateTitle(text, settings.model, settings.provider, settings.baseUrl, settings.apiKey);
-          await updateSession({ name: title });
+          await updateSession({ name: title }, session);
         }
       },
       onError: async (error) => {
         setIsStreaming(false);
         setStreamingContent('');
-        await appendMessage('assistant', `Error: ${error}`, { error: true });
+        if (isNewSession) {
+          await appendMessage('assistant', `Error: ${error}`, { error: true, _messageIndex: 1 }, session);
+        } else {
+          await appendMessage('assistant', `Error: ${error}`, { error: true });
+        }
       },
     });
   };
@@ -310,7 +334,7 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
           keyExtractor={(item) => item._key}
           renderItem={renderMessage}
           ListHeaderComponent={ListHeader}
-          contentContainerStyle={[styles.messageList, { paddingTop: topInset + 56, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 65 : 75 }]}
+          contentContainerStyle={[styles.messageList, { paddingTop: topInset + 66, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 75 : 85 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"

@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react';
-import { View, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react';
+import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 const COLORS = {
-  bg: '#1b1c1d',
+  bg: '#000000ff',
   surface: '#1f1f1f',
   inputBg: '#282A2D',
   fg: '#FCFCFC',
@@ -13,10 +13,28 @@ const COLORS = {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
-export default function ChatInput({ onSend, isStreaming, onStop }) {
+import { useEffect } from 'react';
+
+function ChatInputComponent({ onSend, isStreaming, onStop }, ref) {
   const [text, setText] = useState('');
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef(null);
   const insets = useSafeAreaInsets();
+
+  // Track keyboard visibility
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    blur: () => inputRef.current?.blur(),
+  }));
 
 
   const handleSend = () => {
@@ -26,12 +44,11 @@ export default function ChatInput({ onSend, isStreaming, onStop }) {
   };
 
   return (
-    <View style={styles.wrapper} pointerEvents="box-none">
+    <View style={styles.wrapper}>
       <LinearGradient
-        colors={['transparent', 'transparent', COLORS.bg]}
-        locations={[0, 0.5, 1]}
-        style={[styles.bottomFade, { height: insets.bottom + 178 }]}
-        pointerEvents="none"
+        colors={['transparent', 'transparent', COLORS.bg, COLORS.bg]}
+        locations={[0, 0.2, 0.7, 1]}
+        style={[styles.bottomFade, { height: insets.bottom + 100 }]}
       />
       
       <View style={styles.container}>
@@ -44,7 +61,14 @@ export default function ChatInput({ onSend, isStreaming, onStop }) {
           placeholderTextColor={COLORS.fgMuted}
           multiline
           maxLength={10000}
-          editable={!isStreaming}
+          // editable={!isStreaming}
+          onPressIn={() => {
+            // Only force blur+focus if keyboard is not visible (fix Android multiline bug)
+            if (!isFocused && !keyboardVisible) {
+              inputRef.current?.blur();
+              setTimeout(() => inputRef.current?.focus(), 50);
+            }
+          }}
         />
         
         {isStreaming ? (
@@ -60,18 +84,17 @@ export default function ChatInput({ onSend, isStreaming, onStop }) {
             <Ionicons name="arrow-up" size={20} color={COLORS.fg} />
           </TouchableOpacity>
         )}
-    </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingBottom: 10,
+    paddingBottom: 26,
     paddingHorizontal: 10,
     paddingTop: 0,
   },
@@ -80,17 +103,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     backgroundColor: COLORS.inputBg,
     borderRadius: 24,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.borderLight,
-    paddingLeft: 16,
-    paddingRight: 6,
-    paddingVertical: 6,
+    paddingLeft: 13,
+    paddingRight: 4,
+    paddingVertical: 4,
     zIndex: 100,
   },
   // Bottom fade gradient
   bottomFade: {
     position: 'absolute',
-    bottom: 0,
+    bottom: -10,
     left: 0,
     right: 0,
     zIndex: 1,
@@ -123,3 +146,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
+
+
+export default forwardRef(ChatInputComponent);

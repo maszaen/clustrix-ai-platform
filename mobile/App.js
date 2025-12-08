@@ -42,7 +42,19 @@ function MainApp() {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHasQuery, setSidebarHasQuery] = useState(false);
-  
+  // Fade animation for right buttons container
+  const rightBtnOpacity = useRef(new Animated.Value(0)).current;
+  const showRightBtns = currentSession && messages.length > 0;
+
+  // Fade in/out right buttons when session changes
+  useEffect(() => {
+    Animated.timing(rightBtnOpacity, {
+      toValue: showRightBtns ? 1 : 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start();
+  }, [showRightBtns, rightBtnOpacity]);
+
   // Horizontal pager - start at main screen (offset = SIDEBAR_WIDTH)
   // Pager offset controls the horizontal snap between sidebar (0) and main (SIDEBAR_WIDTH)
   const scrollX = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
@@ -292,23 +304,24 @@ function MainApp() {
             </View>
           </TouchableOpacity>
 
-          {currentSession && messages.length > 0 && (
-            <View style={[styles.floatingPencilBtn, { top: insets.top + 11 }]}>
-              <TouchableOpacity onPress={handleNewChat} activeOpacity={0.7}>
-                <SvgXml xml={PENCIL} style={styles.rightSideLogo} width={23} height={23} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowContextMenu(true)} activeOpacity={0.7}>
-                <Ionicons name="ellipsis-vertical" size={21} color={COLORS.fg} />
-              </TouchableOpacity>
-            </View>
-          )}
+          <Animated.View 
+            style={[styles.floatingPencilBtn, { top: insets.top + 11, opacity: rightBtnOpacity }]}
+            pointerEvents={showRightBtns ? 'auto' : 'none'}
+          >
+            <TouchableOpacity onPress={handleNewChat} activeOpacity={0.7}>
+              <SvgXml xml={PENCIL} style={styles.rightSideLogo} width={23} height={23} />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowContextMenu(true)} activeOpacity={0.7}>
+              <Ionicons name="ellipsis-vertical" size={21} color={COLORS.fg} />
+            </TouchableOpacity>
+          </Animated.View>
 
           {/* Context Menu */}
           <ContextMenuFixed
             visible={showContextMenu}
             onClose={() => setShowContextMenu(false)}
             sessionName={currentSession?.title || 'New Chat'}
-            position={{ top: insets.top + 65, right: 16 }}
+            position={{ top: insets.top + 25, right: 16 }}
             options={[
               { label: 'Rename', icon: 'pencil-outline', onPress: () => {
                 if (currentSession) renameSession(currentSession.id, currentSession.title);

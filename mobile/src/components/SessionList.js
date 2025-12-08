@@ -21,7 +21,7 @@ function SessionItem({ session, isActive, onSelect, onLongPress, onToggleFavorit
         style={[styles.sessionTitle, isActive && styles.sessionTitleActive]} 
         numberOfLines={1}
       >
-        {session.name || 'New Chat'}
+        {session.name || 'Untitled'}
       </Text>
       {/* <TouchableOpacity 
         style={styles.favoriteBtn}
@@ -197,6 +197,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SIDEBAR_PADDING,
+    paddingRight: SIDEBAR_PADDING - 5,
     gap: 10,
   },
   newChatBtn: {
@@ -246,7 +247,7 @@ const styles = StyleSheet.create({
   sessionTitle: {
     flex: 1,
     color: COLORS.fgMuted,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
   },
   sessionTitleActive: {

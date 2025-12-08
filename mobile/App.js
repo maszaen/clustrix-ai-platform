@@ -10,7 +10,6 @@ import {
   Dimensions,
   TouchableWithoutFeedback,
   PanResponder,
-  Easing,
   BackHandler,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,8 +17,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from './src/context/AppContext';
 import ChatScreen from './src/screens/ChatScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
+import PersonalizationScreen from './src/screens/PersonalizationScreen';
+import ModelsListScreen from './src/screens/ModelsListScreen';
 import SessionList from './src/components/SessionList';
+import SlideUpModal from './src/components/SlideUpModal';
+import ContextMenuFixed from './src/components/ContextMenuFixed';
 import { SvgXml } from 'react-native-svg';
 import { COLORS } from './src/constants/colors';
 
@@ -35,7 +37,9 @@ const PENCIL = '<svg width="20" height="20" viewBox="0 0 20 20" fill="currentCol
 function MainApp() {
   const insets = useSafeAreaInsets();
   const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession } = useApp();
-  const [showSettings, setShowSettings] = useState(false);
+  const [showPersonalization, setShowPersonalization] = useState(false);
+  const [showModels, setShowModels] = useState(false);
+  const [showContextMenu, setShowContextMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHasQuery, setSidebarHasQuery] = useState(false);
   
@@ -62,8 +66,7 @@ function MainApp() {
     extrapolate: 'clamp',
   });
   
-  const settingsAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-  const settingsOverlayAnim = useRef(new Animated.Value(0)).current;
+  
 
 
   // Horizontal pager pan responder
@@ -135,26 +138,6 @@ function MainApp() {
     })
   ).current;
 
-  // Settings pan responder
-  const settingsPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 10,
-      onPanResponderMove: (_, gs) => {
-        // Only allow swipe down, clamp at 20 minimum (can't go higher)
-        const newValue = Math.max(20, 20 + gs.dy);
-        settingsAnim.setValue(newValue);
-      },
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dy > 100 || gs.vy > 0.5) {
-          closeSettings();
-        } else {
-          Animated.spring(settingsAnim, { toValue: 20, useNativeDriver: true, tension: 65, friction: 11 }).start();
-        }
-      },
-    })
-  ).current;
-
   // Sidebar width = base width + live stretch (only grows when snapped on the left)
   const sidebarWidth = Animated.add(SIDEBAR_WIDTH, sidebarStretch);
 
@@ -211,28 +194,15 @@ function MainApp() {
     }).start();
   }, [sidebarHasQuery, sidebarOpen, sidebarStretch]);
 
-  const openSettings = useCallback(() => {
-    setShowSettings(true);
-    Animated.parallel([
-      Animated.spring(settingsAnim, { toValue: 20, useNativeDriver: true, tension: 65, friction: 11 }),
-      Animated.timing(settingsOverlayAnim, { toValue: 1, duration: 280, useNativeDriver: true }),
-    ]).start();
-  }, [settingsAnim, settingsOverlayAnim]);
+  const openPersonalization = useCallback(() => setShowPersonalization(true), []);
+  const closePersonalization = useCallback(() => setShowPersonalization(false), []);
+  const openModels = useCallback(() => setShowModels(true), []);
+  const closeModels = useCallback(() => setShowModels(false), []);
 
-  const closeSettings = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(settingsAnim, { toValue: SCREEN_HEIGHT, duration: 250, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
-      Animated.timing(settingsOverlayAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
-    ]).start(() => setShowSettings(false));
-  }, [settingsAnim, settingsOverlayAnim]);
-
-  // Back button handler
+  // Back button handler - only for sidebar (modals handle their own back)
   useEffect(() => {
+    if (showPersonalization || showModels || showContextMenu) return; // Let modals handle back
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (showSettings) {
-        closeSettings();
-        return true;
-      }
       if (sidebarOpen) {
         closeSidebar();
         return true;
@@ -240,7 +210,7 @@ function MainApp() {
       return false;
     });
     return () => backHandler.remove();
-  }, [showSettings, sidebarOpen, closeSettings, closeSidebar]);
+  }, [showPersonalization, showModels, showContextMenu, sidebarOpen, closeSidebar]);
 
   const handleNewChat = useCallback(() => {
     if (!currentSession || messages.length === 0) {
@@ -286,7 +256,7 @@ function MainApp() {
               onRename={renameSession}
               onSearchQueryChange={setSidebarHasQuery}
             />
-            <TouchableOpacity style={styles.sidebarSettingsBtn} onPress={() => { closeSidebar(); setTimeout(openSettings, 100); }}>
+            <TouchableOpacity style={styles.sidebarSettingsBtn} onPress={openPersonalization}>
               <Ionicons name="options-outline" size={20} color={COLORS.fgMuted} />
               <Text style={styles.sidebarSettingsText}>Personalization</Text>
             </TouchableOpacity>
@@ -314,7 +284,7 @@ function MainApp() {
 
           <TouchableOpacity
             style={[styles.floatingLogoBtn, { top: insets.top + 11 }]}
-            onPress={() => setTimeout(openSettings, 40)}
+            onPress={() => setTimeout(openModels, 10)}
             activeOpacity={0.7}
           >
             <View style={styles.logo}>
@@ -322,16 +292,32 @@ function MainApp() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.floatingPencilBtn, { top: insets.top + 11 }]}
-            onPress={() => setTimeout(openSettings, 40)}
-            activeOpacity={0.7}
-          >
-            <View>
-              <SvgXml xml={PENCIL} style={styles.rightSideLogo} width={23} height={23} />
+          {currentSession && messages.length > 0 && (
+            <View style={[styles.floatingPencilBtn, { top: insets.top + 11 }]}>
+              <TouchableOpacity onPress={handleNewChat} activeOpacity={0.7}>
+                <SvgXml xml={PENCIL} style={styles.rightSideLogo} width={23} height={23} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowContextMenu(true)} activeOpacity={0.7}>
+                <Ionicons name="ellipsis-vertical" size={21} color={COLORS.fg} />
+              </TouchableOpacity>
             </View>
-            <Ionicons name="ellipsis-vertical" size={21} color={COLORS.fg} />
-          </TouchableOpacity>
+          )}
+
+          {/* Context Menu */}
+          <ContextMenuFixed
+            visible={showContextMenu}
+            onClose={() => setShowContextMenu(false)}
+            sessionName={currentSession?.title || 'New Chat'}
+            position={{ top: insets.top + 65, right: 16 }}
+            options={[
+              { label: 'Rename', icon: 'pencil-outline', onPress: () => {
+                if (currentSession) renameSession(currentSession.id, currentSession.title);
+              }},
+              { label: 'Delete', icon: 'trash-outline', danger: true, onPress: () => {
+                if (currentSession) deleteSession(currentSession.id);
+              }},
+            ]}
+          />
 
           {/* Main dimming overlay - tap to close sidebar when sidebar is open */}
           <Animated.View 
@@ -345,21 +331,13 @@ function MainApp() {
         </View>
       </Animated.View>
 
-      {/* Settings Modal */}
-      {showSettings && (
-        <View style={styles.settingsOverlay}>
-          <TouchableWithoutFeedback onPress={closeSettings}>
-            <Animated.View style={[styles.settingsBackdrop, { opacity: settingsOverlayAnim }]} />
-          </TouchableWithoutFeedback>
-          <Animated.View 
-            style={[styles.settingsSheet, { transform: [{ translateY: settingsAnim }] }]}
-            {...settingsPanResponder.panHandlers}
-          >
-            <View style={styles.settingsHandle} />
-            <SettingsScreen onClose={closeSettings} />
-          </Animated.View>
-        </View>
-      )}
+      {/* Personalization Modal */}
+      <PersonalizationScreen visible={showPersonalization} onClose={closePersonalization} />
+
+      {/* Models List Modal */}
+      <SlideUpModal visible={showModels} onClose={closeModels}>
+        <ModelsListScreen onClose={closeModels} />
+      </SlideUpModal>
     </View>
   );
 }
@@ -469,35 +447,6 @@ const styles = StyleSheet.create({
     color: COLORS.fgMuted,
     fontSize: 16,
     marginLeft: 12,
-  },
-  settingsOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 30,
-  },
-  settingsBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  settingsSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: SCREEN_HEIGHT * 0.9,
-    backgroundColor: COLORS.bgSecondary,
-    borderTopLeftRadius: 23,
-    // borderTopColor: COLORS.borderLight,
-    // borderWidth: 1.5,
-    borderTopRightRadius: 23,
-  },
-  settingsHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: COLORS.borderLight,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 8,
   },
   pageOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -25,7 +25,7 @@ import { COLORS } from './src/constants/colors';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Base sidebar width sits at ~83% of the screen so users can peek the main page
-const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.83;
+const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.80;
 // The maximum distance the sidebar can stretch to the right (until it fills the screen)
 const SIDEBAR_STRETCH_DISTANCE = SCREEN_WIDTH - SIDEBAR_WIDTH;
 const TOTAL_WIDTH = SIDEBAR_WIDTH + SCREEN_WIDTH; // Total scrollable width

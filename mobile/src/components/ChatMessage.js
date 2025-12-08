@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
@@ -172,6 +172,7 @@ function TypewriterLoader() {
 }
 
 export default function ChatMessage({ message, isUser, isNew, onShowThinking }) {
+  const { height: viewportHeight } = useWindowDimensions();
   const slideAnim = useRef(new Animated.Value(isNew && isUser ? 50 : 0)).current;
   const opacityAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
   
@@ -213,8 +214,11 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking }) 
 
   const isLoading = message.isStreaming && (!textContent || textContent === '...');
   
+  // Add minHeight 50% viewport for streaming AI message
+  const streamingMinHeight = message.isStreaming ? { minHeight: (viewportHeight * 1) - 260 } : {};
+
   return (
-    <View style={styles.aiContainer}>
+    <View style={[styles.aiContainer, streamingMinHeight]}>
       {hasThinking && (
         <TouchableOpacity 
           style={styles.thinkToggle} 

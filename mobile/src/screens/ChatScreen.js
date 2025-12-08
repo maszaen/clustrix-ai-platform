@@ -233,31 +233,28 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [visibleCount, setVisibleCount] = useState(12); // Start with last 12 messages
   const [loadingMore, setLoadingMore] = useState(false);
-  const [showSkeleton, setShowSkeleton] = useState(true);
   const lastHapticTime = useRef(0);
   const isInitialLoad = useRef(true);
-  const skeletonOpacity = useRef(new Animated.Value(1)).current;
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  const skeletonOpacity = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const contentFadeAnim = useRef(new Animated.Value(1)).current;
+  const contentFadeAnimTwo = useRef(new Animated.Value(0)).current;
+  const skeletonTimeoutRef = useRef(null);
+  const prevSessionIdRef = useRef(currentSession?.id);
+  const trigger = currentSession && messages.length > 0;
 
-  // Pulse animation for skeleton breathing effect
+  // Pulse animation for skeleton
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 0.5,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
+        Animated.timing(pulseAnim, { toValue: 0.5, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
       ])
     );
     pulse.start();
     return () => pulse.stop();
-  }, []);
+  }, [pulseAnim]);
 
   // Keyboard listeners
   useEffect(() => {
@@ -300,21 +297,71 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
     }, 100);
   }, []);
 
-  // Reset on session change - show skeleton overlay ONLY if session has messages
+  // Reset on session change + skeleton for session->session
   useEffect(() => {
+    const wasWelcome = !wasSession && !currentSession?.id;
+    const wasSession = prevSessionIdRef.current !== undefined && prevSessionIdRef.current !== null;
+    const isSessionToSession = wasSession && currentSession?.id && prevSessionIdRef.current !== currentSession?.id;
+    const isWelcomeToSession = !wasSession && currentSession?.id;
+    
+    
+    // Clear pending timeout
+    if (skeletonTimeoutRef.current) {
+      clearTimeout(skeletonTimeoutRef.current);
+      skeletonTimeoutRef.current = null;
+    }
+    
     isInitialLoad.current = true;
     hasScrolledInitial.current = false;
     initialScrollDone.current = false;
     setVisibleCount(12);
-    // Only show skeleton when switching to existing session with messages
-    // Don't show skeleton for new sessions or when streaming
-    if (currentSession && messages.length > 0 && !isStreaming) {
+    
+    if (wasWelcome) {
+      Animated.sequence([
+        Animated.timing(contentFadeAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]).start();
+    }
+    if (isWelcomeToSession) {
+      setTimeout(() => {
+        Animated.sequence([
+          Animated.timing(contentFadeAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+          Animated.timing(contentFadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+          Animated.timing(contentFadeAnimTwo, { toValue: 0, duration: 500, useNativeDriver: true }),
+          Animated.timing(contentFadeAnimTwo, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ]).start();
+      }, 50);
+    } else {
+      setTimeout(() => {
+        Animated.sequence([
+          Animated.timing(contentFadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+          Animated.timing(contentFadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+          Animated.timing(contentFadeAnimTwo, { toValue: 0, duration: 500, useNativeDriver: true }),
+          Animated.timing(contentFadeAnimTwo, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ]).start();
+      }, 50);
+    }
+    
+    // Show skeleton instantly for session->session transitions + content fade
+    if (isSessionToSession) {
       setShowSkeleton(true);
       skeletonOpacity.setValue(1);
-    } else {
-      setShowSkeleton(false);
+      
+      // Auto-hide skeleton after 1 second
+      skeletonTimeoutRef.current = setTimeout(() => {
+        Animated.timing(skeletonOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => setShowSkeleton(false));
+      }, 500);
     }
-  }, [currentSession?.id]);
+    
+    prevSessionIdRef.current = currentSession?.id;
+    
+    return () => {
+      if (skeletonTimeoutRef.current) clearTimeout(skeletonTimeoutRef.current);
+    };
+  }, [currentSession?.id, skeletonOpacity, trigger]);
 
   // Scroll during streaming
   useEffect(() => {
@@ -339,11 +386,8 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
   }, [currentSession]);
 
   const handleSend = async (text) => {
-    // Disable skeleton for new messages - IMPORTANT: do this first
     hasScrolledInitial.current = true;
     initialScrollDone.current = true;
-    setShowSkeleton(false);
-    skeletonOpacity.setValue(0);
     
     let session = sessionRef.current;
     let isNewSession = false;
@@ -500,90 +544,83 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
     <View style={styles.container}>
       {!currentSession && displayMessages.length === 0 ? (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={[styles.emptyState, { paddingTop: topInset, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 65 : 75 }]}>
+          <Animated.View style={[styles.emptyState, { paddingTop: topInset, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 65 : 75, opacity: contentFadeAnim }]}>
             <WelcomeScreen username={settings.persona?.name} />
-          </View>
+          </Animated.View>
         </TouchableWithoutFeedback>
       ) : displayMessages.length === 0 ? (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={[styles.emptyState, { paddingTop: topInset, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 65 : 75 }]}>
-            <Text style={styles.emptySubtitle}>Send a message to begin</Text>
-          </View>
+          <Animated.View style={[styles.emptyState, { paddingTop: topInset, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 65 : 75, opacity: contentFadeAnimTwo }]}>
+          </Animated.View>
         </TouchableWithoutFeedback>
       ) : (
         <>
-        {showSkeleton && (
-          <Animated.View style={[styles.skeletonContainer, { opacity: skeletonOpacity, paddingTop: topInset + 70 }]}>
-            <Animated.View style={[styles.skeletonUser, { opacity: pulseAnim }]} />
-            <Animated.View style={{ opacity: pulseAnim }}>
-              <LinearGradient
-                colors={[COLORS.skeleton, COLORS.skeleton, 'transparent']}
-                locations={[0, 0.3, 1]}
-                style={[styles.skeletonAi, { height: 400 }]}
-                pointerEvents="none"
-              />
-            </Animated.View>
-          </Animated.View>
-        )}
-        <FlatList
-          ref={flatListRef}
-          data={displayMessages}
-          keyExtractor={(item) => item._key}
-          renderItem={renderMessage}
-          ListHeaderComponent={ListHeader}
-          contentContainerStyle={[styles.messageList, { paddingTop: topInset + 66, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 75 : 85 }]}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          removeClippedSubviews={true}
-          maxToRenderPerBatch={10}
-          windowSize={10}
-          onScrollToIndexFailed={onScrollToIndexFailed}
-          onLayout={(e) => { layoutHeight.current = e.nativeEvent.layout.height; }}
-          onContentSizeChange={(_, h) => {
-            contentHeight.current = h;
-            
-            // Initial scroll ONLY ONCE on session load - find last user message
-            if (!hasScrolledInitial.current && !initialScrollDone.current && h > 0 && layoutHeight.current > 0 && displayMessages.length > 0 && !isStreaming) {
-              initialScrollDone.current = true;
-              hasScrolledInitial.current = true;
-              
-              // Find last user message index
-              let lastUserIdx = -1;
-              for (let i = displayMessages.length - 1; i >= 0; i--) {
-                if (displayMessages[i].role === 'user') {
-                  lastUserIdx = i;
-                  break;
+          <Animated.View style={{ flex: 1, opacity: contentFadeAnim }}>
+            <FlatList
+              ref={flatListRef}
+              data={displayMessages}
+              keyExtractor={(item) => item._key}
+              renderItem={renderMessage}
+              ListHeaderComponent={ListHeader}
+              contentContainerStyle={[styles.messageList, { paddingTop: topInset + 66, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 75 : 85 }]}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+              onScrollToIndexFailed={onScrollToIndexFailed}
+              onLayout={(e) => { layoutHeight.current = e.nativeEvent.layout.height; }}
+              onContentSizeChange={(_, h) => {
+                contentHeight.current = h;
+                
+                // Initial scroll ONLY ONCE on session load - find last user message
+                if (!hasScrolledInitial.current && !initialScrollDone.current && h > 0 && layoutHeight.current > 0 && displayMessages.length > 0 && !isStreaming) {
+                  initialScrollDone.current = true;
+                  hasScrolledInitial.current = true;
+                  
+                  // Find last user message index
+                  let lastUserIdx = -1;
+                  for (let i = displayMessages.length - 1; i >= 0; i--) {
+                    if (displayMessages[i].role === 'user') {
+                      lastUserIdx = i;
+                      break;
+                    }
+                  }
+                  
+                  if (lastUserIdx >= 0) {
+                    setTimeout(() => {
+                      flatListRef.current?.scrollToIndex({
+                        index: lastUserIdx,
+                        animated: false,
+                        viewPosition: 0,
+                        viewOffset: 100,
+                      });
+                    }, 50);
+                  }
+                  return;
                 }
-              }
-              
-              if (lastUserIdx >= 0) {
-                setTimeout(() => {
-                  flatListRef.current?.scrollToIndex({
-                    index: lastUserIdx,
-                    animated: false,
-                    viewPosition: 0,
-                    viewOffset: 100,
-                  });
-                }, 50);
-              }
-              // Hide skeleton after minimum 800ms
-              setTimeout(() => {
-                Animated.timing(skeletonOpacity, {
-                  toValue: 0,
-                  duration: 300,
-                  useNativeDriver: true,
-                }).start(() => setShowSkeleton(false));
-              }, 800);
-              return;
-            }
-            
-            // During streaming - scroll to end
-            if (isStreaming && streamingContent) {
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }
-          }}
-        />
+                
+                // During streaming - scroll to end
+                if (isStreaming && streamingContent) {
+                  flatListRef.current?.scrollToEnd({ animated: true });
+                }
+              }}
+            />
+          </Animated.View>
+          {/* Skeleton Overlay - full height, zIndex below input so form stays visible */}
+          {showSkeleton && (
+            <Animated.View style={[styles.skeletonContainer, { opacity: skeletonOpacity, paddingTop: topInset + 70 }]}>
+              <Animated.View style={[styles.skeletonUser, { opacity: pulseAnim }]} />
+              <Animated.View style={{ opacity: pulseAnim }}>
+                <LinearGradient
+                  colors={[COLORS.skeleton, COLORS.skeleton, 'transparent']}
+                  locations={[0, 0.3, 1]}
+                  style={styles.skeletonAi}
+                />
+              </Animated.View>
+            </Animated.View>
+          )}
         </>
       )}
       <View style={[styles.inputContainer, {
@@ -667,12 +704,12 @@ const styles = StyleSheet.create({
   skeletonContainer: {
     position: 'absolute',
     top: 0,
+    bottom: 0,
     left: 0,
     right: 0,
-    bottom: 0,
     backgroundColor: COLORS.bg,
     padding: 16,
-    zIndex: 10,
+    zIndex: 4,
   },
   skeletonUser: {
     alignSelf: 'flex-end',
@@ -684,7 +721,7 @@ const styles = StyleSheet.create({
   },
   skeletonAi: {
     width: '100%',
+    height: 350,
     borderRadius: 16,
-    marginBottom: 12,
   },
 });

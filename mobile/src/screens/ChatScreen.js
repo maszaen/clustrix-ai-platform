@@ -531,7 +531,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   const getInitialScrollIndex = () => {
     if (displayMessages.length === 0) return 0;
     if (isStreaming) return displayMessages.length - 1;
-    
+
     // Find last user message
     for (let i = displayMessages.length - 1; i >= 0; i--) {
       if (displayMessages[i].role === 'user') return i;
@@ -553,6 +553,33 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   if (!initialScrollDone.current) {
     lastUserIndexRef.current = initialIndex;
   }
+
+  // Ensure the list opens exactly at the latest user message without a visible jump
+  useEffect(() => {
+    if (!currentSession || hasScrolledInitial.current || displayMessages.length === 0) return;
+
+    const targetIndex = getInitialScrollIndex();
+    lastUserIndexRef.current = targetIndex;
+
+    // Defer scroll until layout settles to avoid blink on mount
+    const timer = setTimeout(() => {
+      flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
+      initialScrollDone.current = true;
+      hasScrolledInitial.current = true;
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [currentSession, displayMessages.length]);
+
+  // Lock the first render to the last user message as soon as FlashList mounts.
+  // This prevents a visual blink where the list briefly renders from the top
+  // before the deferred scroll effect runs.
+  const handleListReady = useCallback(() => {
+    const targetIndex = lastUserIndexRef.current ?? getInitialScrollIndex();
+    flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
+    initialScrollDone.current = true;
+    hasScrolledInitial.current = true;
+  }, []);
   // Header component for load more (appears at TOP)
   const ListHeader = useCallback(() => {
     if (!hasMoreMessages) return null;
@@ -597,7 +624,11 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
               keyExtractor={(item) => item._key}
               renderItem={renderMessage}
               estimatedItemSize={100}
+              // Render from the bottom first so the newest messages mount instantly
+              // without waiting for the rest of the list to measure.
+              startRenderingFromBottom={true}
               initialScrollIndex={lastUserIndexRef.current ?? displayMessages.length - 1}
+              onLoad={handleListReady}
               ListHeaderComponent={ListHeader}
               ListFooterComponent={ListFooter}
               contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}
@@ -608,8 +639,9 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
               onStartReachedThreshold={0.1}
               maintainVisibleContentPosition={{
                 minIndexForVisible: 0,
-                autoscrollToTopThreshold: 100,
+                autoscrollToBottomThreshold: 0.2,
               }}
+              onScrollToIndexFailed={onScrollToIndexFailed}
             />
           </Animated.View>
           {/* Skeleton Overlay - full height, zIndex below input so form stays visible */}

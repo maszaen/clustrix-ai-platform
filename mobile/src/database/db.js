@@ -51,6 +51,12 @@ export async function initDatabase() {
       is_default INTEGER DEFAULT 0,
       created_at INTEGER NOT NULL
     );
+    
+    CREATE TABLE IF NOT EXISTS provider_api_keys (
+      provider_id TEXT PRIMARY KEY,
+      api_key TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
   
   return db;
@@ -164,4 +170,27 @@ export async function saveCustomProvider(provider) {
 
 export async function deleteCustomProvider(id) {
   await db.runAsync('DELETE FROM custom_providers WHERE id = ? AND is_default = 0', [id]);
+}
+
+// Provider API Keys
+export async function getAllProviderApiKeys() {
+  const rows = await db.getAllAsync('SELECT * FROM provider_api_keys');
+  // Convert to object { providerId: apiKey }
+  const keys = {};
+  for (const row of rows) {
+    keys[row.provider_id] = row.api_key;
+  }
+  return keys;
+}
+
+export async function saveProviderApiKey(providerId, apiKey) {
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT INTO provider_api_keys (provider_id, api_key, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(provider_id) DO UPDATE SET
+       api_key = excluded.api_key,
+       updated_at = excluded.updated_at`,
+    [providerId, apiKey, now]
+  );
 }

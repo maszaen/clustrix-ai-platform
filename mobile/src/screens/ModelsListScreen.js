@@ -33,10 +33,15 @@ const DEFAULT_MODELS = [
   { provider: 'megallm', model_id: 'gpt-4o', label: 'GPT-4o', is_default: true },
 ];
 
-// Dropdown Select Component
-function DropdownSelect({ label, value, options, onSelect, renderOption }) {
+// Dropdown Select Component with optional "Add New" option
+function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNew, addNewLabel }) {
   const [visible, setVisible] = useState(false);
   const selected = options.find(o => o.id === value || o.model_id === value);
+
+  const handleAddNew = () => {
+    setVisible(false);
+    onAddNew?.();
+  };
 
   return (
     <View>
@@ -67,6 +72,12 @@ function DropdownSelect({ label, value, options, onSelect, renderOption }) {
                   )}
                 </TouchableOpacity>
               )}
+              ListFooterComponent={onAddNew ? (
+                <TouchableOpacity style={styles.addNewItem} onPress={handleAddNew}>
+                  <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.addNewText}>{addNewLabel || 'Add New'}</Text>
+                </TouchableOpacity>
+              ) : null}
             />
           </View>
         </TouchableOpacity>
@@ -76,12 +87,12 @@ function DropdownSelect({ label, value, options, onSelect, renderOption }) {
 }
 
 export default function ModelsListScreen({ onClose }) {
-  const { settings, updateSettings, customModels, addCustomModel, updateCustomModel, deleteCustomModel, customProviders, addCustomProvider, updateCustomProvider, deleteCustomProvider } = useApp();
+  const { settings, updateSettings, customModels, addCustomModel, updateCustomModel, deleteCustomModel, customProviders, addCustomProvider, updateCustomProvider, deleteCustomProvider, providerApiKeys, updateProviderApiKey } = useApp();
 
   const [localSettings, setLocalSettings] = useState({
     provider: settings.provider || 'openrouter',
     model: settings.model || '',
-    apiKey: settings.apiKey || '',
+    apiKey: providerApiKeys[settings.provider] || settings.apiKey || '',
     baseUrl: settings.baseUrl || '',
   });
   const [showApiKey, setShowApiKey] = useState(false);
@@ -103,7 +114,7 @@ export default function ModelsListScreen({ onClose }) {
 
   const availableModels = getModelsForProvider(localSettings.provider);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!localSettings.apiKey) {
       Alert.alert('Missing API Key', 'Please enter your API key');
       return;
@@ -112,7 +123,15 @@ export default function ModelsListScreen({ onClose }) {
       Alert.alert('Missing Model', 'Please select or enter a model');
       return;
     }
-    updateSettings(localSettings);
+    // Save API key for this provider
+    await updateProviderApiKey(localSettings.provider, localSettings.apiKey);
+    // Save other settings (without apiKey in settings, it's now per-provider)
+    updateSettings({
+      provider: localSettings.provider,
+      model: localSettings.model,
+      baseUrl: localSettings.baseUrl,
+      apiKey: localSettings.apiKey, // Keep for backward compatibility
+    });
     Alert.alert('Saved', 'Model settings saved');
     onClose?.();
   };
@@ -123,6 +142,7 @@ export default function ModelsListScreen({ onClose }) {
       ...localSettings,
       provider: provider.id,
       model: models[0]?.model_id || '',
+      apiKey: providerApiKeys[provider.id] || '',
       baseUrl: '',
     });
   };
@@ -133,24 +153,36 @@ export default function ModelsListScreen({ onClose }) {
       visible: true,
       item,
       type,
-      position: { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY },
+      position: { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY - 20 },
     });
   };
 
-  const handleAddModel = (values) => {
-    addCustomModel({
+  const handleAddModel = async (values) => {
+    const newModel = await addCustomModel({
       provider: localSettings.provider,
       model_id: values.model_id,
       label: values.label || values.model_id,
     });
+    // Select the newly added model
+    setLocalSettings({ ...localSettings, model: values.model_id });
     setAddModelModal(false);
   };
 
-  const handleAddProvider = (values) => {
-    addCustomProvider({
+  const handleAddProvider = async (values) => {
+    const newProvider = await addCustomProvider({
       name: values.name,
       base_url: values.base_url,
     });
+    // Select the newly added provider
+    if (newProvider) {
+      setLocalSettings({
+        ...localSettings,
+        provider: newProvider.id,
+        model: '',
+        apiKey: '',
+        baseUrl: values.base_url,
+      });
+    }
     setAddProviderModal(false);
   };
 
@@ -234,17 +266,14 @@ export default function ModelsListScreen({ onClose }) {
 
         {/* Provider Dropdown */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Provider</Text>
-            <TouchableOpacity onPress={() => setAddProviderModal(true)}>
-              <Ionicons name="add-circle-outline" size={19} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.sectionTitle}>Provider</Text>
           <DropdownSelect
             label="Select Provider"
             value={localSettings.provider}
             options={allProviders}
             onSelect={handleProviderChange}
+            onAddNew={() => setAddProviderModal(true)}
+            addNewLabel="Add Custom Provider"
           />
           {customProviders.length > 0 && (
             <View style={styles.modelChips}>
@@ -254,6 +283,7 @@ export default function ModelsListScreen({ onClose }) {
                   style={[styles.modelChip, localSettings.provider === provider.id && styles.modelChipActive]}
                   onPress={() => handleProviderChange(provider)}
                   onLongPress={(e) => handleItemLongPress(provider, 'provider', e)}
+                  delayLongPress={200}
                 >
                   <Text style={[styles.modelChipText, localSettings.provider === provider.id && styles.modelChipTextActive]}>
                     {provider.name}
@@ -266,20 +296,19 @@ export default function ModelsListScreen({ onClose }) {
 
         {/* Model Dropdown */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Model</Text>
-            <TouchableOpacity onPress={() => setAddModelModal(true)}>
-              <Ionicons name="add-circle-outline" size={19} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.sectionTitle}>Model</Text>
           <DropdownSelect
             label="Select Model"
             value={localSettings.model}
             options={availableModels}
             onSelect={(item) => setLocalSettings({ ...localSettings, model: item.model_id })}
             renderOption={(item) => item?.label || item?.model_id || 'Select...'}
+            onAddNew={() => setAddModelModal(true)}
+            addNewLabel="Add Custom Model"
           />
-          <Text style={styles.hint}>Long press custom models to rename/delete</Text>
+          {availableModels.filter(m => !m.is_default).length > 0 && (
+            <Text style={styles.hint}>Long press custom models to rename/delete</Text>
+          )}
 
           {availableModels.filter(m => !m.is_default).length > 0 && (
             <View style={styles.modelChips}>
@@ -289,6 +318,7 @@ export default function ModelsListScreen({ onClose }) {
                   style={[styles.modelChip, localSettings.model === model.model_id && styles.modelChipActive]}
                   onPress={() => setLocalSettings({ ...localSettings, model: model.model_id })}
                   onLongPress={(e) => handleItemLongPress(model, 'model', e)}
+                  delayLongPress={200}
                 >
                   <Text style={[styles.modelChipText, localSettings.model === model.model_id && styles.modelChipTextActive]}>
                     {model.label}
@@ -408,7 +438,17 @@ const styles = StyleSheet.create({
   dropdownItemActive: {},
   dropdownItemText: { color: COLORS.fgMuted, fontSize: 14 },
   dropdownItemTextActive: { color: COLORS.fg },
-  hint: { color: COLORS.fgMuted, fontSize: 11, marginTop: 8 },
+  addNewItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    backgroundColor: COLORS.bg,
+  },
+  addNewText: { color: COLORS.primary, fontSize: 14, fontFamily: FONTS.sans },
+  hint: { color: COLORS.fgMuted, fontSize: 11, marginTop: 8, marginLeft: 10 },
   modelChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   modelChip: {
     paddingHorizontal: 12,

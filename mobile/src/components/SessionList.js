@@ -49,7 +49,7 @@ function SessionItem({ session, isActive, onSelect, onLongPress, onToggleFavorit
   );
 }
 
-export default function SessionList({ sessions, currentSession, onSelect, onDelete, onRename, onToggleFavorite, onNew }) {
+export default function SessionList({ sessions, currentSession, onSelect, onDelete, onRename, onToggleFavorite, onNew, onSearchQueryChange }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState({ visible: false, session: null, position: { x: 0, y: 0 } });
   const [confirmDelete, setConfirmDelete] = useState({ visible: false, session: null });
@@ -113,10 +113,18 @@ export default function SessionList({ sessions, currentSession, onSelect, onDele
             placeholder="Search..."
             placeholderTextColor={COLORS.fgMuted}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              onSearchQueryChange?.(!!text);
+            }}
           />
           {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <TouchableOpacity
+              onPress={() => {
+                setSearchQuery('');
+                onSearchQueryChange?.(false);
+              }}
+            >
               <Ionicons name="close-circle" size={16} color={COLORS.fgMuted} />
             </TouchableOpacity>
           ) : null}

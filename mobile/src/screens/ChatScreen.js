@@ -7,14 +7,7 @@ import { streamChat, generateTitle, buildSystemPrompt } from '../services/api';
 import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import { LinearGradient } from 'expo-linear-gradient';
-
-const COLORS = {
-  bg: '#000000ff',
-  fg: '#FCFCFC',
-  fgMuted: '#BDC1C6',
-  skeleton: '#232425',
-  accent: '#6366f1',
-};
+import { COLORS } from '../constants/colors';
 
 // Welcome messages by time of day - matching Electron exactly
 const WELCOME_MESSAGES = {

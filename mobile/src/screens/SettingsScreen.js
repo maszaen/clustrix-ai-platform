@@ -6,18 +6,7 @@ import { DEFAULT_PROVIDERS } from '../services/api';
 import ContextMenu from '../components/ContextMenu';
 import InputModal from '../components/InputModal';
 import ConfirmModal from '../components/ConfirmModal';
-
-const COLORS = {
-  bg: '#000000ff',
-  bgSecondary: '#282A2C',
-  inputBg: '#1f1f1f',
-  fg: '#FCFCFC',
-  fgMuted: '#BDC1C6',
-  accent: '#0e4bae',
-  primary: '#D3E3FD',
-  border: '#4a5050',
-  borderLight: '#3c4141',
-};
+import { COLORS } from '../constants/colors';
 
 const DEFAULT_PROVIDERS_LIST = [
   { id: 'openrouter', name: 'OpenRouter' },
@@ -565,7 +554,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   dropdownModal: {
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bgSecondary,
     borderRadius: 12,
     maxHeight: 400,
     overflow: 'hidden',
@@ -586,7 +575,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
-  dropdownItemActive: { backgroundColor: COLORS.bgSecondary },
   dropdownItemText: { color: COLORS.fgMuted, fontSize: 14 },
   dropdownItemTextActive: { color: COLORS.fg },
   hint: { color: COLORS.fgMuted, fontSize: 11, marginTop: 8 },

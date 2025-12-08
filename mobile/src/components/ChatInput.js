@@ -1,16 +1,8 @@
 import { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-const COLORS = {
-  bg: '#000000ff',
-  surface: '#1f1f1f',
-  inputBg: '#282A2D',
-  fg: '#FCFCFC',
-  fgMuted: '#BDC1C6',
-  accent: '#0e4bae',
-  borderLight: '#3c4141',
-};
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { COLORS } from '../constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useEffect } from 'react';
@@ -100,9 +92,9 @@ const styles = StyleSheet.create({
   },
   container: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     backgroundColor: COLORS.inputBg,
-    borderRadius: 24,
+    borderRadius: 26,
     borderWidth: 1.5,
     borderColor: COLORS.borderLight,
     paddingLeft: 13,
@@ -127,9 +119,10 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 41,
+    height: 41,
+    borderRadius: 28,
+    marginTop: 'auto',
     backgroundColor: COLORS.accent,
     justifyContent: 'center',
     alignItems: 'center',
@@ -140,7 +133,7 @@ const styles = StyleSheet.create({
   stopButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 28,
     backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',

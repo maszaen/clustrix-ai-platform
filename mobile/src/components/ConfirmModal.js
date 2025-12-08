@@ -1,12 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
-
-const COLORS = {
-  bg: '#1a1a1a',
-  fg: '#FCFCFC',
-  fgMuted: '#BDC1C6',
-  danger: '#ef4444',
-  borderLight: '#3c4141',
-};
+import { COLORS } from '../constants/colors';
 
 export default function ConfirmModal({ visible, title, message, onConfirm, onCancel, confirmText = 'Confirm', cancelText = 'Cancel', danger = false }) {
   return (

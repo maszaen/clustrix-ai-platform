@@ -1,13 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-const COLORS = {
-  bg: '#1a1a1a',
-  fg: '#FCFCFC',
-  fgMuted: '#BDC1C6',
-  danger: '#ef4444',
-  borderLight: '#3c4141',
-};
+import { COLORS } from '../constants/colors';
 
 export default function ContextMenu({ visible, position, options, onClose }) {
   if (!visible) return null;
@@ -39,7 +32,7 @@ const styles = StyleSheet.create({
   },
   menu: {
     position: 'absolute',
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bgSecondary,
     borderRadius: 12,
     minWidth: 160,
     overflow: 'hidden',

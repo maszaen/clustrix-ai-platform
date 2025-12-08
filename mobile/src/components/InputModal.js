@@ -1,14 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput } from 'react-native';
-
-const COLORS = {
-  bg: '#1a1a1a',
-  inputBg: '#282A2D',
-  fg: '#FCFCFC',
-  fgMuted: '#BDC1C6',
-  borderLight: '#3c4141',
-  accent: '#0e4bae',
-};
+import { COLORS } from '../constants/colors';
 
 /**
  * Reusable Input Modal

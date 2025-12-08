@@ -43,7 +43,12 @@ function ChatInputComponent({ onSend, isStreaming, onStop }, ref) {
         style={[styles.bottomFade, { height: insets.bottom + 100 }]}
       />
       
-      <View style={styles.container}>
+      <TouchableOpacity style={styles.addBtn} activeOpacity={0.7}>
+        {/* <Ionicons name="create-outline" size={24} color={COLORS.fg} /> */}
+        <Ionicons name="add-outline" size={25} color={COLORS.fg} />
+      </TouchableOpacity>
+
+      <View style={styles.containerInput}>
         <TextInput
           ref={inputRef}
           style={styles.input}
@@ -86,11 +91,25 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingBottom: 26,
-    paddingHorizontal: 10,
+    paddingBottom: 27,
+    paddingHorizontal: 16,
     paddingTop: 0,
   },
-  container: {
+  addBtn: {
+    position: 'absolute',
+    left: 16,
+    width: 45,
+    height: 45,
+    borderRadius: 50,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.inputBg,
+    bottom: 27,
+    zIndex: 101,
+  },
+  containerInput: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.inputBg,
@@ -98,6 +117,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.borderLight,
     paddingLeft: 13,
+    marginLeft: 53,
     paddingRight: 4,
     paddingVertical: 4,
     zIndex: 100,
@@ -114,13 +134,13 @@ const styles = StyleSheet.create({
     flex: 1,
     color: COLORS.fg,
     fontSize: 15,
-    maxHeight: 120,
-    paddingVertical: 8,
+    maxHeight: 150,
+    paddingVertical: 3,
     lineHeight: 20,
   },
   sendButton: {
-    width: 41,
-    height: 41,
+    width: 34,
+    height: 34,
     borderRadius: 28,
     marginTop: 'auto',
     backgroundColor: COLORS.accent,

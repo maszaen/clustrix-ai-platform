@@ -12,7 +12,9 @@ import {
   PanResponder,
   BackHandler,
   Keyboard,
+  ScrollView,
 } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,7 +30,7 @@ import InputModal from './src/components/InputModal';
 import ConfirmModal from './src/components/ConfirmModal';
 import { SvgXml } from 'react-native-svg';
 import { COLORS } from './src/constants/colors';
-import { fontAssets } from './src/constants/fonts';
+import { fontAssets, FONTS } from './src/constants/fonts';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Base sidebar width sits at ~83% of the screen so users can peek the main page
@@ -50,6 +52,7 @@ function MainApp() {
   const [renameModal, setRenameModal] = useState({ visible: false, session: null });
   const [confirmDelete, setConfirmDelete] = useState({ visible: false, session: null });
   const [sidebarContextMenuOpen, setSidebarContextMenuOpen] = useState(false);
+  const [thinkingModal, setThinkingModal] = useState({ visible: false, content: '' });
   // Track if any modal is open (for blocking pager swipe)
   const isModalOpen = useRef(false);
   // Fade animation for right buttons container
@@ -67,8 +70,8 @@ function MainApp() {
 
   // Keep modal open ref in sync
   useEffect(() => {
-    isModalOpen.current = showContextMenu || showModels || showPersonalization || renameModal.visible || confirmDelete.visible || sidebarContextMenuOpen;
-  }, [showContextMenu, showModels, showPersonalization, renameModal.visible, confirmDelete.visible, sidebarContextMenuOpen]);
+    isModalOpen.current = showContextMenu || showModels || showPersonalization || renameModal.visible || confirmDelete.visible || sidebarContextMenuOpen || thinkingModal.visible;
+  }, [showContextMenu, showModels, showPersonalization, renameModal.visible, confirmDelete.visible, sidebarContextMenuOpen, thinkingModal.visible]);
 
   // Horizontal pager - start at main screen (offset = SIDEBAR_WIDTH)
   // Pager offset controls the horizontal snap between sidebar (0) and main (SIDEBAR_WIDTH)
@@ -227,6 +230,16 @@ function MainApp() {
 
   const openPersonalization = useCallback(() => setShowPersonalization(true), []);
   const closePersonalization = useCallback(() => setShowPersonalization(false), []);
+  const handleShowThinking = useCallback((content) => {
+    setThinkingModal({ visible: true, content });
+  }, []);
+  const handleStreamingThinking = useCallback((content) => {
+    // Only update content if modal is already open, don't auto-open
+    setThinkingModal(prev => prev.visible ? { ...prev, content } : prev);
+  }, []);
+  const closeThinkingModal = useCallback(() => {
+    setThinkingModal({ visible: false, content: '' });
+  }, []);
   const openModels = useCallback(() => {
     Keyboard.dismiss();
     setShowModels(true);
@@ -300,7 +313,7 @@ function MainApp() {
 
         {/* Page 2: Main Chat (100% width) */}
         <View style={[styles.mainPage, { width: SCREEN_WIDTH }]}>
-          <ChatScreen topInset={insets.top} bottomInset={insets.bottom} />
+          <ChatScreen topInset={insets.top} onShowThinking={handleShowThinking} onStreamingThinking={handleStreamingThinking} />
 
           <LinearGradient
             colors={[COLORS.bg, COLORS.bg, 'transparent']}
@@ -371,8 +384,10 @@ function MainApp() {
       <PersonalizationScreen visible={showPersonalization} onClose={closePersonalization} />
 
       {/* Models List Modal */}
-      <SlideUpModal visible={showModels} onClose={closeModels}>
-        <ModelsListScreen onClose={closeModels} />
+      <SlideUpModal visible={showModels} onClose={closeModels} showBottomGradient>
+        {({ dragHandlers }) => (
+          <ModelsListScreen onClose={closeModels} dragHandlers={dragHandlers} />
+        )}
       </SlideUpModal>
 
       {/* Rename Modal */}
@@ -401,6 +416,35 @@ function MainApp() {
         }}
         onCancel={() => setConfirmDelete({ visible: false, session: null })}
       />
+
+      {/* Thinking Modal */}
+      <SlideUpModal 
+        visible={thinkingModal.visible} 
+        onClose={closeThinkingModal}
+        showBottomGradient
+        bottomInset={insets.bottom}
+      >
+        {({ onScroll, dragHandlers }) => (
+          <View style={styles.thinkingModalContainer}>
+            <View style={styles.thinkingModalHeader} {...dragHandlers}>
+              <Ionicons name="bulb-outline" size={18} color={COLORS.fgMuted} />
+              <Text style={styles.thinkingModalTitle}>Thinking Process</Text>
+            </View>
+            <ScrollView 
+              style={styles.thinkingModalScroll}
+              contentContainerStyle={styles.thinkingModalContent}
+              showsVerticalScrollIndicator={false}
+              onScroll={onScroll}
+              scrollEventThrottle={16}
+              bounces={false}
+            >
+              <Markdown style={thinkingMarkdownStyles}>
+                {thinkingModal.content}
+              </Markdown>
+            </ScrollView>
+          </View>
+        )}
+      </SlideUpModal>
     </View>
   );
 }
@@ -527,4 +571,88 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     zIndex: 100,
   },
+  thinkingModalContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  thinkingModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  thinkingModalTitle: {
+    color: COLORS.fg,
+    fontSize: 16,
+    fontFamily: FONTS.display,
+  },
+  thinkingModalScroll: {
+    flex: 1,
+  },
+  thinkingModalContent: {
+    paddingVertical: 16,
+    paddingBottom: 120,
+  },
 });
+
+// Thinking markdown styles - muted colors
+const thinkingMarkdownStyles = {
+  body: { color: COLORS.fgMuted, fontSize: 13, lineHeight: 19, fontFamily: FONTS.sans },
+  heading1: { color: COLORS.fgMuted, fontSize: 16, fontFamily: FONTS.aiBold, marginVertical: 6 },
+  heading2: { color: COLORS.fgMuted, fontSize: 15, fontFamily: FONTS.aiBold, marginVertical: 4 },
+  heading3: { color: COLORS.fgMuted, fontSize: 14, fontFamily: FONTS.aiBold, marginVertical: 3 },
+  paragraph: { marginVertical: 3 },
+  code_inline: { 
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    color: '#7a9fd4',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    fontSize: 12,
+    fontFamily: FONTS.mono,
+  },
+  fence: { 
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    padding: 10, 
+    borderRadius: 6, 
+    marginVertical: 6,
+  },
+  fenceContent: {
+    color: '#8a9199',
+    fontSize: 11,
+    fontFamily: FONTS.mono,
+    lineHeight: 16,
+  },
+  code_block: { 
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    padding: 10, 
+    borderRadius: 6, 
+    marginVertical: 6,
+    color: '#8a9199',
+    fontFamily: FONTS.mono,
+  },
+  link: { color: '#a3c4f3' },
+  blockquote: { 
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    borderLeftWidth: 2, 
+    color: COLORS.fgMuted,
+    borderLeftColor: COLORS.borderLight, 
+    paddingLeft: 10, 
+    marginLeft: 0,
+    borderRadius: 4,
+  },
+  list_item: { marginVertical: 2 },
+  bullet_list: { marginVertical: 3 },
+  ordered_list: { marginVertical: 3 },
+  strong: { fontFamily: FONTS.aiBold, fontWeight: 'normal', color: COLORS.fgMuted },
+  em: { fontFamily: FONTS.displayItalic, fontStyle: 'normal' },
+  hr: { backgroundColor: COLORS.borderLight, height: 1, marginVertical: 8 },
+};

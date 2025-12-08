@@ -86,7 +86,7 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
   );
 }
 
-export default function ModelsListScreen({ onClose }) {
+export default function ModelsListScreen({ onClose, dragHandlers }) {
   const { settings, updateSettings, customModels, addCustomModel, updateCustomModel, deleteCustomModel, customProviders, addCustomProvider, updateCustomProvider, deleteCustomProvider, providerApiKeys, updateProviderApiKey } = useApp();
 
   const [localSettings, setLocalSettings] = useState({
@@ -188,8 +188,8 @@ export default function ModelsListScreen({ onClose }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Models</Text>
+      <View style={styles.header} {...dragHandlers}>
+        <Text style={styles.headerTitle}>Model Configurations</Text>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>

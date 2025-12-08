@@ -217,7 +217,7 @@ function WelcomeScreen({ username, accentColor }) {
   );
 }
 
-export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
+export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingThinking }) {
   const { 
     currentSession, 
     messages, 
@@ -446,6 +446,7 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
         // Append thinking content (Gemini native streams thinking in chunks)
         fullThinking += think;
         setThinkingContent(fullThinking);
+        onStreamingThinking?.(fullThinking);
       },
       onDone: async () => {
         // Keep streaming content visible while saving
@@ -496,7 +497,12 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
   };
 
   const renderMessage = ({ item }) => (
-    <ChatMessage message={item} isUser={item.role === 'user'} isNew={item._key === newMessageId} />
+    <ChatMessage 
+      message={item} 
+      isUser={item.role === 'user'} 
+      isNew={item._key === newMessageId}
+      onShowThinking={onShowThinking}
+    />
   );
 
   // Lazy load - only show last N messages

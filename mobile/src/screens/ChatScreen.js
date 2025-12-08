@@ -8,6 +8,7 @@ import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 
 // Welcome messages by time of day - matching Electron exactly
 const WELCOME_MESSAGES = {
@@ -57,7 +58,10 @@ function getWelcomeMessage(username = 'friend') {
   
   const allMessages = [...timeMessages, ...WELCOME_MESSAGES.anytime];
   const msg = allMessages[Math.floor(Math.random() * allMessages.length)];
-  return msg.replace(/\[USERNAME\]/g, username);
+  // Get first name only, capitalize properly (e.g. "JoHN Anderson" -> "John")
+  const firstName = username.split(' ')[0];
+  const formattedName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+  return msg.replace(/\[USERNAME\]/g, formattedName);
 }
 
 // Diamond Logo using WebView with exact CSS from Electron
@@ -79,7 +83,7 @@ const DIAMOND_LOGO_HTML = (accentColor) => `
     }
     
     figure {
-      --size: 110px;
+      --size: 130px;
       --duration: 5s;
       --pull: -0.15;
       perspective: 30rem;
@@ -628,7 +632,13 @@ export default function ChatScreen({ topInset = 0, bottomInset = 0 }) {
       }]}>
         <View style={[styles.inputContainer2
          ]}>
-          <ChatInput ref={chatInputRef} onSend={handleSend} isStreaming={isStreaming} onStop={handleStop} />
+          <ChatInput 
+            ref={chatInputRef} 
+            onSend={handleSend} 
+            isStreaming={isStreaming} 
+            onStop={handleStop}
+            placeholder={!currentSession && messages.length === 0 ? 'How can I help you today?' : 'Reply...'}
+          />
         </View>
       </View>
     </View>
@@ -672,7 +682,7 @@ const styles = StyleSheet.create({
   welcomeText: {
     color: COLORS.fg,
     fontSize: 24,
-    fontWeight: '500',
+    fontFamily: FONTS.display,
     textAlign: 'center',
     paddingHorizontal: 20,
   },
@@ -689,7 +699,6 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   inputContainer2: {
-    
     backgroundColor: 'transparent',
     zIndex: 5,
   },
@@ -700,6 +709,7 @@ const styles = StyleSheet.create({
   loadMoreText: {
     color: COLORS.fgMuted,
     fontSize: 14,
+    fontFamily: FONTS.sans,
   },
   skeletonContainer: {
     position: 'absolute',

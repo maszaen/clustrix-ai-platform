@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 
 export default function ContextMenu({ visible, position, options, onClose }) {
   if (!visible) return null;
@@ -50,6 +51,7 @@ const styles = StyleSheet.create({
   optionText: {
     color: COLORS.fg,
     fontSize: 15,
+    fontFamily: FONTS.sans,
   },
   dangerText: {
     color: COLORS.danger,

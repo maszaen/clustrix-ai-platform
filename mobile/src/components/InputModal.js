@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput } from 'react-native';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 
 /**
  * Reusable Input Modal
@@ -107,7 +108,7 @@ const styles = StyleSheet.create({
   title: {
     color: COLORS.fg,
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: FONTS.display,
     marginBottom: 16,
   },
   fieldContainer: {
@@ -116,6 +117,7 @@ const styles = StyleSheet.create({
   label: {
     color: COLORS.fgMuted,
     fontSize: 14,
+    fontFamily: FONTS.display,
     marginBottom: 6,
   },
   input: {
@@ -126,6 +128,7 @@ const styles = StyleSheet.create({
     padding: 14,
     color: COLORS.fg,
     fontSize: 16,
+    fontFamily: FONTS.sans,
     marginBottom: 8,
   },
   inputMultiline: {
@@ -148,7 +151,7 @@ const styles = StyleSheet.create({
   cancelText: {
     color: COLORS.fgMuted,
     fontSize: 15,
-    fontWeight: '500',
+    fontFamily: FONTS.sans,
   },
   submitBtn: {
     flex: 1,
@@ -163,7 +166,7 @@ const styles = StyleSheet.create({
   submitText: {
     color: '#fff',
     fontSize: 15,
-    fontWeight: '500',
+    fontFamily: FONTS.sans,
   },
   submitTextDisabled: {
     color: COLORS.fgMuted,

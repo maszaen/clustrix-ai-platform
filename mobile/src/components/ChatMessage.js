@@ -4,16 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
-
-const COLORS = {
-  bg: '#000000ff',
-  bgSecondary: '#282A2C',
-  fg: '#FCFCFC',
-  fgMuted: '#BDC1C6',
-  primaryLight: '#1f3760',
-  borderLight: '#3c4141',
-  thinkBg: '#282A2C',
-};
+import { COLORS } from '../constants/colors';
 
 // Loading verbs from desktop - exact copy
 const LOADING_VERBS = [

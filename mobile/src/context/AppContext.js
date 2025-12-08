@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider } from '../database/db';
+import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey } from '../database/db';
 import { generateSessionId } from '../utils/ids';
 
 const AppContext = createContext(null);
@@ -21,21 +21,24 @@ export function AppProvider({ children }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [customModels, setCustomModels] = useState([]);
   const [customProviders, setCustomProviders] = useState([]);
+  const [providerApiKeys, setProviderApiKeys] = useState({});
 
   // Initialize database and load data
   useEffect(() => {
     async function init() {
       await initDatabase();
-      const [loadedSessions, loadedSettings, loadedModels, loadedProviders] = await Promise.all([
+      const [loadedSessions, loadedSettings, loadedModels, loadedProviders, loadedApiKeys] = await Promise.all([
         getAllSessions(),
         getSetting('app_settings'),
         getAllCustomModels(),
         getAllCustomProviders(),
+        getAllProviderApiKeys(),
       ]);
       setSessions(loadedSessions || []);
       if (loadedSettings) setSettings({ ...DEFAULT_SETTINGS, ...loadedSettings });
       setCustomModels(loadedModels || []);
       setCustomProviders(loadedProviders || []);
+      setProviderApiKeys(loadedApiKeys || {});
       setIsReady(true);
     }
     init();
@@ -224,6 +227,12 @@ export function AppProvider({ children }) {
     setCustomProviders(prev => prev.filter(p => p.id !== id));
   }, [customProviders]);
 
+  // Update provider API key
+  const updateProviderApiKey = useCallback(async (providerId, apiKey) => {
+    await saveProviderApiKey(providerId, apiKey);
+    setProviderApiKeys(prev => ({ ...prev, [providerId]: apiKey }));
+  }, []);
+
   const value = {
     isReady,
     sessions,
@@ -250,6 +259,8 @@ export function AppProvider({ children }) {
     addCustomProvider,
     updateCustomProvider,
     deleteCustomProvider,
+    providerApiKeys,
+    updateProviderApiKey,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

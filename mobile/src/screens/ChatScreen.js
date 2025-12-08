@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { View, FlatList, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated } from 'react-native';
+import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import * as Haptics from 'expo-haptics';
 import { WebView } from 'react-native-webview';
 import { useApp } from '../context/AppContext';
@@ -285,6 +286,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   const layoutHeight = useRef(0);
   const hasScrolledInitial = useRef(false);
   const initialScrollDone = useRef(false);
+  const lastUserIndexRef = useRef(null);
 
   // Initial load - scroll to position where last user message is at top + 60
   useEffect(() => {
@@ -367,12 +369,8 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
     };
   }, [currentSession?.id, skeletonOpacity, trigger]);
 
-  // Scroll during streaming
-  useEffect(() => {
-    if (streamingContent) {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }
-  }, [streamingContent]);
+  // No auto-scroll during streaming - inverted FlatList handles it naturally
+  // Content expands upward, user stays at bottom
 
   const triggerHaptic = () => {
     const now = Date.now();
@@ -413,6 +411,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
       await appendMessage('user', text, {});
     }
     
+    // Scroll to bottom (last item = newest message)
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     setTimeout(() => setNewMessageId(null), 500);
     
@@ -512,7 +511,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   }));
   
   const startIndex = Math.max(0, allMessages.length - visibleCount);
-  const displayMessages = allMessages.slice(startIndex);
+  let displayMessages = allMessages.slice(startIndex);
   const hasMoreMessages = startIndex > 0;
   
   if (streamingContent || isStreaming) {
@@ -523,6 +522,22 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
       isStreaming: true,
     });
   }
+  
+  // NO reverse needed - FlashList with maintainVisibleContentPosition handles chat style
+  // Data: [oldest, ..., newest] - newest at bottom
+
+  // Calculate initial scroll index (last user message at top + offset)
+  // Returns index of last user message, or last message if no user message
+  const getInitialScrollIndex = () => {
+    if (displayMessages.length === 0) return 0;
+    if (isStreaming) return displayMessages.length - 1;
+    
+    // Find last user message
+    for (let i = displayMessages.length - 1; i >= 0; i--) {
+      if (displayMessages[i].role === 'user') return i;
+    }
+    return displayMessages.length - 1;
+  };
 
   // Load more messages when scroll to top
   const handleLoadMore = useCallback(() => {
@@ -534,7 +549,11 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
     }, 100);
   }, [loadingMore, hasMoreMessages, allMessages.length]);
 
-  // Header component for load more
+  const initialIndex = getInitialScrollIndex();
+  if (!initialScrollDone.current) {
+    lastUserIndexRef.current = initialIndex;
+  }
+  // Header component for load more (appears at TOP)
   const ListHeader = useCallback(() => {
     if (!hasMoreMessages) return null;
     return (
@@ -549,6 +568,11 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
       </TouchableWithoutFeedback>
     );
   }, [hasMoreMessages, loadingMore, handleLoadMore]);
+
+  // Footer component for bottom spacing (appears at BOTTOM)
+  const ListFooter = useCallback(() => (
+    <View style={{ height: Platform.OS === 'android' ? keyboardHeight + 75 : 85 }} />
+  ), [keyboardHeight]);
 
   return (
     <View style={styles.container}>
@@ -566,55 +590,25 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
       ) : (
         <>
           <Animated.View style={{ flex: 1, opacity: contentFadeAnim }}>
-            <FlatList
+            
+            <FlashList
               ref={flatListRef}
               data={displayMessages}
               keyExtractor={(item) => item._key}
               renderItem={renderMessage}
+              estimatedItemSize={100}
+              initialScrollIndex={lastUserIndexRef.current ?? displayMessages.length - 1}
               ListHeaderComponent={ListHeader}
-              contentContainerStyle={[styles.messageList, { paddingTop: topInset + 66, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 75 : 85 }]}
+              ListFooterComponent={ListFooter}
+              contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
-              removeClippedSubviews={true}
-              maxToRenderPerBatch={10}
-              windowSize={10}
-              onScrollToIndexFailed={onScrollToIndexFailed}
-              onLayout={(e) => { layoutHeight.current = e.nativeEvent.layout.height; }}
-              onContentSizeChange={(_, h) => {
-                contentHeight.current = h;
-                
-                // Initial scroll ONLY ONCE on session load - find last user message
-                if (!hasScrolledInitial.current && !initialScrollDone.current && h > 0 && layoutHeight.current > 0 && displayMessages.length > 0 && !isStreaming) {
-                  initialScrollDone.current = true;
-                  hasScrolledInitial.current = true;
-                  
-                  // Find last user message index
-                  let lastUserIdx = -1;
-                  for (let i = displayMessages.length - 1; i >= 0; i--) {
-                    if (displayMessages[i].role === 'user') {
-                      lastUserIdx = i;
-                      break;
-                    }
-                  }
-                  
-                  if (lastUserIdx >= 0) {
-                    setTimeout(() => {
-                      flatListRef.current?.scrollToIndex({
-                        index: lastUserIdx,
-                        animated: false,
-                        viewPosition: 0,
-                        viewOffset: 100,
-                      });
-                    }, 50);
-                  }
-                  return;
-                }
-                
-                // During streaming - scroll to end
-                if (isStreaming && streamingContent) {
-                  flatListRef.current?.scrollToEnd({ animated: true });
-                }
+              onStartReached={handleLoadMore}
+              onStartReachedThreshold={0.1}
+              maintainVisibleContentPosition={{
+                minIndexForVisible: 0,
+                autoscrollToTopThreshold: 100,
               }}
             />
           </Animated.View>
@@ -658,6 +652,8 @@ const styles = StyleSheet.create({
   },
   messageList: {
     paddingLeft: 0,
+    paddingTop: 85,
+    paddingBottom: 75,
   },
   
   emptyState: {

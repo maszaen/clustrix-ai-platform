@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions, TouchableOpacity, BackHandler } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
     flex: 1,
     color: COLORS.fg,
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: FONTS.display,
     textAlign: 'center',
     marginRight: 45,
   },
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
   categoryTitle: {
     color: COLORS.fgMuted,
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: FONTS.display,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 8,
@@ -225,10 +226,11 @@ const styles = StyleSheet.create({
   cardTitle: {
     color: COLORS.fg,
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: FONTS.sans,
   },
   cardDesc: {
     color: COLORS.fgMuted,
     fontSize: 13,
+    fontFamily: FONTS.displayItalic,
   },
 });

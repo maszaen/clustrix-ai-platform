@@ -3,6 +3,7 @@ import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Alert,
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 import SlideLeftModal from '../components/SlideLeftModal';
 
 const LANGUAGES = [
@@ -185,13 +186,14 @@ const styles = StyleSheet.create({
   subContainer: { flex: 1 },
   content: { paddingBottom: 40 },
   section: { marginBottom: 20 },
-  sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 12, marginBottom: 6 },
+  sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontFamily: FONTS.display, textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 12, marginBottom: 6 },
   input: {
     backgroundColor: COLORS.inputBg,
     borderRadius: 8,
     padding: 14,
     color: COLORS.fg,
     fontSize: 14,
+    fontFamily: FONTS.sans,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
@@ -206,7 +208,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
-  dropdownText: { color: COLORS.fg, fontSize: 14 },
+  dropdownText: { color: COLORS.fg, fontSize: 14, fontFamily: FONTS.sans },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -245,5 +247,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  saveBtnText: { color: COLORS.fg, fontSize: 15, fontWeight: '600' },
+  saveBtnText: { color: COLORS.fg, fontSize: 15, fontFamily: FONTS.display },
 });

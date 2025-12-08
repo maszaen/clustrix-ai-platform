@@ -11,7 +11,9 @@ import {
   TouchableWithoutFeedback,
   PanResponder,
   BackHandler,
+  Keyboard,
 } from 'react-native';
+import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
@@ -22,8 +24,11 @@ import ModelsListScreen from './src/screens/ModelsListScreen';
 import SessionList from './src/components/SessionList';
 import SlideUpModal from './src/components/SlideUpModal';
 import ContextMenuFixed from './src/components/ContextMenuFixed';
+import InputModal from './src/components/InputModal';
+import ConfirmModal from './src/components/ConfirmModal';
 import { SvgXml } from 'react-native-svg';
 import { COLORS } from './src/constants/colors';
+import { fontAssets } from './src/constants/fonts';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Base sidebar width sits at ~83% of the screen so users can peek the main page
@@ -42,6 +47,11 @@ function MainApp() {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHasQuery, setSidebarHasQuery] = useState(false);
+  const [renameModal, setRenameModal] = useState({ visible: false, session: null });
+  const [confirmDelete, setConfirmDelete] = useState({ visible: false, session: null });
+  const [sidebarContextMenuOpen, setSidebarContextMenuOpen] = useState(false);
+  // Track if any modal is open (for blocking pager swipe)
+  const isModalOpen = useRef(false);
   // Fade animation for right buttons container
   const rightBtnOpacity = useRef(new Animated.Value(0)).current;
   const showRightBtns = currentSession && messages.length > 0;
@@ -54,6 +64,11 @@ function MainApp() {
       useNativeDriver: true,
     }).start();
   }, [showRightBtns, rightBtnOpacity]);
+
+  // Keep modal open ref in sync
+  useEffect(() => {
+    isModalOpen.current = showContextMenu || showModels || showPersonalization || renameModal.visible || confirmDelete.visible || sidebarContextMenuOpen;
+  }, [showContextMenu, showModels, showPersonalization, renameModal.visible, confirmDelete.visible, sidebarContextMenuOpen]);
 
   // Horizontal pager - start at main screen (offset = SIDEBAR_WIDTH)
   // Pager offset controls the horizontal snap between sidebar (0) and main (SIDEBAR_WIDTH)
@@ -86,6 +101,8 @@ function MainApp() {
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gs) => {
+        // Block swipe when any modal is open
+        if (isModalOpen.current) return false;
         // Only respond to horizontal swipes
         return Math.abs(gs.dx) > 15 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5;
       },
@@ -154,6 +171,7 @@ function MainApp() {
   const sidebarWidth = Animated.add(SIDEBAR_WIDTH, sidebarStretch);
 
   const openSidebar = useCallback(() => {
+    Keyboard.dismiss();
     currentPage.current = 0;
     setSidebarOpen(true);
     Animated.parallel([
@@ -175,6 +193,7 @@ function MainApp() {
   }, [scrollX, sidebarHasQuery, sidebarStretch]);
 
   const closeSidebar = useCallback(() => {
+    Keyboard.dismiss();
     currentPage.current = 1;
     setSidebarOpen(false);
     Animated.parallel([
@@ -208,7 +227,10 @@ function MainApp() {
 
   const openPersonalization = useCallback(() => setShowPersonalization(true), []);
   const closePersonalization = useCallback(() => setShowPersonalization(false), []);
-  const openModels = useCallback(() => setShowModels(true), []);
+  const openModels = useCallback(() => {
+    Keyboard.dismiss();
+    setShowModels(true);
+  }, []);
   const closeModels = useCallback(() => setShowModels(false), []);
 
   // Back button handler - only for sidebar (modals handle their own back)
@@ -267,6 +289,7 @@ function MainApp() {
               onToggleFavorite={toggleFavorite}
               onRename={renameSession}
               onSearchQueryChange={setSidebarHasQuery}
+              onContextMenuChange={setSidebarContextMenuOpen}
             />
             <TouchableOpacity style={styles.sidebarSettingsBtn} onPress={openPersonalization}>
               <Ionicons name="options-outline" size={20} color={COLORS.fgMuted} />
@@ -320,14 +343,14 @@ function MainApp() {
           <ContextMenuFixed
             visible={showContextMenu}
             onClose={() => setShowContextMenu(false)}
-            sessionName={currentSession?.title || 'New Chat'}
+            sessionName={currentSession?.name || 'New Chat'}
             position={{ top: insets.top + 25, right: 16 }}
             options={[
               { label: 'Rename', icon: 'pencil-outline', onPress: () => {
-                if (currentSession) renameSession(currentSession.id, currentSession.title);
+                if (currentSession) setRenameModal({ visible: true, session: currentSession });
               }},
               { label: 'Delete', icon: 'trash-outline', danger: true, onPress: () => {
-                if (currentSession) deleteSession(currentSession.id);
+                if (currentSession) setConfirmDelete({ visible: true, session: currentSession });
               }},
             ]}
           />
@@ -351,11 +374,49 @@ function MainApp() {
       <SlideUpModal visible={showModels} onClose={closeModels}>
         <ModelsListScreen onClose={closeModels} />
       </SlideUpModal>
+
+      {/* Rename Modal */}
+      <InputModal
+        visible={renameModal.visible}
+        title="Rename Chat"
+        fields={[{ key: 'name', placeholder: 'Chat name', value: renameModal.session?.name || '', required: true }]}
+        submitText="Save"
+        onSubmit={(values) => {
+          if (renameModal.session) renameSession(renameModal.session.id, values.name);
+          setRenameModal({ visible: false, session: null });
+        }}
+        onCancel={() => setRenameModal({ visible: false, session: null })}
+      />
+
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        visible={confirmDelete.visible}
+        title="Delete Chat"
+        message={`Are you sure you want to delete "${confirmDelete.session?.name}"?`}
+        confirmText="Delete"
+        danger
+        onConfirm={() => {
+          if (confirmDelete.session) deleteSession(confirmDelete.session.id);
+          setConfirmDelete({ visible: false, session: null });
+        }}
+        onCancel={() => setConfirmDelete({ visible: false, session: null })}
+      />
     </View>
   );
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts(fontAssets);
+
+  if (!fontsLoaded) {
+    return (
+      <View style={styles.loadingContainer}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <AppProvider>

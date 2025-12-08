@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 
 // Loading verbs from desktop - exact copy
 const LOADING_VERBS = [
@@ -309,6 +310,7 @@ const styles = StyleSheet.create({
     color: COLORS.fg,
     fontSize: 15,
     lineHeight: 21,
+    fontFamily: FONTS.sans,
   },
   aiContainer: {
     marginVertical: 6,
@@ -318,15 +320,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 8,
+    marginBottom: 0,
   },
   thinkToggleText: {
     color: COLORS.fgMuted,
-    fontSize: 13,
+    fontSize: 14,
+    fontFamily: FONTS.displayItalic,
   },
   thinkingWrapper: {
     position: 'relative',
-    marginBottom: 12,
+    marginBottom: 0,
   },
   thinkingBlock: {
     maxHeight: 300,
@@ -359,7 +362,7 @@ const styles = StyleSheet.create({
   },
   thinkingText: {
     color: COLORS.fgMuted,
-    fontSize: 13,
+    fontSize: 15,
     fontStyle: 'italic',
     lineHeight: 19,
   },
@@ -378,14 +381,15 @@ const styles = StyleSheet.create({
   loaderText: {
     color: COLORS.fgMuted,
     fontSize: 14,
+    fontFamily: FONTS.displayItalic,
   },
 });
 
 const markdownStyles = {
-  body: { color: COLORS.fg, fontSize: 15, lineHeight: 23 },
-  heading1: { color: COLORS.fg, fontSize: 22, fontWeight: '600', marginVertical: 8 },
-  heading2: { color: COLORS.fg, fontSize: 19, fontWeight: '600', marginVertical: 6 },
-  heading3: { color: COLORS.fg, fontSize: 17, fontWeight: '600', marginVertical: 4 },
+  body: { color: COLORS.fg, fontSize: 15, lineHeight: 23, fontFamily: FONTS.ai },
+  heading1: { color: COLORS.fg, fontSize: 22, fontFamily: FONTS.aiBold, marginVertical: 8 },
+  heading2: { color: COLORS.fg, fontSize: 19, fontFamily: FONTS.aiBold, marginVertical: 6 },
+  heading3: { color: COLORS.fg, fontSize: 17, fontFamily: FONTS.aiBold, marginVertical: 4 },
   paragraph: { marginVertical: 4 },
   code_inline: { 
     backgroundColor: 'transparent',
@@ -396,7 +400,7 @@ const markdownStyles = {
     paddingVertical: 2,
     borderRadius: 4,
     fontSize: 14,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontFamily: FONTS.mono,
   },
   fence: { 
     backgroundColor: 'transparent',
@@ -411,11 +415,12 @@ const markdownStyles = {
     fontSize: 11,
     marginBottom: 8,
     textTransform: 'uppercase',
+    fontFamily: FONTS.mono,
   },
   fenceContent: {
     color: '#a2a9b0',
     fontSize: 13,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontFamily: FONTS.mono,
     lineHeight: 20,
   },
   code_block: { 
@@ -426,7 +431,7 @@ const markdownStyles = {
     borderRadius: 10, 
     marginVertical: 8,
     color: '#a2a9b0',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontFamily: FONTS.mono,
   },
   link: { color: '#D3E3FD' },
   blockquote: { 
@@ -442,20 +447,20 @@ const markdownStyles = {
   list_item: { marginVertical: 4 },
   bullet_list: { marginVertical: 4 },
   ordered_list: { marginVertical: 4 },
-  strong: { fontWeight: '600', color: COLORS.fg },
-  em: { fontStyle: 'italic' },
-  hr: { backgroundColor: COLORS.borderLight, height: 1, marginVertical: 12 },
+  strong: { fontFamily: FONTS.aiBold, fontWeight: 'normal', color: COLORS.fg },
+  em: { fontFamily: FONTS.displayItalic, fontStyle: 'normal' },
+  hr: { backgroundColor: COLORS.borderLight, height: 1, opacity: 0.5, marginVertical: 12 },
   table: { borderWidth: 1, borderColor: COLORS.borderLight, borderRadius: 10 },
-  th: { backgroundColor: 'transparent', padding: 8, borderBottomWidth: 0, borderColor: COLORS.borderLight },
+  th: { backgroundColor: 'transparent', padding: 8, borderBottomWidth: 0, borderColor: COLORS.borderLight, fontFamily: FONTS.aiBold },
   td: { padding: 8, borderTopWidth: 1, borderColor: COLORS.borderLight, backgroundColor: 'transparent', },
 };
 
 // Thinking markdown styles - muted colors
 const thinkingMarkdownStyles = {
-  body: { color: COLORS.fgMuted, fontSize: 13, lineHeight: 19 },
-  heading1: { color: COLORS.fgMuted, fontSize: 16, fontWeight: '600', marginVertical: 6 },
-  heading2: { color: COLORS.fgMuted, fontSize: 15, fontWeight: '600', marginVertical: 4 },
-  heading3: { color: COLORS.fgMuted, fontSize: 14, fontWeight: '600', marginVertical: 3 },
+  body: { color: COLORS.fgMuted, fontSize: 13, lineHeight: 19, fontFamily: FONTS.sans },
+  heading1: { color: COLORS.fgMuted, fontSize: 16, fontFamily: FONTS.aiBold, marginVertical: 6 },
+  heading2: { color: COLORS.fgMuted, fontSize: 15, fontFamily: FONTS.aiBold, marginVertical: 4 },
+  heading3: { color: COLORS.fgMuted, fontSize: 14, fontFamily: FONTS.aiBold, marginVertical: 3 },
   paragraph: { marginVertical: 3 },
   code_inline: { 
     backgroundColor: 'transparent',
@@ -466,7 +471,7 @@ const thinkingMarkdownStyles = {
     paddingVertical: 1,
     borderRadius: 3,
     fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontFamily: FONTS.mono,
   },
   fence: { 
     backgroundColor: 'rgba(0,0,0,0.2)',
@@ -479,7 +484,7 @@ const thinkingMarkdownStyles = {
   fenceContent: {
     color: '#8a9199',
     fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontFamily: FONTS.mono,
     lineHeight: 16,
   },
   code_block: { 
@@ -490,7 +495,7 @@ const thinkingMarkdownStyles = {
     borderRadius: 6, 
     marginVertical: 6,
     color: '#8a9199',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontFamily: FONTS.mono,
   },
   link: { color: '#a3c4f3' },
   blockquote: { 
@@ -505,7 +510,7 @@ const thinkingMarkdownStyles = {
   list_item: { marginVertical: 2 },
   bullet_list: { marginVertical: 3 },
   ordered_list: { marginVertical: 3 },
-  strong: { fontWeight: '600', color: COLORS.fgMuted },
-  em: { fontStyle: 'italic' },
+  strong: { fontFamily: FONTS.aiBold, fontWeight: 'normal', color: COLORS.fgMuted },
+  em: { fontFamily: FONTS.displayItalic, fontStyle: 'normal' },
   hr: { backgroundColor: COLORS.borderLight, height: 1, marginVertical: 8 },
 };

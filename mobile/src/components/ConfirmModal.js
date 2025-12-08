@@ -1,5 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 
 export default function ConfirmModal({ visible, title, message, onConfirm, onCancel, confirmText = 'Confirm', cancelText = 'Cancel', danger = false }) {
   return (
@@ -32,19 +33,20 @@ const styles = StyleSheet.create({
   },
   modal: {
     width: '100%',
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bgSecondary,
     borderRadius: 16,
     padding: 20,
   },
   title: {
     color: COLORS.fg,
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: FONTS.display,
     marginBottom: 8,
   },
   message: {
     color: COLORS.fgMuted,
     fontSize: 14,
+    fontFamily: FONTS.sans,
     marginBottom: 20,
   },
   buttons: {
@@ -62,7 +64,7 @@ const styles = StyleSheet.create({
   cancelText: {
     color: COLORS.fgMuted,
     fontSize: 15,
-    fontWeight: '500',
+    fontFamily: FONTS.sans,
   },
   confirmBtn: {
     flex: 1,
@@ -74,7 +76,7 @@ const styles = StyleSheet.create({
   confirmText: {
     color: COLORS.fg,
     fontSize: 15,
-    fontWeight: '500',
+    fontFamily: FONTS.sans,
   },
   dangerBtn: {
     backgroundColor: COLORS.danger,

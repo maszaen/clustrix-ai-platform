@@ -7,6 +7,7 @@ import ContextMenu from '../components/ContextMenu';
 import InputModal from '../components/InputModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 
 const DEFAULT_PROVIDERS_LIST = [
   { id: 'openrouter', name: 'OpenRouter' },
@@ -347,18 +348,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  headerTitle: { color: COLORS.fg, fontSize: 18, fontWeight: '600' },
+  headerTitle: { color: COLORS.fg, fontSize: 18, fontFamily: FONTS.display },
   content: { flex: 1 },
   contentContainer: { padding: 16, paddingBottom: 40 },
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0, paddingRight: 12 },
-  sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 12, marginBottom: 6 },
+  sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontFamily: FONTS.display, textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 12, marginBottom: 6 },
   input: {
     backgroundColor: COLORS.inputBg,
     borderRadius: 8,
     padding: 14,
     color: COLORS.fg,
     fontSize: 14,
+    fontFamily: FONTS.sans,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
@@ -374,7 +376,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
-  dropdownText: { color: COLORS.fg, fontSize: 14 },
+  dropdownText: { color: COLORS.fg, fontSize: 14, fontFamily: FONTS.sans },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -426,5 +428,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  saveBtnText: { color: COLORS.fg, fontSize: 15, fontWeight: '600' },
+  saveBtnText: { color: COLORS.fg, fontSize: 15, fontFamily: FONTS.display },
 });

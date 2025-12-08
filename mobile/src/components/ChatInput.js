@@ -3,14 +3,14 @@ import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard } from 'react-n
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useEffect } from 'react';
 
-function ChatInputComponent({ onSend, isStreaming, onStop }, ref) {
+function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything' }, ref) {
   const [text, setText] = useState('');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef(null);
   const insets = useSafeAreaInsets();
 
@@ -31,6 +31,7 @@ function ChatInputComponent({ onSend, isStreaming, onStop }, ref) {
 
   const handleSend = () => {
     if (!text.trim() || isStreaming) return;
+    Keyboard.dismiss();
     onSend(text.trim());
     setText('');
   };
@@ -39,8 +40,8 @@ function ChatInputComponent({ onSend, isStreaming, onStop }, ref) {
     <View style={styles.wrapper}>
       <LinearGradient
         colors={['transparent', 'transparent', COLORS.bg, COLORS.bg]}
-        locations={[0, 0.2, 0.7, 1]}
-        style={[styles.bottomFade, { height: insets.bottom + 100 }]}
+        locations={[0, 0.2, 0.6, 1]}
+        style={[styles.bottomFade, { height: insets.bottom + 120 }]}
       />
       
       <TouchableOpacity style={styles.addBtn} activeOpacity={0.7}>
@@ -54,14 +55,14 @@ function ChatInputComponent({ onSend, isStreaming, onStop }, ref) {
           style={styles.input}
           value={text}
           onChangeText={setText}
-          placeholder="Ask anything..."
+          placeholder={placeholder}
           placeholderTextColor={COLORS.fgMuted}
           multiline
           maxLength={10000}
           // editable={!isStreaming}
           onPressIn={() => {
             // Only force blur+focus if keyboard is not visible (fix Android multiline bug)
-            if (!isFocused && !keyboardVisible) {
+            if (!keyboardVisible) {
               inputRef.current?.blur();
               setTimeout(() => inputRef.current?.focus(), 50);
             }
@@ -137,6 +138,7 @@ const styles = StyleSheet.create({
     maxHeight: 150,
     paddingVertical: 3,
     lineHeight: 20,
+    fontFamily: FONTS.sans,
   },
   sendButton: {
     width: 34,

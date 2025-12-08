@@ -37,24 +37,27 @@ export function formatCodeBlock(code, language) {
 
 // Parse thinking blocks from content
 export function parseThinkingBlocks(content) {
+  // Normalize escaped newlines (literal \n string to actual newline)
+  const normalizedContent = content.replace(/\\n/g, '\n');
+  
   const thinkRegex = /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi;
   const blocks = [];
   let lastIndex = 0;
   let match;
 
-  while ((match = thinkRegex.exec(content)) !== null) {
+  while ((match = thinkRegex.exec(normalizedContent)) !== null) {
     if (match.index > lastIndex) {
-      blocks.push({ type: 'text', content: content.slice(lastIndex, match.index) });
+      blocks.push({ type: 'text', content: normalizedContent.slice(lastIndex, match.index) });
     }
     blocks.push({ type: 'thinking', content: match[1].trim() });
     lastIndex = match.index + match[0].length;
   }
 
-  if (lastIndex < content.length) {
-    blocks.push({ type: 'text', content: content.slice(lastIndex) });
+  if (lastIndex < normalizedContent.length) {
+    blocks.push({ type: 'text', content: normalizedContent.slice(lastIndex) });
   }
 
-  return blocks.length ? blocks : [{ type: 'text', content }];
+  return blocks.length ? blocks : [{ type: 'text', content: normalizedContent }];
 }
 
 // Simple markdown to plain text (for previews)

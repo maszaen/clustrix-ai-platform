@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 
 /**
  * Fixed position context menu
@@ -91,12 +92,12 @@ export default function ContextMenuFixed({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   menu: {
     backgroundColor: COLORS.bgSecondary,
     borderRadius: 12,
     minWidth: 180,
+    maxWidth: 300,
     overflow: 'hidden',
   },
   sessionHeader: {
@@ -107,6 +108,7 @@ const styles = StyleSheet.create({
   sessionName: {
     color: COLORS.fgMuted,
     fontSize: 12,
+    fontFamily: FONTS.displayItalic,
   },
   option: {
     flexDirection: 'row',
@@ -117,6 +119,7 @@ const styles = StyleSheet.create({
   optionText: {
     color: COLORS.fg,
     fontSize: 15,
+    fontFamily: FONTS.sans,
   },
   dangerText: {
     color: COLORS.danger,

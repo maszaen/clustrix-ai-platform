@@ -412,10 +412,14 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
         onStreamingThinking?.(fullThinking);
       },
       onDone: async () => {
-        // Keep streaming content visible while saving
         const content = fullThinking ? `<thinking>${fullThinking}</thinking>\n\n${fullContent}` : fullContent;
         
-        // For new session, pass session and correct message index
+        // Clear streaming FIRST to prevent duplicate display
+        setIsStreaming(false);
+        setStreamingContent('');
+        setThinkingContent('');
+        
+        // Then save the message
         if (isNewSession) {
           await appendMessage('assistant', content, {
             model: settings.model,
@@ -430,11 +434,6 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
             thinkContent: fullThinking || null,
           });
         }
-        
-        // Clear streaming AFTER message is saved
-        setIsStreaming(false);
-        setStreamingContent('');
-        setThinkingContent('');
         
         // Generate title for new session
         if (isNewSession) {
@@ -481,7 +480,12 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   // Check if content exceeds viewport - 30px threshold
   const shouldHaveSpacer = listContentHeight >= (listLayoutHeight - 30);
   
-  if (streamingContent || isStreaming) {
+  // Only show streaming message if we're actually streaming AND no saved assistant message exists yet
+  // This prevents duplicate display during the brief state transition
+  const lastMessage = displayMessages[displayMessages.length - 1];
+  const alreadyHasSavedResponse = lastMessage?.role === 'assistant' && !lastMessage?.isStreaming;
+  
+  if ((streamingContent || isStreaming) && !alreadyHasSavedResponse) {
     displayMessages.push({
       _key: 'streaming-response',
       role: 'assistant',

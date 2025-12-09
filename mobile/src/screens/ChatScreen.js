@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated } from 'react-native';
+import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { WebView } from 'react-native-webview';
 import { useApp } from '../context/AppContext';
@@ -10,7 +11,7 @@ import ChatInput from '../components/ChatInput';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { WELCOME_MESSAGES } from '../constants/strings';
+import { WELCOME_MESSAGES, DIAMOND_LOGO_HTML } from '../constants/strings';
 
 
 function getWelcomeMessage(username = 'friend') {
@@ -29,96 +30,6 @@ function getWelcomeMessage(username = 'friend') {
   return msg.replace(/\[USERNAME\]/g, formattedName);
 }
 
-// Diamond Logo using WebView with exact CSS from Electron
-const DIAMOND_LOGO_HTML = (accentColor) => `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { 
-      width: 100%; 
-      height: 100%; 
-      background: transparent; 
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    figure {
-      --size: 130px;
-      --duration: 5s;
-      --pull: -0.15;
-      perspective: 30rem;
-      display: grid;
-      grid-template-areas: "figure";
-      place-items: center;
-      width: var(--size);
-      height: var(--size);
-      animation: spin-logo var(--duration) ease-in-out infinite;
-    }
-    
-    figure > div {
-      --radius: calc(var(--size) / 4);
-      --deg: calc(var(--i) * (360deg / 10));
-      --transform-start: translate3d(
-          calc(cos(var(--deg)) * var(--radius)),
-          calc(sin(var(--deg)) * var(--radius)),
-          0
-        )
-        rotate(calc(var(--deg)));
-      grid-area: figure;
-      background-color: ${accentColor || 'hsl(225, 100%, 60%)'};
-      width: calc(var(--size) / 4);
-      height: calc(var(--size) / 4);
-      clip-path: polygon(25% 25%, 100% 50%, 25% 75%, 0% 50%);
-      transform: var(--transform-start);
-      transform-style: preserve-3d;
-      animation: diamonds var(--duration) cubic-bezier(0.87, 0, 0.13, 1) infinite;
-    }
-    
-    @keyframes diamonds {
-      0%, 20% {
-        transform: var(--transform-start);
-      }
-      50% {
-        clip-path: polygon(75% 25%, 100% 50%, 75% 75%, 0% 50%);
-        transform: translate3d(
-            calc(cos(var(--deg)) * var(--radius) * var(--pull)),
-            calc(sin(var(--deg)) * var(--radius) * var(--pull)),
-            5rem
-          )
-          rotate(calc(var(--deg) + 90deg));
-      }
-    }
-    
-    @keyframes spin-logo {
-      0%, 20% { transform: translateY(0); }
-      50% { transform: translateY(20px); }
-      80%, 100% { transform: translateY(0); }
-    }
-  </style>
-</head>
-<body>
-  <figure>
-    <div style="--i: 1"></div>
-    <div style="--i: 2"></div>
-    <div style="--i: 3"></div>
-    <div style="--i: 4"></div>
-    <div style="--i: 5"></div>
-    <div style="--i: 6"></div>
-    <div style="--i: 7"></div>
-    <div style="--i: 8"></div>
-    <div style="--i: 9"></div>
-    <div style="--i: 10"></div>
-    <div style="--i: 11"></div>
-    <div style="--i: 12"></div>
-  </figure>
-</body>
-</html>
-`;
 
 // Diamond Logo component using WebView for exact CSS animation
 function DiamondLogo({ accentColor }) {
@@ -200,7 +111,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   const [newMessageId, setNewMessageId] = useState(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [visibleCount, setVisibleCount] = useState(12); // Start with last 12 messages
+  const [visibleCount, setVisibleCount] = useState(200); // Start with last 12 messages
   const [loadingMore, setLoadingMore] = useState(false);
   const lastHapticTime = useRef(0);
   const isInitialLoad = useRef(true);
@@ -212,6 +123,48 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   const skeletonTimeoutRef = useRef(null);
   const prevSessionIdRef = useRef(currentSession?.id);
   const trigger = currentSession && messages.length > 0;
+  
+  // Scroll to bottom button - use refs to avoid re-render interference with maintainVisibleContentPosition
+  const scrollPositionRef = useRef({ showButton: false, isScrolling: false });
+  const [scrollButtonVisible, setScrollButtonVisible] = useState(false);
+  const scrollBtnOpacity = useRef(new Animated.Value(0)).current;
+  const scrollTimeoutRef = useRef(null);
+  const scrollUpdateRef = useRef(null);
+  const autoHideTimeoutRef = useRef(null);
+  const programmaticScrollRef = useRef(false);
+  
+  // Fade in/out scroll button with auto-hide
+  useEffect(() => {
+    if (scrollButtonVisible && !keyboardVisible) {
+      // Fade in
+      Animated.timing(scrollBtnOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+      
+      // Auto-hide after 3 seconds
+      if (autoHideTimeoutRef.current) clearTimeout(autoHideTimeoutRef.current);
+      autoHideTimeoutRef.current = setTimeout(() => {
+        Animated.timing(scrollBtnOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => setScrollButtonVisible(false));
+      }, 3000);
+    } else {
+      // Fade out
+      Animated.timing(scrollBtnOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+    
+    return () => {
+      if (autoHideTimeoutRef.current) clearTimeout(autoHideTimeoutRef.current);
+    };
+  }, [scrollButtonVisible, keyboardVisible, scrollBtnOpacity]);
 
   // Pulse animation for skeleton
   useEffect(() => {
@@ -250,9 +203,8 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   const [listLayoutHeight, setListLayoutHeight] = useState(0);
   const hasScrolledInitial = useRef(false);
   const initialScrollDone = useRef(false);
-  const lastUserIndexRef = useRef(null);
 
-  // Initial load - scroll to position where last user message is at top + 60
+  // Initial load reset
   useEffect(() => {
     if (messages.length > 0 && isInitialLoad.current) {
       isInitialLoad.current = false;
@@ -498,19 +450,6 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   // NO reverse needed - FlashList with maintainVisibleContentPosition handles chat style
   // Data: [oldest, ..., newest] - newest at bottom
 
-  // Calculate initial scroll index (last user message at top + offset)
-  // Returns index of last user message, or last message if no user message
-  const getInitialScrollIndex = () => {
-    if (displayMessages.length === 0) return 0;
-    if (isStreaming) return displayMessages.length - 1;
-
-    // Find last user message
-    for (let i = displayMessages.length - 1; i >= 0; i--) {
-      if (displayMessages[i].role === 'user') return i;
-    }
-    return displayMessages.length - 1;
-  };
-
   // Load more messages when scroll to top
   const handleLoadMore = useCallback(() => {
     if (loadingMore || !hasMoreMessages) return;
@@ -521,37 +460,15 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
     }, 100);
   }, [loadingMore, hasMoreMessages, allMessages.length]);
 
-  const initialIndex = getInitialScrollIndex();
-  if (!initialScrollDone.current) {
-    lastUserIndexRef.current = initialIndex;
-  }
-
-  // Ensure the list opens exactly at the latest user message without a visible jump
-  useEffect(() => {
-    if (!currentSession || hasScrolledInitial.current || displayMessages.length === 0) return;
-
-    const targetIndex = getInitialScrollIndex();
-    lastUserIndexRef.current = targetIndex;
-
-    // Defer scroll until layout settles to avoid blink on mount
-    const timer = setTimeout(() => {
-      flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
-      initialScrollDone.current = true;
-      hasScrolledInitial.current = true;
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [currentSession, displayMessages.length]);
-
-  // Lock the first render to the last user message as soon as FlashList mounts.
-  // This prevents a visual blink where the list briefly renders from the top
-  // before the deferred scroll effect runs.
-  const handleListReady = useCallback(() => {
-    const targetIndex = lastUserIndexRef.current ?? getInitialScrollIndex();
-    flatListRef.current?.scrollToIndex({ index: targetIndex, animated: false });
-    initialScrollDone.current = true;
-    hasScrolledInitial.current = true;
-  }, []);
+  // Find last AI message index for initial scroll
+  const getLastAiIndex = () => {
+    for (let i = displayMessages.length - 1; i >= 0; i--) {
+      if (displayMessages[i].role === 'assistant') return i;
+    }
+    return displayMessages.length - 1;
+  };
+  
+  const lastAiIndex = getLastAiIndex();
   // Header component for load more (appears at TOP)
   const ListHeader = useCallback(() => {
     if (!hasMoreMessages) return null;
@@ -596,11 +513,8 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
               keyExtractor={(item) => item._key}
               renderItem={renderMessage}
               estimatedItemSize={100}
-              // Render from the bottom first so the newest messages mount instantly
-              // without waiting for the rest of the list to measure.
-              startRenderingFromBottom={true}
-              initialScrollIndex={lastUserIndexRef.current ?? displayMessages.length - 1}
-              onLoad={handleListReady}
+              initialScrollIndex={lastAiIndex}
+              initialScrollIndexParams={{ viewOffset: 100 }}
               ListHeaderComponent={ListHeader}
               ListFooterComponent={ListFooter}
               contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}
@@ -608,14 +522,39 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
               onStartReached={handleLoadMore}
-              onStartReachedThreshold={0.1}
+              onStartReachedThreshold={0.2}
               maintainVisibleContentPosition={{
                 minIndexForVisible: 0,
-                autoscrollToBottomThreshold: 0.2,
+                autoscrollToBottomThreshold: 0.05,
               }}
               onScrollToIndexFailed={onScrollToIndexFailed}
               onContentSizeChange={(w, h) => setListContentHeight(h)}
               onLayout={(e) => setListLayoutHeight(e.nativeEvent.layout.height)}
+              onScroll={(e) => {
+                const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+                const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+                const percentFromBottom = distanceFromBottom / layoutMeasurement.height;
+                
+                // Track in ref (no re-render)
+                const shouldShow = percentFromBottom > 0.3;
+                scrollPositionRef.current.showButton = shouldShow;
+                scrollPositionRef.current.isScrolling = true;
+                
+                // Clear previous timeouts
+                if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+                if (scrollUpdateRef.current) clearTimeout(scrollUpdateRef.current);
+                
+                // Update UI after scroll stops (debounced)
+                scrollTimeoutRef.current = setTimeout(() => {
+                  scrollPositionRef.current.isScrolling = false;
+                  // Don't show if we just did a programmatic scroll
+                  if (!programmaticScrollRef.current) {
+                    setScrollButtonVisible(scrollPositionRef.current.showButton);
+                  }
+                  programmaticScrollRef.current = false;
+                }, 200);
+              }}
+              scrollEventThrottle={100}
             />
           </Animated.View>
           {/* Skeleton Overlay - full height, zIndex below input so form stays visible */}
@@ -633,6 +572,34 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
           )}
         </>
       )}
+      
+      {/* Scroll to bottom button */}
+      {scrollButtonVisible && displayMessages.length > 0 && !keyboardVisible && (
+        <Animated.View
+          style={[styles.scrollToBottomBtn, {
+            bottom: 95,
+            opacity: scrollBtnOpacity,
+          }]}
+        >
+          <TouchableOpacity
+            onPress={() => {
+              programmaticScrollRef.current = true;
+              flatListRef.current?.scrollToEnd({ animated: true });
+              // Hide button after pressing
+              Animated.timing(scrollBtnOpacity, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+              }).start(() => setScrollButtonVisible(false));
+            }}
+            activeOpacity={0.8}
+            style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ionicons name="arrow-down-outline" size={21} color={COLORS.icon} />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+      
       <View style={[styles.inputContainer, {
         marginBottom: Platform.OS === 'android' ? keyboardHeight : 10,
       }]}>
@@ -742,5 +709,16 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 350,
     borderRadius: 16,
+  },
+  scrollToBottomBtn: {
+    position: 'absolute',
+    alignSelf: 'center',
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 26,
+    width: 45,
+    height: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 6,
   },
 });

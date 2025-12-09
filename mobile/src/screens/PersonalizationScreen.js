@@ -122,7 +122,7 @@ function SettingsMenuContent({ onOpenCustomInstructions }) {
       <SlideLeftModal.Category
         title="Personal Preferences"
         items={[
-          { icon: 'person-outline', title: 'Custom Instructions', description: 'Persona and preferences', onPress: onOpenCustomInstructions },
+          { icon: 'receipt-outline', title: 'Custom Instructions', description: 'Persona and preferences', onPress: onOpenCustomInstructions },
           { icon: 'language-outline', title: 'Language', description: 'App language' },
         ]}
       />
@@ -136,9 +136,10 @@ function SettingsMenuContent({ onOpenCustomInstructions }) {
       />
 
       <SlideLeftModal.Category
-        title="Accessibility"
+        title="Storage"
         items={[
-          { icon: 'text-outline', title: 'Font Size', description: 'Adjust text size' },
+          { icon: 'person-outline', title: 'Account', description: 'User credentials' },
+          { icon: 'file-tray-full-outline', title: 'Memory', description: 'Manage memories' },
         ]}
       />
 

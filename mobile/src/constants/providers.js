@@ -4,7 +4,7 @@ export const DEFAULT_PROVIDERS_LIST = [
   { id: 'google', name: 'Google' },
   { id: 'xai', name: 'xAI (Grok)' },
   { id: 'openrouter', name: 'OpenRouter' },
-  { id: 'zhipu', name: 'Zhipu AI (BigModel)' },
+  { id: 'zhipu', name: 'Zhipu AI' },
   { id: 'bigmodel', name: 'BigModel' },
   { id: 'perplexity', name: 'Perplexity' },
   { id: 'megallm', name: 'MegaLLM' },

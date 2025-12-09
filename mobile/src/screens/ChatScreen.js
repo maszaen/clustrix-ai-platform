@@ -686,6 +686,7 @@ const styles = StyleSheet.create({
   welcomeText: {
     color: COLORS.fg,
     fontSize: 24,
+    maxWidth: '80%',
     fontFamily: FONTS.display,
     textAlign: 'center',
     paddingHorizontal: 20,

@@ -359,7 +359,7 @@ const markdownStyles = {
     fontFamily: FONTS.mono,
   },
   fence: { 
-    backgroundColor: 'transparent',
+    backgroundColor: COLORS.inputBg,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     padding: 12, 
@@ -380,7 +380,7 @@ const markdownStyles = {
     lineHeight: 20,
   },
   code_block: { 
-    backgroundColor: 'transparent',
+    backgroundColor: COLORS.inputBg,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     padding: 12, 

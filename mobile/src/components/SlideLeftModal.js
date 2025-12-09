@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingBottom: 27,
+    paddingBottom: 0,
   },
   category: {
     marginBottom: 16,
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   categoryTitle: {
     color: COLORS.fgMuted,
     fontSize: 12,
-    fontFamily: FONTS.display,
+    fontFamily: FONTS.ai,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 8,
@@ -231,6 +231,6 @@ const styles = StyleSheet.create({
   cardDesc: {
     color: COLORS.fgMuted,
     fontSize: 13,
-    fontFamily: FONTS.displayItalic,
+    fontFamily: FONTS.sans,
   },
 });

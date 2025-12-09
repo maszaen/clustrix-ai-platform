@@ -10,44 +10,8 @@ import ChatInput from '../components/ChatInput';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
+import { WELCOME_MESSAGES } from '../constants/strings';
 
-// Welcome messages by time of day - matching Electron exactly
-const WELCOME_MESSAGES = {
-  pagi: [
-    "Morning, [USERNAME]! What's up?",
-    "Rise and grind, [USERNAME]!",
-    "Good morning, [USERNAME]!",
-    "Morning check-in, [USERNAME]!",
-  ],
-  siang: [
-    "Good afternoon, [USERNAME]!",
-    "Hey [USERNAME], what's good?",
-    "Midday check-in, [USERNAME]!",
-    "Afternoon vibes, [USERNAME]!",
-  ],
-  sore: [
-    "Evening vibes, [USERNAME]!",
-    "Good evening, [USERNAME]!",
-    "Evening check-in, [USERNAME]!",
-    "Hey [USERNAME], what's up?",
-  ],
-  malam: [
-    "Night session, [USERNAME]!",
-    "Evening, [USERNAME]!",
-    "Late night work, [USERNAME]?",
-    "Night check-in, [USERNAME]!",
-  ],
-  anytime: [
-    "What's new, [USERNAME]?",
-    "Hey there, [USERNAME]!",
-    "Yo [USERNAME], what's the mission?",
-    "What's poppin', [USERNAME]?",
-    "Back again, [USERNAME]?",
-    "Let's get it, [USERNAME]!",
-    "Another day, another slay, [USERNAME]!",
-    "Ready to get things done, [USERNAME]?",
-  ],
-};
 
 function getWelcomeMessage(username = 'friend') {
   const hour = new Date().getHours();
@@ -282,8 +246,8 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
     };
   }, [keyboardVisible]);
 
-  const contentHeight = useRef(0);
-  const layoutHeight = useRef(0);
+  const [listContentHeight, setListContentHeight] = useState(0);
+  const [listLayoutHeight, setListLayoutHeight] = useState(0);
   const hasScrolledInitial = useRef(false);
   const initialScrollDone = useRef(false);
   const lastUserIndexRef = useRef(null);
@@ -514,12 +478,16 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   let displayMessages = allMessages.slice(startIndex);
   const hasMoreMessages = startIndex > 0;
   
+  // Check if content exceeds viewport - 30px threshold
+  const shouldHaveSpacer = listContentHeight >= (listLayoutHeight - 30);
+  
   if (streamingContent || isStreaming) {
     displayMessages.push({
       _key: 'streaming-response',
       role: 'assistant',
       content: thinkingContent ? `<thinking>${thinkingContent}</thinking>\n\n${streamingContent}` : streamingContent || '...',
       isStreaming: true,
+      shouldHaveSpacer,
     });
   }
   
@@ -642,6 +610,8 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
                 autoscrollToBottomThreshold: 0.2,
               }}
               onScrollToIndexFailed={onScrollToIndexFailed}
+              onContentSizeChange={(w, h) => setListContentHeight(h)}
+              onLayout={(e) => setListLayoutHeight(e.nativeEvent.layout.height)}
             />
           </Animated.View>
           {/* Skeleton Overlay - full height, zIndex below input so form stays visible */}

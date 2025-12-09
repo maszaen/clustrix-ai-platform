@@ -16,7 +16,7 @@ const GRADIENT_MAX_HEIGHT = 100;
  * @param {function} onClose - Called when modal is closed
  * @param {React.ReactNode} children - Modal content
  */
-export default function SlideUpModal({ visible, onClose, children, showBottomGradient = false, bottomInset = 0 }) {
+export default function SlideUpModal({ visible, onClose, children, showBottomGradient = false, bottomInset = 0, autoExpanded = false }) {
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const gradientHeightAnim = useRef(new Animated.Value(GRADIENT_MAX_HEIGHT + bottomInset)).current;
@@ -29,12 +29,14 @@ export default function SlideUpModal({ visible, onClose, children, showBottomGra
 
   const open = useCallback(() => {
     scrollOffset.current = 0;
-    gradientHeightAnim.setValue(GRADIENT_MAX_HEIGHT + bottomInset);
+    const targetY = autoExpanded ? expandedY : collapsedY;
+    const targetGradient = autoExpanded ? 0 : GRADIENT_MAX_HEIGHT + bottomInset;
+    gradientHeightAnim.setValue(targetGradient);
     Animated.parallel([
-      Animated.spring(slideAnim, { toValue: collapsedY, useNativeDriver: true, tension: 135, friction: 19 }),
+      Animated.spring(slideAnim, { toValue: targetY, useNativeDriver: true, tension: 135, friction: 19 }),
       Animated.timing(overlayAnim, { toValue: 1, duration: 140, useNativeDriver: true }),
     ]).start();
-  }, [slideAnim, overlayAnim, collapsedY, gradientHeightAnim, bottomInset]);
+  }, [slideAnim, overlayAnim, collapsedY, expandedY, gradientHeightAnim, bottomInset, autoExpanded]);
 
   const close = useCallback(() => {
     Animated.parallel([
@@ -75,7 +77,7 @@ export default function SlideUpModal({ visible, onClose, children, showBottomGra
     return () => backHandler.remove();
   }, [visible, close]);
 
-  const lastY = useRef(collapsedY);
+  const lastY = useRef(autoExpanded ? expandedY : collapsedY);
 
   // Track scroll position from content (for future use)
   const handleContentScroll = useCallback((event) => {

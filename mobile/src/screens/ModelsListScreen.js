@@ -8,30 +8,9 @@ import InputModal from '../components/InputModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
+import { Eye, EyeClosed } from 'lucide-react-native';
+import { DEFAULT_PROVIDERS_LIST, DEFAULT_MODELS } from '../constants/providers';
 
-const DEFAULT_PROVIDERS_LIST = [
-  { id: 'openrouter', name: 'OpenRouter' },
-  { id: 'google', name: 'Gemini' },
-  { id: 'openai', name: 'OpenAI' },
-  { id: 'anthropic', name: 'Claude' },
-  { id: 'groq', name: 'Groq' },
-  { id: 'megallm', name: 'MegaLLM' },
-  { id: 'custom', name: 'Custom' },
-];
-
-const DEFAULT_MODELS = [
-  { provider: 'openrouter', model_id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini', is_default: true },
-  { provider: 'openrouter', model_id: 'openai/gpt-4o', label: 'GPT-4o', is_default: true },
-  { provider: 'openrouter', model_id: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet', is_default: true },
-  { provider: 'openrouter', model_id: 'google/gemini-2.5-pro-preview-06-05', label: 'Gemini 2.5 Pro', is_default: true },
-  { provider: 'google', model_id: 'gemini-2.5-pro-preview-06-05', label: 'Gemini 2.5 Pro', is_default: true },
-  { provider: 'google', model_id: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash', is_default: true },
-  { provider: 'openai', model_id: 'gpt-4o-mini', label: 'GPT-4o Mini', is_default: true },
-  { provider: 'openai', model_id: 'gpt-4o', label: 'GPT-4o', is_default: true },
-  { provider: 'anthropic', model_id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', is_default: true },
-  { provider: 'groq', model_id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', is_default: true },
-  { provider: 'megallm', model_id: 'gpt-4o', label: 'GPT-4o', is_default: true },
-];
 
 // Dropdown Select Component with optional "Add New" option
 function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNew, addNewLabel }) {
@@ -47,7 +26,7 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
     <View>
       <TouchableOpacity style={styles.dropdown} onPress={() => setVisible(true)}>
         <Text style={styles.dropdownText}>
-          {renderOption ? renderOption(selected) : (selected?.name || selected?.label || 'Select...')}
+          {renderOption ? renderOption(selected) : (selected?.name || selected?.label || 'Select model')}
         </Text>
         <Ionicons name="chevron-down" size={18} color={COLORS.fgMuted} />
       </TouchableOpacity>
@@ -59,26 +38,41 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
             <FlatList
               data={options}
               keyExtractor={(item) => item.id || item.model_id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.dropdownItem, (item.id === value || item.model_id === value) && styles.dropdownItemActive]}
-                  onPress={() => { onSelect(item); setVisible(false); }}
-                >
-                  <Text style={[styles.dropdownItemText, (item.id === value || item.model_id === value) && styles.dropdownItemTextActive]}>
-                    {renderOption ? renderOption(item) : (item.name || item.label)}
-                  </Text>
-                  {(item.id === value || item.model_id === value) && (
-                    <Ionicons name="checkmark" size={18} color={COLORS.primary} />
-                  )}
-                </TouchableOpacity>
-              )}
-              ListFooterComponent={onAddNew ? (
+              renderItem={({ item, index }) => {
+                const isActive = item.id === value || item.model_id === value;
+                const isLast = index === options.length - 1;
+
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.dropdownItem,
+                      isActive && styles.dropdownItemActive,
+                      isLast && { borderBottomWidth: 0 }, // <- hapus border di last item
+                    ]}
+                    onPress={() => { onSelect(item); setVisible(false); }}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownItemText,
+                        isActive && styles.dropdownItemTextActive,
+                      ]}
+                    >
+                      {renderOption ? renderOption(item) : (item.name || item.label)}
+                    </Text>
+                    {isActive && (
+                      <Ionicons name="checkmark" size={18} color={COLORS.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+              ListHeaderComponent={onAddNew ? (
                 <TouchableOpacity style={styles.addNewItem} onPress={handleAddNew}>
                   <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} />
                   <Text style={styles.addNewText}>{addNewLabel || 'Add New'}</Text>
                 </TouchableOpacity>
               ) : null}
             />
+
           </View>
         </TouchableOpacity>
       </Modal>
@@ -294,9 +288,43 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
           )}
         </View>
 
+        {/* API Key */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>API Key</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.inputApiKey}
+              value={localSettings.apiKey}
+              onChangeText={(text) => setLocalSettings({ ...localSettings, apiKey: text })}
+              placeholder="Enter your API key"
+              placeholderTextColor={COLORS.fgMuted}
+              secureTextEntry={!showApiKey}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowApiKey(!showApiKey)}>
+              {showApiKey ? <EyeClosed size={20} color={COLORS.fgMuted} /> :
+                <Eye size={20} color={COLORS.fgMuted} />
+              }
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Base URL */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Base URL (Optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={localSettings.baseUrl}
+            onChangeText={(text) => setLocalSettings({ ...localSettings, baseUrl: text })}
+            placeholder={DEFAULT_PROVIDERS[localSettings.provider]?.baseUrl || 'https://api.example.com/v1'}
+            placeholderTextColor={COLORS.fgMuted}
+            autoCapitalize="none"
+          />
+        </View>
+
         {/* Model Dropdown */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Model</Text>
+          <Text style={styles.sectionTitle}>LLM Model</Text>
           <DropdownSelect
             label="Select Model"
             value={localSettings.model}
@@ -329,38 +357,6 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
           )}
         </View>
 
-        {/* API Key */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>API Key</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              value={localSettings.apiKey}
-              onChangeText={(text) => setLocalSettings({ ...localSettings, apiKey: text })}
-              placeholder="Enter your API key"
-              placeholderTextColor={COLORS.fgMuted}
-              secureTextEntry={!showApiKey}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowApiKey(!showApiKey)}>
-              <Ionicons name={showApiKey ? 'eye-off' : 'eye'} size={20} color={COLORS.fgMuted} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Base URL */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Base URL (Optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={localSettings.baseUrl}
-            onChangeText={(text) => setLocalSettings({ ...localSettings, baseUrl: text })}
-            placeholder={DEFAULT_PROVIDERS[localSettings.provider]?.baseUrl || 'https://api.example.com/v1'}
-            placeholderTextColor={COLORS.fgMuted}
-            autoCapitalize="none"
-          />
-        </View>
-
         <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
           <Text style={styles.saveBtnText}>Save Model Settings</Text>
         </TouchableOpacity>
@@ -383,25 +379,37 @@ const styles = StyleSheet.create({
   contentContainer: { padding: 16, paddingBottom: 40 },
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0, paddingRight: 12 },
-  sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontFamily: FONTS.display, textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 12, marginBottom: 6 },
+  sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontFamily: FONTS.ai, textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 12, marginBottom: 6 },
   input: {
     backgroundColor: COLORS.inputBg,
-    borderRadius: 8,
+    borderRadius: 15,
     padding: 14,
     color: COLORS.fg,
     fontSize: 14,
-    fontFamily: FONTS.sans,
+    fontFamily: FONTS.sans,    
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
-  inputRow: { position: 'relative' },
-  eyeBtn: { position: 'absolute', right: 12, top: 14 },
+  inputApiKey: {
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 15,
+    padding: 14,
+    color: COLORS.fg,
+    fontSize: 14,
+    fontFamily: FONTS.mono,
+    paddingRight: 50,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  inputRow: { position: 'relative', alignItems: 'center', },
+  eyeBtn: { position: 'absolute', right: 15, top: 16 },
   dropdown: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: COLORS.inputBg,
-    borderRadius: 8,
+    borderRadius: 15,
     padding: 14,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
@@ -417,6 +425,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bgSecondary,
     borderRadius: 12,
     maxHeight: 400,
+    fontFamily: FONTS.ai,
     overflow: 'hidden',
   },
   dropdownModalTitle: {
@@ -443,9 +452,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
     gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
-    backgroundColor: COLORS.bg,
+    borderBottomColor: COLORS.borderLight,
+    borderBottomWidth: 1,
   },
   addNewText: { color: COLORS.primary, fontSize: 14, fontFamily: FONTS.sans },
   hint: { color: COLORS.fgMuted, fontSize: 11, marginTop: 8, marginLeft: 10 },
@@ -464,7 +472,7 @@ const styles = StyleSheet.create({
   saveBtn: {
     backgroundColor: COLORS.accent,
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 15,
     alignItems: 'center',
     marginTop: 8,
   },

@@ -91,12 +91,17 @@ export function buildSystemPrompt(settings = {}) {
 export const DEFAULT_PROVIDERS = {
   openai: { baseUrl: 'https://api.openai.com/v1', name: 'OpenAI' },
   anthropic: { baseUrl: 'https://api.anthropic.com/v1', name: 'Anthropic' },
-  google: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta', name: 'Google Gemini' },
-  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta', name: 'Google Gemini' },
+  google: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta', name: 'Google' },
   openrouter: { baseUrl: 'https://openrouter.ai/api/v1', name: 'OpenRouter' },
   groq: { baseUrl: 'https://api.groq.com/openai/v1', name: 'Groq' },
   megallm: { baseUrl: 'https://api.megallm.net/v1', name: 'MegaLLM' },
-  custom: { baseUrl: '', name: 'Custom' },
+  xai: { baseUrl: 'https://api.x.ai/v1', name: 'xAI (Grok)' },
+  zhipu: { baseUrl: 'https://api.z.ai/api/paas/v4', name: 'Zhipu AI' },
+  bigmodel: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', name: 'BigModel' },
+  perplexity: { baseUrl: 'https://api.perplexity.ai', name: 'Perplexity' },
+  deepseek: { baseUrl: 'https://api.deepseek.com/v1', name: 'DeepSeek' },
+  mistral: { baseUrl: 'https://api.mistral.ai/v1', name: 'Mistral AI' },
+  cerebras: { baseUrl: 'https://api.cerebras.ai/v1', name: 'Cerebras' },
 };
 
 function formatMessagesOpenAI(messages) {

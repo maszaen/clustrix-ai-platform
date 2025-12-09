@@ -8,7 +8,7 @@ export const COLORS = {
   bg: '#000000ff',
   bgSecondary: '#282A2C',
   surface: '#1f1f1f',
-  inputBg: '#282A2D',
+  inputBg: '#212121',
   hover: '#1a1a1a',
   thinkBg: '#282A2C',
   skeleton: '#232425',
@@ -16,10 +16,11 @@ export const COLORS = {
   // Foregrounds
   fg: '#FCFCFC',
   fgMuted: '#BDC1C6',
+  icon: '#dbdbdbff',
 
   // Borders
   border: '#4a5050',
-  borderLight: '#3c4141',
+  borderLight: '#414141',
 
   // Accents
   accent: '#0e4bae',

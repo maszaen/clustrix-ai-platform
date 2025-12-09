@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, useWindowDimensions, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
@@ -176,6 +176,12 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking }) 
   const slideAnim = useRef(new Animated.Value(isNew && isUser ? 50 : 0)).current;
   const opacityAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
   
+  // Animated minHeight for streaming spacer (controlled by parent via shouldHaveSpacer prop)
+  const minHeightAnim = useRef(new Animated.Value(0)).current;
+  const wasStreamingRef = useRef(false);
+  
+  const spacerHeight = viewportHeight - 260;
+  
   useEffect(() => {
     if (isNew && isUser) {
       Animated.parallel([
@@ -193,6 +199,26 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking }) 
       ]).start();
     }
   }, []);
+  
+  // Handle streaming minHeight logic - shouldHaveSpacer comes from parent (ChatScreen)
+  useEffect(() => {
+    if (isUser) return;
+    
+    if (message.isStreaming) {
+      // Streaming: set minHeight instantly (no animation in)
+      minHeightAnim.setValue(message.shouldHaveSpacer ? spacerHeight : 0);
+      wasStreamingRef.current = true;
+    } else if (wasStreamingRef.current) {
+      // Just stopped streaming: animate out smoothly
+      Animated.timing(minHeightAnim, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: false,
+      }).start();
+      wasStreamingRef.current = false;
+    }
+  }, [message.isStreaming, message.shouldHaveSpacer, spacerHeight]);
   
   const blocks = isUser ? [{ type: 'text', content: message.content }] : parseThinkingBlocks(message.content || '');
   const hasThinking = blocks.some(b => b.type === 'thinking');
@@ -213,33 +239,32 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking }) 
   }
 
   const isLoading = message.isStreaming && (!textContent || textContent === '...');
-  
-  // Add minHeight 50% viewport for streaming AI message
-  const streamingMinHeight = message.isStreaming ? { minHeight: (viewportHeight * 1) - 260 } : {};
 
   return (
-    <View style={[styles.aiContainer, streamingMinHeight]}>
-      {hasThinking && (
-        <TouchableOpacity 
-          style={styles.thinkToggle} 
-          onPress={() => onShowThinking?.(thinkingContent)}
-          activeOpacity={0.7}
-        >
-          <Ionicons 
-            name="logo-stackoverflow" 
-            size={14} 
-            color={COLORS.fgMuted} 
-          />
-          <Text style={styles.thinkToggleText}>Show thinking</Text>
-        </TouchableOpacity>
-      )}
-      
-      {isLoading ? (
-        <TypewriterLoader />
-      ) : (
-        <Markdown style={markdownStyles} rules={markdownRules}>{textContent || ' '}</Markdown>
-      )}
-    </View>
+    <Animated.View style={[styles.aiContainer, { minHeight: minHeightAnim }]}>
+      <View>
+        {hasThinking && (
+          <TouchableOpacity 
+            style={styles.thinkToggle} 
+            onPress={() => onShowThinking?.(thinkingContent)}
+            activeOpacity={0.7}
+          >
+            <Ionicons 
+              name="logo-stackoverflow" 
+              size={14} 
+              color={COLORS.fgMuted} 
+            />
+            <Text style={styles.thinkToggleText}>Show thinking</Text>
+          </TouchableOpacity>
+        )}
+        
+        {isLoading ? (
+          <TypewriterLoader />
+        ) : (
+          <Markdown style={markdownStyles} rules={markdownRules}>{textContent || ' '}</Markdown>
+        )}
+      </View>
+    </Animated.View>
   );
 }
 

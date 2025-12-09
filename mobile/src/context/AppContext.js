@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey } from '../database/db';
 import { generateSessionId } from '../utils/ids';
 
@@ -22,6 +22,9 @@ export function AppProvider({ children }) {
   const [customModels, setCustomModels] = useState([]);
   const [customProviders, setCustomProviders] = useState([]);
   const [providerApiKeys, setProviderApiKeys] = useState({});
+  
+  // Ref to track latest session ID for async operations
+  const latestSessionIdRef = useRef(null);
 
   // Initialize database and load data
   useEffect(() => {
@@ -46,14 +49,23 @@ export function AppProvider({ children }) {
 
   // Load messages when session changes
   useEffect(() => {
+    const targetSessionId = currentSession?.id || null;
+    latestSessionIdRef.current = targetSessionId; // Update ref immediately
+    
     async function loadMessages() {
-      if (currentSession) {
-        const msgs = await getMessages(currentSession.id);
-        setMessages(msgs || []);
+      if (targetSessionId) {
+        const msgs = await getMessages(targetSessionId);
+        // Only set messages if this is still the current session
+        if (latestSessionIdRef.current === targetSessionId) {
+          setMessages(msgs || []);
+        }
       } else {
-        setMessages([]);
+        if (latestSessionIdRef.current === null) {
+          setMessages([]);
+        }
       }
     }
+    
     loadMessages();
   }, [currentSession?.id]);
 

@@ -6,6 +6,8 @@
 export const COLORS = {
   // Backgrounds
   bg: '#000000ff',
+  bg90: '#000000e0',
+  bg70: '#000000b3',
   bgSecondary: '#282A2C',
   surface: '#1f1f1f',
   inputBg: '#212121',

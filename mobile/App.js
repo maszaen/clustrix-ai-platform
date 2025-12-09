@@ -316,9 +316,9 @@ function MainApp() {
           <ChatScreen topInset={insets.top} onShowThinking={handleShowThinking} onStreamingThinking={handleStreamingThinking} />
 
           <LinearGradient
-            colors={[COLORS.bg, COLORS.bg, 'transparent']}
-            locations={[0, 0.7, 1]}
-            style={[styles.floatingHeader, { height: insets.top + 69 }]}
+            colors={[COLORS.bg90, COLORS.bg90, COLORS.bg70, 'transparent']}
+            locations={[0, 0.5, 0.8, 1]}
+            style={[styles.floatingHeader, { height: insets.top + 75 }]}
             pointerEvents="none"
           />
 

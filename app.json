@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "05f47c4c-4dd9-40b3-b07c-79b5fbe7eb49"
+      }
+    },
+    "android": {
+      "package": "com.zaeniahmad.clustrix"
+    }
+  }
+}

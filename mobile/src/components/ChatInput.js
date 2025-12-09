@@ -46,7 +46,7 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
       
       <TouchableOpacity style={styles.addBtn} activeOpacity={0.7}>
         {/* <Ionicons name="create-outline" size={24} color={COLORS.fg} /> */}
-        <Ionicons name="add-outline" size={25} color={COLORS.fg} />
+        <Ionicons name="add-outline" size={27} color={COLORS.icon} />
       </TouchableOpacity>
 
       <View style={styles.containerInput}>
@@ -79,7 +79,7 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
             onPress={handleSend}
             disabled={!text.trim()}
           >
-            <Ionicons name="arrow-up" size={20} color={COLORS.fg} />
+            <Ionicons name="arrow-up" size={20} color={COLORS.icon} />
           </TouchableOpacity>
         )}
       </View>
@@ -102,8 +102,9 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderRadius: 50,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.borderLight,
+    color: COLORS.icon,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.inputBg,
@@ -115,7 +116,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.inputBg,
     borderRadius: 26,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.borderLight,
     paddingLeft: 13,
     marginLeft: 53,
@@ -145,6 +146,7 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 28,
     marginTop: 'auto',
+    color: COLORS.icon,
     backgroundColor: COLORS.accent,
     justifyContent: 'center',
     alignItems: 'center',

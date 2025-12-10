@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import SlideLeftModal from '../components/SlideLeftModal';
+import AccountScreen from './AccountScreen';
 
 const LANGUAGES = [
   { id: 'autodetect', name: 'Auto-detect' },
@@ -116,7 +117,7 @@ function CustomInstructionsContent({ settings, onUpdate, onClose }) {
 }
 
 // Settings Menu Content
-function SettingsMenuContent({ onOpenCustomInstructions }) {
+function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount }) {
   return (
     <ScrollView contentContainerStyle={styles.menuContent}>
       <SlideLeftModal.Category
@@ -138,7 +139,7 @@ function SettingsMenuContent({ onOpenCustomInstructions }) {
       <SlideLeftModal.Category
         title="Storage"
         items={[
-          { icon: 'person-outline', title: 'Account', description: 'User credentials' },
+          { icon: 'person-outline', title: 'Account', description: 'User credentials', onPress: onOpenAccount },
           { icon: 'file-tray-full-outline', title: 'Memory', description: 'Manage memories' },
         ]}
       />
@@ -158,12 +159,17 @@ function SettingsMenuContent({ onOpenCustomInstructions }) {
 export default function PersonalizationScreen({ visible, onClose }) {
   const { settings, updateSettings } = useApp();
   const [showCustomInstructions, setShowCustomInstructions] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
+  
 
   return (
     <>
       {/* Main Settings Modal */}
       <SlideLeftModal visible={visible} onClose={onClose} title="Settings">
-        <SettingsMenuContent onOpenCustomInstructions={() => setShowCustomInstructions(true)} />
+        <SettingsMenuContent 
+        onOpenCustomInstructions={() => setShowCustomInstructions(true)} 
+        onOpenAccount={() => setShowAccount(true)}
+        />
       </SlideLeftModal>
 
       {/* Custom Instructions Submenu - rendered at same level, fullscreen */}
@@ -178,6 +184,9 @@ export default function PersonalizationScreen({ visible, onClose }) {
           onClose={() => setShowCustomInstructions(false)} 
         />
       </SlideLeftModal>
+
+      <AccountScreen visible={showAccount} onClose={() => setShowAccount(false)} />
+      
     </>
   );
 }

@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey } from '../database/db';
+import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey, exportAllData, importAllData } from '../database/db';
 import { generateSessionId } from '../utils/ids';
+import { loginWithGitHub, loginWithGoogle, logout as authLogout, getStoredAuth, getLastBackupTime } from '../services/auth';
+import { backupToCloud, restoreFromCloud } from '../services/backup';
 
 const AppContext = createContext(null);
 
@@ -23,6 +25,13 @@ export function AppProvider({ children }) {
   const [customProviders, setCustomProviders] = useState([]);
   const [providerApiKeys, setProviderApiKeys] = useState({});
   
+  // Auth state
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authProvider, setAuthProvider] = useState(null);
+  const [accessToken, setAccessToken] = useState(null);
+  const [lastBackupTime, setLastBackupTime] = useState(null);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  
   // Ref to track latest session ID for async operations
   const latestSessionIdRef = useRef(null);
 
@@ -42,6 +51,19 @@ export function AppProvider({ children }) {
       setCustomModels(loadedModels || []);
       setCustomProviders(loadedProviders || []);
       setProviderApiKeys(loadedApiKeys || {});
+      
+      // Load stored auth
+      const storedAuth = await getStoredAuth();
+      if (storedAuth) {
+        setCurrentUser(storedAuth.user);
+        setAuthProvider(storedAuth.provider);
+        setAccessToken(storedAuth.accessToken);
+      }
+      
+      // Load last backup time
+      const backupTime = await getLastBackupTime();
+      setLastBackupTime(backupTime);
+      
       setIsReady(true);
     }
     init();
@@ -245,6 +267,112 @@ export function AppProvider({ children }) {
     setProviderApiKeys(prev => ({ ...prev, [providerId]: apiKey }));
   }, []);
 
+  // ========================================
+  // Auth Functions
+  // ========================================
+  
+  // Login with GitHub
+  const handleLoginGitHub = useCallback(async () => {
+    const result = await loginWithGitHub();
+    if (result.success) {
+      setCurrentUser(result.user);
+      setAuthProvider('github');
+      setAccessToken(result.accessToken);
+    }
+    return result;
+  }, []);
+  
+  // Login with Google
+  const handleLoginGoogle = useCallback(async () => {
+    const result = await loginWithGoogle();
+    if (result.success) {
+      setCurrentUser(result.user);
+      setAuthProvider('google');
+      setAccessToken(result.accessToken);
+    }
+    return result;
+  }, []);
+  
+  // Logout
+  const handleLogout = useCallback(async () => {
+    const result = await authLogout();
+    if (result.success) {
+      setCurrentUser(null);
+      setAuthProvider(null);
+      setAccessToken(null);
+    }
+    return result;
+  }, []);
+  
+  // ========================================
+  // Backup Functions
+  // ========================================
+  
+  // Backup to cloud
+  const handleBackupNow = useCallback(async () => {
+    if (!accessToken || !authProvider || !currentUser) {
+      return { success: false, error: 'Not logged in' };
+    }
+    
+    setIsBackingUp(true);
+    try {
+      // Export all data
+      const backupData = await exportAllData();
+      
+      // Backup to cloud
+      const result = await backupToCloud(
+        authProvider,
+        accessToken,
+        currentUser.username,
+        backupData
+      );
+      
+      if (result.success) {
+        setLastBackupTime(Date.now());
+      }
+      
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    } finally {
+      setIsBackingUp(false);
+    }
+  }, [accessToken, authProvider, currentUser]);
+  
+  // Restore from cloud
+  const handleRestoreBackup = useCallback(async () => {
+    if (!accessToken || !authProvider || !currentUser) {
+      return { success: false, error: 'Not logged in' };
+    }
+    
+    try {
+      const result = await restoreFromCloud(
+        authProvider,
+        accessToken,
+        currentUser.username
+      );
+      
+      if (result.success && result.data) {
+        // Import data
+        await importAllData(result.data);
+        
+        // Reload all data
+        const [loadedSessions, loadedSettings, loadedModels] = await Promise.all([
+          getAllSessions(),
+          getSetting('app_settings'),
+          getAllCustomModels(),
+        ]);
+        setSessions(loadedSessions || []);
+        if (loadedSettings) setSettings({ ...DEFAULT_SETTINGS, ...loadedSettings });
+        setCustomModels(loadedModels || []);
+      }
+      
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }, [accessToken, authProvider, currentUser]);
+
   const value = {
     isReady,
     sessions,
@@ -273,6 +401,17 @@ export function AppProvider({ children }) {
     deleteCustomProvider,
     providerApiKeys,
     updateProviderApiKey,
+    // Auth
+    currentUser,
+    authProvider,
+    isLoggedIn: !!currentUser,
+    lastBackupTime,
+    isBackingUp,
+    loginWithGitHub: handleLoginGitHub,
+    loginWithGoogle: handleLoginGoogle,
+    logout: handleLogout,
+    backupNow: handleBackupNow,
+    restoreBackup: handleRestoreBackup,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -13,6 +13,7 @@ import {
   BackHandler,
   Keyboard,
   ScrollView,
+  Image,
 } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { useFonts } from 'expo-font';
@@ -23,6 +24,7 @@ import { AppProvider, useApp } from './src/context/AppContext';
 import ChatScreen from './src/screens/ChatScreen';
 import PersonalizationScreen from './src/screens/PersonalizationScreen';
 import ModelsListScreen from './src/screens/ModelsListScreen';
+import AccountScreen from './src/screens/AccountScreen';
 import SessionList from './src/components/SessionList';
 import SlideUpModal from './src/components/SlideUpModal';
 import ContextMenuFixed from './src/components/ContextMenuFixed';
@@ -43,7 +45,7 @@ const PENCIL = '<svg width="20" height="20" viewBox="0 0 20 20" fill="currentCol
 
 function MainApp() {
   const insets = useSafeAreaInsets();
-  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession } = useApp();
+  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime } = useApp();
   const [showPersonalization, setShowPersonalization] = useState(false);
   const [showModels, setShowModels] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -259,6 +261,18 @@ function MainApp() {
     return () => backHandler.remove();
   }, [showPersonalization, showModels, showContextMenu, sidebarOpen, closeSidebar]);
 
+  // Helper to format backup time
+  const formatBackupTime = (timestamp) => {
+    if (!timestamp) return 'Never';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return date.toLocaleDateString();
+  };
+
   const handleNewChat = useCallback(() => {
     if (!currentSession || messages.length === 0) {
       clearCurrentSession();
@@ -304,10 +318,40 @@ function MainApp() {
               onSearchQueryChange={setSidebarHasQuery}
               onContextMenuChange={setSidebarContextMenuOpen}
             />
-            <TouchableOpacity style={styles.sidebarSettingsBtn} onPress={openPersonalization}>
+            {/* Profile / Account Section */}
+            <TouchableOpacity 
+              style={styles.sidebarProfileBtn} 
+              onPress={openPersonalization}
+            >
+              {isLoggedIn && currentUser?.avatarUrl ? (
+                <Image 
+                  source={{ uri: currentUser.avatarUrl }} 
+                  style={styles.sidebarProfileImage} 
+                />
+              ) : (
+                <View style={styles.sidebarProfilePlaceholder}>
+                  <Ionicons name="person-circle-outline" size={38} color={COLORS.icon} />
+                </View>
+              )}
+              <View style={styles.sidebarProfileInfo}>
+                <Text style={styles.sidebarProfileName}>
+                  {isLoggedIn ? currentUser?.name || 'Account' : 'Not Logged in'}
+                </Text>
+                {isLoggedIn && lastBackupTime ? (
+                  <Text style={styles.sidebarBackupTime}>
+                    Last backup: {formatBackupTime(lastBackupTime)}
+                  </Text>
+                  ) :
+                  <Text style={styles.sidebarBackupTime}>
+                    Open settings
+                  </Text>
+                }
+              </View>
+            </TouchableOpacity>
+            {/* <TouchableOpacity style={styles.sidebarSettingsBtn} onPress={openPersonalization}>
               <Ionicons name="options-outline" size={20} color={COLORS.fgMuted} />
               <Text style={styles.sidebarSettingsText}>Personalization</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
         </Animated.View>
 
@@ -382,6 +426,8 @@ function MainApp() {
 
       {/* Personalization Modal */}
       <PersonalizationScreen visible={showPersonalization} onClose={closePersonalization} />
+
+      {/* Account Modal */}
 
       {/* Models List Modal */}
       <SlideUpModal visible={showModels} onClose={closeModels} showBottomGradient autoExpanded>
@@ -566,6 +612,40 @@ const styles = StyleSheet.create({
     color: COLORS.fgMuted,
     fontSize: 16,
     marginLeft: 12,
+  },
+  sidebarProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 17,
+    paddingTop: 12,
+    paddingBottom: 32,
+  },
+  sidebarProfileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  sidebarProfilePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.inputBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sidebarProfileInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  sidebarProfileName: {
+    color: COLORS.fg,
+    fontSize: 15,
+    fontFamily: FONTS.sans,
+  },
+  sidebarBackupTime: {
+    color: COLORS.fgMuted,
+    fontSize: 12,
+    marginTop: 2,
   },
   pageOverlay: {
     ...StyleSheet.absoluteFillObject,

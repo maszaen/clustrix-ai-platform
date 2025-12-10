@@ -559,6 +559,6 @@ export async function generateTitle(content, model, provider, baseUrl, apiKey) {
     // Clean up title - remove quotes, extra whitespace
     return title.replace(/^["']|["']$/g, '').trim() || 'New Chat';
   } catch {
-    return 'New Chat';
+    return 'Untitled';
   }
 }

@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey, exportAllData, importAllData } from '../database/db';
 import { generateSessionId } from '../utils/ids';
-import { loginWithGitHub, loginWithGoogle, logout as authLogout, getStoredAuth, getLastBackupTime } from '../services/auth';
+import { loginWithGoogle, logout as authLogout, getStoredAuth, getLastBackupTime } from '../services/auth';
 import { backupToCloud, restoreFromCloud } from '../services/backup';
 
 const AppContext = createContext(null);
@@ -271,17 +271,6 @@ export function AppProvider({ children }) {
   // Auth Functions
   // ========================================
   
-  // Login with GitHub
-  const handleLoginGitHub = useCallback(async () => {
-    const result = await loginWithGitHub();
-    if (result.success) {
-      setCurrentUser(result.user);
-      setAuthProvider('github');
-      setAccessToken(result.accessToken);
-    }
-    return result;
-  }, []);
-  
   // Login with Google
   const handleLoginGoogle = useCallback(async () => {
     const result = await loginWithGoogle();
@@ -304,13 +293,9 @@ export function AppProvider({ children }) {
     return result;
   }, []);
   
-  // ========================================
-  // Backup Functions
-  // ========================================
-  
-  // Backup to cloud
+  // Backup to cloud (auto-refreshes token)
   const handleBackupNow = useCallback(async () => {
-    if (!accessToken || !authProvider || !currentUser) {
+    if (!currentUser) {
       return { success: false, error: 'Not logged in' };
     }
     
@@ -319,16 +304,16 @@ export function AppProvider({ children }) {
       // Export all data
       const backupData = await exportAllData();
       
-      // Backup to cloud
-      const result = await backupToCloud(
-        authProvider,
-        accessToken,
-        currentUser.username,
-        backupData
-      );
+      // Backup to cloud (token refresh handled automatically)
+      const result = await backupToCloud(backupData);
       
       if (result.success) {
         setLastBackupTime(Date.now());
+      } else if (result.needsReauth) {
+        // Token refresh failed, user needs to login again
+        setCurrentUser(null);
+        setAuthProvider(null);
+        setAccessToken(null);
       }
       
       return result;
@@ -337,20 +322,24 @@ export function AppProvider({ children }) {
     } finally {
       setIsBackingUp(false);
     }
-  }, [accessToken, authProvider, currentUser]);
+  }, [currentUser]);
   
-  // Restore from cloud
+  // Restore from cloud (auto-refreshes token)
   const handleRestoreBackup = useCallback(async () => {
-    if (!accessToken || !authProvider || !currentUser) {
+    if (!currentUser) {
       return { success: false, error: 'Not logged in' };
     }
     
     try {
-      const result = await restoreFromCloud(
-        authProvider,
-        accessToken,
-        currentUser.username
-      );
+      const result = await restoreFromCloud();
+      
+      if (result.needsReauth) {
+        // Token refresh failed, user needs to login again
+        setCurrentUser(null);
+        setAuthProvider(null);
+        setAccessToken(null);
+        return result;
+      }
       
       if (result.success && result.data) {
         // Import data
@@ -371,7 +360,7 @@ export function AppProvider({ children }) {
     } catch (error) {
       return { success: false, error: error.message };
     }
-  }, [accessToken, authProvider, currentUser]);
+  }, [currentUser]);
 
   const value = {
     isReady,
@@ -407,7 +396,6 @@ export function AppProvider({ children }) {
     isLoggedIn: !!currentUser,
     lastBackupTime,
     isBackingUp,
-    loginWithGitHub: handleLoginGitHub,
     loginWithGoogle: handleLoginGoogle,
     logout: handleLogout,
     backupNow: handleBackupNow,

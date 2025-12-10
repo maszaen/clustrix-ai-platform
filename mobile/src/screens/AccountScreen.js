@@ -11,11 +11,11 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import SlideLeftModal from '../components/SlideLeftModal';
+import AlertModal from '../components/AlertModal';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 
@@ -26,7 +26,6 @@ export default function AccountScreen({ visible, onClose }) {
     isLoggedIn,
     lastBackupTime,
     isBackingUp,
-    loginWithGitHub,
     loginWithGoogle,
     logout,
     backupNow,
@@ -34,86 +33,69 @@ export default function AccountScreen({ visible, onClose }) {
   } = useApp();
   
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [loginProvider, setLoginProvider] = useState(null);
-
-  const handleGitHubLogin = async () => {
-    setIsLoggingIn(true);
-    setLoginProvider('github');
-    try {
-      const result = await loginWithGitHub();
-      if (!result.success) {
-        Alert.alert('Login Failed', result.error || 'Failed to login with GitHub');
-      }
-    } finally {
-      setIsLoggingIn(false);
-      setLoginProvider(null);
-    }
+  
+  // Alert modal states
+  const [alert, setAlert] = useState({
+    visible: false,
+    type: 'info', // 'success', 'error', 'confirm-logout', 'confirm-restore'
+    title: '',
+    message: '',
+  });
+  
+  const showAlert = (type, title, message) => {
+    setAlert({ visible: true, type, title, message });
+  };
+  
+  const hideAlert = () => {
+    setAlert(prev => ({ ...prev, visible: false }));
   };
 
   const handleGoogleLogin = async () => {
     setIsLoggingIn(true);
-    setLoginProvider('google');
     try {
       const result = await loginWithGoogle();
       if (!result.success) {
-        Alert.alert('Login Failed', result.error || 'Failed to login with Google');
+        showAlert('error', 'Login Failed', result.error || 'Failed to login with Google');
       }
     } finally {
       setIsLoggingIn(false);
-      setLoginProvider(null);
     }
   };
 
-  const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-          },
-        },
-      ]
-    );
+  const handleLogout = () => {
+    showAlert('confirm-logout', 'Logout', 'Are you sure you want to logout?');
+  };
+  
+  const confirmLogout = async () => {
+    hideAlert();
+    await logout();
   };
 
   const handleBackup = async () => {
     const result = await backupNow();
     if (result.success) {
-      Alert.alert('Backup Complete', 'Your data has been backed up to the cloud.');
+      showAlert('success', 'Backup Complete', 'Your data has been backed up to the cloud.');
     } else {
-      Alert.alert('Backup Failed', result.error || 'Failed to backup data');
+      showAlert('error', 'Backup Failed', result.error || 'Failed to backup data');
     }
   };
 
-  const handleRestore = async () => {
-    Alert.alert(
-      'Restore Backup',
-      'This will replace all your data with the cloud backup. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restore',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await restoreBackup();
-            if (result.success) {
-              if (result.notFound) {
-                Alert.alert('No Backup Found', 'No cloud backup was found for your account.');
-              } else {
-                Alert.alert('Restore Complete', 'Your data has been restored from the cloud.');
-              }
-            } else {
-              Alert.alert('Restore Failed', result.error || 'Failed to restore data');
-            }
-          },
-        },
-      ]
-    );
+  const handleRestore = () => {
+    showAlert('confirm-restore', 'Restore Backup', 'This will replace all your data with the cloud backup. Are you sure?');
+  };
+  
+  const confirmRestore = async () => {
+    hideAlert();
+    const result = await restoreBackup();
+    if (result.success) {
+      if (result.notFound) {
+        showAlert('warning', 'No Backup Found', 'No cloud backup was found for your account.');
+      } else {
+        showAlert('success', 'Restore Complete', 'Your data has been restored from the cloud.');
+      }
+    } else {
+      showAlert('error', 'Restore Failed', result.error || 'Failed to restore data');
+    }
   };
 
   const formatBackupTime = (timestamp) => {
@@ -127,15 +109,48 @@ export default function AccountScreen({ visible, onClose }) {
     if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`;
     return date.toLocaleDateString();
   };
+  
+  // Get alert modal props based on type
+  const getAlertProps = () => {
+    switch (alert.type) {
+      case 'success':
+      case 'error':
+      case 'warning':
+        return {
+          primaryText: 'Okay',
+          onPrimary: hideAlert,
+        };
+      case 'confirm-logout':
+        return {
+          primaryText: 'Logout',
+          onPrimary: confirmLogout,
+          secondaryText: 'Cancel',
+          onSecondary: hideAlert,
+        };
+      case 'confirm-restore':
+        return {
+          primaryText: 'Restore',
+          onPrimary: confirmRestore,
+          secondaryText: 'Cancel',
+          onSecondary: hideAlert,
+        };
+      default:
+        return {
+          primaryText: 'Okay',
+          onPrimary: hideAlert,
+        };
+    }
+  };
 
   return (
-    <SlideLeftModal visible={visible} onClose={onClose} title="Account">
-      <View style={styles.container}>
-        {isLoggedIn ? (
-          // Logged in state
-          <View style={styles.loggedInContainer}>
-            {/* Profile Section */}
-            <View style={styles.profileSection}>
+    <>
+      <SlideLeftModal visible={visible} onClose={onClose} title="Account">
+        <View style={styles.container}>
+          {isLoggedIn ? (
+            // Logged in state
+            <View style={styles.loggedInContainer}>
+              {/* Profile Section */}
+              <View style={styles.profileSection}>
               <Image
                 source={{ uri: currentUser?.avatarUrl }}
                 style={styles.profileImage}
@@ -143,15 +158,13 @@ export default function AccountScreen({ visible, onClose }) {
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName}>{currentUser?.name}</Text>
                 <Text style={styles.profileEmail}>{currentUser?.email}</Text>
-                <View style={styles.providerBadge}>
+                              <View style={styles.providerBadge}>
                   <Ionicons 
-                    name={authProvider === 'github' ? 'logo-github' : 'logo-google'} 
+                    name="logo-google" 
                     size={12} 
                     color={COLORS.fgMuted} 
                   />
-                  <Text style={styles.providerText}>
-                    {authProvider === 'github' ? 'GitHub' : 'Google'}
-                  </Text>
+                  <Text style={styles.providerText}>Google</Text>
                 </View>
               </View>
             </View>
@@ -210,24 +223,11 @@ export default function AccountScreen({ visible, onClose }) {
 
             <View style={styles.loginButtons}>
               <TouchableOpacity 
-                style={[styles.loginBtn, styles.githubBtn]}
-                onPress={handleGitHubLogin}
-                disabled={isLoggingIn}
-              >
-                {isLoggingIn && loginProvider === 'github' ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Ionicons name="logo-github" size={20} color="#fff" />
-                )}
-                <Text style={styles.loginBtnText}>Continue with GitHub</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
                 style={[styles.loginBtn, styles.googleBtn]}
                 onPress={handleGoogleLogin}
                 disabled={isLoggingIn}
               >
-                {isLoggingIn && loginProvider === 'google' ? (
+                {isLoggingIn ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Ionicons name="logo-google" size={20} color="#fff" />
@@ -237,12 +237,21 @@ export default function AccountScreen({ visible, onClose }) {
             </View>
 
             <Text style={styles.privacyNote}>
-              Your data is stored securely in your own GitHub repository or Google Drive.
+              Your data is stored securely in your Google Drive.
             </Text>
           </View>
         )}
       </View>
     </SlideLeftModal>
+    
+    {/* Custom Alert Modal */}
+    <AlertModal
+      visible={alert.visible}
+      title={alert.title}
+      message={alert.message}
+      {...getAlertProps()}
+    />
+  </>
   );
 }
 
@@ -391,9 +400,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 16,
     borderRadius: 12,
-  },
-  githubBtn: {
-    backgroundColor: '#24292e',
   },
   googleBtn: {
     backgroundColor: '#4285f4',

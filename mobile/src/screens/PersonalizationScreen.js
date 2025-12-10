@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, FlatList } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Modal, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import SlideLeftModal from '../components/SlideLeftModal';
+import AlertModal from '../components/AlertModal';
 import AccountScreen from './AccountScreen';
 
 const LANGUAGES = [
@@ -52,13 +53,13 @@ function DropdownSelect({ label, value, options, onSelect }) {
 }
 
 // Custom Instructions Content (rendered inside SlideLeftModal)
-function CustomInstructionsContent({ settings, onUpdate, onClose }) {
+function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved }) {
   const [persona, setPersona] = useState(settings.persona || { name: '', work: '', prefs: '' });
   const [language, setLanguage] = useState(settings.language || 'autodetect');
 
   const handleSave = () => {
     onUpdate({ persona, language });
-    Alert.alert('Saved', 'Custom instructions saved');
+    onShowSaved();
     onClose();
   };
 
@@ -125,6 +126,7 @@ function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount }) {
         items={[
           { icon: 'receipt-outline', title: 'Custom Instructions', description: 'Persona and preferences', onPress: onOpenCustomInstructions },
           { icon: 'language-outline', title: 'Language', description: 'App language' },
+          { icon: 'person-outline', title: 'Account', description: 'User credentials', onPress: onOpenAccount },
         ]}
       />
 
@@ -133,14 +135,6 @@ function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount }) {
         items={[
           { icon: 'color-palette-outline', title: 'Theme', description: 'Light or dark mode' },
           { icon: 'brush-outline', title: 'Accent Color', description: 'Customize accent color' },
-        ]}
-      />
-
-      <SlideLeftModal.Category
-        title="Storage"
-        items={[
-          { icon: 'person-outline', title: 'Account', description: 'User credentials', onPress: onOpenAccount },
-          { icon: 'file-tray-full-outline', title: 'Memory', description: 'Manage memories' },
         ]}
       />
 
@@ -160,7 +154,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
   const { settings, updateSettings } = useApp();
   const [showCustomInstructions, setShowCustomInstructions] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
-  
+  const [showSavedAlert, setShowSavedAlert] = useState(false);
 
   return (
     <>
@@ -181,12 +175,21 @@ export default function PersonalizationScreen({ visible, onClose }) {
         <CustomInstructionsContent 
           settings={settings} 
           onUpdate={updateSettings} 
-          onClose={() => setShowCustomInstructions(false)} 
+          onClose={() => setShowCustomInstructions(false)}
+          onShowSaved={() => setShowSavedAlert(true)}
         />
       </SlideLeftModal>
 
       <AccountScreen visible={showAccount} onClose={() => setShowAccount(false)} />
       
+      {/* Saved Alert */}
+      <AlertModal
+        visible={showSavedAlert}
+        title="Saved"
+        message="Custom instructions saved"
+        primaryText="Okay"
+        onPrimary={() => setShowSavedAlert(false)}
+      />
     </>
   );
 }

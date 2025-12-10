@@ -30,6 +30,7 @@ import SlideUpModal from './src/components/SlideUpModal';
 import ContextMenuFixed from './src/components/ContextMenuFixed';
 import InputModal from './src/components/InputModal';
 import ConfirmModal from './src/components/ConfirmModal';
+import LoadingScreen from './src/components/LoadingScreen';
 import { SvgXml } from 'react-native-svg';
 import { COLORS } from './src/constants/colors';
 import { fontAssets, FONTS } from './src/constants/fonts';
@@ -499,12 +500,7 @@ export default function App() {
   const [fontsLoaded] = useFonts(fontAssets);
 
   if (!fontsLoaded) {
-    return (
-      <View style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
   return (

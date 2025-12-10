@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, FlatList } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Modal, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { DEFAULT_PROVIDERS } from '../services/api';
 import ContextMenu from '../components/ContextMenu';
 import InputModal from '../components/InputModal';
 import ConfirmModal from '../components/ConfirmModal';
+import AlertModal from '../components/AlertModal';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { Eye, EyeClosed } from 'lucide-react-native';
@@ -95,6 +96,11 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
   const [addProviderModal, setAddProviderModal] = useState(false);
   const [renameModal, setRenameModal] = useState({ visible: false, item: null, type: null });
   const [confirmDelete, setConfirmDelete] = useState({ visible: false, item: null, type: null });
+  
+  // Alert state
+  const [alert, setAlert] = useState({ visible: false, type: '', title: '', message: '' });
+  const showAlert = (type, title, message) => setAlert({ visible: true, type, title, message });
+  const hideAlert = () => setAlert(prev => ({ ...prev, visible: false }));
 
   // Combine default and custom providers
   const allProviders = [...DEFAULT_PROVIDERS_LIST, ...customProviders.map(p => ({ id: p.id, name: p.name, base_url: p.base_url, is_custom: true }))];
@@ -110,11 +116,11 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
 
   const handleSave = async () => {
     if (!localSettings.apiKey) {
-      Alert.alert('Missing API Key', 'Please enter your API key');
+      showAlert('error', 'Missing API Key', 'Please enter your API key');
       return;
     }
     if (!localSettings.model) {
-      Alert.alert('Missing Model', 'Please select or enter a model');
+      showAlert('error', 'Missing Model', 'Please select or enter a model');
       return;
     }
     // Save API key for this provider
@@ -126,8 +132,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
       baseUrl: localSettings.baseUrl,
       apiKey: localSettings.apiKey, // Keep for backward compatibility
     });
-    Alert.alert('Saved', 'Model settings saved');
-    onClose?.();
+    showAlert('success', 'Saved', 'Model settings saved');
   };
 
   const handleProviderChange = (provider) => {
@@ -361,6 +366,20 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
           <Text style={styles.saveBtnText}>Save Model Settings</Text>
         </TouchableOpacity>
       </ScrollView>
+      
+      {/* Alert Modal */}
+      <AlertModal
+        visible={alert.visible}
+        title={alert.title}
+        message={alert.message}
+        primaryText="Okay"
+        onPrimary={() => {
+          hideAlert();
+          if (alert.type === 'success') {
+            onClose?.();
+          }
+        }}
+      />
     </View>
   );
 }

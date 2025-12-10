@@ -19,6 +19,8 @@ import Reanimated, {
   useSharedValue, 
   useAnimatedStyle, 
   withSpring, 
+  withTiming,
+  Easing,
   interpolate,
   runOnJS 
 } from 'react-native-reanimated';
@@ -86,7 +88,7 @@ function MainApp() {
   // Using Reanimated shared values for smooth native thread animations
   const scrollX = useSharedValue(SIDEBAR_WIDTH);
   const sidebarStretch = useSharedValue(0);
-  const currentPage = useRef(1); // 0 = sidebar, 1 = main
+  const currentPage = useSharedValue(1); // 0 = sidebar, 1 = main
   const lastDragPosition = useRef(SIDEBAR_WIDTH);
   
   // Keep RN Animated for non-gesture animations (button opacity etc)
@@ -135,7 +137,7 @@ function MainApp() {
     .onUpdate((e) => {
       'worklet';
       // Calculate new position based on drag
-      const baseOffset = currentPage.current === 0 ? 0 : SIDEBAR_WIDTH;
+      const baseOffset = currentPage.value === 0 ? 0 : SIDEBAR_WIDTH;
       const proposedOffset = baseOffset - e.translationX;
 
       if (proposedOffset < 0) {
@@ -159,39 +161,42 @@ function MainApp() {
       }
 
       const scrollTarget = targetPage === 0 ? 0 : SIDEBAR_WIDTH;
-      const stretchTarget = targetPage === 0 ? SIDEBAR_STRETCH_DISTANCE : 0;
+      const stretchTarget = targetPage === 0 && sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0;
 
-      // Animate to target with spring
-      scrollX.value = withSpring(scrollTarget, { damping: 20, stiffness: 200 });
-      sidebarStretch.value = withSpring(stretchTarget, { damping: 20, stiffness: 200 });
+      // Animate to target - fast, snappy, no bounce
+      const config = { duration: 200, easing: Easing.out(Easing.cubic) };
+      scrollX.value = withTiming(scrollTarget, config);
+      sidebarStretch.value = withTiming(stretchTarget, config);
       
       // Sync state on JS thread
       runOnJS(setSidebarOpen)(targetPage === 0);
-      currentPage.current = targetPage;
+      currentPage.value = targetPage;
     });
 
   // Sidebar width calculated from Reanimated value is handled by sidebarAnimatedStyle
 
   const openSidebar = useCallback(() => {
     Keyboard.dismiss();
-    currentPage.current = 0;
+    currentPage.value = 0;
     setSidebarOpen(true);
-    scrollX.value = withSpring(0, { damping: 20, stiffness: 200 });
-    sidebarStretch.value = withSpring(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { damping: 20, stiffness: 200 });
+    const config = { duration: 200, easing: Easing.out(Easing.cubic) };
+    scrollX.value = withTiming(0, config);
+    sidebarStretch.value = withTiming(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, config);
   }, [scrollX, sidebarHasQuery, sidebarStretch]);
 
   const closeSidebar = useCallback(() => {
     Keyboard.dismiss();
-    currentPage.current = 1;
+    currentPage.value = 1;
     setSidebarOpen(false);
-    scrollX.value = withSpring(SIDEBAR_WIDTH, { damping: 20, stiffness: 200 });
-    sidebarStretch.value = withSpring(0, { damping: 20, stiffness: 200 });
+    const config = { duration: 200, easing: Easing.out(Easing.cubic) };
+    scrollX.value = withTiming(SIDEBAR_WIDTH, config);
+    sidebarStretch.value = withTiming(0, config);
   }, [scrollX, sidebarStretch]);
 
   // Smoothly adjust sidebar extent when search text toggles a full-width request
   useEffect(() => {
     if (!sidebarOpen) return;
-    sidebarStretch.value = withSpring(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { damping: 15, stiffness: 100 });
+    sidebarStretch.value = withTiming(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { duration: 250, easing: Easing.out(Easing.cubic) });
   }, [sidebarHasQuery, sidebarOpen, sidebarStretch]);
 
   const openPersonalization = useCallback(() => setShowPersonalization(true), []);
@@ -340,7 +345,7 @@ function MainApp() {
 
           <TouchableOpacity
             style={[styles.floatingLogoBtn, { top: insets.top + 11 }]}
-            onPress={() => setTimeout(openModels, 10)}
+            onPress={openModels}
             activeOpacity={0.7}
           >
             <View style={styles.logo}>

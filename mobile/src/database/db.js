@@ -194,3 +194,117 @@ export async function saveProviderApiKey(providerId, apiKey) {
     [providerId, apiKey, now]
   );
 }
+
+// ========================================
+// Export/Import for Backup
+// ========================================
+
+/**
+ * Export all data from database for backup
+ */
+export async function exportAllData() {
+  const [sessions, messages, settings, customModels, customProviders, providerApiKeys] = await Promise.all([
+    db.getAllAsync('SELECT * FROM sessions'),
+    db.getAllAsync('SELECT * FROM messages'),
+    db.getAllAsync('SELECT * FROM settings'),
+    db.getAllAsync('SELECT * FROM custom_models'),
+    db.getAllAsync('SELECT * FROM custom_providers'),
+    db.getAllAsync('SELECT * FROM provider_api_keys'),
+  ]);
+  
+  return {
+    version: '1.0',
+    exportedAt: Date.now(),
+    platform: 'mobile',
+    data: {
+      sessions: sessions || [],
+      messages: messages || [],
+      settings: settings || [],
+      customModels: customModels || [],
+      customProviders: customProviders || [],
+      providerApiKeys: providerApiKeys || [],
+    },
+  };
+}
+
+/**
+ * Import all data from backup
+ * WARNING: This will replace all existing data!
+ */
+export async function importAllData(backupData) {
+  if (!backupData?.data) {
+    throw new Error('Invalid backup data format');
+  }
+  
+  const { sessions, messages, settings, customModels, customProviders, providerApiKeys } = backupData.data;
+  
+  // Start transaction
+  await db.execAsync('BEGIN TRANSACTION');
+  
+  try {
+    // Clear existing data
+    await db.execAsync(`
+      DELETE FROM messages;
+      DELETE FROM sessions;
+      DELETE FROM settings;
+      DELETE FROM custom_models;
+      DELETE FROM custom_providers;
+      DELETE FROM provider_api_keys;
+    `);
+    
+    // Import sessions
+    for (const session of (sessions || [])) {
+      await db.runAsync(
+        'INSERT INTO sessions (id, name, created_at, updated_at, metadata) VALUES (?, ?, ?, ?, ?)',
+        [session.id, session.name, session.created_at, session.updated_at, session.metadata || '{}']
+      );
+    }
+    
+    // Import messages
+    for (const msg of (messages || [])) {
+      await db.runAsync(
+        'INSERT INTO messages (id, session_id, role, content, created_at, message_index, model_id, provider, think_content, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [msg.id, msg.session_id, msg.role, msg.content, msg.created_at, msg.message_index, msg.model_id, msg.provider, msg.think_content, msg.metadata || '{}']
+      );
+    }
+    
+    // Import settings
+    for (const setting of (settings || [])) {
+      await db.runAsync(
+        'INSERT INTO settings (key, value) VALUES (?, ?)',
+        [setting.key, setting.value]
+      );
+    }
+    
+    // Import custom models
+    for (const model of (customModels || [])) {
+      await db.runAsync(
+        'INSERT INTO custom_models (id, provider, model_id, label, is_default, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [model.id, model.provider, model.model_id, model.label, model.is_default, model.created_at]
+      );
+    }
+    
+    // Import custom providers
+    for (const provider of (customProviders || [])) {
+      await db.runAsync(
+        'INSERT INTO custom_providers (id, name, base_url, is_default, created_at) VALUES (?, ?, ?, ?, ?)',
+        [provider.id, provider.name, provider.base_url, provider.is_default, provider.created_at]
+      );
+    }
+    
+    // Import provider API keys
+    for (const key of (providerApiKeys || [])) {
+      await db.runAsync(
+        'INSERT INTO provider_api_keys (provider_id, api_key, updated_at) VALUES (?, ?, ?)',
+        [key.provider_id, key.api_key, key.updated_at]
+      );
+    }
+    
+    await db.execAsync('COMMIT');
+    
+    return { success: true };
+  } catch (error) {
+    await db.execAsync('ROLLBACK');
+    throw error;
+  }
+}

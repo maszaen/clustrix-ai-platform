@@ -2,6 +2,8 @@
   "expo": {
     "name": "Clustrix",
     "slug": "clustrix-mobile",
+    "owner": "zaeniahmad",
+    "scheme": "clustrix",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -30,6 +32,10 @@
       "eas": {
         "projectId": "ae926762-a774-4e92-b8a0-353c8345620d"
       }
-    }
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser"
+    ]
   }
 }

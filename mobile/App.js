@@ -65,7 +65,7 @@ function MainApp() {
   useEffect(() => {
     Animated.timing(rightBtnOpacity, {
       toValue: showRightBtns ? 1 : 0,
-      duration: 150,
+      duration: 100,
       useNativeDriver: true,
     }).start();
   }, [showRightBtns, rightBtnOpacity]);
@@ -97,9 +97,6 @@ function MainApp() {
     outputRange: [0.5, 0],
     extrapolate: 'clamp',
   });
-  
-  
-
 
   // Horizontal pager pan responder
   const pagerPanResponder = useRef(

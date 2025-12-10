@@ -60,7 +60,7 @@ const GOOGLE_CONFIG = {
   // Web client secret (required for code exchange)
   webClientSecret: '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', // Add your client secret here
   // Android client ID for production builds (replace with your Android OAuth client ID)
-  androidClientId: 'YOUR_ANDROID_CLIENT_ID',
+  androidClientId: '907693456473-q9f7hdqvoiv5sr10nnd2u506jlr657oa.apps.googleusercontent.com',
   scopes: ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
 };
 
@@ -204,139 +204,76 @@ async function getGitHubUserInfo(accessToken) {
 
 /**
  * Login with Google
- * Requires development build for OAuth to work properly (Expo Go doesn't support custom URI schemes)
+ * Uses @react-native-google-signin/google-signin (Expo recommended)
  */
 export async function loginWithGoogle() {
   try {
-    const Constants = require('expo-constants').default;
-    const isExpoGo = Constants.appOwnership === 'expo';
+    const { GoogleSignin, statusCodes } = require('@react-native-google-signin/google-signin');
     
-    // Google OAuth discovery document
-    const discovery = {
-      authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-      tokenEndpoint: 'https://oauth2.googleapis.com/token',
+    // Configure Google Sign-In
+    GoogleSignin.configure({
+      webClientId: GOOGLE_CONFIG.webClientId, // Required for getting idToken
+      offlineAccess: true, // For refresh token
+      scopes: GOOGLE_CONFIG.scopes,
+    });
+    
+    console.log('[Auth] Google Sign-In configured');
+    
+    // Check if user is already signed in
+    const hasPreviousSignIn = GoogleSignin.hasPreviousSignIn();
+    if (hasPreviousSignIn) {
+      console.log('[Auth] Found previous sign-in, signing out first...');
+      await GoogleSignin.signOut();
+    }
+    
+    // Sign in
+    console.log('[Auth] Starting Google Sign-In...');
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    const userInfo = await GoogleSignin.signIn();
+    
+    console.log('[Auth] Google Sign-In successful!');
+    console.log('[Auth] User:', userInfo.data?.user?.email);
+    
+    // Get tokens
+    const tokens = await GoogleSignin.getTokens();
+    
+    // Format user info
+    const user = {
+      id: userInfo.data?.user?.id,
+      email: userInfo.data?.user?.email,
+      name: userInfo.data?.user?.name,
+      avatarUrl: userInfo.data?.user?.photo,
+      provider: 'google',
     };
     
-    // Use native scheme - works with development build and production
-    const redirectUri = AuthSession.makeRedirectUri({
-      scheme: 'clustrix',
-      path: 'oauth',
-    });
-    
-    // For Expo Go, the scheme won't work - need development build
-    if (isExpoGo) {
-      console.log('[Auth] Running in Expo Go - OAuth requires development build');
-      console.log('[Auth] Redirect URI would be:', redirectUri);
-      
-      // Try anyway - might work if user has configured something special
-      // But likely will fail
-    }
-    
-    const clientId = isExpoGo ? GOOGLE_CONFIG.webClientId : (GOOGLE_CONFIG.androidClientId || GOOGLE_CONFIG.webClientId);
-    
-    console.log('[Auth] Google OAuth starting...');
-    console.log('[Auth] Redirect URI:', redirectUri);
-    console.log('[Auth] Client ID:', clientId.substring(0, 30) + '...');
-    console.log('[Auth] Is Expo Go:', isExpoGo);
-    
-    // Build OAuth URL with PKCE
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    const state = generateRandomString(16);
-    
-    const authUrl = 
-      `${discovery.authorizationEndpoint}?` +
-      `client_id=${encodeURIComponent(clientId)}&` +
-      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `response_type=code&` +
-      `scope=${encodeURIComponent(GOOGLE_CONFIG.scopes.join(' '))}&` +
-      `code_challenge=${encodeURIComponent(codeChallenge)}&` +
-      `code_challenge_method=S256&` +
-      `state=${state}&` +
-      `access_type=offline&` +
-      `prompt=consent`;
-    
-    console.log('[Auth] Opening browser...');
-    
-    // Open browser
-    const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-    
-    console.log('[Auth] Browser result type:', result.type);
-    
-    if (result.type !== 'success') {
-      if (result.type === 'dismiss') {
-        // User closed browser
-        if (isExpoGo) {
-          throw new Error('Google login requires development build. Run: npx expo run:android');
-        }
-        throw new Error('Login dibatalkan');
-      }
-      throw new Error('Google auth failed: ' + result.type);
-    }
-    
-    console.log('[Auth] Got result URL:', result.url);
-    
-    // Extract authorization code
-    let code;
-    try {
-      const url = new URL(result.url);
-      code = url.searchParams.get('code');
-    } catch (e) {
-      // Try manual extraction
-      const match = result.url.match(/[?&]code=([^&]+)/);
-      code = match ? decodeURIComponent(match[1]) : null;
-    }
-    
-    if (!code) {
-      console.error('[Auth] No code in result URL:', result.url);
-      throw new Error('No authorization code received');
-    }
-    
-    console.log('[Auth] Got authorization code, exchanging for tokens...');
-    
-    // Exchange code for tokens
-    const tokenResponse = await fetch(discovery.tokenEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: GOOGLE_CONFIG.webClientSecret,
-        code,
-        code_verifier: codeVerifier,
-        grant_type: 'authorization_code',
-        redirect_uri: redirectUri,
-      }).toString(),
-    });
-    
-    if (!tokenResponse.ok) {
-      const errorData = await tokenResponse.json();
-      console.error('[Auth] Token exchange failed:', errorData);
-      throw new Error(errorData.error_description || errorData.error || 'Token exchange failed');
-    }
-    
-    const tokenData = await tokenResponse.json();
-    console.log('[Auth] Token exchange successful!');
-    
-    // Get user info
-    const userInfo = await getGoogleUserInfo(tokenData.access_token);
-    
     // Store credentials
-    await storeAuthData('google', tokenData.access_token, userInfo, tokenData.refresh_token);
+    await storeAuthData('google', tokens.accessToken, user, tokens.idToken);
     
     return {
       success: true,
       provider: 'google',
-      user: userInfo,
-      accessToken: tokenData.access_token,
-      refreshToken: tokenData.refresh_token,
+      user: user,
+      accessToken: tokens.accessToken,
+      idToken: tokens.idToken,
     };
   } catch (error) {
     console.error('[Auth] Google login error:', error);
+    
+    // Handle specific errors
+    const { statusCodes } = require('@react-native-google-signin/google-signin');
+    
+    let errorMessage = error.message;
+    if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+      errorMessage = 'Login dibatalkan';
+    } else if (error.code === statusCodes.IN_PROGRESS) {
+      errorMessage = 'Login sedang berlangsung';
+    } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+      errorMessage = 'Google Play Services tidak tersedia';
+    }
+    
     return {
       success: false,
-      error: error.message,
+      error: errorMessage,
     };
   }
 }

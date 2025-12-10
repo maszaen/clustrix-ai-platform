@@ -18,11 +18,14 @@ import SlideLeftModal from '../components/SlideLeftModal';
 import AlertModal from '../components/AlertModal';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
+import { SvgXml } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
+import GoogleLogo from '../../assets/cloud-database.png';
+import { GOOGLE_FAVICON } from '../constants/strings';
 
 export default function AccountScreen({ visible, onClose }) {
   const {
     currentUser,
-    authProvider,
     isLoggedIn,
     lastBackupTime,
     isBackingUp,
@@ -214,7 +217,13 @@ export default function AccountScreen({ visible, onClose }) {
           // Not logged in state
           <View style={styles.notLoggedInContainer}>
             <View style={styles.loginHeader}>
-              <Ionicons name="cloud-outline" size={48} color={COLORS.fgMuted} />
+              <LinearGradient
+                colors={['transparent', COLORS.bg, COLORS.bg]}
+                locations={[0, 0.8, 1]}
+                style={[styles.floatingHeader, { height: 75 }]}
+                pointerEvents="none"
+              />
+              <Image source={GoogleLogo} style={{ width: '100%', height: 250, borderRadius: 16 }} />
               <Text style={styles.loginTitle}>Cloud Database Sync</Text>
               <Text style={styles.loginSubtitle}>
                 Sign in to backup your data and sync across devices
@@ -230,7 +239,8 @@ export default function AccountScreen({ visible, onClose }) {
                 {isLoggingIn ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Ionicons name="logo-google" size={20} color="#fff" />
+                  
+                  <SvgXml xml={GOOGLE_FAVICON} width={23} height={23} />
                 )}
                 <Text style={styles.loginBtnText}>Continue with Google</Text>
               </TouchableOpacity>
@@ -258,7 +268,7 @@ export default function AccountScreen({ visible, onClose }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    padding: 0,
   },
   // Logged in styles
   loggedInContainer: {
@@ -371,49 +381,62 @@ const styles = StyleSheet.create({
   // Not logged in styles
   notLoggedInContainer: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'start',
+  },
+  images: {
+    height: '20%',
+    backgroundColor: COLORS.fg,
   },
   loginHeader: {
     alignItems: 'center',
     marginBottom: 40,
   },
+  floatingHeader: {
+    position: 'absolute',
+    bottom: 65,
+    left: 0,
+    right: 0,
+    zIndex: 5,
+  },  
   loginTitle: {
     fontSize: 24,
     fontFamily: FONTS.display,
     color: COLORS.fg,
-    marginTop: 16,
+    marginTop: 5,
   },
   loginSubtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.fgMuted,
     textAlign: 'center',
-    marginTop: 8,
+    marginTop: 4,
     lineHeight: 20,
   },
   loginButtons: {
     gap: 12,
+    paddingHorizontal: 16,
+    
   },
   loginBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderRadius: 12,
   },
   googleBtn: {
-    backgroundColor: '#4285f4',
+    backgroundColor: COLORS.fg,
   },
   loginBtnText: {
     fontSize: 16,
-    color: '#fff',
-    fontFamily: FONTS.sans,
+    color: COLORS.bg,
+    fontFamily: FONTS.displayItalic,
   },
   privacyNote: {
     fontSize: 12,
     color: COLORS.fgMuted,
     textAlign: 'center',
-    marginTop: 24,
+    marginTop: 14,
     lineHeight: 18,
   },
 });

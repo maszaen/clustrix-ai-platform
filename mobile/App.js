@@ -9,12 +9,19 @@ import {
   Animated,
   Dimensions,
   TouchableWithoutFeedback,
-  PanResponder,
   BackHandler,
   Keyboard,
   ScrollView,
   Image,
 } from 'react-native';
+import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Reanimated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring, 
+  interpolate,
+  runOnJS 
+} from 'react-native-reanimated';
 import Markdown from 'react-native-markdown-display';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -76,155 +83,115 @@ function MainApp() {
   }, [showContextMenu, showModels, showPersonalization, renameModal.visible, confirmDelete.visible, sidebarContextMenuOpen, thinkingModal.visible]);
 
   // Horizontal pager - start at main screen (offset = SIDEBAR_WIDTH)
-  // Pager offset controls the horizontal snap between sidebar (0) and main (SIDEBAR_WIDTH)
-  const scrollX = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
-  // Stretch value expands the sidebar to the right after it snaps to the left edge
-  const sidebarStretch = useRef(new Animated.Value(0)).current;
+  // Using Reanimated shared values for smooth native thread animations
+  const scrollX = useSharedValue(SIDEBAR_WIDTH);
+  const sidebarStretch = useSharedValue(0);
   const currentPage = useRef(1); // 0 = sidebar, 1 = main
-  const lastDragPosition = useRef(SIDEBAR_WIDTH); // Track where the pager is during a gesture
+  const lastDragPosition = useRef(SIDEBAR_WIDTH);
   
-  // Overlay opacity interpolations
-  // scrollX: 0 (sidebar) -> SIDEBAR_WIDTH (main)
-  // Sidebar overlay: 0 -> 0.5 (dimmed when on main)
-  // Main overlay: 0.5 -> 0 (dimmed when on sidebar)
-  const sidebarOverlayOpacity = scrollX.interpolate({
+  // Keep RN Animated for non-gesture animations (button opacity etc)
+  const scrollXAnimated = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
+  const sidebarStretchAnimated = useRef(new Animated.Value(0)).current;
+  
+  // Animated styles for pager container (runs on native thread)
+  const pagerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -scrollX.value }],
+  }));
+  
+  // Animated styles for sidebar width
+  const sidebarAnimatedStyle = useAnimatedStyle(() => ({
+    width: SIDEBAR_WIDTH + sidebarStretch.value,
+  }));
+  
+  // Animated styles for overlays
+  const mainOverlayAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollX.value, [0, SIDEBAR_WIDTH], [0.5, 0]),
+  }));
+
+  // Keep RN Animated interpolations for non-gesture related UI
+  const sidebarOverlayOpacity = scrollXAnimated.interpolate({
     inputRange: [0, SIDEBAR_WIDTH],
     outputRange: [0, 0.5],
     extrapolate: 'clamp',
   });
-  const mainOverlayOpacity = scrollX.interpolate({
+  const mainOverlayOpacity = scrollXAnimated.interpolate({
     inputRange: [0, SIDEBAR_WIDTH],
     outputRange: [0.5, 0],
     extrapolate: 'clamp',
   });
 
-  // Horizontal pager pan responder
-  const pagerPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gs) => {
-        // Block swipe when any modal is open
-        if (isModalOpen.current) return false;
-        // Only respond to horizontal swipes
-        return Math.abs(gs.dx) > 15 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5;
-      },
-      onPanResponderGrant: () => {
-        scrollX.stopAnimation();
-      },
-      onPanResponderMove: (_, gs) => {
-        // Calculate new position based on drag
-        const baseOffset = currentPage.current === 0 ? 0 : SIDEBAR_WIDTH;
-        const proposedOffset = baseOffset - gs.dx;
+  // Helper to sync RN Animated with Reanimated for non-gesture UI
+  const syncAnimatedValues = useCallback((targetPage) => {
+    const scrollTarget = targetPage === 0 ? 0 : SIDEBAR_WIDTH;
+    const stretchTarget = targetPage === 0 && sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0;
+    scrollXAnimated.setValue(scrollTarget);
+    sidebarStretchAnimated.setValue(stretchTarget);
+  }, [scrollXAnimated, sidebarStretchAnimated, sidebarHasQuery]);
 
-        // Once the sidebar snaps left (offset = 0), additional right drag stretches the width instead of moving further left.
-        if (proposedOffset < 0) {
-          scrollX.setValue(0);
-          const stretchDistance = Math.min(SIDEBAR_STRETCH_DISTANCE, -proposedOffset);
-          sidebarStretch.setValue(stretchDistance);
-          lastDragPosition.current = 0;
-        } else {
-          const clamped = Math.max(0, Math.min(SIDEBAR_WIDTH, proposedOffset));
-          scrollX.setValue(clamped);
-          sidebarStretch.setValue(0);
-          lastDragPosition.current = clamped;
-        }
-      },
-      onPanResponderRelease: (_, gs) => {
-        const currentOffset = lastDragPosition.current;
+  // Horizontal pager gesture handler (runs entirely on native UI thread)
+  const panGesture = Gesture.Pan()
+    .activeOffsetX([-10, 10])
+    .failOffsetY([-15, 15])
+    .onUpdate((e) => {
+      'worklet';
+      // Calculate new position based on drag
+      const baseOffset = currentPage.current === 0 ? 0 : SIDEBAR_WIDTH;
+      const proposedOffset = baseOffset - e.translationX;
 
-        // Determine target based on velocity and position
-        let targetPage;
-        if (Math.abs(gs.vx) > 0.5) {
-          // Fast swipe - use velocity direction
-          targetPage = gs.vx > 0 ? 0 : 1;
-        } else {
-          // Slow swipe - snap to nearest
-          const midpoint = SIDEBAR_WIDTH / 2;
-          targetPage = currentOffset < midpoint ? 0 : 1;
-        }
-
-        currentPage.current = targetPage;
-
-        const stretchTarget = targetPage === 0 && sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0;
-
-        Animated.parallel([
-          Animated.spring(scrollX, {
-            toValue: targetPage === 0 ? 0 : SIDEBAR_WIDTH,
-            useNativeDriver: true,
-            tension: 135,
-            friction: 19,
-          }),
-          Animated.spring(sidebarStretch, {
-            toValue: stretchTarget,
-            useNativeDriver: false,
-            tension: 135,
-            friction: 19,
-          }),
-        ]).start(() => {
-          // Sync state after animation completes
-          setSidebarOpen(targetPage === 0);
-          lastDragPosition.current = targetPage === 0 ? 0 : SIDEBAR_WIDTH;
-        });
-      },
+      if (proposedOffset < 0) {
+        scrollX.value = 0;
+        sidebarStretch.value = Math.min(SIDEBAR_STRETCH_DISTANCE, -proposedOffset);
+      } else {
+        scrollX.value = Math.max(0, Math.min(SIDEBAR_WIDTH, proposedOffset));
+        sidebarStretch.value = 0;
+      }
     })
-  ).current;
+    .onEnd((e) => {
+      'worklet';
+      const currentOffset = scrollX.value;
 
-  // Sidebar width = base width + live stretch (only grows when snapped on the left)
-  const sidebarWidth = Animated.add(SIDEBAR_WIDTH, sidebarStretch);
+      // Determine target based on velocity and position
+      let targetPage;
+      if (Math.abs(e.velocityX) > 500) {
+        targetPage = e.velocityX > 0 ? 0 : 1;
+      } else {
+        targetPage = currentOffset < SIDEBAR_WIDTH / 2 ? 0 : 1;
+      }
+
+      const scrollTarget = targetPage === 0 ? 0 : SIDEBAR_WIDTH;
+      const stretchTarget = targetPage === 0 ? SIDEBAR_STRETCH_DISTANCE : 0;
+
+      // Animate to target with spring
+      scrollX.value = withSpring(scrollTarget, { damping: 20, stiffness: 200 });
+      sidebarStretch.value = withSpring(stretchTarget, { damping: 20, stiffness: 200 });
+      
+      // Sync state on JS thread
+      runOnJS(setSidebarOpen)(targetPage === 0);
+      currentPage.current = targetPage;
+    });
+
+  // Sidebar width calculated from Reanimated value is handled by sidebarAnimatedStyle
 
   const openSidebar = useCallback(() => {
     Keyboard.dismiss();
     currentPage.current = 0;
     setSidebarOpen(true);
-    Animated.parallel([
-      Animated.spring(scrollX, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 135,
-        friction: 19,
-      }),
-      Animated.spring(sidebarStretch, {
-        toValue: sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0,
-        useNativeDriver: false,
-        tension: 135,
-        friction: 19,
-      }),
-    ]).start(() => {
-      lastDragPosition.current = 0;
-    });
+    scrollX.value = withSpring(0, { damping: 20, stiffness: 200 });
+    sidebarStretch.value = withSpring(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { damping: 20, stiffness: 200 });
   }, [scrollX, sidebarHasQuery, sidebarStretch]);
 
   const closeSidebar = useCallback(() => {
     Keyboard.dismiss();
     currentPage.current = 1;
     setSidebarOpen(false);
-    Animated.parallel([
-      Animated.spring(scrollX, {
-        toValue: SIDEBAR_WIDTH,
-        useNativeDriver: true,
-        tension: 135,
-        friction: 19,
-      }),
-      Animated.spring(sidebarStretch, {
-        toValue: 0,
-        useNativeDriver: false,
-        tension: 135,
-        friction: 19,
-      }),
-    ]).start(() => {
-      lastDragPosition.current = SIDEBAR_WIDTH;
-    });
+    scrollX.value = withSpring(SIDEBAR_WIDTH, { damping: 20, stiffness: 200 });
+    sidebarStretch.value = withSpring(0, { damping: 20, stiffness: 200 });
   }, [scrollX, sidebarStretch]);
 
   // Smoothly adjust sidebar extent when search text toggles a full-width request
   useEffect(() => {
     if (!sidebarOpen) return;
-    Animated.spring(sidebarStretch, {
-      toValue: sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0,
-      useNativeDriver: false,
-      tension: 65,
-      friction: 11,
-    }).start();
+    sidebarStretch.value = withSpring(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { damping: 15, stiffness: 100 });
   }, [sidebarHasQuery, sidebarOpen, sidebarStretch]);
 
   const openPersonalization = useCallback(() => setShowPersonalization(true), []);
@@ -291,18 +258,14 @@ function MainApp() {
   }
 
   return (
-    <View style={styles.container} {...pagerPanResponder.panHandlers}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      
-      {/* Horizontal Pager Container */}
-      <Animated.View 
-        style={[
-          styles.pagerContainer,
-          { transform: [{ translateX: Animated.multiply(scrollX, -1) }] }
-        ]}
-      >
-        {/* Page 1: Sidebar (80% base width, stretches to 100% when pulled) */}
-        <Animated.View style={[styles.sidebarPage, { width: sidebarWidth, paddingTop: insets.top }]}>
+    <GestureDetector gesture={panGesture}>
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        
+        {/* Horizontal Pager Container */}
+        <Reanimated.View style={[styles.pagerContainer, pagerAnimatedStyle]}>
+          {/* Page 1: Sidebar (80% base width, stretches to 100% when pulled) */}
+          <Reanimated.View style={[styles.sidebarPage, sidebarAnimatedStyle, { paddingTop: insets.top }]}>
 
           <View style={styles.sidebarContent}>
 
@@ -354,7 +317,7 @@ function MainApp() {
               <Text style={styles.sidebarSettingsText}>Personalization</Text>
             </TouchableOpacity> */}
           </View>
-        </Animated.View>
+          </Reanimated.View>
 
         {/* Page 2: Main Chat (100% width) */}
         <View style={[styles.mainPage, { width: SCREEN_WIDTH }]}>
@@ -414,16 +377,16 @@ function MainApp() {
           />
 
           {/* Main dimming overlay - tap to close sidebar when sidebar is open */}
-          <Animated.View 
-            style={[styles.pageOverlay, { opacity: mainOverlayOpacity }]} 
+          <Reanimated.View 
+            style={[styles.pageOverlay, mainOverlayAnimatedStyle]} 
             pointerEvents={sidebarOpen ? 'auto' : 'none'}
           >
             <TouchableWithoutFeedback onPress={closeSidebar}>
               <View style={StyleSheet.absoluteFill} />
             </TouchableWithoutFeedback>
-          </Animated.View>
+          </Reanimated.View>
         </View>
-      </Animated.View>
+        </Reanimated.View>
 
       {/* Personalization Modal */}
       <PersonalizationScreen visible={showPersonalization} onClose={closePersonalization} />
@@ -492,7 +455,8 @@ function MainApp() {
           </View>
         )}
       </SlideUpModal>
-    </View>
+      </View>
+    </GestureDetector>
   );
 }
 
@@ -504,11 +468,13 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <AppProvider>
-        <MainApp />
-      </AppProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AppProvider>
+          <MainApp />
+        </AppProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

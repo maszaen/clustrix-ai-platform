@@ -22,7 +22,8 @@ import Reanimated, {
   withTiming,
   Easing,
   interpolate,
-  runOnJS 
+  runOnJS,
+  cancelAnimation
 } from 'react-native-reanimated';
 import Markdown from 'react-native-markdown-display';
 import { useFonts } from 'expo-font';
@@ -89,6 +90,7 @@ function MainApp() {
   const scrollX = useSharedValue(SIDEBAR_WIDTH);
   const sidebarStretch = useSharedValue(0);
   const currentPage = useSharedValue(1); // 0 = sidebar, 1 = main
+  const gestureStartedExpanded = useSharedValue(false); // Track if gesture started while expanded
   const lastDragPosition = useRef(SIDEBAR_WIDTH);
   
   // Keep RN Animated for non-gesture animations (button opacity etc)
@@ -130,14 +132,43 @@ function MainApp() {
     sidebarStretchAnimated.setValue(stretchTarget);
   }, [scrollXAnimated, sidebarStretchAnimated, sidebarHasQuery]);
 
+  // Wrapper for Keyboard.dismiss to use with runOnJS
+  const dismissKeyboard = useCallback(() => Keyboard.dismiss(), []);
+
   // Horizontal pager gesture handler (runs entirely on native UI thread)
   const panGesture = Gesture.Pan()
     .activeOffsetX([-10, 10])
     .failOffsetY([-15, 15])
+    .onStart(() => {
+      'worklet';
+      // Cancel any running animations to prevent flicker
+      cancelAnimation(scrollX);
+      cancelAnimation(sidebarStretch);
+      // Track initial stretch value at gesture start
+      gestureStartedExpanded.value = sidebarStretch.value;
+    })
     .onUpdate((e) => {
       'worklet';
-      // Calculate new position based on drag
+      const initialStretch = gestureStartedExpanded.value;
       const baseOffset = currentPage.value === 0 ? 0 : SIDEBAR_WIDTH;
+      
+      // If started from expanded state on sidebar
+      if (currentPage.value === 0 && initialStretch > 0) {
+        // Sliding left - consume translation for stretch collapse, excess to pager
+        if (e.translationX < 0) {
+          const stretchConsumed = Math.min(initialStretch, -e.translationX);
+          sidebarStretch.value = initialStretch - stretchConsumed;
+          const excessTranslation = Math.max(0, -e.translationX - initialStretch);
+          scrollX.value = Math.min(SIDEBAR_WIDTH, excessTranslation);
+        } else {
+          // Sliding right or not moving yet - keep stretch, allow stretch increase
+          sidebarStretch.value = Math.min(SIDEBAR_STRETCH_DISTANCE, initialStretch + e.translationX);
+          scrollX.value = 0;
+        }
+        return;
+      }
+      
+      // Normal pager movement (not started from expanded)
       const proposedOffset = baseOffset - e.translationX;
 
       if (proposedOffset < 0) {
@@ -151,8 +182,10 @@ function MainApp() {
     .onEnd((e) => {
       'worklet';
       const currentOffset = scrollX.value;
+      const initialStretch = gestureStartedExpanded.value;
+      const wasExpanded = initialStretch > 0;
 
-      // Determine target based on velocity and position
+      // Normal page determination
       let targetPage;
       if (Math.abs(e.velocityX) > 500) {
         targetPage = e.velocityX > 0 ? 0 : 1;
@@ -161,7 +194,8 @@ function MainApp() {
       }
 
       const scrollTarget = targetPage === 0 ? 0 : SIDEBAR_WIDTH;
-      const stretchTarget = targetPage === 0 && sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0;
+      // If started from expanded, always collapse stretch
+      const stretchTarget = 0;
 
       // Animate to target - fast, snappy, no bounce
       const config = { duration: 200, easing: Easing.out(Easing.cubic) };
@@ -170,6 +204,10 @@ function MainApp() {
       
       // Sync state on JS thread
       runOnJS(setSidebarOpen)(targetPage === 0);
+      if (targetPage === 1 || wasExpanded) {
+        runOnJS(setSidebarHasQuery)(false);
+        runOnJS(dismissKeyboard)();
+      }
       currentPage.value = targetPage;
     });
 
@@ -188,10 +226,11 @@ function MainApp() {
     Keyboard.dismiss();
     currentPage.value = 1;
     setSidebarOpen(false);
+    setSidebarHasQuery(false);
     const config = { duration: 200, easing: Easing.out(Easing.cubic) };
     scrollX.value = withTiming(SIDEBAR_WIDTH, config);
     sidebarStretch.value = withTiming(0, config);
-  }, [scrollX, sidebarStretch]);
+  }, [scrollX, sidebarStretch, setSidebarHasQuery]);
 
   // Smoothly adjust sidebar extent when search text toggles a full-width request
   useEffect(() => {
@@ -286,6 +325,8 @@ function MainApp() {
               onRename={renameSession}
               onSearchQueryChange={setSidebarHasQuery}
               onContextMenuChange={setSidebarContextMenuOpen}
+              isExpanded={sidebarHasQuery}
+              onCollapse={() => { Keyboard.dismiss(); setSidebarHasQuery(false); }}
             />
             {/* Profile / Account Section */}
             <TouchableOpacity 

@@ -335,7 +335,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
             value={localSettings.model}
             options={availableModels}
             onSelect={(item) => setLocalSettings({ ...localSettings, model: item.model_id })}
-            renderOption={(item) => item?.label || item?.model_id || 'Select...'}
+            renderOption={(item) => item?.label || item?.model_id || 'Select model'}
             onAddNew={() => setAddModelModal(true)}
             addNewLabel="Add Custom Model"
           />
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   contentContainer: { padding: 16, paddingBottom: 40 },
   section: { marginBottom: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0, paddingRight: 12 },
-  sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontFamily: FONTS.ai, textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 12, marginBottom: 6 },
+  sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontFamily: FONTS.ai, textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 4, marginBottom: 6 },
   input: {
     backgroundColor: COLORS.inputBg,
     borderRadius: 15,
@@ -460,8 +460,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
   },
   dropdownItemActive: {},
   dropdownItemText: { color: COLORS.fgMuted, fontSize: 14 },
@@ -471,8 +469,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
     gap: 10,
-    borderBottomColor: COLORS.borderLight,
-    borderBottomWidth: 1,
+    // borderBottomColor: COLORS.borderLight,
+    // borderBottomWidth: 1,
   },
   addNewText: { color: COLORS.primary, fontSize: 14, fontFamily: FONTS.sans },
   hint: { color: COLORS.fgMuted, fontSize: 11, marginTop: 8, marginLeft: 10 },

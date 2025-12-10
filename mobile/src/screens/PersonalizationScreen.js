@@ -125,8 +125,7 @@ function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount }) {
         title="Personal Preferences"
         items={[
           { icon: 'receipt-outline', title: 'Custom Instructions', description: 'Persona and preferences', onPress: onOpenCustomInstructions },
-          { icon: 'language-outline', title: 'Language', description: 'App language' },
-          { icon: 'person-outline', title: 'Account', description: 'User credentials', onPress: onOpenAccount },
+          { icon: 'person-outline', title: 'Account', description: 'Backup/restore chats', onPress: onOpenAccount },
         ]}
       />
 
@@ -199,7 +198,7 @@ const styles = StyleSheet.create({
   subContainer: { flex: 1 },
   content: { paddingBottom: 40 },
   section: { marginBottom: 20 },
-  sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontFamily: FONTS.ai, textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 12, marginBottom: 6 },
+  sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontFamily: FONTS.ai, textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 4, marginBottom: 6 },
   input: {
     backgroundColor: COLORS.inputBg,
     borderRadius: 15,

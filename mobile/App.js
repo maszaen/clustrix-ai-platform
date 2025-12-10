@@ -24,7 +24,6 @@ import { AppProvider, useApp } from './src/context/AppContext';
 import ChatScreen from './src/screens/ChatScreen';
 import PersonalizationScreen from './src/screens/PersonalizationScreen';
 import ModelsListScreen from './src/screens/ModelsListScreen';
-import AccountScreen from './src/screens/AccountScreen';
 import SessionList from './src/components/SessionList';
 import SlideUpModal from './src/components/SlideUpModal';
 import ContextMenuFixed from './src/components/ContextMenuFixed';
@@ -307,7 +306,11 @@ function MainApp() {
       >
         {/* Page 1: Sidebar (80% base width, stretches to 100% when pulled) */}
         <Animated.View style={[styles.sidebarPage, { width: sidebarWidth, paddingTop: insets.top }]}>
+
           <View style={styles.sidebarContent}>
+
+            
+
             <SessionList
               sessions={sessions}
               currentSession={currentSession}

@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingTop: 45,
-    paddingBottom: 16,
+    paddingBottom: 26,
   },
   backBtn: {
     width: 45,

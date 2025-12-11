@@ -43,6 +43,7 @@ import LoadingScreen from './src/components/LoadingScreen';
 import { SvgXml } from 'react-native-svg';
 import { COLORS } from './src/constants/colors';
 import { fontAssets, FONTS } from './src/constants/fonts';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Base sidebar width sits at ~83% of the screen so users can peek the main page
@@ -515,11 +516,13 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <AppProvider>
-          <MainApp />
-        </AppProvider>
-      </SafeAreaProvider>
+      <KeyboardProvider>
+        <SafeAreaProvider>
+          <AppProvider>
+            <MainApp />
+          </AppProvider>
+        </SafeAreaProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

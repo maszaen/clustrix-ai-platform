@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS } from 'react-native-reanimated';
@@ -95,7 +95,7 @@ function WelcomeScreen({ username, accentColor }) {
   );
 }
 
-export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingThinking }) {
+const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onStreamingThinking }) {
   const { 
     currentSession, 
     messages, 
@@ -707,7 +707,9 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
       </View>
     </View>
   );
-}
+});
+
+export default ChatScreen;
 
 const styles = StyleSheet.create({
   container: {

@@ -447,9 +447,9 @@ const markdownStyles = {
   strong: { fontFamily: FONTS.aiBold, fontWeight: 'normal', color: COLORS.fg },
   em: { fontFamily: FONTS.displayItalic, fontStyle: 'normal' },
   hr: { backgroundColor: COLORS.borderLight, height: 1, opacity: 0.5, marginVertical: 12 },
-  table: { borderWidth: 1, borderColor: COLORS.borderLight, borderRadius: 10 },
-  th: { backgroundColor: 'transparent', padding: 8, borderBottomWidth: 0, borderColor: COLORS.borderLight, fontFamily: FONTS.aiBold },
-  td: { padding: 8, borderTopWidth: 1, borderColor: COLORS.borderLight, backgroundColor: 'transparent', },
+  table: { borderWidth: 1, borderColor: COLORS.borderLight, borderRadius: 10, backgroundColor: COLORS.bgSecondary },
+  th: { backgroundColor: 'transparent', padding: 8, fontFamily: FONTS.aiBold },
+  td: { paddingHorizontal: 8, borderTopWidth: 1, borderColor: COLORS.borderLight, backgroundColor: 'transparent', borderBottomWidth: 0, borderRadius: 10,},
 };
 
 

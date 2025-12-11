@@ -111,6 +111,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   const [streamingContent, setStreamingContent] = useState('');
   const [thinkingContent, setThinkingContent] = useState('');
   const [newMessageId, setNewMessageId] = useState(null);
+  const [streamingMessageId, setStreamingMessageId] = useState(null); // Stable ID for streaming message to prevent blink
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [visibleCount, setVisibleCount] = useState(200); // Start with last 12 messages
@@ -361,6 +362,10 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
     setIsStreaming(true);
     setStreamingContent('');
     setThinkingContent('');
+    
+    // Generate stable ID for this streaming message (prevents blink on save)
+    const stableStreamingId = `streaming-${Date.now()}`;
+    setStreamingMessageId(stableStreamingId);
 
     let fullContent = '';
     let fullThinking = '';
@@ -390,21 +395,17 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
       onDone: async () => {
         const content = fullThinking ? `<thinking>${fullThinking}</thinking>\n\n${fullContent}` : fullContent;
         
-        // Clear streaming FIRST to prevent duplicate display
-        setIsStreaming(false);
-        setStreamingContent('');
-        setThinkingContent('');
-        
         // Calculate thinking duration
         const thinkDuration = thinkStartTime ? Math.round((Date.now() - thinkStartTime) / 1000) : null;
         
-        // Then save the message
+        // SAVE FIRST before clearing streaming states (prevents blink)
         if (isNewSession) {
           await appendMessage('assistant', content, {
             model: settings.model,
             provider: settings.provider,
             thinkContent: fullThinking || null,
             thinkDuration: thinkDuration,
+            _streamingId: stableStreamingId,
             _messageIndex: 1,
           }, session);
         } else {
@@ -413,8 +414,15 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
             provider: settings.provider,
             thinkContent: fullThinking || null,
             thinkDuration: thinkDuration,
+            _streamingId: stableStreamingId,
           });
         }
+        
+        // THEN clear streaming states (saved message already in state)
+        setIsStreaming(false);
+        setStreamingContent('');
+        setThinkingContent('');
+        setStreamingMessageId(null);
         
         // Generate title for new session
         if (isNewSession) {
@@ -449,9 +457,10 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   );
 
   // Lazy load - only show last N messages
+  // Use _streamingId if available (for smooth transition from streaming to saved)
   const allMessages = messages.map((m, idx) => ({
     ...m,
-    _key: m.id || `msg-${idx}-${m.message_index || idx}`,
+    _key: m._streamingId || m.id || `msg-${idx}-${m.message_index || idx}`,
   }));
   
   const startIndex = Math.max(0, allMessages.length - visibleCount);
@@ -467,8 +476,9 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   const alreadyHasSavedResponse = lastMessage?.role === 'assistant' && !lastMessage?.isStreaming;
   
   if ((streamingContent || isStreaming) && !alreadyHasSavedResponse) {
+    // Use stable streaming ID to prevent blink when transitioning to saved message
     displayMessages.push({
-      _key: 'streaming-response',
+      _key: streamingMessageId || `streaming-fallback`,
       role: 'assistant',
       content: thinkingContent ? `<thinking>${thinkingContent}</thinking>\n\n${streamingContent}` : streamingContent || '...',
       isStreaming: true,
@@ -573,7 +583,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
               keyExtractor={(item) => item._key}
               renderItem={renderMessage}
               estimatedItemSize={100}
-              recycleItems={true}
+              // recycleItems={true}
               // Removed initialScrollIndex - using manual scrollToIndex instead (GH #239, #240)
               maintainScrollAtEnd
               onStartReached={() => {handleLoadMore(), scrollBottomBtnShow()}}

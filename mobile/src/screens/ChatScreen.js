@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+import { LegendList } from '@legendapp/list';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { WebView } from 'react-native-webview';
@@ -461,14 +461,39 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   }, [loadingMore, hasMoreMessages, allMessages.length]);
 
   // Find last AI message index for initial scroll
-  const getLastAiIndex = () => {
+  const getLastAiIndex = useCallback(() => {
     for (let i = displayMessages.length - 1; i >= 0; i--) {
       if (displayMessages[i].role === 'assistant') return i;
     }
     return displayMessages.length - 1;
-  };
-  
-  const lastAiIndex = getLastAiIndex();
+  }, [displayMessages]);
+
+  // Manual scroll to last AI message after data is ready
+  // This replaces buggy initialScrollIndex (GitHub issues #239, #240)
+  useEffect(() => {
+    const lastAiIndex = getLastAiIndex();
+    
+    // Guard: data harus ada, index valid, belum scroll, ref exists
+    if (
+      displayMessages.length > 0 && 
+      lastAiIndex >= 0 && 
+      !hasScrolledInitial.current && 
+      flatListRef.current
+    ) {
+      // Delay untuk pastikan layout sudah ready
+      const timer = setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: lastAiIndex,
+          animated: false,
+          viewPosition: 0,  // 0 = TOP of screen
+          viewOffset: -(topInset - 140),  // offset untuk header/padding
+        });
+        hasScrolledInitial.current = true;
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [displayMessages.length, getLastAiIndex, topInset]);
   // Header component for load more (appears at TOP)
   const ListHeader = useCallback(() => {
     if (!hasMoreMessages) return null;
@@ -507,27 +532,23 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
         <>
           <Animated.View style={{ flex: 1, opacity: contentFadeAnim }}>
             
-            <FlashList
+            <LegendList
               ref={flatListRef}
               data={displayMessages}
               keyExtractor={(item) => item._key}
               renderItem={renderMessage}
               estimatedItemSize={100}
-              initialScrollIndex={lastAiIndex}
-              initialScrollIndexParams={{ viewOffset: 0 }}
+              // Removed initialScrollIndex - using manual scrollToIndex instead (GH #239, #240)
+              maintainScrollAtEnd
+              maintainScrollAtEndThreshold={0.03}
+              maintainVisibleContentPosition
               ListHeaderComponent={ListHeader}
               ListFooterComponent={ListFooter}
               contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}
+              onScrollToIndexFailed={onScrollToIndexFailed}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
-              onStartReached={handleLoadMore}
-              onStartReachedThreshold={0.2}
-              maintainVisibleContentPosition={{
-                minIndexForVisible: 0,
-                autoscrollToBottomThreshold: 0.05,
-              }}
-              onScrollToIndexFailed={onScrollToIndexFailed}
               onContentSizeChange={(w, h) => setListContentHeight(h)}
               onLayout={(e) => setListLayoutHeight(e.nativeEvent.layout.height)}
               onScroll={(e) => {
@@ -559,7 +580,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
           </Animated.View>
           {/* Skeleton Overlay - full height, zIndex below input so form stays visible */}
           {showSkeleton && (
-            <Animated.View style={[styles.skeletonContainer, { opacity: skeletonOpacity, paddingTop: topInset + 70 }]}>
+            <Animated.View style={[styles.skeletonContainer, { opacity: 0, paddingTop: topInset + 70 }]}>
               <Animated.View style={[styles.skeletonUser, { opacity: pulseAnim }]} />
               <Animated.View style={{ opacity: pulseAnim }}>
                 <LinearGradient

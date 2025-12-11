@@ -1,5 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
+import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
+import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS } from 'react-native-reanimated';
 import { LegendList } from '@legendapp/list';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -132,9 +134,13 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
   const scrollUpdateRef = useRef(null);
   const autoHideTimeoutRef = useRef(null);
   const programmaticScrollRef = useRef(false);
+  const lastContentHeight = useRef(0);
+  const lastScrollOffset = useRef(0);
+  const lastLayoutHeight = useRef(0);
   
   // Fade in/out scroll button with auto-hide
-  useEffect(() => {
+
+  const scrollBottomHandler = () => {
     if (scrollButtonVisible && !keyboardVisible) {
       // Fade in
       Animated.timing(scrollBtnOpacity, {
@@ -164,6 +170,18 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
     return () => {
       if (autoHideTimeoutRef.current) clearTimeout(autoHideTimeoutRef.current);
     };
+  }
+
+  const scrollBottomBtnShow = () => {
+    Animated.timing(scrollBtnOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }
+
+  useEffect(() => {
+    scrollBottomHandler()
   }, [scrollButtonVisible, keyboardVisible, scrollBtnOpacity]);
 
   // Pulse animation for skeleton
@@ -237,6 +255,19 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
     hasScrolledInitial.current = false;
     initialScrollDone.current = false;
     setVisibleCount(12);
+    if (isSessionToSession) {
+      setShowSkeleton(true);
+      skeletonOpacity.setValue(1);
+      
+      // Auto-hide skeleton after 1 second
+      skeletonTimeoutRef.current = setTimeout(() => {
+        Animated.timing(skeletonOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => setShowSkeleton(false));
+      }, 500);
+    }
     
     if (wasWelcome) {
       Animated.sequence([
@@ -264,19 +295,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
     }
     
     // Show skeleton instantly for session->session transitions + content fade
-    if (isSessionToSession) {
-      setShowSkeleton(true);
-      skeletonOpacity.setValue(1);
-      
-      // Auto-hide skeleton after 1 second
-      skeletonTimeoutRef.current = setTimeout(() => {
-        Animated.timing(skeletonOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start(() => setShowSkeleton(false));
-      }, 500);
-    }
+    
     
     prevSessionIdRef.current = currentSession?.id;
     
@@ -489,7 +508,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
           viewOffset: -(topInset - 140),  // offset untuk header/padding
         });
         hasScrolledInitial.current = true;
-      }, 100);
+      }, 300);
       
       return () => clearTimeout(timer);
     }
@@ -501,9 +520,15 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
       <TouchableWithoutFeedback onPress={handleLoadMore}>
         <View style={styles.loadMoreContainer}>
           {loadingMore ? (
-            <ActivityIndicator size="small" color={COLORS.fgMuted} />
+            <>
+              <ActivityIndicator size="small" color={COLORS.fgMuted} />
+              <Text style={styles.loadMoreText}>Load earlier messages</Text>
+            </>
           ) : (
-            <Text style={styles.loadMoreText}>Load earlier messages</Text>
+            <>
+              <ActivityIndicator size="small" color={COLORS.fgMuted} />
+              <Text style={styles.loadMoreText}>Load earlier messages</Text>
+            </>
           )}
         </View>
       </TouchableWithoutFeedback>
@@ -538,49 +563,64 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
               keyExtractor={(item) => item._key}
               renderItem={renderMessage}
               estimatedItemSize={100}
+              recycleItems={true}
               // Removed initialScrollIndex - using manual scrollToIndex instead (GH #239, #240)
               maintainScrollAtEnd
+              onStartReached={() => {handleLoadMore(), scrollBottomBtnShow()}}
               maintainScrollAtEndThreshold={0.03}
               maintainVisibleContentPosition
               ListHeaderComponent={ListHeader}
               ListFooterComponent={ListFooter}
               contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}
-              onScrollToIndexFailed={onScrollToIndexFailed}
+              // onScrollToIndexFailed={onScrollToIndexFailed}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
-              onContentSizeChange={(w, h) => setListContentHeight(h)}
-              onLayout={(e) => setListLayoutHeight(e.nativeEvent.layout.height)}
+              onContentSizeChange={(w, h) => {
+                setListContentHeight(h);
+                lastContentHeight.current = h;
+              }}
+              onLayout={(e) => {
+                setListLayoutHeight(e.nativeEvent.layout.height);
+                lastLayoutHeight.current = e.nativeEvent.layout.height;
+              }}
               onScroll={(e) => {
                 const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+                
+                // Track current scroll position for eased scroll animation
+                lastScrollOffset.current = contentOffset.y;
+                
                 const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
                 const percentFromBottom = distanceFromBottom / layoutMeasurement.height;
                 
-                // Track in ref (no re-render)
+                // Fast hide: instantly hide when user scrolls (no debounce)
+                if (scrollButtonVisible && !programmaticScrollRef.current) {
+                  setScrollButtonVisible(false);
+                }
+                
+                // Track position for showing button after scroll stops
                 const shouldShow = percentFromBottom > 0.3;
                 scrollPositionRef.current.showButton = shouldShow;
                 scrollPositionRef.current.isScrolling = true;
                 
-                // Clear previous timeouts
+                // Clear previous timeout
                 if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-                if (scrollUpdateRef.current) clearTimeout(scrollUpdateRef.current);
                 
-                // Update UI after scroll stops (debounced)
+                // Show button only after scroll stops
                 scrollTimeoutRef.current = setTimeout(() => {
                   scrollPositionRef.current.isScrolling = false;
-                  // Don't show if we just did a programmatic scroll
-                  if (!programmaticScrollRef.current) {
-                    setScrollButtonVisible(scrollPositionRef.current.showButton);
+                  if (!programmaticScrollRef.current && scrollPositionRef.current.showButton) {
+                    setScrollButtonVisible(true);
                   }
                   programmaticScrollRef.current = false;
-                }, 200);
+                }, 300);
               }}
               scrollEventThrottle={100}
             />
           </Animated.View>
           {/* Skeleton Overlay - full height, zIndex below input so form stays visible */}
           {showSkeleton && (
-            <Animated.View style={[styles.skeletonContainer, { opacity: 0, paddingTop: topInset + 70 }]}>
+            <Animated.View style={[styles.skeletonContainer, { opacity: skeletonOpacity, paddingTop: topInset + 70 }]}>
               <Animated.View style={[styles.skeletonUser, { opacity: pulseAnim }]} />
               <Animated.View style={{ opacity: pulseAnim }}>
                 <LinearGradient
@@ -594,30 +634,40 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
         </>
       )}
       
-      {/* Scroll to bottom button */}
-      {scrollButtonVisible && displayMessages.length > 0 && !keyboardVisible && (
+      {/* Scroll to bottom button - always mounted for smooth fade animation */}
+      {displayMessages.length > 0 && !keyboardVisible && (
         <Animated.View
+          pointerEvents={scrollButtonVisible ? 'auto' : 'none'}
           style={[styles.scrollToBottomBtn, {
             bottom: 95,
             opacity: scrollBtnOpacity,
           }]}
         >
-          <TouchableOpacity
+          <Pressable
             onPress={() => {
+              if (!scrollButtonVisible) return; // Guard against ghost taps
               programmaticScrollRef.current = true;
+              
+              // Simple scroll to end
               flatListRef.current?.scrollToEnd({ animated: true });
-              // Hide button after pressing
+              
+              // Fade out then update state
               Animated.timing(scrollBtnOpacity, {
                 toValue: 0,
-                duration: 200,
+                duration: 300,
                 useNativeDriver: true,
               }).start(() => setScrollButtonVisible(false));
             }}
-            activeOpacity={0.8}
-            style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}
+            style={({ pressed }) => [{
+              width: '100%',
+              height: '100%',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.7 : 1,
+            }]}
           >
             <Ionicons name="arrow-down-outline" size={21} color={COLORS.icon} />
-          </TouchableOpacity>
+          </Pressable>
         </Animated.View>
       )}
       
@@ -702,6 +752,10 @@ const styles = StyleSheet.create({
   loadMoreContainer: {
     padding: 16,
     alignItems: 'center',
+    display: 'flex',
+    flexDirection: 'row',
+    gap: 4,
+    justifyContent: 'center',
   },
   loadMoreText: {
     color: COLORS.fgMuted,

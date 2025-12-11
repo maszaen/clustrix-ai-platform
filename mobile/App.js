@@ -411,7 +411,7 @@ function MainApp() {
             visible={showContextMenu}
             onClose={() => setShowContextMenu(false)}
             sessionName={currentSession?.name || 'New Chat'}
-            position={{ top: insets.top + 25, right: 16 }}
+            position={{ top: insets.top + 65, right: 16 }}
             options={[
               { label: 'Rename', icon: 'pencil-outline', onPress: () => {
                 if (currentSession) setRenameModal({ visible: true, session: currentSession });

@@ -132,7 +132,6 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const [scrollButtonVisible, setScrollButtonVisible] = useState(false);
   const scrollBtnOpacity = useRef(new Animated.Value(0)).current;
   const scrollTimeoutRef = useRef(null);
-  const scrollUpdateRef = useRef(null);
   const autoHideTimeoutRef = useRef(null);
   const programmaticScrollRef = useRef(false);
   const lastContentHeight = useRef(0);
@@ -619,7 +618,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
                 }
                 
                 // Track position for showing button after scroll stops
-                const shouldShow = percentFromBottom > 0.3;
+                const isScrollable = contentSize.height > layoutMeasurement.height;
+                // Only show if scrollable AND scrolled up significantly (30%)
+                const shouldShow = isScrollable && percentFromBottom > 0.3;
                 scrollPositionRef.current.showButton = shouldShow;
                 scrollPositionRef.current.isScrolling = true;
                 

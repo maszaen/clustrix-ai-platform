@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
   },
   thinkToggleText: {
     color: COLORS.fgMuted,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: FONTS.displayItalic,
   },
   loaderContainer: {
@@ -438,7 +438,7 @@ const markdownStyles = {
     borderLeftColor: COLORS.borderLight, 
     paddingLeft: 12, 
     marginLeft: 0,
-    borderRadius: 10,
+    borderRadius: 0,
     opacity: 0.9,
   },
   list_item: { marginVertical: 4 },

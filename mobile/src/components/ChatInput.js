@@ -42,6 +42,7 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
         colors={['transparent', COLORS.bg70, COLORS.bg90, COLORS.bg90]}
         locations={[0, 0.45, 0.6, 1]}
         style={[styles.bottomFade, { height: insets.bottom + 100 }]}
+        pointerEvents="none"
       />
       
       <TouchableOpacity style={styles.addBtn} activeOpacity={0.7}>

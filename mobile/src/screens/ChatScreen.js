@@ -814,6 +814,7 @@ const styles = StyleSheet.create({
     height: 45,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 6,
+    zIndex: 20,
+    elevation: 20,
   },
 });

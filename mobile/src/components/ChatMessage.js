@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
-    borderBottomRightRadius: 4,
+    // borderTopRightRadius: 4,
   },
   userText: {
     color: COLORS.fg,

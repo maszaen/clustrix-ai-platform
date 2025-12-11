@@ -24,6 +24,7 @@ export async function initDatabase() {
       model_id TEXT,
       provider TEXT,
       think_content TEXT,
+      think_duration INTEGER,
       metadata TEXT,
       FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
     );
@@ -58,6 +59,13 @@ export async function initDatabase() {
       updated_at INTEGER NOT NULL
     );
   `);
+  
+  // Migration: Add think_duration column if not exists (for existing databases)
+  try {
+    await db.runAsync('ALTER TABLE messages ADD COLUMN think_duration INTEGER');
+  } catch (e) {
+    // Column already exists, ignore
+  }
   
   return db;
 }
@@ -104,13 +112,14 @@ export async function getMessages(sessionId) {
 export async function addMessage(sessionId, role, content, metadata, messageIndex) {
   const now = Date.now();
   await db.runAsync(
-    `INSERT INTO messages (session_id, role, content, created_at, message_index, model_id, provider, think_content, metadata)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO messages (session_id, role, content, created_at, message_index, model_id, provider, think_content, think_duration, metadata)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       sessionId, role, content, now, messageIndex,
       metadata.model || null,
       metadata.provider || null,
       metadata.thinkContent ? JSON.stringify(metadata.thinkContent) : null,
+      metadata.thinkDuration || null,
       JSON.stringify(metadata)
     ]
   );

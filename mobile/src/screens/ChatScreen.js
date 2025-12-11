@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS } from 'react-native-reanimated';
@@ -364,6 +364,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
 
     let fullContent = '';
     let fullThinking = '';
+    let thinkStartTime = null;
 
     await streamChat({
       messages: apiMessages,
@@ -377,6 +378,10 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
         triggerHaptic();
       },
       onThink: (think) => {
+        // Track when thinking starts
+        if (!thinkStartTime && think) {
+          thinkStartTime = Date.now();
+        }
         // Append thinking content (Gemini native streams thinking in chunks)
         fullThinking += think;
         setThinkingContent(fullThinking);
@@ -390,12 +395,16 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
         setStreamingContent('');
         setThinkingContent('');
         
+        // Calculate thinking duration
+        const thinkDuration = thinkStartTime ? Math.round((Date.now() - thinkStartTime) / 1000) : null;
+        
         // Then save the message
         if (isNewSession) {
           await appendMessage('assistant', content, {
             model: settings.model,
             provider: settings.provider,
             thinkContent: fullThinking || null,
+            thinkDuration: thinkDuration,
             _messageIndex: 1,
           }, session);
         } else {
@@ -403,6 +412,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
             model: settings.model,
             provider: settings.provider,
             thinkContent: fullThinking || null,
+            thinkDuration: thinkDuration,
           });
         }
         
@@ -429,14 +439,15 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
     setStreamingContent('');
   };
 
-  const renderMessage = ({ item }) => (
+  // Memoize renderMessage to prevent re-renders during streaming
+  const renderMessage = useCallback(({ item }) => (
     <ChatMessage 
       message={item} 
       isUser={item.role === 'user'} 
       isNew={item._key === newMessageId}
       onShowThinking={onShowThinking}
     />
-  );
+  ), [newMessageId, onShowThinking]);
 
   // Lazy load - only show last N messages
   const allMessages = messages.map((m, idx) => ({
@@ -563,7 +574,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
               keyExtractor={(item) => item._key}
               renderItem={renderMessage}
               estimatedItemSize={100}
-              recycleItems={true}
+              recycleItems={!isStreaming}
               // Removed initialScrollIndex - using manual scrollToIndex instead (GH #239, #240)
               maintainScrollAtEnd
               onStartReached={() => {handleLoadMore(), scrollBottomBtnShow()}}

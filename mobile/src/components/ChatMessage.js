@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, useWindowDimensions, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
@@ -171,7 +171,7 @@ function TypewriterLoader() {
   );
 }
 
-export default function ChatMessage({ message, isUser, isNew, onShowThinking }) {
+function ChatMessage({ message, isUser, isNew, onShowThinking }) {
   const { height: viewportHeight } = useWindowDimensions();
   const slideAnim = useRef(new Animated.Value(isNew && isUser ? 50 : 0)).current;
   const opacityAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
@@ -201,12 +201,18 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking }) 
   }, []);
   
   // Handle streaming minHeight logic - shouldHaveSpacer comes from parent (ChatScreen)
+  const lastMinHeightRef = useRef(0);
+  
   useEffect(() => {
     if (isUser) return;
     
     if (message.isStreaming) {
-      // Streaming: set minHeight instantly (no animation in)
-      minHeightAnim.setValue(message.shouldHaveSpacer ? spacerHeight : 0);
+      const targetHeight = message.shouldHaveSpacer ? spacerHeight : 0;
+      // Only update if value actually changed (prevents unnecessary layout recalculations)
+      if (lastMinHeightRef.current !== targetHeight) {
+        minHeightAnim.setValue(targetHeight);
+        lastMinHeightRef.current = targetHeight;
+      }
       wasStreamingRef.current = true;
     } else if (wasStreamingRef.current) {
       // Just stopped streaming: animate out smoothly
@@ -217,13 +223,69 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking }) 
         useNativeDriver: false,
       }).start();
       wasStreamingRef.current = false;
+      lastMinHeightRef.current = 0;
     }
   }, [message.isStreaming, message.shouldHaveSpacer, spacerHeight]);
   
-  const blocks = isUser ? [{ type: 'text', content: message.content }] : parseThinkingBlocks(message.content || '');
-  const hasThinking = blocks.some(b => b.type === 'thinking');
-  const thinkingContent = blocks.find(b => b.type === 'thinking')?.content || '';
-  const textContent = blocks.filter(b => b.type === 'text').map(b => b.content).join('');
+  // Memoize parsing to prevent recreating objects on every render
+  const { blocks, hasThinking, thinkingContent, textContent } = React.useMemo(() => {
+    if (isUser) {
+      return { 
+        blocks: [{ type: 'text', content: message.content }],
+        hasThinking: false,
+        thinkingContent: '',
+        textContent: message.content
+      };
+    }
+    const parsed = parseThinkingBlocks(message.content || '');
+    return {
+      blocks: parsed,
+      hasThinking: parsed.some(b => b.type === 'thinking'),
+      thinkingContent: parsed.find(b => b.type === 'thinking')?.content || '',
+      textContent: parsed.filter(b => b.type === 'text').map(b => b.content).join('')
+    };
+  }, [message.content, isUser]);
+  
+  // Live timer for streaming thinking
+  const [thinkingSeconds, setThinkingSeconds] = useState(0);
+  const thinkingTimerRef = useRef(null);
+  
+  useEffect(() => {
+    // Start timer when streaming with thinking content
+    if (message.isStreaming && hasThinking) {
+      setThinkingSeconds(0);
+      thinkingTimerRef.current = setInterval(() => {
+        setThinkingSeconds(s => s + 1);
+      }, 1000);
+    }
+    
+    return () => {
+      if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
+    };
+  }, [message.isStreaming, hasThinking]);
+  
+  // Format seconds to "Nm Ns" or just "Ns"
+  const formatThinkTime = (seconds) => {
+    if (seconds >= 60) {
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${m}m ${s}s`;
+    }
+    return `${seconds}s`;
+  };
+  
+  // Get thinking button text
+  const getThinkingText = () => {
+    if (message.isStreaming) {
+      return `Thinking ${formatThinkTime(thinkingSeconds)}`;
+    }
+    // Check both camelCase (streaming) and snake_case (database)
+    const duration = message.thinkDuration || message.think_duration;
+    if (duration) {
+      return `Thought for ${formatThinkTime(duration)}`;
+    }
+    return 'Show thinking';
+  };
 
   if (isUser) {
     return (
@@ -243,30 +305,37 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking }) 
   return (
     <Animated.View style={[styles.aiContainer, { minHeight: minHeightAnim }]}>
       <View>
-        {hasThinking && (
+        {/* Always render thinking toggle container with fixed height to prevent layout shift */}
+        {(hasThinking || message.isStreaming) && (
           <TouchableOpacity 
-            style={styles.thinkToggle} 
+            style={[styles.thinkToggle, !hasThinking && { opacity: 0, height: 0, marginTop: 0, marginBottom: 0 }]} 
             onPress={() => onShowThinking?.(thinkingContent)}
             activeOpacity={0.7}
+            disabled={!hasThinking}
           >
             <Ionicons 
               name="logo-stackoverflow" 
               size={14} 
               color={COLORS.fgMuted} 
             />
-            <Text style={styles.thinkToggleText}>Show thinking</Text>
+            <Text style={styles.thinkToggleText}>{getThinkingText()}</Text>
           </TouchableOpacity>
         )}
         
-        {isLoading ? (
+        {/* Keep both mounted, use opacity to switch - prevents mount/unmount blink */}
+        <View style={{ display: isLoading ? 'flex' : 'none' }}>
           <TypewriterLoader />
-        ) : (
+        </View>
+        <View style={{ display: isLoading ? 'none' : 'flex' }}>
           <Markdown style={markdownStyles} rules={markdownRules}>{textContent || ' '}</Markdown>
-        )}
+        </View>
       </View>
     </Animated.View>
   );
 }
+
+// Wrap with React.memo to prevent re-renders when streaming causes parent updates
+export default memo(ChatMessage);
 
 const markdownRules = {
   fence: (node) => {

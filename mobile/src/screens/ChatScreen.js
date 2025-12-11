@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS } from 'react-native-reanimated';
@@ -439,15 +439,14 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
     setStreamingContent('');
   };
 
-  // Memoize renderMessage to prevent re-renders during streaming
-  const renderMessage = useCallback(({ item }) => (
+  const renderMessage = ({ item }) => (
     <ChatMessage 
       message={item} 
       isUser={item.role === 'user'} 
       isNew={item._key === newMessageId}
       onShowThinking={onShowThinking}
     />
-  ), [newMessageId, onShowThinking]);
+  );
 
   // Lazy load - only show last N messages
   const allMessages = messages.map((m, idx) => ({
@@ -574,7 +573,7 @@ export default function ChatScreen({ topInset = 0, onShowThinking, onStreamingTh
               keyExtractor={(item) => item._key}
               renderItem={renderMessage}
               estimatedItemSize={100}
-              recycleItems={!isStreaming}
+              recycleItems={true}
               // Removed initialScrollIndex - using manual scrollToIndex instead (GH #239, #240)
               maintainScrollAtEnd
               onStartReached={() => {handleLoadMore(), scrollBottomBtnShow()}}

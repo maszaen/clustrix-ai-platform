@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS } from 'react-native-reanimated';
+import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS, useAnimatedStyle } from 'react-native-reanimated';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { LegendList } from '@legendapp/list';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -137,6 +138,18 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const lastContentHeight = useRef(0);
   const lastScrollOffset = useRef(0);
   const lastLayoutHeight = useRef(0);
+  
+  // Smooth keyboard animation using react-native-keyboard-controller
+  const { height: keyboardAnimatedHeight } = useReanimatedKeyboardAnimation();
+  const inputAnimatedStyle = useAnimatedStyle(() => {
+    // Proportional offset - reduce movement by ~10% for tighter keyboard gap
+    // height.value goes from 0 (closed) to negative (open, e.g. -300)
+    // This smoothly scales with keyboard height
+    const offset = -keyboardAnimatedHeight.value * 0.05;
+    return {
+      transform: [{ translateY: keyboardAnimatedHeight.value + offset }],
+    };
+  });
   
   // Fade in/out scroll button with auto-hide
 
@@ -692,11 +705,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         </Animated.View>
       )}
       
-      <View style={[styles.inputContainer, {
-        marginBottom: Platform.OS === 'android' ? keyboardHeight : 10,
-      }]}>
-        <View style={[styles.inputContainer2
-         ]}>
+      {/* Keyboard-animated Input Container */}
+      <ReanimatedModule.View style={[styles.inputContainer, inputAnimatedStyle]}>
+        <View style={styles.inputContainer2}>
           <ChatInput 
             ref={chatInputRef} 
             onSend={handleSend} 
@@ -705,7 +716,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
             placeholder={!currentSession && messages.length === 0 ? 'How can I help you today?' : 'Reply...'}
           />
         </View>
-      </View>
+      </ReanimatedModule.View>
     </View>
   );
 });

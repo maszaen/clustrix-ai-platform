@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, Dimensions, BackHandler } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { 
@@ -72,10 +72,11 @@ export default function SlideUpModal({
     return () => backHandler.remove();
   }, [visible, handleClose, translateY, overlayOpacity]);
 
-  // Pan gesture with threshold to not conflict with ScrollView
+  // Ref for scroll gesture coordination
+  const scrollRef = useRef(null);
+
+  // Pan gesture for the entire sheet
   const panGesture = Gesture.Pan()
-    .activeOffsetY([-15, 15]) // Only activate after 15px vertical movement
-    .failOffsetX([-20, 20]) // Fail if horizontal movement is too much
     .onStart(() => {
       context.value = { y: translateY.value };
     })
@@ -161,7 +162,7 @@ export default function SlideUpModal({
         <Reanimated.View style={[styles.backdrop, overlayAnimatedStyle]} />
       </GestureDetector>
 
-      {/* Sheet with pan gesture - allows simultaneous scroll */}
+      {/* Sheet with pan gesture on entire surface */}
       <GestureDetector gesture={panGesture}>
         <Reanimated.View
           style={[
@@ -175,7 +176,10 @@ export default function SlideUpModal({
           </View>
           <View style={styles.content}>
             {typeof children === 'function' 
-              ? children({ dragHandlers: {} }) 
+              ? children({ 
+                  scrollRef, // Pass scroll ref for waitFor
+                  dragHandlers: {}
+                }) 
               : children}
           </View>
         </Reanimated.View>

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, useWindowDimensions, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { PanelBottomOpen } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
 
 // Loading verbs from desktop - exact copy
 const LOADING_VERBS = [
@@ -172,10 +173,12 @@ function TypewriterLoader() {
   );
 }
 
-export default function ChatMessage({ message, isUser, isNew, onShowThinking }) {
-  const { height: viewportHeight } = useWindowDimensions();
+export default function ChatMessage({ message, isUser, isNew, onShowThinking, onRetry, onReact, onShowMetadata }) {
   const slideAnim = useRef(new Animated.Value(isNew && isUser ? 50 : 0)).current;
   const opacityAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
+  const [copied, setCopied] = useState(false);
+  const [showActions, setShowActions] = useState(false);
+  const actionsOpacity = useRef(new Animated.Value(0)).current;
   
   useEffect(() => {
     if (isNew && isUser) {
@@ -201,6 +204,30 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking }) 
   const hasThinking = blocks.some(b => b.type === 'thinking');
   const thinkingContent = blocks.find(b => b.type === 'thinking')?.content || '';
   const textContent = blocks.filter(b => b.type === 'text').map(b => b.content).join('');
+
+  // Fade in action buttons after stream completes
+  useEffect(() => {
+    const hasText = !!textContent?.trim();
+    if (!isUser && !message.isStreaming && hasText) {
+      const timer = setTimeout(() => {
+        setShowActions(true);
+        Animated.timing(actionsOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
+      }, 500);
+
+      return () => {
+        clearTimeout(timer);
+        actionsOpacity.setValue(0);
+      };
+    }
+
+    // Hide instantly while streaming
+    setShowActions(false);
+    actionsOpacity.setValue(0);
+  }, [textContent, isUser, message.isStreaming, actionsOpacity]);
   
   // Live timer for streaming thinking
   const [thinkingSeconds, setThinkingSeconds] = useState(0);
@@ -243,6 +270,13 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking }) 
     return 'Show thinking';
   };
 
+  // Copy raw message for clipboard feedback
+  const handleCopy = async () => {
+    await Clipboard.setStringAsync(message.content || '');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   if (isUser) {
     return (
       <Animated.View style={[
@@ -276,6 +310,35 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking }) 
           <TypewriterLoader />
         ) : (
           <Markdown style={markdownStyles} rules={markdownRules}>{textContent || ' '}</Markdown>
+        )}
+
+        {!isLoading && showActions && (
+          <Animated.View style={[styles.actionRow, { opacity: actionsOpacity }]}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => onRetry?.(message)} activeOpacity={0.8}>
+              <Ionicons name="refresh" size={16} color={COLORS.icon} />
+              <Text style={styles.actionLabel}>Retry</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionBtn} onPress={handleCopy} activeOpacity={0.8}>
+              <Ionicons name={copied ? 'checkmark-done' : 'copy-outline'} size={16} color={COLORS.icon} />
+              <Text style={styles.actionLabel}>{copied ? 'Copied' : 'Copy'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionBtn} onPress={() => onReact?.(true)} activeOpacity={0.8}>
+              <Ionicons name={message.isLiked === true ? 'thumbs-up' : 'thumbs-up-outline'} size={16} color={COLORS.icon} />
+              <Text style={styles.actionLabel}>Like</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionBtn} onPress={() => onReact?.(false)} activeOpacity={0.8}>
+              <Ionicons name={message.isLiked === false ? 'thumbs-down' : 'thumbs-down-outline'} size={16} color={COLORS.icon} />
+              <Text style={styles.actionLabel}>Dislike</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionBtn} onPress={() => onShowMetadata?.(message)} activeOpacity={0.8}>
+              <Ionicons name="information-circle-outline" size={16} color={COLORS.icon} />
+              <Text style={styles.actionLabel}>Metadata</Text>
+            </TouchableOpacity>
+          </Animated.View>
         )}
       </View>
     </Animated.View>
@@ -335,6 +398,28 @@ const styles = StyleSheet.create({
     color: COLORS.fgMuted,
     fontSize: 14,
     fontFamily: FONTS.displayItalic,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  actionBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.bg,
+  },
+  actionLabel: {
+    color: COLORS.fg,
+    fontSize: 13,
+    fontFamily: FONTS.sans,
   },
   loaderContainer: {
     flexDirection: 'row',

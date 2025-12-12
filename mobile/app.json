@@ -4,7 +4,7 @@
     "slug": "clustrix-mobile",
     "owner": "zaeniahmad",
     "scheme": "clustrix",
-    "version": "1.0.0",
+    "version": "3.1.15",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -23,7 +23,8 @@
         "backgroundColor": "#1a1a1a"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.zaen.clustrix.mobile"
+      "package": "com.zaen.clustrix.mobile",
+      "softwareKeyboardLayoutMode": "pan"
     },
     "web": {
       "favicon": "./assets/favicon.png"

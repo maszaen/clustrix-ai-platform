@@ -7,6 +7,26 @@
 let cachedSystemPrompt = null;
 let cachedPersonaHash = null;
 
+// Normalize provider usage payloads into a single shape
+function normalizeUsage(provider, usage) {
+  if (!usage) return null;
+
+  const lower = (provider || '').toLowerCase();
+  // OpenAI style
+  const promptTokens = usage.prompt_tokens ?? usage.promptTokens ?? usage.input_tokens ?? usage.inputTokens;
+  const completionTokens = usage.completion_tokens ?? usage.completionTokens ?? usage.output_tokens ?? usage.outputTokens;
+  const totalTokens = usage.total_tokens ?? usage.totalTokens;
+  const cost = usage.cost ?? usage.total_cost ?? usage.cost_usd ?? null;
+
+  return {
+    provider: lower,
+    inputTokens: promptTokens ?? null,
+    outputTokens: completionTokens ?? null,
+    totalTokens: totalTokens ?? (promptTokens && completionTokens ? promptTokens + completionTokens : null),
+    cost: cost ?? null,
+  };
+}
+
 /**
  * Build system prompt like renderer's personaSystem()
  */
@@ -205,11 +225,12 @@ function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
     xhr.open('POST', `${baseUrl}/chat/completions`);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.setRequestHeader('Authorization', `Bearer ${apiKey}`);
-    
+
     let buffer = '';
     let lastProcessedIndex = 0;
     let thinkingBuffer = '';
     let isThinking = false;
+    let usageData = null;
     
     xhr.onprogress = () => {
       const newData = xhr.responseText.slice(lastProcessedIndex);
@@ -246,6 +267,13 @@ function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
             if (result.text) onChunk?.(result.text);
             if (result.thinking && !result.stillThinking) onThink?.(result.thinking);
           }
+
+          // Capture usage when provided
+          if (json.usage) {
+            usageData = json.usage;
+          } else if (json.type === 'usage' && json.usage) {
+            usageData = json.usage;
+          }
         } catch {}
       }
     };
@@ -258,7 +286,7 @@ function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
         return resolve();
       }
 
-      onDone?.();
+      onDone?.({ usage: normalizeUsage('openai', usageData) });
       resolve();
     };
 
@@ -309,6 +337,7 @@ function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onT
     let lastProcessedIndex = 0;
     let isThinkingBlock = false;
     let thinkingBuffer = '';
+    let usageData = null;
     
     xhr.onprogress = () => {
       const newData = xhr.responseText.slice(lastProcessedIndex);
@@ -342,6 +371,10 @@ function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onT
           if (json.type === 'content_block_stop') {
             isThinkingBlock = false;
           }
+
+          if (json.usage) {
+            usageData = json.usage;
+          }
         } catch {}
       }
     };
@@ -353,7 +386,7 @@ function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onT
         return resolve();
       }
 
-      onDone?.();
+      onDone?.({ usage: normalizeUsage('anthropic', usageData) });
       resolve();
     };
 
@@ -418,6 +451,10 @@ function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
         try {
           const json = JSON.parse(line.slice(6));
           const parts = json.candidates?.[0]?.content?.parts || [];
+
+          if (json.usageMetadata || json.usage) {
+            usageData = json.usageMetadata || json.usage;
+          }
           
           for (const part of parts) {
             // Native Gemini thinking: { thought: true, text: "..." }
@@ -452,7 +489,7 @@ function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
         return resolve();
       }
 
-      onDone?.();
+      onDone?.({ usage: normalizeUsage('google', usageData) });
       resolve();
     };
 

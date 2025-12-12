@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey, exportAllData, importAllData } from '../database/db';
+import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey, exportAllData, importAllData, getDraft, saveDraft, deleteDraft, updateMessageMetadata, deleteMessage, getPersonaDraft, savePersonaDraft } from '../database/db';
 import { generateSessionId } from '../utils/ids';
 import { loginWithGoogle, logout as authLogout, getStoredAuth, getLastBackupTime } from '../services/auth';
 import { backupToCloud, restoreFromCloud } from '../services/backup';
@@ -189,6 +189,24 @@ export function AppProvider({ children }) {
     });
   }, [currentSession, messages]);
 
+  // Persist message metadata changes (likes, usage, costs)
+  const setMessageMetadata = useCallback(async (sessionId, messageIndex, metadataUpdates) => {
+    if (!sessionId) return;
+    await updateMessageMetadata(sessionId, messageIndex, metadataUpdates);
+    setMessages(prev => prev.map(msg =>
+      msg.message_index === messageIndex
+        ? { ...msg, ...metadataUpdates }
+        : msg
+    ));
+  }, []);
+
+  // Delete message by index for failure recovery
+  const removeMessage = useCallback(async (sessionId, messageIndex) => {
+    if (!sessionId) return;
+    await deleteMessage(sessionId, messageIndex);
+    setMessages(prev => prev.filter(msg => msg.message_index !== messageIndex));
+  }, []);
+
   // Toggle favorite session
   const toggleFavorite = useCallback(async (sessionId) => {
     const session = sessions.find(s => s.id === sessionId);
@@ -231,6 +249,30 @@ export function AppProvider({ children }) {
     setSettings(merged);
     await saveSetting('app_settings', merged);
   }, [settings]);
+
+  // Draft helpers for chat composer
+  const loadDraft = useCallback(async (sessionId) => {
+    if (!sessionId) return '';
+    return await getDraft(sessionId);
+  }, []);
+
+  const persistDraft = useCallback(async (sessionId, value) => {
+    if (!sessionId) return;
+    await saveDraft(sessionId, value);
+  }, []);
+
+  const clearDraft = useCallback(async (sessionId) => {
+    if (!sessionId) return;
+    await deleteDraft(sessionId);
+  }, []);
+
+  const loadWelcomeDraft = useCallback(async () => {
+    return await getPersonaDraft('welcome_draft');
+  }, []);
+
+  const saveWelcomeDraft = useCallback(async (value) => {
+    await savePersonaDraft(value, 'welcome_draft');
+  }, []);
 
   // Add custom model
   const addCustomModel = useCallback(async (model) => {
@@ -408,9 +450,16 @@ export function AppProvider({ children }) {
     deleteSession,
     updateSession,
     appendMessage,
+    setMessageMetadata,
+    removeMessage,
     updateSettings,
     toggleFavorite,
     renameSession,
+    loadDraft,
+    persistDraft,
+    clearDraft,
+    loadWelcomeDraft,
+    saveWelcomeDraft,
     customModels,
     addCustomModel,
     updateCustomModel,

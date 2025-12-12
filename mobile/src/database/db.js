@@ -58,6 +58,20 @@ export async function initDatabase() {
       api_key TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
+    -- Drafts table for chat input auto-save (per session)
+    CREATE TABLE IF NOT EXISTS drafts (
+      session_id TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    -- User persona table for welcome screen draft/prefs storage
+    CREATE TABLE IF NOT EXISTS user_persona (
+      id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
   
   // Migration: Add think_duration column if not exists (for existing databases)
@@ -103,10 +117,38 @@ export async function deleteSession(id) {
 
 // Messages
 export async function getMessages(sessionId) {
-  return await db.getAllAsync(
+  const rows = await db.getAllAsync(
     'SELECT * FROM messages WHERE session_id = ? ORDER BY message_index ASC',
     [sessionId]
   );
+
+  // Normalize metadata for renderer consumption
+  return rows.map((row) => {
+    let metadata = {};
+    try {
+      metadata = row.metadata ? JSON.parse(row.metadata) : {};
+    } catch (e) {
+      metadata = {};
+    }
+
+    // Parse think_content if stored as JSON string
+    let thinkContent = null;
+    if (row.think_content) {
+      try {
+        thinkContent = JSON.parse(row.think_content);
+      } catch (err) {
+        thinkContent = row.think_content;
+      }
+    }
+
+    return {
+      ...row,
+      ...metadata,
+      metadata,
+      thinkContent: thinkContent || metadata.thinkContent || null,
+      thinkDuration: row.think_duration || metadata.thinkDuration || null,
+    };
+  });
 }
 
 export async function addMessage(sessionId, role, content, metadata, messageIndex) {
@@ -122,6 +164,35 @@ export async function addMessage(sessionId, role, content, metadata, messageInde
       metadata.thinkDuration || null,
       JSON.stringify(metadata)
     ]
+  );
+}
+
+// Update message metadata for reactions/usage
+export async function updateMessageMetadata(sessionId, messageIndex, metadata) {
+  const row = await db.getFirstAsync(
+    'SELECT metadata FROM messages WHERE session_id = ? AND message_index = ?',
+    [sessionId, messageIndex]
+  );
+
+  let existing = {};
+  try {
+    existing = row?.metadata ? JSON.parse(row.metadata) : {};
+  } catch (e) {
+    existing = {};
+  }
+
+  const merged = { ...existing, ...metadata };
+  await db.runAsync(
+    'UPDATE messages SET metadata = ? WHERE session_id = ? AND message_index = ?',
+    [JSON.stringify(merged), sessionId, messageIndex]
+  );
+}
+
+// Delete a single message by session + index (used for failure recovery)
+export async function deleteMessage(sessionId, messageIndex) {
+  await db.runAsync(
+    'DELETE FROM messages WHERE session_id = ? AND message_index = ?',
+    [sessionId, messageIndex]
   );
 }
 
@@ -201,6 +272,48 @@ export async function saveProviderApiKey(providerId, apiKey) {
        api_key = excluded.api_key,
        updated_at = excluded.updated_at`,
     [providerId, apiKey, now]
+  );
+}
+
+// Draft helpers
+export async function getDraft(sessionId) {
+  const row = await db.getFirstAsync(
+    'SELECT value FROM drafts WHERE session_id = ?',
+    [sessionId]
+  );
+  return row?.value || '';
+}
+
+export async function saveDraft(sessionId, value) {
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT INTO drafts (session_id, value, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(session_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    [sessionId, value, now]
+  );
+}
+
+export async function deleteDraft(sessionId) {
+  await db.runAsync('DELETE FROM drafts WHERE session_id = ?', [sessionId]);
+}
+
+// Welcome/persona draft helpers (stored in user_persona table)
+export async function getPersonaDraft(key = 'welcome_draft') {
+  const row = await db.getFirstAsync(
+    'SELECT data FROM user_persona WHERE id = ?',
+    [key]
+  );
+  return row?.data || '';
+}
+
+export async function savePersonaDraft(value, key = 'welcome_draft') {
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT INTO user_persona (id, data, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+    [key, value, now]
   );
 }
 

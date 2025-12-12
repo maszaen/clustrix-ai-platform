@@ -9,8 +9,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { useEffect } from 'react';
 
-function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything' }, ref) {
-  const [text, setText] = useState('');
+function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything', value = '', onChangeText }, ref) {
+  const [text, setText] = useState(value || '');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const inputRef = useRef(null);
   const insets = useSafeAreaInsets();
@@ -27,7 +27,13 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
 
   useImperativeHandle(ref, () => ({
     blur: () => inputRef.current?.blur(),
+    setValue: (val) => setText(val),
   }));
+
+  // Sync external value changes (used for draft restore)
+  useEffect(() => {
+    setText(value || '');
+  }, [value]);
 
 
   const handleSend = () => {
@@ -56,7 +62,10 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
           ref={inputRef}
           style={styles.input}
           value={text}
-          onChangeText={setText}
+          onChangeText={(val) => {
+            setText(val);
+            onChangeText?.(val);
+          }}
           placeholder={placeholder}
           placeholderTextColor={COLORS.fgMuted}
           multiline

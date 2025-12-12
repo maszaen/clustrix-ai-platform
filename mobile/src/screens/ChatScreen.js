@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
-import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing, Dimensions } from 'react-native';
+import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing, Dimensions, Modal } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS, useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -11,6 +11,8 @@ import { useApp } from '../context/AppContext';
 import { streamChat, generateTitle, buildSystemPrompt } from '../services/api';
 import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
+import ContextMenuFixed from '../components/ContextMenuFixed';
+import InputModal from '../components/InputModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
@@ -97,13 +99,20 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     currentSession, 
     messages, 
     settings, 
-    isStreaming, 
+    isStreaming,
     setIsStreaming,
-    createSession, 
+    createSession,
     appendMessage,
     updateSession,
+    setMessageMetadata,
+    removeMessage,
     welcomeMessage,
     splashComplete,
+    loadDraft,
+    persistDraft,
+    clearDraft,
+    loadWelcomeDraft,
+    saveWelcomeDraft,
   } = useApp();
   const flatListRef = useRef(null);
   const chatInputRef = useRef(null);
@@ -115,6 +124,12 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [visibleCount, setVisibleCount] = useState(200); // Start with last 12 messages
   const [loadingMore, setLoadingMore] = useState(false);
+  const [inputText, setInputText] = useState('');
+  const [retryTarget, setRetryTarget] = useState(null);
+  const [retryOptionsVisible, setRetryOptionsVisible] = useState(false);
+  const [retryReasonVisible, setRetryReasonVisible] = useState(false);
+  const [retryReason, setRetryReason] = useState('');
+  const [metadataMenu, setMetadataMenu] = useState({ visible: false, message: null });
   const lastHapticTime = useRef(0);
   const isInitialLoad = useRef(true);
   const [showSkeleton, setShowSkeleton] = useState(false);
@@ -421,10 +436,53 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     sessionRef.current = currentSession;
   }, [currentSession]);
 
+  // Hydrate draft for active session or welcome screen
+  useEffect(() => {
+    let mounted = true;
+    const hydrateDraft = async () => {
+      const draftValue = currentSession
+        ? await loadDraft(currentSession.id)
+        : await loadWelcomeDraft();
+      if (mounted) {
+        setInputText(draftValue || '');
+      }
+    };
+    hydrateDraft();
+    return () => { mounted = false; };
+  }, [currentSession?.id, loadDraft, loadWelcomeDraft]);
+
+  // Debounced draft persistence (500ms) to prevent DB spam
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      if (currentSession) {
+        if (inputText?.trim()) {
+          persistDraft(currentSession.id, inputText);
+        } else {
+          clearDraft(currentSession.id);
+        }
+      } else {
+        // Welcome screen draft stored in user_persona table
+        saveWelcomeDraft(inputText || '');
+      }
+    }, 500);
+
+    return () => clearTimeout(handle);
+  }, [inputText, currentSession, persistDraft, clearDraft, saveWelcomeDraft]);
+
   const handleSend = async (text) => {
     hasScrolledInitial.current = true;
     initialScrollDone.current = true;
-    
+
+    // Clear persisted draft immediately on send (spec requirement)
+    if (currentSession) {
+      await clearDraft(currentSession.id);
+    } else {
+      await saveWelcomeDraft('');
+    }
+
+    // Reset composer visual state
+    setInputText('');
+
     let session = sessionRef.current;
     let isNewSession = false;
     
@@ -439,6 +497,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
 
     const newMsgKey = `msg-${messages.length}`;
     setNewMessageId(newMsgKey);
+
+    // Store index for potential rollback when stream returns empty
+    const userMessageIndex = isNewSession ? 0 : messages.length;
     
     // For new session from welcome screen, pass session directly to appendMessage
     if (isNewSession) {
@@ -492,38 +553,46 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         setThinkingContent(fullThinking);
         onStreamingThinking?.(fullThinking);
       },
-      onDone: async () => {
+      onDone: async (summary = {}) => {
+        // If AI response empty (even with thinking), roll back messages and restore prompt
+        if (!fullContent.trim()) {
+          await removeMessage(session.id, userMessageIndex);
+          setIsStreaming(false);
+          setStreamingContent('');
+          setThinkingContent('');
+          setStreamingMessageId(null);
+          setInputText(text);
+          return;
+        }
+
         const content = fullThinking ? `<thinking>${fullThinking}</thinking>\n\n${fullContent}` : fullContent;
-        
+
         // Calculate thinking duration
         const thinkDuration = thinkStartTime ? Math.round((Date.now() - thinkStartTime) / 1000) : null;
-        
+
+        const metadata = {
+          model: settings.model,
+          provider: settings.provider,
+          thinkContent: fullThinking || null,
+          thinkDuration: thinkDuration,
+          _streamingId: stableStreamingId,
+          usage: summary?.usage || null,
+          cost: summary?.usage?.cost ?? null,
+        };
+
         // SAVE FIRST before clearing streaming states (prevents blink)
         if (isNewSession) {
-          await appendMessage('assistant', content, {
-            model: settings.model,
-            provider: settings.provider,
-            thinkContent: fullThinking || null,
-            thinkDuration: thinkDuration,
-            _streamingId: stableStreamingId,
-            _messageIndex: 1,
-          }, session);
+          await appendMessage('assistant', content, { ...metadata, _messageIndex: 1 }, session);
         } else {
-          await appendMessage('assistant', content, {
-            model: settings.model,
-            provider: settings.provider,
-            thinkContent: fullThinking || null,
-            thinkDuration: thinkDuration,
-            _streamingId: stableStreamingId,
-          });
+          await appendMessage('assistant', content, metadata);
         }
-        
+
         // THEN clear streaming states (saved message already in state)
         setIsStreaming(false);
         setStreamingContent('');
         setThinkingContent('');
         setStreamingMessageId(null);
-        
+
         // Generate title for new session
         if (isNewSession) {
           const title = await generateTitle(text, settings.model, settings.provider, settings.baseUrl, settings.apiKey);
@@ -547,12 +616,63 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     setStreamingContent('');
   };
 
+  // Retrieve preceding user prompt for retry injection
+  const getUserPromptForMessage = useCallback((message) => {
+    if (!message) return '';
+    const targetIndex = message.message_index ?? 0;
+    const candidate = messages.find(m => m.role === 'user' && (m.message_index === targetIndex - 1));
+    return candidate?.content || '';
+  }, [messages]);
+
+  // Retry modal trigger
+  const handleRetryModal = useCallback((message) => {
+    setRetryTarget(message);
+    setRetryOptionsVisible(true);
+  }, []);
+
+  // Retry submission with prompt injection rules
+  const handleRetrySubmit = useCallback((mode, reasonText = '') => {
+    if (!retryTarget) return;
+    const userPrompt = getUserPromptForMessage(retryTarget);
+    const pickedResponse = retryTarget.content || '';
+
+    let injectedPrompt = '';
+    if (mode === 'concise') {
+      injectedPrompt = `The user requested a short, concise, but clear response.\nUser prompt: ${userPrompt}`;
+    } else if (mode === 'detailed') {
+      injectedPrompt = `The user requested a detailed, comprehensive response.\nUser prompt: ${userPrompt}`;
+    } else {
+      injectedPrompt = `Your previous response was inappropriate, and the user would like you to repeat it for ${reasonText}. Your previous response was ${pickedResponse}, and the associated user prompt was ${userPrompt}.`;
+    }
+
+    setRetryOptionsVisible(false);
+    setRetryReasonVisible(false);
+    setRetryReason('');
+    setRetryTarget(null);
+    handleSend(injectedPrompt);
+  }, [retryTarget, getUserPromptForMessage]);
+
+  // Handle like/dislike toggle
+  const handleReaction = useCallback((message, liked) => {
+    if (!currentSession || message?.message_index === undefined) return;
+    const newState = message.isLiked === liked ? null : liked;
+    setMessageMetadata(currentSession.id, message.message_index, { isLiked: newState });
+  }, [currentSession, setMessageMetadata]);
+
+  // Open metadata context menu
+  const handleMetadataOpen = useCallback((message) => {
+    setMetadataMenu({ visible: true, message });
+  }, []);
+
   const renderMessage = ({ item }) => (
-    <ChatMessage 
-      message={item} 
-      isUser={item.role === 'user'} 
+    <ChatMessage
+      message={item}
+      isUser={item.role === 'user'}
       isNew={item._key === newMessageId}
       onShowThinking={onShowThinking}
+      onRetry={() => handleRetryModal(item)}
+      onReact={(liked) => handleReaction(item, liked)}
+      onShowMetadata={() => handleMetadataOpen(item)}
     />
   );
 
@@ -815,15 +935,77 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       {/* Keyboard-animated Input Container */}
       <ReanimatedModule.View style={[styles.inputContainer, inputAnimatedStyle]}>
         <View style={styles.inputContainer2}>
-          <ChatInput 
-            ref={chatInputRef} 
-            onSend={handleSend} 
-            isStreaming={isStreaming} 
+          <ChatInput
+            ref={chatInputRef}
+            onSend={handleSend}
+            isStreaming={isStreaming}
             onStop={handleStop}
             placeholder={!currentSession && messages.length === 0 ? 'How can I help you today?' : 'Reply...'}
+            value={inputText}
+            onChangeText={setInputText}
           />
         </View>
       </ReanimatedModule.View>
+
+      {/* Retry options modal */}
+      <Modal
+        visible={retryOptionsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRetryOptionsVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setRetryOptionsVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.retryCard}>
+                <Text style={styles.retryTitle}>Retry response</Text>
+                <Pressable style={styles.retryOption} onPress={() => handleRetrySubmit('concise')} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+                  <Text style={styles.retryOptionText}>Concise response</Text>
+                </Pressable>
+                <Pressable style={styles.retryOption} onPress={() => handleRetrySubmit('detailed')} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+                  <Text style={styles.retryOptionText}>Detailed response</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.retryOption, styles.retryOptionLast]}
+                  onPress={() => {
+                    setRetryOptionsVisible(false);
+                    setRetryReasonVisible(true);
+                  }}
+                  android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+                >
+                  <Text style={styles.retryOptionText}>Other (give reason)</Text>
+                </Pressable>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Retry reason modal */}
+      <InputModal
+        visible={retryReasonVisible}
+        title="Why retry?"
+        fields={[{ key: 'reason', label: 'Reason', placeholder: 'Explain what to fix', value: retryReason, multiline: true, required: true }]}
+        submitText="Send"
+        onSubmit={(values) => handleRetrySubmit('other', values.reason)}
+        onCancel={() => {
+          setRetryReasonVisible(false);
+          setRetryReason('');
+        }}
+      />
+
+      {/* Metadata context menu */}
+      <ContextMenuFixed
+        visible={metadataMenu.visible}
+        onClose={() => setMetadataMenu({ visible: false, message: null })}
+        sessionName="Response metadata"
+        options={[
+          { label: `Model: ${metadataMenu.message?.model || 'No data/Null'}`, icon: 'information-circle-outline', onPress: () => {} },
+          { label: `Input tokens: ${metadataMenu.message?.usage?.inputTokens ?? 'No data/Null'}`, icon: 'document-text-outline', onPress: () => {} },
+          { label: `Output tokens: ${metadataMenu.message?.usage?.outputTokens ?? 'No data/Null'}`, icon: 'document-text-outline', onPress: () => {} },
+          { label: `Cost: ${metadataMenu.message?.cost ?? 'No data/Null'}`, icon: 'cash-outline', onPress: () => {} },
+        ]}
+      />
     </View>
   );
 });
@@ -937,5 +1119,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 20,
     elevation: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  retryCard: {
+    width: '100%',
+    backgroundColor: COLORS.bgSecondary,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  retryTitle: {
+    color: COLORS.fg,
+    fontSize: 17,
+    fontFamily: FONTS.display,
+    marginBottom: 8,
+  },
+  retryOption: {
+    paddingVertical: 12,
+  },
+  retryOptionLast: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
+  retryOptionText: {
+    color: COLORS.fg,
+    fontSize: 15,
+    fontFamily: FONTS.sans,
   },
 });

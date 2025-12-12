@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback, Pressable } from 'react-native';
+import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
@@ -30,25 +30,27 @@ function DropdownSelect({ label, value, options, onSelect }) {
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
         <TouchableWithoutFeedback onPress={() => setVisible(false)}>
           <View style={styles.modalOverlay}>
-          <View style={styles.dropdownModal}>
-            <Text style={styles.dropdownModalTitle}>{label}</Text>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={[styles.dropdownItem, item.id === value && styles.dropdownItemActive]}
-                  onPress={() => { onSelect(item); setVisible(false); }}
-                  android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-                >
-                  <Text style={[styles.dropdownItemText, item.id === value && styles.dropdownItemTextActive]}>
-                    {item.name}
-                  </Text>
-                  {item.id === value && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
-                </Pressable>
-              )}
-            />
-          </View>
+            <TouchableWithoutFeedback>
+              <View style={styles.dropdownModal}>
+                <Text style={styles.dropdownModalTitle}>{label}</Text>
+                <FlatList
+                  data={options}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <Pressable
+                      style={[styles.dropdownItem, item.id === value && styles.dropdownItemActive]}
+                      onPress={() => { onSelect(item); setVisible(false); }}
+                      android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+                    >
+                      <Text style={[styles.dropdownItemText, item.id === value && styles.dropdownItemTextActive]}>
+                        {item.name}
+                      </Text>
+                      {item.id === value && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
+                    </Pressable>
+                  )}
+                />
+              </View>
+            </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
       </Modal>

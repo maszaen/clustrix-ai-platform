@@ -1,5 +1,4 @@
-import { View, Text, StyleSheet, Modal } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 

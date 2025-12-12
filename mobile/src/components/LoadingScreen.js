@@ -1,14 +1,14 @@
 import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { COLORS } from '../constants/colors';
-import { DIAMOND_LOGO_HTML } from '../constants/strings';
+import { DIAMOND_LOGO_HTML_LOADER } from '../constants/strings';
 
 /**
  * App Loading Screen with animated diamond logo
  * Shown while fonts and database are loading
  */
 export default function LoadingScreen() {
-  const html = DIAMOND_LOGO_HTML(COLORS.accent);
+  const html = DIAMOND_LOGO_HTML_LOADER();
   
   return (
     <View style={styles.container}>

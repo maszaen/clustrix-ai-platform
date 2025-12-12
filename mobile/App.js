@@ -124,12 +124,12 @@ function MainApp() {
   });
 
   // Helper to sync RN Animated with Reanimated for non-gesture UI
-  const syncAnimatedValues = useCallback((targetPage) => {
-    const scrollTarget = targetPage === 0 ? 0 : SIDEBAR_WIDTH;
-    const stretchTarget = targetPage === 0 && sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0;
-    scrollXAnimated.setValue(scrollTarget);
-    sidebarStretchAnimated.setValue(stretchTarget);
-  }, [scrollXAnimated, sidebarStretchAnimated, sidebarHasQuery]);
+  // const syncAnimatedValues = useCallback((targetPage) => {
+  //   const scrollTarget = targetPage === 0 ? 0 : SIDEBAR_WIDTH;
+  //   const stretchTarget = targetPage === 0 && sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0;
+  //   scrollXAnimated.setValue(scrollTarget);
+  //   sidebarStretchAnimated.setValue(stretchTarget);
+  // }, [scrollXAnimated, sidebarStretchAnimated, sidebarHasQuery]);
 
   // Wrapper for Keyboard.dismiss to use with runOnJS
   const dismissKeyboard = useCallback(() => Keyboard.dismiss(), []);

@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions, TouchableOpacity, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, Animated, Dimensions, BackHandler } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
@@ -29,7 +30,7 @@ function getCardRadius(index, total) {
  */
 function MenuCard({ icon, title, description, onPress, style }) {
   return (
-    <TouchableOpacity style={[styles.card, style]} onPress={onPress} activeOpacity={0.7}>
+    <Pressable style={[styles.card, style]} onPress={onPress} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
       <View style={styles.cardLeft}>
         <Ionicons name={icon} size={22} color={COLORS.fgMuted} />
         <View style={styles.cardText}>
@@ -38,7 +39,7 @@ function MenuCard({ icon, title, description, onPress, style }) {
         </View>
       </View>
       <Ionicons name="chevron-forward" size={20} color={COLORS.fgMuted} />
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -132,9 +133,9 @@ export default function SlideLeftModal({ visible, onClose, title, children, show
       <Animated.View style={[styles.container, { transform: [{ translateX: slideAnim }] }]}>
         <View style={styles.header}>
           {showBack && (
-            <TouchableOpacity style={styles.backBtn} onPress={close}>
+            <Pressable style={styles.backBtn} onPress={close} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
               <Ionicons name="arrow-back-outline" size={23} color={COLORS.fg} />
-            </TouchableOpacity>
+            </Pressable>
           )}
           <Text style={[styles.headerTitle, !showBack && styles.headerTitleCenter]}>{title}</Text>
         </View>

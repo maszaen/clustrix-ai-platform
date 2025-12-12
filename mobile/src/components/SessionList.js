@@ -1,5 +1,6 @@
 import React, { useState, useRef, memo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TextInput } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { SvgXml } from 'react-native-svg';
 import ContextMenu from './ContextMenu';
@@ -14,12 +15,12 @@ const PENCIL = '<svg width="20" height="20" viewBox="0 0 20 20" fill="currentCol
 
 function SessionItem({ session, isActive, onSelect, onLongPress, onToggleFavorite }) {
   return (
-    <TouchableOpacity
+    <Pressable
       style={[styles.sessionItem, isActive && styles.sessionItemActive]}
       onPress={() => onSelect(session)}
       onLongPress={(e) => onLongPress(session, e.nativeEvent)}
       delayLongPress={200}
-      activeOpacity={0.7}
+      android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
     >
       <Text 
         style={[styles.sessionTitle, isActive && styles.sessionTitleActive]} 
@@ -27,18 +28,7 @@ function SessionItem({ session, isActive, onSelect, onLongPress, onToggleFavorit
       >
         {session.name || 'Untitled'}
       </Text>
-      {/* <TouchableOpacity 
-        style={styles.favoriteBtn}
-        onPress={() => onToggleFavorite?.(session.id)}
-        activeOpacity={0.7}
-      >
-        <Ionicons 
-          name={session.is_favorite ? "star" : "star-outline"} 
-          size={18} 
-          color={session.is_favorite ? "#fbbf24" : COLORS.fgMuted} 
-        />
-      </TouchableOpacity> */}
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -108,9 +98,8 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
       />
 
       <View style={styles.headerRow}>
-        <TouchableOpacity 
+        <Pressable 
           style={styles.searchContainer} 
-          activeOpacity={1}
           onPress={() => {
             // Only expand when collapsed
             if (!isExpanded) {
@@ -120,16 +109,16 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
           }}
         >
           {isExpanded ? (
-            <TouchableOpacity 
+            <Pressable 
               onPress={() => {
                 // Collapse: blur input, dismiss keyboard, then collapse
                 searchInputRef.current?.blur();
                 onCollapse?.();
               }} 
-              activeOpacity={0.7}
+              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
             >
               <LucideArrowLeft size={23} color={COLORS.icon} />
-            </TouchableOpacity>
+            </Pressable>
           ) : (
             <LucideSearch size={23} color={COLORS.icon} />
           )}
@@ -145,22 +134,23 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
             }}
           />
           {searchQuery ? (
-            <TouchableOpacity
+            <Pressable
               onPress={() => {
                 setSearchQuery('');
               }}
+              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
             >
               <Ionicons name="close-outline" size={23} color={COLORS.icon} />
-            </TouchableOpacity>
+            </Pressable>
           ) : null}
-        </TouchableOpacity>
+        </Pressable>
         {/* New Chat Button */}
-        <TouchableOpacity style={styles.newChatBtn} onPress={onNew} activeOpacity={0.7}>
+        <Pressable style={styles.newChatBtn} onPress={onNew} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
           {/* <Ionicons name="create-outline" size={24} color={COLORS.fg} /> */}
           <View>
             <SvgXml xml={PENCIL} width={23} height={23} style={[styles.newChatIcon, {color: COLORS.icon}]} />
           </View>
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {/* Sessions */}

@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableWithoutFeedback } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
@@ -8,20 +9,23 @@ export default function ContextMenu({ visible, position, options, onClose }) {
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={styles.overlay}>
         <View style={[styles.menu, { top: position.y, left: Math.min(position.x, 200) }]}>
           {options.map((option, idx) => (
-            <TouchableOpacity
+            <Pressable
               key={idx}
               style={[styles.option, idx < options.length - 1 && styles.optionBorder]}
               onPress={() => { option.onPress(); onClose(); }}
+              android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
             >
               <Ionicons name={option.icon} size={18} color={option.danger ? COLORS.danger : COLORS.fg} />
               <Text style={[styles.optionText, option.danger && styles.dangerText]}>{option.label}</Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
-      </TouchableOpacity>
+        </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }

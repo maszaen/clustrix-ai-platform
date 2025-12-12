@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Modal, TextInput } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 
@@ -74,16 +75,17 @@ export default function InputModal({
           ))}
           
           <View style={styles.buttons}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
+            <Pressable style={styles.cancelBtn} onPress={onCancel} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
               <Text style={styles.cancelText}>{cancelText}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
+            </Pressable>
+            <Pressable 
               style={[styles.submitBtn, !isValid && styles.submitDisabled]} 
               onPress={handleSubmit}
               disabled={!isValid}
+              android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
             >
               <Text style={[styles.submitText, !isValid && styles.submitTextDisabled]}>{submitText}</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </View>

@@ -8,10 +8,10 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Image,
   ActivityIndicator,
 } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import SlideLeftModal from '../components/SlideLeftModal';
@@ -181,10 +181,11 @@ export default function AccountScreen({ visible, onClose }) {
               </View>
               
               <View style={styles.backupButtons}>
-                <TouchableOpacity 
+                <Pressable 
                   style={[styles.backupBtn, isBackingUp && styles.backupBtnDisabled]}
                   onPress={handleBackup}
                   disabled={isBackingUp}
+                  android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
                 >
                   {isBackingUp ? (
                     <ActivityIndicator size="small" color={COLORS.fg} />
@@ -194,24 +195,25 @@ export default function AccountScreen({ visible, onClose }) {
                   <Text style={styles.backupBtnText}>
                     {isBackingUp ? 'Backing up...' : 'Backup Now'}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
                 
-                <TouchableOpacity 
+                <Pressable 
                   style={[styles.backupBtn, styles.restoreBtn]}
                   onPress={handleRestore}
                   disabled={isBackingUp}
+                  android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
                 >
                   <Ionicons name="cloud-download-outline" size={18} color={COLORS.fg} />
                   <Text style={styles.backupBtnText}>Restore</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
 
             {/* Logout Button */}
-            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Pressable style={styles.logoutBtn} onPress={handleLogout} android_ripple={{ color: 'rgba(255,100,100,0.2)' }}>
               <Ionicons name="log-out-outline" size={18} color={COLORS.danger} />
               <Text style={styles.logoutBtnText}>Logout</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         ) : (
           // Not logged in state
@@ -231,10 +233,11 @@ export default function AccountScreen({ visible, onClose }) {
             </View>
 
             <View style={styles.loginButtons}>
-              <TouchableOpacity 
+              <Pressable 
                 style={[styles.loginBtn, styles.googleBtn]}
                 onPress={handleGoogleLogin}
                 disabled={isLoggingIn}
+                android_ripple={{ color: 'rgba(0,0,0,0.2)' }}
               >
                 {isLoggingIn ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -243,7 +246,7 @@ export default function AccountScreen({ visible, onClose }) {
                   <SvgXml xml={GOOGLE_FAVICON} width={23} height={23} />
                 )}
                 <Text style={styles.loginBtnText}>Continue with Google</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <Text style={styles.privacyNote}>
@@ -414,7 +417,6 @@ const styles = StyleSheet.create({
   loginButtons: {
     gap: 12,
     paddingHorizontal: 16,
-    
   },
   loginBtn: {
     flexDirection: 'row',

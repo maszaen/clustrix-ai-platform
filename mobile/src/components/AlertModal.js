@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, StyleSheet, Modal } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 
@@ -30,13 +31,13 @@ export default function AlertModal({
           {/* Buttons - aligned right */}
           <View style={styles.buttons}>
             {hasSecondary && (
-              <TouchableOpacity style={styles.secondaryBtn} onPress={onSecondary}>
+              <Pressable style={styles.secondaryBtn} onPress={onSecondary} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
                 <Text style={styles.secondaryText}>{secondaryText}</Text>
-              </TouchableOpacity>
+              </Pressable>
             )}
-            <TouchableOpacity style={styles.primaryBtn} onPress={onPrimary}>
+            <Pressable style={styles.primaryBtn} onPress={onPrimary} android_ripple={{ color: 'rgba(255,255,255,0.2)' }}>
               <Text style={styles.primaryText}>{primaryText}</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </View>

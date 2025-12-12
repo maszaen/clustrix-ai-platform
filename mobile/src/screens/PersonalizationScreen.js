@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Modal, FlatList } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
@@ -21,32 +22,35 @@ function DropdownSelect({ label, value, options, onSelect }) {
 
   return (
     <View>
-      <TouchableOpacity style={styles.dropdown} onPress={() => setVisible(true)}>
+      <Pressable style={styles.dropdown} onPress={() => setVisible(true)} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
         <Text style={styles.dropdownText}>{selected?.name || 'Select...'}</Text>
         <Ionicons name="chevron-down" size={18} color={COLORS.fgMuted} />
-      </TouchableOpacity>
+      </Pressable>
 
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
+        <TouchableWithoutFeedback onPress={() => setVisible(false)}>
+          <View style={styles.modalOverlay}>
           <View style={styles.dropdownModal}>
             <Text style={styles.dropdownModalTitle}>{label}</Text>
             <FlatList
               data={options}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <TouchableOpacity
+                <Pressable
                   style={[styles.dropdownItem, item.id === value && styles.dropdownItemActive]}
                   onPress={() => { onSelect(item); setVisible(false); }}
+                  android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
                 >
                   <Text style={[styles.dropdownItemText, item.id === value && styles.dropdownItemTextActive]}>
                     {item.name}
                   </Text>
                   {item.id === value && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
-                </TouchableOpacity>
+                </Pressable>
               )}
             />
           </View>
-        </TouchableOpacity>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );
@@ -110,9 +114,9 @@ function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved })
         />
       </View>
 
-      <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+      <Pressable style={styles.saveBtn} onPress={handleSave} android_ripple={{ color: 'rgba(255,255,255,0.2)' }}>
         <Text style={styles.saveBtnText}>Save Instructions</Text>
-      </TouchableOpacity>
+      </Pressable>
     </ScrollView>
   );
 }

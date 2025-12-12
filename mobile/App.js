@@ -3,7 +3,6 @@ import {
   View,
   StyleSheet,
   StatusBar,
-  TouchableOpacity,
   Text,
   ActivityIndicator,
   Animated,
@@ -14,7 +13,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Gesture, GestureDetector, Pressable } from 'react-native-gesture-handler';
 import Reanimated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -330,9 +329,10 @@ function MainApp() {
               onCollapse={() => { Keyboard.dismiss(); setSidebarHasQuery(false); }}
             />
             {/* Profile / Account Section */}
-            <TouchableOpacity 
+            <Pressable 
               style={styles.sidebarProfileBtn} 
               onPress={openPersonalization}
+              android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
             >
               {isLoggedIn && currentUser?.avatarUrl ? (
                 <Image 
@@ -358,7 +358,7 @@ function MainApp() {
                   </Text>
                 }
               </View>
-            </TouchableOpacity>
+            </Pressable>
             {/* <TouchableOpacity style={styles.sidebarSettingsBtn} onPress={openPersonalization}>
               <Ionicons name="options-outline" size={20} color={COLORS.fgMuted} />
               <Text style={styles.sidebarSettingsText}>Personalization</Text>
@@ -377,34 +377,34 @@ function MainApp() {
             pointerEvents="none"
           />
 
-          <TouchableOpacity 
+          <Pressable 
             style={[styles.floatingMenuBtn, { top: insets.top + 11 }]} 
             onPress={openSidebar}
-            activeOpacity={0.7}
+            android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
           >
             <Ionicons name="menu" size={22} color={COLORS.icon} />
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
             style={[styles.floatingLogoBtn, { top: insets.top + 11 }]}
             onPress={openModels}
-            activeOpacity={0.7}
+            android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
           >
             <View style={styles.logo}>
               <SvgXml xml={LOGO_SVG} width={70} height={30}/>
             </View>
-          </TouchableOpacity>
+          </Pressable>
 
           <Animated.View 
             style={[styles.floatingPencilBtn, { top: insets.top + 11, opacity: rightBtnOpacity }]}
             pointerEvents={showRightBtns ? 'auto' : 'none'}
           >
-            <TouchableOpacity onPress={handleNewChat} activeOpacity={0.7}>
+            <Pressable onPress={handleNewChat} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
               <SvgXml xml={PENCIL} style={styles.rightSideLogo} width={23} height={23} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowContextMenu(true)} activeOpacity={0.7}>
+            </Pressable>
+            <Pressable onPress={() => setShowContextMenu(true)} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
               <Ionicons name="ellipsis-vertical" size={21} color={COLORS.icon} />
-            </TouchableOpacity>
+            </Pressable>
           </Animated.View>
 
           {/* Context Menu */}

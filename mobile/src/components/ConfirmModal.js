@@ -1,4 +1,5 @@
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, StyleSheet, Modal } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 
@@ -10,12 +11,12 @@ export default function ConfirmModal({ visible, title, message, onConfirm, onCan
           <Text style={styles.title}>{title}</Text>
           {message && <Text style={styles.message}>{message}</Text>}
           <View style={styles.buttons}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
+            <Pressable style={styles.cancelBtn} onPress={onCancel} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
               <Text style={styles.cancelText}>{cancelText}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.confirmBtn, danger && styles.dangerBtn]} onPress={onConfirm}>
+            </Pressable>
+            <Pressable style={[styles.confirmBtn, danger && styles.dangerBtn]} onPress={onConfirm} android_ripple={{ color: 'rgba(255,255,255,0.2)' }}>
               <Text style={[styles.confirmText, danger && styles.dangerText]}>{confirmText}</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </View>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity, Modal, FlatList } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { DEFAULT_PROVIDERS } from '../services/api';
@@ -25,15 +26,16 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
 
   return (
     <View>
-      <TouchableOpacity style={styles.dropdown} onPress={() => setVisible(true)}>
+      <Pressable style={styles.dropdown} onPress={() => setVisible(true)} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
         <Text style={styles.dropdownText}>
           {renderOption ? renderOption(selected) : (selected?.name || selected?.label || 'Select model')}
         </Text>
         <Ionicons name="chevron-down" size={18} color={COLORS.fgMuted} />
-      </TouchableOpacity>
+      </Pressable>
 
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
+        <TouchableWithoutFeedback onPress={() => setVisible(false)}>
+          <View style={styles.modalOverlay}>
           <View style={styles.dropdownModal}>
             <Text style={styles.dropdownModalTitle}>{label}</Text>
             <FlatList
@@ -44,13 +46,14 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
                 const isLast = index === options.length - 1;
 
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     style={[
                       styles.dropdownItem,
                       isActive && styles.dropdownItemActive,
-                      isLast && { borderBottomWidth: 0 }, // <- hapus border di last item
+                      isLast && { borderBottomWidth: 0 },
                     ]}
                     onPress={() => { onSelect(item); setVisible(false); }}
+                    android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
                   >
                     <Text
                       style={[
@@ -63,19 +66,20 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
                     {isActive && (
                       <Ionicons name="checkmark" size={18} color={COLORS.primary} />
                     )}
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               }}
               ListHeaderComponent={onAddNew ? (
-                <TouchableOpacity style={styles.addNewItem} onPress={handleAddNew}>
+                <Pressable style={styles.addNewItem} onPress={handleAddNew} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
                   <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} />
                   <Text style={styles.addNewText}>{addNewLabel || 'Add New'}</Text>
-                </TouchableOpacity>
+                </Pressable>
               ) : null}
             />
 
           </View>
-        </TouchableOpacity>
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );
@@ -277,17 +281,18 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
           {customProviders.length > 0 && (
             <View style={styles.modelChips}>
               {customProviders.map(provider => (
-                <TouchableOpacity
+                <Pressable
                   key={provider.id}
                   style={[styles.modelChip, localSettings.provider === provider.id && styles.modelChipActive]}
                   onPress={() => handleProviderChange(provider)}
                   onLongPress={(e) => handleItemLongPress(provider, 'provider', e)}
                   delayLongPress={200}
+                  android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
                 >
                   <Text style={[styles.modelChipText, localSettings.provider === provider.id && styles.modelChipTextActive]}>
                     {provider.name}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
           )}
@@ -306,11 +311,11 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
               secureTextEntry={!showApiKey}
               autoCapitalize="none"
             />
-            <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowApiKey(!showApiKey)}>
+            <Pressable style={styles.eyeBtn} onPress={() => setShowApiKey(!showApiKey)} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
               {showApiKey ? <EyeClosed size={20} color={COLORS.fgMuted} /> :
                 <Eye size={20} color={COLORS.fgMuted} />
               }
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
 
@@ -346,25 +351,26 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
           {availableModels.filter(m => !m.is_default).length > 0 && (
             <View style={styles.modelChips}>
               {availableModels.filter(m => !m.is_default).map(model => (
-                <TouchableOpacity
+                <Pressable
                   key={model.id || model.model_id}
                   style={[styles.modelChip, localSettings.model === model.model_id && styles.modelChipActive]}
                   onPress={() => setLocalSettings({ ...localSettings, model: model.model_id })}
                   onLongPress={(e) => handleItemLongPress(model, 'model', e)}
                   delayLongPress={200}
+                  android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
                 >
                   <Text style={[styles.modelChipText, localSettings.model === model.model_id && styles.modelChipTextActive]}>
                     {model.label}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
           )}
         </View>
 
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+        <Pressable style={styles.saveBtn} onPress={handleSave} android_ripple={{ color: 'rgba(255,255,255,0.2)' }}>
           <Text style={styles.saveBtnText}>Save Model Settings</Text>
-        </TouchableOpacity>
+        </Pressable>
       </ScrollView>
       
       {/* Alert Modal */}

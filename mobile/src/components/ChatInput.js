@@ -1,5 +1,6 @@
 import { useState, useRef, forwardRef, useImperativeHandle } from 'react';
-import { View, TextInput, TouchableOpacity, StyleSheet, Keyboard } from 'react-native';
+import { View, TextInput, StyleSheet, Keyboard } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
@@ -45,10 +46,10 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
         pointerEvents="none"
       />
       
-      <TouchableOpacity style={styles.addBtn} activeOpacity={0.7}>
+      <Pressable style={styles.addBtn} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
         {/* <Ionicons name="create-outline" size={24} color={COLORS.fg} /> */}
         <Ionicons name="add-outline" size={27} color={COLORS.icon} />
-      </TouchableOpacity>
+      </Pressable>
 
       <View style={styles.containerInput}>
         <TextInput
@@ -71,17 +72,18 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
         />
         
         {isStreaming ? (
-          <TouchableOpacity style={styles.stopButton} onPress={onStop}>
+          <Pressable style={styles.stopButton} onPress={onStop} android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true }}>
             <Ionicons name="stop" size={20} color={COLORS.fg} />
-          </TouchableOpacity>
+          </Pressable>
         ) : (
-          <TouchableOpacity 
+          <Pressable 
             style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]} 
             onPress={handleSend}
             disabled={!text.trim()}
+            android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true }}
           >
             <Ionicons name="arrow-up" size={20} color={COLORS.icon} />
-          </TouchableOpacity>
+          </Pressable>
         )}
       </View>
     </View>

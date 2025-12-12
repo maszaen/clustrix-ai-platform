@@ -10,10 +10,9 @@ import {
   TouchableWithoutFeedback,
   BackHandler,
   Keyboard,
-  ScrollView,
   Image,
 } from 'react-native';
-import { GestureHandlerRootView, Gesture, GestureDetector, Pressable } from 'react-native-gesture-handler';
+import { GestureHandlerRootView, Gesture, GestureDetector, Pressable, ScrollView } from 'react-native-gesture-handler';
 import Reanimated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -599,17 +598,17 @@ function MainApp() {
         showBottomGradient
         bottomInset={insets.bottom}
       >
-        {({ onScroll, dragHandlers }) => (
+        {({ scrollRef, dragHandlers }) => (
           <View style={styles.thinkingModalContainer}>
             <View style={styles.thinkingModalHeader} {...dragHandlers}>
               <Ionicons name="bulb-outline" size={18} color={COLORS.fgMuted} />
               <Text style={styles.thinkingModalTitle}>Thinking Process</Text>
             </View>
             <ScrollView 
+              ref={scrollRef}
               style={styles.thinkingModalScroll}
               contentContainerStyle={styles.thinkingModalContent}
               showsVerticalScrollIndicator={false}
-              onScroll={onScroll}
               scrollEventThrottle={16}
               bounces={false}
             >

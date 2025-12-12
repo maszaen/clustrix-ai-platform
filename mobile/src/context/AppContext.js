@@ -64,6 +64,8 @@ export function AppProvider({ children }) {
       const backupTime = await getLastBackupTime();
       setLastBackupTime(backupTime);
       
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       setIsReady(true);
     }
     init();

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
-import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing } from 'react-native';
+import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing, Dimensions } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS, useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
@@ -139,6 +139,13 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const lastScrollOffset = useRef(0);
   const lastLayoutHeight = useRef(0);
   
+  // Spacer visibility tracking for simpler approach
+  const [showSpacer, setShowSpacer] = useState(false);
+  const isNearBottomRef = useRef(true); // Track if user is near bottom
+  const streamEndedRef = useRef(false); // Track if stream just ended
+  const SPACER_HEIGHT = Dimensions.get('window').height - 335; // Full device height - 145
+  const SPACER_HIDE_BUFFER = 30; // Extra buffer before hiding spacer
+  
   // Smooth keyboard animation using react-native-keyboard-controller
   const { height: keyboardAnimatedHeight } = useReanimatedKeyboardAnimation();
   const inputAnimatedStyle = useAnimatedStyle(() => {
@@ -196,6 +203,42 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   useEffect(() => {
     scrollBottomHandler()
   }, [scrollButtonVisible, keyboardVisible, scrollBtnOpacity]);
+
+  // Spacer visibility management - simpler approach
+  // Show spacer when streaming starts, hide when stream ends AND user scrolls up
+  // Skip spacer if content is less than 90% of viewport
+  useEffect(() => {
+    if (isStreaming) {
+      // Check if content is small enough to not need spacer
+      // Content height without spacer vs 90% of layout height
+      const contentWithoutSpacer = listContentHeight - (showSpacer ? SPACER_HEIGHT : 0);
+      const viewportThreshold = listLayoutHeight * 0.9;
+      
+      if (contentWithoutSpacer < viewportThreshold && listLayoutHeight > 0) {
+        // Content is small, no spacer needed
+        setShowSpacer(false);
+        streamEndedRef.current = false;
+      } else {
+        // Stream started - show spacer and scroll to bottom
+        setShowSpacer(true);
+        streamEndedRef.current = false;
+        // Wait for layout update before scrolling
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 50);
+        });
+      }
+    } else if (streamEndedRef.current === false && showSpacer) {
+      // Stream just ended
+      streamEndedRef.current = true;
+      // If user is NOT near bottom, hide spacer immediately
+      if (!isNearBottomRef.current) {
+        setShowSpacer(false);
+      }
+      // If user IS near bottom, keep spacer - will be removed when they scroll up
+    }
+  }, [isStreaming, showSpacer, listContentHeight, listLayoutHeight]);
 
   // Pulse animation for skeleton
   useEffect(() => {
@@ -519,8 +562,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     return displayMessages.length - 1;
   }, [displayMessages]);
 
-  // Manual scroll to last AI message after data is ready
-  // This replaces buggy initialScrollIndex (GitHub issues #239, #240)
+  // DISABLED: useEffect scroll to last AI message - causes lag
+  // Simpler approach: use inverted list or just scroll to end
+  /*
   useEffect(() => {
     const lastAiIndex = getLastAiIndex();
     
@@ -545,6 +589,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       return () => clearTimeout(timer);
     }
   }, [displayMessages.length, getLastAiIndex, topInset]);
+  */
   // Header component for load more (appears at TOP)
   const ListHeader = useCallback(() => {
     if (!hasMoreMessages) return null;
@@ -568,9 +613,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   }, [hasMoreMessages, loadingMore, handleLoadMore]);
 
   // Footer component for bottom spacing (appears at BOTTOM)
-  const ListFooter = useCallback(() => (
-    <View style={{ height: Platform.OS === 'android' ? keyboardHeight + 75 : 85 }} />
-  ), [keyboardHeight]);
+  // Simpler approach: fixed size during stream, conditional removal based on visibility
+  const ListFooter = useCallback(() => {
+    // Show spacer during streaming OR if stream ended but user still near bottom
+    if (showSpacer) {
+      return <View style={{ height: SPACER_HEIGHT }} />;
+    }
+    // Default minimal footer for keyboard handling
+    return <View style={{ height: Platform.OS === 'android' ? keyboardHeight + 75 : 85 }} />;
+  }, [showSpacer, keyboardHeight]);
 
   return (
     <View style={styles.container}>
@@ -599,7 +650,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
               // Removed initialScrollIndex - using manual scrollToIndex instead (GH #239, #240)
               maintainScrollAtEnd
               onStartReached={() => {handleLoadMore(), scrollBottomBtnShow()}}
-              maintainScrollAtEndThreshold={0.03}
+              // Removed maintainScrollAtEndThreshold to prevent auto-scroll issues
               maintainVisibleContentPosition
               ListHeaderComponent={ListHeader}
               ListFooterComponent={ListFooter}
@@ -624,6 +675,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
                 
                 const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
                 const percentFromBottom = distanceFromBottom / layoutMeasurement.height;
+                
+                // Track if user is near bottom (for spacer visibility)
+                const nearBottom = distanceFromBottom < SPACER_HEIGHT + SPACER_HIDE_BUFFER;
+                isNearBottomRef.current = nearBottom;
+                
+                // If stream ended and user scrolled up past spacer, hide it
+                if (streamEndedRef.current && showSpacer && !nearBottom) {
+                  setShowSpacer(false);
+                }
                 
                 // Fast hide: instantly hide when user scrolls (no debounce)
                 if (scrollButtonVisible && !programmaticScrollRef.current) {

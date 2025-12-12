@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { View, Text, StyleSheet, Modal, TextInput, Pressable } from 'react-native';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 

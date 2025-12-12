@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback, Pressable } from 'react-native';
+import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { DEFAULT_PROVIDERS } from '../services/api';
@@ -36,48 +36,49 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
         <TouchableWithoutFeedback onPress={() => setVisible(false)}>
           <View style={styles.modalOverlay}>
-          <View style={styles.dropdownModal}>
-            <Text style={styles.dropdownModalTitle}>{label}</Text>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item.id || item.model_id}
-              renderItem={({ item, index }) => {
-                const isActive = item.id === value || item.model_id === value;
-                const isLast = index === options.length - 1;
+            <TouchableWithoutFeedback>
+              <View style={styles.dropdownModal}>
+                <Text style={styles.dropdownModalTitle}>{label}</Text>
+                <FlatList
+                  data={options}
+                  keyExtractor={(item) => item.id || item.model_id}
+                  renderItem={({ item, index }) => {
+                    const isActive = item.id === value || item.model_id === value;
+                    const isLast = index === options.length - 1;
 
-                return (
-                  <Pressable
-                    style={[
-                      styles.dropdownItem,
-                      isActive && styles.dropdownItemActive,
-                      isLast && { borderBottomWidth: 0 },
-                    ]}
-                    onPress={() => { onSelect(item); setVisible(false); }}
-                    android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-                  >
-                    <Text
-                      style={[
-                        styles.dropdownItemText,
-                        isActive && styles.dropdownItemTextActive,
-                      ]}
-                    >
-                      {renderOption ? renderOption(item) : (item.name || item.label)}
-                    </Text>
-                    {isActive && (
-                      <Ionicons name="checkmark" size={18} color={COLORS.primary} />
-                    )}
-                  </Pressable>
-                );
-              }}
-              ListHeaderComponent={onAddNew ? (
-                <Pressable style={styles.addNewItem} onPress={handleAddNew} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
-                  <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} />
-                  <Text style={styles.addNewText}>{addNewLabel || 'Add New'}</Text>
-                </Pressable>
-              ) : null}
-            />
-
-          </View>
+                    return (
+                      <Pressable
+                        style={[
+                          styles.dropdownItem,
+                          isActive && styles.dropdownItemActive,
+                          isLast && { borderBottomWidth: 0 },
+                        ]}
+                        onPress={() => { onSelect(item); setVisible(false); }}
+                        android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+                      >
+                        <Text
+                          style={[
+                            styles.dropdownItemText,
+                            isActive && styles.dropdownItemTextActive,
+                          ]}
+                        >
+                          {renderOption ? renderOption(item) : (item.name || item.label)}
+                        </Text>
+                        {isActive && (
+                          <Ionicons name="checkmark" size={18} color={COLORS.primary} />
+                        )}
+                      </Pressable>
+                    );
+                  }}
+                  ListHeaderComponent={onAddNew ? (
+                    <Pressable style={styles.addNewItem} onPress={handleAddNew} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+                      <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} />
+                      <Text style={styles.addNewText}>{addNewLabel || 'Add New'}</Text>
+                    </Pressable>
+                  ) : null}
+                />
+              </View>
+            </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
       </Modal>

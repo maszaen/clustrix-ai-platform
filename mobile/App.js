@@ -134,7 +134,7 @@ function WelcomeOverlay({ message, accentColor, visible, onFadeComplete }) {
 
 function MainApp() {
   const insets = useSafeAreaInsets();
-  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime, settings, splashMessage } = useApp();
+  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime, settings, splashMessage, setSplashComplete } = useApp();
   const [showPersonalization, setShowPersonalization] = useState(false);
   const [showModels, setShowModels] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -165,9 +165,15 @@ function MainApp() {
 
   // Trigger fadeout when app becomes ready
   useEffect(() => {
+    if (!isReady) {
+      setTimeout(() => {
+        setSplashComplete(true);
+      }, 2000);
+    }
     if (isReady) {
       setShowLoadingOverlay(false);
     }
+
   }, [isReady]);
 
   // Keep modal open ref in sync
@@ -479,10 +485,42 @@ function MainApp() {
             style={[styles.floatingPencilBtn, { top: insets.top + 11, opacity: rightBtnOpacity }]}
             pointerEvents={showRightBtns ? 'auto' : 'none'}
           >
-            <Pressable onPress={handleNewChat} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
-              <SvgXml xml={PENCIL} style={styles.rightSideLogo} width={23} height={23} />
+            {/* BUTTON 1: PENCIL */}
+            <Pressable 
+              onPress={handleNewChat} 
+              // Bikin wadah lingkaran 40x40 (atau sesuaikan size yg dimau)
+              style={{ 
+                width: 43, 
+                height: 43, 
+                borderRadius: 30, // Setengah dari width/height
+                alignItems: 'center', // Biar icon di tengah
+                justifyContent: 'center' 
+              }}
+              // borderless: false biar ripplenya stay di dalem lingkaran
+              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+            >
+              <SvgXml 
+  xml={PENCIL} 
+  // Perhatikan kurung siku [] lalu kurung kurawal {}
+  style={[styles.rightSideLogo, { transform: [{ translateX: 1 }] }]} 
+  width={23} 
+  height={23} 
+/>
             </Pressable>
-            <Pressable onPress={() => setShowContextMenu(true)} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
+
+            {/* BUTTON 2: ELLIPSIS (Tiga Titik) */}
+            <Pressable 
+              onPress={() => setShowContextMenu(true)} 
+              // Sama, bikin wadah lingkaran juga
+              style={{ 
+                width: 43, 
+                height: 43, 
+                borderRadius: 30, 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }}
+              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+            >
               <Ionicons name="ellipsis-vertical" size={21} color={COLORS.icon} />
             </Pressable>
           </Animated.View>
@@ -671,7 +709,7 @@ const styles = StyleSheet.create({
   },
   floatingLogoBtn: {
     position: 'absolute',
-    left: 68,
+    left: 69,
     width: 105,
     height: 45,
     borderRadius: 50,
@@ -689,8 +727,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     flexDirection: 'row',
     right: 16,
-    width: 85,
-    paddingHorizontal: 9,
+    width: 88,
+    // paddingHorizontal: 9,
     height: 45,
     borderRadius: 50,
     borderWidth: 1,

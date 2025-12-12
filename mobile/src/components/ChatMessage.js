@@ -5,6 +5,7 @@ import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
+import { PanelBottomOpen } from 'lucide-react-native';
 
 // Loading verbs from desktop - exact copy
 const LOADING_VERBS = [
@@ -266,11 +267,7 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking }) 
             onPress={() => onShowThinking?.(thinkingContent)}
             activeOpacity={0.7}
           >
-            <Ionicons 
-              name="logo-stackoverflow" 
-              size={14} 
-              color={COLORS.fgMuted} 
-            />
+            <PanelBottomOpen size={13} color={COLORS.fgMuted} />
             <Text style={styles.thinkToggleText}>{getThinkingText()}</Text>
           </TouchableOpacity>
         )}
@@ -330,7 +327,7 @@ const styles = StyleSheet.create({
   thinkToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 3,
     marginBottom: 0,
     marginTop: 6
   },

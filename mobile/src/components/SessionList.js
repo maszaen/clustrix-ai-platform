@@ -144,9 +144,19 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
           ) : null}
         </Pressable>
         {/* New Chat Button */}
-        <Pressable style={styles.newChatBtn} onPress={onNew} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
-          {/* <Ionicons name="create-outline" size={24} color={COLORS.fg} /> */}
-          <View>
+        <Pressable 
+          // 1. Pindahkan borderRadius ke sini (style utama)
+          // Pastikan styles.newChatBtn juga punya width & height yang sama biar jadi lingkaran sempurna
+          style={[styles.newChatBtn, { borderRadius: 40, overflow: 'hidden' }]} 
+          onPress={onNew} 
+          android_ripple={{ 
+            color: 'rgba(255,255,255,0.2)', 
+            // 2. Kalau mau ripplenya kepotong pas di lingkaran, set borderless: false
+            borderless: false 
+          }}
+        >
+          {/* View di dalem sini sebenernya jadi redundan kalau stylingnya udah di Pressable */}
+          <View style={{ alignItems: 'center', justifyContent: 'center' }}>
             <SvgXml xml={PENCIL} width={23} height={23} style={[styles.newChatIcon, {color: COLORS.icon}]} />
           </View>
         </Pressable>

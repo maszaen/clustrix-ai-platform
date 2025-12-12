@@ -43,6 +43,7 @@ export function AppProvider({ children }) {
   const [providerApiKeys, setProviderApiKeys] = useState({});
   const [splashMessage, setSplashMessage] = useState(''); // For splash screen (generated once)
   const [welcomeMessage, setWelcomeMessage] = useState(''); // For welcome screen (regenerated on clear)
+  const [splashComplete, setSplashComplete] = useState(false); // Track if splash animation finished
   
   // Auth state
   const [currentUser, setCurrentUser] = useState(null);
@@ -422,6 +423,8 @@ export function AppProvider({ children }) {
     updateProviderApiKey,
     splashMessage,
     welcomeMessage,
+    splashComplete,
+    setSplashComplete,
     // Auth
     currentUser,
     authProvider,

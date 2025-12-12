@@ -72,13 +72,15 @@ export default function SlideUpModal({
     return () => backHandler.remove();
   }, [visible, handleClose, translateY, overlayOpacity]);
 
-  // Pan gesture for the entire sheet
+  // Pan gesture with threshold to not conflict with ScrollView
   const panGesture = Gesture.Pan()
+    .activeOffsetY([-15, 15]) // Only activate after 15px vertical movement
+    .failOffsetX([-20, 20]) // Fail if horizontal movement is too much
     .onStart(() => {
       context.value = { y: translateY.value };
     })
     .onUpdate((event) => {
-      // Allow dragging down freely, but limit dragging up
+      // Allow dragging down freely, but limit dragging up to EXPANDED_Y
       const newValue = Math.max(EXPANDED_Y, context.value.y + event.translationY);
       translateY.value = newValue;
     })
@@ -121,6 +123,15 @@ export default function SlideUpModal({
     runOnJS(handleClose)();
   });
 
+  // Pan gesture for backdrop - consume all swipes to block underlying content
+  const backdropPanGesture = Gesture.Pan()
+    .onUpdate(() => {
+      // Do nothing - just consume the gesture
+    });
+
+  // Compose gestures for backdrop (tap to close, pan to block)
+  const backdropGesture = Gesture.Race(tapGesture, backdropPanGesture);
+
   // Animated styles
   const sheetAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -145,12 +156,12 @@ export default function SlideUpModal({
 
   return (
     <View style={styles.container}>
-      {/* Backdrop - tap to close */}
-      <GestureDetector gesture={tapGesture}>
+      {/* Backdrop - tap to close, pan to block swipes */}
+      <GestureDetector gesture={backdropGesture}>
         <Reanimated.View style={[styles.backdrop, overlayAnimatedStyle]} />
       </GestureDetector>
 
-      {/* Sheet with pan gesture on entire surface */}
+      {/* Sheet with pan gesture - allows simultaneous scroll */}
       <GestureDetector gesture={panGesture}>
         <Reanimated.View
           style={[

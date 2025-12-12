@@ -18,7 +18,19 @@ import { WELCOME_MESSAGES, DIAMOND_LOGO_HTML } from '../constants/strings';
 
 
 // Welcome Screen with diamond logo and typewriter effect
-function DiamondLogo({ accentColor }) {
+function DiamondLogo({ accentColor, shouldAnimate }) {
+  const [showLogo, setShowLogo] = useState(false);
+  
+  useEffect(() => {
+    if (shouldAnimate) {
+      // Small delay to ensure smooth transition
+      const timer = setTimeout(() => setShowLogo(true), 0);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldAnimate]);
+  
+  if (!showLogo) return <View style={styles.logoContainer} />;
+  
   return (
     <View style={styles.logoContainer}>
       <WebView
@@ -38,7 +50,7 @@ function DiamondLogo({ accentColor }) {
 }
 
 // Welcome Screen with diamond logo and typewriter effect (uses message from context)
-function WelcomeScreen({ message, accentColor }) {
+function WelcomeScreen({ message, shouldAnimate }) {
   const [displayText, setDisplayText] = useState('');
   const isMountedRef = useRef(true);
 
@@ -74,7 +86,7 @@ function WelcomeScreen({ message, accentColor }) {
 
   return (
     <View style={styles.welcomeContainer}>
-      <DiamondLogo accentColor={accentColor} />
+      <DiamondLogo shouldAnimate={shouldAnimate} />
       <Text style={styles.welcomeText}>{displayText}</Text>
     </View>
   );
@@ -91,6 +103,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     appendMessage,
     updateSession,
     welcomeMessage,
+    splashComplete,
   } = useApp();
   const flatListRef = useRef(null);
   const chatInputRef = useRef(null);
@@ -661,7 +674,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ReanimatedModule.View style={[styles.emptyState, { paddingTop: topInset }, contentPaddingAnimatedStyle]}>
             <Animated.View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', opacity: contentFadeAnim }}>
-              <WelcomeScreen message={welcomeMessage} />
+              <WelcomeScreen message={welcomeMessage} shouldAnimate={splashComplete} />
             </Animated.View>
           </ReanimatedModule.View>
         </TouchableWithoutFeedback>

@@ -40,10 +40,11 @@ import InputModal from './src/components/InputModal';
 import ConfirmModal from './src/components/ConfirmModal';
 import LoadingScreen from './src/components/LoadingScreen';
 import { SvgXml } from 'react-native-svg';
+import { WebView } from 'react-native-webview';
 import { COLORS } from './src/constants/colors';
 import { fontAssets, FONTS } from './src/constants/fonts';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
-import { PENCIL, LOGO_SVG } from './src/constants/strings';
+import { PENCIL, LOGO_SVG, DIAMOND_LOGO_HTML_LOADER } from './src/constants/strings';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Base sidebar width sits at ~83% of the screen so users can peek the main page
@@ -52,9 +53,88 @@ const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.80;
 const SIDEBAR_STRETCH_DISTANCE = SCREEN_WIDTH - SIDEBAR_WIDTH;
 const TOTAL_WIDTH = SIDEBAR_WIDTH + SCREEN_WIDTH; // Total scrollable width
 
+// Diamond Logo component (using LOADER version for splash screen)
+function DiamondLogo({ accentColor }) {
+  return (
+    <View style={loadingOverlayStyles.logoContainer}>
+      <WebView
+        source={{ html: DIAMOND_LOGO_HTML_LOADER(accentColor) }}
+        style={loadingOverlayStyles.logoWebView}
+        scrollEnabled={false}
+        showsHorizontalScrollIndicator={false}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+        overScrollMode="never"
+        androidLayerType="hardware"
+        originWhitelist={['*']}
+        javaScriptEnabled={true}
+      />
+    </View>
+  );
+}
+
+// Welcome Overlay with typewriter effect (uses message from context)
+function WelcomeOverlay({ message, accentColor, visible, onFadeComplete }) {
+  const [displayText, setDisplayText] = useState('');
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const isMountedRef = useRef(true);
+
+  // Typewriter effect
+  useEffect(() => {
+    if (!message) return;
+    
+    isMountedRef.current = true;
+    let i = 0;
+    const timers = [];
+    
+    const typeChar = () => {
+      if (!isMountedRef.current) return;
+      if (i < message.length) {
+        setDisplayText(message.slice(0, i + 1));
+        i++;
+        const char = message[i - 1];
+        const delay = /[.,?!;:\-–]/.test(char) ? 350 : 30 + Math.random() * 40;
+        const t = setTimeout(typeChar, delay);
+        timers.push(t);
+      }
+    };
+    
+    const starter = setTimeout(typeChar, 100);
+    timers.push(starter);
+    
+    return () => { 
+      isMountedRef.current = false;
+      timers.forEach(t => clearTimeout(t));
+    };
+  }, [message]);
+
+  // Fade out when not visible
+  useEffect(() => {
+    if (!visible) {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        onFadeComplete?.();
+      });
+    }
+  }, [visible, fadeAnim, onFadeComplete]);
+ // fadeAnim
+  return (
+    <Animated.View style={[loadingOverlayStyles.overlay, { opacity: fadeAnim }]} pointerEvents="none">
+      <View style={loadingOverlayStyles.welcomeContainer}>
+        <DiamondLogo accentColor={accentColor} />
+        <Text style={loadingOverlayStyles.welcomeText}>{displayText}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+
 function MainApp() {
   const insets = useSafeAreaInsets();
-  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime } = useApp();
+  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime, settings, splashMessage } = useApp();
   const [showPersonalization, setShowPersonalization] = useState(false);
   const [showModels, setShowModels] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -64,6 +144,10 @@ function MainApp() {
   const [confirmDelete, setConfirmDelete] = useState({ visible: false, session: null });
   const [sidebarContextMenuOpen, setSidebarContextMenuOpen] = useState(false);
   const [thinkingModal, setThinkingModal] = useState({ visible: false, content: '' });
+  
+  // Loading overlay state
+  const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
+  const [mountLoadingOverlay, setMountLoadingOverlay] = useState(true);
   // Track if any modal is open (for blocking pager swipe)
   const isModalOpen = useRef(false);
   // Fade animation for right buttons container
@@ -78,6 +162,13 @@ function MainApp() {
       useNativeDriver: true,
     }).start();
   }, [showRightBtns, rightBtnOpacity]);
+
+  // Trigger fadeout when app becomes ready
+  useEffect(() => {
+    if (isReady) {
+      setShowLoadingOverlay(false);
+    }
+  }, [isReady]);
 
   // Keep modal open ref in sync
   useEffect(() => {
@@ -290,15 +381,6 @@ function MainApp() {
     closeSidebar();
   }, [currentSession, messages, clearCurrentSession, closeSidebar]);
 
-  if (!isReady) {
-    return (
-      <>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-        <LoadingScreen />
-      </>
-    );
-  }
-
   return (
     <GestureDetector gesture={panGesture}>
       <View style={styles.container}>
@@ -500,6 +582,16 @@ function MainApp() {
           </View>
         )}
       </SlideUpModal>
+
+      {/* Loading overlay - shown until app is ready */}
+      {mountLoadingOverlay && (
+        <WelcomeOverlay
+          message={splashMessage}
+          accentColor={COLORS.accent}
+          visible={showLoadingOverlay} //
+          onFadeComplete={() => setMountLoadingOverlay(false)}
+        />
+      )}
       </View>
     </GestureDetector>
   );
@@ -746,3 +838,43 @@ const thinkingMarkdownStyles = {
   em: { fontFamily: FONTS.displayItalic, fontStyle: 'normal' },
   hr: { backgroundColor: COLORS.borderLight, height: 1, marginVertical: 8 },
 };
+
+// Loading overlay styles (same as ChatScreen's WelcomeScreen)
+const loadingOverlayStyles = StyleSheet.create({
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: COLORS.bg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  welcomeContainer: {
+    alignItems: 'center',
+    gap: 0,
+    paddingBottom: 45,
+  },
+  logoContainer: {
+    width: 150,
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoWebView: {
+    width: 150,
+    height: 150,
+    backgroundColor: 'transparent',
+  },
+  welcomeText: {
+    color: COLORS.fg,
+    fontSize: 24,
+    maxWidth: '80%',
+    fontFamily: FONTS.display,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+});
+

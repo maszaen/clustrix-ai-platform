@@ -3,6 +3,7 @@ import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSes
 import { generateSessionId } from '../utils/ids';
 import { loginWithGoogle, logout as authLogout, getStoredAuth, getLastBackupTime } from '../services/auth';
 import { backupToCloud, restoreFromCloud } from '../services/backup';
+import { WELCOME_MESSAGES } from '../constants/strings';
 
 const AppContext = createContext(null);
 
@@ -14,6 +15,22 @@ const DEFAULT_SETTINGS = {
   thinkMode: false,
 };
 
+// Helper to generate welcome message
+function getWelcomeMessage(username = 'friend') {
+  const hour = new Date().getHours();
+  let timeMessages = [];
+  if (hour >= 5 && hour < 12) timeMessages = WELCOME_MESSAGES.pagi;
+  else if (hour >= 12 && hour < 15) timeMessages = WELCOME_MESSAGES.siang;
+  else if (hour >= 15 && hour < 19) timeMessages = WELCOME_MESSAGES.sore;
+  else timeMessages = WELCOME_MESSAGES.malam;
+  
+  const allMessages = [...timeMessages, ...WELCOME_MESSAGES.anytime];
+  const msg = allMessages[Math.floor(Math.random() * allMessages.length)];
+  const firstName = username.split(' ')[0];
+  const formattedName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+  return msg.replace(/\[USERNAME\]/g, formattedName);
+}
+
 export function AppProvider({ children }) {
   const [isReady, setIsReady] = useState(false);
   const [sessions, setSessions] = useState([]);
@@ -24,6 +41,8 @@ export function AppProvider({ children }) {
   const [customModels, setCustomModels] = useState([]);
   const [customProviders, setCustomProviders] = useState([]);
   const [providerApiKeys, setProviderApiKeys] = useState({});
+  const [splashMessage, setSplashMessage] = useState(''); // For splash screen (generated once)
+  const [welcomeMessage, setWelcomeMessage] = useState(''); // For welcome screen (regenerated on clear)
   
   // Auth state
   const [currentUser, setCurrentUser] = useState(null);
@@ -63,6 +82,12 @@ export function AppProvider({ children }) {
       // Load last backup time
       const backupTime = await getLastBackupTime();
       setLastBackupTime(backupTime);
+      
+      // Generate messages (use loaded persona name if available)
+      const personaName = loadedSettings?.persona?.name || 'friend';
+      const initialMessage = getWelcomeMessage(personaName);
+      setSplashMessage(initialMessage); // For splash screen
+      setWelcomeMessage(initialMessage); // Initial welcome message
       
       await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -117,7 +142,10 @@ export function AppProvider({ children }) {
   const clearCurrentSession = useCallback(() => {
     setCurrentSession(null);
     setMessages([]);
-  }, []);
+    // Regenerate welcome message for new visit
+    const personaName = settings?.persona?.name || 'friend';
+    setWelcomeMessage(getWelcomeMessage(personaName));
+  }, [settings]);
 
   // Delete session
   const deleteSession = useCallback(async (id) => {
@@ -392,6 +420,8 @@ export function AppProvider({ children }) {
     deleteCustomProvider,
     providerApiKeys,
     updateProviderApiKey,
+    splashMessage,
+    welcomeMessage,
     // Auth
     currentUser,
     authProvider,

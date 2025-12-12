@@ -17,25 +17,7 @@ import { FONTS } from '../constants/fonts';
 import { WELCOME_MESSAGES, DIAMOND_LOGO_HTML } from '../constants/strings';
 
 
-
-function getWelcomeMessage(username = 'friend') {
-  const hour = new Date().getHours();
-  let timeMessages = [];
-  if (hour >= 5 && hour < 12) timeMessages = WELCOME_MESSAGES.pagi;
-  else if (hour >= 12 && hour < 15) timeMessages = WELCOME_MESSAGES.siang;
-  else if (hour >= 15 && hour < 19) timeMessages = WELCOME_MESSAGES.sore;
-  else timeMessages = WELCOME_MESSAGES.malam;
-  
-  const allMessages = [...timeMessages, ...WELCOME_MESSAGES.anytime];
-  const msg = allMessages[Math.floor(Math.random() * allMessages.length)];
-  // Get first name only, capitalize properly (e.g. "JoHN Anderson" -> "John")
-  const firstName = username.split(' ')[0];
-  const formattedName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
-  return msg.replace(/\[USERNAME\]/g, formattedName);
-}
-
-
-// Diamond Logo component using WebView for exact CSS animation
+// Welcome Screen with diamond logo and typewriter effect
 function DiamondLogo({ accentColor }) {
   return (
     <View style={styles.logoContainer}>
@@ -55,23 +37,24 @@ function DiamondLogo({ accentColor }) {
   );
 }
 
-// Welcome Screen with diamond logo and typewriter effect
-function WelcomeScreen({ username, accentColor }) {
+// Welcome Screen with diamond logo and typewriter effect (uses message from context)
+function WelcomeScreen({ message, accentColor }) {
   const [displayText, setDisplayText] = useState('');
   const isMountedRef = useRef(true);
-  const welcomeMessage = useRef(getWelcomeMessage(username || 'friend')).current;
 
   useEffect(() => {
+    if (!message) return;
+    
     isMountedRef.current = true;
     let i = 0;
     const timers = [];
     
     const typeChar = () => {
       if (!isMountedRef.current) return;
-      if (i < welcomeMessage.length) {
-        setDisplayText(welcomeMessage.slice(0, i + 1));
+      if (i < message.length) {
+        setDisplayText(message.slice(0, i + 1));
         i++;
-        const char = welcomeMessage[i - 1];
+        const char = message[i - 1];
         // Match Electron: punctuation = 350ms delay, normal = 30 + random(40)
         const delay = /[.,?!;:\-–]/.test(char) ? 350 : 30 + Math.random() * 40;
         const t = setTimeout(typeChar, delay);
@@ -87,7 +70,7 @@ function WelcomeScreen({ username, accentColor }) {
       isMountedRef.current = false;
       timers.forEach(t => clearTimeout(t));
     };
-  }, [welcomeMessage]);
+  }, [message]);
 
   return (
     <View style={styles.welcomeContainer}>
@@ -107,6 +90,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     createSession, 
     appendMessage,
     updateSession,
+    welcomeMessage,
   } = useApp();
   const flatListRef = useRef(null);
   const chatInputRef = useRef(null);
@@ -191,7 +175,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         }).start(() => setScrollButtonVisible(false));
       }, 3000);
     } else {
-      // Fade out
+      // Fade outz
       Animated.timing(scrollBtnOpacity, {
         toValue: 0,
         duration: 200,
@@ -299,11 +283,11 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   }, [messages]);
 
   // Handle scroll to index failure (for dynamic height items)
-  const onScrollToIndexFailed = useCallback((info) => {
-    setTimeout(() => {
-      flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
-    }, 100);
-  }, []);
+  // const onScrollToIndexFailed = useCallback((info) => {
+  //   setTimeout(() => {
+  //     flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+  //   }, 100);
+  // }, []);
 
   // Reset on session change + skeleton for session->session
   useEffect(() => {
@@ -311,6 +295,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     const wasWelcome = !wasSession && !currentSession?.id;
     const isSessionToSession = wasSession && currentSession?.id && prevSessionIdRef.current !== currentSession?.id;
     const isWelcomeToSession = !wasSession && currentSession?.id;
+    const isSessionToWelcome = wasSession && (currentSession?.id === undefined || currentSession?.id === null);
+
     
     // Robust check for sending from welcome: flag OR matching ID of just-created session
     const sendingFromWelcome = isSendingFromWelcome.current || (currentSession?.id && lastCreatedSessionId.current === currentSession.id);
@@ -358,8 +344,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     }
     
     // Reset flag if it was set
-    if (sendingFromWelcome && isWelcomeToSession) {
+    if (sendingFromWelcome && isWelcomeToSession && !isSessionToWelcome) {
       isSendingFromWelcome.current = false;
+      console.log('this is true first')
+
       // Force hide skeleton just in case
       setShowSkeleton(false);
       // Ensure content is visible immediately without blink
@@ -383,15 +371,17 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         ]).start();
       }, 50);
     } else if (!isWelcomeToSession) {
+      console.log('this is true !iswelcometosess')
       setTimeout(() => {
         Animated.sequence([
-          Animated.timing(contentFadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+          Animated.timing(contentFadeAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
           Animated.timing(contentFadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
           Animated.timing(contentFadeAnimTwo, { toValue: 0, duration: 500, useNativeDriver: true }),
           Animated.timing(contentFadeAnimTwo, { toValue: 1, duration: 600, useNativeDriver: true }),
         ]).start();
       }, 50);
-    }
+    } 
+    
     
     prevSessionIdRef.current = currentSession?.id;
     
@@ -669,8 +659,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     <View style={styles.container}>
       {!currentSession && displayMessages.length === 0 ? (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ReanimatedModule.View style={[styles.emptyState, { paddingTop: topInset, opacity: contentFadeAnim.value !== undefined ? contentFadeAnim.value : 1 }, contentPaddingAnimatedStyle]}>
-            <WelcomeScreen username={settings.persona?.name} />
+          <ReanimatedModule.View style={[styles.emptyState, { paddingTop: topInset }, contentPaddingAnimatedStyle]}>
+            <Animated.View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', opacity: contentFadeAnim }}>
+              <WelcomeScreen message={welcomeMessage} />
+            </Animated.View>
           </ReanimatedModule.View>
         </TouchableWithoutFeedback>
       ) : displayMessages.length === 0 ? (

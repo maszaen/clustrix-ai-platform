@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from '
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing, Dimensions } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS, useAnimatedStyle } from 'react-native-reanimated';
-import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import { useReanimatedKeyboardAnimation, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { LegendList } from '@legendapp/list';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { WELCOME_MESSAGES, DIAMOND_LOGO_HTML } from '../constants/strings';
+
 
 
 function getWelcomeMessage(username = 'friend') {
@@ -126,6 +127,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const contentFadeAnimTwo = useRef(new Animated.Value(0)).current;
   const skeletonTimeoutRef = useRef(null);
   const prevSessionIdRef = useRef(currentSession?.id);
+  const isSendingFromWelcome = useRef(false);
+  const lastCreatedSessionId = useRef(null);
   const trigger = currentSession && messages.length > 0;
   
   // Scroll to bottom button - use refs to avoid re-render interference with maintainVisibleContentPosition
@@ -304,23 +307,29 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
 
   // Reset on session change + skeleton for session->session
   useEffect(() => {
-    const wasWelcome = !wasSession && !currentSession?.id;
     const wasSession = prevSessionIdRef.current !== undefined && prevSessionIdRef.current !== null;
+    const wasWelcome = !wasSession && !currentSession?.id;
     const isSessionToSession = wasSession && currentSession?.id && prevSessionIdRef.current !== currentSession?.id;
     const isWelcomeToSession = !wasSession && currentSession?.id;
     
+    // Robust check for sending from welcome: flag OR matching ID of just-created session
+    const sendingFromWelcome = isSendingFromWelcome.current || (currentSession?.id && lastCreatedSessionId.current === currentSession.id);
     
-    // Clear pending timeout
-    if (skeletonTimeoutRef.current) {
-      clearTimeout(skeletonTimeoutRef.current);
-      skeletonTimeoutRef.current = null;
+    // Clear pending timeout ONLY if we are starting a NEW skeleton sequence
+    // This prevents clearing the cleanup timer if just messages update
+    if (isSessionToSession || (isWelcomeToSession && !sendingFromWelcome)) {
+      if (skeletonTimeoutRef.current) {
+        clearTimeout(skeletonTimeoutRef.current);
+        skeletonTimeoutRef.current = null;
+      }
     }
     
     isInitialLoad.current = true;
     hasScrolledInitial.current = false;
     initialScrollDone.current = false;
     setVisibleCount(12);
-    if (isSessionToSession) {
+
+    if (isSessionToSession && !sendingFromWelcome) {
       setShowSkeleton(true);
       skeletonOpacity.setValue(1);
       
@@ -331,7 +340,31 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
           duration: 200,
           useNativeDriver: true,
         }).start(() => setShowSkeleton(false));
-      }, 500);
+      }, 700);
+    }
+
+    if (isWelcomeToSession && !sendingFromWelcome) {
+      // Rule 1: Welcome -> Session via Sidebar (WITH Skeleton)
+      setShowSkeleton(true);
+      skeletonOpacity.setValue(1);
+      
+      skeletonTimeoutRef.current = setTimeout(() => {
+        Animated.timing(skeletonOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => setShowSkeleton(false));
+      }, 700);
+    }
+    
+    // Reset flag if it was set
+    if (sendingFromWelcome && isWelcomeToSession) {
+      isSendingFromWelcome.current = false;
+      // Force hide skeleton just in case
+      setShowSkeleton(false);
+      // Ensure content is visible immediately without blink
+      contentFadeAnim.setValue(1);
+      contentFadeAnimTwo.setValue(1);
     }
     
     if (wasWelcome) {
@@ -339,7 +372,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         Animated.timing(contentFadeAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
       ]).start();
     }
-    if (isWelcomeToSession) {
+    
+    if (isWelcomeToSession && !sendingFromWelcome) {
       setTimeout(() => {
         Animated.sequence([
           Animated.timing(contentFadeAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
@@ -348,7 +382,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
           Animated.timing(contentFadeAnimTwo, { toValue: 1, duration: 600, useNativeDriver: true }),
         ]).start();
       }, 50);
-    } else {
+    } else if (!isWelcomeToSession) {
       setTimeout(() => {
         Animated.sequence([
           Animated.timing(contentFadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
@@ -359,15 +393,12 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       }, 50);
     }
     
-    // Show skeleton instantly for session->session transitions + content fade
-    
-    
     prevSessionIdRef.current = currentSession?.id;
     
     return () => {
       if (skeletonTimeoutRef.current) clearTimeout(skeletonTimeoutRef.current);
     };
-  }, [currentSession?.id, skeletonOpacity, trigger]);
+  }, [currentSession?.id, skeletonOpacity]);
 
   // No auto-scroll during streaming - inverted FlatList handles it naturally
   // Content expands upward, user stays at bottom
@@ -396,8 +427,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     
     // WELCOME SCREEN FLOW: Create session first, then append messages
     if (!session) {
+      isSendingFromWelcome.current = true;
       session = await createSession('New Chat');
       sessionRef.current = session;
+      lastCreatedSessionId.current = session.id; // Store ID for effect check
       isNewSession = true;
     }
 
@@ -656,9 +689,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
               renderItem={renderMessage}
               estimatedItemSize={100}
               // recycleItems={true}
-              // Removed initialScrollIndex - using manual scrollToIndex instead (GH #239, #240)
+              initialScrollIndex={Math.max(0, displayMessages.length - 1)}
               maintainScrollAtEnd
-              onStartReached={() => {handleLoadMore(), scrollBottomBtnShow()}}
+              onStartReached={() => {handleLoadMore()}}
               // Removed maintainScrollAtEndThreshold to prevent auto-scroll issues
               maintainVisibleContentPosition
               ListHeaderComponent={ListHeader}

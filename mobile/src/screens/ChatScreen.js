@@ -158,6 +158,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     };
   });
   
+  // Animated paddingBottom for content area (welcome screen, messages)
+  const contentPaddingAnimatedStyle = useAnimatedStyle(() => {
+    // Convert negative keyboard height to positive padding
+    const paddingValue = -keyboardAnimatedHeight.value;
+    return {
+      paddingBottom: paddingValue > 0 ? paddingValue + 75 : 85,
+    };
+  });
+  
   // Fade in/out scroll button with auto-hide
 
   const scrollBottomHandler = () => {
@@ -627,14 +636,14 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     <View style={styles.container}>
       {!currentSession && displayMessages.length === 0 ? (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <Animated.View style={[styles.emptyState, { paddingTop: topInset, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 65 : 75, opacity: contentFadeAnim }]}>
+          <ReanimatedModule.View style={[styles.emptyState, { paddingTop: topInset, opacity: contentFadeAnim.value !== undefined ? contentFadeAnim.value : 1 }, contentPaddingAnimatedStyle]}>
             <WelcomeScreen username={settings.persona?.name} />
-          </Animated.View>
+          </ReanimatedModule.View>
         </TouchableWithoutFeedback>
       ) : displayMessages.length === 0 ? (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <Animated.View style={[styles.emptyState, { paddingTop: topInset, paddingBottom: Platform.OS === 'android' ? keyboardHeight + 65 : 75, opacity: contentFadeAnimTwo }]}>
-          </Animated.View>
+          <ReanimatedModule.View style={[styles.emptyState, { paddingTop: topInset, opacity: contentFadeAnimTwo.value !== undefined ? contentFadeAnimTwo.value : 1 }, contentPaddingAnimatedStyle]}>
+          </ReanimatedModule.View>
         </TouchableWithoutFeedback>
       ) : (
         <>

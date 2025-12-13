@@ -100,12 +100,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     minWidth: 180,
     maxWidth: 300,
+    paddingBottom: 5,
+    paddingRight: 3,
     overflow: 'hidden',
   },
   sessionHeader: {
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
+    marginBottom: 5,
   },
   sessionName: {
     color: COLORS.fgMuted,
@@ -115,12 +118,13 @@ const styles = StyleSheet.create({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    gap: 9,
   },
   optionText: {
     color: COLORS.fg,
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: FONTS.sans,
   },
   dangerText: {

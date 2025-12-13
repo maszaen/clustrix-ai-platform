@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback, Pressable } from 'react-native';
-import { Pressable as GHPressable } from 'react-native-gesture-handler';
+import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
@@ -8,6 +7,7 @@ import { FONTS } from '../constants/fonts';
 import SlideLeftModal from '../components/SlideLeftModal';
 import AlertModal from '../components/AlertModal';
 import AccountScreen from './AccountScreen';
+import { LinearGradient } from 'react-native-svg';
 
 const LANGUAGES = [
   { id: 'autodetect', name: 'Auto-detect' },
@@ -84,7 +84,7 @@ function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved })
   };
 
   return (
-    <ScrollView style={styles.subContainer} contentContainerStyle={styles.content}>
+    <ScrollView showsVerticalScrollIndicator={false} style={styles.subContainer} contentContainerStyle={styles.content}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Your Name</Text>
         <TextInput
@@ -140,7 +140,7 @@ function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved })
 // Settings Menu Content
 function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout }) {
   return (
-    <ScrollView contentContainerStyle={styles.menuContent}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuContent}>
       <SlideLeftModal.Category
         title="Preferences"
         items={[
@@ -150,19 +150,29 @@ function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenPr
       />
 
       <SlideLeftModal.Category
-        title="Appearances"
+        title="Support"
         items={[
-          { icon: 'color-palette-outline', title: 'Theme', description: 'Light or dark mode' },
-          { icon: 'brush-outline', title: 'Accent Color', description: 'Customize accent color' },
+          {
+            icon: 'bug-outline',
+            title: 'Report a Bug',
+            description: 'Report app issues',
+            onPress: () => Linking.openURL('https://github.com/maszaen/clustrix-ai-platform/issues'),
+          },
+          {
+            icon: 'git-branch-outline',
+            title: 'Contribution',
+            description: 'Contribute to Clustrix',
+            onPress: () => Linking.openURL('https://github.com/maszaen/clustrix-ai-platform'),
+          },
         ]}
       />
 
       <SlideLeftModal.Category
-        title="Privacy"
+        title="About"
         items={[
           { icon: 'shield-outline', title: 'Privacy Policy', description: 'How we handle your data', onPress: onOpenPrivacyPolicy },
           { icon: 'document-text-outline', title: 'License', description: 'Open source licenses', onPress: onOpenLicense },
-          { icon: 'information-circle-outline', title: 'Learn More', description: 'About Clustrix', onPress: onOpenAbout },
+          { icon: 'information-circle-outline', title: 'About App', description: 'Learn more about Clustrix', onPress: onOpenAbout },
         ]}
       />
     </ScrollView>
@@ -172,7 +182,7 @@ function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenPr
 // Privacy Policy Content
 function PrivacyPolicyContent() {
   return (
-    <ScrollView style={styles.subContainer} contentContainerStyle={styles.content}>
+    <ScrollView showsVerticalScrollIndicator={false} style={styles.subContainer} contentContainerStyle={styles.content}>
       <View style={styles.section}>
         <Text style={styles.infoTitle}>Customer Agreement</Text>
         <Text style={styles.infoText}>Last updated: 13 December 2025 at 10.03</Text>
@@ -195,23 +205,23 @@ function PrivacyPolicyContent() {
       <View style={styles.section}>
         <Text style={styles.sectionTitleNoPadding}>Cloud Backup</Text>
         <Text style={styles.infoText}>
-          If you choose to use our optional cloud backup feature, your data is encrypted before being uploaded. Only you can decrypt your data using your account credentials.
+          If you choose to use our optional cloud backup feature, your data is encrypted before being uploaded. Only you can decrypt your data using your account.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitleNoPadding}>Third-Party Services</Text>
-        <Text style={styles.infoText}>
-          When you use AI providers (OpenAI, Anthropic, Google, etc.), your messages are sent directly to their servers according to their own privacy policies. Please review each provider's privacy policy for more information.
-        </Text>
+        <Text style={styles.infoText}>When you use AI providers (OpenAI, Anthropic, Google, etc.), your messages are sent directly to their servers according to their own privacy policies.</Text>
       </View>
-
+      
       <View style={styles.section}>
         <Text style={styles.sectionTitleNoPadding}>Contact</Text>
         <Text style={styles.infoText}>
           For privacy-related questions, please contact Zaeni Ahmad at zaeniahmad@proton.me
         </Text>
       </View>
+
+      
     </ScrollView>
   );
 }
@@ -219,7 +229,7 @@ function PrivacyPolicyContent() {
 // License Content
 function LicenseContent() {
   return (
-    <ScrollView style={styles.subContainer} contentContainerStyle={styles.content}>
+    <ScrollView showsVerticalScrollIndicator={false} style={styles.subContainer} contentContainerStyle={styles.content}>
       <View style={styles.section}>
         <Text style={styles.infoTitle}>Open Source Licenses</Text>
         <Text style={styles.infoText}>Clustrix is built with love using open source software.</Text>
@@ -260,52 +270,109 @@ function LicenseContent() {
 // About Clustrix Content
 function AboutClustrixContent() {
   return (
-    <ScrollView style={styles.subContainer} contentContainerStyle={styles.content}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      style={styles.subContainer}
+      contentContainerStyle={styles.content}
+    >
+
       <View style={styles.section}>
         <Text style={styles.infoTitle}>What is Clustrix?</Text>
-      
 
         <Text style={styles.infoText}>
-          Clustrix is a powerful AI chat application designed by Zaeni Ahmad. It provides a beautiful, native mobile experience for interacting with various AI models including OpenAI's GPT, Anthropic's Claude, and Google's Gemini.
+          Clustrix is a native mobile AI chat client built to help you work with multiple AI providers from one clean,
+          fast interface. It’s designed for everyday use like quick questions, deeper research, drafting, and iterative work
+          while keeping your configuration and chat history in your control.
+          {'\n\n'}
+          You can connect providers such as OpenAI, Anthropic, and Google, then choose models based on your needs
+          (speed, cost, reasoning depth, or capabilities). Clustrix focuses on the details that matter on mobile:
+          responsive UI, streaming output, and a layout that stays readable in long conversations.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitleNoPadding}>How it works</Text>
+        <BulletList
+          items={[
+            'Bring your own API keys for each provider.',
+            'Your messages are sent directly to the provider you select, following that provider’s policies.',
+            'Chats are stored locally by default, with optional encrypted backup if you enable it.',
+          ]}
+        />
+
+        <Text style={styles.infoText}>
+          If you’re using Clustrix for work or sensitive information, review the Privacy Policy section in Settings for
+          details on data handling and third-party services.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitleNoPadding}>Features</Text>
-        <BulletList items={[
-          'Multi-provider support (OpenAI, Anthropic, Google, and more)',
-          'Native thinking/reasoning display for supported models',
-          'Real-time streaming responses',
-          'Beautiful dark mode interface',
-          'Local-first data storage',
-          'Optional cloud backup',
-          'Custom instructions and persona settings',
-        ]} />
-      </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitleNoPadding}>Developer</Text>
+        {/* Keep the original feature list intact (no items removed) */}
+        <BulletList
+          items={[
+            'Multi-provider support (OpenAI, Anthropic, Google, and more)',
+            'Native thinking/reasoning display for supported models',
+            'Real-time streaming responses',
+            'Beautiful dark mode interface',
+            'Local-first data storage',
+            'Optional cloud backup',
+            'Custom instructions and persona settings',
+          ]}
+        />
+
         <Text style={styles.infoText}>
-          Clustrix is developed by Zaeni Ahmad, a passionate software developer focused on creating intuitive and powerful AI applications. Zaeni Ahmad believes in privacy-first design and open source software.
+          These features are designed to work together: switch providers without changing your workflow, see results as
+          they stream, and use custom instructions to keep outputs consistent across chats and models.
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitleNoPadding}>Connect with Zaeni Ahmad</Text>
-        <BulletList items={[
-          'Email: zaeniahmad@proton.me',
-          'GitHub: github.com/maszaen',
-        ]} />
+        <Text style={styles.sectionTitleNoPadding}>Privacy-first by design</Text>
+        <Text style={styles.infoText}>
+          Clustrix aims to minimize data exposure and keep choices explicit. Local-first storage reduces dependency on
+          external services, while optional backup is there for users who want cross-device continuity. When you use a
+          third-party AI provider, requests are handled by that provider—so it’s important to understand their privacy
+          terms before sending sensitive content.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitleNoPadding}>Open source</Text>
+        <Text style={styles.infoText}>
+          Clustrix is built with open source software and is available on GitHub. You can report bugs, request features,
+          or contribute improvements through issues and pull requests.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitleNoPadding}>Support & links</Text>
+        <BulletList
+          items={[
+            'Email: zaeniahmad@proton.me',
+            'GitHub: github.com/maszaen',
+          ]}
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitleNoPadding}>Maintainer</Text>
+        <Text style={styles.infoText}>
+          Created and maintained by Zaeni Ahmad.
+        </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.infoText}>
-          Thank you for using Clustrix! If you enjoy the app, please consider leaving a review or contributing to the project. - Zaeni Ahmad
+          Thank you for using Clustrix. If you find it useful, please consider leaving a review or contributing to the
+          project.
         </Text>
       </View>
     </ScrollView>
   );
 }
+
 
 export default function PersonalizationScreen({ visible, onClose }) {
   const { settings, updateSettings } = useApp();
@@ -370,6 +437,12 @@ export default function PersonalizationScreen({ visible, onClose }) {
         onClose={() => setShowAbout(false)} 
         title="About Clustrix"
       >
+        <LinearGradient
+        colors={[COLORS.bg90, COLORS.bg90, COLORS.bg70, 'transparent']}
+        locations={[0, 0.5, 0.7, 1]}
+        style={[styles.floatingHeader, { height: 80 }]}
+        pointerEvents="none"
+      />
         <AboutClustrixContent />
       </SlideLeftModal>
       
@@ -401,6 +474,13 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.sans,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
+  },
+  floatingHeader: {
+    position: 'absolute',
+    top: 500,
+    left: 0,
+    right: 0,
+    zIndex: 5,
   },
   inputMultiline: { minHeight: 100, textAlignVertical: 'top' },
   dropdown: {

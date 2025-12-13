@@ -4,12 +4,14 @@ import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useEffect } from 'react';
 
 function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything', value = '', onChangeText }, ref) {
+  const { colors } = useTheme();
   const [text, setText] = useState(value || '');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const inputRef = useRef(null);
@@ -46,33 +48,30 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
   return (
     <View style={styles.wrapper}>
       <LinearGradient
-        colors={['transparent', COLORS.bg70, COLORS.bg90, COLORS.bg90]}
+        colors={['transparent', colors.bg70, colors.bg90, colors.bg90]}
         locations={[0, 0.45, 0.6, 1]}
         style={[styles.bottomFade, { height: insets.bottom + 100 }]}
         pointerEvents="none"
       />
       
-      <Pressable style={styles.addBtn} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
-        {/* <Ionicons name="create-outline" size={24} color={COLORS.fg} /> */}
-        <Ionicons name="add-outline" size={27} color={COLORS.icon} />
+      <Pressable style={[styles.addBtn, { borderColor: colors.borderLight, backgroundColor: colors.inputBg }]} android_ripple={{ color: colors.rippleMedium, borderless: true }}>
+        <Ionicons name="add-outline" size={27} color={colors.icon} />
       </Pressable>
 
-      <View style={styles.containerInput}>
+      <View style={[styles.containerInput, { backgroundColor: colors.inputBg, borderColor: colors.borderLight }]}>
         <TextInput
           ref={inputRef}
-          style={styles.input}
+          style={[styles.input, { color: colors.fg }]}
           value={text}
           onChangeText={(val) => {
             setText(val);
             onChangeText?.(val);
           }}
           placeholder={placeholder}
-          placeholderTextColor={COLORS.fgMuted}
+          placeholderTextColor={colors.fgMuted}
           multiline
           maxLength={10000}
-          // editable={!isStreaming}
           onPressIn={() => {
-            // Only force blur+focus if keyboard is not visible (fix Android multiline bug)
             if (!keyboardVisible) {
               inputRef.current?.blur();
               setTimeout(() => inputRef.current?.focus(), 50);
@@ -81,17 +80,17 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
         />
         
         {isStreaming ? (
-          <Pressable style={styles.stopButton} onPress={onStop} android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true }}>
-            <Ionicons name="stop" size={20} color={COLORS.fg} />
+          <Pressable style={[styles.stopButton, { backgroundColor: colors.surface }]} onPress={onStop} android_ripple={{ color: colors.rippleStrong, borderless: true }}>
+            <Ionicons name="stop" size={20} color={colors.fg} />
           </Pressable>
         ) : (
           <Pressable 
-            style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]} 
+            style={[styles.sendButton, { backgroundColor: colors.accent }, !text.trim() && { backgroundColor: colors.surface }]} 
             onPress={handleSend}
             disabled={!text.trim()}
-            android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true }}
+            android_ripple={{ color: colors.rippleStrong, borderless: true }}
           >
-            <Ionicons name="arrow-up" size={20} color={COLORS.icon} />
+            <Ionicons name="arrow-up" size={20} color={colors.icon} />
           </Pressable>
         )}
       </View>

@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Animated, Modal, TouchableWithoutFeedback, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 
 /**
@@ -21,6 +22,7 @@ export default function ContextMenuFixed({
   position = { top: 60, right: 16 },
   positionType = 'absolute'
 }) {
+  const { colors } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
@@ -55,14 +57,15 @@ export default function ContextMenuFixed({
         <Animated.View 
           style={[
             styles.menu, 
+            { backgroundColor: colors.bgSecondary },
             menuPosition,
             { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
           ]}
         >
           {/* Session Name Header */}
           {sessionName && (
-            <View style={styles.sessionHeader}>
-              <Text style={styles.sessionName} numberOfLines={1}>{sessionName}</Text>
+            <View style={[styles.sessionHeader, { borderBottomColor: colors.borderLight }]}>
+              <Text style={[styles.sessionName, { color: colors.fgMuted }]} numberOfLines={1}>{sessionName}</Text>
             </View>
           )}
           
@@ -72,14 +75,14 @@ export default function ContextMenuFixed({
               key={idx}
               style={styles.option}
               onPress={() => { option.onPress?.(); close(); }}
-              android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+              android_ripple={{ color: colors.ripple }}
             >
               <Ionicons 
                 name={option.icon} 
                 size={18} 
-                color={option.danger ? COLORS.danger : COLORS.fg} 
+                color={option.danger ? colors.danger : colors.fg} 
               />
-              <Text style={[styles.optionText, option.danger && styles.dangerText]}>
+              <Text style={[styles.optionText, { color: colors.fg }, option.danger && { color: colors.danger }]}>
                 {option.label}
               </Text>
             </Pressable>

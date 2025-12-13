@@ -9,6 +9,7 @@ import InputModal from '../components/InputModal';
 import ConfirmModal from '../components/ConfirmModal';
 import AlertModal from '../components/AlertModal';
 import { COLORS } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 import { Eye, EyeClosed } from 'lucide-react-native';
 import { DEFAULT_PROVIDERS_LIST, DEFAULT_MODELS } from '../constants/providers';

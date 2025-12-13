@@ -12,6 +12,7 @@ import Reanimated, {
 import { runOnJS } from 'react-native-worklets';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -41,6 +42,7 @@ export default function SlideUpModal({
   bottomInset = 0, 
   autoExpanded = false 
 }) {
+  const { colors } = useTheme();
   const translateY = useSharedValue(CLOSED_Y);
   const overlayOpacity = useSharedValue(0);
   const context = useSharedValue({ y: 0 });
@@ -159,7 +161,7 @@ export default function SlideUpModal({
     <View style={styles.container}>
       {/* Backdrop - tap to close, pan to block swipes */}
       <GestureDetector gesture={backdropGesture}>
-        <Reanimated.View style={[styles.backdrop, overlayAnimatedStyle]} />
+        <Reanimated.View style={[styles.backdrop, { backgroundColor: colors.overlay }, overlayAnimatedStyle]} />
       </GestureDetector>
 
       {/* Sheet with pan gesture on entire surface */}
@@ -167,12 +169,12 @@ export default function SlideUpModal({
         <Reanimated.View
           style={[
             styles.sheet, 
-            { height: SCREEN_HEIGHT * SNAP_EXPANDED },
+            { height: SCREEN_HEIGHT * SNAP_EXPANDED, backgroundColor: colors.bgSecondary },
             sheetAnimatedStyle
           ]}
         >
           <View style={styles.handleArea}>
-            <View style={styles.handle} />
+            <View style={[styles.handle, { backgroundColor: colors.borderLight }]} />
           </View>
           <View style={styles.content}>
             {typeof children === 'function' 
@@ -189,7 +191,7 @@ export default function SlideUpModal({
       {showBottomGradient && (
         <Reanimated.View style={[styles.bottomGradient, gradientAnimatedStyle]} pointerEvents="none">
           <LinearGradient
-            colors={['transparent', COLORS.bgSecondary]}
+            colors={['transparent', colors.bgSecondary]}
             style={StyleSheet.absoluteFill}
           />
         </Reanimated.View>

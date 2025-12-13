@@ -17,7 +17,6 @@ import { useApp } from '../context/AppContext';
 import SlideLeftModal from '../components/SlideLeftModal';
 import AlertModal from '../components/AlertModal';
 import { COLORS } from '../constants/colors';
-import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 import { SvgXml } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';

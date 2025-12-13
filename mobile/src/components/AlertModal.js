@@ -1,6 +1,5 @@
 import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
 import { COLORS } from '../constants/colors';
-import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 
 /**
@@ -16,28 +15,27 @@ export default function AlertModal({
   secondaryText,
   onSecondary,
 }) {
-  const { colors } = useTheme();
   const hasSecondary = !!secondaryText && !!onSecondary;
   
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onPrimary}>
-      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
-        <View style={[styles.modal, { backgroundColor: colors.bgSecondary }]}>
+      <View style={styles.overlay}>
+        <View style={styles.modal}>
           {/* Title */}
-          <Text style={[styles.title, { color: colors.fg }]}>{title}</Text>
+          <Text style={styles.title}>{title}</Text>
           
           {/* Message */}
-          {message && <Text style={[styles.message, { color: colors.fgMuted }]}>{message}</Text>}
+          {message && <Text style={styles.message}>{message}</Text>}
           
           {/* Buttons - aligned right */}
           <View style={styles.buttons}>
             {hasSecondary && (
-              <Pressable style={styles.secondaryBtn} onPress={onSecondary} android_ripple={{ color: colors.ripple }}>
-                <Text style={[styles.secondaryText, { color: colors.fgMuted }]}>{secondaryText}</Text>
+              <Pressable style={styles.secondaryBtn} onPress={onSecondary} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+                <Text style={styles.secondaryText}>{secondaryText}</Text>
               </Pressable>
             )}
-            <Pressable style={[styles.primaryBtn, { borderColor: colors.borderLight }]} onPress={onPrimary} android_ripple={{ color: colors.rippleMedium }}>
-              <Text style={[styles.primaryText, { color: colors.fg }]}>{primaryText}</Text>
+            <Pressable style={styles.primaryBtn} onPress={onPrimary} android_ripple={{ color: 'rgba(255,255,255,0.2)' }}>
+              <Text style={styles.primaryText}>{primaryText}</Text>
             </Pressable>
           </View>
         </View>

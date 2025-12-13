@@ -1,14 +1,12 @@
-import { useState, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback, Pressable, Dimensions } from 'react-native';
+import { useState } from 'react';
+import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback, Pressable } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
-import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 import SlideLeftModal from '../components/SlideLeftModal';
 import AlertModal from '../components/AlertModal';
-import ContextMenuFixed from '../components/ContextMenuFixed';
 import AccountScreen from './AccountScreen';
 
 const LANGUAGES = [
@@ -140,14 +138,7 @@ function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved })
 }
 
 // Settings Menu Content
-function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout, onOpenTheme, currentTheme }) {
-  // Map theme ID to display name
-  const themeDisplayName = {
-    dark: 'Dark',
-    light: 'Light',
-    system: 'System default',
-  }[currentTheme] || 'Dark';
-
+function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout }) {
   return (
     <ScrollView contentContainerStyle={styles.menuContent}>
       <SlideLeftModal.Category
@@ -161,7 +152,7 @@ function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenPr
       <SlideLeftModal.Category
         title="Appearances"
         items={[
-          { icon: 'color-palette-outline', title: 'Theme', description: themeDisplayName, onPress: onOpenTheme },
+          { icon: 'color-palette-outline', title: 'Theme', description: 'Light or dark mode' },
           { icon: 'brush-outline', title: 'Accent Color', description: 'Customize accent color' },
         ]}
       />
@@ -324,27 +315,6 @@ export default function PersonalizationScreen({ visible, onClose }) {
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [themeMenu, setThemeMenu] = useState({ visible: false, position: null });
-
-  // Current theme from settings, default to 'dark'
-  const currentTheme = settings.theme || 'dark';
-
-  // Handle theme change with 200ms delay
-  const handleThemeChange = (newTheme) => {
-    setThemeMenu({ visible: false, position: null });
-    setTimeout(() => {
-      updateSettings({ theme: newTheme });
-    }, 200);
-  };
-
-  // Open theme menu
-  const handleOpenTheme = () => {
-    // Position menu at right side, somewhat centered
-    setThemeMenu({ 
-      visible: true, 
-      position: { top: 200, right: 16 } 
-    });
-  };
 
   return (
     <>
@@ -356,35 +326,8 @@ export default function PersonalizationScreen({ visible, onClose }) {
           onOpenPrivacyPolicy={() => setShowPrivacyPolicy(true)}
           onOpenLicense={() => setShowLicense(true)}
           onOpenAbout={() => setShowAbout(true)}
-          onOpenTheme={handleOpenTheme}
-          currentTheme={currentTheme}
         />
       </SlideLeftModal>
-
-      {/* Theme Selection Menu */}
-      <ContextMenuFixed
-        visible={themeMenu.visible}
-        onClose={() => setThemeMenu({ visible: false, position: null })}
-        sessionName="Switch theme"
-        position={themeMenu.position || { top: 200, right: 16 }}
-        options={[
-          { 
-            label: 'Dark', 
-            icon: 'moon-outline', 
-            onPress: () => handleThemeChange('dark') 
-          },
-          { 
-            label: 'Light', 
-            icon: 'sunny-outline', 
-            onPress: () => handleThemeChange('light') 
-          },
-          { 
-            label: 'System default', 
-            icon: 'phone-portrait-outline', 
-            onPress: () => handleThemeChange('system') 
-          },
-        ]}
-      />
 
       {/* Custom Instructions Submenu */}
       <SlideLeftModal 

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Animated, Dimensions, BackHandler } from 'react
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -28,17 +29,17 @@ function getCardRadius(index, total) {
 /**
  * Menu Card Item
  */
-function MenuCard({ icon, title, description, onPress, style }) {
+function MenuCard({ icon, title, description, onPress, style, colors }) {
   return (
-    <Pressable style={[styles.card, style]} onPress={onPress} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+    <Pressable style={[styles.card, { backgroundColor: colors.bgSecondary }, style]} onPress={onPress} android_ripple={{ color: colors.ripple }}>
       <View style={styles.cardLeft}>
-        <Ionicons name={icon} size={22} color={COLORS.fgMuted} />
+        <Ionicons name={icon} size={22} color={colors.fgMuted} />
         <View style={styles.cardText}>
-          <Text style={styles.cardTitle}>{title}</Text>
-          {description && <Text style={styles.cardDesc}>{description}</Text>}
+          <Text style={[styles.cardTitle, { color: colors.fg }]}>{title}</Text>
+          {description && <Text style={[styles.cardDesc, { color: colors.fgMuted }]}>{description}</Text>}
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={COLORS.fgMuted} />
+      <Ionicons name="chevron-forward" size={20} color={colors.fgMuted} />
     </Pressable>
   );
 }
@@ -49,9 +50,10 @@ function MenuCard({ icon, title, description, onPress, style }) {
  * @param {Array} items - Array of { icon, title, description, onPress }
  */
 function MenuCategory({ title, items }) {
+  const { colors } = useTheme();
   return (
     <View style={styles.category}>
-      <Text style={styles.categoryTitle}>{title}</Text>
+      <Text style={[styles.categoryTitle, { color: colors.fgMuted }]}>{title}</Text>
       <View style={styles.categoryCards}>
         {items.map((item, index) => (
           <MenuCard
@@ -61,6 +63,7 @@ function MenuCategory({ title, items }) {
             description={item.description}
             onPress={item.onPress}
             style={getCardRadius(index, items.length)}
+            colors={colors}
           />
         ))}
       </View>
@@ -77,6 +80,7 @@ function MenuCategory({ title, items }) {
  * @param {boolean} showBack - Show back button (default true)
  */
 export default function SlideLeftModal({ visible, onClose, title, children, showBack = true }) {
+  const { colors } = useTheme();
   const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
 
@@ -129,15 +133,15 @@ export default function SlideLeftModal({ visible, onClose, title, children, show
 
   return (
     <View style={styles.wrapper}>
-      <Animated.View style={[styles.overlay, { opacity: overlayAnim }]} />
-      <Animated.View style={[styles.container, { transform: [{ translateX: slideAnim }] }]}>
+      <Animated.View style={[styles.overlay, { opacity: overlayAnim, backgroundColor: colors.overlay }]} />
+      <Animated.View style={[styles.container, { backgroundColor: colors.bg, transform: [{ translateX: slideAnim }] }]}>
         <View style={styles.header}>
           {showBack && (
-            <Pressable style={styles.backBtn} onPress={close} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
-              <Ionicons name="arrow-back-outline" size={23} color={COLORS.fg} />
+            <Pressable style={[styles.backBtn, { borderColor: colors.borderLight, backgroundColor: colors.inputBg }]} onPress={close} android_ripple={{ color: colors.rippleMedium, borderless: true }}>
+              <Ionicons name="arrow-back-outline" size={23} color={colors.fg} />
             </Pressable>
           )}
-          <Text style={[styles.headerTitle, !showBack && styles.headerTitleCenter]}>{title}</Text>
+          <Text style={[styles.headerTitle, { color: colors.fg }, !showBack && styles.headerTitleCenter]}>{title}</Text>
         </View>
         <View style={styles.content}>
           {children}

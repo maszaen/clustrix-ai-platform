@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TextInput, Pressable } from 'react-native';
 import { COLORS } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 
 /**
@@ -22,6 +23,7 @@ export default function InputModal({
   onSubmit, 
   onCancel 
 }) {
+  const { colors } = useTheme();
   const [values, setValues] = useState({});
 
   useEffect(() => {
@@ -48,19 +50,19 @@ export default function InputModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.overlay}>
-        <View style={styles.modal}>
-          <Text style={styles.title}>{title}</Text>
+      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
+        <View style={[styles.modal, { backgroundColor: colors.bgSecondary }]}>
+          <Text style={[styles.title, { color: colors.fg }]}>{title}</Text>
           
           {fields.map((field, idx) => (
             <View key={field.key} style={idx < fields.length - 1 ? styles.fieldContainer : null}>
-              {field.label && <Text style={styles.label}>{field.label}</Text>}
+              {field.label && <Text style={[styles.label, { color: colors.fgMuted }]}>{field.label}</Text>}
               <TextInput
-                style={[styles.input, field.multiline && styles.inputMultiline]}
+                style={[styles.input, { backgroundColor: colors.inputBg, borderColor: colors.borderLight, color: colors.fg }, field.multiline && styles.inputMultiline]}
                 value={values[field.key] || ''}
                 onChangeText={(text) => handleChange(field.key, text)}
                 placeholder={field.placeholder || ''}
-                placeholderTextColor={COLORS.fgMuted}
+                placeholderTextColor={colors.fgMuted}
                 autoFocus={idx === 0}
                 selectTextOnFocus={idx === 0}
                 multiline={field.multiline}
@@ -74,16 +76,16 @@ export default function InputModal({
           ))}
           
           <View style={styles.buttons}>
-            <Pressable style={styles.cancelBtn} onPress={onCancel} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
-              <Text style={styles.cancelText}>{cancelText}</Text>
+            <Pressable style={[styles.cancelBtn, { borderColor: colors.borderLight }]} onPress={onCancel} android_ripple={{ color: colors.ripple }}>
+              <Text style={[styles.cancelText, { color: colors.fgMuted }]}>{cancelText}</Text>
             </Pressable>
             <Pressable 
-              style={[styles.submitBtn, !isValid && styles.submitDisabled]} 
+              style={[styles.submitBtn, { backgroundColor: colors.accent }, !isValid && { backgroundColor: colors.borderLight }]} 
               onPress={handleSubmit}
               disabled={!isValid}
-              android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
+              android_ripple={{ color: colors.rippleMedium }}
             >
-              <Text style={[styles.submitText, !isValid && styles.submitTextDisabled]}>{submitText}</Text>
+              <Text style={[styles.submitText, !isValid && { color: colors.fgMuted }]}>{submitText}</Text>
             </Pressable>
           </View>
         </View>

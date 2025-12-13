@@ -7,6 +7,7 @@ import ContextMenu from './ContextMenu';
 import ConfirmModal from './ConfirmModal';
 import InputModal from './InputModal';
 import { COLORS } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 import { LucideSearch, LucideArrowLeft } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -32,6 +33,7 @@ function SessionItem({ session, isActive, onSelect, onLongPress, onToggleFavorit
 }
 
 const SessionList = memo(function SessionList({ sessions, currentSession, onSelect, onDelete, onRename, onToggleFavorite, onNew, onSearchQueryChange, onContextMenuChange, isExpanded, onCollapse }) {
+  const { colors } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState({ visible: false, session: null, position: { x: 0, y: 0 } });
   const [confirmDelete, setConfirmDelete] = useState({ visible: false, session: null });
@@ -90,7 +92,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
       />
 
       <LinearGradient
-        colors={[COLORS.bg, COLORS.bg, 'transparent']}
+        colors={[colors.bg, colors.bg, 'transparent']}
         locations={[0, 0.7, 1]}
         style={[styles.floatingHeaderSidebar, { height: 70 }]}
         pointerEvents="none"
@@ -114,18 +116,18 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
                 searchInputRef.current?.blur();
                 onCollapse?.();
               }} 
-              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
+              android_ripple={{ color: colors.rippleMedium, borderless: true }}
             >
-              <LucideArrowLeft size={23} color={COLORS.icon} />
+              <LucideArrowLeft size={23} color={colors.icon} />
             </Pressable>
           ) : (
-            <LucideSearch size={23} color={COLORS.icon} />
+            <LucideSearch size={23} color={colors.icon} />
           )}
           <TextInput
             ref={searchInputRef}
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.fg }]}
             placeholder="Search..."
-            placeholderTextColor={COLORS.fgMuted}
+            placeholderTextColor={colors.fgMuted}
             value={searchQuery}
             onFocus={() => onSearchQueryChange?.(true)}
             onChangeText={(text) => {
@@ -137,27 +139,23 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
               onPress={() => {
                 setSearchQuery('');
               }}
-              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
+              android_ripple={{ color: colors.rippleMedium, borderless: true }}
             >
-              <Ionicons name="close-outline" size={23} color={COLORS.icon} />
+              <Ionicons name="close-outline" size={23} color={colors.icon} />
             </Pressable>
           ) : null}
         </Pressable>
         {/* New Chat Button */}
         <Pressable 
-          // 1. Pindahkan borderRadius ke sini (style utama)
-          // Pastikan styles.newChatBtn juga punya width & height yang sama biar jadi lingkaran sempurna
           style={[styles.newChatBtn, { borderRadius: 40, overflow: 'hidden' }]} 
           onPress={onNew} 
           android_ripple={{ 
-            color: 'rgba(255,255,255,0.2)', 
-            // 2. Kalau mau ripplenya kepotong pas di lingkaran, set borderless: false
+            color: colors.rippleMedium, 
             borderless: false 
           }}
         >
-          {/* View di dalem sini sebenernya jadi redundan kalau stylingnya udah di Pressable */}
           <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-            <SvgXml xml={PENCIL} width={23} height={23} style={[styles.newChatIcon, {color: COLORS.icon}]} />
+            <SvgXml xml={PENCIL} width={23} height={23} style={[styles.newChatIcon, {color: colors.icon}]} />
           </View>
         </Pressable>
       </View>

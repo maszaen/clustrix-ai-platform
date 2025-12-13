@@ -44,7 +44,6 @@ import { COLORS } from './src/constants/colors';
 import { fontAssets, FONTS } from './src/constants/fonts';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { PENCIL, LOGO_SVG, DIAMOND_LOGO_HTML_LOADER } from './src/constants/strings';
-import { ThemeProvider } from './src/context/ThemeContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Base sidebar width sits at ~83% of the screen so users can peek the main page
@@ -134,7 +133,6 @@ function WelcomeOverlay({ message, accentColor, visible, onFadeComplete }) {
 
 function MainApp() {
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = require('./src/context/ThemeContext').useTheme();
   const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime, settings, splashMessage, setSplashComplete } = useApp();
   const [showPersonalization, setShowPersonalization] = useState(false);
   const [showModels, setShowModels] = useState(false);
@@ -390,13 +388,13 @@ function MainApp() {
 
   return (
     <GestureDetector gesture={panGesture}>
-      <View style={[styles.container, { backgroundColor: colors.bg }]}>
-        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
         
         {/* Horizontal Pager Container */}
         <Reanimated.View style={[styles.pagerContainer, pagerAnimatedStyle]}>
           {/* Page 1: Sidebar (80% base width, stretches to 100% when pulled) */}
-          <Reanimated.View style={[styles.sidebarPage, sidebarAnimatedStyle, { paddingTop: insets.top, backgroundColor: colors.bg }]}>
+          <Reanimated.View style={[styles.sidebarPage, sidebarAnimatedStyle, { paddingTop: insets.top }]}>
 
           <View style={styles.sidebarContent}>
 
@@ -454,11 +452,11 @@ function MainApp() {
           </Reanimated.View>
 
         {/* Page 2: Main Chat (100% width) */}
-        <View style={[styles.mainPage, { width: SCREEN_WIDTH, backgroundColor: colors.bg }]}>
+        <View style={[styles.mainPage, { width: SCREEN_WIDTH }]}>
           <ChatScreen topInset={insets.top} onShowThinking={handleShowThinking} onStreamingThinking={handleStreamingThinking} />
 
           <LinearGradient
-            colors={[colors.bg90, colors.bg90, colors.bg70, 'transparent']}
+            colors={[COLORS.bg90, COLORS.bg90, COLORS.bg70, 'transparent']}
             locations={[0, 0.5, 0.7, 1]}
             style={[styles.floatingHeader, { height: insets.top + 80 }]}
             pointerEvents="none"
@@ -636,18 +634,6 @@ function MainApp() {
   );
 }
 
-// Wrapper to connect AppContext settings to ThemeProvider
-function ThemedApp() {
-  const { settings } = useApp();
-  const themeSetting = settings?.theme || 'dark';
-  
-  return (
-    <ThemeProvider themeSetting={themeSetting}>
-      <MainApp />
-    </ThemeProvider>
-  );
-}
-
 export default function App() {
   const [fontsLoaded] = useFonts(fontAssets);
 
@@ -660,7 +646,7 @@ export default function App() {
       <KeyboardProvider>
         <SafeAreaProvider>
           <AppProvider>
-            <ThemedApp />
+            <MainApp />
           </AppProvider>
         </SafeAreaProvider>
       </KeyboardProvider>

@@ -1,22 +1,20 @@
 import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
 import { COLORS } from '../constants/colors';
-import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 
 export default function ConfirmModal({ visible, title, message, onConfirm, onCancel, confirmText = 'Confirm', cancelText = 'Cancel', danger = false }) {
-  const { colors } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={[styles.overlay, { backgroundColor: colors.overlay }]}>
-        <View style={[styles.modal, { backgroundColor: colors.bgSecondary }]}>
-          <Text style={[styles.title, { color: colors.fg }]}>{title}</Text>
-          {message && <Text style={[styles.message, { color: colors.fgMuted }]}>{message}</Text>}
+      <View style={styles.overlay}>
+        <View style={styles.modal}>
+          <Text style={styles.title}>{title}</Text>
+          {message && <Text style={styles.message}>{message}</Text>}
           <View style={styles.buttons}>
-            <Pressable style={[styles.cancelBtn, { borderColor: colors.borderLight }]} onPress={onCancel} android_ripple={{ color: colors.ripple }}>
-              <Text style={[styles.cancelText, { color: colors.fgMuted }]}>{cancelText}</Text>
+            <Pressable style={styles.cancelBtn} onPress={onCancel} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+              <Text style={styles.cancelText}>{cancelText}</Text>
             </Pressable>
-            <Pressable style={[styles.confirmBtn, { backgroundColor: colors.borderLight }, danger && { backgroundColor: colors.danger }]} onPress={onConfirm} android_ripple={{ color: colors.rippleMedium }}>
-              <Text style={[styles.confirmText, { color: colors.fg }, danger && styles.dangerText]}>{confirmText}</Text>
+            <Pressable style={[styles.confirmBtn, danger && styles.dangerBtn]} onPress={onConfirm} android_ripple={{ color: 'rgba(255,255,255,0.2)' }}>
+              <Text style={[styles.confirmText, danger && styles.dangerText]}>{confirmText}</Text>
             </Pressable>
           </View>
         </View>

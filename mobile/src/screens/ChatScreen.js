@@ -15,7 +15,6 @@ import ContextMenuFixed from '../components/ContextMenuFixed';
 import InputModal from '../components/InputModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors';
-import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 import { WELCOME_MESSAGES, DIAMOND_LOGO_HTML } from '../constants/strings';
 
@@ -115,7 +114,6 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     loadWelcomeDraft,
     saveWelcomeDraft,
   } = useApp();
-  const { colors, isDark } = useTheme();
   const flatListRef = useRef(null);
   const chatInputRef = useRef(null);
   const [streamingContent, setStreamingContent] = useState('');
@@ -982,10 +980,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   }, [showSpacer, keyboardHeight]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.bg }]}>
+    <View style={styles.container}>
       {!currentSession && displayMessages.length === 0 ? (
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ReanimatedModule.View style={[styles.emptyState, { paddingTop: topInset, backgroundColor: colors.bg }, contentPaddingAnimatedStyle]}>
+          <ReanimatedModule.View style={[styles.emptyState, { paddingTop: topInset }, contentPaddingAnimatedStyle]}>
             <Animated.View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', opacity: contentFadeAnim }}>
               <WelcomeScreen message={welcomeMessage} shouldAnimate={splashComplete} />
             </Animated.View>

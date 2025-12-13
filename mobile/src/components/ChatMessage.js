@@ -4,7 +4,6 @@ import { Pressable } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
-import { useTheme } from '../context/ThemeContext';
 import { FONTS } from '../constants/fonts';
 import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -175,7 +174,6 @@ function TypewriterLoader() {
 }
 
 export default function ChatMessage({ message, isUser, isNew, onShowThinking, onRetry, onReact, onShowMetadata }) {
-  const { colors } = useTheme();
   // Animation for new user messages - fade in + subtle slide from right
   const fadeAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
   const scaleAnim = useRef(new Animated.Value(isNew && isUser ? 0.95 : 1)).current;
@@ -371,7 +369,7 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
               android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
             >
               <View style={styles.actionBtnInner}>
-                <ThumbsDown size={17} color={message.isLiked === false ? COLORS.dangerLight : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === false ? COLORS.dangerLight : 'none'} />
+                <ThumbsDown size={17} color={message.isLiked === false ? '#f87171' : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === false ? '#f87171' : 'none'} />
               </View>
             </Pressable>
 
@@ -498,7 +496,7 @@ const markdownStyles = {
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    color: COLORS.codeText,
+    color: '#8ab4f8',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -521,7 +519,7 @@ const markdownStyles = {
     fontFamily: FONTS.mono,
   },
   fenceContent: {
-    color: COLORS.codeFence,
+    color: '#a2a9b0',
     fontSize: 13,
     fontFamily: FONTS.mono,
     lineHeight: 20,
@@ -533,10 +531,10 @@ const markdownStyles = {
     padding: 12, 
     borderRadius: 10, 
     marginVertical: 8,
-    color: COLORS.codeFence,
+    color: '#a2a9b0',
     fontFamily: FONTS.mono,
   },
-  link: { color: COLORS.link },
+  link: { color: '#D3E3FD' },
   blockquote: { 
     backgroundColor: COLORS.bg,
     borderLeftWidth: 3, 

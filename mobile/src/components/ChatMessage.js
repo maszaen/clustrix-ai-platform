@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
@@ -173,29 +174,32 @@ function TypewriterLoader() {
 }
 
 export default function ChatMessage({ message, isUser, isNew, onShowThinking, onRetry, onReact, onShowMetadata }) {
-  const slideAnim = useRef(new Animated.Value(isNew && isUser ? 50 : 0)).current;
-  const opacityAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
+  // Animation for new user messages - fade in + subtle slide from right
+  const fadeAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
+  const scaleAnim = useRef(new Animated.Value(isNew && isUser ? 0.95 : 1)).current;
   const [copied, setCopied] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const actionsOpacity = useRef(new Animated.Value(0)).current;
+  const metadataBtnRef = useRef(null);
   
   useEffect(() => {
     if (isNew && isUser) {
+      // Animate user message appearing (only on mount)
       Animated.parallel([
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          tension: 100,
-          friction: 12,
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 250,
           useNativeDriver: true,
         }),
-        Animated.timing(opacityAnim, {
+        Animated.spring(scaleAnim, {
           toValue: 1,
-          duration: 200,
+          tension: 100,
+          friction: 10,
           useNativeDriver: true,
         }),
       ]).start();
     }
-  }, []);
+  }, []); // Empty deps - run once on mount
   
   // Old streaming spacer logic removed - now handled by ListFooter in ChatScreen
   
@@ -269,9 +273,9 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
     return 'Show thinking';
   };
 
-  // Copy raw message for clipboard feedback
+  // Copy message text ONLY (without thinking content)
   const handleCopy = async () => {
-    await Clipboard.setStringAsync(message.content || '');
+    await Clipboard.setStringAsync(textContent.trim() || message.content || '');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -280,7 +284,7 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
     return (
       <Animated.View style={[
         styles.userContainer,
-        { transform: [{ translateX: slideAnim }], opacity: opacityAnim }
+        { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
       ]}>
         <View style={styles.userBubble}>
           <Text style={styles.userText}>{message.content}</Text>
@@ -320,30 +324,43 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
 
         {!isLoading && showActions && (
           <Animated.View style={[styles.actionRow, { opacity: actionsOpacity }]}>
-            {onRetry && (
-              <Pressable 
-                style={styles.actionBtn} 
-                onPress={() => onRetry?.(message)}
-                android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
-              >
-                <RotateCcw size={17} color={COLORS.fgMuted} strokeWidth={2} />
-              </Pressable>
-            )}
+            
 
             <Pressable 
               style={styles.actionBtn} 
               onPress={handleCopy}
               android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
             >
-              {copied ? <Check size={17} color={COLORS.primary} strokeWidth={2} /> : <Copy size={17} color={COLORS.fgMuted} strokeWidth={2} />}
+              <View style={styles.actionBtnInner}>
+                {copied ? <Check size={17} color={COLORS.primary} strokeWidth={2} /> : <Copy size={17} color={COLORS.fgMuted} strokeWidth={2} />}
+              </View>
             </Pressable>
+
+            <View ref={metadataBtnRef} collapsable={false}>
+              <Pressable 
+                style={styles.actionBtn} 
+                onPress={() => {
+                  // Measure button position for menu placement
+                  metadataBtnRef.current?.measureInWindow((x, y, width, height) => {
+                    onShowMetadata?.(message, { x, y, width, height });
+                  });
+                }}
+                android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+              >
+                <View style={styles.actionBtnInner}>
+                  <Info size={17} color={COLORS.fgMuted} strokeWidth={2} />
+                </View>
+              </Pressable>
+            </View>
 
             <Pressable 
               style={styles.actionBtn} 
               onPress={() => onReact?.(true)}
               android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
             >
-              <ThumbsUp size={17} color={message.isLiked === true ? COLORS.primary : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === true ? COLORS.primary : 'none'} />
+              <View style={styles.actionBtnInner}>
+                <ThumbsUp size={17} color={message.isLiked === true ? COLORS.primary : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === true ? COLORS.primary : 'none'} />
+              </View>
             </Pressable>
 
             <Pressable 
@@ -351,16 +368,24 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
               onPress={() => onReact?.(false)}
               android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
             >
-              <ThumbsDown size={17} color={message.isLiked === false ? '#f87171' : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === false ? '#f87171' : 'none'} />
+              <View style={styles.actionBtnInner}>
+                <ThumbsDown size={17} color={message.isLiked === false ? '#f87171' : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === false ? '#f87171' : 'none'} />
+              </View>
             </Pressable>
 
-            <Pressable 
-              style={styles.actionBtn} 
-              onPress={() => onShowMetadata?.(message)}
-              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
-            >
-              <Info size={17} color={COLORS.fgMuted} strokeWidth={2} />
-            </Pressable>
+            
+
+            {onRetry && (
+              <Pressable 
+                style={styles.actionBtn} 
+                onPress={() => onRetry?.(message)}
+                android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+              >
+                <View style={styles.actionBtnInner}>
+                  <RotateCcw size={17} color={COLORS.fgMuted} strokeWidth={2} />
+                </View>
+              </Pressable>
+            )}
           </Animated.View>
         )}
       </View>
@@ -425,7 +450,7 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 0,
     marginTop: 0,
     marginBottom: 4,
     paddingHorizontal: 7
@@ -434,9 +459,13 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
+    overflow: 'hidden',
+  },
+  actionBtnInner: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
   loaderContainer: {
     flexDirection: 'row',

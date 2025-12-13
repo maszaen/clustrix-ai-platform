@@ -129,7 +129,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const [retryOptionsVisible, setRetryOptionsVisible] = useState(false);
   const [retryReasonVisible, setRetryReasonVisible] = useState(false);
   const [retryReason, setRetryReason] = useState('');
-  const [metadataMenu, setMetadataMenu] = useState({ visible: false, message: null });
+  const [metadataMenu, setMetadataMenu] = useState({ visible: false, message: null, position: null });
   const lastHapticTime = useRef(0);
   const isInitialLoad = useRef(true);
   const [showSkeleton, setShowSkeleton] = useState(false);
@@ -841,9 +841,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     setMessageMetadata(currentSession.id, message.message_index, { isLiked: newState });
   }, [currentSession, setMessageMetadata]);
 
-  // Open metadata context menu
-  const handleMetadataOpen = useCallback((message) => {
-    setMetadataMenu({ visible: true, message });
+  // Open metadata context menu with position
+  const handleMetadataOpen = useCallback((message, buttonPosition) => {
+    setMetadataMenu({ visible: true, message, position: buttonPosition });
   }, []);
 
   const renderMessage = ({ item }) => (
@@ -854,15 +854,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       onShowThinking={onShowThinking}
       onRetry={item.isLastAiMessage ? () => handleRetryModal(item) : null}
       onReact={(liked) => handleReaction(item, liked)}
-      onShowMetadata={() => handleMetadataOpen(item)}
+      onShowMetadata={(msg, pos) => handleMetadataOpen(msg || item, pos)}
     />
   );
 
   // Lazy load - only show last N messages
-  // Use _streamingId if available (for smooth transition from streaming to saved)
+  // Use TRULY unique key: session + index + array position
   const allMessages = messages.map((m, idx) => ({
     ...m,
-    _key: m._streamingId || m.id || `msg-${idx}-${m.message_index || idx}`,
+    _key: `saved-${currentSession?.id?.slice(-6) || 'x'}-${m.message_index ?? idx}-${idx}`,
   }));
   
   const startIndex = Math.max(0, allMessages.length - visibleCount);
@@ -879,8 +879,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   
   if ((streamingContent || isStreaming) && !alreadyHasSavedResponse) {
     // Use stable streaming ID to prevent blink when transitioning to saved message
+    // Prefix with 'live-' to avoid conflict with saved message that has same _streamingId
     displayMessages.push({
-      _key: streamingMessageId || `streaming-fallback`,
+      _key: `live-${streamingMessageId || 'fallback'}`,
       role: 'assistant',
       content: thinkingContent ? `<thinking>${thinkingContent}</thinking>\n\n${streamingContent}` : streamingContent || '...',
       isStreaming: true,
@@ -1187,8 +1188,14 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       {/* Metadata context menu */}
       <ContextMenuFixed
         visible={metadataMenu.visible}
-        onClose={() => setMetadataMenu({ visible: false, message: null })}
+        onClose={() => setMetadataMenu({ visible: false, message: null, position: null })}
         sessionName="Response metadata"
+        position={metadataMenu.position ? {
+          // Position near the button - if button is in lower half of screen, show above it
+          top: metadataMenu.position.y > 400 ? undefined : metadataMenu.position.y + 80,
+          bottom: metadataMenu.position.y > 400 ? (Dimensions.get('window').height - metadataMenu.position.y + -38) : undefined,
+          left: 16,
+        } : { top: 100, left: 16 }}
         options={[
           { 
             label: `Model: ${metadataMenu.message?.model || metadataMenu.message?.model_id || 'Unknown'}`, 

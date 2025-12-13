@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
-import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing, Dimensions, Modal } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing, Dimensions, Modal, Pressable } from 'react-native';
+import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS, useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { LegendList } from '@legendapp/list';
@@ -374,7 +374,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     // Reset flag if it was set
     if (sendingFromWelcome && isWelcomeToSession && !isSessionToWelcome) {
       isSendingFromWelcome.current = false;
-      console.log('this is true first')
+
 
       // Force hide skeleton just in case
       setShowSkeleton(false);
@@ -399,7 +399,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         ]).start();
       }, 50);
     } else if (!isWelcomeToSession) {
-      console.log('this is true !iswelcometosess')
+
       setTimeout(() => {
         Animated.sequence([
           Animated.timing(contentFadeAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
@@ -469,7 +469,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     return () => clearTimeout(handle);
   }, [inputText, currentSession, persistDraft, clearDraft, saveWelcomeDraft]);
 
-  const handleSend = async (text) => {
+  const handleSend = useCallback(async (text) => {
     hasScrolledInitial.current = true;
     initialScrollDone.current = true;
 
@@ -609,7 +609,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         }
       },
     });
-  };
+  }, [currentSession, clearDraft, saveWelcomeDraft, messages, createSession, appendMessage, settings, removeMessage, updateSession, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, setInputText, setNewMessageId, onStreamingThinking, triggerHaptic]);
 
   const handleStop = () => {
     setIsStreaming(false);
@@ -617,11 +617,39 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   };
 
   // Retrieve preceding user prompt for retry injection
-  const getUserPromptForMessage = useCallback((message) => {
-    if (!message) return '';
-    const targetIndex = message.message_index ?? 0;
-    const candidate = messages.find(m => m.role === 'user' && (m.message_index === targetIndex - 1));
-    return candidate?.content || '';
+  // Searches by ARRAY POSITION (backwards from AI message), not message_index
+  // This handles cases where message_index might be duplicate due to race conditions
+  const getUserPromptForMessage = useCallback((aiMessage) => {
+    if (!aiMessage) {
+      console.log('[getUserPromptForMessage] No message provided');
+      return '';
+    }
+    
+    console.log('[getUserPromptForMessage] Looking for user message before AI:', aiMessage.content?.substring(0, 30));
+    
+    // Find this AI message's position in the array
+    const aiPos = messages.findIndex(m => 
+      m.role === 'assistant' && 
+      m.content === aiMessage.content
+    );
+    
+    console.log('[getUserPromptForMessage] AI message found at array position:', aiPos);
+    
+    if (aiPos <= 0) {
+      console.log('[getUserPromptForMessage] AI at position 0 or not found, no user message before');
+      return '';
+    }
+    
+    // Look backwards from AI position to find the first user message
+    for (let i = aiPos - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        console.log('[getUserPromptForMessage] Found user message at position:', i, 'content:', messages[i].content?.substring(0, 50));
+        return messages[i].content || '';
+      }
+    }
+    
+    console.log('[getUserPromptForMessage] No user message found before AI');
+    return '';
   }, [messages]);
 
   // Retry modal trigger
@@ -631,26 +659,180 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   }, []);
 
   // Retry submission with prompt injection rules
-  const handleRetrySubmit = useCallback((mode, reasonText = '') => {
-    if (!retryTarget) return;
-    const userPrompt = getUserPromptForMessage(retryTarget);
-    const pickedResponse = retryTarget.content || '';
-
-    let injectedPrompt = '';
-    if (mode === 'concise') {
-      injectedPrompt = `The user requested a short, concise, but clear response.\nUser prompt: ${userPrompt}`;
-    } else if (mode === 'detailed') {
-      injectedPrompt = `The user requested a detailed, comprehensive response.\nUser prompt: ${userPrompt}`;
-    } else {
-      injectedPrompt = `Your previous response was inappropriate, and the user would like you to repeat it for ${reasonText}. Your previous response was ${pickedResponse}, and the associated user prompt was ${userPrompt}.`;
+  // SAMA PERSIS seperti handleSend: kirim history, thinking toggle, streaming
+  // Bedanya: inject instruction ke user prompt yang dikirim ke API (UI tidak berubah)
+  // PENTING: Gunakan POSISI ARRAY bukan message_index (karena bisa duplicate)
+  const handleRetrySubmit = useCallback(async (mode, reasonText = '') => {
+    if (!retryTarget || !currentSession) {
+      console.log('[Retry] Aborted: no retryTarget or currentSession');
+      return;
     }
+    
+    const pickedResponse = retryTarget.content || '';
+    
+    // Find AI message position in array (NOT message_index!)
+    const aiArrayPos = messages.findIndex(m => 
+      m.role === 'assistant' && m.content === retryTarget.content
+    );
+    
+    console.log('[Retry] AI message array position:', aiArrayPos);
+    console.log('[Retry] Mode:', mode);
+    console.log('[Retry] Messages count before:', messages.length);
+    console.log('[Retry] Messages:', messages.map((m, i) => ({ pos: i, role: m.role, index: m.message_index, content: m.content?.substring(0, 30) })));
+    
+    if (aiArrayPos < 0) {
+      console.log('[Retry] AI message not found in array!');
+      return;
+    }
+    
+    // Find the user message that triggered this AI (search backwards from AI position)
+    let userArrayPos = -1;
+    let userPrompt = '';
+    for (let i = aiArrayPos - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        userArrayPos = i;
+        userPrompt = messages[i].content || '';
+        break;
+      }
+    }
+    
+    console.log('[Retry] User message array position:', userArrayPos);
+    console.log('[Retry] Found userPrompt:', userPrompt?.substring(0, 100));
+    
+    // Build injected user prompt based on retry mode
+    let injectedUserPrompt = '';
+    if (mode === 'concise') {
+      injectedUserPrompt = `The user requested a short, concise, but clear response.\nUser prompt: ${userPrompt}`;
+    } else if (mode === 'detailed') {
+      injectedUserPrompt = `The user requested a detailed, comprehensive response.\nUser prompt: ${userPrompt}`;
+    } else {
+      // Other mode - include reason, previous response, and original user prompt
+      injectedUserPrompt = `Your previous response was inappropriate, and the user would like you to repeat it for ${reasonText}. Your previous response was ${pickedResponse}, and the associated user prompt was ${userPrompt}.`;
+    }
+    console.log('[Retry] Injected prompt:', injectedUserPrompt.substring(0, 150));
 
+    // Close modals and clear state
     setRetryOptionsVisible(false);
     setRetryReasonVisible(false);
     setRetryReason('');
     setRetryTarget(null);
-    handleSend(injectedPrompt);
-  }, [retryTarget, getUserPromptForMessage]);
+
+    // SNAPSHOT messages BEFORE any state changes
+    const messagesSnapshot = [...messages];
+    console.log('[Retry] Snapshot count:', messagesSnapshot.length);
+
+    // Get the message_index of the AI we want to delete (for DB deletion)
+    // Pass role and content for precise state filtering (handles duplicate indexes)
+    const aiMessageIndex = retryTarget.message_index;
+    const aiContent = retryTarget.content;
+    
+    // Delete from DB and state (with precise matching using role + content)
+    console.log('[Retry] Deleting AI message with message_index:', aiMessageIndex, 'role: assistant');
+    await removeMessage(currentSession.id, aiMessageIndex, 'assistant', aiContent);
+    
+    // Scroll to bottom
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+
+    // Build system prompt (sama seperti handleSend)
+    const systemPrompt = buildSystemPrompt(settings);
+    
+    // Build API messages dari snapshot using ARRAY POSITION:
+    // - Include all messages BEFORE the AI (by array position)
+    // - Replace the user message (by array position) with injected prompt
+    const filteredMessages = messagesSnapshot.slice(0, aiArrayPos); // Everything before AI
+    console.log('[Retry] Filtered messages for API (before AI at pos', aiArrayPos, '):', 
+      filteredMessages.map((m, i) => ({ pos: i, role: m.role })));
+    
+    const apiMessages = [
+      { role: 'system', content: systemPrompt },
+      ...filteredMessages.map((m, idx) => {
+        // Replace the user message that triggered the response with injected version
+        if (idx === userArrayPos) {
+          console.log('[Retry] Replacing user message at array pos', idx, 'with injected prompt');
+          return { role: 'user', content: injectedUserPrompt };
+        }
+        return { role: m.role, content: m.content };
+      })
+    ];
+
+    console.log('[Retry] Final API messages count:', apiMessages.length);
+    console.log('[Retry] API messages summary:', apiMessages.map(m => ({ role: m.role, contentLen: m.content?.length })));
+
+    // Start streaming - SAMA PERSIS seperti handleSend
+    setIsStreaming(true);
+    setStreamingContent('');
+    setThinkingContent('');
+    
+    const stableStreamingId = `streaming-retry-${Date.now()}`;
+    setStreamingMessageId(stableStreamingId);
+    console.log('[Retry] Streaming started with ID:', stableStreamingId);
+
+    let fullContent = '';
+    let fullThinking = '';
+    let thinkStartTime = null;
+
+    await streamChat({
+      messages: apiMessages,
+      model: settings.model,
+      provider: settings.provider,
+      baseUrl: settings.baseUrl || undefined,
+      apiKey: settings.apiKey,
+      onChunk: (chunk) => {
+        fullContent += chunk;
+        setStreamingContent(fullContent);
+        triggerHaptic();
+      },
+      onThink: (think) => {
+        // Track when thinking starts (sama seperti handleSend)
+        if (!thinkStartTime && think) {
+          thinkStartTime = Date.now();
+          console.log('[Retry] Thinking started');
+        }
+        // Append thinking content
+        fullThinking += think;
+        setThinkingContent(fullThinking);
+        onStreamingThinking?.(fullThinking);
+      },
+      onDone: async (summary = {}) => {
+        console.log('[Retry] Stream done, fullContent length:', fullContent.length, 'fullThinking length:', fullThinking.length);
+        
+        // Format content dengan thinking jika ada (sama seperti handleSend)
+        const content = fullThinking ? `<thinking>${fullThinking}</thinking>\n\n${fullContent}` : fullContent;
+
+        // Calculate thinking duration
+        const thinkDuration = thinkStartTime ? Math.round((Date.now() - thinkStartTime) / 1000) : null;
+
+        const metadata = {
+          model: settings.model,
+          provider: settings.provider,
+          thinkContent: fullThinking || null,
+          thinkDuration: thinkDuration,
+          _streamingId: stableStreamingId,
+          usage: summary?.usage || null,
+          cost: summary?.usage?.cost ?? null,
+        };
+
+        // Append new AI response
+        console.log('[Retry] Appending new AI response');
+        await appendMessage('assistant', content, metadata);
+
+        // Clear streaming states
+        setIsStreaming(false);
+        setStreamingContent('');
+        setThinkingContent('');
+        setStreamingMessageId(null);
+        console.log('[Retry] Complete!');
+      },
+      onError: async (error) => {
+        console.log('[Retry] Error:', error);
+        setIsStreaming(false);
+        setStreamingContent('');
+        setThinkingContent('');
+        setStreamingMessageId(null);
+        await appendMessage('assistant', `Error: ${error}`, { error: true });
+      },
+    });
+  }, [retryTarget, currentSession, removeMessage, messages, settings, appendMessage, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, onStreamingThinking, triggerHaptic]);
 
   // Handle like/dislike toggle
   const handleReaction = useCallback((message, liked) => {
@@ -670,7 +852,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       isUser={item.role === 'user'}
       isNew={item._key === newMessageId}
       onShowThinking={onShowThinking}
-      onRetry={() => handleRetryModal(item)}
+      onRetry={item.isLastAiMessage ? () => handleRetryModal(item) : null}
       onReact={(liked) => handleReaction(item, liked)}
       onShowMetadata={() => handleMetadataOpen(item)}
     />
@@ -704,6 +886,14 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       isStreaming: true,
       shouldHaveSpacer,
     });
+  }
+  
+  // Mark the last non-streaming AI message for retry button visibility
+  // Retry is ONLY allowed on the last AI message (not messages in the middle)
+  const lastAiIndex = displayMessages.reduce((lastIdx, msg, idx) => 
+    (msg.role === 'assistant' && !msg.isStreaming) ? idx : lastIdx, -1);
+  if (lastAiIndex >= 0) {
+    displayMessages[lastAiIndex] = { ...displayMessages[lastAiIndex], isLastAiMessage: true };
   }
   
   // NO reverse needed - FlashList with maintainVisibleContentPosition handles chat style
@@ -1000,10 +1190,36 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         onClose={() => setMetadataMenu({ visible: false, message: null })}
         sessionName="Response metadata"
         options={[
-          { label: `Model: ${metadataMenu.message?.model || 'No data/Null'}`, icon: 'information-circle-outline', onPress: () => {} },
-          { label: `Input tokens: ${metadataMenu.message?.usage?.inputTokens ?? 'No data/Null'}`, icon: 'document-text-outline', onPress: () => {} },
-          { label: `Output tokens: ${metadataMenu.message?.usage?.outputTokens ?? 'No data/Null'}`, icon: 'document-text-outline', onPress: () => {} },
-          { label: `Cost: ${metadataMenu.message?.cost ?? 'No data/Null'}`, icon: 'cash-outline', onPress: () => {} },
+          { 
+            label: `Model: ${metadataMenu.message?.model || metadataMenu.message?.model_id || 'Unknown'}`, 
+            icon: 'information-circle-outline', 
+            onPress: () => {} 
+          },
+          { 
+            label: `Provider: ${metadataMenu.message?.provider || 'Unknown'}`, 
+            icon: 'server-outline', 
+            onPress: () => {} 
+          },
+          { 
+            label: `Input tokens: ${metadataMenu.message?.usage?.inputTokens ?? metadataMenu.message?.usage?.prompt_tokens ?? 'N/A'}`, 
+            icon: 'arrow-down-circle-outline', 
+            onPress: () => {} 
+          },
+          { 
+            label: `Output tokens: ${metadataMenu.message?.usage?.outputTokens ?? metadataMenu.message?.usage?.completion_tokens ?? 'N/A'}`, 
+            icon: 'arrow-up-circle-outline', 
+            onPress: () => {} 
+          },
+          { 
+            label: `Total tokens: ${metadataMenu.message?.usage?.totalTokens ?? metadataMenu.message?.usage?.total_tokens ?? 'N/A'}`, 
+            icon: 'analytics-outline', 
+            onPress: () => {} 
+          },
+          { 
+            label: `Cost: ${metadataMenu.message?.usage?.cost || metadataMenu.message?.cost ? `$${(metadataMenu.message?.usage?.cost || metadataMenu.message?.cost).toFixed(6)}` : 'N/A'}`, 
+            icon: 'cash-outline', 
+            onPress: () => {} 
+          },
         ]}
       />
     </View>

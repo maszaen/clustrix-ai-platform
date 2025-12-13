@@ -457,8 +457,8 @@ function MainApp() {
 
           <LinearGradient
             colors={[COLORS.bg90, COLORS.bg90, COLORS.bg70, 'transparent']}
-            locations={[0, 0.5, 0.8, 1]}
-            style={[styles.floatingHeader, { height: insets.top + 75 }]}
+            locations={[0, 0.5, 0.7, 1]}
+            style={[styles.floatingHeader, { height: insets.top + 80 }]}
             pointerEvents="none"
           />
 
@@ -499,12 +499,12 @@ function MainApp() {
               android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
             >
               <SvgXml 
-  xml={PENCIL} 
-  // Perhatikan kurung siku [] lalu kurung kurawal {}
-  style={[styles.rightSideLogo, { transform: [{ translateX: 1 }] }]} 
-  width={23} 
-  height={23} 
-/>
+                xml={PENCIL} 
+                // Perhatikan kurung siku [] lalu kurung kurawal {}
+                style={[styles.rightSideLogo, { transform: [{ translateX: 1 }] }]} 
+                width={23} 
+                height={23} 
+              />
             </Pressable>
 
             {/* BUTTON 2: ELLIPSIS (Tiga Titik) */}

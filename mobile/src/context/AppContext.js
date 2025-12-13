@@ -174,9 +174,18 @@ export function AppProvider({ children }) {
     if (!session) return;
     
     // For new sessions, we need to get current message count from state
-    const messageIndex = targetSession ? 0 : messages.length;
-    await addMessage(session.id, role, content, metadata, targetSession ? metadata._messageIndex ?? messageIndex : messageIndex);
-    const newMsg = { role, content, message_index: targetSession ? metadata._messageIndex ?? messageIndex : messageIndex, ...metadata };
+    // Use functional update pattern to get latest state value
+    let messageIndex;
+    if (targetSession && metadata._messageIndex !== undefined) {
+      messageIndex = metadata._messageIndex;
+    } else {
+      // Get current count via functional update (won't cause re-render if we return same value)
+      // This is a workaround - ideally we'd use a ref, but this preserves existing behavior
+      messageIndex = messages.length;
+    }
+    
+    await addMessage(session.id, role, content, metadata, messageIndex);
+    const newMsg = { role, content, message_index: messageIndex, ...metadata };
     setMessages(prev => [...prev, newMsg]);
     
     // Update session timestamp
@@ -200,11 +209,28 @@ export function AppProvider({ children }) {
     ));
   }, []);
 
-  // Delete message by index for failure recovery
-  const removeMessage = useCallback(async (sessionId, messageIndex) => {
+  // Delete message by index (and optionally role+content for precise matching)
+  // When role and content are provided, only removes if ALL match (handles duplicate indexes)
+  const removeMessage = useCallback(async (sessionId, messageIndex, role = null, contentMatch = null) => {
     if (!sessionId) return;
+    
+    // Always delete from DB by message_index (DB shouldn't have duplicates if appendMessage is fixed)
     await deleteMessage(sessionId, messageIndex);
-    setMessages(prev => prev.filter(msg => msg.message_index !== messageIndex));
+    
+    // For state, if role/content provided, use them for precise matching
+    if (role && contentMatch) {
+      setMessages(prev => prev.filter(msg => 
+        !(msg.message_index === messageIndex && msg.role === role && msg.content === contentMatch)
+      ));
+    } else {
+      // Fallback: filter by message_index only (original behavior)
+      // But only remove ONE message with this index (the first match)
+      setMessages(prev => {
+        const idx = prev.findIndex(msg => msg.message_index === messageIndex);
+        if (idx === -1) return prev;
+        return [...prev.slice(0, idx), ...prev.slice(idx + 1)];
+      });
+    }
   }, []);
 
   // Toggle favorite session

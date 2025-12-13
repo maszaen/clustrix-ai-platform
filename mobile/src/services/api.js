@@ -12,15 +12,21 @@ function normalizeUsage(provider, usage) {
   if (!usage) return null;
 
   const lower = (provider || '').toLowerCase();
-  // OpenAI style
-  const promptTokens = usage.prompt_tokens ?? usage.promptTokens ?? usage.input_tokens ?? usage.inputTokens;
-  const completionTokens = usage.completion_tokens ?? usage.completionTokens ?? usage.output_tokens ?? usage.outputTokens;
-  const totalTokens = usage.total_tokens ?? usage.totalTokens;
+  
+  // Gemini format: promptTokenCount, candidatesTokenCount, totalTokenCount
+  // OpenAI format: prompt_tokens, completion_tokens, total_tokens
+  // Anthropic format: input_tokens, output_tokens
+  const promptTokens = usage.promptTokenCount ?? usage.prompt_tokens ?? usage.promptTokens ?? usage.input_tokens ?? usage.inputTokens;
+  const completionTokens = usage.candidatesTokenCount ?? usage.completion_tokens ?? usage.completionTokens ?? usage.output_tokens ?? usage.outputTokens;
+  const totalTokens = usage.totalTokenCount ?? usage.total_tokens ?? usage.totalTokens;
   const cost = usage.cost ?? usage.total_cost ?? usage.cost_usd ?? null;
 
   return {
     provider: lower,
-    inputTokens: promptTokens ?? null,
+    prompt_tokens: promptTokens ?? null, // Keep snake_case for backward compatibility
+    completion_tokens: completionTokens ?? null,
+    total_tokens: totalTokens ?? (promptTokens && completionTokens ? promptTokens + completionTokens : null),
+    inputTokens: promptTokens ?? null, // Also provide camelCase
     outputTokens: completionTokens ?? null,
     totalTokens: totalTokens ?? (promptTokens && completionTokens ? promptTokens + completionTokens : null),
     cost: cost ?? null,
@@ -372,8 +378,11 @@ function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onT
             isThinkingBlock = false;
           }
 
+          // Capture usage (Anthropic sends it in various message events)
           if (json.usage) {
             usageData = json.usage;
+          } else if (json.type === 'message_stop' && json.message?.usage) {
+            usageData = json.message.usage;
           }
         } catch {}
       }
@@ -437,6 +446,7 @@ function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
     let lastProcessedIndex = 0;
     let thinkingBuffer = '';
     let isThinking = false;
+    let usageData = null;
     
     xhr.onprogress = () => {
       const newData = xhr.responseText.slice(lastProcessedIndex);
@@ -452,8 +462,11 @@ function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
           const json = JSON.parse(line.slice(6));
           const parts = json.candidates?.[0]?.content?.parts || [];
 
-          if (json.usageMetadata || json.usage) {
-            usageData = json.usageMetadata || json.usage;
+          // Capture usage metadata (Gemini format)
+          if (json.usageMetadata) {
+            usageData = json.usageMetadata;
+          } else if (json.usage) {
+            usageData = json.usage;
           }
           
           for (const part of parts) {

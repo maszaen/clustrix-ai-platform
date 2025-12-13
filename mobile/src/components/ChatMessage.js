@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Pressable } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { PanelBottomOpen } from 'lucide-react-native';
+import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 
 // Loading verbs from desktop - exact copy
@@ -296,48 +295,72 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
     <Animated.View style={styles.aiContainer}>
       <View>
         {hasThinking && (
+          <View style={{paddingHorizontal: 16}}>
+
           <TouchableOpacity 
             style={styles.thinkToggle} 
             onPress={() => onShowThinking?.(thinkingContent)}
             activeOpacity={0.7}
-          >
+            >
             <PanelBottomOpen size={13} color={COLORS.fgMuted} />
             <Text style={styles.thinkToggleText}>{getThinkingText()}</Text>
           </TouchableOpacity>
+            </View>
         )}
         
         {isLoading ? (
-          <TypewriterLoader />
+          <View style={{paddingHorizontal: 16}}>
+            <TypewriterLoader />
+          </View>
         ) : (
-          <Markdown style={markdownStyles} rules={markdownRules}>{textContent || ' '}</Markdown>
+          <View style={{paddingHorizontal: 16}}>
+            <Markdown style={markdownStyles} rules={markdownRules}>{textContent || ' '}</Markdown>
+          </View>
         )}
 
         {!isLoading && showActions && (
           <Animated.View style={[styles.actionRow, { opacity: actionsOpacity }]}>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => onRetry?.(message)} activeOpacity={0.8}>
-              <Ionicons name="refresh" size={16} color={COLORS.icon} />
-              <Text style={styles.actionLabel}>Retry</Text>
-            </TouchableOpacity>
+            {onRetry && (
+              <Pressable 
+                style={styles.actionBtn} 
+                onPress={() => onRetry?.(message)}
+                android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+              >
+                <RotateCcw size={17} color={COLORS.fgMuted} strokeWidth={2} />
+              </Pressable>
+            )}
 
-            <TouchableOpacity style={styles.actionBtn} onPress={handleCopy} activeOpacity={0.8}>
-              <Ionicons name={copied ? 'checkmark-done' : 'copy-outline'} size={16} color={COLORS.icon} />
-              <Text style={styles.actionLabel}>{copied ? 'Copied' : 'Copy'}</Text>
-            </TouchableOpacity>
+            <Pressable 
+              style={styles.actionBtn} 
+              onPress={handleCopy}
+              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+            >
+              {copied ? <Check size={17} color={COLORS.primary} strokeWidth={2} /> : <Copy size={17} color={COLORS.fgMuted} strokeWidth={2} />}
+            </Pressable>
 
-            <TouchableOpacity style={styles.actionBtn} onPress={() => onReact?.(true)} activeOpacity={0.8}>
-              <Ionicons name={message.isLiked === true ? 'thumbs-up' : 'thumbs-up-outline'} size={16} color={COLORS.icon} />
-              <Text style={styles.actionLabel}>Like</Text>
-            </TouchableOpacity>
+            <Pressable 
+              style={styles.actionBtn} 
+              onPress={() => onReact?.(true)}
+              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+            >
+              <ThumbsUp size={17} color={message.isLiked === true ? COLORS.primary : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === true ? COLORS.primary : 'none'} />
+            </Pressable>
 
-            <TouchableOpacity style={styles.actionBtn} onPress={() => onReact?.(false)} activeOpacity={0.8}>
-              <Ionicons name={message.isLiked === false ? 'thumbs-down' : 'thumbs-down-outline'} size={16} color={COLORS.icon} />
-              <Text style={styles.actionLabel}>Dislike</Text>
-            </TouchableOpacity>
+            <Pressable 
+              style={styles.actionBtn} 
+              onPress={() => onReact?.(false)}
+              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+            >
+              <ThumbsDown size={17} color={message.isLiked === false ? '#f87171' : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === false ? '#f87171' : 'none'} />
+            </Pressable>
 
-            <TouchableOpacity style={styles.actionBtn} onPress={() => onShowMetadata?.(message)} activeOpacity={0.8}>
-              <Ionicons name="information-circle-outline" size={16} color={COLORS.icon} />
-              <Text style={styles.actionLabel}>Metadata</Text>
-            </TouchableOpacity>
+            <Pressable 
+              style={styles.actionBtn} 
+              onPress={() => onShowMetadata?.(message)}
+              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+            >
+              <Info size={17} color={COLORS.fgMuted} strokeWidth={2} />
+            </Pressable>
           </Animated.View>
         )}
       </View>
@@ -375,6 +398,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
+    marginBottom: 4,
     // borderTopRightRadius: 4,
   },
   userText: {
@@ -385,7 +409,6 @@ const styles = StyleSheet.create({
   },
   aiContainer: {
     marginVertical: 6,
-    paddingHorizontal: 16,
   },
   thinkToggle: {
     flexDirection: 'row',
@@ -401,25 +424,19 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 0,
+    marginBottom: 4,
+    paddingHorizontal: 7
   },
   actionBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    borderRadius: 12,
-    flexDirection: 'row',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: COLORS.bg,
-  },
-  actionLabel: {
-    color: COLORS.fg,
-    fontSize: 13,
-    fontFamily: FONTS.sans,
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
   loaderContainer: {
     flexDirection: 'row',

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import Markdown from 'react-native-markdown-display';
+import MarkdownWebView from './MarkdownWebView';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
@@ -203,10 +203,19 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
   
   // Old streaming spacer logic removed - now handled by ListFooter in ChatScreen
   
-  const blocks = isUser ? [{ type: 'text', content: message.content }] : parseThinkingBlocks(message.content || '');
-  const hasThinking = blocks.some(b => b.type === 'thinking');
-  const thinkingContent = blocks.find(b => b.type === 'thinking')?.content || '';
-  const textContent = blocks.filter(b => b.type === 'text').map(b => b.content).join('');
+  // Memoize parsing - only recalculate when content changes
+  const blocks = useMemo(() => {
+    return isUser 
+      ? [{ type: 'text', content: message.content }] 
+      : parseThinkingBlocks(message.content || '');
+  }, [message.content, isUser]);
+  
+  // Memoize derived values
+  const { hasThinking, thinkingContent, textContent } = useMemo(() => ({
+    hasThinking: blocks.some(b => b.type === 'thinking'),
+    thinkingContent: blocks.find(b => b.type === 'thinking')?.content || '',
+    textContent: blocks.filter(b => b.type === 'text').map(b => b.content).join(''),
+  }), [blocks]);
 
   // Fade in action buttons after stream completes
   useEffect(() => {
@@ -318,7 +327,11 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
           </View>
         ) : (
           <View style={{paddingHorizontal: 16}}>
-            <Markdown style={markdownStyles} rules={markdownRules}>{textContent || ' '}</Markdown>
+            <MarkdownWebView 
+              content={textContent || ''} 
+              isStreaming={message.isStreaming}
+              minHeight={24}
+            />
           </View>
         )}
 
@@ -393,22 +406,7 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
   );
 }
 
-const markdownRules = {
-  fence: (node) => {
-    const language = node.sourceInfo || '';
-    return (
-      <View key={node.key} style={markdownStyles.fence}>
-        {language ? <Text style={markdownStyles.fenceLanguage}>{language}</Text> : null}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <Text style={markdownStyles.fenceContent}>{node.content}</Text>
-        </ScrollView>
-      </View>
-    );
-  },
-  code_inline: (node) => (
-    <Text key={node.key} style={markdownStyles.code_inline}>{node.content}</Text>
-  ),
-};
+// Note: markdownRules moved to MarkdownWebView
 
 const styles = StyleSheet.create({
   userContainer: {
@@ -486,74 +484,4 @@ const styles = StyleSheet.create({
   },
 });
 
-const markdownStyles = {
-  body: { color: COLORS.fg, fontSize: 15, lineHeight: 23, fontFamily: FONTS.ai },
-  heading1: { color: COLORS.fg, fontSize: 22, fontFamily: FONTS.aiBold, marginVertical: 8 },
-  heading2: { color: COLORS.fg, fontSize: 19, fontFamily: FONTS.aiBold, marginVertical: 6 },
-  heading3: { color: COLORS.fg, fontSize: 17, fontFamily: FONTS.aiBold, marginVertical: 4 },
-  paragraph: { marginVertical: 4 },
-  code_inline: { 
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    color: '#8ab4f8',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    fontSize: 14,
-    fontFamily: FONTS.mono,
-  },
-  fence: { 
-    backgroundColor: COLORS.inputBg,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    padding: 12, 
-    borderRadius: 8, 
-    marginVertical: 8,
-  },
-  fenceLanguage: {
-    color: COLORS.fgMuted,
-    fontSize: 11,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    fontFamily: FONTS.mono,
-  },
-  fenceContent: {
-    color: '#a2a9b0',
-    fontSize: 13,
-    fontFamily: FONTS.mono,
-    lineHeight: 20,
-  },
-  code_block: { 
-    backgroundColor: COLORS.inputBg,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    padding: 12, 
-    borderRadius: 10, 
-    marginVertical: 8,
-    color: '#a2a9b0',
-    fontFamily: FONTS.mono,
-  },
-  link: { color: '#D3E3FD' },
-  blockquote: { 
-    backgroundColor: COLORS.bg,
-    borderLeftWidth: 3, 
-    color: COLORS.fgMuted,
-    borderLeftColor: COLORS.borderLight, 
-    paddingLeft: 12, 
-    marginLeft: 0,
-    borderRadius: 0,
-    opacity: 0.9,
-  },
-  list_item: { marginVertical: 4 },
-  bullet_list: { marginVertical: 4 },
-  ordered_list: { marginVertical: 4 },
-  strong: { fontFamily: FONTS.aiBold, fontWeight: 'normal', color: COLORS.fg },
-  em: { fontFamily: FONTS.displayItalic, fontStyle: 'normal' },
-  hr: { backgroundColor: COLORS.borderLight, height: 1, opacity: 0.5, marginVertical: 12 },
-  table: { borderWidth: 1, borderColor: COLORS.borderLight, borderRadius: 10, backgroundColor: COLORS.bgSecondary },
-  th: { backgroundColor: 'transparent', padding: 8, fontFamily: FONTS.aiBold },
-  td: { paddingHorizontal: 8, borderTopWidth: 1, borderColor: COLORS.borderLight, backgroundColor: 'transparent', borderBottomWidth: 0, borderRadius: 10,},
-};
-
-
+// Note: markdownStyles moved to MarkdownWebView CSS

@@ -48,7 +48,7 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
       <LinearGradient
         colors={['transparent', COLORS.bg70, COLORS.bg90, COLORS.bg90]}
         locations={[0, 0.45, 0.6, 1]}
-        style={[styles.bottomFade, { height: insets.bottom + 100 }]}
+        style={[styles.bottomFade, { height: insets.bottom + 85 }]}
         pointerEvents="none"
       />
       

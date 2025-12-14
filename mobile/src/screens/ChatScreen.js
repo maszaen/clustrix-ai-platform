@@ -495,11 +495,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       isNewSession = true;
     }
 
-    const newMsgKey = `msg-${messages.length}`;
-    setNewMessageId(newMsgKey);
-
     // Store index for potential rollback when stream returns empty
     const userMessageIndex = isNewSession ? 0 : messages.length;
+    
+    // Set newMessageId with the EXACT format that _key uses in allMessages mapping
+    // Format: saved-<sessionId last 6 chars>-<message_index>-<array idx>
+    // For new user message: message_index = userMessageIndex, array idx = messages.length (position after append)
+    const sessionIdPart = isNewSession ? session.id.slice(-6) : (currentSession?.id?.slice(-6) || 'x');
+    const newMsgKey = `saved-${sessionIdPart}-${userMessageIndex}-${userMessageIndex}`;
+    setNewMessageId(newMsgKey);
     
     // For new session from welcome screen, pass session directly to appendMessage
     if (isNewSession) {

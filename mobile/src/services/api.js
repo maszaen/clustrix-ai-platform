@@ -130,8 +130,45 @@ export const DEFAULT_PROVIDERS = {
   cerebras: { baseUrl: 'https://api.cerebras.ai/v1', name: 'Cerebras' },
 };
 
+/**
+ * Format messages for OpenAI-compatible endpoints
+ * Filters out assistant messages with empty content (prevents API errors)
+ */
 function formatMessagesOpenAI(messages) {
-  return messages.map(m => ({ role: m.role, content: m.content }));
+  return messages
+    .filter(m => {
+      // Keep all non-assistant messages
+      if (m.role !== 'assistant') return true;
+      // For assistant messages, require non-empty content
+      return m.content && m.content.trim().length > 0;
+    })
+    .map(m => ({ role: m.role, content: m.content }));
+}
+
+/**
+ * Format messages for Mistral native endpoint
+ * - Filters empty assistant messages (Mistral is strict about this)
+ * - Supports Mistral-specific message format
+ */
+function formatMessagesMistral(messages) {
+  const formatted = [];
+  let systemPrompt = null;
+  
+  for (const m of messages) {
+    if (m.role === 'system') {
+      systemPrompt = m.content;
+    } else if (m.role === 'assistant') {
+      // Mistral requires assistant messages to have content or tool_calls
+      if (m.content && m.content.trim().length > 0) {
+        formatted.push({ role: m.role, content: m.content });
+      }
+      // Skip empty assistant messages
+    } else {
+      formatted.push({ role: m.role, content: m.content });
+    }
+  }
+  
+  return { messages: formatted, system: systemPrompt };
 }
 
 function formatMessagesAnthropic(messages) {
@@ -141,6 +178,11 @@ function formatMessagesAnthropic(messages) {
   for (const m of messages) {
     if (m.role === 'system') {
       systemPrompt = m.content;
+    } else if (m.role === 'assistant') {
+      // Filter out empty assistant messages
+      if (m.content && m.content.trim().length > 0) {
+        formatted.push({ role: m.role, content: m.content });
+      }
     } else {
       formatted.push({ role: m.role, content: m.content });
     }
@@ -169,9 +211,17 @@ function formatMessagesGemini(messages) {
   for (const m of messages) {
     if (m.role === 'system') {
       systemInstruction = m.content;
+    } else if (m.role === 'assistant') {
+      // Filter out empty assistant messages
+      if (m.content && m.content.trim().length > 0) {
+        contents.push({
+          role: 'model',
+          parts: [{ text: m.content }]
+        });
+      }
     } else {
       contents.push({
-        role: m.role === 'assistant' ? 'model' : 'user',
+        role: 'user',
         parts: [{ text: m.content }]
       });
     }
@@ -194,6 +244,10 @@ export async function streamChat({ messages, model, provider, baseUrl, apiKey, o
     
     if (providerLower === 'anthropic') {
       return streamAnthropicChunked({ messages, model, baseUrl: base, apiKey, onChunk, onThink, onDone, onError });
+    }
+    
+    if (providerLower === 'mistral') {
+      return streamMistralChunked({ messages, model, baseUrl: base, apiKey, onChunk, onThink, onDone, onError });
     }
     
     return streamOpenAIChunked({ messages, model, baseUrl: base, apiKey, onChunk, onThink, onDone, onError });
@@ -306,6 +360,92 @@ function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
       model,
       messages: formatMessagesOpenAI(messages),
       stream: true,
+    }));
+  });
+}
+
+/**
+ * Mistral AI native streaming with XMLHttpRequest
+ * Uses Mistral-specific features:
+ * - safe_prompt for content moderation
+ * - Strict message validation (no empty assistant messages)
+ * - Native Mistral reasoning support
+ */
+function streamMistralChunked({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError }) {
+  return new Promise((resolve) => {
+    const { messages: formatted, system } = formatMessagesMistral(messages);
+    
+    // Prepend system message if present
+    const finalMessages = system 
+      ? [{ role: 'system', content: system }, ...formatted]
+      : formatted;
+    
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${baseUrl}/chat/completions`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Authorization', `Bearer ${apiKey}`);
+
+    let buffer = '';
+    let lastProcessedIndex = 0;
+    let thinkingBuffer = '';
+    let isThinking = false;
+    let usageData = null;
+    
+    xhr.onprogress = () => {
+      const newData = xhr.responseText.slice(lastProcessedIndex);
+      lastProcessedIndex = xhr.responseText.length;
+      buffer += newData;
+      
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+        
+        try {
+          const json = JSON.parse(data);
+          
+          // Regular content from Mistral
+          const content = json.choices?.[0]?.delta?.content || '';
+          if (content) {
+            // Parse <think> tags for models that support reasoning
+            const result = parseThinking(content, isThinking, thinkingBuffer);
+            isThinking = result.stillThinking;
+            thinkingBuffer = result.stillThinking ? result.thinking : '';
+            if (result.text) onChunk?.(result.text);
+            if (result.thinking && !result.stillThinking) onThink?.(result.thinking);
+          }
+
+          // Capture usage when provided
+          if (json.usage) {
+            usageData = json.usage;
+          }
+        } catch {}
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status && xhr.status >= 400) {
+        onError?.(extractXhrError(xhr));
+        return resolve();
+      }
+
+      onDone?.({ usage: normalizeUsage('mistral', usageData) });
+      resolve();
+    };
+
+    xhr.onerror = () => {
+      onError?.(extractXhrError(xhr));
+      resolve();
+    };
+    
+    xhr.send(JSON.stringify({
+      model,
+      messages: finalMessages,
+      stream: true,
+      safe_prompt: false, // Disable safety prompt injection (handled by our system prompt)
     }));
   });
 }
@@ -582,6 +722,27 @@ export async function chat({ messages, model, provider, baseUrl, apiKey }) {
     if (!response.ok) throw new Error(await response.text());
     const json = await response.json();
     return json.content?.[0]?.text || '';
+  }
+  
+  // Mistral-specific handling
+  if (providerLower === 'mistral') {
+    const { messages: formatted, system } = formatMessagesMistral(messages);
+    const finalMessages = system 
+      ? [{ role: 'system', content: system }, ...formatted]
+      : formatted;
+    
+    const url = `${base}/chat/completions`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ model, messages: finalMessages, safe_prompt: false }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const json = await response.json();
+    return json.choices?.[0]?.message?.content || '';
   }
   
   const url = `${base}/chat/completions`;

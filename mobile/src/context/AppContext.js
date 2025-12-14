@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { InteractionManager } from 'react-native';
 import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey, exportAllData, importAllData, getDraft, saveDraft, deleteDraft, updateMessageMetadata, deleteMessage, getPersonaDraft, savePersonaDraft } from '../database/db';
 import { generateSessionId } from '../utils/ids';
 import { loginWithGoogle, logout as authLogout, getStoredAuth, getLastBackupTime } from '../services/auth';
@@ -44,6 +45,7 @@ export function AppProvider({ children }) {
   const [splashMessage, setSplashMessage] = useState(''); // For splash screen (generated once)
   const [welcomeMessage, setWelcomeMessage] = useState(''); // For welcome screen (regenerated on clear)
   const [splashComplete, setSplashComplete] = useState(false); // Track if splash animation finished
+  const [isLoadingSession, setIsLoadingSession] = useState(false); // For instant skeleton on session click
   
   // Auth state
   const [currentUser, setCurrentUser] = useState(null);
@@ -100,23 +102,27 @@ export function AppProvider({ children }) {
   // Load messages when session changes
   useEffect(() => {
     const targetSessionId = currentSession?.id || null;
-    latestSessionIdRef.current = targetSessionId; // Update ref immediately
+    latestSessionIdRef.current = targetSessionId;
     
-    async function loadMessages() {
+    // Defer message loading until ALL animations complete (including drawer slide)
+    const task = InteractionManager.runAfterInteractions(async () => {
       if (targetSessionId) {
         const msgs = await getMessages(targetSessionId);
         // Only set messages if this is still the current session
         if (latestSessionIdRef.current === targetSessionId) {
           setMessages(msgs || []);
+          setIsLoadingSession(false); // Clear loading state after messages loaded
         }
       } else {
         if (latestSessionIdRef.current === null) {
           setMessages([]);
+          setIsLoadingSession(false);
         }
       }
-    }
+    });
     
-    loadMessages();
+    // Cleanup if session changes before loading completes
+    return () => task.cancel();
   }, [currentSession?.id]);
 
   // Create new session
@@ -500,6 +506,8 @@ export function AppProvider({ children }) {
     welcomeMessage,
     splashComplete,
     setSplashComplete,
+    isLoadingSession,
+    setIsLoadingSession,
     // Auth
     currentUser,
     authProvider,

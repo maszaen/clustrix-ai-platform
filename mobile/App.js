@@ -133,7 +133,7 @@ function WelcomeOverlay({ message, accentColor, visible, onFadeComplete }) {
 
 function MainApp() {
   const insets = useSafeAreaInsets();
-  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime, settings, splashMessage, setSplashComplete } = useApp();
+  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime, settings, splashMessage, setSplashComplete, setIsLoadingSession } = useApp();
   const [showPersonalization, setShowPersonalization] = useState(false);
   const [showModels, setShowModels] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -403,7 +403,14 @@ function MainApp() {
             <SessionList
               sessions={sessions}
               currentSession={currentSession}
-              onSelect={(session) => { selectSession(session); setTimeout(() => closeSidebar(), 50); }}
+              onSelect={(session) => { 
+                // Show skeleton IMMEDIATELY (before slide starts)
+                setIsLoadingSession(true);
+                // Close sidebar (starts slide animation)
+                closeSidebar(); 
+                // Select session AFTER slide animation completes (250ms matches animation duration)
+                setTimeout(() => selectSession(session), 250); 
+              }}
               onDelete={deleteSession}
               onNew={handleNewChat}
               onToggleFavorite={toggleFavorite}

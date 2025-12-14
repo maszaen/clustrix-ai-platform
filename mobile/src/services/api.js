@@ -288,8 +288,7 @@ function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
 
     let buffer = '';
     let lastProcessedIndex = 0;
-    let thinkingBuffer = '';
-    let isThinking = false;
+    let parserState = createThinkingParserState();
     let usageData = null;
     
     xhr.onprogress = () => {
@@ -317,15 +316,21 @@ function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
           if (Array.isArray(reasoning)) reasoning = reasoning.map(p => p?.text ?? p).join('');
           if (reasoning) onThink?.(reasoning);
           
-          // Regular content
+          // Regular content - use robust thinking parser
           const content = json.choices?.[0]?.delta?.content || '';
           if (content) {
-            // Fallback: parse <think> tags
-            const result = parseThinking(content, isThinking, thinkingBuffer);
-            isThinking = result.stillThinking;
-            thinkingBuffer = result.stillThinking ? result.thinking : '';
-            if (result.text) onChunk?.(result.text);
-            if (result.thinking && !result.stillThinking) onThink?.(result.thinking);
+            const parsed = parseThinkingPatterns(content, parserState);
+            
+            // Update state for next chunk
+            parserState.partialTag = parsed.partialTag;
+            parserState.insideThinkingBlock = parsed.insideThinkingBlock;
+            parserState.currentBlockType = parsed.currentBlockType;
+            parserState.hasSeenContent = parsed.hasSeenContent;
+            
+            // Send thinking content
+            if (parsed.thinkingText) onThink?.(parsed.thinkingText);
+            // Send regular content
+            if (parsed.cleanedContent) onChunk?.(parsed.cleanedContent);
           }
 
           // Capture usage when provided
@@ -387,8 +392,7 @@ function streamMistralChunked({ messages, model, baseUrl, apiKey, onChunk, onThi
 
     let buffer = '';
     let lastProcessedIndex = 0;
-    let thinkingBuffer = '';
-    let isThinking = false;
+    let parserState = createThinkingParserState();
     let usageData = null;
     
     xhr.onprogress = () => {
@@ -407,15 +411,21 @@ function streamMistralChunked({ messages, model, baseUrl, apiKey, onChunk, onThi
         try {
           const json = JSON.parse(data);
           
-          // Regular content from Mistral
+          // Regular content from Mistral - use robust thinking parser
           const content = json.choices?.[0]?.delta?.content || '';
           if (content) {
-            // Parse <think> tags for models that support reasoning
-            const result = parseThinking(content, isThinking, thinkingBuffer);
-            isThinking = result.stillThinking;
-            thinkingBuffer = result.stillThinking ? result.thinking : '';
-            if (result.text) onChunk?.(result.text);
-            if (result.thinking && !result.stillThinking) onThink?.(result.thinking);
+            const parsed = parseThinkingPatterns(content, parserState);
+            
+            // Update state for next chunk
+            parserState.partialTag = parsed.partialTag;
+            parserState.insideThinkingBlock = parsed.insideThinkingBlock;
+            parserState.currentBlockType = parsed.currentBlockType;
+            parserState.hasSeenContent = parsed.hasSeenContent;
+            
+            // Send thinking content
+            if (parsed.thinkingText) onThink?.(parsed.thinkingText);
+            // Send regular content
+            if (parsed.cleanedContent) onChunk?.(parsed.cleanedContent);
           }
 
           // Capture usage when provided
@@ -584,8 +594,7 @@ function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
     
     let buffer = '';
     let lastProcessedIndex = 0;
-    let thinkingBuffer = '';
-    let isThinking = false;
+    let parserState = createThinkingParserState();
     let usageData = null;
     
     xhr.onprogress = () => {
@@ -614,21 +623,19 @@ function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
             if (part.thought === true && part.text) {
               onThink?.(part.text);
             } else if (part.text) {
-              let text = part.text;
+              // Use robust thinking parser (handles <think>, <thinking>, <reasoning>, *(reasoning:)* patterns)
+              const parsed = parseThinkingPatterns(part.text, parserState);
               
-              // Fallback: parse <think> tags or *(Internal Reasoning: ...)* pattern
-              const internalMatch = text.match(/\*\(Internal Reasoning:\s*([\s\S]*?)\)\*/i);
-              if (internalMatch) {
-                onThink?.(internalMatch[1].trim());
-                text = text.replace(/\*\(Internal Reasoning:\s*[\s\S]*?\)\*/gi, '').trim();
-              }
+              // Update state for next chunk
+              parserState.partialTag = parsed.partialTag;
+              parserState.insideThinkingBlock = parsed.insideThinkingBlock;
+              parserState.currentBlockType = parsed.currentBlockType;
+              parserState.hasSeenContent = parsed.hasSeenContent;
               
-              // Also check for <think> tags
-              const result = parseThinking(text, isThinking, thinkingBuffer);
-              isThinking = result.stillThinking;
-              thinkingBuffer = result.stillThinking ? result.thinking : '';
-              if (result.text) onChunk?.(result.text);
-              if (result.thinking && !result.stillThinking) onThink?.(result.thinking);
+              // Send thinking content
+              if (parsed.thinkingText) onThink?.(parsed.thinkingText);
+              // Send regular content
+              if (parsed.cleanedContent) onChunk?.(parsed.cleanedContent);
             }
           }
         } catch {}
@@ -655,33 +662,154 @@ function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
   });
 }
 
-function parseThinking(chunk, wasThinking, buffer) {
-  let text = '';
-  let thinking = buffer;
-  let stillThinking = wasThinking;
+/**
+ * Create thinking parser state (like Electron preload.js)
+ * State machine for tracking thinking blocks across chunks
+ */
+function createThinkingParserState() {
+  return {
+    partialTag: '',
+    insideThinkingBlock: false,
+    currentBlockType: null,
+    hasSeenContent: false
+  };
+}
 
-  const thinkStart = /<think(?:ing)?>/i;
-  const thinkEnd = /<\/think(?:ing)?>/i;
-
-  if (!stillThinking && thinkStart.test(chunk)) {
-    stillThinking = true;
-    chunk = chunk.replace(thinkStart, '');
+/**
+ * Robust thinking pattern parser (ported from Electron preload.js)
+ * 
+ * Features:
+ * - Only detects thinking tags at START of response (tolerant to whitespace)
+ * - Supports multiple tag types: think, thinking, reasoning
+ * - Handles partial/incomplete tags across chunks
+ * - Once regular content is seen, stops looking for thinking tags
+ */
+function parseThinkingPatterns(chunkText, state = {}) {
+  if (!chunkText || typeof chunkText !== 'string') {
+    return {
+      thinkingText: '',
+      cleanedContent: chunkText || '',
+      insideThinkingBlock: state.insideThinkingBlock || false,
+      currentBlockType: state.currentBlockType || null,
+      hasSeenContent: state.hasSeenContent || false,
+      partialTag: state.partialTag || ''
+    };
   }
 
-  if (stillThinking) {
-    if (thinkEnd.test(chunk)) {
-      const parts = chunk.split(thinkEnd);
-      thinking += parts[0];
-      text = parts.slice(1).join('');
-      stillThinking = false;
-    } else {
-      thinking += chunk;
+  const fullText = (state.partialTag || '') + chunkText;
+  let thinkingText = '';
+  let cleanedContent = '';
+  let insideThinkingBlock = state.insideThinkingBlock || false;
+  let currentBlockType = state.currentBlockType || null;
+  let hasSeenContent = state.hasSeenContent || false;
+  let partialTag = '';
+
+  let position = 0;
+
+  while (position < fullText.length) {
+    // If inside a thinking block, look for closing tag
+    if (insideThinkingBlock) {
+      let closeRegex;
+      if (currentBlockType === 'think') {
+        closeRegex = /<\/think>/i;
+      } else if (currentBlockType === 'thinking') {
+        closeRegex = /<\/thinking>/i;
+      } else if (currentBlockType === 'reasoning') {
+        closeRegex = /<\/reasoning>/i;
+      } else if (currentBlockType === 'reasoning-prefix') {
+        closeRegex = /\)\*/;
+      } else {
+        insideThinkingBlock = false;
+        currentBlockType = null;
+        continue;
+      }
+
+      const remainingText = fullText.substring(position);
+      const match = remainingText.match(closeRegex);
+      
+      if (match && match.index !== undefined) {
+        thinkingText += remainingText.substring(0, match.index);
+        position += match.index + match[0].length;
+        insideThinkingBlock = false;
+        currentBlockType = null;
+        continue;
+      } else {
+        thinkingText += remainingText;
+        position = fullText.length;
+        break;
+      }
     }
-  } else {
-    text = chunk;
+
+    // Only look for opening tags if we haven't seen regular content yet
+    if (!hasSeenContent) {
+      const remainingText = fullText.substring(position);
+      const trimmed = remainingText.trimStart();
+      const whitespaceLen = remainingText.length - trimmed.length;
+
+      const openPatterns = [
+        { regex: /^<thinking>/i, type: 'thinking', tagLen: 10 },
+        { regex: /^<think>/i, type: 'think', tagLen: 7 },
+        { regex: /^<reasoning>/i, type: 'reasoning', tagLen: 11 },
+        { regex: /^\*\(reasoning:\s*/i, type: 'reasoning-prefix', tagLen: null }
+      ];
+
+      let foundOpening = false;
+      for (const { regex, type, tagLen } of openPatterns) {
+        if (regex.test(trimmed)) {
+          insideThinkingBlock = true;
+          currentBlockType = type;
+          
+          let actualTagLen = tagLen;
+          if (tagLen === null) {
+            const tagMatch = trimmed.match(regex);
+            actualTagLen = tagMatch ? tagMatch[0].length : 0;
+          }
+          
+          position += whitespaceLen + actualTagLen;
+          foundOpening = true;
+          break;
+        }
+      }
+
+      if (foundOpening) continue;
+
+      // Check for incomplete/partial tags (tag cut off mid-chunk)
+      const incompletePatterns = [
+        /^<thinking[^>]*$/i,
+        /^<think[^>]*$/i,
+        /^<reasoning[^>]*$/i,
+        /^\*\(reasoning:[^)]*$/i
+      ];
+
+      let foundIncomplete = false;
+      for (const pattern of incompletePatterns) {
+        if (pattern.test(trimmed)) {
+          partialTag = trimmed;
+          position = fullText.length;
+          foundIncomplete = true;
+          break;
+        }
+      }
+
+      if (foundIncomplete) break;
+    }
+
+    // Regular content - add to cleaned output
+    if (position < fullText.length) {
+      hasSeenContent = true;
+      cleanedContent += fullText.substring(position);
+      position = fullText.length;
+    }
   }
 
-  return { text, thinking, stillThinking };
+  return {
+    thinkingText,
+    cleanedContent,
+    insideThinkingBlock,
+    currentBlockType,
+    hasSeenContent,
+    partialTag
+  };
 }
 
 /**

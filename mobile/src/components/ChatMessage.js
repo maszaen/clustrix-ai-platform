@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import MarkdownWebView from './MarkdownWebView';
+import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
@@ -178,8 +178,9 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
   const fadeAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
   const scaleAnim = useRef(new Animated.Value(isNew && isUser ? 0.95 : 1)).current;
   const [copied, setCopied] = useState(false);
-  const [showActions, setShowActions] = useState(false);
-  const actionsOpacity = useRef(new Animated.Value(0)).current;
+  // Pre-render actions for saved messages to prevent layout shift
+  const [showActions, setShowActions] = useState(!message.isStreaming && !isUser);
+  const actionsOpacity = useRef(new Animated.Value(!message.isStreaming && !isUser ? 1 : 0)).current;
   const metadataBtnRef = useRef(null);
   
   useEffect(() => {
@@ -220,26 +221,23 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
   // Fade in action buttons after stream completes
   useEffect(() => {
     const hasText = !!textContent?.trim();
+    
     if (!isUser && !message.isStreaming && hasText) {
-      const timer = setTimeout(() => {
+      // Show actions for completed AI messages
+      if (!showActions) {
         setShowActions(true);
         Animated.timing(actionsOpacity, {
           toValue: 1,
-          duration: 200,
+          duration: 150,
           useNativeDriver: true,
         }).start();
-      }, 500);
-
-      return () => {
-        clearTimeout(timer);
-        actionsOpacity.setValue(0);
-      };
+      }
+    } else if (message.isStreaming) {
+      // Hide while streaming
+      setShowActions(false);
+      actionsOpacity.setValue(0);
     }
-
-    // Hide instantly while streaming
-    setShowActions(false);
-    actionsOpacity.setValue(0);
-  }, [textContent, isUser, message.isStreaming, actionsOpacity]);
+  }, [message.isStreaming, isUser, textContent]);
   
   // Live timer for streaming thinking
   const [thinkingSeconds, setThinkingSeconds] = useState(0);
@@ -326,12 +324,9 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
             <TypewriterLoader />
           </View>
         ) : (
+          // Native Markdown for all AI messages
           <View style={{paddingHorizontal: 16}}>
-            <MarkdownWebView 
-              content={textContent || ''} 
-              isStreaming={message.isStreaming}
-              minHeight={24}
-            />
+            <Markdown style={markdownStyles} rules={markdownRules}>{textContent || ' '}</Markdown>
           </View>
         )}
 
@@ -484,4 +479,91 @@ const styles = StyleSheet.create({
   },
 });
 
-// Note: markdownStyles moved to MarkdownWebView CSS
+// Markdown styles for saved messages (native rendering)
+const markdownStyles = {
+  body: { color: COLORS.fg, fontSize: 15, lineHeight: 23, fontFamily: FONTS.ai },
+  heading1: { color: COLORS.fg, fontSize: 22, fontFamily: FONTS.aiBold, marginVertical: 8 },
+  heading2: { color: COLORS.fg, fontSize: 19, fontFamily: FONTS.aiBold, marginVertical: 6 },
+  heading3: { color: COLORS.fg, fontSize: 17, fontFamily: FONTS.aiBold, marginVertical: 4 },
+  paragraph: { marginVertical: 4 },
+  code_inline: { 
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    color: '#8ab4f8',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontSize: 14,
+    fontFamily: FONTS.mono,
+  },
+  fence: { 
+    backgroundColor: COLORS.inputBg,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    padding: 12, 
+    borderRadius: 8, 
+    marginVertical: 8,
+  },
+  fenceLanguage: {
+    color: COLORS.fgMuted,
+    fontSize: 11,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    fontFamily: FONTS.mono,
+  },
+  fenceContent: {
+    color: '#a2a9b0',
+    fontSize: 13,
+    fontFamily: FONTS.mono,
+    lineHeight: 20,
+  },
+  code_block: { 
+    backgroundColor: COLORS.inputBg,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    padding: 12, 
+    borderRadius: 10, 
+    marginVertical: 8,
+    color: '#a2a9b0',
+    fontFamily: FONTS.mono,
+  },
+  link: { color: '#D3E3FD' },
+  blockquote: { 
+    backgroundColor: COLORS.bg,
+    borderLeftWidth: 3, 
+    color: COLORS.fgMuted,
+    borderLeftColor: COLORS.borderLight, 
+    paddingLeft: 12, 
+    marginLeft: 0,
+    borderRadius: 0,
+    opacity: 0.9,
+  },
+  list_item: { marginVertical: 4 },
+  bullet_list: { marginVertical: 4 },
+  ordered_list: { marginVertical: 4 },
+  strong: { fontFamily: FONTS.aiBold, fontWeight: 'normal', color: COLORS.fg },
+  em: { fontFamily: FONTS.displayItalic, fontStyle: 'normal' },
+  hr: { backgroundColor: COLORS.borderLight, height: 1, opacity: 0.5, marginVertical: 12 },
+  table: { borderWidth: 1, borderColor: COLORS.borderLight, borderRadius: 10, backgroundColor: COLORS.bgSecondary },
+  th: { backgroundColor: 'transparent', padding: 8, fontFamily: FONTS.aiBold },
+  td: { paddingHorizontal: 8, borderTopWidth: 1, borderColor: COLORS.borderLight, backgroundColor: 'transparent', borderBottomWidth: 0, borderRadius: 10 },
+};
+
+// Markdown rules for code blocks
+const markdownRules = {
+  fence: (node) => {
+    const language = node.sourceInfo || '';
+    return (
+      <View key={node.key} style={markdownStyles.fence}>
+        {language ? <Text style={markdownStyles.fenceLanguage}>{language}</Text> : null}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <Text style={markdownStyles.fenceContent}>{node.content}</Text>
+        </ScrollView>
+      </View>
+    );
+  },
+  code_inline: (node) => (
+    <Text key={node.key} style={markdownStyles.code_inline}>{node.content}</Text>
+  ),
+};

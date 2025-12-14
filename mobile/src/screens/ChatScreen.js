@@ -1,8 +1,7 @@
-import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
-import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing, Dimensions, Modal, Pressable } from 'react-native';
-import { Pressable as GHPressable } from 'react-native-gesture-handler';
-import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS, useAnimatedStyle } from 'react-native-reanimated';
-import { useReanimatedKeyboardAnimation, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import React, { useRef, useEffect, useState, useCallback, memo } from 'react';
+import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable } from 'react-native';
+import ReanimatedModule, { useAnimatedStyle } from 'react-native-reanimated';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { LegendList } from '@legendapp/list';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -14,9 +13,9 @@ import ChatInput from '../components/ChatInput';
 import ContextMenuFixed from '../components/ContextMenuFixed';
 import InputModal from '../components/InputModal';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS } from '../constants/colors';
+import { COLORS } from '../constants/colors'; 
 import { FONTS } from '../constants/fonts';
-import { WELCOME_MESSAGES, DIAMOND_LOGO_HTML } from '../constants/strings';
+import { DIAMOND_LOGO_HTML } from '../constants/strings';
 
 
 // Welcome Screen with diamond logo and typewriter effect

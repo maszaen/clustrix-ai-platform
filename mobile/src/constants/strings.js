@@ -141,12 +141,15 @@ export const DIAMOND_LOGO_HTML_LOADER = (accentColor) => `
       display: flex;
       align-items: center;
       justify-content: center;
+      pointer-events: none;
     }
     
     figure {
       --size: 130px;
       --duration: 5.00s;
       --pull: -0.15;
+      --base-color: ${accentColor || 'hsl(225, 100%, 60%)'};
+      --shimmer-color: hsl(200, 100%, 75%);
       perspective: 30rem;
       display: grid;
       grid-template-areas: "figure";
@@ -154,7 +157,7 @@ export const DIAMOND_LOGO_HTML_LOADER = (accentColor) => `
       width: var(--size);
       height: var(--size);
       animation: spin-logo var(--duration) ease-in-out infinite;
-      animation-delay: -2.90s; /* TAMBAHAN 2: Inject delay ke parent */
+      animation-delay: -2.90s;
     }
     
     figure > div {
@@ -167,14 +170,29 @@ export const DIAMOND_LOGO_HTML_LOADER = (accentColor) => `
         )
         rotate(calc(var(--deg)));
       grid-area: figure;
-      background-color: ${accentColor || 'hsl(225, 100%, 60%)'};
       width: calc(var(--size) / 4);
       height: calc(var(--size) / 4);
       clip-path: polygon(25% 25%, 100% 50%, 25% 75%, 0% 50%);
       transform: var(--transform-start);
       transform-style: preserve-3d;
-      animation: diamonds var(--duration) cubic-bezier(0.87, 0, 0.13, 1) infinite;
-      animation-delay: -2.90s; /* TAMBAHAN 3: Inject delay ke children */
+      animation: 
+        diamonds var(--duration) cubic-bezier(0.87, 0, 0.13, 1) infinite,
+        shimmer-color 3s ease-in-out infinite;
+      animation-delay: -2.90s, calc(var(--i) * -0.15s);
+      background: linear-gradient(
+        110deg,
+        var(--base-color) 0%,
+        var(--base-color) 35%,
+        var(--shimmer-color) 50%,
+        var(--base-color) 65%,
+        var(--base-color) 100%
+      );
+      background-size: 300% 100%;
+    }
+    
+    @keyframes shimmer-color {
+      0%, 100% { background-position: 100% 50%; }
+      50% { background-position: 0% 50%; }
     }
     
     @keyframes diamonds {

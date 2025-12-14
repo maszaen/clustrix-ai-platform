@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo, memo, useTransition } from 'react';
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable } from 'react-native';
 import ReanimatedModule, { useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
@@ -124,6 +124,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [visibleCount, setVisibleCount] = useState(200); // Start with last 12 messages
   const [loadingMore, setLoadingMore] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const loadingTimeoutRef = useRef(null);
   const [inputText, setInputText] = useState('');
   const [retryTarget, setRetryTarget] = useState(null);
   const [retryOptionsVisible, setRetryOptionsVisible] = useState(false);
@@ -141,6 +143,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const prevSessionIdRef = useRef(currentSession?.id);
   const isSendingFromWelcome = useRef(false);
   const lastCreatedSessionId = useRef(null);
+  const itemHeights = useRef({});
   const trigger = currentSession && messages.length > 0;
   
   // Scroll to bottom button - use refs to avoid re-render interference with maintainVisibleContentPosition
@@ -203,7 +206,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         }).start(() => setScrollButtonVisible(false));
       }, 3000);
     } else {
-      // Fade outz
+      // Fade out
       Animated.timing(scrollBtnOpacity, {
         toValue: 0,
         duration: 200,
@@ -216,13 +219,13 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     };
   }
 
-  const scrollBottomBtnShow = () => {
-    Animated.timing(scrollBtnOpacity, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-  }
+  // const scrollBottomBtnShow = () => {
+  //   Animated.timing(scrollBtnOpacity, {
+  //     toValue: 1,
+  //     duration: 200,
+  //     useNativeDriver: true,
+  //   }).start();
+  // }
 
   useEffect(() => {
     scrollBottomHandler()
@@ -922,12 +925,27 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
 
   // Load more messages when scroll to top
   const handleLoadMore = useCallback(() => {
+    // Guard 1: Already loading or no more data
     if (loadingMore || !hasMoreMessages) return;
+    
+    // Guard 2: Debounce - prevent spam calls
+    if (loadingTimeoutRef.current) return;
+    
+    // Set loading state immediately (UI feedback)
     setLoadingMore(true);
-    setTimeout(() => {
-      setVisibleCount(prev => Math.min(prev + 12, allMessages.length));
+    
+    // Store timeout ref to enable debouncing
+    loadingTimeoutRef.current = setTimeout(() => {
+      // Use startTransition for non-blocking update
+      startTransition(() => {
+        setVisibleCount(prev => Math.min(prev + 12, allMessages.length));
+      });
+      
+      // Cleanup
       setLoadingMore(false);
-    }, 100);
+      loadingTimeoutRef.current = null;
+    }, 150);
+    
   }, [loadingMore, hasMoreMessages, allMessages.length]);
 
   // Find last AI message index for initial scroll
@@ -999,6 +1017,17 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     return <View style={{ height: Platform.OS === 'android' ? keyboardHeight + 75 : 85 }} />;
   }, [showSpacer, keyboardHeight]);
 
+  const onItemLayout = useCallback((index, height) => {
+  itemHeights.current[index] = height;
+  }, []);
+
+  // Calculate average
+  const avgHeight = useMemo(() => {
+    const heights = Object.values(itemHeights.current);
+    if (heights.length === 0) return 440;
+    return Math.round(heights.reduce((a, b) => a + b, 0) / heights.length);
+  }, [itemHeights.current]);
+
   return (
     <View style={styles.container}>
       {!currentSession && displayMessages.length === 0 ? (
@@ -1023,11 +1052,13 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
               data={displayMessages}
               keyExtractor={(item) => item._key}
               renderItem={renderMessage}
-              estimatedItemSize={250}
-              drawDistance={500}
-              initialScrollIndex={Math.max(0, displayMessages.length - 1)}
+              estimatedItemSize={avgHeight}
+              recycleItems={true}
+              drawDistance={2000}
+              // initialScrollIndex={Math.max(0, displayMessages.length - 1)}
               maintainScrollAtEnd
               onStartReached={() => {handleLoadMore()}}
+              onStartReachedThreshold={1}
               maintainVisibleContentPosition
               ListHeaderComponent={ListHeader}
               ListFooterComponent={ListFooter}
@@ -1083,9 +1114,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
                     setScrollButtonVisible(true);
                   }
                   programmaticScrollRef.current = false;
-                }, 300);
+                }, 200);
               }}
-              scrollEventThrottle={100}
+              scrollEventThrottle={16}
             />
           </Animated.View>
           {/* Skeleton Overlay - full height, zIndex below input so form stays visible */}

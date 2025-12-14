@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback, memo } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable } from 'react-native';
 import ReanimatedModule, { useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
@@ -112,6 +112,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     clearDraft,
     loadWelcomeDraft,
     saveWelcomeDraft,
+    isLoadingSession,
   } = useApp();
   const flatListRef = useRef(null);
   const chatInputRef = useRef(null);
@@ -262,6 +263,22 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       // If user IS near bottom, keep spacer - will be removed when they scroll up
     }
   }, [isStreaming, showSpacer, listContentHeight, listLayoutHeight]);
+
+  // React to isLoadingSession - show skeleton IMMEDIATELY when triggered from App.js
+  useEffect(() => {
+    if (isLoadingSession) {
+      // Show skeleton immediately
+      setShowSkeleton(true);
+      skeletonOpacity.setValue(1);
+    } else if (showSkeleton) {
+      // Hide skeleton when loading complete
+      Animated.timing(skeletonOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => setShowSkeleton(false));
+    }
+  }, [isLoadingSession, skeletonOpacity]);
 
   // Pulse animation for skeleton
   useEffect(() => {
@@ -862,11 +879,11 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   );
 
   // Lazy load - only show last N messages
-  // Use TRULY unique key: session + index + array position
-  const allMessages = messages.map((m, idx) => ({
+  // Memoize to avoid recreating array on every render
+  const allMessages = useMemo(() => messages.map((m, idx) => ({
     ...m,
     _key: `saved-${currentSession?.id?.slice(-6) || 'x'}-${m.message_index ?? idx}-${idx}`,
-  }));
+  })), [messages, currentSession?.id]);
   
   const startIndex = Math.max(0, allMessages.length - visibleCount);
   let displayMessages = allMessages.slice(startIndex);
@@ -1006,17 +1023,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
               data={displayMessages}
               keyExtractor={(item) => item._key}
               renderItem={renderMessage}
-              estimatedItemSize={100}
-              // recycleItems={true}
+              estimatedItemSize={250}
+              drawDistance={500}
               initialScrollIndex={Math.max(0, displayMessages.length - 1)}
               maintainScrollAtEnd
               onStartReached={() => {handleLoadMore()}}
-              // Removed maintainScrollAtEndThreshold to prevent auto-scroll issues
               maintainVisibleContentPosition
               ListHeaderComponent={ListHeader}
               ListFooterComponent={ListFooter}
               contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}
-              // onScrollToIndexFailed={onScrollToIndexFailed}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"

@@ -179,7 +179,6 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
               )}
               {isFirstRegular && (
                 <>
-                  <View style={styles.divider} />
                   <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitle}>Recent</Text>
                   </View>

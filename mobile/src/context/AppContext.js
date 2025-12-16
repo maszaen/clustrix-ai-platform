@@ -151,12 +151,23 @@ export function AppProvider({ children }) {
   }, [currentSession?.id]);
 
   // Load more older messages (for pagination)
+  // Returns the number of messages prepended for scroll position adjustment
   const loadMoreMessages = useCallback(async () => {
     console.log('[LoadMore] Called - hasMoreMessages:', hasMoreMessages, 'isLoadingMore:', isLoadingMore, 'oldestLoadedIndex:', oldestLoadedIndex);
     
-    if (!currentSession?.id || !hasMoreMessages || isLoadingMore || oldestLoadedIndex <= 0) {
-      console.log('[LoadMore] Skipped due to guard');
-      return;
+    // Guard: Skip if no session, already loading, or no more messages
+    // oldestLoadedIndex < 0 means no messages loaded yet
+    // oldestLoadedIndex = 0 means first message already loaded, but we still check hasMoreMessages
+    if (!currentSession?.id || !hasMoreMessages || isLoadingMore || oldestLoadedIndex < 0) {
+      console.log('[LoadMore] Skipped due to guard - session:', !!currentSession?.id, 'hasMore:', hasMoreMessages, 'loading:', isLoadingMore, 'oldest:', oldestLoadedIndex);
+      return 0;
+    }
+    
+    // Additional guard: if oldestLoadedIndex is 0, there's nothing more to load
+    if (oldestLoadedIndex === 0) {
+      console.log('[LoadMore] Skipped - already at message index 0');
+      setHasMoreMessages(false);
+      return 0;
     }
     
     setIsLoadingMore(true);
@@ -167,6 +178,8 @@ export function AppProvider({ children }) {
       console.log('[LoadMore] Message indices:', result.messages?.map(m => m.message_index));
       
       if (result.messages && result.messages.length > 0) {
+        const prependCount = result.messages.length;
+        
         // Prepend older messages to current messages
         setMessages(prev => {
           console.log('[LoadMore] Prepending to prev length:', prev.length);
@@ -180,9 +193,12 @@ export function AppProvider({ children }) {
         });
         setHasMoreMessages(result.hasMore);
         setOldestLoadedIndex(result.messages[0].message_index);
-        console.log('[LoadMore] New oldestLoadedIndex:', result.messages[0].message_index);
+        console.log('[LoadMore] New oldestLoadedIndex:', result.messages[0].message_index, 'newHasMore:', result.hasMore);
+        return prependCount;
       } else {
+        console.log('[LoadMore] No messages returned, setting hasMore to false');
         setHasMoreMessages(false);
+        return 0;
       }
     } finally {
       setIsLoadingMore(false);

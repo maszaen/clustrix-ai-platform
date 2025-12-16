@@ -26,7 +26,8 @@ export async function initDatabase() {
       think_content TEXT,
       think_duration INTEGER,
       metadata TEXT,
-      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+      UNIQUE(session_id, message_index)
     );
     
     CREATE TABLE IF NOT EXISTS settings (
@@ -222,15 +223,24 @@ export async function getMessagesPaginated(sessionId, charLimit = 5000) {
     };
   });
   
-  return { messages, hasMore, oldestLoadedIndex, totalCount: rows.length };
+  // Calculate the next valid message index (max index + 1)
+  // This handles gaps and duplicates correctly
+  const maxIndex = rows.reduce((max, row) => Math.max(max, row.message_index), -1);
+  const nextValidIndex = maxIndex + 1;
+  
+  return { messages, hasMore, oldestLoadedIndex, totalCount: nextValidIndex };
 }
 
 // Load older messages (for pagination - load N messages before a given index)
 export async function getOlderMessages(sessionId, beforeIndex, count = 4) {
+  console.log('[DB:getOlderMessages] sessionId:', sessionId, 'beforeIndex:', beforeIndex, 'count:', count);
+  
   const rows = await db.getAllAsync(
     'SELECT * FROM messages WHERE session_id = ? AND message_index < ? ORDER BY message_index DESC LIMIT ?',
     [sessionId, beforeIndex, count]
   );
+  
+  console.log('[DB:getOlderMessages] Raw rows count:', rows?.length, 'indices:', rows?.map(r => r.message_index));
   
   if (!rows || rows.length === 0) {
     return { messages: [], hasMore: false };
@@ -239,9 +249,17 @@ export async function getOlderMessages(sessionId, beforeIndex, count = 4) {
   // Reverse to get ascending order
   rows.reverse();
   
-  // Check if there are more older messages
+  // Check if there are more older messages by querying count of messages before oldestLoaded
   const oldestLoaded = rows[0].message_index;
-  const hasMore = oldestLoaded > 0;
+  
+  // More accurate hasMore check - query if any message exists before oldestLoaded
+  const olderExists = await db.getFirstAsync(
+    'SELECT 1 FROM messages WHERE session_id = ? AND message_index < ? LIMIT 1',
+    [sessionId, oldestLoaded]
+  );
+  const hasMore = !!olderExists;
+  
+  console.log('[DB:getOlderMessages] After reverse indices:', rows.map(r => r.message_index), 'oldestLoaded:', oldestLoaded, 'hasMore:', hasMore);
   
   // Normalize metadata
   const messages = rows.map((row) => {
@@ -274,8 +292,11 @@ export async function getOlderMessages(sessionId, beforeIndex, count = 4) {
 }
 
 export async function addMessage(sessionId, role, content, metadata, messageIndex, createdAt = Date.now()) {
+  console.log('[DB:addMessage] sessionId:', sessionId, 'role:', role, 'messageIndex:', messageIndex);
+  
+  // Use INSERT OR REPLACE to handle any existing duplicates gracefully
   await db.runAsync(
-    `INSERT INTO messages (session_id, role, content, created_at, message_index, model_id, provider, think_content, think_duration, metadata)
+    `INSERT OR REPLACE INTO messages (session_id, role, content, created_at, message_index, model_id, provider, think_content, think_duration, metadata)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       sessionId, role, content, createdAt, messageIndex,

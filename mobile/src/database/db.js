@@ -273,13 +273,12 @@ export async function getOlderMessages(sessionId, beforeIndex, count = 4) {
   return { messages, hasMore };
 }
 
-export async function addMessage(sessionId, role, content, metadata, messageIndex) {
-  const now = Date.now();
+export async function addMessage(sessionId, role, content, metadata, messageIndex, createdAt = Date.now()) {
   await db.runAsync(
     `INSERT INTO messages (session_id, role, content, created_at, message_index, model_id, provider, think_content, think_duration, metadata)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      sessionId, role, content, now, messageIndex,
+      sessionId, role, content, createdAt, messageIndex,
       metadata.model || null,
       metadata.provider || null,
       metadata.thinkContent ? JSON.stringify(metadata.thinkContent) : null,

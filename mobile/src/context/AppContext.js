@@ -223,7 +223,7 @@ export function AppProvider({ children }) {
   }, [currentSession]);
 
   // Add message to current session (or specified session for welcome screen flow)
-  const appendMessage = useCallback(async (role, content, metadata = {}, targetSession = null) => {
+  const appendMessage = useCallback(async (role, content, metadata = {}, targetSession = null, createdAt = Date.now()) => {
     const session = targetSession || currentSession;
     if (!session) return;
     
@@ -235,8 +235,8 @@ export function AppProvider({ children }) {
       messageIndex = messages.length;
     }
     
-    await addMessage(session.id, role, content, metadata, messageIndex);
-    const newMsg = { role, content, message_index: messageIndex, ...metadata };
+    await addMessage(session.id, role, content, metadata, messageIndex, createdAt);
+    const newMsg = { role, content, message_index: messageIndex, created_at: createdAt, ...metadata };
     setMessages(prev => [...prev, newMsg]);
     
     // Update session timestamp

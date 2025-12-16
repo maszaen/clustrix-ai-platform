@@ -1,7 +1,8 @@
-import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
-import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable } from 'react-native';
-import ReanimatedModule, { useAnimatedStyle } from 'react-native-reanimated';
-import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
+import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Easing, Dimensions, Modal, Pressable } from 'react-native';
+import { Pressable as GHPressable } from 'react-native-gesture-handler';
+import ReanimatedModule, { withTiming, Easing as ReanimatedEasing, runOnJS, useAnimatedStyle } from 'react-native-reanimated';
+import { useReanimatedKeyboardAnimation, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { LegendList } from '@legendapp/list';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -13,9 +14,9 @@ import ChatInput from '../components/ChatInput';
 import ContextMenuFixed from '../components/ContextMenuFixed';
 import InputModal from '../components/InputModal';
 import { LinearGradient } from 'expo-linear-gradient';
-import { COLORS } from '../constants/colors'; 
+import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { DIAMOND_LOGO_HTML } from '../constants/strings';
+import { WELCOME_MESSAGES, DIAMOND_LOGO_HTML } from '../constants/strings';
 
 
 // Welcome Screen with diamond logo and typewriter effect
@@ -112,12 +113,6 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     clearDraft,
     loadWelcomeDraft,
     saveWelcomeDraft,
-    isLoadingSession,
-    expectedMessageCount,
-    // Pagination from context
-    hasMoreMessages,
-    loadMoreMessages,
-    isLoadingMore,
   } = useApp();
   const flatListRef = useRef(null);
   const chatInputRef = useRef(null);
@@ -127,8 +122,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const [streamingMessageId, setStreamingMessageId] = useState(null); // Stable ID for streaming message to prevent blink
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  // Pagination is now handled by context (hasMoreMessages, loadMoreMessages, isLoadingMore)
-  const loadingTimeoutRef = useRef(null);
+  const [visibleCount, setVisibleCount] = useState(200); // Start with last 12 messages
+  const [loadingMore, setLoadingMore] = useState(false);
   const [inputText, setInputText] = useState('');
   const [retryTarget, setRetryTarget] = useState(null);
   const [retryOptionsVisible, setRetryOptionsVisible] = useState(false);
@@ -146,8 +141,6 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const prevSessionIdRef = useRef(currentSession?.id);
   const isSendingFromWelcome = useRef(false);
   const lastCreatedSessionId = useRef(null);
-  const shouldScrollOnSizeChange = useRef(false); // Flag: scroll to bottom on every content size change
-  const itemHeights = useRef({});
   const trigger = currentSession && messages.length > 0;
   
   // Scroll to bottom button - use refs to avoid re-render interference with maintainVisibleContentPosition
@@ -168,7 +161,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const SPACER_HEIGHT = Dimensions.get('window').height - 335; // Full device height - 145
   const SPACER_HIDE_BUFFER = 30; // Extra buffer before hiding spacer
   
-  // Smooth keyboard animation for INPUT ONLY using react-native-keyboard-controller
+  // Smooth keyboard animation using react-native-keyboard-controller
   const { height: keyboardAnimatedHeight } = useReanimatedKeyboardAnimation();
   const inputAnimatedStyle = useAnimatedStyle(() => {
     // Proportional offset - reduce movement by ~10% for tighter keyboard gap
@@ -180,7 +173,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     };
   });
   
-  // Animated paddingBottom for content area (welcome screen only)
+  // Animated paddingBottom for content area (welcome screen, messages)
   const contentPaddingAnimatedStyle = useAnimatedStyle(() => {
     // Convert negative keyboard height to positive padding
     const paddingValue = -keyboardAnimatedHeight.value;
@@ -210,7 +203,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         }).start(() => setScrollButtonVisible(false));
       }, 3000);
     } else {
-      // Fade out
+      // Fade outz
       Animated.timing(scrollBtnOpacity, {
         toValue: 0,
         duration: 200,
@@ -223,13 +216,13 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     };
   }
 
-  // const scrollBottomBtnShow = () => {
-  //   Animated.timing(scrollBtnOpacity, {
-  //     toValue: 1,
-  //     duration: 200,
-  //     useNativeDriver: true,
-  //   }).start();
-  // }
+  const scrollBottomBtnShow = () => {
+    Animated.timing(scrollBtnOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }
 
   useEffect(() => {
     scrollBottomHandler()
@@ -250,10 +243,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         setShowSpacer(false);
         streamEndedRef.current = false;
       } else {
-        // Stream started - show spacer
-        // Note: scroll is handled by maintainScrollAtEnd, no need to call scrollToEnd here
+        // Stream started - show spacer and scroll to bottom
         setShowSpacer(true);
         streamEndedRef.current = false;
+        // Wait for layout update before scrolling
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 50);
+        });
       }
     } else if (streamEndedRef.current === false && showSpacer) {
       // Stream just ended
@@ -265,80 +263,6 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       // If user IS near bottom, keep spacer - will be removed when they scroll up
     }
   }, [isStreaming, showSpacer, listContentHeight, listLayoutHeight]);
-
-  // React to isLoadingSession - show skeleton and enable scroll-on-size-change
-  useEffect(() => {
-    if (isLoadingSession) {
-      // Show skeleton immediately
-      setShowSkeleton(true);
-      skeletonOpacity.setValue(1);
-      // Enable scroll on every content size change while loading
-      shouldScrollOnSizeChange.current = true;
-    }
-  }, [isLoadingSession, skeletonOpacity]);
-
-  // When all messages loaded AND at bottom, disable scroll flag and hide skeleton
-  useEffect(() => {
-    // Guard: only run when we have expected data and it matches loaded data
-    if (
-      showSkeleton && 
-      !isLoadingSession && 
-      expectedMessageCount > 0 && 
-      messages.length === expectedMessageCount
-    ) {
-      // All data loaded! But wait until we're at bottom AND content is rendered before hiding
-      const checkAndHide = () => {
-        // Scroll to bottom
-        flatListRef.current?.scrollToEnd({ animated: false });
-        
-        // Check if at bottom AND content has rendered (listContentHeight > 0)
-        if (isNearBottomRef.current && listContentHeight > 0) {
-          // At bottom and content rendered! Disable flag and hide skeleton
-          shouldScrollOnSizeChange.current = false;
-          
-          Animated.timing(skeletonOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => setShowSkeleton(false));
-          return true; // Done
-        }
-        return false; // Not ready yet
-      };
-      
-      // Try immediately
-      if (!checkAndHide()) {
-        // Not ready, keep checking every 50ms
-        const interval = setInterval(() => {
-          if (checkAndHide()) {
-            clearInterval(interval);
-          }
-        }, 50);
-        
-        // Safety: clear interval after 2 seconds max
-        setTimeout(() => {
-          clearInterval(interval);
-          // Force hide anyway
-          shouldScrollOnSizeChange.current = false;
-          Animated.timing(skeletonOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => setShowSkeleton(false));
-        }, 4000);
-      }
-    }
-    
-    // Handle going back to welcome (no messages expected)
-    if (showSkeleton && !isLoadingSession && expectedMessageCount === 0 && !currentSession) {
-      shouldScrollOnSizeChange.current = false;
-      Animated.timing(skeletonOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(() => setShowSkeleton(false));
-    }
-  }, [showSkeleton, isLoadingSession, expectedMessageCount, messages.length, listContentHeight, currentSession, skeletonOpacity]);
 
   // Pulse animation for skeleton
   useEffect(() => {
@@ -412,26 +336,39 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         clearTimeout(skeletonTimeoutRef.current);
         skeletonTimeoutRef.current = null;
       }
-      
-      // Reset flags for sidebar transitions (pagination is handled by context)
-      isInitialLoad.current = true;
-      hasScrolledInitial.current = false;
-      initialScrollDone.current = false;
     }
+    
+    isInitialLoad.current = true;
+    hasScrolledInitial.current = false;
+    initialScrollDone.current = false;
+    setVisibleCount(12);
 
     if (isSessionToSession && !sendingFromWelcome) {
-      // NOTE: Skeleton hide is controlled by separate useEffect that waits for all messages to load
       setShowSkeleton(true);
       skeletonOpacity.setValue(1);
-      shouldScrollOnSizeChange.current = true;
+      
+      // Auto-hide skeleton after 1 second
+      skeletonTimeoutRef.current = setTimeout(() => {
+        Animated.timing(skeletonOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => setShowSkeleton(false));
+      }, 700);
     }
 
     if (isWelcomeToSession && !sendingFromWelcome) {
       // Rule 1: Welcome -> Session via Sidebar (WITH Skeleton)
-      // NOTE: Skeleton hide is controlled by separate useEffect that waits for all messages to load
       setShowSkeleton(true);
       skeletonOpacity.setValue(1);
-      shouldScrollOnSizeChange.current = true;
+      
+      skeletonTimeoutRef.current = setTimeout(() => {
+        Animated.timing(skeletonOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => setShowSkeleton(false));
+      }, 700);
     }
     
     // Reset flag if it was set
@@ -461,8 +398,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
           Animated.timing(contentFadeAnimTwo, { toValue: 1, duration: 600, useNativeDriver: true }),
         ]).start();
       }, 50);
-    } else if (!isWelcomeToSession && !sendingFromWelcome) {
-      // Session to session transition (via sidebar) - fade animation
+    } else if (!isWelcomeToSession) {
+
       setTimeout(() => {
         Animated.sequence([
           Animated.timing(contentFadeAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
@@ -472,7 +409,6 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         ]).start();
       }, 50);
     } 
-    // sendingFromWelcome = true: skip all fade animations
     
     
     prevSessionIdRef.current = currentSession?.id;
@@ -562,10 +498,11 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     // Store index for potential rollback when stream returns empty
     const userMessageIndex = isNewSession ? 0 : messages.length;
     
-    // Set newMessageId with the EXACT format that _key uses
-    // Format: msg-<sessionId last 6 chars>-<message_index>-<role>
+    // Set newMessageId with the EXACT format that _key uses in allMessages mapping
+    // Format: saved-<sessionId last 6 chars>-<message_index>-<array idx>
+    // For new user message: message_index = userMessageIndex, array idx = messages.length (position after append)
     const sessionIdPart = isNewSession ? session.id.slice(-6) : (currentSession?.id?.slice(-6) || 'x');
-    const newMsgKey = `msg-${sessionIdPart}-${userMessageIndex}-user`;
+    const newMsgKey = `saved-${sessionIdPart}-${userMessageIndex}-${userMessageIndex}`;
     setNewMessageId(newMsgKey);
     
     // For new session from welcome screen, pass session directly to appendMessage
@@ -575,7 +512,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       await appendMessage('user', text, {});
     }
     
-    // Scroll to bottom
+    // Scroll to bottom (last item = newest message)
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     setTimeout(() => setNewMessageId(null), 500);
     
@@ -925,16 +862,16 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     />
   );
 
-  // Messages are already paginated from context - just add keys
-  // Key must be STABLE across prepends - use message_index only (not array index!)
-  // Array index changes when prepending, causing LegendList to think items are new
-  const displayMessagesBase = useMemo(() => messages.map((m) => ({
+  // Lazy load - only show last N messages
+  // Use TRULY unique key: session + index + array position
+  const allMessages = messages.map((m, idx) => ({
     ...m,
-    _key: `msg-${currentSession?.id?.slice(-6) || 'x'}-${m.message_index}-${m.role}`,
-  })), [messages, currentSession?.id]);
+    _key: `saved-${currentSession?.id?.slice(-6) || 'x'}-${m.message_index ?? idx}-${idx}`,
+  }));
   
-  // Create mutable copy for streaming message push
-  let displayMessages = [...displayMessagesBase];
+  const startIndex = Math.max(0, allMessages.length - visibleCount);
+  let displayMessages = allMessages.slice(startIndex);
+  const hasMoreMessages = startIndex > 0;
   
   // Check if content exceeds viewport - 30px threshold
   const shouldHaveSpacer = listContentHeight >= (listLayoutHeight - 30);
@@ -945,12 +882,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const alreadyHasSavedResponse = lastMessage?.role === 'assistant' && !lastMessage?.isStreaming;
   
   if ((streamingContent || isStreaming) && !alreadyHasSavedResponse) {
-    // Key must match saved message key format to prevent blink on transition
-    // Streaming AI message will be saved at message_index = current messages count
-    const streamingIndex = messages.length;
-    const sessionIdPart = currentSession?.id?.slice(-6) || 'x';
+    // Use stable streaming ID to prevent blink when transitioning to saved message
+    // Prefix with 'live-' to avoid conflict with saved message that has same _streamingId
     displayMessages.push({
-      _key: `msg-${sessionIdPart}-${streamingIndex}-assistant`,
+      _key: `live-${streamingMessageId || 'fallback'}`,
       role: 'assistant',
       content: thinkingContent ? `<thinking>${thinkingContent}</thinking>\n\n${streamingContent}` : streamingContent || '...',
       isStreaming: true,
@@ -966,22 +901,18 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     displayMessages[lastAiIndex] = { ...displayMessages[lastAiIndex], isLastAiMessage: true };
   }
   
-  // Normal order: oldest first, newest last
+  // NO reverse needed - FlashList with maintainVisibleContentPosition handles chat style
+  // Data: [oldest, ..., newest] - newest at bottom
 
   // Load more messages when scroll to top
-  const handleLoadMore = useCallback(async () => {
-    // Guard: Already loading or no more data
-    if (isLoadingMore || !hasMoreMessages) return;
-    
-    // Guard: Debounce
-    if (loadingTimeoutRef.current) return;
-    loadingTimeoutRef.current = 'pending';
-    
-    loadingTimeoutRef.current = setTimeout(async () => {
-      await loadMoreMessages();
-      loadingTimeoutRef.current = null;
-    }, 150);
-  }, [isLoadingMore, hasMoreMessages, loadMoreMessages]);
+  const handleLoadMore = useCallback(() => {
+    if (loadingMore || !hasMoreMessages) return;
+    setLoadingMore(true);
+    setTimeout(() => {
+      setVisibleCount(prev => Math.min(prev + 12, allMessages.length));
+      setLoadingMore(false);
+    }, 100);
+  }, [loadingMore, hasMoreMessages, allMessages.length]);
 
   // Find last AI message index for initial scroll
   const getLastAiIndex = useCallback(() => {
@@ -992,7 +923,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   }, [displayMessages]);
 
   // DISABLED: useEffect scroll to last AI message - causes lag
-  // Simpler approach: just scroll to end
+  // Simpler approach: use inverted list or just scroll to end
   /*
   useEffect(() => {
     const lastAiIndex = getLastAiIndex();
@@ -1019,50 +950,16 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     }
   }, [displayMessages.length, getLastAiIndex, topInset]);
   */
-  
-  // Debounced scroll state handler - runs on JS thread but throttled
-  const scrollStateTimeout = useRef(null);
-  const handleScrollState = useCallback((offsetY, distanceFromBottom, nearBottom, contentHeight, layoutHeight) => {
-    lastScrollOffset.current = offsetY;
-    isNearBottomRef.current = nearBottom;
-    
-    // Hide spacer when scrolled up after stream ends
-    if (streamEndedRef.current && showSpacer && !nearBottom) {
-      setShowSpacer(false);
-    }
-    
-    // Fast hide scroll button when near bottom
-    if (scrollButtonVisible && nearBottom && !programmaticScrollRef.current) {
-      setScrollButtonVisible(false);
-    }
-    
-    // Debounced show button - show when scrolled away from bottom
-    const isScrollable = contentHeight > layoutHeight;
-    const shouldShow = isScrollable && !nearBottom;
-    
-    scrollPositionRef.current.showButton = shouldShow;
-    scrollPositionRef.current.isScrolling = true;
-    
-    if (scrollStateTimeout.current) clearTimeout(scrollStateTimeout.current);
-    scrollStateTimeout.current = setTimeout(() => {
-      scrollPositionRef.current.isScrolling = false;
-      if (!programmaticScrollRef.current && scrollPositionRef.current.showButton) {
-        setScrollButtonVisible(true);
-      }
-      programmaticScrollRef.current = false;
-    }, 200);
-  }, [showSpacer, scrollButtonVisible]);
-  
   // Header component for load more (appears at TOP)
   const ListHeader = useCallback(() => {
     if (!hasMoreMessages) return null;
     return (
       <TouchableWithoutFeedback onPress={handleLoadMore}>
         <View style={styles.loadMoreContainer}>
-          {isLoadingMore ? (
+          {loadingMore ? (
             <>
               <ActivityIndicator size="small" color={COLORS.fgMuted} />
-              <Text style={styles.loadMoreText}>Loading</Text>
+              <Text style={styles.loadMoreText}>Load earlier messages</Text>
             </>
           ) : (
             <>
@@ -1073,7 +970,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         </View>
       </TouchableWithoutFeedback>
     );
-  }, [hasMoreMessages, isLoadingMore, handleLoadMore]);
+  }, [hasMoreMessages, loadingMore, handleLoadMore]);
 
   // Footer component for bottom spacing (appears at BOTTOM)
   // Simpler approach: fixed size during stream, conditional removal based on visibility
@@ -1086,17 +983,6 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     return <View style={{ height: Platform.OS === 'android' ? keyboardHeight + 75 : 85 }} />;
   }, [showSpacer, keyboardHeight]);
 
-  const onItemLayout = useCallback((index, height) => {
-  itemHeights.current[index] = height;
-  }, []);
-
-  // Calculate average
-  const avgHeight = useMemo(() => {
-    const heights = Object.values(itemHeights.current);
-    if (heights.length === 0) return 440;
-    return Math.round(heights.reduce((a, b) => a + b, 0) / heights.length);
-  }, [itemHeights.current]);
-
   return (
     <View style={styles.container}>
       {!currentSession && displayMessages.length === 0 ? (
@@ -1108,74 +994,85 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
           </ReanimatedModule.View>
         </TouchableWithoutFeedback>
       ) : displayMessages.length === 0 ? (
-        <>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <ReanimatedModule.View style={[styles.emptyState, { paddingTop: topInset, opacity: contentFadeAnimTwo.value !== undefined ? contentFadeAnimTwo.value : 1 }, contentPaddingAnimatedStyle]}>
-            </ReanimatedModule.View>
-          </TouchableWithoutFeedback>
-          {/* Skeleton for Welcome->Session transition (before messages load) */}
-          {showSkeleton && (
-            <Animated.View style={[styles.skeletonContainer, { opacity: skeletonOpacity, paddingTop: topInset + 70 }]}>
-              <Animated.View style={[styles.skeletonUser, { opacity: pulseAnim }]} />
-              <Animated.View style={{ opacity: pulseAnim }}>
-                <LinearGradient
-                  colors={[COLORS.skeleton, COLORS.skeleton, 'transparent']}
-                  locations={[0, 0.3, 1]}
-                  style={styles.skeletonAi}
-                />
-              </Animated.View>
-            </Animated.View>
-          )}
-        </>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ReanimatedModule.View style={[styles.emptyState, { paddingTop: topInset, opacity: contentFadeAnimTwo.value !== undefined ? contentFadeAnimTwo.value : 1 }, contentPaddingAnimatedStyle]}>
+          </ReanimatedModule.View>
+        </TouchableWithoutFeedback>
       ) : (
         <>
           <Animated.View style={{ flex: 1, opacity: contentFadeAnim }}>
-              <LegendList
-                ref={flatListRef}
-                data={displayMessages}
-                keyExtractor={(item) => item._key}
-                renderItem={renderMessage}
-                estimatedItemSize={avgHeight}
-                recycleItems={true}
-                drawDistance={2000}
-                onStartReached={() => {handleLoadMore()}}
-                onStartReachedThreshold={1}
-                ListHeaderComponent={ListHeader}
-                ListFooterComponent={ListFooter}
-                contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="interactive"
-                maintainVisibleContentPosition={true}
-                onContentSizeChange={(w, h) => {
-                  setListContentHeight(h);
-                  lastContentHeight.current = h;
-                  
-                  // Scroll to bottom on every size change while loading from sidebar
-                  if (shouldScrollOnSizeChange.current) {
-                    flatListRef.current?.scrollToEnd({ animated: false });
+            
+            <LegendList
+              ref={flatListRef}
+              data={displayMessages}
+              keyExtractor={(item) => item._key}
+              renderItem={renderMessage}
+              estimatedItemSize={100}
+              // recycleItems={true}
+              initialScrollIndex={Math.max(0, displayMessages.length - 1)}
+              maintainScrollAtEnd
+              onStartReached={() => {handleLoadMore()}}
+              // Removed maintainScrollAtEndThreshold to prevent auto-scroll issues
+              maintainVisibleContentPosition
+              ListHeaderComponent={ListHeader}
+              ListFooterComponent={ListFooter}
+              contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}
+              // onScrollToIndexFailed={onScrollToIndexFailed}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              onContentSizeChange={(w, h) => {
+                setListContentHeight(h);
+                lastContentHeight.current = h;
+              }}
+              onLayout={(e) => {
+                setListLayoutHeight(e.nativeEvent.layout.height);
+                lastLayoutHeight.current = e.nativeEvent.layout.height;
+              }}
+              onScroll={(e) => {
+                const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+                
+                // Track current scroll position for eased scroll animation
+                lastScrollOffset.current = contentOffset.y;
+                
+                const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+                const percentFromBottom = distanceFromBottom / layoutMeasurement.height;
+                
+                // Track if user is near bottom (for spacer visibility)
+                const nearBottom = distanceFromBottom < SPACER_HEIGHT + SPACER_HIDE_BUFFER;
+                isNearBottomRef.current = nearBottom;
+                
+                // If stream ended and user scrolled up past spacer, hide it
+                if (streamEndedRef.current && showSpacer && !nearBottom) {
+                  setShowSpacer(false);
+                }
+                
+                // Fast hide: instantly hide when user scrolls (no debounce)
+                if (scrollButtonVisible && !programmaticScrollRef.current) {
+                  setScrollButtonVisible(false);
+                }
+                
+                // Track position for showing button after scroll stops
+                const isScrollable = contentSize.height > layoutMeasurement.height;
+                // Only show if scrollable AND scrolled up significantly (30%)
+                const shouldShow = isScrollable && percentFromBottom > 0.3;
+                scrollPositionRef.current.showButton = shouldShow;
+                scrollPositionRef.current.isScrolling = true;
+                
+                // Clear previous timeout
+                if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+                
+                // Show button only after scroll stops
+                scrollTimeoutRef.current = setTimeout(() => {
+                  scrollPositionRef.current.isScrolling = false;
+                  if (!programmaticScrollRef.current && scrollPositionRef.current.showButton) {
+                    setScrollButtonVisible(true);
                   }
-                }}
-                onLayout={(e) => {
-                  setListLayoutHeight(e.nativeEvent.layout.height);
-                  lastLayoutHeight.current = e.nativeEvent.layout.height;
-                }}
-                onScroll={(e) => {
-                  // Simple scroll handler - calls debounced state handler
-                  const contentOffset = e.nativeEvent?.contentOffset || { x: 0, y: 0 };
-                  const contentSize = e.nativeEvent?.contentSize || { width: 0, height: 0 };
-                  const layoutMeasurement = e.nativeEvent?.layoutMeasurement || { width: 0, height: 0 };
-                  
-                  if (layoutMeasurement.height === 0) return;
-                  
-                  // Calculate distance from bottom (normal list)
-                  const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-                  const nearBottom = distanceFromBottom < 400;
-                  
-                  handleScrollState(contentOffset.y, distanceFromBottom, nearBottom, contentSize.height, layoutMeasurement.height);
-                }}
-                scrollEventThrottle={16}
-              />
+                  programmaticScrollRef.current = false;
+                }, 300);
+              }}
+              scrollEventThrottle={100}
+            />
           </Animated.View>
           {/* Skeleton Overlay - full height, zIndex below input so form stays visible */}
           {showSkeleton && (
@@ -1207,7 +1104,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
               if (!scrollButtonVisible) return; // Guard against ghost taps
               programmaticScrollRef.current = true;
               
-              // Scroll to bottom (normal list)
+              // Simple scroll to end
               flatListRef.current?.scrollToEnd({ animated: true });
               
               // Fade out then update state

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { InteractionManager } from 'react-native';
-import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey, exportAllData, importAllData, getDraft, saveDraft, deleteDraft, updateMessageMetadata, deleteMessage, getPersonaDraft, savePersonaDraft } from '../database/db';
+import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, getMessagesPaginated, getOlderMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey, exportAllData, importAllData, getDraft, saveDraft, deleteDraft, updateMessageMetadata, deleteMessage, getPersonaDraft, savePersonaDraft } from '../database/db';
 import { generateSessionId } from '../utils/ids';
 import { loginWithGoogle, logout as authLogout, getStoredAuth, getLastBackupTime } from '../services/auth';
 import { backupToCloud, restoreFromCloud } from '../services/backup';
@@ -15,6 +15,9 @@ const DEFAULT_SETTINGS = {
   apiKey: '',
   thinkMode: false,
 };
+
+// Character limit for initial message load
+const INITIAL_CHAR_LIMIT = 5000;
 
 // Helper to generate welcome message
 function getWelcomeMessage(username = 'friend') {
@@ -46,6 +49,12 @@ export function AppProvider({ children }) {
   const [welcomeMessage, setWelcomeMessage] = useState(''); // For welcome screen (regenerated on clear)
   const [splashComplete, setSplashComplete] = useState(false); // Track if splash animation finished
   const [isLoadingSession, setIsLoadingSession] = useState(false); // For instant skeleton on session click
+  const [expectedMessageCount, setExpectedMessageCount] = useState(0); // Track expected messages for scroll timing
+  
+  // Pagination state
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [oldestLoadedIndex, setOldestLoadedIndex] = useState(-1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   // Auth state
   const [currentUser, setCurrentUser] = useState(null);
@@ -99,31 +108,70 @@ export function AppProvider({ children }) {
     init();
   }, []);
 
-  // Load messages when session changes
+  // Load messages when session changes (paginated - only load ~5000 chars initially)
   useEffect(() => {
     const targetSessionId = currentSession?.id || null;
     latestSessionIdRef.current = targetSessionId;
     
-    // Defer message loading until ALL animations complete (including drawer slide)
-    const task = InteractionManager.runAfterInteractions(async () => {
+    // Load messages immediately (slide delay already handled in App.js)
+    const loadMessages = async () => {
       if (targetSessionId) {
-        const msgs = await getMessages(targetSessionId);
+        // Use paginated load - only get messages up to char limit
+        const result = await getMessagesPaginated(targetSessionId, INITIAL_CHAR_LIMIT);
         // Only set messages if this is still the current session
         if (latestSessionIdRef.current === targetSessionId) {
-          setMessages(msgs || []);
-          setIsLoadingSession(false); // Clear loading state after messages loaded
+          setExpectedMessageCount(result.messages?.length || 0);
+          setMessages(result.messages || []);
+          setHasMoreMessages(result.hasMore);
+          setOldestLoadedIndex(result.oldestLoadedIndex);
+          setIsLoadingSession(false);
         }
       } else {
         if (latestSessionIdRef.current === null) {
+          setExpectedMessageCount(0);
           setMessages([]);
+          setHasMoreMessages(false);
+          setOldestLoadedIndex(-1);
           setIsLoadingSession(false);
         }
       }
-    });
+    };
     
-    // Cleanup if session changes before loading completes
-    return () => task.cancel();
+    loadMessages();
   }, [currentSession?.id]);
+
+  // Load more older messages (for pagination)
+  const loadMoreMessages = useCallback(async () => {
+    console.log('[LoadMore] Called - hasMoreMessages:', hasMoreMessages, 'isLoadingMore:', isLoadingMore, 'oldestLoadedIndex:', oldestLoadedIndex);
+    
+    if (!currentSession?.id || !hasMoreMessages || isLoadingMore || oldestLoadedIndex <= 0) {
+      console.log('[LoadMore] Skipped due to guard');
+      return;
+    }
+    
+    setIsLoadingMore(true);
+    
+    try {
+      const result = await getOlderMessages(currentSession.id, oldestLoadedIndex, 4);
+      console.log('[LoadMore] Got result:', result.messages?.length, 'messages, hasMore:', result.hasMore);
+      console.log('[LoadMore] Message indices:', result.messages?.map(m => m.message_index));
+      
+      if (result.messages && result.messages.length > 0) {
+        // Prepend older messages to current messages
+        setMessages(prev => {
+          console.log('[LoadMore] Prepending to prev length:', prev.length);
+          return [...result.messages, ...prev];
+        });
+        setHasMoreMessages(result.hasMore);
+        setOldestLoadedIndex(result.messages[0].message_index);
+        console.log('[LoadMore] New oldestLoadedIndex:', result.messages[0].message_index);
+      } else {
+        setHasMoreMessages(false);
+      }
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [currentSession?.id, hasMoreMessages, isLoadingMore, oldestLoadedIndex]);
 
   // Create new session
   const createSession = useCallback(async (name = 'New Chat') => {
@@ -180,13 +228,10 @@ export function AppProvider({ children }) {
     if (!session) return;
     
     // For new sessions, we need to get current message count from state
-    // Use functional update pattern to get latest state value
     let messageIndex;
     if (targetSession && metadata._messageIndex !== undefined) {
       messageIndex = metadata._messageIndex;
     } else {
-      // Get current count via functional update (won't cause re-render if we return same value)
-      // This is a workaround - ideally we'd use a ref, but this preserves existing behavior
       messageIndex = messages.length;
     }
     
@@ -508,6 +553,11 @@ export function AppProvider({ children }) {
     setSplashComplete,
     isLoadingSession,
     setIsLoadingSession,
+    expectedMessageCount,
+    // Pagination
+    hasMoreMessages,
+    loadMoreMessages,
+    isLoadingMore,
     // Auth
     currentUser,
     authProvider,

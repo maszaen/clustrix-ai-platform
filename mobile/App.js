@@ -404,12 +404,16 @@ function MainApp() {
               sessions={sessions}
               currentSession={currentSession}
               onSelect={(session) => { 
-                // Show skeleton IMMEDIATELY (before slide starts)
+                // 1. Show skeleton FIRST
                 setIsLoadingSession(true);
-                // Close sidebar (starts slide animation)
-                closeSidebar(); 
-                // Select session AFTER slide animation completes (250ms matches animation duration)
-                setTimeout(() => selectSession(session), 250); 
+                
+                // 2. Wait 100ms for skeleton to appear, THEN slide
+                setTimeout(() => {
+                  closeSidebar();
+                  
+                  // 3. Wait for slide to complete (200ms animation + 100ms buffer), THEN load
+                  setTimeout(() => selectSession(session), 300);
+                }, 100);
               }}
               onDelete={deleteSession}
               onNew={handleNewChat}

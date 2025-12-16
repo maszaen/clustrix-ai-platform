@@ -151,6 +151,128 @@ export async function getMessages(sessionId) {
   });
 }
 
+// Get message count for a session
+export async function getMessageCount(sessionId) {
+  const result = await db.getFirstAsync(
+    'SELECT COUNT(*) as count FROM messages WHERE session_id = ?',
+    [sessionId]
+  );
+  return result?.count || 0;
+}
+
+// Get messages with character limit (from the end)
+// Returns { messages, hasMore, oldestLoadedIndex }
+export async function getMessagesPaginated(sessionId, charLimit = 5000) {
+  // First get all messages ordered by index DESC (newest first)
+  const rows = await db.getAllAsync(
+    'SELECT * FROM messages WHERE session_id = ? ORDER BY message_index DESC',
+    [sessionId]
+  );
+  
+  if (!rows || rows.length === 0) {
+    return { messages: [], hasMore: false, oldestLoadedIndex: -1 };
+  }
+  
+  // Accumulate messages until char limit, but MINIMUM 2 messages
+  const MIN_MESSAGES = 2;
+  let totalChars = 0;
+  let selectedRows = [];
+  
+  for (const row of rows) {
+    const contentLength = (row.content || '').length;
+    totalChars += contentLength;
+    selectedRows.push(row);
+    
+    // Only stop if: exceeded char limit AND have at least 2 messages
+    if (totalChars >= charLimit && selectedRows.length >= MIN_MESSAGES) {
+      break;
+    }
+  }
+  
+  // Reverse to get ascending order (oldest to newest)
+  selectedRows.reverse();
+  
+  const oldestLoadedIndex = selectedRows.length > 0 ? selectedRows[0].message_index : -1;
+  const hasMore = selectedRows.length < rows.length;
+  
+  // Normalize metadata
+  const messages = selectedRows.map((row) => {
+    let metadata = {};
+    try {
+      metadata = row.metadata ? JSON.parse(row.metadata) : {};
+    } catch (e) {
+      metadata = {};
+    }
+
+    let thinkContent = null;
+    if (row.think_content) {
+      try {
+        thinkContent = JSON.parse(row.think_content);
+      } catch (err) {
+        thinkContent = row.think_content;
+      }
+    }
+
+    return {
+      ...row,
+      ...metadata,
+      metadata,
+      thinkContent: thinkContent || metadata.thinkContent || null,
+      thinkDuration: row.think_duration || metadata.thinkDuration || null,
+    };
+  });
+  
+  return { messages, hasMore, oldestLoadedIndex, totalCount: rows.length };
+}
+
+// Load older messages (for pagination - load N messages before a given index)
+export async function getOlderMessages(sessionId, beforeIndex, count = 4) {
+  const rows = await db.getAllAsync(
+    'SELECT * FROM messages WHERE session_id = ? AND message_index < ? ORDER BY message_index DESC LIMIT ?',
+    [sessionId, beforeIndex, count]
+  );
+  
+  if (!rows || rows.length === 0) {
+    return { messages: [], hasMore: false };
+  }
+  
+  // Reverse to get ascending order
+  rows.reverse();
+  
+  // Check if there are more older messages
+  const oldestLoaded = rows[0].message_index;
+  const hasMore = oldestLoaded > 0;
+  
+  // Normalize metadata
+  const messages = rows.map((row) => {
+    let metadata = {};
+    try {
+      metadata = row.metadata ? JSON.parse(row.metadata) : {};
+    } catch (e) {
+      metadata = {};
+    }
+
+    let thinkContent = null;
+    if (row.think_content) {
+      try {
+        thinkContent = JSON.parse(row.think_content);
+      } catch (err) {
+        thinkContent = row.think_content;
+      }
+    }
+
+    return {
+      ...row,
+      ...metadata,
+      metadata,
+      thinkContent: thinkContent || metadata.thinkContent || null,
+      thinkDuration: row.think_duration || metadata.thinkDuration || null,
+    };
+  });
+  
+  return { messages, hasMore };
+}
+
 export async function addMessage(sessionId, role, content, metadata, messageIndex) {
   const now = Date.now();
   await db.runAsync(

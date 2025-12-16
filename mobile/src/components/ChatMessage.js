@@ -1,12 +1,25 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView } from 'react-native';
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Modal, Pressable as RNPressable, TouchableWithoutFeedback } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info } from 'lucide-react-native';
+import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info, TextSelect } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
+
+// Simple long press wrapper - ZERO feedback during hold
+// Defined outside component to prevent recreation on each render
+const LongPressWrapper = memo(({ children, onLongPress, disabled, style }) => {
+  return (
+    <TouchableWithoutFeedback
+      onLongPress={disabled ? undefined : onLongPress}
+      delayLongPress={200}
+    >
+      <View style={style}>{children}</View>
+    </TouchableWithoutFeedback>
+  );
+});
 
 // Loading verbs from desktop - exact copy
 const LOADING_VERBS = [
@@ -173,7 +186,7 @@ function TypewriterLoader() {
   );
 }
 
-export default function ChatMessage({ message, isUser, isNew, onShowThinking, onRetry, onReact, onShowMetadata }) {
+export default function ChatMessage({ message, isUser, isNew, onShowThinking, onRetry, onReact, onShowMetadata, onSelectText }) {
   // Animation for new user messages - fade in + subtle slide from right
   const fadeAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
   const scaleAnim = useRef(new Animated.Value(isNew && isUser ? 0.95 : 1)).current;
@@ -182,6 +195,11 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
   const [showActions, setShowActions] = useState(!message.isStreaming && !isUser);
   const actionsOpacity = useRef(new Animated.Value(!message.isStreaming && !isUser ? 1 : 0)).current;
   const metadataBtnRef = useRef(null);
+  
+  // Context menu state
+  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const messageRef = useRef(null);
   
   useEffect(() => {
     if (isNew && isUser) {
@@ -282,53 +300,127 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
 
   // Copy message text ONLY (without thinking content)
   const handleCopy = async () => {
-    await Clipboard.setStringAsync(textContent.trim() || message.content || '');
+    const content = isUser ? message.content : (textContent.trim() || message.content || '');
+    await Clipboard.setStringAsync(content);
     setCopied(true);
+    setContextMenuVisible(false);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Long press handler - show context menu
+  const handleLongPress = useCallback((event) => {
+    // Don't show for streaming messages
+    if (message.isStreaming) return;
+    
+    // Get touch position for menu placement
+    const { pageX, pageY } = event.nativeEvent;
+    setContextMenuPosition({ x: pageX, y: pageY });
+    setContextMenuVisible(true);
+  }, [message.isStreaming]);
+
+  // Open select text modal - calls parent callback with raw content
+  const openSelectText = useCallback(() => {
+    setContextMenuVisible(false);
+    // Pass raw content to parent for SlideLeftModal
+    onSelectText?.(rawContent);
+  }, [onSelectText, rawContent]);
+
+  // Get raw content for selection (without thinking tags for AI)
+  const rawContent = isUser ? message.content : (textContent.trim() || message.content || '');
+
+  // Context menu component
+  const ContextMenu = () => (
+    <Modal
+      visible={contextMenuVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setContextMenuVisible(false)}
+    >
+      <RNPressable 
+        style={styles.contextMenuOverlay} 
+        onPress={() => setContextMenuVisible(false)}
+      >
+        <View 
+          style={[
+            styles.contextMenu,
+            { 
+              top: Math.min(contextMenuPosition.y - 10, 500),
+              left: Math.min(Math.max(contextMenuPosition.x - 80, 16), 200),
+            }
+          ]}
+        >
+          <RNPressable 
+            style={styles.contextMenuItem}
+            onPress={handleCopy}
+            android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
+          >
+            <Copy size={18} color={COLORS.fg} />
+            <Text style={styles.contextMenuText}>Copy</Text>
+          </RNPressable>
+          <View style={styles.contextMenuDivider} />
+          <RNPressable 
+            style={styles.contextMenuItem}
+            onPress={openSelectText}
+            android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
+          >
+            <TextSelect size={18} color={COLORS.fg} />
+            <Text style={styles.contextMenuText}>Select text</Text>
+          </RNPressable>
+        </View>
+      </RNPressable>
+    </Modal>
+  );
+
   if (isUser) {
     return (
-      <Animated.View style={[
-        styles.userContainer,
-        { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
-      ]}>
-        <View style={styles.userBubble}>
-          <Text style={styles.userText}>{message.content}</Text>
-        </View>
-      </Animated.View>
+      <>
+        <Animated.View style={[
+          styles.userContainer,
+          { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
+        ]}>
+          <LongPressWrapper onLongPress={handleLongPress} style={styles.userBubble}>
+            <Text style={styles.userText}>{message.content}</Text>
+          </LongPressWrapper>
+        </Animated.View>
+        <ContextMenu />
+      </>
     );
   }
 
   const isLoading = message.isStreaming && (!textContent || textContent === '...');
 
   return (
-    <Animated.View style={styles.aiContainer}>
-      <View>
-        {hasThinking && (
-          <View style={{paddingHorizontal: 16}}>
-
-          <TouchableOpacity 
-            style={styles.thinkToggle} 
-            onPress={() => onShowThinking?.(thinkingContent)}
-            activeOpacity={0.7}
-            >
-            <PanelBottomOpen size={13} color={COLORS.fgMuted} />
-            <Text style={styles.thinkToggleText}>{getThinkingText()}</Text>
-          </TouchableOpacity>
+    <>
+      <Animated.View style={styles.aiContainer}>
+        <LongPressWrapper 
+          onLongPress={handleLongPress} 
+          disabled={message.isStreaming}
+          style={styles.aiMessagePressable}
+        >
+          {hasThinking && (
+            <View style={{paddingHorizontal: 16}}>
+              <TouchableOpacity 
+                style={styles.thinkToggle} 
+                onPress={() => onShowThinking?.(thinkingContent)}
+                activeOpacity={0.7}
+              >
+                <PanelBottomOpen size={13} color={COLORS.fgMuted} />
+                <Text style={styles.thinkToggleText}>{getThinkingText()}</Text>
+              </TouchableOpacity>
             </View>
-        )}
-        
-        {isLoading ? (
-          <View style={{paddingHorizontal: 16}}>
-            <TypewriterLoader />
-          </View>
-        ) : (
-          // Native Markdown for all AI messages
-          <View style={{paddingHorizontal: 16}}>
-            <Markdown style={markdownStyles} rules={markdownRules}>{textContent || ' '}</Markdown>
-          </View>
-        )}
+          )}
+          
+          {isLoading ? (
+            <View style={{paddingHorizontal: 16}}>
+              <TypewriterLoader />
+            </View>
+          ) : (
+            // Native Markdown for all AI messages
+            <View style={{paddingHorizontal: 16}}>
+              <Markdown style={markdownStyles} rules={markdownRules}>{textContent || ' '}</Markdown>
+            </View>
+          )}
+        </LongPressWrapper>
 
         {!isLoading && showActions && (
           <Animated.View style={[styles.actionRow, { opacity: actionsOpacity }]}>
@@ -396,8 +488,9 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
             )}
           </Animated.View>
         )}
-      </View>
-    </Animated.View>
+      </Animated.View>
+      <ContextMenu />
+    </>
   );
 }
 
@@ -410,15 +503,6 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     paddingHorizontal: 16,
   },
-  userBubble: {
-    maxWidth: '85%',
-    backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
-    marginBottom: 4,
-    // borderTopRightRadius: 4,
-  },
   userText: {
     color: COLORS.fg,
     fontSize: 15,
@@ -427,6 +511,8 @@ const styles = StyleSheet.create({
   },
   aiContainer: {
     marginVertical: 6,
+  },
+  aiMessagePressable: {
   },
   thinkToggle: {
     flexDirection: 'row',
@@ -476,6 +562,52 @@ const styles = StyleSheet.create({
     color: COLORS.fgMuted,
     fontSize: 14,
     fontFamily: FONTS.displayItalic,
+  },
+  // Context menu styles
+  contextMenuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  contextMenu: {
+    position: 'absolute',
+    backgroundColor: COLORS.bgSecondary,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    minWidth: 160,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  contextMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  contextMenuText: {
+    color: COLORS.fg,
+    fontSize: 15,
+    fontFamily: FONTS.sans,
+  },
+  contextMenuDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderLight,
+    marginHorizontal: 12,
+  },
+  // User bubble styles
+  userBubble: {
+    maxWidth: '85%',
+    backgroundColor: COLORS.primaryLight,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 18,
+    marginBottom: 4,
+    overflow: 'hidden',
   },
 });
 

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
-import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable } from 'react-native';
+import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable, ScrollView } from 'react-native';
 import ReanimatedModule, { useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { LegendList } from '@legendapp/list';
@@ -93,7 +93,7 @@ function WelcomeScreen({ message, shouldAnimate }) {
   );
 }
 
-const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onStreamingThinking }) {
+const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onStreamingThinking, onSelectText }) {
   const { 
     currentSession, 
     messages, 
@@ -920,6 +920,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       isNew={item._key === newMessageId}
       onShowThinking={onShowThinking}
       onRetry={item.isLastAiMessage ? () => handleRetryModal(item) : null}
+      onSelectText={onSelectText}
       onReact={(liked) => handleReaction(item, liked)}
       onShowMetadata={(msg, pos) => handleMetadataOpen(msg || item, pos)}
     />
@@ -1138,6 +1139,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
                 estimatedItemSize={avgHeight}
                 recycleItems={true}
                 drawDistance={2000}
+                // maintainScrollAtEnd
+                // maintainScrollAtEndThreshold={0.02}
                 onStartReached={() => {handleLoadMore()}}
                 onStartReachedThreshold={1}
                 ListHeaderComponent={ListHeader}

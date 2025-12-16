@@ -34,6 +34,7 @@ import PersonalizationScreen from './src/screens/PersonalizationScreen';
 import ModelsListScreen from './src/screens/ModelsListScreen';
 import SessionList from './src/components/SessionList';
 import SlideUpModal from './src/components/SlideUpModal';
+import SlideLeftModal from './src/components/SlideLeftModal';
 import ContextMenuFixed from './src/components/ContextMenuFixed';
 import InputModal from './src/components/InputModal';
 import ConfirmModal from './src/components/ConfirmModal';
@@ -143,6 +144,8 @@ function MainApp() {
   const [confirmDelete, setConfirmDelete] = useState({ visible: false, session: null });
   const [sidebarContextMenuOpen, setSidebarContextMenuOpen] = useState(false);
   const [thinkingModal, setThinkingModal] = useState({ visible: false, content: '' });
+  // Select text modal state (app-level for message text selection)
+  const [selectTextModal, setSelectTextModal] = useState({ visible: false, content: '' });
   
   // Loading overlay state
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
@@ -345,6 +348,10 @@ function MainApp() {
   const closeThinkingModal = useCallback(() => {
     setThinkingModal({ visible: false, content: '' });
   }, []);
+  // Handle select text from message context menu - opens app-level SlideLeftModal
+  const handleSelectText = useCallback((content) => {
+    setSelectTextModal({ visible: true, content: content || '' });
+  }, []);
   const openModels = useCallback(() => {
     Keyboard.dismiss();
     setShowModels(true);
@@ -464,7 +471,7 @@ function MainApp() {
 
         {/* Page 2: Main Chat (100% width) */}
         <View style={[styles.mainPage, { width: SCREEN_WIDTH }]}>
-          <ChatScreen topInset={insets.top} onShowThinking={handleShowThinking} onStreamingThinking={handleStreamingThinking} />
+          <ChatScreen topInset={insets.top} onShowThinking={handleShowThinking} onStreamingThinking={handleStreamingThinking} onSelectText={handleSelectText} />
 
           <LinearGradient
             colors={[COLORS.bg90, COLORS.bg90, COLORS.bg70, 'transparent']}
@@ -630,6 +637,17 @@ function MainApp() {
           </View>
         )}
       </SlideUpModal>
+
+      {/* Select text modal - app-level for message text selection */}
+      <SlideLeftModal
+        visible={selectTextModal.visible}
+        onClose={() => setSelectTextModal({ visible: false, content: '' })}
+        title="Select Text"
+      >
+        <ScrollView style={styles.selectTextScrollView}>
+          <Text style={styles.selectTextBody} selectable>{selectTextModal.content}</Text>
+        </ScrollView>
+      </SlideLeftModal>
 
       {/* Loading overlay - shown until app is ready */}
       {mountLoadingOverlay && (
@@ -824,6 +842,19 @@ const styles = StyleSheet.create({
   thinkingModalContent: {
     paddingVertical: 16,
     paddingBottom: 120,
+  },
+  // Select text modal styles (SlideLeftModal content)
+  selectTextScrollView: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  selectTextBody: {
+    color: COLORS.fg,
+    fontSize: 15,
+    fontFamily: FONTS.sans,
+    lineHeight: 22,
+    paddingBottom: 24,
   },
 });
 

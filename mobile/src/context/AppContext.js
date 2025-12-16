@@ -173,8 +173,9 @@ export function AppProvider({ children }) {
     setIsLoadingMore(true);
     
     try {
-      const result = await getOlderMessages(currentSession.id, oldestLoadedIndex, 4);
-      console.log('[LoadMore] Got result:', result.messages?.length, 'messages, hasMore:', result.hasMore);
+      // Load older messages with 5000 char limit (same as initial load)
+      const result = await getOlderMessages(currentSession.id, oldestLoadedIndex, 5000);
+      console.log('[LoadMore] Got result:', result.messages?.length, 'messages, hasMore:', result.hasMore, 'newOldestIndex:', result.oldestLoadedIndex);
       console.log('[LoadMore] Message indices:', result.messages?.map(m => m.message_index));
       
       if (result.messages && result.messages.length > 0) {
@@ -192,8 +193,9 @@ export function AppProvider({ children }) {
           return updated;
         });
         setHasMoreMessages(result.hasMore);
-        setOldestLoadedIndex(result.messages[0].message_index);
-        console.log('[LoadMore] New oldestLoadedIndex:', result.messages[0].message_index, 'newHasMore:', result.hasMore);
+        // Use oldestLoadedIndex from result (more accurate)
+        setOldestLoadedIndex(result.oldestLoadedIndex);
+        console.log('[LoadMore] New oldestLoadedIndex:', result.oldestLoadedIndex, 'newHasMore:', result.hasMore);
         return prependCount;
       } else {
         console.log('[LoadMore] No messages returned, setting hasMore to false');

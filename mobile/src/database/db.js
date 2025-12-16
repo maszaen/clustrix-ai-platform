@@ -231,38 +231,55 @@ export async function getMessagesPaginated(sessionId, charLimit = 5000) {
   return { messages, hasMore, oldestLoadedIndex, totalCount: nextValidIndex };
 }
 
-// Load older messages (for pagination - load N messages before a given index)
-export async function getOlderMessages(sessionId, beforeIndex, count = 4) {
-  console.log('[DB:getOlderMessages] sessionId:', sessionId, 'beforeIndex:', beforeIndex, 'count:', count);
+// Load older messages (for pagination - load messages before a given index up to charLimit)
+// Uses same logic as initial load: 5000 chars, minimum 2 messages
+export async function getOlderMessages(sessionId, beforeIndex, charLimit = 5000) {
+  console.log('[DB:getOlderMessages] sessionId:', sessionId, 'beforeIndex:', beforeIndex, 'charLimit:', charLimit);
   
+  // Get all messages before beforeIndex, ordered DESC (newest of the older ones first)
   const rows = await db.getAllAsync(
-    'SELECT * FROM messages WHERE session_id = ? AND message_index < ? ORDER BY message_index DESC LIMIT ?',
-    [sessionId, beforeIndex, count]
+    'SELECT * FROM messages WHERE session_id = ? AND message_index < ? ORDER BY message_index DESC',
+    [sessionId, beforeIndex]
   );
   
-  console.log('[DB:getOlderMessages] Raw rows count:', rows?.length, 'indices:', rows?.map(r => r.message_index));
+  console.log('[DB:getOlderMessages] Total older messages available:', rows?.length);
   
   if (!rows || rows.length === 0) {
-    return { messages: [], hasMore: false };
+    return { messages: [], hasMore: false, oldestLoadedIndex: beforeIndex };
   }
   
-  // Reverse to get ascending order
-  rows.reverse();
+  // Accumulate messages until char limit, but MINIMUM 2 messages (same as initial load)
+  const MIN_MESSAGES = 2;
+  let totalChars = 0;
+  let selectedRows = [];
   
-  // Check if there are more older messages by querying count of messages before oldestLoaded
-  const oldestLoaded = rows[0].message_index;
+  for (const row of rows) {
+    const contentLength = (row.content || '').length;
+    totalChars += contentLength;
+    selectedRows.push(row);
+    
+    // Only stop if: exceeded char limit AND have at least 2 messages
+    if (totalChars >= charLimit && selectedRows.length >= MIN_MESSAGES) {
+      break;
+    }
+  }
   
-  // More accurate hasMore check - query if any message exists before oldestLoaded
-  const olderExists = await db.getFirstAsync(
-    'SELECT 1 FROM messages WHERE session_id = ? AND message_index < ? LIMIT 1',
-    [sessionId, oldestLoaded]
-  );
-  const hasMore = !!olderExists;
+  console.log('[DB:getOlderMessages] Selected rows count:', selectedRows.length, 'totalChars:', totalChars);
+  console.log('[DB:getOlderMessages] Selected indices (before reverse):', selectedRows.map(r => r.message_index));
   
-  console.log('[DB:getOlderMessages] After reverse indices:', rows.map(r => r.message_index), 'oldestLoaded:', oldestLoaded, 'hasMore:', hasMore);
+  // Reverse to get ascending order (oldest to newest)
+  selectedRows.reverse();
   
-  // Normalize metadata
-  const messages = rows.map((row) => {
+  // The oldest loaded index is the first element after reverse
+  const oldestLoadedIndex = selectedRows[0].message_index;
+  
+  // Check if there are more older messages
+  const hasMore = selectedRows.length < rows.length;
+  
+  console.log('[DB:getOlderMessages] After reverse indices:', selectedRows.map(r => r.message_index), 'oldestLoadedIndex:', oldestLoadedIndex, 'hasMore:', hasMore);
+  
+  // Normalize metadata (use selectedRows, not rows!)
+  const messages = selectedRows.map((row) => {
     let metadata = {};
     try {
       metadata = row.metadata ? JSON.parse(row.metadata) : {};
@@ -288,7 +305,7 @@ export async function getOlderMessages(sessionId, beforeIndex, count = 4) {
     };
   });
   
-  return { messages, hasMore };
+  return { messages, hasMore, oldestLoadedIndex };
 }
 
 export async function addMessage(sessionId, role, content, metadata, messageIndex, createdAt = Date.now()) {

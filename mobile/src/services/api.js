@@ -231,27 +231,82 @@ function formatMessagesGemini(messages) {
 }
 
 /**
+ * Create throttled chunk handler - accumulates chunks and flushes every interval
+ * Uses throttle (not debounce) - flushes regularly every interval while data flows
+ * @param {Function} onChunk - Original chunk callback
+ * @param {number} interval - Throttle interval in ms (default 500ms)
+ * @returns {Object} - { throttledOnChunk, flush } - throttled handler and flush function
+ */
+function createThrottledChunkHandler(onChunk, interval = 500) {
+  let buffer = '';
+  let intervalId = null;
+  
+  const flush = () => {
+    if (buffer && onChunk) {
+      onChunk(buffer);
+      buffer = '';
+    }
+  };
+  
+  const startInterval = () => {
+    if (!intervalId) {
+      intervalId = setInterval(flush, interval);
+    }
+  };
+  
+  const stopInterval = () => {
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+  };
+  
+  const throttledOnChunk = (chunk) => {
+    buffer += chunk;
+    startInterval(); // Start flushing if not already
+  };
+  
+  const cleanup = () => {
+    stopInterval();
+    flush(); // Flush any remaining buffer
+  };
+  
+  return { throttledOnChunk, flush: cleanup };
+}
+
+/**
  * Stream chat - main entry point
+ * Throttles chunk delivery to frontend every 500ms for smoother rendering
  */
 export async function streamChat({ messages, model, provider, baseUrl, apiKey, onChunk, onThink, onDone, onError }) {
   const providerLower = (provider || '').toLowerCase();
   const base = baseUrl || DEFAULT_PROVIDERS[providerLower]?.baseUrl || DEFAULT_PROVIDERS.openai.baseUrl;
   
+  // Create throttled chunk handler (500ms interval)
+  const { throttledOnChunk, flush: flushChunks } = createThrottledChunkHandler(onChunk, 500);
+  
+  // Wrap onDone to flush remaining chunks before completing
+  const wrappedOnDone = (summary) => {
+    flushChunks(); // Flush any remaining buffered chunks
+    onDone?.(summary);
+  };
+  
   try {
     if (providerLower === 'google' || providerLower === 'gemini') {
-      return streamGeminiChunked({ messages, model, baseUrl: base, apiKey, onChunk, onThink, onDone, onError });
+      return streamGeminiChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError });
     }
     
     if (providerLower === 'anthropic') {
-      return streamAnthropicChunked({ messages, model, baseUrl: base, apiKey, onChunk, onThink, onDone, onError });
+      return streamAnthropicChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError });
     }
     
     if (providerLower === 'mistral') {
-      return streamMistralChunked({ messages, model, baseUrl: base, apiKey, onChunk, onThink, onDone, onError });
+      return streamMistralChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError });
     }
     
-    return streamOpenAIChunked({ messages, model, baseUrl: base, apiKey, onChunk, onThink, onDone, onError });
+    return streamOpenAIChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError });
   } catch (error) {
+    flushChunks(); // Flush on error too
     onError?.(error.message);
   }
 }

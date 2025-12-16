@@ -55,6 +55,9 @@ export function AppProvider({ children }) {
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [oldestLoadedIndex, setOldestLoadedIndex] = useState(-1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Track the next message_index to avoid collisions when we only load a paginated subset
+  const nextMessageIndexRef = useRef(0);
   
   // Auth state
   const [currentUser, setCurrentUser] = useState(null);
@@ -120,11 +123,15 @@ export function AppProvider({ children }) {
         const result = await getMessagesPaginated(targetSessionId, INITIAL_CHAR_LIMIT);
         // Only set messages if this is still the current session
         if (latestSessionIdRef.current === targetSessionId) {
+          const totalCount = result.totalCount ?? result.messages?.length ?? 0;
           setExpectedMessageCount(result.messages?.length || 0);
           setMessages(result.messages || []);
           setHasMoreMessages(result.hasMore);
           setOldestLoadedIndex(result.oldestLoadedIndex);
           setIsLoadingSession(false);
+
+          // Keep the next index aligned with database count so new messages don't overwrite old ones
+          nextMessageIndexRef.current = totalCount;
         }
       } else {
         if (latestSessionIdRef.current === null) {
@@ -133,6 +140,9 @@ export function AppProvider({ children }) {
           setHasMoreMessages(false);
           setOldestLoadedIndex(-1);
           setIsLoadingSession(false);
+
+          // Reset index tracker when returning to welcome screen
+          nextMessageIndexRef.current = 0;
         }
       }
     };
@@ -160,7 +170,13 @@ export function AppProvider({ children }) {
         // Prepend older messages to current messages
         setMessages(prev => {
           console.log('[LoadMore] Prepending to prev length:', prev.length);
-          return [...result.messages, ...prev];
+          const updated = [...result.messages, ...prev];
+
+          // Maintain a stable next index using the highest message_index we know about
+          const latestKnownIndex = updated.reduce((max, msg) => Math.max(max, msg.message_index ?? -1), -1);
+          nextMessageIndexRef.current = Math.max(nextMessageIndexRef.current, latestKnownIndex + 1);
+
+          return updated;
         });
         setHasMoreMessages(result.hasMore);
         setOldestLoadedIndex(result.messages[0].message_index);
@@ -185,6 +201,7 @@ export function AppProvider({ children }) {
     setSessions(prev => [session, ...prev]);
     setCurrentSession(session);
     setMessages([]);
+    nextMessageIndexRef.current = 0;
     return session;
   }, []);
 
@@ -200,6 +217,7 @@ export function AppProvider({ children }) {
     // Regenerate welcome message for new visit
     const personaName = settings?.persona?.name || 'friend';
     setWelcomeMessage(getWelcomeMessage(personaName));
+    nextMessageIndexRef.current = 0;
   }, [settings]);
 
   // Delete session
@@ -209,6 +227,7 @@ export function AppProvider({ children }) {
     if (currentSession?.id === id) {
       setCurrentSession(null);
       setMessages([]);
+      nextMessageIndexRef.current = 0;
     }
   }, [currentSession]);
 
@@ -226,19 +245,23 @@ export function AppProvider({ children }) {
   const appendMessage = useCallback(async (role, content, metadata = {}, targetSession = null, createdAt = Date.now()) => {
     const session = targetSession || currentSession;
     if (!session) return;
-    
-    // For new sessions, we need to get current message count from state
+
+    // Derive the next message_index from a stable ref to avoid collisions when state is paginated
     let messageIndex;
     if (targetSession && metadata._messageIndex !== undefined) {
+      // Welcome flow provides explicit indices (0 for user, 1 for assistant)
       messageIndex = metadata._messageIndex;
     } else {
-      messageIndex = messages.length;
+      messageIndex = nextMessageIndexRef.current;
     }
-    
+
     await addMessage(session.id, role, content, metadata, messageIndex, createdAt);
     const newMsg = { role, content, message_index: messageIndex, created_at: createdAt, ...metadata };
     setMessages(prev => [...prev, newMsg]);
-    
+
+    // Bump the tracker so subsequent messages always use a fresh index
+    nextMessageIndexRef.current = Math.max(nextMessageIndexRef.current, messageIndex + 1);
+
     // Update session timestamp
     await saveSession({ ...session, updated_at: Date.now() });
     setSessions(prev => {

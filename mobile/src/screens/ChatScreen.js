@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable } from 'react-native';
 import ReanimatedModule, { useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import { KeyboardAvoidingLegendList } from '@legendapp/list';
+import { LegendList } from '@legendapp/list';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { WebView } from 'react-native-webview';
@@ -325,7 +325,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
             duration: 200,
             useNativeDriver: true,
           }).start(() => setShowSkeleton(false));
-        }, 2000);
+        }, 4000);
       }
     }
     
@@ -927,10 +927,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   );
 
   // Messages are already paginated from context - just add keys
-  // Key must be based on message_index only (not array position which changes on load more)
+  // Key must be unique - use message_index + role + array index to prevent duplicates
   const displayMessagesBase = useMemo(() => messages.map((m, idx) => ({
     ...m,
-    _key: `saved-${currentSession?.id?.slice(-6) || 'x'}-${m.message_index ?? idx}`,
+    _key: `saved-${currentSession?.id?.slice(-6) || 'x'}-${m.message_index ?? idx}-${m.role}-${idx}`,
   })), [messages, currentSession?.id]);
   
   // Create mutable copy for streaming message push
@@ -1036,6 +1036,41 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     }
   }, [displayMessages.length, getLastAiIndex, topInset]);
   */
+  
+  // Debounced scroll state handler - runs on JS thread but throttled
+  const scrollStateTimeout = useRef(null);
+  const handleScrollState = useCallback((offsetY, distanceFromBottom, nearBottom, contentHeight, layoutHeight) => {
+    lastScrollOffset.current = offsetY;
+    isNearBottomRef.current = nearBottom;
+    
+    // Hide spacer when scrolled up after stream ends
+    if (streamEndedRef.current && showSpacer && !nearBottom) {
+      setShowSpacer(false);
+    }
+    
+    // Fast hide scroll button
+    if (scrollButtonVisible && !programmaticScrollRef.current) {
+      setScrollButtonVisible(false);
+    }
+    
+    // Debounced show button
+    const isScrollable = contentHeight > layoutHeight;
+    const percentFromBottom = distanceFromBottom / layoutHeight;
+    const shouldShow = isScrollable && percentFromBottom > 0.3;
+    
+    scrollPositionRef.current.showButton = shouldShow;
+    scrollPositionRef.current.isScrolling = true;
+    
+    if (scrollStateTimeout.current) clearTimeout(scrollStateTimeout.current);
+    scrollStateTimeout.current = setTimeout(() => {
+      scrollPositionRef.current.isScrolling = false;
+      if (!programmaticScrollRef.current && scrollPositionRef.current.showButton) {
+        setScrollButtonVisible(true);
+      }
+      programmaticScrollRef.current = false;
+    }, 200);
+  }, [showSpacer, scrollButtonVisible]);
+  
   // Header component for load more (appears at TOP)
   const ListHeader = useCallback(() => {
     if (!hasMoreMessages) return null;
@@ -1113,84 +1148,54 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       ) : (
         <>
           <Animated.View style={{ flex: 1, opacity: contentFadeAnim }}>
-            
-            <KeyboardAvoidingLegendList
-              ref={flatListRef}
-              data={displayMessages}
-              keyExtractor={(item) => item._key}
-              renderItem={renderMessage}
-              estimatedItemSize={avgHeight}
-              recycleItems={true}
-              drawDistance={2000}
-              initialScrollIndex={Math.max(0, displayMessages.length - 1)}
-              maintainScrollAtEnd
-              maintainScrollAtEndThreshold={0.03}
-              onStartReached={() => {handleLoadMore()}}
-              onStartReachedThreshold={1}
-              maintainVisibleContentPosition
-              ListHeaderComponent={ListHeader}
-              ListFooterComponent={ListFooter}
-              contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="interactive"
-              onContentSizeChange={(w, h) => {
-                setListContentHeight(h);
-                lastContentHeight.current = h;
-                
-                // Scroll to bottom on every size change while loading from sidebar
-                if (shouldScrollOnSizeChange.current) {
-                  flatListRef.current?.scrollToEnd({ animated: false });
-                }
-              }}
-              onLayout={(e) => {
-                setListLayoutHeight(e.nativeEvent.layout.height);
-                lastLayoutHeight.current = e.nativeEvent.layout.height;
-              }}
-              onScroll={(e) => {
-                const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-                
-                // Track current scroll position for eased scroll animation
-                lastScrollOffset.current = contentOffset.y;
-                
-                const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-                const percentFromBottom = distanceFromBottom / layoutMeasurement.height;
-                
-                // Track if user is near bottom (for spacer visibility)
-                const nearBottom = distanceFromBottom < SPACER_HEIGHT + SPACER_HIDE_BUFFER;
-                isNearBottomRef.current = nearBottom;
-                
-                // If stream ended and user scrolled up past spacer, hide it
-                if (streamEndedRef.current && showSpacer && !nearBottom) {
-                  setShowSpacer(false);
-                }
-                
-                // Fast hide: instantly hide when user scrolls (no debounce)
-                if (scrollButtonVisible && !programmaticScrollRef.current) {
-                  setScrollButtonVisible(false);
-                }
-                
-                // Track position for showing button after scroll stops
-                const isScrollable = contentSize.height > layoutMeasurement.height;
-                // Only show if scrollable AND scrolled up significantly (30%)
-                const shouldShow = isScrollable && percentFromBottom > 0.3;
-                scrollPositionRef.current.showButton = shouldShow;
-                scrollPositionRef.current.isScrolling = true;
-                
-                // Clear previous timeout
-                if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-                
-                // Show button only after scroll stops
-                scrollTimeoutRef.current = setTimeout(() => {
-                  scrollPositionRef.current.isScrolling = false;
-                  if (!programmaticScrollRef.current && scrollPositionRef.current.showButton) {
-                    setScrollButtonVisible(true);
+              <LegendList
+                ref={flatListRef}
+                data={displayMessages}
+                keyExtractor={(item) => item._key}
+                renderItem={renderMessage}
+                estimatedItemSize={avgHeight}
+                recycleItems={true}
+                drawDistance={2000}
+                initialScrollIndex={Math.max(0, displayMessages.length - 1)}
+                maintainScrollAtEnd
+                maintainScrollAtEndThreshold={0.03}
+                onStartReached={() => {handleLoadMore()}}
+                onStartReachedThreshold={1}
+                maintainVisibleContentPosition
+                ListHeaderComponent={ListHeader}
+                ListFooterComponent={ListFooter}
+                contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                onContentSizeChange={(w, h) => {
+                  setListContentHeight(h);
+                  lastContentHeight.current = h;
+                  
+                  // Scroll to bottom on every size change while loading from sidebar
+                  if (shouldScrollOnSizeChange.current) {
+                    flatListRef.current?.scrollToEnd({ animated: false });
                   }
-                  programmaticScrollRef.current = false;
-                }, 200);
-              }}
-              scrollEventThrottle={16}
-            />
+                }}
+                onLayout={(e) => {
+                  setListLayoutHeight(e.nativeEvent.layout.height);
+                  lastLayoutHeight.current = e.nativeEvent.layout.height;
+                }}
+                onScroll={(e) => {
+                  // Simple scroll handler - calls debounced state handler
+                  const contentOffset = e.nativeEvent?.contentOffset || { x: 0, y: 0 };
+                  const contentSize = e.nativeEvent?.contentSize || { width: 0, height: 0 };
+                  const layoutMeasurement = e.nativeEvent?.layoutMeasurement || { width: 0, height: 0 };
+                  
+                  if (layoutMeasurement.height === 0) return;
+                  
+                  const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+                  const nearBottom = distanceFromBottom < 400;
+                  
+                  handleScrollState(contentOffset.y, distanceFromBottom, nearBottom, contentSize.height, layoutMeasurement.height);
+                }}
+                scrollEventThrottle={16}
+              />
           </Animated.View>
           {/* Skeleton Overlay - full height, zIndex below input so form stays visible */}
           {showSkeleton && (

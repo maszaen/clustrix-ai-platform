@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable } from 'react-native';
 import ReanimatedModule, { useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import { LegendList } from '@legendapp/list';
+import { KeyboardAvoidingLegendList } from '@legendapp/list';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { WebView } from 'react-native-webview';
@@ -168,7 +168,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const SPACER_HEIGHT = Dimensions.get('window').height - 335; // Full device height - 145
   const SPACER_HIDE_BUFFER = 30; // Extra buffer before hiding spacer
   
-  // Smooth keyboard animation using react-native-keyboard-controller
+  // Smooth keyboard animation for INPUT ONLY using react-native-keyboard-controller
   const { height: keyboardAnimatedHeight } = useReanimatedKeyboardAnimation();
   const inputAnimatedStyle = useAnimatedStyle(() => {
     // Proportional offset - reduce movement by ~10% for tighter keyboard gap
@@ -180,7 +180,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     };
   });
   
-  // Animated paddingBottom for content area (welcome screen, messages)
+  // Animated paddingBottom for content area (welcome screen only)
   const contentPaddingAnimatedStyle = useAnimatedStyle(() => {
     // Convert negative keyboard height to positive padding
     const paddingValue = -keyboardAnimatedHeight.value;
@@ -1114,7 +1114,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         <>
           <Animated.View style={{ flex: 1, opacity: contentFadeAnim }}>
             
-            <LegendList
+            <KeyboardAvoidingLegendList
               ref={flatListRef}
               data={displayMessages}
               keyExtractor={(item) => item._key}

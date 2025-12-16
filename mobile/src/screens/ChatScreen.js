@@ -161,6 +161,13 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const lastScrollOffset = useRef(0);
   const lastLayoutHeight = useRef(0);
   
+  // For scroll position preservation during load more
+  const prependScrollRef = useRef({
+    isPrepending: false,
+    savedScrollOffset: 0,
+    savedContentHeight: 0,
+  });
+  
   // Spacer visibility tracking for simpler approach
   const [showSpacer, setShowSpacer] = useState(false);
   const isNearBottomRef = useRef(true); // Track if user is near bottom
@@ -969,17 +976,35 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   // NO reverse needed - FlashList with maintainVisibleContentPosition handles chat style
   // Data: [oldest, ..., newest] - newest at bottom
 
-  // Load more messages when scroll to top - just call context function with debounce
-  const handleLoadMore = useCallback(() => {
+  // Load more messages when scroll to top - save scroll position before load
+  const handleLoadMore = useCallback(async () => {
     // Guard: Already loading or no more data
-    if (isLoadingMore || !hasMoreMessages) return;
+    if (isLoadingMore || !hasMoreMessages) {
+      console.log('[handleLoadMore] Skipped - isLoadingMore:', isLoadingMore, 'hasMoreMessages:', hasMoreMessages);
+      return;
+    }
     
     // Guard: Debounce - prevent spam calls
-    if (loadingTimeoutRef.current) return;
+    if (loadingTimeoutRef.current) {
+      console.log('[handleLoadMore] Skipped - debounce active');
+      return;
+    }
     
-    // Debounce the load
-    loadingTimeoutRef.current = setTimeout(() => {
-      loadMoreMessages();
+    // Save current scroll position and content height BEFORE loading
+    prependScrollRef.current = {
+      isPrepending: true,
+      savedScrollOffset: lastScrollOffset.current,
+      savedContentHeight: lastContentHeight.current,
+    };
+    console.log('[handleLoadMore] Saved scroll state:', prependScrollRef.current);
+    
+    // Debounce the load - set ref immediately to prevent multiple calls
+    loadingTimeoutRef.current = 'pending';
+    
+    // Small delay then load
+    loadingTimeoutRef.current = setTimeout(async () => {
+      console.log('[handleLoadMore] Executing loadMoreMessages...');
+      await loadMoreMessages();
       loadingTimeoutRef.current = null;
     }, 150);
     
@@ -1169,8 +1194,20 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
                 onContentSizeChange={(w, h) => {
+                  const prevHeight = lastContentHeight.current;
                   setListContentHeight(h);
                   lastContentHeight.current = h;
+                  
+                  // Handle scroll position restoration after prepending messages
+                  if (prependScrollRef.current.isPrepending && h > prevHeight) {
+                    const heightDelta = h - prependScrollRef.current.savedContentHeight;
+                    if (heightDelta > 0) {
+                      // Restore scroll position: add the height difference to maintain viewport
+                      const newOffset = prependScrollRef.current.savedScrollOffset + heightDelta;
+                      flatListRef.current?.scrollToOffset({ offset: newOffset, animated: false });
+                    }
+                    prependScrollRef.current.isPrepending = false;
+                  }
                   
                   // Scroll to bottom on every size change while loading from sidebar
                   if (shouldScrollOnSizeChange.current) {

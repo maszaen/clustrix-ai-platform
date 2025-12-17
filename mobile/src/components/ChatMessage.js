@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable as RNPressable } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
@@ -9,13 +8,20 @@ import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info } f
 import * as Clipboard from 'expo-clipboard';
 import ContextMenu from './ContextMenu';
 
-// Simple long press wrapper - uses gesture handler Pressable
-// No visual feedback, allows keyboard dismiss to work properly
+// Simple long press wrapper using native Pressable
+// No custom ripple - just handles long press detection
 const LongPressWrapper = memo(({ children, onLongPress, disabled, style }) => {
+  const handleLongPress = useCallback((e) => {
+    if (onLongPress && !disabled) {
+      onLongPress(e);
+    }
+  }, [onLongPress, disabled]);
+
   return (
     <Pressable
-      onLongPress={disabled ? undefined : onLongPress}
+      onLongPress={handleLongPress}
       delayLongPress={200}
+      disabled={disabled}
       style={style}
     >
       {children}

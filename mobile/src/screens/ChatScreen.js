@@ -149,6 +149,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const skeletonTimeoutRef = useRef(null);
   const prevSessionIdRef = useRef(currentSession?.id);
   const isSendingFromWelcome = useRef(false);
+  const abortControllerRef = useRef(null);
   const lastCreatedSessionId = useRef(null);
   const shouldScrollOnSizeChange = useRef(false); // Flag: scroll to bottom on every content size change
   const itemHeights = useRef({});
@@ -639,7 +640,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     let fullThinking = '';
     let thinkStartTime = null;
 
+    // Abort previous request if any
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const ac = new AbortController();
+    abortControllerRef.current = ac;
+
     await streamChat({
+      signal: ac.signal,
       messages: apiMessages,
       model: settings.model,
       provider: settings.provider,
@@ -719,6 +728,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   }, [currentSession, clearDraft, saveWelcomeDraft, messages, createSession, appendMessage, settings, removeMessage, updateSession, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, setInputText, setNewMessageId, onStreamingThinking, triggerHaptic]);
 
   const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
     setIsStreaming(false);
     setStreamingContent('');
   };

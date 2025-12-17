@@ -71,6 +71,14 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
   const hasContent = text.trim() || attachments.length > 0;
 
 
+  // Notify parent when input height changes (extra height from multiline)
+  useEffect(() => {
+    // Cap height at 150 (maxHeight from styles)
+    const effectiveHeight = Math.min(inputHeight, 150);
+    const extraHeight = baseInputHeight.current > 0 ? Math.max(0, effectiveHeight - baseInputHeight.current) : 0;
+    onInputHeightChange?.(extraHeight);
+  }, [inputHeight, onInputHeightChange]);
+
   // Animate attachment section height
   useEffect(() => {
     // Determine target height

@@ -1,9 +1,10 @@
 import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
-import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable, ScrollView } from 'react-native';
+import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable, ScrollView, InteractionManager } from 'react-native';
 import ReanimatedModule, { useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { LegendList } from '@legendapp/list';
 import { Ionicons } from '@expo/vector-icons';
+import { Info, Server, ArrowDownCircle, ArrowUpCircle, BarChart3, DollarSign } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { WebView } from 'react-native-webview';
 import { useApp } from '../context/AppContext';
@@ -16,6 +17,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors'; 
 import { FONTS } from '../constants/fonts';
 import { DIAMOND_LOGO_HTML } from '../constants/strings';
+
+// PERF: Debug flag - set to false in production to disable all debug logs
+// This prevents console.log overhead during streaming
+const __DEV_DEBUG__ = false;
+const log = __DEV_DEBUG__ ? console.log : () => {};
 
 
 // Welcome Screen with diamond logo and typewriter effect
@@ -197,7 +203,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   
   // Fade in/out scroll button with auto-hide
 
-  const scrollBottomHandler = () => {
+  // Fade in/out scroll button with auto-hide
+  // NOTE: Moved state update OUTSIDE of this effect to prevent infinite loop
+  useEffect(() => {
     if (scrollButtonVisible && !keyboardVisible) {
       // Fade in
       Animated.timing(scrollBtnOpacity, {
@@ -206,17 +214,21 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         useNativeDriver: true,
       }).start();
       
-      // Auto-hide after 3 seconds
+      // Auto-hide after 3 seconds - use ref to track visibility instead of setState
       if (autoHideTimeoutRef.current) clearTimeout(autoHideTimeoutRef.current);
       autoHideTimeoutRef.current = setTimeout(() => {
         Animated.timing(scrollBtnOpacity, {
           toValue: 0,
           duration: 200,
           useNativeDriver: true,
-        }).start(() => setScrollButtonVisible(false));
+        }).start();
+        // Use InteractionManager to batch state update after animation
+        InteractionManager.runAfterInteractions(() => {
+          setScrollButtonVisible(false);
+        });
       }, 3000);
-    } else {
-      // Fade out
+    } else if (!scrollButtonVisible) {
+      // Only fade out if button is not visible (prevents re-triggering)
       Animated.timing(scrollBtnOpacity, {
         toValue: 0,
         duration: 200,
@@ -227,50 +239,47 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     return () => {
       if (autoHideTimeoutRef.current) clearTimeout(autoHideTimeoutRef.current);
     };
-  }
-
-  // const scrollBottomBtnShow = () => {
-  //   Animated.timing(scrollBtnOpacity, {
-  //     toValue: 1,
-  //     duration: 200,
-  //     useNativeDriver: true,
-  //   }).start();
-  // }
-
-  useEffect(() => {
-    scrollBottomHandler()
-  }, [scrollButtonVisible, keyboardVisible, scrollBtnOpacity]);
+  }, [scrollButtonVisible, keyboardVisible]); // Removed scrollBtnOpacity from deps - it's a ref
 
   // Spacer visibility management - simpler approach
   // Show spacer when streaming starts, hide when stream ends AND user scrolls up
   // Skip spacer if content is less than 90% of viewport
+  // NOTE: Removed showSpacer from deps to prevent infinite loop - use functional setState instead
   useEffect(() => {
     if (isStreaming) {
       // Check if content is small enough to not need spacer
       // Content height without spacer vs 90% of layout height
-      const contentWithoutSpacer = listContentHeight - (showSpacer ? SPACER_HEIGHT : 0);
-      const viewportThreshold = listLayoutHeight * 0.9;
-      
-      if (contentWithoutSpacer < viewportThreshold && listLayoutHeight > 0) {
-        // Content is small, no spacer needed
-        setShowSpacer(false);
-        streamEndedRef.current = false;
-      } else {
-        // Stream started - show spacer
-        // Note: scroll is handled by maintainScrollAtEnd, no need to call scrollToEnd here
-        setShowSpacer(true);
-        streamEndedRef.current = false;
-      }
-    } else if (streamEndedRef.current === false && showSpacer) {
-      // Stream just ended
-      streamEndedRef.current = true;
-      // If user is NOT near bottom, hide spacer immediately
-      if (!isNearBottomRef.current) {
-        setShowSpacer(false);
-      }
-      // If user IS near bottom, keep spacer - will be removed when they scroll up
+      // Use ref to get current spacer state without adding to deps
+      setShowSpacer(currentShowSpacer => {
+        const contentWithoutSpacer = listContentHeight - (currentShowSpacer ? SPACER_HEIGHT : 0);
+        const viewportThreshold = listLayoutHeight * 0.9;
+        
+        if (contentWithoutSpacer < viewportThreshold && listLayoutHeight > 0) {
+          // Content is small, no spacer needed
+          streamEndedRef.current = false;
+          return false;
+        } else {
+          // Stream started - show spacer
+          streamEndedRef.current = false;
+          return true;
+        }
+      });
+    } else {
+      // Stream ended - check if we should hide spacer
+      setShowSpacer(currentShowSpacer => {
+        if (streamEndedRef.current === false && currentShowSpacer) {
+          // Stream just ended
+          streamEndedRef.current = true;
+          // If user is NOT near bottom, hide spacer immediately
+          if (!isNearBottomRef.current) {
+            return false;
+          }
+        }
+        // Keep current state
+        return currentShowSpacer;
+      });
     }
-  }, [isStreaming, showSpacer, listContentHeight, listLayoutHeight]);
+  }, [isStreaming, listContentHeight, listLayoutHeight]); // Removed showSpacer from deps
 
   // React to isLoadingSession - show skeleton and enable scroll-on-size-change
   useEffect(() => {
@@ -284,7 +293,25 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   }, [isLoadingSession, skeletonOpacity]);
 
   // When all messages loaded AND at bottom, disable scroll flag and hide skeleton
+  // NOTE: Added proper cleanup for interval/timeout to prevent memory leaks and potential loops
   useEffect(() => {
+    let intervalId = null;
+    let timeoutId = null;
+    let isMounted = true;
+    
+    // Helper to hide skeleton with animation - prevents setState on unmounted component
+    const hideSkeleton = () => {
+      if (!isMounted) return;
+      shouldScrollOnSizeChange.current = false;
+      Animated.timing(skeletonOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        if (isMounted) setShowSkeleton(false);
+      });
+    };
+    
     // Guard: only run when we have expected data and it matches loaded data
     if (
       showSkeleton && 
@@ -294,19 +321,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     ) {
       // All data loaded! But wait until we're at bottom AND content is rendered before hiding
       const checkAndHide = () => {
+        if (!isMounted) return true; // Stop checking if unmounted
+        
         // Scroll to bottom
         flatListRef.current?.scrollToEnd({ animated: false });
         
         // Check if at bottom AND content has rendered (listContentHeight > 0)
         if (isNearBottomRef.current && listContentHeight > 0) {
-          // At bottom and content rendered! Disable flag and hide skeleton
-          shouldScrollOnSizeChange.current = false;
-          
-          Animated.timing(skeletonOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => setShowSkeleton(false));
+          // At bottom and content rendered! Hide skeleton
+          hideSkeleton();
           return true; // Done
         }
         return false; // Not ready yet
@@ -315,35 +338,36 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       // Try immediately
       if (!checkAndHide()) {
         // Not ready, keep checking every 50ms
-        const interval = setInterval(() => {
+        intervalId = setInterval(() => {
           if (checkAndHide()) {
-            clearInterval(interval);
+            if (intervalId) clearInterval(intervalId);
+            intervalId = null;
           }
         }, 50);
         
-        // Safety: clear interval after 2 seconds max
-        setTimeout(() => {
-          clearInterval(interval);
+        // Safety: clear interval after 4 seconds max
+        timeoutId = setTimeout(() => {
+          if (intervalId) {
+            clearInterval(intervalId);
+            intervalId = null;
+          }
           // Force hide anyway
-          shouldScrollOnSizeChange.current = false;
-          Animated.timing(skeletonOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: true,
-          }).start(() => setShowSkeleton(false));
+          hideSkeleton();
         }, 4000);
       }
     }
     
     // Handle going back to welcome (no messages expected)
     if (showSkeleton && !isLoadingSession && expectedMessageCount === 0 && !currentSession) {
-      shouldScrollOnSizeChange.current = false;
-      Animated.timing(skeletonOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(() => setShowSkeleton(false));
+      hideSkeleton();
     }
+    
+    // Cleanup function - CRITICAL to prevent infinite loops on fast re-renders
+    return () => {
+      isMounted = false;
+      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [showSkeleton, isLoadingSession, expectedMessageCount, messages.length, listContentHeight, currentSession, skeletonOpacity]);
 
   // Pulse animation for skeleton
@@ -491,13 +515,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   // No auto-scroll during streaming - inverted FlatList handles it naturally
   // Content expands upward, user stays at bottom
 
-  const triggerHaptic = () => {
+  // PERF: Throttle haptic to max once per 800ms during streaming
+  // 150ms was too frequent and caused performance issues on some devices
+  const triggerHaptic = useCallback(() => {
     const now = Date.now();
-    if (now - lastHapticTime.current > 150) {
+    if (now - lastHapticTime.current > 800) {
       lastHapticTime.current = now;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // Light instead of Medium for less overhead
     }
-  };
+  }, []);
 
   const sessionRef = useRef(currentSession);
   
@@ -541,8 +567,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
 
   const handleSend = useCallback(async (text, attachments = []) => {
     // DEBUG: Log attachments received
-    console.log('[handleSend] text:', text.substring(0, 50), 'attachments:', attachments.length);
-    console.log('[handleSend] attachments detail:', attachments.map(a => ({ type: a.type, name: a.name, hasBase64: !!a.base64, hasTextContent: !!a.textContent })));
+    log('[handleSend] text:', text.substring(0, 50), 'attachments:', attachments.length);
+    log('[handleSend] attachments detail:', attachments.map(a => ({ type: a.type, name: a.name, hasBase64: !!a.base64, hasTextContent: !!a.textContent })));
     
     hasScrolledInitial.current = true;
     initialScrollDone.current = true;
@@ -593,7 +619,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     }));
     
     // DEBUG: Log attachmentMeta
-    console.log('[handleSend] attachmentMeta:', attachmentMeta.length, attachmentMeta.map(a => ({ type: a.type, name: a.name })));
+    log('[handleSend] attachmentMeta:', attachmentMeta.length, attachmentMeta.map(a => ({ type: a.type, name: a.name })));
     // For new session from welcome screen, pass session directly to appendMessage
     if (isNewSession) {
       await appendMessage('user', text, { 
@@ -784,11 +810,11 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   // This handles cases where message_index might be duplicate due to race conditions
   const getUserPromptForMessage = useCallback((aiMessage) => {
     if (!aiMessage) {
-      console.log('[getUserPromptForMessage] No message provided');
+      log('[getUserPromptForMessage] No message provided');
       return '';
     }
     
-    console.log('[getUserPromptForMessage] Looking for user message before AI:', aiMessage.content?.substring(0, 30));
+    log('[getUserPromptForMessage] Looking for user message before AI:', aiMessage.content?.substring(0, 30));
     
     // Find this AI message's position in the array
     const aiPos = messages.findIndex(m => 
@@ -796,22 +822,22 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       m.content === aiMessage.content
     );
     
-    console.log('[getUserPromptForMessage] AI message found at array position:', aiPos);
+    log('[getUserPromptForMessage] AI message found at array position:', aiPos);
     
     if (aiPos <= 0) {
-      console.log('[getUserPromptForMessage] AI at position 0 or not found, no user message before');
+      log('[getUserPromptForMessage] AI at position 0 or not found, no user message before');
       return '';
     }
     
     // Look backwards from AI position to find the first user message
     for (let i = aiPos - 1; i >= 0; i--) {
       if (messages[i].role === 'user') {
-        console.log('[getUserPromptForMessage] Found user message at position:', i, 'content:', messages[i].content?.substring(0, 50));
+        log('[getUserPromptForMessage] Found user message at position:', i, 'content:', messages[i].content?.substring(0, 50));
         return messages[i].content || '';
       }
     }
     
-    console.log('[getUserPromptForMessage] No user message found before AI');
+    log('[getUserPromptForMessage] No user message found before AI');
     return '';
   }, [messages]);
 
@@ -827,7 +853,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   // PENTING: Gunakan POSISI ARRAY bukan message_index (karena bisa duplicate)
   const handleRetrySubmit = useCallback(async (mode, reasonText = '') => {
     if (!retryTarget || !currentSession) {
-      console.log('[Retry] Aborted: no retryTarget or currentSession');
+      log('[Retry] Aborted: no retryTarget or currentSession');
       return;
     }
     
@@ -838,13 +864,13 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       m.role === 'assistant' && m.content === retryTarget.content
     );
     
-    console.log('[Retry] AI message array position:', aiArrayPos);
-    console.log('[Retry] Mode:', mode);
-    console.log('[Retry] Messages count before:', messages.length);
-    console.log('[Retry] Messages:', messages.map((m, i) => ({ pos: i, role: m.role, index: m.message_index, content: m.content?.substring(0, 30) })));
+    log('[Retry] AI message array position:', aiArrayPos);
+    log('[Retry] Mode:', mode);
+    log('[Retry] Messages count before:', messages.length);
+    log('[Retry] Messages:', messages.map((m, i) => ({ pos: i, role: m.role, index: m.message_index, content: m.content?.substring(0, 30) })));
     
     if (aiArrayPos < 0) {
-      console.log('[Retry] AI message not found in array!');
+      log('[Retry] AI message not found in array!');
       return;
     }
     
@@ -859,8 +885,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       }
     }
     
-    console.log('[Retry] User message array position:', userArrayPos);
-    console.log('[Retry] Found userPrompt:', userPrompt?.substring(0, 100));
+    log('[Retry] User message array position:', userArrayPos);
+    log('[Retry] Found userPrompt:', userPrompt?.substring(0, 100));
     
     // Build injected user prompt based on retry mode
     let injectedUserPrompt = '';
@@ -872,7 +898,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       // Other mode - include reason, previous response, and original user prompt
       injectedUserPrompt = `Your previous response was inappropriate, and the user would like you to repeat it for ${reasonText}. Your previous response was ${pickedResponse}, and the associated user prompt was ${userPrompt}.`;
     }
-    console.log('[Retry] Injected prompt:', injectedUserPrompt.substring(0, 150));
+    log('[Retry] Injected prompt:', injectedUserPrompt.substring(0, 150));
 
     // Close modals and clear state
     setRetryOptionsVisible(false);
@@ -882,7 +908,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
 
     // SNAPSHOT messages BEFORE any state changes
     const messagesSnapshot = [...messages];
-    console.log('[Retry] Snapshot count:', messagesSnapshot.length);
+    log('[Retry] Snapshot count:', messagesSnapshot.length);
 
     // Get the message_index of the AI we want to delete (for DB deletion)
     // Pass role and content for precise state filtering (handles duplicate indexes)
@@ -890,7 +916,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     const aiContent = retryTarget.content;
     
     // Delete from DB and state (with precise matching using role + content)
-    console.log('[Retry] Deleting AI message with message_index:', aiMessageIndex, 'role: assistant');
+    log('[Retry] Deleting AI message with message_index:', aiMessageIndex, 'role: assistant');
     await removeMessage(currentSession.id, aiMessageIndex, 'assistant', aiContent);
     
     // Scroll to bottom
@@ -903,7 +929,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     // - Include all messages BEFORE the AI (by array position)
     // - Replace the user message (by array position) with injected prompt
     const filteredMessages = messagesSnapshot.slice(0, aiArrayPos); // Everything before AI
-    console.log('[Retry] Filtered messages for API (before AI at pos', aiArrayPos, '):', 
+    log('[Retry] Filtered messages for API (before AI at pos', aiArrayPos, '):', 
       filteredMessages.map((m, i) => ({ pos: i, role: m.role })));
     
     const apiMessages = [
@@ -911,15 +937,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       ...filteredMessages.map((m, idx) => {
         // Replace the user message that triggered the response with injected version
         if (idx === userArrayPos) {
-          console.log('[Retry] Replacing user message at array pos', idx, 'with injected prompt');
+          log('[Retry] Replacing user message at array pos', idx, 'with injected prompt');
           return { role: 'user', content: injectedUserPrompt };
         }
         return { role: m.role, content: m.content };
       })
     ];
 
-    console.log('[Retry] Final API messages count:', apiMessages.length);
-    console.log('[Retry] API messages summary:', apiMessages.map(m => ({ role: m.role, contentLen: m.content?.length })));
+    log('[Retry] Final API messages count:', apiMessages.length);
+    log('[Retry] API messages summary:', apiMessages.map(m => ({ role: m.role, contentLen: m.content?.length })));
 
     // Start streaming - SAMA PERSIS seperti handleSend
     setIsStreaming(true);
@@ -928,7 +954,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     
     const stableStreamingId = `streaming-retry-${Date.now()}`;
     setStreamingMessageId(stableStreamingId);
-    console.log('[Retry] Streaming started with ID:', stableStreamingId);
+    log('[Retry] Streaming started with ID:', stableStreamingId);
 
     let fullContent = '';
     let fullThinking = '';
@@ -949,7 +975,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         // Track when thinking starts (sama seperti handleSend)
         if (!thinkStartTime && think) {
           thinkStartTime = Date.now();
-          console.log('[Retry] Thinking started');
+          log('[Retry] Thinking started');
         }
         // Append thinking content
         fullThinking += think;
@@ -957,7 +983,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         onStreamingThinking?.(fullThinking);
       },
       onDone: async (summary = {}) => {
-        console.log('[Retry] Stream done, fullContent length:', fullContent.length, 'fullThinking length:', fullThinking.length);
+        log('[Retry] Stream done, fullContent length:', fullContent.length, 'fullThinking length:', fullThinking.length);
         
         // Format content dengan thinking jika ada (sama seperti handleSend)
         const content = fullThinking ? `<thinking>${fullThinking}</thinking>\n\n${fullContent}` : fullContent;
@@ -976,7 +1002,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         };
 
         // Append new AI response
-        console.log('[Retry] Appending new AI response');
+        log('[Retry] Appending new AI response');
         await appendMessage('assistant', content, metadata);
 
         // Clear streaming states
@@ -984,10 +1010,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         setStreamingContent('');
         setThinkingContent('');
         setStreamingMessageId(null);
-        console.log('[Retry] Complete!');
+        log('[Retry] Complete!');
       },
       onError: async (error) => {
-        console.log('[Retry] Error:', error);
+        log('[Retry] Error:', error);
         setIsStreaming(false);
         setStreamingContent('');
         setThinkingContent('');
@@ -1009,7 +1035,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     setMetadataMenu({ visible: true, message, position: buttonPosition });
   }, []);
 
-  const renderMessage = ({ item }) => (
+  // PERF: useCallback to prevent renderMessage recreation on every render
+  // This is critical for LegendList/FlatList performance during streaming
+  const renderMessage = useCallback(({ item }) => (
     <ChatMessage
       message={item}
       isUser={item.role === 'user'}
@@ -1020,7 +1048,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       onReact={(liked) => handleReaction(item, liked)}
       onShowMetadata={(msg, pos) => handleMetadataOpen(msg || item, pos)}
     />
-  );
+  ), [newMessageId, onShowThinking, onSelectText, handleRetryModal, handleReaction, handleMetadataOpen]);
 
   // Messages are already paginated from context - just add keys
   // Key must be STABLE across prepends - use message_index only (not array index!)
@@ -1240,7 +1268,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
                 // maintainScrollAtEnd
                 // maintainScrollAtEndThreshold={0.02}
                 onStartReached={() => {handleLoadMore()}}
-                onStartReachedThreshold={1}
+                onStartReachedThreshold={0.03}
                 ListHeaderComponent={ListHeader}
                 ListFooterComponent={ListFooter}
                 contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}
@@ -1410,32 +1438,32 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         options={[
           { 
             label: `Model: ${metadataMenu.message?.model || metadataMenu.message?.model_id || 'Unknown'}`, 
-            icon: 'information-circle-outline', 
+            icon: Info, 
             onPress: () => {} 
           },
           { 
             label: `Provider: ${metadataMenu.message?.provider || 'Unknown'}`, 
-            icon: 'server-outline', 
+            icon: Server, 
             onPress: () => {} 
           },
           { 
             label: `Input tokens: ${metadataMenu.message?.usage?.inputTokens ?? metadataMenu.message?.usage?.prompt_tokens ?? 'N/A'}`, 
-            icon: 'arrow-down-circle-outline', 
+            icon: ArrowDownCircle, 
             onPress: () => {} 
           },
           { 
             label: `Output tokens: ${metadataMenu.message?.usage?.outputTokens ?? metadataMenu.message?.usage?.completion_tokens ?? 'N/A'}`, 
-            icon: 'arrow-up-circle-outline', 
+            icon: ArrowUpCircle, 
             onPress: () => {} 
           },
           { 
             label: `Total tokens: ${metadataMenu.message?.usage?.totalTokens ?? metadataMenu.message?.usage?.total_tokens ?? 'N/A'}`, 
-            icon: 'analytics-outline', 
+            icon: BarChart3, 
             onPress: () => {} 
           },
           { 
             label: `Cost: ${metadataMenu.message?.usage?.cost || metadataMenu.message?.cost ? `$${(metadataMenu.message?.usage?.cost || metadataMenu.message?.cost).toFixed(6)}` : 'N/A'}`, 
-            icon: 'cash-outline', 
+            icon: DollarSign, 
             onPress: () => {} 
           },
         ]}

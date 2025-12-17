@@ -460,7 +460,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
 
 const styles = StyleSheet.create({
   menuContent: { paddingBottom: 40 },
-  subContainer: { flex: 1 },
+  subContainer: { flex: 1, paddingTop: 10},
   content: { paddingBottom: 40 },
   section: { marginBottom: 20 },
   sectionTitle: { color: COLORS.fgMuted, fontSize: 12, fontFamily: FONTS.ai, textTransform: 'uppercase', letterSpacing: 0.5, paddingHorizontal: 4, marginBottom: 6 },

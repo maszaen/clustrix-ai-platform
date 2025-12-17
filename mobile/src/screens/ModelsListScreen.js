@@ -10,7 +10,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import AlertModal from '../components/AlertModal';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { Eye, EyeClosed } from 'lucide-react-native';
+import { Eye, EyeClosed, Pencil, Trash2 } from 'lucide-react-native';
 import { DEFAULT_PROVIDERS_LIST, DEFAULT_MODELS } from '../constants/providers';
 
 
@@ -197,12 +197,13 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        {/* Context menu with Lucide icons */}
         <ContextMenu
           visible={contextMenu.visible}
           position={contextMenu.position}
           options={[
-            { label: 'Rename', icon: 'pencil-outline', onPress: () => setRenameModal({ visible: true, item: contextMenu.item, type: contextMenu.type }) },
-            { label: 'Delete', icon: 'trash-outline', danger: true, onPress: () => setConfirmDelete({ visible: true, item: contextMenu.item, type: contextMenu.type }) },
+            { label: 'Rename', icon: Pencil, onPress: () => setRenameModal({ visible: true, item: contextMenu.item, type: contextMenu.type }) },
+            { label: 'Delete', icon: Trash2, danger: true, onPress: () => setConfirmDelete({ visible: true, item: contextMenu.item, type: contextMenu.type }) },
           ]}
           onClose={() => setContextMenu({ ...contextMenu, visible: false })}
         />

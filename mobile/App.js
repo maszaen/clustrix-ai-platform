@@ -28,7 +28,7 @@ import Markdown from 'react-native-markdown-display';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Image as ImageIcon, FileText, Camera } from 'lucide-react-native';
+import { Image as ImageIcon, FileText, Camera, Pencil, Trash2 } from 'lucide-react-native';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from './src/context/AppContext';
 import ChatScreen from './src/screens/ChatScreen';
@@ -198,6 +198,7 @@ function MainApp() {
   const gestureStartedExpanded = useSharedValue(false); // Track if gesture started while expanded
   const lastDragPosition = useRef(SIDEBAR_WIDTH);
   const attachmentModalRef = useRef(null); // Ref for attachment modal graceful closing
+  const modelsModalRef = useRef(null); // Ref for models modal graceful closing
   
   // Keep RN Animated for non-gesture animations (button opacity etc)
   const scrollXAnimated = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
@@ -763,17 +764,17 @@ function MainApp() {
             </Pressable>
           </Animated.View>
 
-          {/* Context Menu */}
+          {/* Context Menu with Lucide icons */}
           <ContextMenuFixed
             visible={showContextMenu}
             onClose={() => setShowContextMenu(false)}
             sessionName={currentSession?.name || 'New Chat'}
             position={{ top: insets.top + 65, right: 16 }}
             options={[
-              { label: 'Rename', icon: 'pencil-outline', onPress: () => {
+              { label: 'Rename', icon: Pencil, onPress: () => {
                 if (currentSession) setRenameModal({ visible: true, session: currentSession });
               }},
-              { label: 'Delete', icon: 'trash-outline', danger: true, onPress: () => {
+              { label: 'Delete', icon: Trash2, danger: true, onPress: () => {
                 if (currentSession) setConfirmDelete({ visible: true, session: currentSession });
               }},
             ]}
@@ -797,9 +798,12 @@ function MainApp() {
       {/* Account Modal */}
 
       {/* Models List Modal */}
-      <SlideUpModal visible={showModels} onClose={closeModels} showBottomGradient autoExpanded>
+      <SlideUpModal ref={modelsModalRef} visible={showModels} onClose={closeModels} showBottomGradient autoExpanded>
         {({ dragHandlers }) => (
-          <ModelsListScreen onClose={closeModels} dragHandlers={dragHandlers} />
+          <ModelsListScreen 
+            onClose={() => modelsModalRef.current?.close() || closeModels()} 
+            dragHandlers={dragHandlers} 
+          />
         )}
       </SlideUpModal>
 
@@ -865,7 +869,7 @@ function MainApp() {
         onClose={() => setSelectTextModal({ visible: false, content: '' })}
         title="Select Text"
       >
-        <ScrollView style={styles.selectTextScrollView}>
+        <ScrollView showsVerticalScrollIndicator={false} style={styles.selectTextScrollView}>
           <Text style={styles.selectTextBody} selectable>{selectTextModal.content}</Text>
         </ScrollView>
       </SlideLeftModal>
@@ -875,6 +879,7 @@ function MainApp() {
         ref={attachmentModalRef}
         visible={attachmentModal}
         onClose={closeAttachmentModal}
+        showBottomGradient
       >
         <View style={styles.attachmentModalContent}>
           
@@ -1162,8 +1167,8 @@ const styles = StyleSheet.create({
   // Select text modal styles (SlideLeftModal content)
   selectTextScrollView: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingHorizontal: 0,
+    paddingTop: 16,
   },
   selectTextBody: {
     color: COLORS.fg,

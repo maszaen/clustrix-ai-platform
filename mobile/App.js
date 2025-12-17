@@ -197,6 +197,7 @@ function MainApp() {
   const currentPage = useSharedValue(1); // 0 = sidebar, 1 = main
   const gestureStartedExpanded = useSharedValue(false); // Track if gesture started while expanded
   const lastDragPosition = useRef(SIDEBAR_WIDTH);
+  const attachmentModalRef = useRef(null); // Ref for attachment modal graceful closing
   
   // Keep RN Animated for non-gesture animations (button opacity etc)
   const scrollXAnimated = useRef(new Animated.Value(SIDEBAR_WIDTH)).current;
@@ -397,7 +398,8 @@ function MainApp() {
   
   // Handle image selection
   const handleSelectImages = useCallback(async () => {
-    closeAttachmentModal();
+    // Close modal gracefully if possible
+    attachmentModalRef.current?.close() || closeAttachmentModal();
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -437,7 +439,8 @@ function MainApp() {
   
   // Handle file selection - read content for AI
   const handleSelectFiles = useCallback(async () => {
-    closeAttachmentModal();
+    // Close modal gracefully if possible
+    attachmentModalRef.current?.close() || closeAttachmentModal();
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*', // Allow all files
@@ -533,7 +536,8 @@ function MainApp() {
   
   // Handle camera
   const handleOpenCamera = useCallback(async () => {
-    closeAttachmentModal();
+    // Close modal gracefully if possible
+    attachmentModalRef.current?.close() || closeAttachmentModal();
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
@@ -861,9 +865,12 @@ function MainApp() {
       </SlideLeftModal>
 
       {/* Attachment modal */}
-      <SlideUpModal visible={attachmentModal} onClose={closeAttachmentModal}>
+      <SlideUpModal
+        ref={attachmentModalRef}
+        visible={attachmentModal}
+        onClose={closeAttachmentModal}
+      >
         <View style={styles.attachmentModalContent}>
-          <Text style={styles.attachmentModalTitle}>Add Attachment</Text>
           
           <Pressable
             style={styles.attachmentOption}
@@ -871,7 +878,7 @@ function MainApp() {
             android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
           >
             <View style={styles.attachmentOptionIcon}>
-              <ImageIcon size={22} color={COLORS.accent} strokeWidth={1.8} />
+              <ImageIcon size={28} color={COLORS.icon} strokeWidth={1.5} />
             </View>
             <View style={styles.attachmentOptionText}>
               <Text style={styles.attachmentOptionLabel}>Upload Images</Text>
@@ -885,7 +892,7 @@ function MainApp() {
             android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
           >
             <View style={styles.attachmentOptionIcon}>
-              <FileText size={22} color={COLORS.accent} strokeWidth={1.8} />
+              <FileText size={28} color={COLORS.icon} strokeWidth={1.5} />
             </View>
             <View style={styles.attachmentOptionText}>
               <Text style={styles.attachmentOptionLabel}>Upload Files</Text>
@@ -899,7 +906,7 @@ function MainApp() {
             android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
           >
             <View style={styles.attachmentOptionIcon}>
-              <Camera size={22} color={COLORS.accent} strokeWidth={1.8} />
+              <Camera size={28} color={COLORS.icon} strokeWidth={1.5} />
             </View>
             <View style={styles.attachmentOptionText}>
               <Text style={styles.attachmentOptionLabel}>Take Photo</Text>
@@ -1104,7 +1111,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,

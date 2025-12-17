@@ -499,24 +499,24 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
   return (
     <>
       <Animated.View style={styles.aiContainer}>
+        {hasThinking && (
+          <View style={{paddingHorizontal: 16, paddingBottom: 6}}>
+            <TouchableOpacity 
+              style={styles.thinkToggle} 
+              onPress={() => onShowThinking?.(thinkingContent)}
+              activeOpacity={0.7}
+            >
+              <PanelBottomOpen size={13} color={COLORS.fgMuted} />
+              <Text style={styles.thinkToggleText}>{getThinkingText()}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <LongPressWrapper 
           onLongPress={handleLongPress} 
           disabled={message.isStreaming}
           style={styles.aiMessagePressable}
           isUser={false}
           >
-          {hasThinking && (
-            <View style={{paddingHorizontal: 16}}>
-              <TouchableOpacity 
-                style={styles.thinkToggle} 
-                onPress={() => onShowThinking?.(thinkingContent)}
-                activeOpacity={0.7}
-              >
-                <PanelBottomOpen size={13} color={COLORS.fgMuted} />
-                <Text style={styles.thinkToggleText}>{getThinkingText()}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
           
           {isLoading ? (
             <View style={{paddingHorizontal: 16}}>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { View, StyleSheet, Dimensions, BackHandler } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { 
@@ -33,17 +33,42 @@ const SPRING_CONFIG = { damping: 50, stiffness: 400, mass: 1 };
  * Reusable slide-up modal component with snap points
  * Uses Reanimated for smooth 60fps animations
  */
-export default function SlideUpModal({ 
+const SlideUpModal = forwardRef(({ 
   visible, 
   onClose, 
   children, 
   showBottomGradient = false, 
   bottomInset = 0, 
   autoExpanded = false 
-}) {
+}, ref) => {
   const translateY = useSharedValue(CLOSED_Y);
   const overlayOpacity = useSharedValue(0);
   const context = useSharedValue({ y: 0 });
+
+  // Expose methods to parent
+  useImperativeHandle(ref, () => ({
+    close: () => {
+      'worklet'; 
+      // Trigger close animation
+      translateY.value = withSpring(CLOSED_Y, SPRING_CONFIG);
+      overlayOpacity.value = withTiming(0, { duration: 120 });
+      // Call onClose after animation matches the timeout in back handler
+      runOnJS(handleCloseCaller)();
+    },
+    expand: () => {
+      translateY.value = withSpring(EXPANDED_Y, SPRING_CONFIG);
+    },
+    collapse: () => {
+      translateY.value = withSpring(COLLAPSED_Y, SPRING_CONFIG);
+    }
+  }));
+
+  // Helper to safely call onClose from worklet or JS
+  const handleCloseCaller = useCallback(() => {
+    setTimeout(() => {
+     onClose?.();
+    }, 200);
+  }, [onClose]);
 
   // Close handler (called from JS)
   const handleClose = useCallback(() => {
@@ -196,7 +221,9 @@ export default function SlideUpModal({
       )}
     </View>
   );
-}
+});
+
+export default SlideUpModal;
 
 const styles = StyleSheet.create({
   container: {

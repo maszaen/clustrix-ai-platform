@@ -46,7 +46,9 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
 
   // Notify parent when input height changes (extra height from multiline)
   useEffect(() => {
-    const extraHeight = baseInputHeight.current > 0 ? Math.max(0, inputHeight - baseInputHeight.current) : 0;
+    // Cap height at 150 (maxHeight from styles)
+    const effectiveHeight = Math.min(inputHeight, 150);
+    const extraHeight = baseInputHeight.current > 0 ? Math.max(0, effectiveHeight - baseInputHeight.current) : 0;
     onInputHeightChange?.(extraHeight);
   }, [inputHeight, onInputHeightChange]);
 
@@ -69,13 +71,18 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
   };
 
   const hasContent = text.trim() || attachments.length > 0;
+  
+  // Calculate dynamic height for gradient
+  const effectiveInputHeight = Math.min(inputHeight, 150);
+  const extraInputHeight = baseInputHeight.current > 0 ? Math.max(0, effectiveInputHeight - baseInputHeight.current) : 0;
+  const attachmentHeight = attachments.length > 0 ? 120 : 0;
 
   return (
     <View style={styles.wrapper}>
       <LinearGradient
         colors={['transparent', COLORS.bg70, COLORS.bg90, COLORS.bg90]}
         locations={[0, 0.45, 0.6, 1]}
-        style={[styles.bottomFade, { height: insets.bottom + 85 }]}
+        style={[styles.bottomFade, { height: insets.bottom + 85 + extraInputHeight + attachmentHeight }]}
         pointerEvents="none"
       />
       

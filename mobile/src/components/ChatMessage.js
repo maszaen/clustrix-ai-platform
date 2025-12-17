@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable, Keyboard, Easing } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
@@ -8,24 +8,122 @@ import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info } f
 import * as Clipboard from 'expo-clipboard';
 import ContextMenu from './ContextMenu';
 
-// Simple long press wrapper using native Pressable
-// No custom ripple - just handles long press detection
-const LongPressWrapper = memo(({ children, onLongPress, disabled, style }) => {
+// Custom ripple that follows touch position exactly
+const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser }) => {
+  const [ripples, setRipples] = useState([]);
+  const rippleIdRef = useRef(0);
+  const activeRippleId = useRef(null);
+
   const handleLongPress = useCallback((e) => {
     if (onLongPress && !disabled) {
       onLongPress(e);
     }
   }, [onLongPress, disabled]);
 
+  // Dismiss keyboard on regular tap
+  const handlePress = useCallback(() => {
+    Keyboard.dismiss();
+  }, []);
+
+  // Start ripple at touch position
+  const handlePressIn = useCallback((e) => {
+    const { locationX, locationY } = e.nativeEvent;
+    const id = rippleIdRef.current++;
+    activeRippleId.current = id;
+    
+    setRipples(prev => [...prev, { id, x: locationX, y: locationY, released: false }]);
+  }, []);
+
+  // Trigger fade out when finger released - release ALL unreleased ripples
+  const handlePressOut = useCallback(() => {
+    setRipples(prev => prev.map(r => 
+      !r.released ? { ...r, released: true } : r
+    ));
+    activeRippleId.current = null;
+  }, []);
+
+  // Remove ripple from array
+  const removeRipple = useCallback((id) => {
+    setRipples(prev => prev.filter(r => r.id !== id));
+  }, []);
+
+  const rippleSize = 80;
+
   return (
     <Pressable
+      onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       onLongPress={handleLongPress}
-      delayLongPress={200}
+      delayLongPress={300}
       disabled={disabled}
-      style={style}
+      style={[style, { overflow: 'hidden' }]}
     >
-      {children}
+      {/* Wrap children so ALL touches pass through to Pressable */}
+      <View pointerEvents="none" style={{ flex: 1 }}>
+        {children}
+      </View>
+      {ripples.map(ripple => (
+        <RippleCircle 
+          key={ripple.id}
+          x={ripple.x} 
+          y={ripple.y} 
+          size={rippleSize}
+          isUser={isUser}
+          released={ripple.released}
+          onComplete={() => removeRipple(ripple.id)}
+        />
+      ))}
     </Pressable>
+  );
+});
+
+// Separate animated ripple component
+const RippleCircle = memo(({ x, y, size, isUser, released, onComplete }) => {
+  const scale = useRef(new Animated.Value(0.7)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  const hasStartedFade = useRef(false);
+
+  // Scale animation on mount (ease out)
+  useEffect(() => {
+    Animated.timing(scale, {
+      toValue: 1.5,
+      duration: 350,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  // Fade out only when released
+  useEffect(() => {
+    if (released && !hasStartedFade.current) {
+      hasStartedFade.current = true;
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start(() => {
+        onComplete?.();
+      });
+    }
+  }, [released]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: x - size / 2,
+        top: y - size / 2,
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: isUser ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.15)',
+        opacity,
+        transform: [{ scale }],
+      }}
+    />
   );
 });
 
@@ -349,7 +447,7 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
           styles.userContainer,
           { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
         ]}>
-          <LongPressWrapper onLongPress={handleLongPress} style={styles.userBubble}>
+          <LongPressWrapper onLongPress={handleLongPress} style={styles.userBubble} isUser={true}>
             <Text style={styles.userText}>{message.content}</Text>
           </LongPressWrapper>
         </Animated.View>
@@ -372,6 +470,7 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
           onLongPress={handleLongPress} 
           disabled={message.isStreaming}
           style={styles.aiMessagePressable}
+          isUser={false}
         >
           {hasThinking && (
             <View style={{paddingHorizontal: 16}}>

@@ -533,7 +533,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     return () => clearTimeout(handle);
   }, [inputText, currentSession, persistDraft, clearDraft, saveWelcomeDraft]);
 
-  const handleSend = useCallback(async (text) => {
+  const handleSend = useCallback(async (text, attachments = []) => {
     hasScrolledInitial.current = true;
     initialScrollDone.current = true;
 
@@ -568,11 +568,28 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     const newMsgKey = `msg-${sessionIdPart}-${userMessageIndex}-user`;
     setNewMessageId(newMsgKey);
     
+    // Prepare attachment metadata for storage (exclude large base64 for DB storage)
+    const attachmentMeta = attachments.map(a => ({
+      type: a.type,
+      name: a.name,
+      mimeType: a.mimeType,
+      size: a.size,
+      width: a.width,
+      height: a.height,
+      // Store URI for display, but not base64 (too large for DB)
+      uri: a.uri,
+    }));
+    
     // For new session from welcome screen, pass session directly to appendMessage
     if (isNewSession) {
-      await appendMessage('user', text, { _messageIndex: 0 }, session);
+      await appendMessage('user', text, { 
+        _messageIndex: 0,
+        attachments: attachmentMeta.length > 0 ? attachmentMeta : undefined,
+      }, session);
     } else {
-      await appendMessage('user', text, {});
+      await appendMessage('user', text, {
+        attachments: attachmentMeta.length > 0 ? attachmentMeta : undefined,
+      });
     }
     
     // Scroll to bottom
@@ -582,10 +599,21 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     // Build system prompt with persona settings
     const systemPrompt = buildSystemPrompt(settings);
     
+    // Build user message with attachments for API (include base64 for vision)
+    const userMessageWithAttachments = {
+      role: 'user',
+      content: text,
+      attachments: attachments.length > 0 ? attachments : undefined,
+    };
+    
     // For new session, messages state is empty, so just use the user message
     const apiMessages = isNewSession 
-      ? [{ role: 'system', content: systemPrompt }, { role: 'user', content: text }]
-      : [{ role: 'system', content: systemPrompt }, ...messages.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: text }];
+      ? [{ role: 'system', content: systemPrompt }, userMessageWithAttachments]
+      : [
+          { role: 'system', content: systemPrompt }, 
+          ...messages.map(m => ({ role: m.role, content: m.content, attachments: m.attachments })), 
+          userMessageWithAttachments
+        ];
 
     setIsStreaming(true);
     setStreamingContent('');

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable, Keyboard, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable, Keyboard, Easing, Image } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
@@ -445,6 +445,10 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
   ], [handleCopy, openSelectText]);
 
   if (isUser) {
+    // Check for attachments
+    const attachments = message.attachments || [];
+    const hasAttachments = attachments.length > 0;
+    
     return (
       <>
         <Animated.View style={[
@@ -452,7 +456,22 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
           { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
         ]}>
           <LongPressWrapper onLongPress={handleLongPress} style={styles.userBubble} isUser={true}>
-            <Text style={styles.userText}>{message.content}</Text>
+            {/* Render image attachments */}
+            {hasAttachments && (
+              <View style={styles.attachmentContainer}>
+                {attachments.filter(a => a.type === 'image').map((attachment, idx) => (
+                  <Image
+                    key={idx}
+                    source={{ uri: attachment.uri }}
+                    style={styles.attachmentImage}
+                    resizeMode="cover"
+                  />
+                ))}
+              </View>
+            )}
+            {message.content ? (
+              <Text style={styles.userText}>{message.content}</Text>
+            ) : null}
           </LongPressWrapper>
         </Animated.View>
         <ContextMenu 
@@ -656,6 +675,19 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     marginBottom: 4,
     overflow: 'hidden',
+  },
+  // Attachment styles
+  attachmentContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  attachmentImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    backgroundColor: COLORS.inputBg,
   },
 });
 

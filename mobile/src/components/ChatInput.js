@@ -1,19 +1,27 @@
-import { useState, useRef, forwardRef, useImperativeHandle } from 'react';
-import { View, TextInput, StyleSheet, Keyboard } from 'react-native';
+import { useState, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
+import { View, TextInput, StyleSheet, Keyboard, Alert } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import AttachmentModal from './AttachmentModal';
+import AttachmentPreview from './AttachmentPreview';
 
 import { useEffect } from 'react';
 
 function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything', value = '', onChangeText }, ref) {
   const [text, setText] = useState(value || '');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
   const inputRef = useRef(null);
   const insets = useSafeAreaInsets();
+  const attachmentIdRef = useRef(0);
 
   // Track keyboard visibility
   useEffect(() => {
@@ -28,6 +36,7 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
   useImperativeHandle(ref, () => ({
     blur: () => inputRef.current?.blur(),
     setValue: (val) => setText(val),
+    clearAttachments: () => setAttachments([]),
   }));
 
   // Sync external value changes (used for draft restore)
@@ -35,13 +44,162 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
     setText(value || '');
   }, [value]);
 
+  // Read file as base64
+  const readFileAsBase64 = async (uri) => {
+    try {
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      return base64;
+    } catch (error) {
+      console.error('Error reading file:', error);
+      return null;
+    }
+  };
+
+  // Get MIME type from extension
+  const getMimeType = (filename) => {
+    const ext = filename?.split('.').pop()?.toLowerCase() || '';
+    const mimeTypes = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      heic: 'image/heic',
+      heif: 'image/heif',
+      pdf: 'application/pdf',
+      txt: 'text/plain',
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
+    return mimeTypes[ext] || 'application/octet-stream';
+  };
+
+  // Handle image selection
+  const handleSelectImages = useCallback(async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library to upload images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        base64: false, // We'll read it manually for consistency
+      });
+
+      if (!result.canceled && result.assets) {
+        const newAttachments = await Promise.all(
+          result.assets.map(async (asset) => {
+            const base64 = await readFileAsBase64(asset.uri);
+            const filename = asset.fileName || asset.uri.split('/').pop() || 'image.jpg';
+            return {
+              id: attachmentIdRef.current++,
+              type: 'image',
+              uri: asset.uri,
+              name: filename,
+              mimeType: asset.mimeType || getMimeType(filename),
+              size: asset.fileSize,
+              base64,
+              width: asset.width,
+              height: asset.height,
+            };
+          })
+        );
+        setAttachments(prev => [...prev, ...newAttachments]);
+      }
+    } catch (error) {
+      console.error('Error picking images:', error);
+      Alert.alert('Error', 'Failed to select images. Please try again.');
+    }
+  }, []);
+
+  // Handle file selection
+  const handleSelectFiles = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        multiple: true,
+      });
+
+      if (!result.canceled && result.assets) {
+        const newAttachments = await Promise.all(
+          result.assets.map(async (asset) => {
+            const base64 = await readFileAsBase64(asset.uri);
+            return {
+              id: attachmentIdRef.current++,
+              type: 'file',
+              uri: asset.uri,
+              name: asset.name,
+              mimeType: asset.mimeType || getMimeType(asset.name),
+              size: asset.size,
+              base64,
+            };
+          })
+        );
+        setAttachments(prev => [...prev, ...newAttachments]);
+      }
+    } catch (error) {
+      console.error('Error picking files:', error);
+      Alert.alert('Error', 'Failed to select files. Please try again.');
+    }
+  }, []);
+
+  // Handle camera
+  const handleOpenCamera = useCallback(async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your camera to take photos.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        quality: 0.8,
+        base64: false,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        const base64 = await readFileAsBase64(asset.uri);
+        const filename = asset.fileName || `photo_${Date.now()}.jpg`;
+        
+        setAttachments(prev => [...prev, {
+          id: attachmentIdRef.current++,
+          type: 'image',
+          uri: asset.uri,
+          name: filename,
+          mimeType: asset.mimeType || 'image/jpeg',
+          size: asset.fileSize,
+          base64,
+          width: asset.width,
+          height: asset.height,
+        }]);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+    }
+  }, []);
+
+  // Remove attachment
+  const handleRemoveAttachment = useCallback((id) => {
+    setAttachments(prev => prev.filter(a => a.id !== id));
+  }, []);
 
   const handleSend = () => {
-    if (!text.trim() || isStreaming) return;
+    if ((!text.trim() && attachments.length === 0) || isStreaming) return;
     Keyboard.dismiss();
-    onSend(text.trim());
+    onSend(text.trim(), attachments);
     setText('');
+    setAttachments([]);
   };
+
+  const hasContent = text.trim() || attachments.length > 0;
 
   return (
     <View style={styles.wrapper}>
@@ -52,49 +210,69 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
         pointerEvents="none"
       />
       
-      <Pressable style={styles.addBtn} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
-        {/* <Ionicons name="create-outline" size={24} color={COLORS.fg} /> */}
+      <Pressable 
+        style={styles.addBtn} 
+        onPress={() => setModalVisible(true)}
+        android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
+      >
         <Ionicons name="add-outline" size={27} color={COLORS.icon} />
       </Pressable>
 
-      <View style={styles.containerInput}>
-        <TextInput
-          ref={inputRef}
-          style={styles.input}
-          value={text}
-          onChangeText={(val) => {
-            setText(val);
-            onChangeText?.(val);
-          }}
-          placeholder={placeholder}
-          placeholderTextColor={COLORS.fgMuted}
-          multiline
-          maxLength={10000}
-          // editable={!isStreaming}
-          onPressIn={() => {
-            // Only force blur+focus if keyboard is not visible (fix Android multiline bug)
-            if (!keyboardVisible) {
-              inputRef.current?.blur();
-              setTimeout(() => inputRef.current?.focus(), 50);
-            }
-          }}
-        />
-        
-        {isStreaming ? (
-          <Pressable style={styles.stopButton} onPress={onStop} android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true }}>
-            <Ionicons name="stop" size={20} color={COLORS.fg} />
-          </Pressable>
-        ) : (
-          <Pressable 
-            style={[styles.sendButton, !text.trim() && styles.sendButtonDisabled]} 
-            onPress={handleSend}
-            disabled={!text.trim()}
-            android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true }}
-          >
-            <Ionicons name="arrow-up" size={20} color={COLORS.icon} />
-          </Pressable>
+      <View style={styles.inputWrapper}>
+        {/* Attachment preview */}
+        {attachments.length > 0 && (
+          <AttachmentPreview 
+            attachments={attachments} 
+            onRemove={handleRemoveAttachment}
+          />
         )}
+
+        <View style={styles.containerInput}>
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            value={text}
+            onChangeText={(val) => {
+              setText(val);
+              onChangeText?.(val);
+            }}
+            placeholder={placeholder}
+            placeholderTextColor={COLORS.fgMuted}
+            multiline
+            maxLength={10000}
+            onPressIn={() => {
+              if (!keyboardVisible) {
+                inputRef.current?.blur();
+                setTimeout(() => inputRef.current?.focus(), 50);
+              }
+            }}
+          />
+          
+          {isStreaming ? (
+            <Pressable style={styles.stopButton} onPress={onStop} android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true }}>
+              <Ionicons name="stop" size={20} color={COLORS.fg} />
+            </Pressable>
+          ) : (
+            <Pressable 
+              style={[styles.sendButton, !hasContent && styles.sendButtonDisabled]} 
+              onPress={handleSend}
+              disabled={!hasContent}
+              android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true }}
+            >
+              <Ionicons name="arrow-up" size={20} color={COLORS.icon} />
+            </Pressable>
+          )}
+        </View>
       </View>
+
+      {/* Attachment modal */}
+      <AttachmentModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onSelectImages={handleSelectImages}
+        onSelectFiles={handleSelectFiles}
+        onOpenCamera={handleOpenCamera}
+      />
     </View>
   );
 }
@@ -107,6 +285,9 @@ const styles = StyleSheet.create({
     paddingBottom: 27,
     paddingHorizontal: 16,
     paddingTop: 0,
+  },
+  inputWrapper: {
+    marginLeft: 53,
   },
   addBtn: {
     position: 'absolute',
@@ -131,7 +312,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
     paddingLeft: 13,
-    marginLeft: 53,
     paddingRight: 4,
     paddingVertical: 4,
     zIndex: 100,
@@ -178,3 +358,4 @@ const styles = StyleSheet.create({
 
 
 export default forwardRef(ChatInputComponent);
+

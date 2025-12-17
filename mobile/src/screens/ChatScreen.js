@@ -319,46 +319,52 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       expectedMessageCount > 0 && 
       messages.length === expectedMessageCount
     ) {
-      // All data loaded! But wait until we're at bottom AND content is rendered before hiding
-      const checkAndHide = () => {
-        if (!isMounted) return true; // Stop checking if unmounted
-        
-        // Scroll to bottom
-        flatListRef.current?.scrollToEnd({ animated: false });
-        
-        // Check if at bottom AND content has rendered (listContentHeight > 0)
-        if (isNearBottomRef.current && listContentHeight > 0) {
-          // At bottom and content rendered! Hide skeleton
-          hideSkeleton();
-          return true; // Done
-        }
-        return false; // Not ready yet
-      };
+      // All data loaded!
       
-      // Try immediately
-      if (!checkAndHide()) {
-        // Not ready, keep checking every 50ms
-        intervalId = setInterval(() => {
-          if (checkAndHide()) {
-            if (intervalId) clearInterval(intervalId);
-            intervalId = null;
+      // Case 1: List already rendered (session->session) - listContentHeight > 0
+      // Check immediately and poll if needed
+      if (listContentHeight > 0) {
+        const checkAndHide = () => {
+          if (!isMounted) return true;
+          flatListRef.current?.scrollToEnd({ animated: false });
+          if (isNearBottomRef.current) {
+            hideSkeleton();
+            return true;
           }
-        }, 50);
+          return false;
+        };
         
-        // Safety: clear interval after 4 seconds max
+        if (!checkAndHide()) {
+          intervalId = setInterval(() => {
+            if (checkAndHide()) {
+              if (intervalId) clearInterval(intervalId);
+              intervalId = null;
+            }
+          }, 50);
+          
+          timeoutId = setTimeout(() => {
+            if (intervalId) clearInterval(intervalId);
+            hideSkeleton();
+          }, 2000);
+        }
+      } else {
+        // Case 2: List NOT rendered yet (welcome->session) - listContentHeight === 0
+        // Don't wait for list, hide after short delay to let it mount and render
         timeoutId = setTimeout(() => {
-          if (intervalId) {
-            clearInterval(intervalId);
-            intervalId = null;
-          }
-          // Force hide anyway
+          flatListRef.current?.scrollToEnd({ animated: false });
           hideSkeleton();
-        }, 4000);
+        }, 300);
       }
     }
     
     // Handle going back to welcome (no messages expected)
     if (showSkeleton && !isLoadingSession && expectedMessageCount === 0 && !currentSession) {
+      hideSkeleton();
+    }
+    
+    // Handle navigating to existing session with 0 messages (empty session)
+    // This catches welcome->session sidebar navigation where session exists but is empty
+    if (showSkeleton && !isLoadingSession && expectedMessageCount === 0 && currentSession && messages.length === 0) {
       hideSkeleton();
     }
     

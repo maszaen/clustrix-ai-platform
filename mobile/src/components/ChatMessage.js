@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Keyboard, Easing } from 'react-native';
-import { Pressable, ScrollView as GHScrollView } from 'react-native-gesture-handler';
-import Markdown from 'react-native-markdown-display';
+import { Pressable } from 'react-native-gesture-handler';
+import { StreamdownRN } from 'streamdown-rn';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
@@ -523,9 +523,14 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
               <TypewriterLoader />
             </View>
           ) : (
-            // Native Markdown for all AI messages
+            // Native Markdown for all AI messages - using streamdown-rn for streaming support
             <View style={{paddingHorizontal: 16}}>
-              <Markdown style={markdownStyles} rules={markdownRules}>{textContent || ' '}</Markdown>
+              <StreamdownRN 
+                theme="dark" 
+                isComplete={!message.isStreaming}
+              >
+                {textContent || ' '}
+              </StreamdownRN>
             </View>
           )}
         </LongPressWrapper>
@@ -691,199 +696,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 });
-
-// Markdown styles for saved messages (native rendering)
-const markdownStyles = {
-  body: { color: COLORS.fg, fontSize: 15, lineHeight: 23, fontFamily: FONTS.ai },
-  heading1: { color: COLORS.fg, fontSize: 22, fontFamily: FONTS.aiBold, marginVertical: 8 },
-  heading2: { color: COLORS.fg, fontSize: 19, fontFamily: FONTS.aiBold, marginVertical: 6 },
-  heading3: { color: COLORS.fg, fontSize: 17, fontFamily: FONTS.aiBold, marginVertical: 4 },
-  paragraph: { marginVertical: 4 },
-  code_inline: { 
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    color: '#8ab4f8',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    fontSize: 14,
-    fontFamily: FONTS.mono,
-  },
-  fence: { 
-    backgroundColor: COLORS.inputBg,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    padding: 12, 
-    borderRadius: 8, 
-    marginVertical: 8,
-  },
-  fenceLanguage: {
-    color: COLORS.fgMuted,
-    fontSize: 11,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    fontFamily: FONTS.mono,
-  },
-  fenceContent: {
-    color: '#a2a9b0',
-    fontSize: 13,
-    fontFamily: FONTS.mono,
-    lineHeight: 20,
-  },
-  code_block: { 
-    backgroundColor: COLORS.inputBg,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    padding: 12, 
-    borderRadius: 10, 
-    marginVertical: 8,
-    color: '#a2a9b0',
-    fontFamily: FONTS.mono,
-  },
-  link: { color: '#D3E3FD' },
-  blockquote: { 
-    backgroundColor: COLORS.bg,
-    borderLeftWidth: 3, 
-    color: COLORS.fgMuted,
-    borderLeftColor: COLORS.borderLight, 
-    paddingLeft: 12, 
-    marginLeft: 0,
-    borderRadius: 0,
-    opacity: 0.9,
-  },
-  list_item: { marginVertical: 4 },
-  bullet_list: { marginVertical: 4 },
-  ordered_list: { marginVertical: 4 },
-  strong: { fontFamily: FONTS.aiBold, fontWeight: 'normal', color: COLORS.fg },
-  em: { fontFamily: FONTS.displayItalic, fontStyle: 'normal' },
-  hr: { backgroundColor: COLORS.borderLight, height: 1, opacity: 0.5, marginVertical: 12 },
-  // Table styles - wrapped in horizontal ScrollView via custom rule
-  table: { 
-    borderWidth: 1, 
-    borderRadius: 10, 
-    overflow: 'hidden',
-    minWidth: '100%',
-  },
-  tr: {
-    flexDirection: 'row',
-    
-  },
-  thead: {
-    borderBottomWidth: 0.5,
-    borderBottomColor: COLORS.borderLight,
-  },
-  // Cell container styles - fixed width for alignment
-  thCell: {
-    width: 150,
-    
-  },
-  tdCell: {
-    width: 150,
-    borderTopWidth: 0.3,
-    borderTopColor: COLORS.borderLight,
-  },
-  // Text styles for cells
-  th: { 
-    paddingVertical: 10,
-    paddingHorizontal: 10, 
-    fontFamily: FONTS.aiBold,
-    color: COLORS.fg,
-    fontSize: 13,
-  },
-  td: { 
-    paddingVertical: 10,
-    paddingHorizontal: 10, 
-    color: COLORS.fgMuted,
-    fontSize: 13,
-    fontFamily: FONTS.ai,
-  },
-  // Table container for horizontal scroll
-  tableContainer: {
-    marginVertical: 8,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-};
-
-// Horizontal scroll wrapper that blocks sidebar pan gesture
-// Uses same technique as AttachmentPreview - stopPropagation + responder capture
-const HorizontalScrollWrapper = ({ children, style, showIndicator = false }) => (
-  <View style={style}>
-    <GHScrollView 
-      horizontal 
-      showsHorizontalScrollIndicator={showIndicator}
-      nestedScrollEnabled={true}
-      scrollEventThrottle={16}
-      onTouchStart={(e) => e.stopPropagation()}
-      onMoveShouldSetResponder={() => true}
-      onMoveShouldSetResponderCapture={() => true}
-    >
-      {children}
-    </GHScrollView>
-  </View>
-);
-
-// Markdown rules for code blocks and tables
-const markdownRules = {
-  // Custom fence (code block) with horizontal scroll
-  fence: (node) => {
-    const language = node.sourceInfo || '';
-    return (
-      <View key={node.key} style={markdownStyles.fence}>
-        {language ? <Text style={markdownStyles.fenceLanguage}>{language}</Text> : null}
-        <HorizontalScrollWrapper>
-          <Text style={markdownStyles.fenceContent}>{node.content}</Text>
-        </HorizontalScrollWrapper>
-      </View>
-    );
-  },
-  // Inline code styling
-  code_inline: (node) => (
-    <Text key={node.key} style={markdownStyles.code_inline}>{node.content}</Text>
-  ),
-  // Custom table with horizontal scroll
-  table: (node, children) => (
-    <HorizontalScrollWrapper key={node.key} style={markdownStyles.tableContainer} showIndicator={true}>
-      <View style={markdownStyles.table}>
-        {children}
-      </View>
-    </HorizontalScrollWrapper>
-  ),
-  // Table header row styling
-  thead: (node, children) => (
-    <View key={node.key} style={markdownStyles.thead}>
-      {children}
-    </View>
-  ),
-  // Table body styling
-  tbody: (node, children) => (
-    <View key={node.key}>
-      {children}
-    </View>
-  ),
-  // Table row styling
-  tr: (node, children) => (
-    <View key={node.key} style={markdownStyles.tr}>
-      {children}
-    </View>
-  ),
-  // Table header cell - fixed width for consistent columns
-  th: (node, children) => (
-    <View key={node.key} style={markdownStyles.thCell}>
-      <Text style={markdownStyles.th}>{children}</Text>
-    </View>
-  ),
-  // Table data cell - fixed width for consistent columns
-  td: (node, children) => (
-    <View key={node.key} style={markdownStyles.tdCell}>
-      <Text style={markdownStyles.td}>{children}</Text>
-    </View>
-  ),
-  // Handle <br> tags as newlines
-  hardbreak: () => <Text>{'\n'}</Text>,
-  softbreak: () => <Text>{'\n'}</Text>,
-};
 
 // Export memoized component
 export default ChatMessage;

@@ -146,7 +146,7 @@ function AttachmentPreview({ attachments = [], onRemove }) {
 }
 
 const IMAGE_HEIGHT = 129;
-const IMAGE_WIDTH = Math.round(IMAGE_HEIGHT * (4/3)); // 4:3 aspect
+const IMAGE_WIDTH = Math.round(IMAGE_HEIGHT * (3/4)); // 4:3 aspect
 const FILE_SIZE = 129;
 
 const styles = StyleSheet.create({
@@ -177,9 +177,9 @@ const styles = StyleSheet.create({
     width: FILE_SIZE,
     height: FILE_SIZE,
     borderRadius: 12,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bg70,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor: COLORS.bg70,
     padding: 8,
     position: 'relative',
     justifyContent: 'space-between',

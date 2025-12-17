@@ -524,8 +524,8 @@ export async function streamChat({ messages, model, provider, baseUrl, apiKey, o
   const providerLower = (provider || '').toLowerCase();
   const base = baseUrl || DEFAULT_PROVIDERS[providerLower]?.baseUrl || DEFAULT_PROVIDERS.openai.baseUrl;
   
-  // Create throttled chunk handler (500ms interval)
-  const { throttledOnChunk, flush: flushChunks } = createThrottledChunkHandler(onChunk, 500);
+  // Create throttled chunk handler (200ms interval - balance between smooth and responsive)
+  const { throttledOnChunk, flush: flushChunks } = createThrottledChunkHandler(onChunk, 200);
   
   // Wrap onDone to flush remaining chunks before completing
   const wrappedOnDone = (summary) => {

@@ -1,11 +1,16 @@
-import { useRef, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions, BackHandler } from 'react-native';
+import { useRef, useEffect, useCallback, useState } from 'react';
+import { View, Text, StyleSheet, Animated, Dimensions, BackHandler, ScrollView } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Gradient constants - pixel based
+const GRADIENT_MAX_HEIGHT = 100; // Max gradient height in pixels
+const GRADIENT_THRESHOLD = 200; // Scroll distance for full gradient (0 to full in 200px)
 
 /**
  * Get border radius for card based on position in category
@@ -75,10 +80,19 @@ function MenuCategory({ title, items }) {
  * @param {string} title - Header title
  * @param {React.ReactNode} children - Modal content (use MenuCategory for menu screens)
  * @param {boolean} showBack - Show back button (default true)
+ * @param {boolean} showGradients - Show scroll-based gradients (default true)
  */
-export default function SlideLeftModal({ visible, onClose, title, children, showBack = true }) {
+export default function SlideLeftModal({ visible, onClose, title, children, showBack = true, showGradients = true }) {
   const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
+  
+  // Gradient heights based on scroll position
+  const [topGradientHeight, setTopGradientHeight] = useState(0);
+  const [bottomGradientHeight, setBottomGradientHeight] = useState(GRADIENT_MAX_HEIGHT);
+  
+  // Track content and layout dimensions
+  const contentHeight = useRef(0);
+  const layoutHeight = useRef(0);
 
   const open = useCallback(() => {
     Animated.parallel([
@@ -112,8 +126,34 @@ export default function SlideLeftModal({ visible, onClose, title, children, show
     ]).start(() => onClose?.());
   }, [slideAnim, overlayAnim, onClose]);
 
+  // Handle scroll to update gradient heights
+  const handleScroll = useCallback((event) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const scrollY = contentOffset.y;
+    const maxScroll = contentSize.height - layoutMeasurement.height;
+    
+    // Store dimensions for initial calculation
+    contentHeight.current = contentSize.height;
+    layoutHeight.current = layoutMeasurement.height;
+    
+    // Top gradient: 0 at top, grows as user scrolls down (max at 200px scroll)
+    const topHeight = Math.min(GRADIENT_MAX_HEIGHT, (scrollY / GRADIENT_THRESHOLD) * GRADIENT_MAX_HEIGHT);
+    setTopGradientHeight(Math.max(0, topHeight));
+    
+    // Bottom gradient: full at top, shrinks as user approaches bottom
+    const distanceFromBottom = maxScroll - scrollY;
+    const bottomHeight = Math.min(GRADIENT_MAX_HEIGHT, (distanceFromBottom / GRADIENT_THRESHOLD) * GRADIENT_MAX_HEIGHT);
+    setBottomGradientHeight(Math.max(0, bottomHeight));
+  }, []);
+
+  // Reset gradients when modal opens
   useEffect(() => {
-    if (visible) open();
+    if (visible) {
+      open();
+      // Reset to initial state: no top gradient, full bottom gradient
+      setTopGradientHeight(0);
+      setBottomGradientHeight(GRADIENT_MAX_HEIGHT);
+    }
   }, [visible, open]);
 
   useEffect(() => {
@@ -139,8 +179,38 @@ export default function SlideLeftModal({ visible, onClose, title, children, show
           )}
           <Text style={[styles.headerTitle, !showBack && styles.headerTitleCenter]}>{title}</Text>
         </View>
-        <View style={styles.content}>
-          {children}
+        
+        <View style={styles.contentWrapper}>
+          {/* Top gradient - fades content under header */}
+          {showGradients && topGradientHeight > 0 && (
+            <View style={[styles.topGradient, { height: topGradientHeight }]} pointerEvents="none">
+              <LinearGradient
+                colors={[COLORS.bg, 'transparent']}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
+          )}
+          
+          {/* Scrollable content */}
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={styles.contentContainer}
+            showsVerticalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+          >
+            {children}
+          </ScrollView>
+          
+          {/* Bottom gradient - fades content at bottom */}
+          {showGradients && bottomGradientHeight > 0 && (
+            <View style={[styles.bottomGradient, { height: bottomGradientHeight }]} pointerEvents="none">
+              <LinearGradient
+                colors={['transparent', COLORS.bg]}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
+          )}
         </View>
       </Animated.View>
     </View>
@@ -168,14 +238,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 45,
-    paddingBottom: 26,
+    paddingTop: 50,
+    paddingBottom: 16,
   },
   backBtn: {
     width: 45,
     height: 45,
     borderRadius: 50,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
@@ -189,10 +259,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginRight: 45,
   },
+  contentWrapper: {
+    flex: 1,
+    position: 'relative',
+  },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 0,
+    paddingBottom: 100, // Extra padding for bottom gradient
+  },
+  topGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  bottomGradient: {
+    position: 'absolute',
+    bottom: -10,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   category: {
     marginBottom: 16,

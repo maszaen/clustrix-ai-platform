@@ -4,7 +4,7 @@ import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info } from 'lucide-react-native';
+import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info, ClipboardCopy, FileText } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import ContextMenu from './ContextMenu';
 import MessageAttachments from './MessageAttachments';
@@ -297,7 +297,9 @@ function TypewriterLoader() {
   );
 }
 
-export default function ChatMessage({ message, isUser, isNew, onShowThinking, onRetry, onReact, onShowMetadata, onSelectText }) {
+// Memoized ChatMessage - only re-renders when props actually change
+// CRITICAL for performance during streaming (prevents all messages re-rendering on each chunk)
+const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowThinking, onRetry, onReact, onShowMetadata, onSelectText }) {
   // Animation for new user messages - fade in + subtle slide from right
   const fadeAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
   const scaleAnim = useRef(new Animated.Value(isNew && isUser ? 0.95 : 1)).current;
@@ -418,6 +420,12 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Get raw content for selection (without thinking tags for AI)
+  // Using useMemo to ensure stable reference that updates when message changes
+  const rawContent = useMemo(() => {
+    return isUser ? message.content : (textContent.trim() || message.content || '');
+  }, [isUser, message.content, textContent]);
+
   // Long press handler - show context menu
   const handleLongPress = useCallback((event) => {
     // Don't show for streaming messages
@@ -430,19 +438,18 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
   }, [message.isStreaming]);
 
   // Open select text modal - calls parent callback with raw content
+  // FIX: Compute content directly from message prop to avoid stale closure with recycled items
   const openSelectText = useCallback(() => {
     setContextMenuVisible(false);
-    // Pass raw content to parent for SlideLeftModal
-    onSelectText?.(rawContent);
-  }, [onSelectText, rawContent]);
+    // Compute fresh content directly from current message prop
+    const content = isUser ? message.content : (textContent.trim() || message.content || '');
+    onSelectText?.(content);
+  }, [onSelectText, isUser, message.content, textContent]);
 
-  // Get raw content for selection (without thinking tags for AI)
-  const rawContent = isUser ? message.content : (textContent.trim() || message.content || '');
-
-  // Context menu options
+  // Context menu options - using Lucide icons
   const contextMenuOptions = useMemo(() => [
-    { label: 'Copy', icon: 'copy-outline', onPress: handleCopy },
-    { label: 'Select text', icon: 'text-outline', onPress: openSelectText },
+    { label: 'Copy', icon: ClipboardCopy, onPress: handleCopy },
+    { label: 'Select text', icon: FileText, onPress: openSelectText },
   ], [handleCopy, openSelectText]);
 
   if (isUser) {
@@ -451,8 +458,8 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
     const hasAttachments = attachments.length > 0;
     const hasContent = message.content && message.content.trim();
     
-    // DEBUG: Log what ChatMessage receives
-    console.log('[ChatMessage] isUser, message.attachments:', message.attachments?.length, message.attachments?.map(a => a.name));
+    // DEBUG removed for performance - uncomment if needed
+    // console.log('[ChatMessage] isUser, message.attachments:', message.attachments?.length);
     
     return (
       <>
@@ -593,7 +600,7 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
       />
     </>
   );
-}
+}); // Close memo()
 
 // Note: markdownRules moved to MarkdownWebView
 
@@ -768,3 +775,6 @@ const markdownRules = {
     <Text key={node.key} style={markdownStyles.code_inline}>{node.content}</Text>
   ),
 };
+
+// Export memoized component
+export default ChatMessage;

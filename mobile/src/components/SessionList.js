@@ -8,7 +8,7 @@ import ConfirmModal from './ConfirmModal';
 import InputModal from './InputModal';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { LucideSearch, LucideArrowLeft } from 'lucide-react-native';
+import { LucideSearch, LucideArrowLeft, Pencil, Trash2, Star } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PENCIL } from '../constants/strings';
 
@@ -55,16 +55,17 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
     onContextMenuChange?.(true);
   };
 
+  // Context menu options with Lucide icons
   const getContextOptions = () => {
     if (!contextMenu.session) return [];
     return [
-      { label: 'Rename', icon: 'pencil-outline', onPress: () => setRenameModal({ visible: true, session: contextMenu.session, name: contextMenu.session.name || '' }) },
+      { label: 'Rename', icon: Pencil, onPress: () => setRenameModal({ visible: true, session: contextMenu.session, name: contextMenu.session.name || '' }) },
       { 
         label: contextMenu.session.is_favorite ? 'Unfavorite' : 'Favorite', 
-        icon: contextMenu.session.is_favorite ? 'star' : 'star-outline', 
+        icon: Star, 
         onPress: () => onToggleFavorite?.(contextMenu.session.id) 
       },
-      { label: 'Delete', icon: 'trash-outline', danger: true, onPress: () => setConfirmDelete({ visible: true, session: contextMenu.session }) },
+      { label: 'Delete', icon: Trash2, danger: true, onPress: () => setConfirmDelete({ visible: true, session: contextMenu.session }) },
     ];
   };
 

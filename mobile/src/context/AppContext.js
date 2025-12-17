@@ -6,6 +6,10 @@ import { loginWithGoogle, logout as authLogout, getStoredAuth, getLastBackupTime
 import { backupToCloud, restoreFromCloud } from '../services/backup';
 import { WELCOME_MESSAGES } from '../constants/strings';
 
+// PERF: Debug flag - set to false in production
+const __DEV_DEBUG__ = false;
+const log = __DEV_DEBUG__ ? console.log : () => {};
+
 const AppContext = createContext(null);
 
 const DEFAULT_SETTINGS = {
@@ -153,19 +157,19 @@ export function AppProvider({ children }) {
   // Load more older messages (for pagination)
   // Returns the number of messages prepended for scroll position adjustment
   const loadMoreMessages = useCallback(async () => {
-    console.log('[LoadMore] Called - hasMoreMessages:', hasMoreMessages, 'isLoadingMore:', isLoadingMore, 'oldestLoadedIndex:', oldestLoadedIndex);
+    log('[LoadMore] Called - hasMoreMessages:', hasMoreMessages, 'isLoadingMore:', isLoadingMore, 'oldestLoadedIndex:', oldestLoadedIndex);
     
     // Guard: Skip if no session, already loading, or no more messages
     // oldestLoadedIndex < 0 means no messages loaded yet
     // oldestLoadedIndex = 0 means first message already loaded, but we still check hasMoreMessages
     if (!currentSession?.id || !hasMoreMessages || isLoadingMore || oldestLoadedIndex < 0) {
-      console.log('[LoadMore] Skipped due to guard - session:', !!currentSession?.id, 'hasMore:', hasMoreMessages, 'loading:', isLoadingMore, 'oldest:', oldestLoadedIndex);
+      log('[LoadMore] Skipped due to guard - session:', !!currentSession?.id, 'hasMore:', hasMoreMessages, 'loading:', isLoadingMore, 'oldest:', oldestLoadedIndex);
       return 0;
     }
     
     // Additional guard: if oldestLoadedIndex is 0, there's nothing more to load
     if (oldestLoadedIndex === 0) {
-      console.log('[LoadMore] Skipped - already at message index 0');
+      log('[LoadMore] Skipped - already at message index 0');
       setHasMoreMessages(false);
       return 0;
     }
@@ -175,15 +179,15 @@ export function AppProvider({ children }) {
     try {
       // Load older messages with 5000 char limit (same as initial load)
       const result = await getOlderMessages(currentSession.id, oldestLoadedIndex, 5000);
-      console.log('[LoadMore] Got result:', result.messages?.length, 'messages, hasMore:', result.hasMore, 'newOldestIndex:', result.oldestLoadedIndex);
-      console.log('[LoadMore] Message indices:', result.messages?.map(m => m.message_index));
+      log('[LoadMore] Got result:', result.messages?.length, 'messages, hasMore:', result.hasMore, 'newOldestIndex:', result.oldestLoadedIndex);
+      log('[LoadMore] Message indices:', result.messages?.map(m => m.message_index));
       
       if (result.messages && result.messages.length > 0) {
         const prependCount = result.messages.length;
         
         // Prepend older messages to current messages
         setMessages(prev => {
-          console.log('[LoadMore] Prepending to prev length:', prev.length);
+          log('[LoadMore] Prepending to prev length:', prev.length);
           const updated = [...result.messages, ...prev];
 
           // Maintain a stable next index using the highest message_index we know about
@@ -195,10 +199,10 @@ export function AppProvider({ children }) {
         setHasMoreMessages(result.hasMore);
         // Use oldestLoadedIndex from result (more accurate)
         setOldestLoadedIndex(result.oldestLoadedIndex);
-        console.log('[LoadMore] New oldestLoadedIndex:', result.oldestLoadedIndex, 'newHasMore:', result.hasMore);
+        log('[LoadMore] New oldestLoadedIndex:', result.oldestLoadedIndex, 'newHasMore:', result.hasMore);
         return prependCount;
       } else {
-        console.log('[LoadMore] No messages returned, setting hasMore to false');
+        log('[LoadMore] No messages returned, setting hasMore to false');
         setHasMoreMessages(false);
         return 0;
       }
@@ -277,8 +281,8 @@ export function AppProvider({ children }) {
     const newMsg = { role, content, message_index: messageIndex, created_at: createdAt, ...metadata };
     
     // DEBUG: Log what's being added to messages state
-    console.log('[appendMessage] role:', role, 'attachments in metadata:', metadata.attachments?.length, metadata.attachments?.map(a => a.name));
-    console.log('[appendMessage] newMsg.attachments:', newMsg.attachments?.length, newMsg.attachments?.map(a => a.name));
+    log('[appendMessage] role:', role, 'attachments in metadata:', metadata.attachments?.length, metadata.attachments?.map(a => a.name));
+    log('[appendMessage] newMsg.attachments:', newMsg.attachments?.length, newMsg.attachments?.map(a => a.name));
     
     setMessages(prev => [...prev, newMsg]);
 

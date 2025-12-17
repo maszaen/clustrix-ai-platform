@@ -1,15 +1,14 @@
 import { useRef, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, Animated, Modal, TouchableWithoutFeedback, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 
 /**
- * Fixed position context menu
+ * Fixed position context menu with Lucide icon support
  * @param {boolean} visible - Menu visibility
  * @param {function} onClose - Called when menu is closed
  * @param {string} sessionName - Current session name to display
- * @param {Array} options - Array of { label, icon, onPress, danger? }
+ * @param {Array} options - Array of { label, icon: LucideIcon, onPress, danger? }
  * @param {object} position - { top, right, left, bottom } for positioning
  * @param {string} positionType - 'absolute' or 'fixed' (default 'absolute')
  */
@@ -66,24 +65,25 @@ export default function ContextMenuFixed({
             </View>
           )}
           
-          {/* Menu Options */}
-          {options.map((option, idx) => (
-            <Pressable
-              key={idx}
-              style={styles.option}
-              onPress={() => { option.onPress?.(); close(); }}
-              android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-            >
-              <Ionicons 
-                name={option.icon} 
-                size={18} 
-                color={option.danger ? COLORS.danger : COLORS.fg} 
-              />
-              <Text style={[styles.optionText, option.danger && styles.dangerText]}>
-                {option.label}
-              </Text>
-            </Pressable>
-          ))}
+          {/* Menu Options - supports Lucide icon components */}
+          {options.map((option, idx) => {
+            const IconComponent = option.icon;
+            
+            return (
+              <Pressable
+                key={idx}
+                style={styles.option}
+                onPress={() => { option.onPress?.(); close(); }}
+                android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+              >
+                {/* Render Lucide icon component if provided */}
+                {IconComponent && <IconComponent size={18} color={option.danger ? COLORS.danger : COLORS.fg} strokeWidth={1.3} />}
+                <Text style={[styles.optionText, option.danger && styles.dangerText]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </Animated.View>
         </View>
       </TouchableWithoutFeedback>

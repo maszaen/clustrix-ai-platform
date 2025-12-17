@@ -1,4 +1,4 @@
-import { useState, useRef, forwardRef, useImperativeHandle, useCallback } from 'react';
+import { useState, useRef, forwardRef, useImperativeHandle, useCallback, useEffect } from 'react';
 import { View, TextInput, StyleSheet, Keyboard } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,9 +6,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { LinearGradient } from 'expo-linear-gradient';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import AttachmentPreview from './AttachmentPreview';
 
-import { useEffect } from 'react';
+// Animation config - TWEAK HERE
+// Height of attachment preview section (Height 129 + margins ~16)
+const ATTACHMENT_SECTION_HEIGHT = 145;
+
+const SPRING_CONFIG = {
+  damping: 26,     // Higher = less bounce (try 15-40)
+  stiffness: 250,  // Higher = faster snap (try 100-400)
+  mass: 0.8        // Lower = lighter/faster (try 0.5-2)
+};
 
 function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything', value = '', onChangeText, onOpenAttachmentModal, onAttachmentsChange, onInputHeightChange }, ref) {
   const [text, setText] = useState(value || '');
@@ -19,6 +28,9 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
   const insets = useSafeAreaInsets();
   const attachmentIdRef = useRef(0);
   const baseInputHeight = useRef(0); // Store initial single-line height
+  
+  // Animation value for attachment section height
+  const attachmentSectionHeight = useSharedValue(0);
 
   // Track keyboard visibility
   useEffect(() => {
@@ -38,20 +50,6 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
     getAttachmentIdRef: () => attachmentIdRef,
     getAttachmentCount: () => attachments.length,
   }), [attachments.length]);
-
-  // Notify parent when attachments change
-  useEffect(() => {
-    onAttachmentsChange?.(attachments.length);
-  }, [attachments.length, onAttachmentsChange]);
-
-  // Notify parent when input height changes (extra height from multiline)
-  useEffect(() => {
-    // Cap height at 150 (maxHeight from styles)
-    const effectiveHeight = Math.min(inputHeight, 150);
-    const extraHeight = baseInputHeight.current > 0 ? Math.max(0, effectiveHeight - baseInputHeight.current) : 0;
-    onInputHeightChange?.(extraHeight);
-  }, [inputHeight, onInputHeightChange]);
-
   // Sync external value changes (used for draft restore)
   useEffect(() => {
     setText(value || '');
@@ -71,11 +69,31 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
   };
 
   const hasContent = text.trim() || attachments.length > 0;
+
+
+  // Animate attachment section height
+  useEffect(() => {
+    // Determine target height
+    // We use withSpring for lively interaction but high damping to prevent bottom wobble
+    const targetHeight = attachments.length > 0 ? ATTACHMENT_SECTION_HEIGHT : 0;
+    attachmentSectionHeight.value = withSpring(targetHeight, SPRING_CONFIG);
+    
+    onAttachmentsChange?.(attachments.length);
+  }, [attachments.length, onAttachmentsChange]);
+
+  const attachmentStyle = useAnimatedStyle(() => ({
+    height: attachmentSectionHeight.value,
+    opacity: attachmentSectionHeight.value > 10 ? 1 : 0, // Prevent flicker at 0
+    overflow: 'hidden',
+  }));
+
+  // Match gradient height logic below
+  // ...
   
   // Calculate dynamic height for gradient
   const effectiveInputHeight = Math.min(inputHeight, 150);
   const extraInputHeight = baseInputHeight.current > 0 ? Math.max(0, effectiveInputHeight - baseInputHeight.current) : 0;
-  const attachmentHeight = attachments.length > 0 ? 120 : 0;
+  const attachmentHeight = attachments.length > 0 ? ATTACHMENT_SECTION_HEIGHT + 5 : 0; // +5 for extra breathing room in gradient
 
   return (
     <View style={styles.wrapper}>
@@ -96,12 +114,12 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
 
       <View style={styles.containerInput}>
         {/* Attachment preview - above input */}
-        {attachments.length > 0 && (
+        <Reanimated.View style={attachmentStyle}>
           <AttachmentPreview 
             attachments={attachments} 
             onRemove={handleRemoveAttachment}
           />
-        )}
+        </Reanimated.View>
 
         <View style={styles.inputRow}>
           <TextInput

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable, Keyboard, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable as RNPressable, Keyboard, Easing, Platform } from 'react-native';
+import { Gesture, GestureDetector, Pressable } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
@@ -9,11 +10,12 @@ import * as Clipboard from 'expo-clipboard';
 import ContextMenu from './ContextMenu';
 import MessageAttachments from './MessageAttachments';
 
-// Custom ripple that follows touch position exactly
+// Custom ripple wrapper using gesture-handler Pressable
+// Allows nested ScrollViews to handle their own gestures
 const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser }) => {
   const [ripples, setRipples] = useState([]);
   const rippleIdRef = useRef(0);
-  const activeRippleId = useRef(null);
+  const containerRef = useRef(null);
 
   const handleLongPress = useCallback((e) => {
     if (onLongPress && !disabled) {
@@ -26,25 +28,28 @@ const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser 
     Keyboard.dismiss();
   }, []);
 
-  // Start ripple at touch position
+  // Start ripple - measure container to get accurate position
   const handlePressIn = useCallback((e) => {
-    const { locationX, locationY } = e.nativeEvent;
+    const { pageX, pageY } = e.nativeEvent;
     const id = rippleIdRef.current++;
-    activeRippleId.current = id;
     
-    // Release all previous ripples first, then add new one
-    setRipples(prev => [
-      ...prev.map(r => !r.released ? { ...r, released: true } : r),
-      { id, x: locationX, y: locationY, released: false }
-    ]);
+    // Measure container position to calculate relative touch position
+    containerRef.current?.measure((x, y, width, height, containerPageX, containerPageY) => {
+      const relativeX = pageX - containerPageX;
+      const relativeY = pageY - containerPageY;
+      
+      setRipples(prev => [
+        ...prev.map(r => !r.released ? { ...r, released: true } : r),
+        { id, x: relativeX, y: relativeY, released: false }
+      ]);
+    });
   }, []);
 
-  // Trigger fade out when finger released - release ALL unreleased ripples
+  // Trigger fade out when finger released
   const handlePressOut = useCallback(() => {
     setRipples(prev => prev.map(r => 
       !r.released ? { ...r, released: true } : r
     ));
-    activeRippleId.current = null;
   }, []);
 
   // Remove ripple from array
@@ -56,6 +61,7 @@ const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser 
 
   return (
     <Pressable
+      ref={containerRef}
       onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
@@ -64,10 +70,9 @@ const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser 
       disabled={disabled}
       style={[style, { overflow: 'hidden' }]}
     >
-      {/* Wrap children so ALL touches pass through to Pressable */}
-      <View pointerEvents="none">
-        {children}
-      </View>
+      {/* No pointerEvents="none" - allows nested ScrollViews to work */}
+      {children}
+      {/* Ripple layer - absolute positioned, doesn't block touches */}
       {ripples.map(ripple => (
         <RippleCircle 
           key={ripple.id}
@@ -494,24 +499,24 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
   return (
     <>
       <Animated.View style={styles.aiContainer}>
-        {hasThinking && (
-          <View style={{paddingHorizontal: 16}}>
-            <TouchableOpacity 
-              style={styles.thinkToggle} 
-              onPress={() => onShowThinking?.(thinkingContent)}
-              activeOpacity={0.7}
-            >
-              <PanelBottomOpen size={13} color={COLORS.fgMuted} />
-              <Text style={styles.thinkToggleText}>{getThinkingText()}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
         <LongPressWrapper 
           onLongPress={handleLongPress} 
           disabled={message.isStreaming}
           style={styles.aiMessagePressable}
           isUser={false}
-        >
+          >
+          {hasThinking && (
+            <View style={{paddingHorizontal: 16}}>
+              <TouchableOpacity 
+                style={styles.thinkToggle} 
+                onPress={() => onShowThinking?.(thinkingContent)}
+                activeOpacity={0.7}
+              >
+                <PanelBottomOpen size={13} color={COLORS.fgMuted} />
+                <Text style={styles.thinkToggleText}>{getThinkingText()}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           
           {isLoading ? (
             <View style={{paddingHorizontal: 16}}>
@@ -753,26 +758,141 @@ const markdownStyles = {
   strong: { fontFamily: FONTS.aiBold, fontWeight: 'normal', color: COLORS.fg },
   em: { fontFamily: FONTS.displayItalic, fontStyle: 'normal' },
   hr: { backgroundColor: COLORS.borderLight, height: 1, opacity: 0.5, marginVertical: 12 },
-  table: { borderWidth: 1, borderColor: COLORS.borderLight, borderRadius: 10, backgroundColor: COLORS.bgSecondary },
-  th: { backgroundColor: 'transparent', padding: 8, fontFamily: FONTS.aiBold },
-  td: { paddingHorizontal: 8, borderTopWidth: 1, borderColor: COLORS.borderLight, backgroundColor: 'transparent', borderBottomWidth: 0, borderRadius: 10 },
+  // Table styles - wrapped in horizontal ScrollView via custom rule
+  table: { 
+    borderWidth: 1, 
+    borderColor: COLORS.borderLight, 
+    borderRadius: 10, 
+    backgroundColor: COLORS.bgSecondary,
+    overflow: 'hidden',
+    minWidth: '100%',
+  },
+  thead: {
+    backgroundColor: COLORS.inputBg,
+  },
+  tr: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  // Cell container styles - fixed width for alignment
+  thCell: {
+    width: 150,
+    borderRightWidth: 1,
+    borderRightColor: COLORS.borderLight,
+    backgroundColor: COLORS.inputBg,
+  },
+  tdCell: {
+    width: 150,
+    borderRightWidth: 1,
+    borderRightColor: COLORS.borderLight,
+  },
+  // Text styles for cells
+  th: { 
+    paddingVertical: 10,
+    paddingHorizontal: 10, 
+    fontFamily: FONTS.aiBold,
+    color: COLORS.fg,
+    fontSize: 13,
+  },
+  td: { 
+    paddingVertical: 10,
+    paddingHorizontal: 10, 
+    color: COLORS.fgMuted,
+    fontSize: 13,
+    fontFamily: FONTS.ai,
+  },
+  // Table container for horizontal scroll
+  tableContainer: {
+    marginVertical: 8,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
 };
 
-// Markdown rules for code blocks
+// Horizontal scroll wrapper that blocks sidebar pan gesture
+// Uses GestureDetector with pan gesture that has smaller activeOffset than sidebar
+const HorizontalScrollWrapper = ({ children, style, showIndicator = false }) => {
+  // Pan gesture with very small activeOffset to "win" over sidebar gesture
+  // Sidebar uses activeOffsetX([-10, 10]), we use [-5, 5] to activate first
+  const panGesture = Gesture.Pan()
+    .activeOffsetX([-5, 5])
+    .failOffsetY([-10, 10])
+    .onStart(() => {})
+    .onUpdate(() => {})
+    .onEnd(() => {});
+
+  return (
+    <GestureDetector gesture={panGesture}>
+      <View style={style}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={showIndicator}
+          nestedScrollEnabled={true}
+          scrollEventThrottle={16}
+        >
+          {children}
+        </ScrollView>
+      </View>
+    </GestureDetector>
+  );
+};
+
+// Markdown rules for code blocks and tables
 const markdownRules = {
+  // Custom fence (code block) with horizontal scroll
   fence: (node) => {
     const language = node.sourceInfo || '';
     return (
       <View key={node.key} style={markdownStyles.fence}>
         {language ? <Text style={markdownStyles.fenceLanguage}>{language}</Text> : null}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <HorizontalScrollWrapper>
           <Text style={markdownStyles.fenceContent}>{node.content}</Text>
-        </ScrollView>
+        </HorizontalScrollWrapper>
       </View>
     );
   },
+  // Inline code styling
   code_inline: (node) => (
     <Text key={node.key} style={markdownStyles.code_inline}>{node.content}</Text>
+  ),
+  // Custom table with horizontal scroll
+  table: (node, children) => (
+    <HorizontalScrollWrapper key={node.key} style={markdownStyles.tableContainer} showIndicator={true}>
+      <View style={markdownStyles.table}>
+        {children}
+      </View>
+    </HorizontalScrollWrapper>
+  ),
+  // Table header row styling
+  thead: (node, children) => (
+    <View key={node.key} style={markdownStyles.thead}>
+      {children}
+    </View>
+  ),
+  // Table body styling
+  tbody: (node, children) => (
+    <View key={node.key}>
+      {children}
+    </View>
+  ),
+  // Table row styling
+  tr: (node, children) => (
+    <View key={node.key} style={markdownStyles.tr}>
+      {children}
+    </View>
+  ),
+  // Table header cell - fixed width for consistent columns
+  th: (node, children) => (
+    <View key={node.key} style={markdownStyles.thCell}>
+      <Text style={markdownStyles.th}>{children}</Text>
+    </View>
+  ),
+  // Table data cell - fixed width for consistent columns
+  td: (node, children) => (
+    <View key={node.key} style={markdownStyles.tdCell}>
+      <Text style={markdownStyles.td}>{children}</Text>
+    </View>
   ),
 };
 

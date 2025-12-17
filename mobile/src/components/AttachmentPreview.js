@@ -1,9 +1,14 @@
 import { memo } from 'react';
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
+import Reanimated, { ZoomIn, ZoomOut, Layout } from 'react-native-reanimated';
 import { X, FileText, File, FileImage, FileVideo, FileAudio, FileCode, FileSpreadsheet, FileArchive } from 'lucide-react-native';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
+
+// Animation config
+const ANIM_DURATION = 200;
+const LAYOUT_SPRING_CONFIG = { damping: 30, stiffness: 350, mass: 1 };
 
 /**
  * Get file icon based on mime type or extension
@@ -82,7 +87,12 @@ function AttachmentPreview({ attachments = [], onRemove }) {
         if (isImage) {
           // Image preview - max 4:3 aspect ratio
           return (
-            <View key={attachment.id || index} style={styles.imageItem}>
+            <Reanimated.View 
+              key={attachment.id || index} 
+              style={styles.imageItem}
+              entering={ZoomIn.duration(ANIM_DURATION)}
+              exiting={ZoomOut.duration(ANIM_DURATION)}
+            >
               <Image 
                 source={{ uri: attachment.uri }} 
                 style={styles.imagePreview}
@@ -96,14 +106,19 @@ function AttachmentPreview({ attachments = [], onRemove }) {
               >
                 <X size={12} color={COLORS.fg} strokeWidth={2.5} />
               </Pressable>
-            </View>
+            </Reanimated.View>
           );
         } else {
           // File preview - square with icon and filename
           const { icon: FileIcon, color: iconColor } = getFileIcon(attachment.mimeType, attachment.name);
           
           return (
-            <View key={attachment.id || index} style={styles.fileItem}>
+            <Reanimated.View 
+              key={attachment.id || index} 
+              style={styles.fileItem}
+              entering={ZoomIn.duration(ANIM_DURATION)}
+              exiting={ZoomOut.duration(ANIM_DURATION)}
+            >
               {/* File icon - top left */}
               <View style={styles.fileIconContainer}>
                 <FileIcon size={20} color={iconColor} strokeWidth={1.8} />
@@ -122,7 +137,7 @@ function AttachmentPreview({ attachments = [], onRemove }) {
               >
                 <X size={12} color={COLORS.fg} strokeWidth={2.5} />
               </Pressable>
-            </View>
+            </Reanimated.View>
           );
         }
       })}
@@ -130,9 +145,9 @@ function AttachmentPreview({ attachments = [], onRemove }) {
   );
 }
 
-const IMAGE_HEIGHT = 100;
+const IMAGE_HEIGHT = 129;
 const IMAGE_WIDTH = Math.round(IMAGE_HEIGHT * (4/3)); // 4:3 aspect
-const FILE_SIZE = 100;
+const FILE_SIZE = 129;
 
 const styles = StyleSheet.create({
   container: {

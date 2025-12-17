@@ -1118,7 +1118,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
 
   // Footer component for bottom spacing (appears at BOTTOM)
   // Simpler approach: fixed size during stream, conditional removal based on visibility
-  const ATTACHMENT_EXTRA_HEIGHT = 120; // Extra space when attachments are shown
+  const ATTACHMENT_EXTRA_HEIGHT = 150; // Increased to match new preview size (129 + margins) // Extra space when attachments are shown
   const ListFooter = useCallback(() => {
     const dynamicOffset = (attachmentCount > 0 ? ATTACHMENT_EXTRA_HEIGHT : 0) + inputExtraHeight;
     // Show spacer during streaming OR if stream ended but user still near bottom

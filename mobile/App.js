@@ -637,7 +637,13 @@ function MainApp() {
                   setTimeout(() => selectSession(session), 300);
                 }, 100);
               }}
-              onDelete={deleteSession}
+              onDelete={async (id) => {
+                const isDeletingCurrent = currentSession?.id === id;
+                await deleteSession(id);
+                if (isDeletingCurrent) {
+                  closeSidebar();
+                }
+              }}
               onNew={handleNewChat}
               onToggleFavorite={toggleFavorite}
               onRename={renameSession}

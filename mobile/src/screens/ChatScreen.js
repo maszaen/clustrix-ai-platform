@@ -105,6 +105,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     updateSession,
     setMessageMetadata,
     removeMessage,
+    deleteSession,
     welcomeMessage,
     splashComplete,
     loadDraft,
@@ -727,13 +728,55 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     });
   }, [currentSession, clearDraft, saveWelcomeDraft, messages, createSession, appendMessage, settings, removeMessage, updateSession, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, setInputText, setNewMessageId, onStreamingThinking, triggerHaptic]);
 
-  const handleStop = () => {
+  const handleStop = async () => {
+    // 1. Abort network request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    
+    // 2. Clear visual streaming state
     setIsStreaming(false);
     setStreamingContent('');
+    setThinkingContent('');
+    setStreamingMessageId(null);
+
+    // 3. Restore last user message to input and delete from chat
+    // Ensure we have messages and the last one is from user (it should be, AI is not added yet)
+    if (messages.length > 0 && currentSession?.id) {
+      const lastMsg = messages[messages.length - 1];
+      
+      if (lastMsg.role === 'user') {
+        // Restore text
+        if (inputRef.current) {
+          inputRef.current.setValue(lastMsg.content || '');
+          
+          // Restore attachments if any
+          if (lastMsg.attachments && lastMsg.attachments.length > 0) {
+            // Clear current attachments first (should be empty anyway)
+            inputRef.current.clearAttachments();
+            
+            // Remap attachments ensuring they have IDs
+            const restoredAttachments = lastMsg.attachments.map((a, i) => ({
+              ...a,
+              id: Date.now() + i // Generate fresh temp IDs
+            }));
+            
+            inputRef.current.addAttachments(restoredAttachments);
+          }
+        }
+        
+        // Cleanup: remove message or delete session if it's the first message
+        if (messages.length === 1) {
+          // If this was the first message (Start of session), delete the whole session
+          // This cancels the "Start Chat" action and returns to Welcome
+          await deleteSession(currentSession.id);
+        } else {
+          // Remove from database and state
+          await removeMessage(currentSession.id, lastMsg.message_index);
+        }
+      }
+    }
   };
 
   // Retrieve preceding user prompt for retry injection

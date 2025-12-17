@@ -24,7 +24,7 @@ import Reanimated, {
   runOnJS,
   cancelAnimation
 } from 'react-native-reanimated';
-import Markdown from 'react-native-markdown-display';
+import { StreamdownRN } from 'streamdown-rn';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -855,9 +855,9 @@ function MainApp() {
               scrollEventThrottle={16}
               bounces={false}
             >
-              <Markdown style={thinkingMarkdownStyles}>
+              <StreamdownRN theme="dark" isComplete={true}>
                 {thinkingModal.content}
-              </Markdown>
+              </StreamdownRN>
             </ScrollView>
           </View>
         )}
@@ -1178,66 +1178,6 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
 });
-
-// Thinking markdown styles - muted colors
-const thinkingMarkdownStyles = {
-  body: { color: COLORS.fgMuted, fontSize: 13, lineHeight: 19, fontFamily: FONTS.sans },
-  heading1: { color: COLORS.fgMuted, fontSize: 16, fontFamily: FONTS.aiBold, marginVertical: 6 },
-  heading2: { color: COLORS.fgMuted, fontSize: 15, fontFamily: FONTS.aiBold, marginVertical: 4 },
-  heading3: { color: COLORS.fgMuted, fontSize: 14, fontFamily: FONTS.aiBold, marginVertical: 3 },
-  paragraph: { marginVertical: 3 },
-  code_inline: { 
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    color: '#7a9fd4',
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    borderRadius: 3,
-    fontSize: 12,
-    fontFamily: FONTS.mono,
-  },
-  fence: { 
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    padding: 10, 
-    borderRadius: 6, 
-    marginVertical: 6,
-  },
-  fenceContent: {
-    color: '#8a9199',
-    fontSize: 11,
-    fontFamily: FONTS.mono,
-    lineHeight: 16,
-  },
-  code_block: { 
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    padding: 10, 
-    borderRadius: 6, 
-    marginVertical: 6,
-    color: '#8a9199',
-    fontFamily: FONTS.mono,
-  },
-  link: { color: '#a3c4f3' },
-  blockquote: { 
-    backgroundColor: 'rgba(0,0,0,0.15)',
-    borderLeftWidth: 2, 
-    color: COLORS.fgMuted,
-    borderLeftColor: COLORS.borderLight, 
-    paddingLeft: 10, 
-    marginLeft: 0,
-    borderRadius: 4,
-  },
-  list_item: { marginVertical: 2 },
-  bullet_list: { marginVertical: 3 },
-  ordered_list: { marginVertical: 3 },
-  strong: { fontFamily: FONTS.aiBold, fontWeight: 'normal', color: COLORS.fgMuted },
-  em: { fontFamily: FONTS.displayItalic, fontStyle: 'normal' },
-  hr: { backgroundColor: COLORS.borderLight, height: 1, marginVertical: 8 },
-};
 
 // Loading overlay styles (same as ChatScreen's WelcomeScreen)
 const loadingOverlayStyles = StyleSheet.create({

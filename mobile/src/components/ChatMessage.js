@@ -31,7 +31,11 @@ const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser 
     const id = rippleIdRef.current++;
     activeRippleId.current = id;
     
-    setRipples(prev => [...prev, { id, x: locationX, y: locationY, released: false }]);
+    // Release all previous ripples first, then add new one
+    setRipples(prev => [
+      ...prev.map(r => !r.released ? { ...r, released: true } : r),
+      { id, x: locationX, y: locationY, released: false }
+    ]);
   }, []);
 
   // Trigger fade out when finger released - release ALL unreleased ripples

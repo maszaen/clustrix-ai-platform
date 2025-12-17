@@ -11,6 +11,7 @@ import {
   BackHandler,
   Keyboard,
   Image,
+  Alert,
 } from 'react-native';
 import { GestureHandlerRootView, Gesture, GestureDetector, Pressable, ScrollView } from 'react-native-gesture-handler';
 import Reanimated, { 
@@ -27,6 +28,7 @@ import Markdown from 'react-native-markdown-display';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { Image as ImageIcon, FileText, Camera } from 'lucide-react-native';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from './src/context/AppContext';
 import ChatScreen from './src/screens/ChatScreen';
@@ -45,6 +47,9 @@ import { COLORS } from './src/constants/colors';
 import { fontAssets, FONTS } from './src/constants/fonts';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { PENCIL, LOGO_SVG, DIAMOND_LOGO_HTML_LOADER } from './src/constants/strings';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Base sidebar width sits at ~83% of the screen so users can peek the main page
@@ -122,7 +127,7 @@ function WelcomeOverlay({ message, accentColor, visible, onFadeComplete }) {
   }, [visible, fadeAnim, onFadeComplete]);
  // fadeAnim
   return (
-    <Animated.View style={[loadingOverlayStyles.overlay, { opacity: fadeAnim }]} pointerEvents="none">
+    <Animated.View style={[loadingOverlayStyles.overlay, { opacity: fadeAnim }]} pointerEvents={visible ? "auto" : "none"}>
       <View style={loadingOverlayStyles.welcomeContainer}>
         <DiamondLogo accentColor={accentColor} />
         <Text style={loadingOverlayStyles.welcomeText}>{displayText}</Text>
@@ -146,6 +151,8 @@ function MainApp() {
   const [thinkingModal, setThinkingModal] = useState({ visible: false, content: '' });
   // Select text modal state (app-level for message text selection)
   const [selectTextModal, setSelectTextModal] = useState({ visible: false, content: '' });
+  // Attachment modal state
+  const [attachmentModal, setAttachmentModal] = useState(false);
   
   // Loading overlay state
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
@@ -357,6 +364,209 @@ function MainApp() {
     setShowModels(true);
   }, []);
   const closeModels = useCallback(() => setShowModels(false), []);
+  
+  // Attachment modal handlers
+  const openAttachmentModal = useCallback(() => {
+    Keyboard.dismiss();
+    setAttachmentModal(true);
+  }, []);
+  const closeAttachmentModal = useCallback(() => setAttachmentModal(false), []);
+  
+  // Ref for ChatInput to add attachments
+  const chatInputRef = useRef(null);
+  const attachmentIdRef = useRef(0);
+
+  // Get MIME type from extension
+  const getMimeType = (filename) => {
+    const ext = filename?.split('.').pop()?.toLowerCase() || '';
+    const mimeTypes = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      heic: 'image/heic',
+      heif: 'image/heif',
+      pdf: 'application/pdf',
+      txt: 'text/plain',
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
+    return mimeTypes[ext] || 'application/octet-stream';
+  };
+  
+  // Handle image selection
+  const handleSelectImages = useCallback(async () => {
+    closeAttachmentModal();
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library to upload images.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        quality: 0.8,
+        base64: true, // Get base64 directly from picker
+      });
+
+      if (!result.canceled && result.assets) {
+        const newAttachments = result.assets.map((asset) => {
+          const filename = asset.fileName || asset.uri.split('/').pop() || 'image.jpg';
+          return {
+            id: attachmentIdRef.current++,
+            type: 'image',
+            uri: asset.uri,
+            name: filename,
+            mimeType: asset.mimeType || getMimeType(filename),
+            size: asset.fileSize,
+            base64: asset.base64, // Direct from picker
+            width: asset.width,
+            height: asset.height,
+          };
+        });
+        chatInputRef.current?.addAttachments(newAttachments);
+      }
+    } catch (error) {
+      console.error('Error picking images:', error);
+      Alert.alert('Error', 'Failed to select images. Please try again.');
+    }
+  }, [closeAttachmentModal]);
+  
+  // Handle file selection - read content for AI
+  const handleSelectFiles = useCallback(async () => {
+    closeAttachmentModal();
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*', // Allow all files
+        multiple: true,
+      });
+
+      if (!result.canceled && result.assets) {
+        // DEBUG: Log what DocumentPicker returns
+        console.log('[handleSelectFiles] DocumentPicker result.assets:', result.assets.map(a => ({ name: a.name, uri: a.uri, mimeType: a.mimeType, size: a.size })));
+        
+        // Text-readable file extensions (plain text that can be shown inline)
+        const textExtensions = [
+          'txt', 'md', 'markdown', 'json', 'csv', 'xml', 'html', 'htm', 'css',
+          'js', 'jsx', 'ts', 'tsx', 'py', 'java', 'c', 'cpp', 'h', 'hpp',
+          'rb', 'php', 'go', 'rs', 'swift', 'kt', 'scala', 'sh', 'bash', 'zsh',
+          'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'log', 'sql', 'graphql',
+          'vue', 'svelte', 'astro', 'env', 'gitignore', 'dockerfile', 'makefile'
+        ];
+        
+        // Document types that need base64 for API (PDF, DOCX, etc)
+        const documentExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+        
+        const textMimeTypes = [
+          'text/', 'application/json', 'application/xml', 'application/javascript',
+        ];
+        
+        const newAttachments = await Promise.all(
+          result.assets.map(async (asset) => {
+            let textContent = null;
+            let base64 = null;
+            const ext = asset.name?.split('.').pop()?.toLowerCase() || '';
+            const mimeType = asset.mimeType || getMimeType(asset.name);
+            
+            // Check file type
+            const isTextFile = textExtensions.includes(ext) || 
+                               textMimeTypes.some(t => mimeType.startsWith(t)) ||
+                               mimeType === 'text/plain';
+            const isDocument = documentExtensions.includes(ext) ||
+                               mimeType === 'application/pdf' ||
+                               mimeType.includes('word') ||
+                               mimeType.includes('spreadsheet') ||
+                               mimeType.includes('presentation');
+            
+            // Read text files as plain text
+            if (isTextFile) {
+              try {
+                const response = await fetch(asset.uri);
+                textContent = await response.text();
+                // Limit content size to prevent huge payloads (max 100KB)
+                if (textContent.length > 100000) {
+                  textContent = textContent.substring(0, 100000) + '\n\n[Content truncated due to size limit]';
+                }
+              } catch (e) {
+                console.log('Could not read text file:', e);
+              }
+            }
+            
+            // Read documents as base64 for API (PDF, DOCX, etc)
+            if (isDocument) {
+              try {
+                base64 = await FileSystem.readAsStringAsync(asset.uri, {
+                  encoding: FileSystem.EncodingType.Base64,
+                });
+                // Limit size - most APIs have ~25MB limit, but let's be safe with 10MB
+                if (base64.length > 10 * 1024 * 1024) {
+                  console.log('File too large for base64 encoding');
+                  base64 = null;
+                }
+              } catch (e) {
+                console.log('Could not read file as base64:', e);
+              }
+            }
+            
+            return {
+              id: attachmentIdRef.current++,
+              type: 'file',
+              uri: asset.uri,
+              name: asset.name || 'File',
+              mimeType: mimeType,
+              size: asset.size,
+              textContent, // Text content for text files
+              base64, // Base64 for documents (PDF, DOCX, etc)
+            };
+          })
+        );
+        chatInputRef.current?.addAttachments(newAttachments);
+      }
+    } catch (error) {
+      console.error('Error picking files:', error);
+      Alert.alert('Error', 'Failed to select files. Please try again.');
+    }
+  }, [closeAttachmentModal]);
+  
+  // Handle camera
+  const handleOpenCamera = useCallback(async () => {
+    closeAttachmentModal();
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your camera to take photos.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        quality: 0.8,
+        base64: true, // Get base64 directly from picker
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        const filename = asset.fileName || `photo_${Date.now()}.jpg`;
+        
+        chatInputRef.current?.addAttachments([{
+          id: attachmentIdRef.current++,
+          type: 'image',
+          uri: asset.uri,
+          name: filename,
+          mimeType: asset.mimeType || 'image/jpeg',
+          size: asset.fileSize,
+          base64: asset.base64, // Direct from picker
+          width: asset.width,
+          height: asset.height,
+        }]);
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+    }
+  }, [closeAttachmentModal]);
 
   // Back button handler - only for sidebar (modals handle their own back)
   useEffect(() => {
@@ -394,6 +604,7 @@ function MainApp() {
   }, [currentSession, messages, clearCurrentSession, closeSidebar]);
 
   return (
+    <>
     <GestureDetector gesture={panGesture}>
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
@@ -471,7 +682,7 @@ function MainApp() {
 
         {/* Page 2: Main Chat (100% width) */}
         <View style={[styles.mainPage, { width: SCREEN_WIDTH }]}>
-          <ChatScreen topInset={insets.top} onShowThinking={handleShowThinking} onStreamingThinking={handleStreamingThinking} onSelectText={handleSelectText} />
+          <ChatScreen topInset={insets.top} onShowThinking={handleShowThinking} onStreamingThinking={handleStreamingThinking} onSelectText={handleSelectText} onOpenAttachmentModal={openAttachmentModal} chatInputRef={chatInputRef} />
 
           <LinearGradient
             colors={[COLORS.bg90, COLORS.bg90, COLORS.bg70, 'transparent']}
@@ -649,17 +860,68 @@ function MainApp() {
         </ScrollView>
       </SlideLeftModal>
 
-      {/* Loading overlay - shown until app is ready */}
-      {mountLoadingOverlay && (
-        <WelcomeOverlay
-          message={splashMessage}
-          accentColor={COLORS.accent}
-          visible={showLoadingOverlay} //
-          onFadeComplete={() => setMountLoadingOverlay(false)}
-        />
-      )}
+      {/* Attachment modal */}
+      <SlideUpModal visible={attachmentModal} onClose={closeAttachmentModal}>
+        <View style={styles.attachmentModalContent}>
+          <Text style={styles.attachmentModalTitle}>Add Attachment</Text>
+          
+          <Pressable
+            style={styles.attachmentOption}
+            onPress={handleSelectImages}
+            android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+          >
+            <View style={styles.attachmentOptionIcon}>
+              <ImageIcon size={22} color={COLORS.accent} strokeWidth={1.8} />
+            </View>
+            <View style={styles.attachmentOptionText}>
+              <Text style={styles.attachmentOptionLabel}>Upload Images</Text>
+              <Text style={styles.attachmentOptionSublabel}>JPEG, PNG, GIF, WebP</Text>
+            </View>
+          </Pressable>
+          
+          <Pressable
+            style={styles.attachmentOption}
+            onPress={handleSelectFiles}
+            android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+          >
+            <View style={styles.attachmentOptionIcon}>
+              <FileText size={22} color={COLORS.accent} strokeWidth={1.8} />
+            </View>
+            <View style={styles.attachmentOptionText}>
+              <Text style={styles.attachmentOptionLabel}>Upload Files</Text>
+              <Text style={styles.attachmentOptionSublabel}>PDF, TXT, DOC, etc.</Text>
+            </View>
+          </Pressable>
+          
+          <Pressable
+            style={[styles.attachmentOption, { borderBottomWidth: 0 }]}
+            onPress={handleOpenCamera}
+            android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+          >
+            <View style={styles.attachmentOptionIcon}>
+              <Camera size={22} color={COLORS.accent} strokeWidth={1.8} />
+            </View>
+            <View style={styles.attachmentOptionText}>
+              <Text style={styles.attachmentOptionLabel}>Take Photo</Text>
+              <Text style={styles.attachmentOptionSublabel}>Use camera</Text>
+            </View>
+          </Pressable>
+        </View>
+      </SlideUpModal>
+
       </View>
     </GestureDetector>
+    
+    {/* Loading overlay - OUTSIDE GestureDetector to properly block touches */}
+    {mountLoadingOverlay && (
+      <WelcomeOverlay
+        message={splashMessage}
+        accentColor={COLORS.accent}
+        visible={showLoadingOverlay}
+        onFadeComplete={() => setMountLoadingOverlay(false)}
+      />
+    )}
+    </>
   );
 }
 
@@ -818,6 +1080,48 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     zIndex: 100,
+  },
+  // Attachment modal styles
+  attachmentModalContent: {
+    paddingHorizontal: 8,
+  },
+  attachmentModalTitle: {
+    fontSize: 16,
+    fontFamily: FONTS.sansBold,
+    color: COLORS.fg,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  attachmentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  attachmentOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  attachmentOptionText: {
+    flex: 1,
+  },
+  attachmentOptionLabel: {
+    fontSize: 15,
+    fontFamily: FONTS.sans,
+    color: COLORS.fg,
+    marginBottom: 2,
+  },
+  attachmentOptionSublabel: {
+    fontSize: 12,
+    fontFamily: FONTS.sans,
+    color: COLORS.fgMuted,
   },
   thinkingModalContainer: {
     flex: 1,

@@ -93,7 +93,7 @@ function WelcomeScreen({ message, shouldAnimate }) {
   );
 }
 
-const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onStreamingThinking, onSelectText }) {
+const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onStreamingThinking, onSelectText, onOpenAttachmentModal, chatInputRef }) {
   const { 
     currentSession, 
     messages, 
@@ -120,7 +120,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     isLoadingMore,
   } = useApp();
   const flatListRef = useRef(null);
-  const chatInputRef = useRef(null);
+  // Use passed chatInputRef if available, otherwise create local ref
+  const localChatInputRef = useRef(null);
+  const inputRef = chatInputRef || localChatInputRef;
   const [streamingContent, setStreamingContent] = useState('');
   const [thinkingContent, setThinkingContent] = useState('');
   const [newMessageId, setNewMessageId] = useState(null);
@@ -534,6 +536,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   }, [inputText, currentSession, persistDraft, clearDraft, saveWelcomeDraft]);
 
   const handleSend = useCallback(async (text, attachments = []) => {
+    // DEBUG: Log attachments received
+    console.log('[handleSend] text:', text.substring(0, 50), 'attachments:', attachments.length);
+    console.log('[handleSend] attachments detail:', attachments.map(a => ({ type: a.type, name: a.name, hasBase64: !!a.base64, hasTextContent: !!a.textContent })));
+    
     hasScrolledInitial.current = true;
     initialScrollDone.current = true;
 
@@ -578,8 +584,12 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       height: a.height,
       // Store URI for display, but not base64 (too large for DB)
       uri: a.uri,
+      // Include textContent for text files so AI can read them
+      textContent: a.textContent,
     }));
     
+    // DEBUG: Log attachmentMeta
+    console.log('[handleSend] attachmentMeta:', attachmentMeta.length, attachmentMeta.map(a => ({ type: a.type, name: a.name })));
     // For new session from welcome screen, pass session directly to appendMessage
     if (isNewSession) {
       await appendMessage('user', text, { 
@@ -1265,13 +1275,14 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       <ReanimatedModule.View style={[styles.inputContainer, inputAnimatedStyle]}>
         <View style={styles.inputContainer2}>
           <ChatInput
-            ref={chatInputRef}
+            ref={inputRef}
             onSend={handleSend}
             isStreaming={isStreaming}
             onStop={handleStop}
             placeholder={!currentSession && messages.length === 0 ? 'How can I help you today?' : 'Reply...'}
             value={inputText}
             onChangeText={setInputText}
+            onOpenAttachmentModal={onOpenAttachmentModal}
           />
         </View>
       </ReanimatedModule.View>

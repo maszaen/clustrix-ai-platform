@@ -1,23 +1,25 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Modal, Pressable as RNPressable, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable as RNPressable } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info, TextSelect } from 'lucide-react-native';
+import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
+import ContextMenu from './ContextMenu';
 
-// Simple long press wrapper - ZERO feedback during hold
-// Defined outside component to prevent recreation on each render
+// Simple long press wrapper - uses gesture handler Pressable
+// No visual feedback, allows keyboard dismiss to work properly
 const LongPressWrapper = memo(({ children, onLongPress, disabled, style }) => {
   return (
-    <TouchableWithoutFeedback
+    <Pressable
       onLongPress={disabled ? undefined : onLongPress}
       delayLongPress={200}
+      style={style}
     >
-      <View style={style}>{children}</View>
-    </TouchableWithoutFeedback>
+      {children}
+    </Pressable>
   );
 });
 
@@ -328,48 +330,11 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
   // Get raw content for selection (without thinking tags for AI)
   const rawContent = isUser ? message.content : (textContent.trim() || message.content || '');
 
-  // Context menu component
-  const ContextMenu = () => (
-    <Modal
-      visible={contextMenuVisible}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setContextMenuVisible(false)}
-    >
-      <RNPressable 
-        style={styles.contextMenuOverlay} 
-        onPress={() => setContextMenuVisible(false)}
-      >
-        <View 
-          style={[
-            styles.contextMenu,
-            { 
-              top: Math.min(contextMenuPosition.y - 10, 500),
-              left: Math.min(Math.max(contextMenuPosition.x - 80, 16), 200),
-            }
-          ]}
-        >
-          <RNPressable 
-            style={styles.contextMenuItem}
-            onPress={handleCopy}
-            android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
-          >
-            <Copy size={18} color={COLORS.fg} />
-            <Text style={styles.contextMenuText}>Copy</Text>
-          </RNPressable>
-          <View style={styles.contextMenuDivider} />
-          <RNPressable 
-            style={styles.contextMenuItem}
-            onPress={openSelectText}
-            android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
-          >
-            <TextSelect size={18} color={COLORS.fg} />
-            <Text style={styles.contextMenuText}>Select text</Text>
-          </RNPressable>
-        </View>
-      </RNPressable>
-    </Modal>
-  );
+  // Context menu options
+  const contextMenuOptions = useMemo(() => [
+    { label: 'Copy', icon: 'copy-outline', onPress: handleCopy },
+    { label: 'Select text', icon: 'text-outline', onPress: openSelectText },
+  ], [handleCopy, openSelectText]);
 
   if (isUser) {
     return (
@@ -382,7 +347,12 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
             <Text style={styles.userText}>{message.content}</Text>
           </LongPressWrapper>
         </Animated.View>
-        <ContextMenu />
+        <ContextMenu 
+          visible={contextMenuVisible}
+          position={contextMenuPosition}
+          options={contextMenuOptions}
+          onClose={() => setContextMenuVisible(false)}
+        />
       </>
     );
   }
@@ -489,7 +459,12 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
           </Animated.View>
         )}
       </Animated.View>
-      <ContextMenu />
+      <ContextMenu 
+        visible={contextMenuVisible}
+        position={contextMenuPosition}
+        options={contextMenuOptions}
+        onClose={() => setContextMenuVisible(false)}
+      />
     </>
   );
 }
@@ -562,42 +537,6 @@ const styles = StyleSheet.create({
     color: COLORS.fgMuted,
     fontSize: 14,
     fontFamily: FONTS.displayItalic,
-  },
-  // Context menu styles
-  contextMenuOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  contextMenu: {
-    position: 'absolute',
-    backgroundColor: COLORS.bgSecondary,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    minWidth: 160,
-    overflow: 'hidden',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  contextMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  contextMenuText: {
-    color: COLORS.fg,
-    fontSize: 15,
-    fontFamily: FONTS.sans,
-  },
-  contextMenuDivider: {
-    height: 1,
-    backgroundColor: COLORS.borderLight,
-    marginHorizontal: 12,
   },
   // User bubble styles
   userBubble: {

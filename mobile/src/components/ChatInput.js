@@ -10,13 +10,15 @@ import AttachmentPreview from './AttachmentPreview';
 
 import { useEffect } from 'react';
 
-function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything', value = '', onChangeText, onOpenAttachmentModal }, ref) {
+function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything', value = '', onChangeText, onOpenAttachmentModal, onAttachmentsChange, onInputHeightChange }, ref) {
   const [text, setText] = useState(value || '');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [attachments, setAttachments] = useState([]);
+  const [inputHeight, setInputHeight] = useState(0);
   const inputRef = useRef(null);
   const insets = useSafeAreaInsets();
   const attachmentIdRef = useRef(0);
+  const baseInputHeight = useRef(0); // Store initial single-line height
 
   // Track keyboard visibility
   useEffect(() => {
@@ -34,7 +36,19 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
     clearAttachments: () => setAttachments([]),
     addAttachments: (newAttachments) => setAttachments(prev => [...prev, ...newAttachments]),
     getAttachmentIdRef: () => attachmentIdRef,
-  }));
+    getAttachmentCount: () => attachments.length,
+  }), [attachments.length]);
+
+  // Notify parent when attachments change
+  useEffect(() => {
+    onAttachmentsChange?.(attachments.length);
+  }, [attachments.length, onAttachmentsChange]);
+
+  // Notify parent when input height changes (extra height from multiline)
+  useEffect(() => {
+    const extraHeight = baseInputHeight.current > 0 ? Math.max(0, inputHeight - baseInputHeight.current) : 0;
+    onInputHeightChange?.(extraHeight);
+  }, [inputHeight, onInputHeightChange]);
 
   // Sync external value changes (used for draft restore)
   useEffect(() => {
@@ -95,6 +109,14 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
             placeholderTextColor={COLORS.fgMuted}
             multiline
             maxLength={10000}
+            onContentSizeChange={(e) => {
+              const height = e.nativeEvent.contentSize.height;
+              // Store base height on first measurement
+              if (baseInputHeight.current === 0 && height > 0) {
+                baseInputHeight.current = height;
+              }
+              setInputHeight(height);
+            }}
             onPressIn={() => {
               if (!keyboardVisible) {
                 inputRef.current?.blur();

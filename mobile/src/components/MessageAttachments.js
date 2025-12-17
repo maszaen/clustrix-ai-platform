@@ -1,5 +1,6 @@
 import { memo, useMemo } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, Dimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Image, Dimensions, Pressable } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { FileText, File, FileImage, FileVideo, FileAudio, FileCode, FileSpreadsheet, FileArchive } from 'lucide-react-native';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
@@ -136,22 +137,24 @@ function MessageAttachments({ attachments = [], maxWidth = MAX_BUBBLE_WIDTH }) {
             ))}
           </View>
         ) : (
-          // 3+ images: horizontal scroll
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.imagesScroll}
-            contentContainerStyle={styles.imagesScrollContent}
-          >
-            {images.map((img, idx) => (
-              <Image
-                key={idx}
-                source={{ uri: img.uri }}
-                style={[styles.image, { width: imageDims.width, height: imageDims.height }]}
-                resizeMode="cover"
-              />
-            ))}
-          </ScrollView>
+          // 3+ images: horizontal scroll - wrap in View with fixed height
+          <View style={{ height: imageDims.height + 6, overflow: 'hidden' }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.imagesScroll}
+              contentContainerStyle={styles.imagesScrollContent}
+            >
+              {images.map((img, idx) => (
+                <Image
+                  key={idx}
+                  source={{ uri: img.uri }}
+                  style={[styles.image, { width: imageDims.width, height: imageDims.height }]}
+                  resizeMode="cover"
+                />
+              ))}
+            </ScrollView>
+          </View>
         )
       )}
     </View>
@@ -163,7 +166,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'flex-end',
     alignSelf: 'flex-end',
-    maxWidth: '85%',
+    maxWidth: '100%',
     marginBottom: 6,
   },
   // Files container
@@ -172,7 +175,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    marginBottom: 6,
+    marginBottom: 0,
     gap: 10,
     flexDirection: 'column',
     minWidth: '85%', // Ensure file names have space to display
@@ -191,10 +194,13 @@ const styles = StyleSheet.create({
   // Images
   imagesRow: {
     flexDirection: 'row',
+    marginTop: 6,
     borderRadius: 12,
     overflow: 'hidden',
   },
   imagesScroll: {
+    marginTop: 6,
+
     maxWidth: SCREEN_WIDTH - 32,
   },
   imagesScrollContent: {
@@ -202,6 +208,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   image: {
+    
     borderRadius: 12,
     backgroundColor: COLORS.inputBg,
   },

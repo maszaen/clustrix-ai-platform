@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable as RNPressable, Keyboard, Easing, Platform } from 'react-native';
-import { Gesture, GestureDetector, Pressable } from 'react-native-gesture-handler';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Keyboard, Easing } from 'react-native';
+import { Pressable, ScrollView as GHScrollView } from 'react-native-gesture-handler';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
@@ -761,31 +761,27 @@ const markdownStyles = {
   // Table styles - wrapped in horizontal ScrollView via custom rule
   table: { 
     borderWidth: 1, 
-    borderColor: COLORS.borderLight, 
     borderRadius: 10, 
-    backgroundColor: COLORS.bgSecondary,
     overflow: 'hidden',
     minWidth: '100%',
   },
-  thead: {
-    backgroundColor: COLORS.inputBg,
-  },
   tr: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
+    
+  },
+  thead: {
+    borderBottomWidth: 0.5,
     borderBottomColor: COLORS.borderLight,
   },
   // Cell container styles - fixed width for alignment
   thCell: {
     width: 150,
-    borderRightWidth: 1,
-    borderRightColor: COLORS.borderLight,
-    backgroundColor: COLORS.inputBg,
+    
   },
   tdCell: {
     width: 150,
-    borderRightWidth: 1,
-    borderRightColor: COLORS.borderLight,
+    borderTopWidth: 0.3,
+    borderTopColor: COLORS.borderLight,
   },
   // Text styles for cells
   th: { 
@@ -811,32 +807,22 @@ const markdownStyles = {
 };
 
 // Horizontal scroll wrapper that blocks sidebar pan gesture
-// Uses GestureDetector with pan gesture that has smaller activeOffset than sidebar
-const HorizontalScrollWrapper = ({ children, style, showIndicator = false }) => {
-  // Pan gesture with very small activeOffset to "win" over sidebar gesture
-  // Sidebar uses activeOffsetX([-10, 10]), we use [-5, 5] to activate first
-  const panGesture = Gesture.Pan()
-    .activeOffsetX([-5, 5])
-    .failOffsetY([-10, 10])
-    .onStart(() => {})
-    .onUpdate(() => {})
-    .onEnd(() => {});
-
-  return (
-    <GestureDetector gesture={panGesture}>
-      <View style={style}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={showIndicator}
-          nestedScrollEnabled={true}
-          scrollEventThrottle={16}
-        >
-          {children}
-        </ScrollView>
-      </View>
-    </GestureDetector>
-  );
-};
+// Uses same technique as AttachmentPreview - stopPropagation + responder capture
+const HorizontalScrollWrapper = ({ children, style, showIndicator = false }) => (
+  <View style={style}>
+    <GHScrollView 
+      horizontal 
+      showsHorizontalScrollIndicator={showIndicator}
+      nestedScrollEnabled={true}
+      scrollEventThrottle={16}
+      onTouchStart={(e) => e.stopPropagation()}
+      onMoveShouldSetResponder={() => true}
+      onMoveShouldSetResponderCapture={() => true}
+    >
+      {children}
+    </GHScrollView>
+  </View>
+);
 
 // Markdown rules for code blocks and tables
 const markdownRules = {
@@ -894,6 +880,9 @@ const markdownRules = {
       <Text style={markdownStyles.td}>{children}</Text>
     </View>
   ),
+  // Handle <br> tags as newlines
+  hardbreak: () => <Text>{'\n'}</Text>,
+  softbreak: () => <Text>{'\n'}</Text>,
 };
 
 // Export memoized component

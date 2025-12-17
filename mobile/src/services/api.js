@@ -520,7 +520,7 @@ function createThrottledChunkHandler(onChunk, interval = 500) {
  * Stream chat - main entry point
  * Throttles chunk delivery to frontend every 500ms for smoother rendering
  */
-export async function streamChat({ messages, model, provider, baseUrl, apiKey, onChunk, onThink, onDone, onError }) {
+export async function streamChat({ messages, model, provider, baseUrl, apiKey, onChunk, onThink, onDone, onError, signal }) {
   const providerLower = (provider || '').toLowerCase();
   const base = baseUrl || DEFAULT_PROVIDERS[providerLower]?.baseUrl || DEFAULT_PROVIDERS.openai.baseUrl;
   
@@ -535,18 +535,18 @@ export async function streamChat({ messages, model, provider, baseUrl, apiKey, o
   
   try {
     if (providerLower === 'google' || providerLower === 'gemini') {
-      return streamGeminiChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError });
+      return streamGeminiChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError, signal });
     }
     
     if (providerLower === 'anthropic') {
-      return streamAnthropicChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError });
+      return streamAnthropicChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError, signal });
     }
     
     if (providerLower === 'mistral') {
-      return streamMistralChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError });
+      return streamMistralChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError, signal });
     }
     
-    return streamOpenAIChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError });
+    return streamOpenAIChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError, signal });
   } catch (error) {
     flushChunks(); // Flush on error too
     onError?.(error.message);
@@ -576,9 +576,16 @@ function extractXhrError(xhr) {
  * OpenAI streaming with XMLHttpRequest for real-time chunks
  * Supports native reasoning_content for o1/o3 models
  */
-function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError }) {
+function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError, signal }) {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
+    if (signal) {
+      if (signal.aborted) return resolve();
+      signal.addEventListener('abort', () => {
+        xhr.abort();
+        resolve();
+      });
+    }
     xhr.open('POST', `${baseUrl}/chat/completions`);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.setRequestHeader('Authorization', `Bearer ${apiKey}`);
@@ -673,7 +680,7 @@ function streamOpenAIChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
  * - Strict message validation (no empty assistant messages)
  * - Native Mistral reasoning support
  */
-function streamMistralChunked({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError }) {
+function streamMistralChunked({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError, signal }) {
   return new Promise((resolve) => {
     const { messages: formatted, system } = formatMessagesMistral(messages);
     
@@ -683,6 +690,13 @@ function streamMistralChunked({ messages, model, baseUrl, apiKey, onChunk, onThi
       : formatted;
     
     const xhr = new XMLHttpRequest();
+    if (signal) {
+      if (signal.aborted) return resolve();
+      signal.addEventListener('abort', () => {
+        xhr.abort();
+        resolve();
+      });
+    }
     xhr.open('POST', `${baseUrl}/chat/completions`);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.setRequestHeader('Authorization', `Bearer ${apiKey}`);
@@ -760,7 +774,7 @@ function streamMistralChunked({ messages, model, baseUrl, apiKey, onChunk, onThi
 /**
  * Anthropic streaming with XMLHttpRequest
  */
-function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError }) {
+function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError, signal }) {
   return new Promise((resolve) => {
     const { messages: formatted, system } = formatMessagesAnthropic(messages);
     
@@ -780,6 +794,13 @@ function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onT
     }
     
     const xhr = new XMLHttpRequest();
+    if (signal) {
+      if (signal.aborted) return resolve();
+      signal.addEventListener('abort', () => {
+        xhr.abort();
+        resolve();
+      });
+    }
     xhr.open('POST', `${baseUrl}/messages`);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.setRequestHeader('x-api-key', apiKey);
@@ -859,9 +880,10 @@ function streamAnthropicChunked({ messages, model, baseUrl, apiKey, onChunk, onT
  * Gemini streaming with XMLHttpRequest and alt=sse
  * Supports native thinking (thought: true) for Gemini 2.5 Pro / 2.0 Flash Thinking
  */
-function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError }) {
+function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError, signal }) {
   return new Promise((resolve) => {
     const { contents, systemInstruction } = formatMessagesGemini(messages);
+    
     const url = `${baseUrl}/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`;
     
     // Check if model supports native thinking
@@ -874,7 +896,7 @@ function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
     };
     
     // Enable thinking for supported models
-    if (isThinkingModel) {
+    if (isThinkingModel) { // isThinkingModel depends on lines inserted in previous steps/file context
       body.generationConfig.thinkingConfig = {
         thinkingBudget: modelLower.includes('2.5-pro') ? 16384 : 8192,
         includeThoughts: true
@@ -886,6 +908,13 @@ function streamGeminiChunked({ messages, model, baseUrl, apiKey, onChunk, onThin
     }
     
     const xhr = new XMLHttpRequest();
+    if (signal) {
+      if (signal.aborted) return resolve();
+      signal.addEventListener('abort', () => {
+        xhr.abort();
+        resolve();
+      });
+    }
     xhr.open('POST', url);
     xhr.setRequestHeader('Content-Type', 'application/json');
     

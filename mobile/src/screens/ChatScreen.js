@@ -129,6 +129,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const [streamingMessageId, setStreamingMessageId] = useState(null); // Stable ID for streaming message to prevent blink
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [attachmentCount, setAttachmentCount] = useState(0); // Track attachment count for layout adjustments
+  const [inputExtraHeight, setInputExtraHeight] = useState(0); // Track multiline input expansion
   // Pagination is now handled by context (hasMoreMessages, loadMoreMessages, isLoadingMore)
   const loadingTimeoutRef = useRef(null);
   const [inputText, setInputText] = useState('');
@@ -1116,14 +1118,16 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
 
   // Footer component for bottom spacing (appears at BOTTOM)
   // Simpler approach: fixed size during stream, conditional removal based on visibility
+  const ATTACHMENT_EXTRA_HEIGHT = 120; // Extra space when attachments are shown
   const ListFooter = useCallback(() => {
+    const dynamicOffset = (attachmentCount > 0 ? ATTACHMENT_EXTRA_HEIGHT : 0) + inputExtraHeight;
     // Show spacer during streaming OR if stream ended but user still near bottom
     if (showSpacer) {
-      return <View style={{ height: SPACER_HEIGHT }} />;
+      return <View style={{ height: SPACER_HEIGHT + dynamicOffset }} />;
     }
     // Default minimal footer for keyboard handling
-    return <View style={{ height: Platform.OS === 'android' ? keyboardHeight + 75 : 85 }} />;
-  }, [showSpacer, keyboardHeight]);
+    return <View style={{ height: (Platform.OS === 'android' ? keyboardHeight + 75 : 85) + dynamicOffset }} />;
+  }, [showSpacer, keyboardHeight, attachmentCount, inputExtraHeight]);
 
   const onItemLayout = useCallback((index, height) => {
   itemHeights.current[index] = height;
@@ -1239,7 +1243,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         <Animated.View
           pointerEvents={scrollButtonVisible ? 'auto' : 'none'}
           style={[styles.scrollToBottomBtn, {
-            bottom: 95,
+            bottom: 85 + (attachmentCount > 0 ? ATTACHMENT_EXTRA_HEIGHT : 0) + inputExtraHeight,
             opacity: scrollBtnOpacity,
           }]}
         >
@@ -1283,6 +1287,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
             value={inputText}
             onChangeText={setInputText}
             onOpenAttachmentModal={onOpenAttachmentModal}
+            onAttachmentsChange={setAttachmentCount}
+            onInputHeightChange={setInputExtraHeight}
           />
         </View>
       </ReanimatedModule.View>

@@ -130,9 +130,9 @@ function AttachmentPreview({ attachments = [], onRemove }) {
   );
 }
 
-const IMAGE_HEIGHT = 80;
+const IMAGE_HEIGHT = 100;
 const IMAGE_WIDTH = Math.round(IMAGE_HEIGHT * (4/3)); // 4:3 aspect
-const FILE_SIZE = 80;
+const FILE_SIZE = 100;
 
 const styles = StyleSheet.create({
   container: {

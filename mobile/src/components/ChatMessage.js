@@ -460,7 +460,7 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
           styles.userContainer,
           { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
         ]}>
-          {/* Attachments - OUTSIDE the bubble, rendered first (above) */}
+          {/* Attachments */}
           {hasAttachments && (
             <MessageAttachments attachments={attachments} />
           )}
@@ -600,7 +600,7 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
 const styles = StyleSheet.create({
   userContainer: {
     flexDirection: 'column',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     marginVertical: 6,
     paddingHorizontal: 16,
   },

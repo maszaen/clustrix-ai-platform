@@ -275,6 +275,11 @@ export function AppProvider({ children }) {
 
     await addMessage(session.id, role, content, metadata, messageIndex, createdAt);
     const newMsg = { role, content, message_index: messageIndex, created_at: createdAt, ...metadata };
+    
+    // DEBUG: Log what's being added to messages state
+    console.log('[appendMessage] role:', role, 'attachments in metadata:', metadata.attachments?.length, metadata.attachments?.map(a => a.name));
+    console.log('[appendMessage] newMsg.attachments:', newMsg.attachments?.length, newMsg.attachments?.map(a => a.name));
+    
     setMessages(prev => [...prev, newMsg]);
 
     // Bump the tracker so subsequent messages always use a fresh index

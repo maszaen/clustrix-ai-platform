@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable, Keyboard, Easing, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView, Pressable, Keyboard, Easing } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
@@ -7,6 +7,7 @@ import { FONTS } from '../constants/fonts';
 import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import ContextMenu from './ContextMenu';
+import MessageAttachments from './MessageAttachments';
 
 // Custom ripple that follows touch position exactly
 const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser }) => {
@@ -64,7 +65,7 @@ const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser 
       style={[style, { overflow: 'hidden' }]}
     >
       {/* Wrap children so ALL touches pass through to Pressable */}
-      <View pointerEvents="none" style={{ flex: 1 }}>
+      <View pointerEvents="none">
         {children}
       </View>
       {ripples.map(ripple => (
@@ -448,6 +449,10 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
     // Check for attachments
     const attachments = message.attachments || [];
     const hasAttachments = attachments.length > 0;
+    const hasContent = message.content && message.content.trim();
+    
+    // DEBUG: Log what ChatMessage receives
+    console.log('[ChatMessage] isUser, message.attachments:', message.attachments?.length, message.attachments?.map(a => a.name));
     
     return (
       <>
@@ -455,24 +460,17 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
           styles.userContainer,
           { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
         ]}>
-          <LongPressWrapper onLongPress={handleLongPress} style={styles.userBubble} isUser={true}>
-            {/* Render image attachments */}
-            {hasAttachments && (
-              <View style={styles.attachmentContainer}>
-                {attachments.filter(a => a.type === 'image').map((attachment, idx) => (
-                  <Image
-                    key={idx}
-                    source={{ uri: attachment.uri }}
-                    style={styles.attachmentImage}
-                    resizeMode="cover"
-                  />
-                ))}
-              </View>
-            )}
-            {message.content ? (
+          {/* Attachments - OUTSIDE the bubble, rendered first (above) */}
+          {hasAttachments && (
+            <MessageAttachments attachments={attachments} />
+          )}
+          
+          {/* Text bubble - only if there's text content */}
+          {hasContent && (
+            <LongPressWrapper onLongPress={handleLongPress} style={styles.userBubble} isUser={true}>
               <Text style={styles.userText}>{message.content}</Text>
-            ) : null}
-          </LongPressWrapper>
+            </LongPressWrapper>
+          )}
         </Animated.View>
         <ContextMenu 
           visible={contextMenuVisible}
@@ -489,24 +487,24 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
   return (
     <>
       <Animated.View style={styles.aiContainer}>
+        {hasThinking && (
+          <View style={{paddingHorizontal: 16}}>
+            <TouchableOpacity 
+              style={styles.thinkToggle} 
+              onPress={() => onShowThinking?.(thinkingContent)}
+              activeOpacity={0.7}
+            >
+              <PanelBottomOpen size={13} color={COLORS.fgMuted} />
+              <Text style={styles.thinkToggleText}>{getThinkingText()}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <LongPressWrapper 
           onLongPress={handleLongPress} 
           disabled={message.isStreaming}
           style={styles.aiMessagePressable}
           isUser={false}
         >
-          {hasThinking && (
-            <View style={{paddingHorizontal: 16}}>
-              <TouchableOpacity 
-                style={styles.thinkToggle} 
-                onPress={() => onShowThinking?.(thinkingContent)}
-                activeOpacity={0.7}
-              >
-                <PanelBottomOpen size={13} color={COLORS.fgMuted} />
-                <Text style={styles.thinkToggleText}>{getThinkingText()}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
           
           {isLoading ? (
             <View style={{paddingHorizontal: 16}}>
@@ -601,8 +599,8 @@ export default function ChatMessage({ message, isUser, isNew, onShowThinking, on
 
 const styles = StyleSheet.create({
   userContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
     marginVertical: 6,
     paddingHorizontal: 16,
   },
@@ -610,7 +608,10 @@ const styles = StyleSheet.create({
     color: COLORS.fg,
     fontSize: 15,
     lineHeight: 21,
+
     fontFamily: FONTS.sans,
+    flexShrink: 1,
+
   },
   aiContainer: {
     marginVertical: 6,
@@ -669,25 +670,13 @@ const styles = StyleSheet.create({
   // User bubble styles
   userBubble: {
     maxWidth: '85%',
+    alignSelf: 'flex-end',
     backgroundColor: COLORS.primaryLight,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 18,
     marginBottom: 4,
     overflow: 'hidden',
-  },
-  // Attachment styles
-  attachmentContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
-  },
-  attachmentImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 12,
-    backgroundColor: COLORS.inputBg,
   },
 });
 

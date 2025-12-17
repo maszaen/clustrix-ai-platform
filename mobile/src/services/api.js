@@ -132,7 +132,7 @@ export const DEFAULT_PROVIDERS = {
 
 /**
  * Format messages for OpenAI-compatible endpoints
- * Supports vision with base64 images in data URL format
+ * Supports vision with base64 images and file text content
  */
 function formatMessagesOpenAI(messages) {
   return messages
@@ -141,33 +141,71 @@ function formatMessagesOpenAI(messages) {
       return m.content && m.content.trim().length > 0;
     })
     .map(m => {
-      // Check if message has attachments with images
+      // Check if message has attachments
       const images = m.attachments?.filter(a => a.type === 'image' && a.base64) || [];
+      const readableFiles = m.attachments?.filter(a => a.type === 'file' && a.textContent) || [];
+      const documents = m.attachments?.filter(a => a.type === 'file' && a.base64 && !a.textContent) || [];
+      const unreadableFiles = m.attachments?.filter(a => a.type === 'file' && !a.textContent && !a.base64) || [];
       
-      if (images.length > 0 && m.role === 'user') {
-        // Multi-modal content format for vision
-        const content = [];
+      const hasAttachments = images.length > 0 || readableFiles.length > 0 || documents.length > 0 || unreadableFiles.length > 0;
+      
+      if (hasAttachments && m.role === 'user') {
+        // Build text content with file contents
+        let textParts = [];
         
-        // Add images first
-        for (const img of images) {
-          content.push({
-            type: 'image_url',
-            image_url: {
-              url: `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}`,
-              detail: 'auto'
-            }
-          });
+        // Add readable file contents first
+        for (const file of readableFiles) {
+          textParts.push(`[File: ${file.name}]\n${file.textContent}\n[End File]`);
         }
         
-        // Add text if present
+        // Mention unreadable binary files
+        for (const file of unreadableFiles) {
+          textParts.push(`[Attached file: ${file.name} (${file.mimeType || 'binary'}) - Content cannot be read directly]`);
+        }
+        
+        // Add user text
         if (m.content?.trim()) {
-          content.push({
-            type: 'text',
-            text: m.content
-          });
+          textParts.push(m.content);
         }
         
-        return { role: m.role, content };
+        const fullText = textParts.join('\n\n');
+        
+        // If has images or documents, use multi-modal format
+        if (images.length > 0 || documents.length > 0) {
+          const content = [];
+          
+          // Add images first
+          for (const img of images) {
+            content.push({
+              type: 'image_url',
+              image_url: {
+                url: `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}`,
+                detail: 'auto'
+              }
+            });
+          }
+          
+          // Add PDF/documents as images (OpenAI can process PDFs via vision)
+          for (const doc of documents) {
+            content.push({
+              type: 'image_url',
+              image_url: {
+                url: `data:${doc.mimeType || 'application/pdf'};base64,${doc.base64}`,
+                detail: 'auto'
+              }
+            });
+          }
+          
+          // Add text
+          if (fullText.trim()) {
+            content.push({ type: 'text', text: fullText });
+          }
+          
+          return { role: m.role, content };
+        }
+        
+        // Text only (with file contents)
+        return { role: m.role, content: fullText };
       }
       
       return { role: m.role, content: m.content };
@@ -190,10 +228,28 @@ function formatMessagesMistral(messages) {
         formatted.push({ role: m.role, content: m.content });
       }
     } else {
-      // Check for image attachments
+      // Check for attachments
       const images = m.attachments?.filter(a => a.type === 'image' && a.base64) || [];
+      const readableFiles = m.attachments?.filter(a => a.type === 'file' && a.textContent) || [];
+      const documents = m.attachments?.filter(a => a.type === 'file' && a.base64 && !a.textContent) || [];
+      const unreadableFiles = m.attachments?.filter(a => a.type === 'file' && !a.textContent && !a.base64) || [];
       
-      if (images.length > 0) {
+      // Build text with file contents
+      let textParts = [];
+      for (const file of readableFiles) {
+        textParts.push(`[File: ${file.name}]\n${file.textContent}\n[End File]`);
+      }
+      for (const file of unreadableFiles) {
+        textParts.push(`[Attached file: ${file.name} (${file.mimeType || 'binary'}) - Content cannot be read directly]`);
+      }
+      if (m.content?.trim()) {
+        textParts.push(m.content);
+      }
+      const fullText = textParts.join('\n\n');
+      
+      const hasMultiModal = images.length > 0 || documents.length > 0;
+      
+      if (hasMultiModal) {
         const content = [];
         
         for (const img of images) {
@@ -205,14 +261,23 @@ function formatMessagesMistral(messages) {
           });
         }
         
-        if (m.content?.trim()) {
+        // Add documents as image_url (Mistral vision can process some doc types)
+        for (const doc of documents) {
           content.push({
-            type: 'text',
-            text: m.content
+            type: 'image_url',
+            image_url: {
+              url: `data:${doc.mimeType || 'application/pdf'};base64,${doc.base64}`
+            }
           });
         }
         
+        if (fullText.trim()) {
+          content.push({ type: 'text', text: fullText });
+        }
+        
         formatted.push({ role: m.role, content });
+      } else if (fullText.trim()) {
+        formatted.push({ role: m.role, content: fullText });
       } else {
         formatted.push({ role: m.role, content: m.content });
       }
@@ -238,11 +303,41 @@ function formatMessagesAnthropic(messages) {
         formatted.push({ role: m.role, content: m.content });
       }
     } else {
-      // Check for image attachments
+      // Check for attachments
       const images = m.attachments?.filter(a => a.type === 'image' && a.base64) || [];
+      const readableFiles = m.attachments?.filter(a => a.type === 'file' && a.textContent) || [];
+      const documents = m.attachments?.filter(a => a.type === 'file' && a.base64 && !a.textContent) || [];
+      const unreadableFiles = m.attachments?.filter(a => a.type === 'file' && !a.textContent && !a.base64) || [];
       
-      if (images.length > 0) {
+      // Build text with file contents
+      let textParts = [];
+      for (const file of readableFiles) {
+        textParts.push(`[File: ${file.name}]\n${file.textContent}\n[End File]`);
+      }
+      for (const file of unreadableFiles) {
+        textParts.push(`[Attached file: ${file.name} (${file.mimeType || 'binary'}) - Content cannot be read directly]`);
+      }
+      if (m.content?.trim()) {
+        textParts.push(m.content);
+      }
+      const fullText = textParts.join('\n\n');
+      
+      const hasMultiModal = images.length > 0 || documents.length > 0;
+      
+      if (hasMultiModal) {
         const content = [];
+        
+        // Add documents first (Anthropic native document support)
+        for (const doc of documents) {
+          content.push({
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: doc.mimeType || 'application/pdf',
+              data: doc.base64
+            }
+          });
+        }
         
         // Add images as content blocks
         for (const img of images) {
@@ -257,14 +352,13 @@ function formatMessagesAnthropic(messages) {
         }
         
         // Add text if present
-        if (m.content?.trim()) {
-          content.push({
-            type: 'text',
-            text: m.content
-          });
+        if (fullText.trim()) {
+          content.push({ type: 'text', text: fullText });
         }
         
         formatted.push({ role: m.role, content });
+      } else if (fullText.trim()) {
+        formatted.push({ role: m.role, content: fullText });
       } else {
         formatted.push({ role: m.role, content: m.content });
       }
@@ -310,11 +404,39 @@ function formatMessagesGemini(messages) {
         });
       }
     } else {
-      // Check for image attachments
+      // Check for attachments
       const images = m.attachments?.filter(a => a.type === 'image' && a.base64) || [];
+      const readableFiles = m.attachments?.filter(a => a.type === 'file' && a.textContent) || [];
+      const documents = m.attachments?.filter(a => a.type === 'file' && a.base64 && !a.textContent) || [];
+      const unreadableFiles = m.attachments?.filter(a => a.type === 'file' && !a.textContent && !a.base64) || [];
       
-      if (images.length > 0) {
+      // Build text with file contents
+      let textParts = [];
+      for (const file of readableFiles) {
+        textParts.push(`[File: ${file.name}]\n${file.textContent}\n[End File]`);
+      }
+      for (const file of unreadableFiles) {
+        textParts.push(`[Attached file: ${file.name} (${file.mimeType || 'binary'}) - Content cannot be read directly]`);
+      }
+      if (m.content?.trim()) {
+        textParts.push(m.content);
+      }
+      const fullText = textParts.join('\n\n');
+      
+      const hasMultiModal = images.length > 0 || documents.length > 0;
+      
+      if (hasMultiModal) {
         const parts = [];
+        
+        // Add documents as inline_data (Gemini supports PDF via inline_data)
+        for (const doc of documents) {
+          parts.push({
+            inline_data: {
+              mime_type: doc.mimeType || 'application/pdf',
+              data: doc.base64
+            }
+          });
+        }
         
         // Add images as inline_data parts
         for (const img of images) {
@@ -327,11 +449,16 @@ function formatMessagesGemini(messages) {
         }
         
         // Add text if present
-        if (m.content?.trim()) {
-          parts.push({ text: m.content });
+        if (fullText.trim()) {
+          parts.push({ text: fullText });
         }
         
         contents.push({ role: 'user', parts });
+      } else if (fullText.trim()) {
+        contents.push({
+          role: 'user',
+          parts: [{ text: fullText }]
+        });
       } else {
         contents.push({
           role: 'user',

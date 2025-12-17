@@ -526,7 +526,37 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
             // Native Markdown for all AI messages - using streamdown-rn for streaming support
             <View style={{paddingHorizontal: 16}}>
               <StreamdownRN 
-                theme="dark" 
+                theme={{
+                  colors: {
+                    background: 'transparent',
+                    foreground: COLORS.fg,
+                    muted: COLORS.fgMuted,
+                    accent: COLORS.primary,
+                    codeBackground: COLORS.inputBg,
+                    codeForeground: '#a2a9b0',
+                    border: COLORS.borderLight,
+                    link: '#D3E3FD',
+                    // Syntax highlighting
+                    syntaxDefault: '#c9d1d9',
+                    syntaxKeyword: '#ff7b72',
+                    syntaxString: '#a5d6ff',
+                    syntaxNumber: '#79c0ff',
+                    syntaxComment: '#8b949e',
+                    syntaxFunction: '#d2a8ff',
+                    syntaxClass: '#ffa657',
+                    syntaxOperator: '#ff7b72',
+                  },
+                  fonts: {
+                    regular: FONTS.ai,
+                    bold: FONTS.aiBold,  // Different font file, not CSS bold
+                    mono: FONTS.mono,
+                  },
+                  spacing: {
+                    block: 8,
+                    inline: 4,
+                    indent: 16,
+                  },
+                }}
                 isComplete={!message.isStreaming}
               >
                 {textContent || ' '}

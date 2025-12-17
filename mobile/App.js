@@ -855,7 +855,40 @@ function MainApp() {
               scrollEventThrottle={16}
               bounces={false}
             >
-              <StreamdownRN theme="dark" isComplete={true}>
+              <StreamdownRN 
+                theme={{
+                  colors: {
+                    background: 'transparent',
+                    foreground: COLORS.fgMuted,
+                    muted: COLORS.fgMuted,
+                    accent: COLORS.primary,
+                    codeBackground: 'rgba(0,0,0,0.2)',
+                    codeForeground: '#8a9199',
+                    border: COLORS.borderLight,
+                    link: '#a3c4f3',
+                    // Syntax highlighting (muted)
+                    syntaxDefault: '#8a9199',
+                    syntaxKeyword: '#c97070',
+                    syntaxString: '#8ab4d8',
+                    syntaxNumber: '#6a9fcc',
+                    syntaxComment: '#6a737d',
+                    syntaxFunction: '#b392cc',
+                    syntaxClass: '#cc9050',
+                    syntaxOperator: '#c97070',
+                  },
+                  fonts: {
+                    regular: FONTS.sans,
+                    bold: FONTS.aiBold,
+                    mono: FONTS.mono,
+                  },
+                  spacing: {
+                    block: 6,
+                    inline: 3,
+                    indent: 12,
+                  },
+                }}
+                isComplete={true}
+              >
                 {thinkingModal.content}
               </StreamdownRN>
             </ScrollView>

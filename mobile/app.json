@@ -4,7 +4,7 @@
     "slug": "clustrix-mobile",
     "owner": "zaeniahmad",
     "scheme": "clustrix",
-    "version": "3.1.15",
+    "version": "3.1.18",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",

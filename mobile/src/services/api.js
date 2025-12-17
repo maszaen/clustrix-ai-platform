@@ -132,23 +132,51 @@ export const DEFAULT_PROVIDERS = {
 
 /**
  * Format messages for OpenAI-compatible endpoints
- * Filters out assistant messages with empty content (prevents API errors)
+ * Supports vision with base64 images in data URL format
  */
 function formatMessagesOpenAI(messages) {
   return messages
     .filter(m => {
-      // Keep all non-assistant messages
       if (m.role !== 'assistant') return true;
-      // For assistant messages, require non-empty content
       return m.content && m.content.trim().length > 0;
     })
-    .map(m => ({ role: m.role, content: m.content }));
+    .map(m => {
+      // Check if message has attachments with images
+      const images = m.attachments?.filter(a => a.type === 'image' && a.base64) || [];
+      
+      if (images.length > 0 && m.role === 'user') {
+        // Multi-modal content format for vision
+        const content = [];
+        
+        // Add images first
+        for (const img of images) {
+          content.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}`,
+              detail: 'auto'
+            }
+          });
+        }
+        
+        // Add text if present
+        if (m.content?.trim()) {
+          content.push({
+            type: 'text',
+            text: m.content
+          });
+        }
+        
+        return { role: m.role, content };
+      }
+      
+      return { role: m.role, content: m.content };
+    });
 }
 
 /**
  * Format messages for Mistral native endpoint
- * - Filters empty assistant messages (Mistral is strict about this)
- * - Supports Mistral-specific message format
+ * Mistral supports vision similar to OpenAI format
  */
 function formatMessagesMistral(messages) {
   const formatted = [];
@@ -158,19 +186,46 @@ function formatMessagesMistral(messages) {
     if (m.role === 'system') {
       systemPrompt = m.content;
     } else if (m.role === 'assistant') {
-      // Mistral requires assistant messages to have content or tool_calls
       if (m.content && m.content.trim().length > 0) {
         formatted.push({ role: m.role, content: m.content });
       }
-      // Skip empty assistant messages
     } else {
-      formatted.push({ role: m.role, content: m.content });
+      // Check for image attachments
+      const images = m.attachments?.filter(a => a.type === 'image' && a.base64) || [];
+      
+      if (images.length > 0) {
+        const content = [];
+        
+        for (const img of images) {
+          content.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}`
+            }
+          });
+        }
+        
+        if (m.content?.trim()) {
+          content.push({
+            type: 'text',
+            text: m.content
+          });
+        }
+        
+        formatted.push({ role: m.role, content });
+      } else {
+        formatted.push({ role: m.role, content: m.content });
+      }
     }
   }
   
   return { messages: formatted, system: systemPrompt };
 }
 
+/**
+ * Format messages for Anthropic Claude
+ * Uses content blocks with source.type = "base64"
+ */
 function formatMessagesAnthropic(messages) {
   const formatted = [];
   let systemPrompt = null;
@@ -179,31 +234,67 @@ function formatMessagesAnthropic(messages) {
     if (m.role === 'system') {
       systemPrompt = m.content;
     } else if (m.role === 'assistant') {
-      // Filter out empty assistant messages
       if (m.content && m.content.trim().length > 0) {
         formatted.push({ role: m.role, content: m.content });
       }
     } else {
-      formatted.push({ role: m.role, content: m.content });
+      // Check for image attachments
+      const images = m.attachments?.filter(a => a.type === 'image' && a.base64) || [];
+      
+      if (images.length > 0) {
+        const content = [];
+        
+        // Add images as content blocks
+        for (const img of images) {
+          content.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: img.mimeType || 'image/jpeg',
+              data: img.base64
+            }
+          });
+        }
+        
+        // Add text if present
+        if (m.content?.trim()) {
+          content.push({
+            type: 'text',
+            text: m.content
+          });
+        }
+        
+        formatted.push({ role: m.role, content });
+      } else {
+        formatted.push({ role: m.role, content: m.content });
+      }
     }
   }
   
+  // Apply cache control to older messages
   if (formatted.length > 4) {
     for (let i = 0; i < formatted.length - 2; i++) {
-      formatted[i] = {
-        ...formatted[i],
-        content: [{
-          type: 'text',
-          text: formatted[i].content,
-          cache_control: { type: 'ephemeral' }
-        }]
-      };
+      const msg = formatted[i];
+      if (typeof msg.content === 'string') {
+        formatted[i] = {
+          ...msg,
+          content: [{
+            type: 'text',
+            text: msg.content,
+            cache_control: { type: 'ephemeral' }
+          }]
+        };
+      }
     }
   }
   
   return { messages: formatted, system: systemPrompt };
 }
 
+/**
+ * Format messages for Google Gemini
+ * Uses inline_data with mimeType and base64 data
+ */
 function formatMessagesGemini(messages) {
   const contents = [];
   let systemInstruction = null;
@@ -212,7 +303,6 @@ function formatMessagesGemini(messages) {
     if (m.role === 'system') {
       systemInstruction = m.content;
     } else if (m.role === 'assistant') {
-      // Filter out empty assistant messages
       if (m.content && m.content.trim().length > 0) {
         contents.push({
           role: 'model',
@@ -220,15 +310,40 @@ function formatMessagesGemini(messages) {
         });
       }
     } else {
-      contents.push({
-        role: 'user',
-        parts: [{ text: m.content }]
-      });
+      // Check for image attachments
+      const images = m.attachments?.filter(a => a.type === 'image' && a.base64) || [];
+      
+      if (images.length > 0) {
+        const parts = [];
+        
+        // Add images as inline_data parts
+        for (const img of images) {
+          parts.push({
+            inline_data: {
+              mime_type: img.mimeType || 'image/jpeg',
+              data: img.base64
+            }
+          });
+        }
+        
+        // Add text if present
+        if (m.content?.trim()) {
+          parts.push({ text: m.content });
+        }
+        
+        contents.push({ role: 'user', parts });
+      } else {
+        contents.push({
+          role: 'user',
+          parts: [{ text: m.content }]
+        });
+      }
     }
   }
   
   return { contents, systemInstruction };
 }
+
 
 /**
  * Create throttled chunk handler - accumulates chunks and flushes every interval

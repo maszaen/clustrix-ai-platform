@@ -11,7 +11,7 @@ import ConfirmModal from './ConfirmModal';
 import InputModal from './InputModal';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { LucideSearch, LucideArrowLeft, Pencil, Trash2, Star } from 'lucide-react-native';
+import { LucideSearch, LucideArrowLeft, Pencil, Trash2, Star, LucideX } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PENCIL } from '../constants/strings';
 
@@ -148,12 +148,14 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
                 searchInputRef.current?.blur();
                 onCollapse?.();
               }} 
+              style={[styles.xButton, { borderRadius: 40, overflow: 'hidden' }]} 
+              
               android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
             >
               <LucideArrowLeft size={23} color={COLORS.icon} />
             </Pressable>
           ) : (
-            <LucideSearch size={23} color={COLORS.icon} />
+            <LucideSearch size={23} color={COLORS.icon} style={{marginHorizontal: 11}} />
           )}
           <TextInput
             ref={searchInputRef}
@@ -171,9 +173,11 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
               onPress={() => {
                 setSearchQuery('');
               }}
+              style={[styles.xButton, { borderRadius: 40, overflow: 'hidden' }]} 
+              
               android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
             >
-              <Ionicons name="close-outline" size={23} color={COLORS.icon} />
+              <LucideX size={23} color={COLORS.icon} />
             </Pressable>
           ) : null}
         </Pressable>
@@ -181,8 +185,8 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
         <Pressable 
           // 1. Pindahkan borderRadius ke sini (style utama)
           // Pastikan styles.newChatBtn juga punya width & height yang sama biar jadi lingkaran sempurna
-          style={[styles.newChatBtn, { borderRadius: 40, overflow: 'hidden' }]} 
           onPress={onNew} 
+          style={[styles.newChatBtn, { borderRadius: 40, overflow: 'hidden' }]} 
           android_ripple={{ 
             color: 'rgba(255,255,255,0.2)', 
             // 2. Kalau mau ripplenya kepotong pas di lingkaran, set borderless: false
@@ -289,6 +293,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  xButton: {
+    width: 45,
+    height: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   newChatIcon: {
     flexShrink: 0,
     color: COLORS.fg,
@@ -300,7 +310,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 45,
-    paddingHorizontal: 14,
     backgroundColor: COLORS.inputBg,
     borderRadius: 50,
     borderWidth: 1,

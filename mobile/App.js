@@ -321,7 +321,16 @@ function MainApp() {
           }
         }
       });
-      sidebarStretch.value = withTiming(stretchTarget, config);
+      
+      // Hybrid approach: Use Spring for WIDTH animations (stretch) to fix 50fps release lag
+      // while keeping Timing for TRANSFORM animations (scrollX) for consistent snapping.
+      sidebarStretch.value = withSpring(stretchTarget, { 
+        damping: 30, 
+        stiffness: 300, 
+        mass: 0.8, 
+        velocity: e.velocityX // Pass gesture velocity for seamless handoff
+      });
+      
       currentPage.value = targetPage;
     });
 
@@ -360,7 +369,19 @@ function MainApp() {
   // State updates immediately for instant icon switch, animation follows
   useEffect(() => {
     if (!sidebarOpen) return;
-    sidebarStretch.value = withTiming(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { duration: 200, easing: Easing.out(Easing.cubic) });
+    
+    // Defer slightly (one frame) to let heavy state updates (keyboard/search) clear first
+    const timer = setTimeout(() => {
+        // Optimized Spring for auto-stretch (system driven) - softer stiffness prevents 60fps locking feels
+        sidebarStretch.value = withSpring(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { 
+          damping: 35,    // Slightly higher damping for stability
+          stiffness: 440, // Lower stiffness (softer) consumes less processing power per frame visually
+          mass: 1,
+          velocity: 400   // Initial kick to make it feel responsive immediately
+        });
+    }, 10);
+    
+    return () => clearTimeout(timer);
   }, [sidebarHasQuery, sidebarOpen, sidebarStretch]);
 
   const openPersonalization = useCallback(() => setShowPersonalization(true), []);
@@ -951,7 +972,7 @@ function MainApp() {
             android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
           >
             <View style={styles.attachmentOptionIcon}>
-              <ImageIcon size={28} color={COLORS.icon} strokeWidth={1.5} />
+              <ImageIcon size={28} color={COLORS.icon} strokeWidth={1.3} />
             </View>
             <View style={styles.attachmentOptionText}>
               <Text style={styles.attachmentOptionLabel}>Upload Images</Text>
@@ -965,7 +986,7 @@ function MainApp() {
             android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
           >
             <View style={styles.attachmentOptionIcon}>
-              <FileText size={28} color={COLORS.icon} strokeWidth={1.5} />
+              <FileText size={28} color={COLORS.icon} strokeWidth={1.3} />
             </View>
             <View style={styles.attachmentOptionText}>
               <Text style={styles.attachmentOptionLabel}>Upload Files</Text>
@@ -979,7 +1000,7 @@ function MainApp() {
             android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
           >
             <View style={styles.attachmentOptionIcon}>
-              <Camera size={28} color={COLORS.icon} strokeWidth={1.5} />
+              <Camera size={28} color={COLORS.icon} strokeWidth={1.3} />
             </View>
             <View style={styles.attachmentOptionText}>
               <Text style={styles.attachmentOptionLabel}>Take Photo</Text>
@@ -1170,7 +1191,7 @@ const styles = StyleSheet.create({
   },
   // Attachment modal styles
   attachmentModalContent: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
   },
   attachmentModalTitle: {
     fontSize: 16,
@@ -1194,6 +1215,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    marginLeft: 12,
   },
   attachmentOptionText: {
     flex: 1,

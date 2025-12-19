@@ -357,9 +357,10 @@ function MainApp() {
   }, [scrollX, sidebarStretch, setSidebarHasQuery]);
 
   // Smoothly adjust sidebar extent when search text toggles a full-width request
+  // State updates immediately for instant icon switch, animation follows
   useEffect(() => {
     if (!sidebarOpen) return;
-    sidebarStretch.value = withTiming(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { duration: 250, easing: Easing.out(Easing.cubic) });
+    sidebarStretch.value = withTiming(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { duration: 200, easing: Easing.out(Easing.cubic) });
   }, [sidebarHasQuery, sidebarOpen, sidebarStretch]);
 
   const openPersonalization = useCallback(() => setShowPersonalization(true), []);
@@ -679,6 +680,7 @@ function MainApp() {
               onContextMenuChange={setSidebarContextMenuOpen}
               isExpanded={sidebarHasQuery}
               onCollapse={() => { Keyboard.dismiss(); setSidebarHasQuery(false); }}
+              onClose={closeSidebar}
             />
             {/* Profile / Account Section */}
             <Pressable 
@@ -720,7 +722,7 @@ function MainApp() {
 
         {/* Page 2: Main Chat (100% width) */}
         <View style={[styles.mainPage, { width: SCREEN_WIDTH }]}>
-          <ChatScreen topInset={insets.top} onShowThinking={handleShowThinking} onStreamingThinking={handleStreamingThinking} onSelectText={handleSelectText} onOpenAttachmentModal={openAttachmentModal} onImagePress={(img) => setImageViewerModal({ visible: true, image: img })} chatInputRef={chatInputRef} />
+          <ChatScreen topInset={insets.top} sidebarOpen={sidebarOpen} onShowThinking={handleShowThinking} onStreamingThinking={handleStreamingThinking} onSelectText={handleSelectText} onOpenAttachmentModal={openAttachmentModal} onImagePress={(img) => setImageViewerModal({ visible: true, image: img })} chatInputRef={chatInputRef} />
 
           <LinearGradient
             colors={[COLORS.bg90, COLORS.bg90, COLORS.bg70, 'transparent']}

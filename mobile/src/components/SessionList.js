@@ -1,5 +1,8 @@
-import React, { useState, useRef, memo } from 'react';
-import { View, Text, FlatList, StyleSheet, TextInput } from 'react-native';
+import React, { useState, useRef, memo, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, TextInput, Animated, Dimensions } from 'react-native';
+import { LegendList } from '@legendapp/list';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { SvgXml } from 'react-native-svg';
@@ -12,7 +15,7 @@ import { LucideSearch, LucideArrowLeft, Pencil, Trash2, Star } from 'lucide-reac
 import { LinearGradient } from 'expo-linear-gradient';
 import { PENCIL } from '../constants/strings';
 
-function SessionItem({ session, isActive, onSelect, onLongPress, onToggleFavorite }) {
+const SessionItem = memo(function SessionItem({ session, isActive, onSelect, onLongPress, onToggleFavorite }) {
   return (
     <Pressable
       style={[styles.sessionItem, isActive && styles.sessionItemActive]}
@@ -29,13 +32,14 @@ function SessionItem({ session, isActive, onSelect, onLongPress, onToggleFavorit
       </Text>
     </Pressable>
   );
-}
+});
 
-const SessionList = memo(function SessionList({ sessions, currentSession, onSelect, onDelete, onRename, onToggleFavorite, onNew, onSearchQueryChange, onContextMenuChange, isExpanded, onCollapse }) {
+const SessionList = memo(function SessionList({ sessions, currentSession, onSelect, onDelete, onRename, onToggleFavorite, onNew, onSearchQueryChange, onContextMenuChange, isExpanded, onCollapse, onClose }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [contextMenu, setContextMenu] = useState({ visible: false, session: null, position: { x: 0, y: 0 } });
   const [confirmDelete, setConfirmDelete] = useState({ visible: false, session: null });
   const [renameModal, setRenameModal] = useState({ visible: false, session: null, name: '' });
+  const [displayCount, setDisplayCount] = useState(20); // Lazy load: start with 20 items
   const searchInputRef = useRef(null);
 
   const filteredSessions = searchQuery 
@@ -45,6 +49,35 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
   // Separate favorites and regular sessions
   const favoriteSessions = filteredSessions.filter(s => s.is_favorite);
   const regularSessions = filteredSessions.filter(s => !s.is_favorite);
+  
+  // Combined and sliced for lazy loading
+  const allSessions = useMemo(() => 
+    [...favoriteSessions, ...regularSessions], 
+    [favoriteSessions, regularSessions]
+  );
+  const displayedSessions = useMemo(() => 
+    allSessions.slice(0, displayCount), 
+    [allSessions, displayCount]
+  );
+  
+  // Load more handler
+  const handleLoadMore = useCallback(() => {
+    if (displayCount < allSessions.length) {
+      setDisplayCount(prev => Math.min(prev + 20, allSessions.length));
+    }
+  }, [displayCount, allSessions.length]);
+
+  // Handle session select - if already active, just close sidebar
+  const handleSelectSession = useCallback((session) => {
+    if (currentSession?.id === session.id) {
+      // Already active - just close sidebar, don't reload
+      onClose?.();
+    } else {
+      // New session - select and close
+      onSelect(session);
+      onClose?.();
+    }
+  }, [currentSession?.id, onSelect, onClose]);
 
   const handleLongPress = (session, event) => {
     setContextMenu({
@@ -70,7 +103,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
   };
 
   return (
-    <View style={[styles.container, { marginTop: 11 }]}>
+    <Animated.View style={[styles.container, { marginTop: 11 }]}>
       <ContextMenu
         visible={contextMenu.visible}
         position={contextMenu.position}
@@ -164,12 +197,13 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
       </View>
 
       {/* Sessions */}
-      <FlatList
-        data={[...favoriteSessions, ...regularSessions]}
+      <LegendList
+        data={displayedSessions}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => {
-          const isFirstFavorite = index === 0 && favoriteSessions.length > 0;
-          const isFirstRegular = index === favoriteSessions.length && regularSessions.length > 0 && favoriteSessions.length > 0;
+          const favCount = favoriteSessions.length;
+          const isFirstFavorite = index === 0 && favCount > 0;
+          const isFirstRegular = index === favCount && regularSessions.length > 0 && favCount > 0;
           
           return (
             <>
@@ -179,16 +213,14 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
                 </View>
               )}
               {isFirstRegular && (
-                <>
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Recent</Text>
-                  </View>
-                </>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Recent</Text>
+                </View>
               )}
               <SessionItem
                 session={item}
                 isActive={currentSession?.id === item.id}
-                onSelect={onSelect}
+                onSelect={handleSelectSession}
                 onLongPress={handleLongPress}
                 onToggleFavorite={onToggleFavorite}
               />
@@ -197,9 +229,12 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
         }}
         contentContainerStyle={styles.sessionList}
         showsVerticalScrollIndicator={false}
+        estimatedItemSize={45}
+        recycleItems={true}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            {/* <SvgXml xml={svgEmptyStateChats} size={20} color={COLORS.fgMuted}/> */}
             <Text style={styles.emptyText}>
               {searchQuery ? 'No chats found' : 'No conversations yet'}
             </Text>
@@ -218,7 +253,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
         }}
         onCancel={() => setRenameModal({ visible: false, session: null, name: '' })}
       />
-    </View>
+    </Animated.View>
   );
 });
 
@@ -282,6 +317,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   sessionItem: {
+    width: SCREEN_WIDTH,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 11,

@@ -28,6 +28,8 @@ const MID_POINT = (COLLAPSED_Y + EXPANDED_Y) / 2;
 
 // Spring config - less bouncy
 const SPRING_CONFIG = { damping: 50, stiffness: 400, mass: 1 };
+// Close config - slower and smoother
+const CLOSE_SPRING_CONFIG = { damping: 30, stiffness: 450, mass: 1 };
 
 /**
  * Reusable slide-up modal component with snap points
@@ -50,8 +52,8 @@ const SlideUpModal = forwardRef(({
     close: () => {
       'worklet'; 
       // Trigger close animation
-      translateY.value = withSpring(CLOSED_Y, SPRING_CONFIG);
-      overlayOpacity.value = withTiming(0, { duration: 120 });
+      translateY.value = withSpring(CLOSED_Y, CLOSE_SPRING_CONFIG);
+      overlayOpacity.value = withTiming(0, { duration: 300 });
       // Call onClose after animation matches the timeout in back handler
       runOnJS(handleCloseCaller)();
     },
@@ -67,7 +69,7 @@ const SlideUpModal = forwardRef(({
   const handleCloseCaller = useCallback(() => {
     setTimeout(() => {
      onClose?.();
-    }, 200);
+    }, 350);
   }, [onClose]);
 
   // Close handler (called from JS)
@@ -89,9 +91,9 @@ const SlideUpModal = forwardRef(({
     if (!visible) return;
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       // Close animation
-      translateY.value = withSpring(CLOSED_Y, SPRING_CONFIG);
-      overlayOpacity.value = withTiming(0, { duration: 120 });
-      setTimeout(handleClose, 200);
+      translateY.value = withSpring(CLOSED_Y, CLOSE_SPRING_CONFIG);
+      overlayOpacity.value = withTiming(0, { duration: 300 });
+      setTimeout(handleClose, 350);
       return true;
     });
     return () => backHandler.remove();
@@ -116,9 +118,9 @@ const SlideUpModal = forwardRef(({
 
       // Fast swipe down = close
       if (velocity > 800 || currentY > SCREEN_HEIGHT * 0.75) {
-        translateY.value = withSpring(CLOSED_Y, { ...SPRING_CONFIG, velocity });
-        overlayOpacity.value = withTiming(0, { duration: 200 });
-        runOnJS(handleClose)();
+        translateY.value = withSpring(CLOSED_Y, { ...CLOSE_SPRING_CONFIG, velocity });
+        overlayOpacity.value = withTiming(0, { duration: 300 });
+        runOnJS(handleCloseCaller)();
         return;
       }
 
@@ -144,9 +146,9 @@ const SlideUpModal = forwardRef(({
 
   // Tap gesture for overlay to close
   const tapGesture = Gesture.Tap().onEnd(() => {
-    translateY.value = withSpring(CLOSED_Y, SPRING_CONFIG);
-    overlayOpacity.value = withTiming(0, { duration: 120 });
-    runOnJS(handleClose)();
+    translateY.value = withSpring(CLOSED_Y, CLOSE_SPRING_CONFIG);
+    overlayOpacity.value = withTiming(0, { duration: 300 });
+    runOnJS(handleCloseCaller)();
   });
 
   // Pan gesture for backdrop - consume all swipes to block underlying content

@@ -205,7 +205,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   
   // Animated paddingBottom for content area (welcome screen only)
   const contentPaddingAnimatedStyle = useAnimatedStyle(() => {
-    // Skip keyboard padding when sidebar is open
+    // Skip keyboard padding when sidebar is open or animating open
     if (sidebarOpen) {
       return { paddingBottom: 85 };
     }

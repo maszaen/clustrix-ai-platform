@@ -91,7 +91,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
       />
 
       <LinearGradient
-        colors={[COLORS.bg, COLORS.bg, 'transparent']}
+        colors={[COLORS.bgv2, COLORS.bgv2, 'transparent']}
         locations={[0, 0.7, 1]}
         style={[styles.floatingHeaderSidebar, { height: 70 }]}
         pointerEvents="none"
@@ -229,6 +229,7 @@ const SIDEBAR_PADDING = 12;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: COLORS.bgv2,
   },
   headerRow: {
     flexDirection: 'row',
@@ -259,7 +260,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.inputBg,
     borderRadius: 50,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderColor: COLORS.inputBg,
     gap: 10,
   },
   searchInput: {

@@ -99,7 +99,7 @@ function WelcomeScreen({ message, shouldAnimate }) {
   );
 }
 
-const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onStreamingThinking, onSelectText, onOpenAttachmentModal, onImagePress, chatInputRef }) {
+const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false, onShowThinking, onStreamingThinking, onSelectText, onOpenAttachmentModal, onImagePress, chatInputRef }) {
   const { 
     currentSession, 
     messages, 
@@ -180,9 +180,20 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const SPACER_HEIGHT = Dimensions.get('window').height - 335; // Full device height - 145
   const SPACER_HIDE_BUFFER = 30; // Extra buffer before hiding spacer
   
+  // Dismiss chat input keyboard when sidebar opens (to avoid conflict with search bar)
+  useEffect(() => {
+    if (sidebarOpen) {
+      Keyboard.dismiss();
+    }
+  }, [sidebarOpen]);
+  
   // Smooth keyboard animation for INPUT ONLY using react-native-keyboard-controller
   const { height: keyboardAnimatedHeight } = useReanimatedKeyboardAnimation();
   const inputAnimatedStyle = useAnimatedStyle(() => {
+    // Skip animation when sidebar is open (search bar focused - don't move chat input)
+    if (sidebarOpen) {
+      return { transform: [{ translateY: 0 }] };
+    }
     // Proportional offset - reduce movement by ~10% for tighter keyboard gap
     // height.value goes from 0 (closed) to negative (open, e.g. -300)
     // This smoothly scales with keyboard height
@@ -194,6 +205,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   
   // Animated paddingBottom for content area (welcome screen only)
   const contentPaddingAnimatedStyle = useAnimatedStyle(() => {
+    // Skip keyboard padding when sidebar is open
+    if (sidebarOpen) {
+      return { paddingBottom: 85 };
+    }
     // Convert negative keyboard height to positive padding
     const paddingValue = -keyboardAnimatedHeight.value;
     return {

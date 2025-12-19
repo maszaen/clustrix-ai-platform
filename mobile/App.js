@@ -1165,7 +1165,7 @@ const styles = StyleSheet.create({
   },
   pageOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: COLORS.whiteTr,
     zIndex: 100,
   },
   // Attachment modal styles

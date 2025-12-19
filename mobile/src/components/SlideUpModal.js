@@ -214,7 +214,7 @@ const SlideUpModal = forwardRef(({
       {showBottomGradient && (
         <Reanimated.View style={[styles.bottomGradient, gradientAnimatedStyle]} pointerEvents="none">
           <LinearGradient
-            colors={['transparent', COLORS.bgSecondary]}
+            colors={['transparent', COLORS.bgSecondaryv2]}
             style={StyleSheet.absoluteFill}
           />
         </Reanimated.View>
@@ -232,14 +232,14 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: COLORS.whiteTr,
   },
   sheet: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: COLORS.bgSecondary,
+    backgroundColor: COLORS.bgSecondaryv2,
     borderTopLeftRadius: 23,
     borderTopRightRadius: 23,
     shadowColor: '#000',

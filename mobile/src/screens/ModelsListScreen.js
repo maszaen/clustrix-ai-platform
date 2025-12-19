@@ -393,7 +393,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bgSecondary },
+  container: { flex: 1, backgroundColor: COLORS.bgSecondaryv2 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

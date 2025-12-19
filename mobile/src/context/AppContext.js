@@ -284,10 +284,17 @@ export function AppProvider({ children }) {
     log('[appendMessage] role:', role, 'attachments in metadata:', metadata.attachments?.length, metadata.attachments?.map(a => a.name));
     log('[appendMessage] newMsg.attachments:', newMsg.attachments?.length, newMsg.attachments?.map(a => a.name));
     
-    setMessages(prev => [...prev, newMsg]);
+    // Only update in-memory messages when this session is still active.
+    // This prevents "ghost" messages from appearing after users navigate back to welcome.
+    if (latestSessionIdRef.current === session.id) {
+      setMessages(prev => [...prev, newMsg]);
+    }
 
-    // Bump the tracker so subsequent messages always use a fresh index
-    nextMessageIndexRef.current = Math.max(nextMessageIndexRef.current, messageIndex + 1);
+    // Bump the tracker so subsequent messages always use a fresh index.
+    // Only update for the active session to avoid desync on welcome screen.
+    if (latestSessionIdRef.current === session.id) {
+      nextMessageIndexRef.current = Math.max(nextMessageIndexRef.current, messageIndex + 1);
+    }
 
     // Update session timestamp
     await saveSession({ ...session, updated_at: Date.now() });

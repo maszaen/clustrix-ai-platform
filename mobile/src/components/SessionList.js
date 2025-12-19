@@ -199,6 +199,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
       {/* Sessions */}
       <LegendList
         data={displayedSessions}
+        extraData={currentSession}
         keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => {
           const favCount = favoriteSessions.length;
@@ -252,6 +253,14 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
           setRenameModal({ visible: false, session: null, name: '' });
         }}
         onCancel={() => setRenameModal({ visible: false, session: null, name: '' })}
+      />
+      {/* Gradient mask for edge */}
+      <LinearGradient
+        colors={['transparent', COLORS.bgv2]}
+        start={{ x: 0, y:0 }}
+        end={{ x: 0.7, y: 0 }}
+        style={[styles.edgeGradient, { width: 50 }]}
+        pointerEvents="none"
       />
     </Animated.View>
   );
@@ -325,7 +334,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   sessionItemActive: {
-    backgroundColor: COLORS.hover,
+    backgroundColor: COLORS.bgSecondary, // Lighter than bgv2 for visibility
   },
   sessionTitle: {
     flex: 1,
@@ -342,6 +351,13 @@ const styles = StyleSheet.create({
   sectionHeader: {
     paddingHorizontal: SIDEBAR_PADDING + 5,
     paddingVertical: 8,
+  },
+  edgeGradient: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: -3,
+    zIndex: 1,
   },
   sectionTitle: {
     color: COLORS.fgMuted,

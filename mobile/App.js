@@ -308,16 +308,20 @@ function MainApp() {
       const stretchTarget = 0;
 
       // Animate to target - fast, snappy, no bounce
+      // State updates are deferred until animation completes to prevent jank
       const config = { duration: 200, easing: Easing.out(Easing.cubic) };
-      scrollX.value = withTiming(scrollTarget, config);
+      scrollX.value = withTiming(scrollTarget, config, (finished) => {
+        'worklet';
+        if (finished) {
+          // Sync state on JS thread AFTER animation completes
+          runOnJS(setSidebarOpen)(targetPage === 0);
+          if (targetPage === 1 || wasExpanded) {
+            runOnJS(setSidebarHasQuery)(false);
+            runOnJS(dismissKeyboard)();
+          }
+        }
+      });
       sidebarStretch.value = withTiming(stretchTarget, config);
-      
-      // Sync state on JS thread
-      runOnJS(setSidebarOpen)(targetPage === 0);
-      if (targetPage === 1 || wasExpanded) {
-        runOnJS(setSidebarHasQuery)(false);
-        runOnJS(dismissKeyboard)();
-      }
       currentPage.value = targetPage;
     });
 
@@ -326,19 +330,29 @@ function MainApp() {
   const openSidebar = useCallback(() => {
     Keyboard.dismiss();
     currentPage.value = 0;
-    setSidebarOpen(true);
     const config = { duration: 200, easing: Easing.out(Easing.cubic) };
-    scrollX.value = withTiming(0, config);
+    // Animate first, then update state after animation completes
+    scrollX.value = withTiming(0, config, (finished) => {
+      'worklet';
+      if (finished) {
+        runOnJS(setSidebarOpen)(true);
+      }
+    });
     sidebarStretch.value = withTiming(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, config);
   }, [scrollX, sidebarHasQuery, sidebarStretch]);
 
   const closeSidebar = useCallback(() => {
     Keyboard.dismiss();
     currentPage.value = 1;
-    setSidebarOpen(false);
-    setSidebarHasQuery(false);
     const config = { duration: 200, easing: Easing.out(Easing.cubic) };
-    scrollX.value = withTiming(SIDEBAR_WIDTH, config);
+    // Animate first, then update state after animation completes
+    scrollX.value = withTiming(SIDEBAR_WIDTH, config, (finished) => {
+      'worklet';
+      if (finished) {
+        runOnJS(setSidebarOpen)(false);
+        runOnJS(setSidebarHasQuery)(false);
+      }
+    });
     sidebarStretch.value = withTiming(0, config);
   }, [scrollX, sidebarStretch, setSidebarHasQuery]);
 

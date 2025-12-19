@@ -99,7 +99,7 @@ function WelcomeScreen({ message, shouldAnimate }) {
   );
 }
 
-const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onStreamingThinking, onSelectText, onOpenAttachmentModal, chatInputRef }) {
+const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onStreamingThinking, onSelectText, onOpenAttachmentModal, onImagePress, chatInputRef }) {
   const { 
     currentSession, 
     messages, 
@@ -1048,8 +1048,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
       onSelectText={onSelectText}
       onReact={(liked) => handleReaction(item, liked)}
       onShowMetadata={(msg, pos) => handleMetadataOpen(msg || item, pos)}
+      onImagePress={onImagePress}
     />
-  ), [newMessageId, onShowThinking, onSelectText, handleRetryModal, handleReaction, handleMetadataOpen]);
+  ), [newMessageId, onShowThinking, onSelectText, onImagePress, handleRetryModal, handleReaction, handleMetadataOpen]);
 
   // Messages are already paginated from context - just add keys
   // Key must be STABLE across prepends - use message_index only (not array index!)
@@ -1293,6 +1294,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
                 maintainVisibleContentPosition={true}
+                waitForInitialLayout={true}
                 onContentSizeChange={(w, h) => {
                   setListContentHeight(h);
                   lastContentHeight.current = h;

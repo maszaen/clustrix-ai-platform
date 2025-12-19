@@ -113,8 +113,32 @@ function handleParagraphBoundary({ registry, fullText, activeContent, tagState, 
 function handleDoubleNewline({ registry, fullText, activeContent, tagState, activeStartPos, }) {
     if (!activeContent.includes('\n\n'))
         return null;
-    const segments = activeContent.split(/\n\n+/);
-    const separators = activeContent.match(/\n\n+/g) ?? [];
+    // === Smart Segment Merging ===
+    // Prevents splitting inside active code blocks
+    let rawSegments = activeContent.split(/\n\n+/);
+    let rawSeparators = activeContent.match(/\n\n+/g) ?? [];
+    
+    const segments = [];
+    const separators = [];
+    
+    let currentSegment = rawSegments[0];
+    
+    for (let i = 0; i < rawSegments.length - 1; i++) {
+        // If current segment has unbalanced code fences, it means the \n\n split 
+        // happened inside a code block. We must merge firmly.
+        if (!isCodeBlockBalanced(currentSegment)) {
+            // Merge with next separator and segment
+            currentSegment = currentSegment + rawSeparators[i] + rawSegments[i + 1];
+        } else {
+            // Balanced - safe to split
+            segments.push(currentSegment);
+            separators.push(rawSeparators[i]);
+            currentSegment = rawSegments[i + 1];
+        }
+    }
+    // Push the final segment (accumulated or single)
+    segments.push(currentSegment);
+    
     let offset = 0;
     let blocks = [...registry.blocks];
     let blockCounter = registry.blockCounter;
@@ -469,5 +493,39 @@ function consumeLeadingBlocks(args) {
         tagState: updateTagState(INITIAL_INCOMPLETE_STATE, content),
         activeStartPos: startPos,
     };
+}
+
+/**
+ * Check if code block fences are balanced in a text segment.
+ * Returns true if balanced (or no blocks), false if unbalanced (inside a block).
+ */
+function isCodeBlockBalanced(text) {
+    const regex = /^(`{3,}|~{3,})/gm;
+    let match;
+    let inBlock = false;
+    let fenceChar = null;
+    let fenceLen = 0;
+    
+    while ((match = regex.exec(text)) !== null) {
+        const marker = match[1];
+        const char = marker[0];
+        const len = marker.length;
+        
+        if (!inBlock) {
+            inBlock = true;
+            fenceChar = char;
+            fenceLen = len;
+        } else {
+            // Check if closing fence matches opener
+            // Allow closing fence to be longer than opener (CommonMark spec)
+            if (char === fenceChar && len >= fenceLen) {
+                inBlock = false;
+                fenceChar = null;
+                fenceLen = 0;
+            }
+        }
+    }
+    
+    return !inBlock;
 }
 

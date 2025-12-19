@@ -4,7 +4,7 @@
  */
 export const BLOCK_PATTERNS = {
     heading: /^(#{1,6})\s+(.*)$/,
-    codeBlockStart: /^(`{3,}|~{3,})(\w*)?$/,
+    codeBlockStart: /^(`{3,}|~{3,})(.*)$/,
     unorderedList: /^(\s*)([-*+])\s+(.*)$/,
     orderedList: /^(\s*)(\d+)\.\s+(.*)$/,
     blockquote: /^>\s?(.*)$/,
@@ -54,7 +54,7 @@ export function detectBlockType(line) {
         const match = line.match(BLOCK_PATTERNS.codeBlockStart);
         return {
             type: 'codeBlock',
-            meta: { type: 'codeBlock', language: match?.[2] || '' },
+            meta: { type: 'codeBlock', language: (match?.[2] || '').trim() },
         };
     }
     if (BLOCK_PATTERNS.horizontalRule.test(line)) {
@@ -127,10 +127,10 @@ export function detectPartialBlockType(content) {
     }
     // Code block: ``` or ~~~
     if (PARTIAL_BLOCK_PATTERNS.codeBlockStart.test(firstLine)) {
-        const match = firstLine.match(/^(`{3,}|~{3,})(\w*)/);
+        const match = firstLine.match(/^(`{3,}|~{3,})(.*)/);
         return {
             type: 'codeBlock',
-            meta: { type: 'codeBlock', language: match?.[2] || '' },
+            meta: { type: 'codeBlock', language: (match?.[2] || '').trim() },
             confidence: 'definite',
         };
     }

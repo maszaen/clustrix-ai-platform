@@ -234,7 +234,6 @@ export async function getMessagesPaginated(sessionId, charLimit = 5000) {
 // Load older messages (for pagination - load messages before a given index up to charLimit)
 // Uses same logic as initial load: 5000 chars, minimum 2 messages
 export async function getOlderMessages(sessionId, beforeIndex, charLimit = 5000) {
-  console.log('[DB:getOlderMessages] sessionId:', sessionId, 'beforeIndex:', beforeIndex, 'charLimit:', charLimit);
   
   // Get all messages before beforeIndex, ordered DESC (newest of the older ones first)
   const rows = await db.getAllAsync(
@@ -242,7 +241,6 @@ export async function getOlderMessages(sessionId, beforeIndex, charLimit = 5000)
     [sessionId, beforeIndex]
   );
   
-  console.log('[DB:getOlderMessages] Total older messages available:', rows?.length);
   
   if (!rows || rows.length === 0) {
     return { messages: [], hasMore: false, oldestLoadedIndex: beforeIndex };
@@ -264,9 +262,7 @@ export async function getOlderMessages(sessionId, beforeIndex, charLimit = 5000)
     }
   }
   
-  console.log('[DB:getOlderMessages] Selected rows count:', selectedRows.length, 'totalChars:', totalChars);
-  console.log('[DB:getOlderMessages] Selected indices (before reverse):', selectedRows.map(r => r.message_index));
-  
+
   // Reverse to get ascending order (oldest to newest)
   selectedRows.reverse();
   
@@ -276,7 +272,6 @@ export async function getOlderMessages(sessionId, beforeIndex, charLimit = 5000)
   // Check if there are more older messages
   const hasMore = selectedRows.length < rows.length;
   
-  console.log('[DB:getOlderMessages] After reverse indices:', selectedRows.map(r => r.message_index), 'oldestLoadedIndex:', oldestLoadedIndex, 'hasMore:', hasMore);
   
   // Normalize metadata (use selectedRows, not rows!)
   const messages = selectedRows.map((row) => {
@@ -309,7 +304,6 @@ export async function getOlderMessages(sessionId, beforeIndex, charLimit = 5000)
 }
 
 export async function addMessage(sessionId, role, content, metadata, messageIndex, createdAt = Date.now()) {
-  console.log('[DB:addMessage] sessionId:', sessionId, 'role:', role, 'messageIndex:', messageIndex);
   
   // Use INSERT OR REPLACE to handle any existing duplicates gracefully
   await db.runAsync(

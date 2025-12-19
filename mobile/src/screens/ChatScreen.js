@@ -521,14 +521,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   // No auto-scroll during streaming - inverted FlatList handles it naturally
   // Content expands upward, user stays at bottom
 
-  // PERF: Throttle haptic to max once per 800ms during streaming
-  // 150ms was too frequent and caused performance issues on some devices
+  // Haptic feedback disabled - user preference
   const triggerHaptic = useCallback(() => {
-    const now = Date.now();
-    if (now - lastHapticTime.current > 800) {
-      lastHapticTime.current = now;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); // Light instead of Medium for less overhead
-    }
+    // Disabled: Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
   const sessionRef = useRef(currentSession);
@@ -605,8 +600,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
     const userMessageIndex = isNewSession ? 0 : messages.length;
     
     // Set newMessageId with the EXACT format that _key uses
-    // Format: msg-<sessionId last 6 chars>-<message_index>-<role>
-    const sessionIdPart = isNewSession ? session.id.slice(-6) : (currentSession?.id?.slice(-6) || 'x');
+    // Format: msg-<full sessionId>-<message_index>-<role>
+    const sessionIdPart = isNewSession ? session.id : (currentSession?.id || 'x');
     const newMsgKey = `msg-${sessionIdPart}-${userMessageIndex}-user`;
     setNewMessageId(newMsgKey);
     
@@ -1059,10 +1054,24 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   // Messages are already paginated from context - just add keys
   // Key must be STABLE across prepends - use message_index only (not array index!)
   // Array index changes when prepending, causing LegendList to think items are new
-  const displayMessagesBase = useMemo(() => messages.map((m) => ({
-    ...m,
-    _key: `msg-${currentSession?.id?.slice(-6) || 'x'}-${m.message_index}-${m.role}`,
-  })), [messages, currentSession?.id]);
+  // Use FULL session ID in key to prevent recycler confusion across sessions
+  // ALSO use message.id as fallback for uniqueness when message_index might be duplicate
+  const displayMessagesBase = useMemo(() => {
+    const seen = new Set();
+    return messages.map((m, idx) => {
+      // Primary key format - use message.id if available for guaranteed uniqueness
+      const uniqueId = m.id || `idx-${idx}`;
+      const key = `msg-${currentSession?.id || 'x'}-${m.message_index}-${m.role}-${uniqueId}`;
+      
+      // Dedupe check (shouldn't happen, but safety)
+      if (seen.has(key)) {
+        console.warn('[ChatScreen] Duplicate key detected, adding suffix:', key);
+        return { ...m, _key: `${key}-dup-${idx}` };
+      }
+      seen.add(key);
+      return { ...m, _key: key };
+    });
+  }, [messages, currentSession?.id]);
   
   // Create mutable copy for streaming message push
   let displayMessages = [...displayMessagesBase];
@@ -1076,12 +1085,12 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
   const alreadyHasSavedResponse = lastMessage?.role === 'assistant' && !lastMessage?.isStreaming;
   
   if ((streamingContent || isStreaming) && !alreadyHasSavedResponse) {
-    // Key must match saved message key format to prevent blink on transition
-    // Streaming AI message will be saved at message_index = current messages count
+    // Key must be UNIQUE - use streamingMessageId for guaranteed uniqueness
+    // This prevents any collision with saved messages
     const streamingIndex = messages.length;
-    const sessionIdPart = currentSession?.id?.slice(-6) || 'x';
+    const sessionIdPart = currentSession?.id || 'x';
     displayMessages.push({
-      _key: `msg-${sessionIdPart}-${streamingIndex}-assistant`,
+      _key: `msg-${sessionIdPart}-${streamingIndex}-assistant-streaming-${streamingMessageId || 'active'}`,
       role: 'assistant',
       content: thinkingContent ? `<thinking>${thinkingContent}</thinking>\n\n${streamingContent}` : streamingContent || '...',
       isStreaming: true,
@@ -1264,17 +1273,19 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, onShowThinking, onSt
         <>
           <Animated.View style={{ flex: 1, opacity: contentFadeAnim }}>
               <LegendList
+                key={currentSession?.id || 'welcome'}  // Force remount on session change to reset recycled state
                 ref={flatListRef}
                 data={displayMessages}
                 keyExtractor={(item) => item._key}
                 renderItem={renderMessage}
                 estimatedItemSize={avgHeight}
                 recycleItems={true}
-                drawDistance={2000}
-                // maintainScrollAtEnd
-                // maintainScrollAtEndThreshold={0.02}
+                drawDistance={5000}  // Increased for smoother pre-rendering of long sessions
+                initialScrollIndex={displayMessages.length > 0 ? displayMessages.length - 1 : undefined}  // Start at bottom
+                maintainScrollAtEnd
+                maintainScrollAtEndThreshold={0.02}
                 onStartReached={() => {handleLoadMore()}}
-                onStartReachedThreshold={0.03}
+                onStartReachedThreshold={0.02}
                 ListHeaderComponent={ListHeader}
                 ListFooterComponent={ListFooter}
                 contentContainerStyle={{ paddingLeft: 0, paddingTop: topInset + 66 }}

@@ -1039,7 +1039,7 @@ const styles = StyleSheet.create({
   },
   sidebarPage: {
     height: '100%',
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bgv2,
   },
   sidebarContent: {
     flex: 1,

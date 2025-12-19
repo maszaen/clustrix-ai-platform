@@ -41,6 +41,7 @@ import ContextMenuFixed from './src/components/ContextMenuFixed';
 import InputModal from './src/components/InputModal';
 import ConfirmModal from './src/components/ConfirmModal';
 import LoadingScreen from './src/components/LoadingScreen';
+import ImageViewerModal from './src/components/ImageViewerModal';
 import { SvgXml } from 'react-native-svg';
 import { WebView } from 'react-native-webview';
 import { COLORS } from './src/constants/colors';
@@ -153,6 +154,8 @@ function MainApp() {
   const [selectTextModal, setSelectTextModal] = useState({ visible: false, content: '' });
   // Attachment modal state
   const [attachmentModal, setAttachmentModal] = useState(false);
+  // Image viewer modal state
+  const [imageViewerModal, setImageViewerModal] = useState({ visible: false, image: null });
   
   // Loading overlay state
   const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
@@ -703,7 +706,7 @@ function MainApp() {
 
         {/* Page 2: Main Chat (100% width) */}
         <View style={[styles.mainPage, { width: SCREEN_WIDTH }]}>
-          <ChatScreen topInset={insets.top} onShowThinking={handleShowThinking} onStreamingThinking={handleStreamingThinking} onSelectText={handleSelectText} onOpenAttachmentModal={openAttachmentModal} chatInputRef={chatInputRef} />
+          <ChatScreen topInset={insets.top} onShowThinking={handleShowThinking} onStreamingThinking={handleStreamingThinking} onSelectText={handleSelectText} onOpenAttachmentModal={openAttachmentModal} onImagePress={(img) => setImageViewerModal({ visible: true, image: img })} chatInputRef={chatInputRef} />
 
           <LinearGradient
             colors={[COLORS.bg90, COLORS.bg90, COLORS.bg70, 'transparent']}
@@ -982,6 +985,13 @@ function MainApp() {
         onFadeComplete={() => setMountLoadingOverlay(false)}
       />
     )}
+    
+    {/* Image viewer modal - fullscreen zoomable/pannable */}
+    <ImageViewerModal
+      visible={imageViewerModal.visible}
+      image={imageViewerModal.image}
+      onClose={() => setImageViewerModal({ visible: false, image: null })}
+    />
     </>
   );
 }

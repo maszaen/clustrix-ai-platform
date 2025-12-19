@@ -53,8 +53,12 @@ const getFileIcon = (mimeType, filename) => {
  * - 1 image: width = max bubble width
  * - 2 images: side by side, fill width
  * - 3+ images: square thumbnails, horizontal scroll
+ * 
+ * @param {Array} attachments - Array of attachment objects
+ * @param {number} maxWidth - Maximum width for layout
+ * @param {function} onImagePress - Called with image object when image is tapped
  */
-function MessageAttachments({ attachments = [], maxWidth = MAX_BUBBLE_WIDTH }) {
+function MessageAttachments({ attachments = [], maxWidth = MAX_BUBBLE_WIDTH, onImagePress }) {
   if (!attachments || attachments.length === 0) return null;
 
   const images = useMemo(() => attachments.filter(a => a.type === 'image'), [attachments]);
@@ -96,6 +100,30 @@ function MessageAttachments({ attachments = [], maxWidth = MAX_BUBBLE_WIDTH }) {
 
   const imageDims = getImageDimensions();
 
+  // Render a single image with pressable wrapper
+  const renderImage = (img, idx, additionalStyle = {}) => (
+    <Pressable
+      key={idx}
+      onPress={() => onImagePress?.(img)}
+      android_ripple={{ color: 'rgba(255,255,255,0.3)' }}
+      style={({ pressed }) => [
+        styles.imageWrapper,
+        { 
+          width: imageDims.width, 
+          height: imageDims.height,
+          opacity: pressed ? 0.85 : 1,
+          ...additionalStyle,
+        }
+      ]}
+    >
+      <Image
+        source={{ uri: img.uri }}
+        style={[styles.image, { width: '100%', height: '100%' }]}
+        resizeMode="cover"
+      />
+    </Pressable>
+  );
+
   return (
     <View style={styles.container}>
       {/* Files section - always above images */}
@@ -120,21 +148,9 @@ function MessageAttachments({ attachments = [], maxWidth = MAX_BUBBLE_WIDTH }) {
         imageCount <= 2 ? (
           // 1-2 images: flex row
           <View style={[styles.imagesRow, { maxWidth }]}>
-            {images.map((img, idx) => (
-              <Image
-                key={idx}
-                source={{ uri: img.uri }}
-                style={[
-                  styles.image,
-                  { 
-                    width: imageDims.width, 
-                    height: imageDims.height,
-                    marginRight: idx < imageCount - 1 ? IMAGE_GAP : 0,
-                  }
-                ]}
-                resizeMode="cover"
-              />
-            ))}
+            {images.map((img, idx) => 
+              renderImage(img, idx, { marginRight: idx < imageCount - 1 ? IMAGE_GAP : 0 })
+            )}
           </View>
         ) : (
           // 3+ images: horizontal scroll - wrap in View with fixed height
@@ -145,14 +161,7 @@ function MessageAttachments({ attachments = [], maxWidth = MAX_BUBBLE_WIDTH }) {
               style={styles.imagesScroll}
               contentContainerStyle={styles.imagesScrollContent}
             >
-              {images.map((img, idx) => (
-                <Image
-                  key={idx}
-                  source={{ uri: img.uri }}
-                  style={[styles.image, { width: imageDims.width, height: imageDims.height }]}
-                  resizeMode="cover"
-                />
-              ))}
+              {images.map((img, idx) => renderImage(img, idx))}
             </ScrollView>
           </View>
         )
@@ -207,8 +216,12 @@ const styles = StyleSheet.create({
     gap: IMAGE_GAP,
     flexDirection: 'row',
   },
+  imageWrapper: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: COLORS.inputBg,
+  },
   image: {
-    
     borderRadius: 12,
     backgroundColor: COLORS.inputBg,
   },

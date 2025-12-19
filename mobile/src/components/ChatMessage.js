@@ -360,7 +360,7 @@ function TypewriterLoader() {
 
 // Memoized ChatMessage - only re-renders when props actually change
 // CRITICAL for performance during streaming (prevents all messages re-rendering on each chunk)
-const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowThinking, onRetry, onReact, onShowMetadata, onSelectText }) {
+const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowThinking, onRetry, onReact, onShowMetadata, onSelectText, onImagePress }) {
   // Animation for new user messages - fade in + subtle slide from right
   const fadeAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
   const scaleAnim = useRef(new Animated.Value(isNew && isUser ? 0.95 : 1)).current;
@@ -530,7 +530,7 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
         ]}>
           {/* Attachments */}
           {hasAttachments && (
-            <MessageAttachments attachments={attachments} />
+            <MessageAttachments attachments={attachments} onImagePress={onImagePress} />
           )}
           
           {/* Text bubble - only if there's text content */}

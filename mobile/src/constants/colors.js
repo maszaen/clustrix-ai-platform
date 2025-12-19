@@ -16,6 +16,9 @@ export const COLORS = {
   thinkBg: '#282A2C',
   skeleton: '#232425',
 
+  whiteTr: '#FFFFFF61',
+  bgSecondaryv2: '#151515',
+
   // Foregrounds
   fg: '#FCFCFC',
   fgMuted: '#BDC1C6',

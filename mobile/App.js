@@ -24,7 +24,7 @@ import Reanimated, {
   runOnJS,
   cancelAnimation
 } from 'react-native-reanimated';
-import { StreamdownRN } from 'streamdown-rn';
+import { StreamdownRN } from './src/lib/streamdown';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -148,7 +148,7 @@ function MainApp() {
   const [renameModal, setRenameModal] = useState({ visible: false, session: null });
   const [confirmDelete, setConfirmDelete] = useState({ visible: false, session: null });
   const [sidebarContextMenuOpen, setSidebarContextMenuOpen] = useState(false);
-  const [thinkingModal, setThinkingModal] = useState({ visible: false, content: '' });
+  const [thinkingModal, setThinkingModal] = useState({ visible: false, content: '', isStreaming: false });
   // Select text modal state (app-level for message text selection)
   const [selectTextModal, setSelectTextModal] = useState({ visible: false, content: '' });
   // Attachment modal state
@@ -348,14 +348,24 @@ function MainApp() {
   const openPersonalization = useCallback(() => setShowPersonalization(true), []);
   const closePersonalization = useCallback(() => setShowPersonalization(false), []);
   const handleShowThinking = useCallback((content) => {
-    setThinkingModal({ visible: true, content });
+    setThinkingModal({ visible: true, content, isStreaming: false });
   }, []);
+  const streamingTimeoutRef = useRef(null);
   const handleStreamingThinking = useCallback((content) => {
     // Only update content if modal is already open, don't auto-open
-    setThinkingModal(prev => prev.visible ? { ...prev, content } : prev);
+    // Mark as streaming to let StreamdownRN use streaming mode (not batch)
+    setThinkingModal(prev => prev.visible ? { ...prev, content, isStreaming: true } : prev);
+    
+    // Reset isStreaming to false after 500ms of no updates (stream ended)
+    if (streamingTimeoutRef.current) {
+      clearTimeout(streamingTimeoutRef.current);
+    }
+    streamingTimeoutRef.current = setTimeout(() => {
+      setThinkingModal(prev => prev.visible ? { ...prev, isStreaming: false } : prev);
+    }, 500);
   }, []);
   const closeThinkingModal = useCallback(() => {
-    setThinkingModal({ visible: false, content: '' });
+    setThinkingModal({ visible: false, content: '', isStreaming: false });
   }, []);
   // Handle select text from message context menu - opens app-level SlideLeftModal
   const handleSelectText = useCallback((content) => {
@@ -887,7 +897,7 @@ function MainApp() {
                     indent: 12,
                   },
                 }}
-                isComplete={true}
+                isComplete={!thinkingModal.isStreaming}
               >
                 {thinkingModal.content}
               </StreamdownRN>

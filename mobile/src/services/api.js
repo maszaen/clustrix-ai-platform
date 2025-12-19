@@ -1058,9 +1058,39 @@ function parseThinkingPatterns(chunkText, state = {}) {
         position += match.index + match[0].length;
         insideThinkingBlock = false;
         currentBlockType = null;
+        partialTag = ''; // Clear partial tag buffer when exiting thinking block
+        // After thinking ends, mark that we've seen content so regular content follows
+        hasSeenContent = true;
         continue;
       } else {
-        thinkingText += remainingText;
+        // Check if remainingText ENDS with a partial closing tag
+        // If so, buffer it and only add the safe content to thinkingText
+        let closeTagPrefix = '';
+        if (currentBlockType === 'thinking') closeTagPrefix = '</thinking';
+        else if (currentBlockType === 'think') closeTagPrefix = '</think';
+        else if (currentBlockType === 'reasoning') closeTagPrefix = '</reasoning';
+        else if (currentBlockType === 'reasoning-prefix') closeTagPrefix = ')*';
+        
+        // Check for any partial match at end of remainingText
+        let partialCloseLen = 0;
+        if (closeTagPrefix) {
+          for (let len = 1; len <= closeTagPrefix.length; len++) {
+            const suffix = closeTagPrefix.substring(0, len);
+            if (remainingText.endsWith(suffix)) {
+              partialCloseLen = len;
+            }
+          }
+        }
+        
+        if (partialCloseLen > 0) {
+          // Found partial closing tag at end - buffer it
+          const safeContent = remainingText.substring(0, remainingText.length - partialCloseLen);
+          thinkingText += safeContent;
+          partialTag = remainingText.substring(remainingText.length - partialCloseLen);
+        } else {
+          thinkingText += remainingText;
+          partialTag = '';
+        }
         position = fullText.length;
         break;
       }
@@ -1093,6 +1123,7 @@ function parseThinkingPatterns(chunkText, state = {}) {
           
           position += whitespaceLen + actualTagLen;
           foundOpening = true;
+          partialTag = ''; // Clear partial tag buffer - we found the opening!
           break;
         }
       }
@@ -1100,11 +1131,30 @@ function parseThinkingPatterns(chunkText, state = {}) {
       if (foundOpening) continue;
 
       // Check for incomplete/partial tags (tag cut off mid-chunk)
+      // This includes very short partials like <t, <th, <thi that could become <thinking>
       const incompletePatterns = [
         /^<thinking[^>]*$/i,
         /^<think[^>]*$/i,
+        /^<thinki[^>]*$/i,
+        /^<thinkn[^>]*$/i,
+        /^<thin[^>]*$/i,
+        /^<thi[^>]*$/i,
+        /^<th[^>]*$/i,
+        /^<t$/i,
         /^<reasoning[^>]*$/i,
-        /^\*\(reasoning:[^)]*$/i
+        /^<reasonin[^>]*$/i,
+        /^<reasoni[^>]*$/i,
+        /^<reason[^>]*$/i,
+        /^<reaso[^>]*$/i,
+        /^<reas[^>]*$/i,
+        /^<rea[^>]*$/i,
+        /^<re[^>]*$/i,
+        /^<r$/i,
+        /^\*\(reasoning:[^)]*$/i,
+        /^\*\(reasoning$/i,
+        /^\*\(reasonin$/i,
+        /^\*\($/i,
+        /^\*$/
       ];
 
       let foundIncomplete = false;
@@ -1118,12 +1168,25 @@ function parseThinkingPatterns(chunkText, state = {}) {
       }
 
       if (foundIncomplete) break;
+      
+      // If we're here and haven't seen content yet, check if remaining is just whitespace
+      // If so, don't mark as hasSeenContent - keep looking for thinking tags in next chunk
+      const remainingFromPosition = fullText.substring(position);
+      if (!remainingFromPosition.trim()) {
+        // Only whitespace remains - don't set hasSeenContent, skip this whitespace
+        position = fullText.length;
+        break;
+      }
     }
 
     // Regular content - add to cleaned output
+    // Only set hasSeenContent if there's actual non-whitespace content
     if (position < fullText.length) {
-      hasSeenContent = true;
-      cleanedContent += fullText.substring(position);
+      const remaining = fullText.substring(position);
+      if (remaining.trim()) {
+        hasSeenContent = true;
+        cleanedContent += remaining;
+      }
       position = fullText.length;
     }
   }

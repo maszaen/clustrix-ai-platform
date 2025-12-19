@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Keyboard, Easing } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
-import { StreamdownRN } from 'streamdown-rn';
+import { StreamdownRN } from '../lib/streamdown';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
@@ -9,6 +9,62 @@ import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info, Cl
 import * as Clipboard from 'expo-clipboard';
 import ContextMenu from './ContextMenu';
 import MessageAttachments from './MessageAttachments';
+
+// PERF: Memoized StreamdownRN wrapper to cache rendered markdown for completed messages
+// This prevents expensive re-parsing during list recycling and session loads
+const MemoizedMarkdown = memo(({ content, isStreaming, theme }) => {
+  // For streaming messages, always render fresh (content changes frequently)
+  // For completed messages, memoize based on content to prevent re-parsing
+  return (
+    <StreamdownRN 
+      theme={theme}
+      isComplete={!isStreaming}
+    >
+      {content || ' '}
+    </StreamdownRN>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if content or streaming state changes
+  // This is more aggressive than default shallow compare
+  if (prevProps.isStreaming !== nextProps.isStreaming) return false;
+  if (prevProps.content !== nextProps.content) return false;
+  // Theme rarely changes, skip deep compare
+  return true;
+});
+
+// PERF: Static theme object to prevent recreation on every render
+// This ensures MemoizedMarkdown can properly skip re-renders
+const MARKDOWN_THEME = {
+  colors: {
+    background: 'transparent',
+    foreground: COLORS.fg,
+    muted: COLORS.fgMuted,
+    accent: COLORS.primary,
+    codeBackground: COLORS.inputBg,
+    codeForeground: '#a2a9b0',
+    border: COLORS.borderLight,
+    link: '#D3E3FD',
+    // Syntax highlighting
+    syntaxDefault: '#c9d1d9',
+    syntaxKeyword: '#ff7b72',
+    syntaxString: '#a5d6ff',
+    syntaxNumber: '#79c0ff',
+    syntaxComment: '#8b949e',
+    syntaxFunction: '#d2a8ff',
+    syntaxClass: '#ffa657',
+    syntaxOperator: '#ff7b72',
+  },
+  fonts: {
+    regular: FONTS.ai,
+    bold: FONTS.aiBold,
+    mono: FONTS.mono,
+  },
+  spacing: {
+    block: 8,
+    inline: 4,
+    indent: 16,
+  },
+};
 
 // Custom ripple wrapper using gesture-handler Pressable
 // Allows nested ScrollViews to handle their own gestures
@@ -523,44 +579,13 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
               <TypewriterLoader />
             </View>
           ) : (
-            // Native Markdown for all AI messages - using streamdown-rn for streaming support
+            // Native Markdown for all AI messages - using MemoizedMarkdown for cached rendering
             <View style={{paddingHorizontal: 16}}>
-              <StreamdownRN 
-                theme={{
-                  colors: {
-                    background: 'transparent',
-                    foreground: COLORS.fg,
-                    muted: COLORS.fgMuted,
-                    accent: COLORS.primary,
-                    codeBackground: COLORS.inputBg,
-                    codeForeground: '#a2a9b0',
-                    border: COLORS.borderLight,
-                    link: '#D3E3FD',
-                    // Syntax highlighting
-                    syntaxDefault: '#c9d1d9',
-                    syntaxKeyword: '#ff7b72',
-                    syntaxString: '#a5d6ff',
-                    syntaxNumber: '#79c0ff',
-                    syntaxComment: '#8b949e',
-                    syntaxFunction: '#d2a8ff',
-                    syntaxClass: '#ffa657',
-                    syntaxOperator: '#ff7b72',
-                  },
-                  fonts: {
-                    regular: FONTS.ai,
-                    bold: FONTS.aiBold,  // Different font file, not CSS bold
-                    mono: FONTS.mono,
-                  },
-                  spacing: {
-                    block: 8,
-                    inline: 4,
-                    indent: 16,
-                  },
-                }}
-                isComplete={!message.isStreaming}
-              >
-                {textContent || ' '}
-              </StreamdownRN>
+              <MemoizedMarkdown
+                content={textContent}
+                isStreaming={message.isStreaming}
+                theme={MARKDOWN_THEME}
+              />
             </View>
           )}
         </LongPressWrapper>

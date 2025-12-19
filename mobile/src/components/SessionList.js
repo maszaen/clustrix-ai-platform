@@ -205,6 +205,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
         data={displayedSessions}
         extraData={currentSession}
         keyExtractor={(item) => item.id}
+        style={{ width: SCREEN_WIDTH }}
         renderItem={({ item, index }) => {
           const favCount = favoriteSessions.length;
           const isFirstFavorite = index === 0 && favCount > 0;

@@ -81,17 +81,20 @@ function AttachmentPreview({ attachments = [], onRemove }) {
       onMoveShouldSetResponder={() => true}
       onMoveShouldSetResponderCapture={() => true}
     >
-      {attachments.map((attachment, index) => {
+      {[...attachments].reverse().map((attachment) => {
+        const originalIndex = attachments.indexOf(attachment);
+        const key = attachment.id || originalIndex;
         const isImage = attachment.type === 'image';
         
         if (isImage) {
           // Image preview - max 4:3 aspect ratio
           return (
             <Reanimated.View 
-              key={attachment.id || index} 
+              key={key} 
               style={styles.imageItem}
               entering={ZoomIn.duration(ANIM_DURATION)}
               exiting={ZoomOut.duration(ANIM_DURATION)}
+              layout={Layout.springify().damping(30).stiffness(350).mass(1)}
             >
               <Image 
                 source={{ uri: attachment.uri }} 
@@ -101,7 +104,7 @@ function AttachmentPreview({ attachments = [], onRemove }) {
               {/* Remove button - top right */}
               <Pressable
                 style={styles.removeBtn}
-                onPress={() => onRemove?.(attachment.id || index)}
+                onPress={() => onRemove?.(attachment.id || originalIndex)}
                 hitSlop={8}
               >
                 <X size={12} color={COLORS.fg} strokeWidth={2.5} />
@@ -114,10 +117,11 @@ function AttachmentPreview({ attachments = [], onRemove }) {
           
           return (
             <Reanimated.View 
-              key={attachment.id || index} 
+              key={key} 
               style={styles.fileItem}
               entering={ZoomIn.duration(ANIM_DURATION)}
               exiting={ZoomOut.duration(ANIM_DURATION)}
+              layout={Layout.springify().damping(30).stiffness(350).mass(1)}
             >
               {/* File icon - top left */}
               <View style={styles.fileIconContainer}>
@@ -132,7 +136,7 @@ function AttachmentPreview({ attachments = [], onRemove }) {
               {/* Remove button - top right */}
               <Pressable
                 style={styles.removeBtn}
-                onPress={() => onRemove?.(attachment.id || index)}
+                onPress={() => onRemove?.(attachment.id || originalIndex)}
                 hitSlop={8}
               >
                 <X size={12} color={COLORS.fg} strokeWidth={2.5} />

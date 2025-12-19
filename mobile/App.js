@@ -1077,6 +1077,7 @@ const styles = StyleSheet.create({
   sidebarPage: {
     height: '100%',
     backgroundColor: COLORS.bgv2,
+    overflow: 'hidden',
   },
   sidebarContent: {
     flex: 1,

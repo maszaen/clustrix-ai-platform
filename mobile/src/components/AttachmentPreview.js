@@ -87,11 +87,29 @@ function AttachmentPreview({ attachments = [], onRemove }) {
         const isImage = attachment.type === 'image';
         
         if (isImage) {
-          // Image preview - max 4:3 aspect ratio
+          // Dynamic aspect ratio logic
+          // Default to square if dimensions missing
+          const w = attachment.width || 0;
+          const h = attachment.height || 0;
+          const ratio = (w > 0 && h > 0) ? w / h : 1;
+          
+          let targetWidth = IMAGE_HEIGHT; // Default 1:1
+          
+          if (ratio > 1.2) {
+             // Landscape -> 4:3
+             targetWidth = Math.round(IMAGE_HEIGHT * (4/3));
+          } else if (ratio < 0.8) {
+             // Portrait -> 3:4
+             targetWidth = Math.round(IMAGE_HEIGHT * (3/4));
+          } else {
+             // Square-ish -> 1:1
+             targetWidth = IMAGE_HEIGHT;
+          }
+
           return (
             <Reanimated.View 
               key={key} 
-              style={styles.imageItem}
+              style={[styles.imageItem, { width: targetWidth }]}
               entering={ZoomIn.duration(ANIM_DURATION)}
               exiting={ZoomOut.duration(ANIM_DURATION)}
               layout={Layout.springify().damping(30).stiffness(350).mass(1)}
@@ -150,7 +168,6 @@ function AttachmentPreview({ attachments = [], onRemove }) {
 }
 
 const IMAGE_HEIGHT = 129;
-const IMAGE_WIDTH = Math.round(IMAGE_HEIGHT * (3/4)); // 4:3 aspect
 const FILE_SIZE = 129;
 
 const styles = StyleSheet.create({
@@ -165,7 +182,6 @@ const styles = StyleSheet.create({
   },
   // Image item styles
   imageItem: {
-    width: IMAGE_WIDTH,
     height: IMAGE_HEIGHT,
     borderRadius: 12,
     overflow: 'hidden',

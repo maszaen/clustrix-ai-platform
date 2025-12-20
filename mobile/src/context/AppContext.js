@@ -18,6 +18,8 @@ const DEFAULT_SETTINGS = {
   baseUrl: '',
   apiKey: '',
   thinkMode: false,
+  agenticMode: false,
+  generateImage: false,
 };
 
 // Character limit for initial message load

@@ -109,6 +109,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     createSession,
     appendMessage,
     updateSession,
+    updateSettings,
     setMessageMetadata,
     removeMessage,
     deleteSession,
@@ -147,6 +148,22 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const [retryReason, setRetryReason] = useState('');
   const [metadataMenu, setMetadataMenu] = useState({ visible: false, message: null, position: null });
   const lastHapticTime = useRef(0);
+
+  // Memoized toggle handler for ChatInput
+  const handleToggleAgentic = useCallback(() => {
+    updateSettings({ agenticMode: !settings.agenticMode });
+  }, [updateSettings, settings.agenticMode]);
+
+  const handleToggleGenerateImage = useCallback(() => {
+    updateSettings({ generateImage: !settings.generateImage });
+  }, [updateSettings, settings.generateImage]);
+
+  // Sync Pills imperatively to prevent re-render glitches
+  useEffect(() => {
+    inputRef.current?.setPillState('agentic', settings.agenticMode);
+    inputRef.current?.setPillState('generate_image', settings.generateImage);
+  }, [settings.agenticMode, settings.generateImage]);
+
   const isInitialLoad = useRef(true);
   const [showSkeleton, setShowSkeleton] = useState(false);
   const skeletonOpacity = useRef(new Animated.Value(0)).current;
@@ -1407,11 +1424,12 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
             onOpenAttachmentModal={onOpenAttachmentModal}
             onAttachmentsChange={setAttachmentCount}
             onInputHeightChange={setInputExtraHeight}
+            onToggleAgenticMode={handleToggleAgentic}
+            onToggleGenerateImage={handleToggleGenerateImage}
           />
         </View>
       </ReanimatedModule.View>
 
-      {/* Retry options modal */}
       <Modal
         visible={retryOptionsVisible}
         transparent

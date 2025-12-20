@@ -18,6 +18,7 @@ export const COLORS = {
 
   whiteTr: '#FFFFFF61',
   bgSecondaryv2: '#151515',
+  bgSecondaryv3: '#303030',
 
   // Foregrounds
   fg: '#FCFCFC',
@@ -30,7 +31,7 @@ export const COLORS = {
 
   // Accents
   accent: '#0e4bae',
-  primary: '#D3E3FD',
+  primary: '#68b2f8',
   primaryLight: '#1f3760',
 
   // Status

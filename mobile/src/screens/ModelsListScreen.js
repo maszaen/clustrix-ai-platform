@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback, Pressable } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback, Pressable, Switch } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
@@ -94,7 +94,18 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
     model: settings.model || '',
     apiKey: providerApiKeys[settings.provider] || settings.apiKey || '',
     baseUrl: settings.baseUrl || '',
+    agenticMode: settings.agenticMode ?? false,
+    generateImage: settings.generateImage ?? false,
   });
+
+  useEffect(() => {
+    setLocalSettings(prev => ({ 
+      ...prev, 
+      agenticMode: settings.agenticMode,
+      generateImage: settings.generateImage 
+    }));
+  }, [settings.agenticMode, settings.generateImage]);
+
   const [showApiKey, setShowApiKey] = useState(false);
   const [contextMenu, setContextMenu] = useState({ visible: false, item: null, type: null, position: { x: 0, y: 0 } });
   const [addModelModal, setAddModelModal] = useState(false);
@@ -119,37 +130,37 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
 
   const availableModels = getModelsForProvider(localSettings.provider);
 
-  const handleSave = async () => {
-    if (!localSettings.apiKey) {
-      showAlert('error', 'Missing API Key', 'Please enter your API key');
-      return;
-    }
-    if (!localSettings.model) {
-      showAlert('error', 'Missing Model', 'Please select or enter a model');
-      return;
-    }
-    // Save API key for this provider
-    await updateProviderApiKey(localSettings.provider, localSettings.apiKey);
-    // Save other settings (without apiKey in settings, it's now per-provider)
-    updateSettings({
-      provider: localSettings.provider,
-      model: localSettings.model,
-      baseUrl: localSettings.baseUrl,
-      apiKey: localSettings.apiKey, // Keep for backward compatibility
-    });
-    showAlert('success', 'Saved', 'Model settings saved');
-  };
+  // Auto-save effect with debounce
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      // Allow saving even if incomplete, validation happens during chat
+      await updateProviderApiKey(localSettings.provider, localSettings.apiKey);
+      updateSettings({
+        provider: localSettings.provider,
+        model: localSettings.model,
+        baseUrl: localSettings.baseUrl,
+        apiKey: localSettings.apiKey,
+        agenticMode: localSettings.agenticMode,
+        generateImage: localSettings.generateImage,
+      });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [localSettings.provider, localSettings.model, localSettings.baseUrl, localSettings.apiKey]); // Exclude toggles from debounce loop
 
   const handleProviderChange = (provider) => {
     const models = getModelsForProvider(provider.id);
-    setLocalSettings({
+    const newSettings = {
       ...localSettings,
       provider: provider.id,
       model: models[0]?.model_id || '',
       apiKey: providerApiKeys[provider.id] || '',
-      baseUrl: '',
-    });
+      baseUrl: provider.base_url || '',
+    };
+    setLocalSettings(newSettings);
+    // Immediate save for provider change
+    updateSettings(newSettings);
   };
+
 
   const handleItemLongPress = (item, type, event) => {
     if (item.is_default) return;
@@ -370,9 +381,61 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
           )}
         </View>
 
-        <Pressable style={styles.saveBtn} onPress={handleSave} android_ripple={{ color: 'rgba(255,255,255,0.2)' }}>
-          <Text style={styles.saveBtnText}>Save Model Settings</Text>
-        </Pressable>
+        {/* Feature Toggles - Connected Card */}
+        <View style={styles.section}>
+
+          <Text style={styles.sectionTitle}>Other Config</Text>
+          <View style={styles.toggleCard}>
+            <Pressable 
+              style={styles.toggleRowTop}
+              onPress={() => {
+                const val = !localSettings.agenticMode;
+                setLocalSettings(prev => ({ ...prev, agenticMode: val }));
+                updateSettings({ agenticMode: val });
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Agentic Mode</Text>
+                <Text style={styles.switchDescription}>Allow the AI to use tools</Text>
+              </View>
+              <Switch
+                value={localSettings.agenticMode}
+                onValueChange={(val) => {
+                  setLocalSettings(prev => ({ ...prev, agenticMode: val }));
+                  updateSettings({ agenticMode: val });
+                }}
+                trackColor={{ false: COLORS.borderLight, true: COLORS.success }}
+                thumbColor={COLORS.fg}
+                
+              />
+            </Pressable>
+
+            <View style={styles.toggleDivider} />
+
+            <Pressable 
+              style={styles.toggleRowBottom}
+              onPress={() => {
+                const val = !localSettings.generateImage;
+                setLocalSettings(prev => ({ ...prev, generateImage: val }));
+                updateSettings({ generateImage: val });
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Generate Image</Text>
+                <Text style={styles.switchDescription}>Enable image generation</Text>
+              </View>
+              <Switch
+                value={localSettings.generateImage}
+                onValueChange={(val) => {
+                  setLocalSettings(prev => ({ ...prev, generateImage: val }));
+                  updateSettings({ generateImage: val });
+                }}
+                trackColor={{ false: COLORS.borderLight, true: COLORS.success }}
+                thumbColor={COLORS.fg}
+              />
+            </Pressable>
+          </View>
+        </View>
       </ScrollView>
       
       {/* Alert Modal */}
@@ -502,4 +565,33 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   saveBtnText: { color: COLORS.fg, fontSize: 15, fontFamily: FONTS.display },
+  toggleCard: {
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 15,
+    marginTop: 0,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    overflow: 'hidden',
+  },
+  toggleRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  toggleRowBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  toggleDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderLight,
+    marginHorizontal: 16,
+  },
+  switchDescription: { color: COLORS.fgMuted, fontSize: 12, marginTop: 4 },
+  label: {
+    color: COLORS.fg,
+  },
 });

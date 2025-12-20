@@ -13,13 +13,60 @@
 import React from 'react';
 import { Text, View, Image, Platform } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import SyntaxHighlighter from 'react-native-syntax-highlighter';
+import CodeHighlighter from 'react-native-code-highlighter';
 import { getTextStyles, getBlockStyles } from '../themes';
 import { extractComponentData } from '../core/componentParser';
 import { sanitizeURL } from '../core/sanitize';
+
 // ============================================================================
 // Syntax Highlighting Utilities
 // ============================================================================
+
+// Atom One Dark theme - defined inline to avoid react-syntax-highlighter import issues
+const atomOneDarkStyle = {
+  'hljs': {
+    display: 'block',
+    overflowX: 'auto',
+    padding: '0.5em',
+    color: '#abb2bf',
+    background: 'transparent',
+  },
+  'hljs-comment': { color: '#5c6370', fontStyle: 'italic' },
+  'hljs-quote': { color: '#5c6370', fontStyle: 'italic' },
+  'hljs-doctag': { color: '#c678dd' },
+  'hljs-keyword': { color: '#c678dd' },
+  'hljs-formula': { color: '#c678dd' },
+  'hljs-section': { color: '#e06c75' },
+  'hljs-name': { color: '#e06c75' },
+  'hljs-selector-tag': { color: '#e06c75' },
+  'hljs-deletion': { color: '#e06c75' },
+  'hljs-subst': { color: '#e06c75' },
+  'hljs-literal': { color: '#56b6c2' },
+  'hljs-string': { color: '#98c379' },
+  'hljs-regexp': { color: '#98c379' },
+  'hljs-addition': { color: '#98c379' },
+  'hljs-attribute': { color: '#98c379' },
+  'hljs-meta-string': { color: '#98c379' },
+  'hljs-built_in': { color: '#e6c07b' },
+  'hljs-class': { color: '#e6c07b' },
+  'hljs-attr': { color: '#d19a66' },
+  'hljs-variable': { color: '#d19a66' },
+  'hljs-template-variable': { color: '#d19a66' },
+  'hljs-type': { color: '#d19a66' },
+  'hljs-selector-class': { color: '#d19a66' },
+  'hljs-selector-attr': { color: '#d19a66' },
+  'hljs-selector-pseudo': { color: '#d19a66' },
+  'hljs-number': { color: '#d19a66' },
+  'hljs-symbol': { color: '#61aeee' },
+  'hljs-bullet': { color: '#61aeee' },
+  'hljs-link': { color: '#61aeee', textDecoration: 'underline' },
+  'hljs-meta': { color: '#61aeee' },
+  'hljs-selector-id': { color: '#61aeee' },
+  'hljs-title': { color: '#61aeee' },
+  'hljs-emphasis': { fontStyle: 'italic' },
+  'hljs-strong': { fontWeight: 'bold' },
+};
+
 /**
  * Map common language aliases to Prism language names
  */
@@ -40,35 +87,6 @@ function normalizeLanguage(lang) {
         'dockerfile': 'docker',
     };
     return aliases[lang.toLowerCase()] || lang.toLowerCase();
-}
-/**
- * Create Prism syntax style from theme colors
- */
-function createSyntaxStyle(theme) {
-    return {
-        'pre[class*="language-"]': {
-            color: theme.colors.syntaxDefault,
-            background: 'transparent',
-        },
-        'token': { color: theme.colors.syntaxDefault },
-        'keyword': { color: theme.colors.syntaxKeyword },
-        'builtin': { color: theme.colors.syntaxOperator },
-        'class-name': { color: theme.colors.syntaxClass },
-        'function': { color: theme.colors.syntaxFunction },
-        'string': { color: theme.colors.syntaxString },
-        'number': { color: theme.colors.syntaxNumber },
-        'operator': { color: theme.colors.syntaxOperator },
-        'comment': { color: theme.colors.syntaxComment },
-        'punctuation': { color: theme.colors.syntaxDefault },
-        'property': { color: theme.colors.syntaxClass },
-        'constant': { color: theme.colors.syntaxNumber },
-        'boolean': { color: theme.colors.syntaxNumber },
-        'tag': { color: theme.colors.syntaxKeyword },
-        'attr-name': { color: theme.colors.syntaxString },
-        'attr-value': { color: theme.colors.syntaxString },
-        'selector': { color: theme.colors.syntaxClass },
-        'regex': { color: theme.colors.syntaxString },
-    };
 }
 // ============================================================================
 // Component Extraction (re-export for backwards compatibility)
@@ -217,7 +235,17 @@ function renderCodeBlock(node, theme, key) {
     const code = node.value.replace(/\n+$/, ''); // Trim trailing newlines
     const language = node.lang || 'text';
     const normalizedLanguage = normalizeLanguage(language);
-    const syntaxStyle = createSyntaxStyle(theme);
+    
+    // Custom style that matches our theme
+    const customStyle = {
+        ...atomOneDarkStyle,
+        'hljs': {
+            ...atomOneDarkStyle['hljs'],
+            background: 'transparent',
+            color: theme.colors.syntaxDefault || '#c9d1d9',
+        },
+    };
+    
     return (<View key={key} style={blockStyles.codeBlock}>
       {language && language !== 'text' && (<Text style={{
                 color: theme.colors.muted,
@@ -233,18 +261,24 @@ function renderCodeBlock(node, theme, key) {
         contentContainerStyle={{ flexGrow: 1 }}
         nestedScrollEnabled={true}
       >
-        <SyntaxHighlighter language={normalizedLanguage} style={syntaxStyle} highlighter="prism" customStyle={{
+        <CodeHighlighter 
+          hljsStyle={customStyle}
+          language={normalizedLanguage}
+          textStyle={{
+            fontSize: 14,
+            fontFamily: Platform.select({
+              ios: 'Menlo',
+              android: 'monospace',
+              default: 'monospace',
+            }),
+          }}
+          containerStyle={{
             backgroundColor: 'transparent',
             padding: 0,
-            margin: 0,
-        }} fontSize={14} fontFamily={Platform.select({
-            ios: 'Menlo',
-            android: 'monospace',
-            web: 'monospace',
-            default: 'monospace',
-        })} PreTag={View} CodeTag={Text}>
+          }}
+        >
           {code}
-        </SyntaxHighlighter>
+        </CodeHighlighter>
       </ScrollView>
     </View>);
 }

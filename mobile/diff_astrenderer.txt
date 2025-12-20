@@ -1,0 +1,49 @@
+diff --git a/mobile/src/lib/streamdown/renderers/ASTRenderer.js b/mobile/src/lib/streamdown/renderers/ASTRenderer.js
+index 9a4a03c..97b5ffd 100644
+--- a/mobile/src/lib/streamdown/renderers/ASTRenderer.js
++++ b/mobile/src/lib/streamdown/renderers/ASTRenderer.js
+@@ -13,7 +13,9 @@
+ import React from 'react';
+ import { Text, View, Image, Platform } from 'react-native';
+ import { ScrollView } from 'react-native-gesture-handler';
+-import SyntaxHighlighter from 'react-native-syntax-highlighter';
++// TEMPORARILY DISABLED - testing if this is the cause
++// import CodeHighlighter from 'react-native-code-highlighter';
++// import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+ import { getTextStyles, getBlockStyles } from '../themes';
+ import { extractComponentData } from '../core/componentParser';
+ import { sanitizeURL } from '../core/sanitize';
+@@ -214,10 +216,10 @@ function renderChildren(node, theme, componentRegistry, isStreaming = false) {
+  */
+ function renderCodeBlock(node, theme, key) {
+     const blockStyles = getBlockStyles(theme);
++    const styles = getTextStyles(theme);
+     const code = node.value.replace(/\n+$/, ''); // Trim trailing newlines
+     const language = node.lang || 'text';
+-    const normalizedLanguage = normalizeLanguage(language);
+-    const syntaxStyle = createSyntaxStyle(theme);
++    // TEMPORARILY DISABLED - using plain Text instead of CodeHighlighter
+     return (<View key={key} style={blockStyles.codeBlock}>
+       {language && language !== 'text' && (<Text style={{
+                 color: theme.colors.muted,
+@@ -233,18 +235,9 @@ function renderCodeBlock(node, theme, key) {
+         contentContainerStyle={{ flexGrow: 1 }}
+         nestedScrollEnabled={true}
+       >
+-        <SyntaxHighlighter language={normalizedLanguage} style={syntaxStyle} highlighter="prism" customStyle={{
+-            backgroundColor: 'transparent',
+-            padding: 0,
+-            margin: 0,
+-        }} fontSize={14} fontFamily={Platform.select({
+-            ios: 'Menlo',
+-            android: 'monospace',
+-            web: 'monospace',
+-            default: 'monospace',
+-        })} PreTag={View} CodeTag={Text}>
++        <Text style={[styles.code, { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }]}>
+           {code}
+-        </SyntaxHighlighter>
++        </Text>
+       </ScrollView>
+     </View>);
+ }

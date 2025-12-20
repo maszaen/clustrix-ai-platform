@@ -23,7 +23,7 @@ const SPRING_CONFIG = {
 // Height of agentic mode pill section (matches pill paddingVertical 8 * 2 + fontSize 13 + margins)
 const AGENTIC_SECTION_HEIGHT = 48;
 
-function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything', value = '', onChangeText, onOpenAttachmentModal, onAttachmentsChange, onInputHeightChange, onToggleAgenticMode, onToggleGenerateImage }, ref) {
+function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything', value = '', onChangeText, onOpenAttachmentModal, onAttachmentsChange, onInputHeightChange, onPillsChange, onToggleAgenticMode, onToggleGenerateImage }, ref) {
   const [text, setText] = useState(value || '');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [attachments, setAttachments] = useState([]);
@@ -122,9 +122,11 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
 
   // Animate agentic section height
   useEffect(() => {
-    const targetHeight = activePills.length > 0 ? AGENTIC_SECTION_HEIGHT : 0;
+    const baseHeight = activePills.length > 0 ? AGENTIC_SECTION_HEIGHT : 0;
+    const targetHeight = baseHeight > 0 && attachments.length > 0 ? baseHeight - 8 : baseHeight;
     agenticSectionHeight.value = withSpring(targetHeight, SPRING_CONFIG);
-  }, [activePills.length]);
+    onPillsChange?.(activePills.length);
+  }, [activePills.length, attachments.length, onPillsChange]);
 
   const attachmentStyle = useAnimatedStyle(() => ({
     height: attachmentSectionHeight.value,
@@ -169,14 +171,14 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
         {/* Agentic Mode Pill - Top */}
         <Reanimated.View style={agenticStyle}>
           {activePills.length > 0 && (
-            <View style={styles.agenticContainer}>
-              {activePills.map(pill => {
+              <View style={styles.agenticContainer}>
+                {activePills.map(pill => {
                 if (pill === 'agentic') {
                   return (
                     <Reanimated.View 
                       key="agentic"
-                      entering={ZoomIn.duration(200)}
-                      exiting={ZoomOut.duration(200)}
+                      entering={ZoomIn.duration(100)}
+                      exiting={ZoomOut.duration(100)}
                       layout={LinearTransition.springify().damping(30).stiffness(350).mass(1)}
                     >
                       <View style={styles.pill}>
@@ -355,7 +357,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   pill: {
     flexDirection: 'row',
@@ -364,12 +366,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bgSecondaryv3,
     borderRadius: 20,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
   },
   pillText: {
     color: COLORS.primary,
     fontSize: 15,
-    fontFamily: FONTS.displayItalic,
+    fontFamily: FONTS.sans,
     fontWeight: '600',
   },
 });

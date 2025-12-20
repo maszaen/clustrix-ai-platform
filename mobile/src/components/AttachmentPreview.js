@@ -1,13 +1,13 @@
 import { memo } from 'react';
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import Reanimated, { ZoomIn, ZoomOut, Layout } from 'react-native-reanimated';
+import Reanimated, { ZoomIn, ZoomOut, LinearTransition } from 'react-native-reanimated';
 import { X, FileText, File, FileImage, FileVideo, FileAudio, FileCode, FileSpreadsheet, FileArchive } from 'lucide-react-native';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 
 // Animation config
-const ANIM_DURATION = 200;
+const ANIM_DURATION = 100;
 const LAYOUT_SPRING_CONFIG = { damping: 30, stiffness: 350, mass: 1 };
 
 /**
@@ -112,7 +112,7 @@ function AttachmentPreview({ attachments = [], onRemove }) {
               style={[styles.imageItem, { width: targetWidth }]}
               entering={ZoomIn.duration(ANIM_DURATION)}
               exiting={ZoomOut.duration(ANIM_DURATION)}
-              layout={Layout.springify().damping(30).stiffness(350).mass(1)}
+              layout={LinearTransition.springify().damping(30).stiffness(350).mass(1)}
             >
               <Image 
                 source={{ uri: attachment.uri }} 

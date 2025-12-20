@@ -61,7 +61,7 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
                             styles.dropdownItemText,
                             isActive && styles.dropdownItemTextActive,
                           ]}
-                        >
+                        > 
                           {renderOption ? renderOption(item) : (item.name || item.label)}
                         </Text>
                         {isActive && (

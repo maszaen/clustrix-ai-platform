@@ -1,0 +1,18 @@
+diff --git a/mobile/app.json b/mobile/app.json
+index 1f83291..d0c0775 100644
+--- a/mobile/app.json
++++ b/mobile/app.json
+@@ -4,11 +4,11 @@
+     "slug": "clustrix-mobile",
+     "owner": "zaeniahmad",
+     "scheme": "clustrix",
+-    "version": "3.1.18",
++    "version": "3.1.25",
+     "orientation": "portrait",
+     "icon": "./assets/icon.png",
+     "userInterfaceStyle": "dark",
+-    "newArchEnabled": true,
++    "newArchEnabled": false,
+     "jsEngine": "hermes", 
+     "splash": {
+       "image": "./assets/splash-icon.png",

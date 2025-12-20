@@ -1,0 +1,21 @@
+diff --git a/mobile/src/screens/ChatScreen.js b/mobile/src/screens/ChatScreen.js
+index cdc7f36..5f10135 100644
+--- a/mobile/src/screens/ChatScreen.js
++++ b/mobile/src/screens/ChatScreen.js
+@@ -109,6 +109,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
+     createSession,
+     appendMessage,
+     updateSession,
++    updateSettings,
+     setMessageMetadata,
+     removeMessage,
+     deleteSession,
+@@ -1407,6 +1408,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
+             onOpenAttachmentModal={onOpenAttachmentModal}
+             onAttachmentsChange={setAttachmentCount}
+             onInputHeightChange={setInputExtraHeight}
++            agenticMode={settings.agenticMode}
++            onToggleAgenticMode={() => updateSettings({ agenticMode: !settings.agenticMode })}
+           />
+         </View>
+       </ReanimatedModule.View>

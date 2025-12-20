@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { WebView } from 'react-native-webview';
 import { useApp } from '../context/AppContext';
 import { streamChat, generateTitle, buildSystemPrompt } from '../services/api';
+import { streamAgenticChat, streamImageGenChat } from '../services/agenticTools';
 import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import ContextMenuFixed from '../components/ContextMenuFixed';
@@ -122,6 +123,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     saveWelcomeDraft,
     isLoadingSession,
     expectedMessageCount,
+    providerApiKeys,
     // Pagination from context
     hasMoreMessages,
     loadMoreMessages,
@@ -148,6 +150,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const [retryReasonVisible, setRetryReasonVisible] = useState(false);
   const [retryReason, setRetryReason] = useState('');
   const [metadataMenu, setMetadataMenu] = useState({ visible: false, message: null, position: null });
+  const [toolStatus, setToolStatus] = useState(null); // { name, commentary } - for tool execution indicator
   const lastHapticTime = useRef(0);
 
   // Memoized toggle handler for ChatInput
@@ -708,85 +711,146 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     const ac = new AbortController();
     abortControllerRef.current = ac;
 
-    await streamChat({
-      signal: ac.signal,
-      messages: apiMessages,
-      model: settings.model,
-      provider: settings.provider,
-      baseUrl: settings.baseUrl || undefined,
-      apiKey: settings.apiKey,
-      onChunk: (chunk) => {
-        fullContent += chunk;
-        setStreamingContent(fullContent);
-        triggerHaptic();
-      },
-      onThink: (think) => {
-        // Track when thinking starts
-        if (!thinkStartTime && think) {
-          thinkStartTime = Date.now();
-        }
-        // Append thinking content (Gemini native streams thinking in chunks)
-        fullThinking += think;
-        setThinkingContent(fullThinking);
-        onStreamingThinking?.(fullThinking);
-      },
-      onDone: async (summary = {}) => {
-        // If AI response empty (even with thinking), roll back messages and restore prompt
-        if (!fullContent.trim()) {
-          await removeMessage(session.id, userMessageIndex);
-          setIsStreaming(false);
-          setStreamingContent('');
-          setThinkingContent('');
-          setStreamingMessageId(null);
-          setInputText(text);
-          return;
-        }
+    // Store tool results for this message
+    let toolResults = [];
 
-        const content = fullThinking ? `<thinking>${fullThinking}</thinking>\n\n${fullContent}` : fullContent;
+    // Common callbacks
+    const handleChunk = (chunk) => {
+      fullContent += chunk;
+      setStreamingContent(fullContent);
+      triggerHaptic();
+    };
 
-        // Calculate thinking duration
-        const thinkDuration = thinkStartTime ? Math.round((Date.now() - thinkStartTime) / 1000) : null;
+    const handleThink = (think) => {
+      if (!thinkStartTime && think) {
+        thinkStartTime = Date.now();
+      }
+      fullThinking += think;
+      setThinkingContent(fullThinking);
+      onStreamingThinking?.(fullThinking);
+    };
 
-        const metadata = {
-          model: settings.model,
-          provider: settings.provider,
-          thinkContent: fullThinking || null,
-          thinkDuration: thinkDuration,
-          _streamingId: stableStreamingId,
-          usage: summary?.usage || null,
-          cost: summary?.usage?.cost ?? null,
-        };
-
-        // SAVE FIRST before clearing streaming states (prevents blink)
-        if (isNewSession) {
-          await appendMessage('assistant', content, { ...metadata, _messageIndex: 1 }, session);
-        } else {
-          await appendMessage('assistant', content, metadata);
-        }
-
-        // THEN clear streaming states (saved message already in state)
+    const handleDone = async (summary = {}) => {
+      setToolStatus(null);
+      
+      if (!fullContent.trim()) {
+        await removeMessage(session.id, userMessageIndex);
         setIsStreaming(false);
         setStreamingContent('');
         setThinkingContent('');
         setStreamingMessageId(null);
+        setInputText(text);
+        return;
+      }
 
-        // Generate title for new session
-        if (isNewSession) {
-          const title = await generateTitle(text, settings.model, settings.provider, settings.baseUrl, settings.apiKey);
-          await updateSession({ name: title }, session);
-        }
-      },
-      onError: async (error) => {
-        setIsStreaming(false);
-        setStreamingContent('');
-        if (isNewSession) {
-          await appendMessage('assistant', `Error: ${error}`, { error: true, _messageIndex: 1 }, session);
-        } else {
-          await appendMessage('assistant', `Error: ${error}`, { error: true });
-        }
-      },
-    });
-  }, [currentSession, clearDraft, saveWelcomeDraft, messages, createSession, appendMessage, settings, removeMessage, updateSession, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, setInputText, setNewMessageId, onStreamingThinking, triggerHaptic]);
+      const content = fullThinking ? `<thinking>${fullThinking}</thinking>\n\n${fullContent}` : fullContent;
+      const thinkDuration = thinkStartTime ? Math.round((Date.now() - thinkStartTime) / 1000) : null;
+
+      const metadata = {
+        model: settings.model,
+        provider: settings.provider,
+        thinkContent: fullThinking || null,
+        thinkDuration: thinkDuration,
+        _streamingId: stableStreamingId,
+        usage: summary?.usage || null,
+        cost: summary?.usage?.cost ?? null,
+        toolResults: toolResults.length > 0 ? toolResults : undefined,
+      };
+
+      if (isNewSession) {
+        await appendMessage('assistant', content, { ...metadata, _messageIndex: 1 }, session);
+      } else {
+        await appendMessage('assistant', content, metadata);
+      }
+
+      setIsStreaming(false);
+      setStreamingContent('');
+      setThinkingContent('');
+      setStreamingMessageId(null);
+
+      if (isNewSession) {
+        const title = await generateTitle(text, settings.model, settings.provider, settings.baseUrl, settings.apiKey);
+        await updateSession({ name: title }, session);
+      }
+    };
+
+    const handleError = async (error) => {
+      setToolStatus(null);
+      setIsStreaming(false);
+      setStreamingContent('');
+      if (isNewSession) {
+        await appendMessage('assistant', `Error: ${error}`, { error: true, _messageIndex: 1 }, session);
+      } else {
+        await appendMessage('assistant', `Error: ${error}`, { error: true });
+      }
+    };
+
+    const handleToolCall = (toolCall) => {
+      setToolStatus({ name: toolCall.name, commentary: toolCall.commentary });
+    };
+
+    const handleToolResult = (result) => {
+      toolResults.push({
+        id: result.id,
+        name: result.name,
+        success: result.success,
+        data: result.data,
+      });
+      setToolStatus(null);
+    };
+
+    // Choose streaming function based on mode
+    if (settings.agenticMode) {
+      // Web Search mode
+      await streamAgenticChat({
+        signal: ac.signal,
+        messages: apiMessages,
+        model: settings.model,
+        provider: settings.provider,
+        baseUrl: settings.baseUrl || undefined,
+        apiKey: settings.apiKey,
+        agenticConfig: settings.agenticTools,
+        onChunk: handleChunk,
+        onThink: handleThink,
+        onToolCall: handleToolCall,
+        onToolResult: handleToolResult,
+        onDone: handleDone,
+        onError: handleError,
+      });
+    } else if (settings.generateImage) {
+      // Image Generation mode
+      await streamImageGenChat({
+        signal: ac.signal,
+        messages: apiMessages,
+        model: settings.model,
+        provider: settings.provider,
+        baseUrl: settings.baseUrl || undefined,
+        apiKey: settings.apiKey,
+        agenticConfig: settings.agenticTools,
+        providerApiKeys,
+        onChunk: handleChunk,
+        onThink: handleThink,
+        onToolCall: handleToolCall,
+        onToolResult: handleToolResult,
+        onDone: handleDone,
+        onError: handleError,
+      });
+    } else {
+      // Normal chat mode
+      await streamChat({
+        signal: ac.signal,
+        messages: apiMessages,
+        model: settings.model,
+        provider: settings.provider,
+        baseUrl: settings.baseUrl || undefined,
+        apiKey: settings.apiKey,
+        onChunk: handleChunk,
+        onThink: handleThink,
+        onDone: handleDone,
+        onError: handleError,
+      });
+    }
+  }, [currentSession, clearDraft, saveWelcomeDraft, messages, createSession, appendMessage, settings, removeMessage, updateSession, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, setInputText, setNewMessageId, onStreamingThinking, triggerHaptic, providerApiKeys]);
 
   const handleStop = async () => {
     // 1. Abort network request
@@ -1126,9 +1190,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     displayMessages.push({
       _key: `msg-${sessionIdPart}-${streamingIndex}-assistant-streaming-${streamingMessageId || 'active'}`,
       role: 'assistant',
-      content: thinkingContent ? `<thinking>${thinkingContent}</thinking>\n\n${streamingContent}` : streamingContent || '...',
+      content: thinkingContent ? `<thinking>${thinkingContent}</thinking>\n\n${streamingContent}` : streamingContent || (toolStatus ? '' : '...'),
       isStreaming: true,
       shouldHaveSpacer,
+      toolStatus: toolStatus, // { name, commentary } for tool execution indicator
     });
   }
   

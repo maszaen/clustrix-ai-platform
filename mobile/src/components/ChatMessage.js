@@ -5,10 +5,11 @@ import { StreamdownRN } from '../lib/streamdown';
 import { parseThinkingBlocks } from '../utils/markdown';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info, ClipboardCopy, FileText } from 'lucide-react-native';
+import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info, ClipboardCopy, FileText, Search, ImageIcon, Loader2 } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import ContextMenu from './ContextMenu';
 import MessageAttachments from './MessageAttachments';
+import ToolResultView from './ToolResultView';
 
 // PERF: Memoized StreamdownRN wrapper to cache rendered markdown for completed messages
 // This prevents expensive re-parsing during list recycling and session loads
@@ -358,6 +359,42 @@ function TypewriterLoader() {
   );
 }
 
+// Tool Status Indicator - shows when a tool is executing
+const ToolStatusIndicator = memo(({ toolStatus }) => {
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    const spin = Animated.loop(
+      Animated.timing(spinAnim, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    spin.start();
+    return () => spin.stop();
+  }, []);
+  
+  const spinInterpolate = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+  
+  const icon = toolStatus.name === 'web_search' ? Search : ImageIcon;
+  const Icon = icon;
+  
+  return (
+    <View style={styles.toolStatusContainer}>
+      <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
+        <Loader2 size={14} color={COLORS.primary} strokeWidth={2} />
+      </Animated.View>
+      <Icon size={14} color={COLORS.fgMuted} strokeWidth={2} style={{ marginLeft: 6 }} />
+      <Text style={styles.toolStatusText}>{toolStatus.commentary}</Text>
+    </View>
+  );
+});
+
 // Memoized ChatMessage - only re-renders when props actually change
 // CRITICAL for performance during streaming (prevents all messages re-rendering on each chunk)
 const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowThinking, onRetry, onReact, onShowMetadata, onSelectText, onImagePress }) {
@@ -550,7 +587,8 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
     );
   }
 
-  const isLoading = message.isStreaming && (!textContent || textContent === '...');
+  const isLoading = message.isStreaming && (!textContent || textContent === '...') && !message.toolStatus;
+  const hasToolStatus = message.isStreaming && message.toolStatus;
 
   return (
     <>
@@ -567,6 +605,14 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
             </TouchableOpacity>
           </View>
         )}
+        
+        {/* Tool Status Indicator - shown when tool is executing */}
+        {hasToolStatus && (
+          <View style={{paddingHorizontal: 16, paddingVertical: 8}}>
+            <ToolStatusIndicator toolStatus={message.toolStatus} />
+          </View>
+        )}
+        
         <LongPressWrapper 
           onLongPress={handleLongPress} 
           disabled={message.isStreaming}
@@ -579,14 +625,28 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
               <TypewriterLoader />
             </View>
           ) : (
-            // Native Markdown for all AI messages - using MemoizedMarkdown for cached rendering
-            <View style={{paddingHorizontal: 16}}>
-              <MemoizedMarkdown
-                content={textContent}
-                isStreaming={message.isStreaming}
-                theme={MARKDOWN_THEME}
-              />
-            </View>
+            <>
+              {/* Tool Results - shown for messages with tool results */}
+              {message.toolResults?.map((result, idx) => (
+                <View key={result.id || idx} style={{marginBottom: 12}}>
+                  <ToolResultView 
+                    toolName={result.name} 
+                    result={result.data} 
+                  />
+                </View>
+              ))}
+              
+              {/* Text content */}
+              {textContent && textContent.trim() && textContent !== '...' && (
+                <View style={{paddingHorizontal: 16}}>
+                  <MemoizedMarkdown
+                    content={textContent}
+                    isStreaming={message.isStreaming}
+                    theme={MARKDOWN_THEME}
+                  />
+                </View>
+              )}
+            </>
           )}
         </LongPressWrapper>
 
@@ -738,6 +798,19 @@ const styles = StyleSheet.create({
     color: COLORS.fgMuted,
     fontSize: 14,
     fontFamily: FONTS.displayItalic,
+  },
+  // Tool status indicator styles
+  toolStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  toolStatusText: {
+    color: COLORS.fgMuted,
+    fontSize: 14,
+    fontFamily: FONTS.displayItalic,
+    marginLeft: 6,
+    flex: 1,
   },
   // User bubble styles
   userBubble: {

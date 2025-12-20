@@ -20,6 +20,21 @@ const DEFAULT_SETTINGS = {
   thinkMode: false,
   agenticMode: false,
   generateImage: false,
+  // Agentic tools configuration
+  agenticTools: {
+    webSearch: {
+      enabled: true,
+      provider: 'tavily', // 'serpapi' | 'google' | 'tavily'
+      apiKey: '',
+      googleCseId: '', // Only for Google CSE
+    },
+    imageGeneration: {
+      enabled: true,
+      provider: 'openai', // 'openai' | 'stability' | 'replicate'
+      apiKey: '', // If empty, uses main API key for OpenAI
+      model: 'dall-e-3',
+    },
+  },
 };
 
 // Character limit for initial message load

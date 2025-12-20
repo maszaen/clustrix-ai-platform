@@ -7,6 +7,7 @@ import { FONTS } from '../constants/fonts';
 import SlideLeftModal from '../components/SlideLeftModal';
 import AlertModal from '../components/AlertModal';
 import AccountScreen from './AccountScreen';
+import AgenticToolsScreen from './AgenticToolsScreen';
 import { LinearGradient } from 'react-native-svg';
 
 const LANGUAGES = [
@@ -138,13 +139,14 @@ function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved })
 }
 
 // Settings Menu Content
-function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout }) {
+function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenAgenticTools, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout }) {
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuContent}>
       <SlideLeftModal.Category
         title="Preferences"
         items={[
           { icon: 'receipt-outline', title: 'Custom Instructions', description: 'Persona and preferences', onPress: onOpenCustomInstructions },
+          { icon: 'sparkles-outline', title: 'Agentic Tools', description: 'Web search & image gen', onPress: onOpenAgenticTools },
           { icon: 'person-outline', title: 'Account', description: 'Backup/restore chats', onPress: onOpenAccount },
         ]}
       />
@@ -378,6 +380,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
   const { settings, updateSettings } = useApp();
   const [showCustomInstructions, setShowCustomInstructions] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
+  const [showAgenticTools, setShowAgenticTools] = useState(false);
   const [showSavedAlert, setShowSavedAlert] = useState(false);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
@@ -389,6 +392,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
       <SlideLeftModal visible={visible} onClose={onClose} title="Settings">
         <SettingsMenuContent 
           onOpenCustomInstructions={() => setShowCustomInstructions(true)} 
+          onOpenAgenticTools={() => setShowAgenticTools(true)}
           onOpenAccount={() => setShowAccount(true)}
           onOpenPrivacyPolicy={() => setShowPrivacyPolicy(true)}
           onOpenLicense={() => setShowLicense(true)}
@@ -408,6 +412,16 @@ export default function PersonalizationScreen({ visible, onClose }) {
           onClose={() => setShowCustomInstructions(false)}
           onShowSaved={() => setShowSavedAlert(true)}
         />
+      </SlideLeftModal>
+
+      {/* Agentic Tools Screen */}
+      <SlideLeftModal 
+        visible={showAgenticTools} 
+        onClose={() => setShowAgenticTools(false)} 
+        title="Agentic Tools"
+        showGradients={false}
+      >
+        <AgenticToolsScreen onClose={() => setShowAgenticTools(false)} />
       </SlideLeftModal>
 
       {/* Account Screen */}

@@ -1,12 +1,13 @@
-import { useState, useRef, forwardRef, useImperativeHandle, useCallback, useEffect } from 'react';
-import { View, TextInput, StyleSheet, Keyboard } from 'react-native';
+import { useState, useRef, forwardRef, useImperativeHandle, useCallback, useEffect, memo } from 'react';
+import { View, Text, TextInput, StyleSheet, Keyboard } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { LinearGradient } from 'expo-linear-gradient';
-import Reanimated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { LucideCombine, LucideImage, LucideX } from 'lucide-react-native';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, ZoomIn, ZoomOut, LinearTransition } from 'react-native-reanimated';
 import AttachmentPreview from './AttachmentPreview';
 
 // Animation config - TWEAK HERE
@@ -19,11 +20,17 @@ const SPRING_CONFIG = {
   mass: 0.8        // Lower = lighter/faster (try 0.5-2)
 };
 
-function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything', value = '', onChangeText, onOpenAttachmentModal, onAttachmentsChange, onInputHeightChange }, ref) {
+// Height of agentic mode pill section (matches pill paddingVertical 8 * 2 + fontSize 13 + margins)
+const AGENTIC_SECTION_HEIGHT = 48;
+
+function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask anything', value = '', onChangeText, onOpenAttachmentModal, onAttachmentsChange, onInputHeightChange, onToggleAgenticMode, onToggleGenerateImage }, ref) {
   const [text, setText] = useState(value || '');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [inputHeight, setInputHeight] = useState(0);
+  // Local state for pills (mimics attachments array)
+  const [activePills, setActivePills] = useState([]);
+  
   const inputRef = useRef(null);
   const insets = useSafeAreaInsets();
   const attachmentIdRef = useRef(0);
@@ -31,6 +38,8 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
   
   // Animation value for attachment section height
   const attachmentSectionHeight = useSharedValue(0);
+  // Animation value for agentic mode pill
+  const agenticSectionHeight = useSharedValue(0);
 
   // Track keyboard visibility
   useEffect(() => {
@@ -49,6 +58,15 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
     addAttachments: (newAttachments) => setAttachments(prev => [...prev, ...newAttachments]),
     getAttachmentIdRef: () => attachmentIdRef,
     getAttachmentCount: () => attachments.length,
+    setPillState: (name, enabled) => {
+      setActivePills(prev => {
+        if (enabled) {
+          return prev.includes(name) ? prev : [...prev, name];
+        } else {
+          return prev.filter(p => p !== name);
+        }
+      });
+    },
   }), [attachments.length]);
   // Sync external value changes (used for draft restore)
   useEffect(() => {
@@ -59,6 +77,19 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
   const handleRemoveAttachment = useCallback((id) => {
     setAttachments(prev => prev.filter(a => a.id !== id));
   }, []);
+
+  // Handle pill close
+  const handlePillClose = useCallback((pillName) => {
+    // Local remove (triggers ZoomOut)
+    setActivePills(prev => prev.filter(p => p !== pillName));
+    
+    // Notify parent
+    if (pillName === 'agentic') {
+      onToggleAgenticMode?.();
+    } else if (pillName === 'generate_image') {
+      onToggleGenerateImage?.();
+    }
+  }, [onToggleAgenticMode, onToggleGenerateImage]);
 
   const handleSend = () => {
     if ((!text.trim() && attachments.length === 0) || isStreaming) return;
@@ -89,9 +120,21 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
     onAttachmentsChange?.(attachments.length);
   }, [attachments.length, onAttachmentsChange]);
 
+  // Animate agentic section height
+  useEffect(() => {
+    const targetHeight = activePills.length > 0 ? AGENTIC_SECTION_HEIGHT : 0;
+    agenticSectionHeight.value = withSpring(targetHeight, SPRING_CONFIG);
+  }, [activePills.length]);
+
   const attachmentStyle = useAnimatedStyle(() => ({
     height: attachmentSectionHeight.value,
     opacity: attachmentSectionHeight.value > 10 ? 1 : 0, // Prevent flicker at 0
+    overflow: 'hidden',
+  }));
+
+  const agenticStyle = useAnimatedStyle(() => ({
+    height: agenticSectionHeight.value,
+    opacity: agenticSectionHeight.value > 10 ? 1 : 0,
     overflow: 'hidden',
   }));
 
@@ -102,13 +145,15 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
   const effectiveInputHeight = Math.min(inputHeight, 150);
   const extraInputHeight = baseInputHeight.current > 0 ? Math.max(0, effectiveInputHeight - baseInputHeight.current) : 0;
   const attachmentHeight = attachments.length > 0 ? ATTACHMENT_SECTION_HEIGHT + 5 : 0; // +5 for extra breathing room in gradient
+  // Use LOCAL state for gradient height too!
+  const agenticHeight = activePills.length > 0 ? AGENTIC_SECTION_HEIGHT : 0;
 
   return (
     <View style={styles.wrapper}>
       <LinearGradient
         colors={['transparent', COLORS.bg70, COLORS.bg90, COLORS.bg90]}
         locations={[0, 0.45, 0.6, 1]}
-        style={[styles.bottomFade, { height: insets.bottom + 85 + extraInputHeight + attachmentHeight }]}
+        style={[styles.bottomFade, { height: insets.bottom + 85 + extraInputHeight + attachmentHeight + agenticHeight }]}
         pointerEvents="none"
       />
       
@@ -121,6 +166,54 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
       </Pressable>
 
       <View style={styles.containerInput}>
+        {/* Agentic Mode Pill - Top */}
+        <Reanimated.View style={agenticStyle}>
+          {activePills.length > 0 && (
+            <View style={styles.agenticContainer}>
+              {activePills.map(pill => {
+                if (pill === 'agentic') {
+                  return (
+                    <Reanimated.View 
+                      key="agentic"
+                      entering={ZoomIn.duration(200)}
+                      exiting={ZoomOut.duration(200)}
+                      layout={LinearTransition.springify().damping(30).stiffness(350).mass(1)}
+                    >
+                      <View style={styles.pill}>
+                        <LucideCombine size={20} color={COLORS.primary} strokeWidth={2} />
+                        <Text style={styles.pillText}>Agentic</Text>
+                        <Pressable onPress={() => handlePillClose('agentic')} hitSlop={12}>
+                        <LucideX size={15} color={COLORS.primary} strokeWidth={2} />
+
+                        </Pressable>
+                      </View>
+                    </Reanimated.View>
+                  );
+                }
+                if (pill === 'generate_image') {
+                  return (
+                    <Reanimated.View 
+                      key="generate_image"
+                      entering={ZoomIn.duration(200)}
+                      exiting={ZoomOut.duration(200)}
+                      layout={LinearTransition.springify().damping(30).stiffness(350).mass(1)}
+                    >
+                      <View style={styles.pill}>
+                        <LucideImage size={20} color={COLORS.primary} strokeWidth={2} /> 
+                        <Text style={styles.pillText}>Image</Text>
+                        <Pressable onPress={() => handlePillClose('generate_image')} hitSlop={12}>
+                        <LucideX size={15} color={COLORS.primary} strokeWidth={2} />
+                        </Pressable>
+                      </View>
+                    </Reanimated.View>
+                  );
+                }
+                return null;
+              })}
+            </View>
+          )}
+        </Reanimated.View>
+
         {/* Attachment preview - above input */}
         <Reanimated.View style={attachmentStyle}>
           <AttachmentPreview 
@@ -256,7 +349,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  agenticContainer: {
+    marginBottom: 8,
+    marginTop: 4,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: COLORS.bgSecondaryv3,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  pillText: {
+    color: COLORS.primary,
+    fontSize: 15,
+    fontFamily: FONTS.displayItalic,
+    fontWeight: '600',
+  },
 });
 
 
-export default forwardRef(ChatInputComponent);
+export default memo(forwardRef(ChatInputComponent));

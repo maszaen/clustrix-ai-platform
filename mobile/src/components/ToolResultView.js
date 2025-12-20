@@ -4,7 +4,7 @@
  */
 
 import { useState, memo, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, Pressable, Linking, ActivityIndicator, Modal, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, Pressable, Linking, ActivityIndicator, Modal, Dimensions, ScrollView } from 'react-native';
 import { Globe, ExternalLink, Image as ImageIcon, Search, Download, X, Sparkles, Maximize2 } from 'lucide-react-native';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
@@ -113,6 +113,80 @@ export const WebSearchResults = memo(function WebSearchResults({ results, query 
           </Text>
         </Pressable>
       )}
+    </View>
+  );
+});
+
+/**
+ * Perplexity Search Cards - Horizontal scrolling source cards
+ * Displays Perplexity's built-in web search results
+ */
+const PerplexitySearchCard = memo(function PerplexitySearchCard({ result, isFirst }) {
+  const handlePress = useCallback(() => {
+    if (result.url) {
+      Linking.openURL(result.url);
+    }
+  }, [result.url]);
+
+  return (
+    <Pressable
+      style={[styles.pplxCard, isFirst && styles.pplxCardFirst]}
+      onPress={handlePress}
+      android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+    >
+      <View style={styles.pplxCardMeta}>
+        <Text style={styles.pplxCardDate}>{result.date || 'Recent'}</Text>
+        <Text style={styles.pplxCardSource}>{result.source || 'web'}</Text>
+      </View>
+      <Text style={styles.pplxCardTitle} numberOfLines={2}>
+        {result.title || 'Untitled'}
+      </Text>
+      {result.snippet && (
+        <Text style={styles.pplxCardSnippet} numberOfLines={3}>
+          {result.snippet}
+        </Text>
+      )}
+      <View style={styles.pplxCardLink}>
+        <Text style={styles.pplxCardLinkText}>View source</Text>
+        <ExternalLink size={12} color={COLORS.primary} />
+      </View>
+    </Pressable>
+  );
+});
+
+export const PerplexitySearchCards = memo(function PerplexitySearchCards({ searchResults }) {
+  if (!searchResults?.results || searchResults.results.length === 0) {
+    return null;
+  }
+
+  const { results } = searchResults;
+
+  return (
+    <View style={styles.pplxContainer}>
+      <View style={styles.pplxHeader}>
+        {/* Perplexity Logo SVG equivalent */}
+        <View style={styles.pplxLogoPlaceholder}>
+          <Search size={14} color={COLORS.primary} />
+        </View>
+        <Text style={styles.pplxHeaderText}>
+          Search Results ({results.length})
+        </Text>
+      </View>
+      
+      {/* Horizontal scroll container */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.pplxScrollContainer}
+      >
+        {results.map((result, index) => (
+          <PerplexitySearchCard
+            key={result.url || index}
+            result={result}
+            isFirst={index === 0}
+          />
+        ))}
+      </ScrollView>
     </View>
   );
 });
@@ -589,5 +663,91 @@ const styles = StyleSheet.create({
     color: COLORS.fgMuted,
     fontSize: 12,
     fontFamily: FONTS.mono,
+  },
+  
+  // Perplexity Search Cards
+  pplxContainer: {
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  pplxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  pplxLogoPlaceholder: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pplxHeaderText: {
+    color: COLORS.fg,
+    fontSize: 13,
+    fontFamily: FONTS.display,
+  },
+  pplxScrollContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  pplxCard: {
+    width: 220,
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  pplxCardFirst: {
+    marginLeft: 0,
+  },
+  pplxCardMeta: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 6,
+  },
+  pplxCardDate: {
+    color: COLORS.fgMuted,
+    fontSize: 10,
+    backgroundColor: COLORS.primary + '15',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  pplxCardSource: {
+    color: COLORS.fgMuted,
+    fontSize: 10,
+    backgroundColor: COLORS.borderLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  pplxCardTitle: {
+    color: COLORS.fg,
+    fontSize: 13,
+    fontFamily: FONTS.display,
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  pplxCardSnippet: {
+    color: COLORS.fgMuted,
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  pplxCardLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 'auto',
+  },
+  pplxCardLinkText: {
+    color: COLORS.primary,
+    fontSize: 11,
+    fontFamily: FONTS.display,
   },
 });

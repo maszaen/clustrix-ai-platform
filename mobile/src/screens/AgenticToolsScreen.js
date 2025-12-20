@@ -1,471 +1,150 @@
 /**
- * AgenticToolsScreen - Configure web search and image generation APIs
+ * AgenticToolsScreen - Configure web search API
+ * 
+ * Follows the same pattern as CustomInstructionsContent in PersonalizationScreen
  */
 
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Switch, Linking } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { Search, Image as ImageIcon, Eye, EyeClosed, ExternalLink, Info, ChevronDown, Check } from 'lucide-react-native';
+import { Eye, EyeClosed, ExternalLink, Check } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 const SEARCH_PROVIDERS = [
-  { id: 'tavily', name: 'Tavily', description: 'AI-optimized search (recommended)', freeCredits: true },
-  { id: 'serpapi', name: 'SerpAPI', description: 'Google search results', freeCredits: true },
-  { id: 'google', name: 'Google CSE', description: 'Google Custom Search Engine', freeCredits: false },
+  { id: 'tavily', name: 'Tavily', desc: 'AI-optimized search', url: 'https://app.tavily.com/home' },
+  { id: 'serpapi', name: 'SerpAPI', desc: 'Google results via API', url: 'https://serpapi.com/manage-api-key' },
+  { id: 'google', name: 'Google CSE', desc: 'Custom Search Engine', url: 'https://programmablesearchengine.google.com/' },
 ];
 
-const IMAGE_PROVIDERS = [
-  { id: 'openai', name: 'OpenAI DALL-E', description: 'DALL-E 3 (high quality)', models: ['dall-e-3', 'dall-e-2'] },
-  { id: 'stability', name: 'Stability AI', description: 'Stable Diffusion XL', models: ['stable-diffusion-xl-1024-v1-0'] },
-  { id: 'replicate', name: 'Replicate', description: 'Various models', models: ['sdxl', 'flux'] },
-];
-
-export default function AgenticToolsScreen({ onClose, dragHandlers }) {
-  const { settings, updateSettings, providerApiKeys } = useApp();
+export default function AgenticToolsScreen({ onClose }) {
+  const { settings, updateSettings } = useApp();
   
-  const [localSettings, setLocalSettings] = useState({
-    webSearch: {
-      enabled: settings.agenticTools?.webSearch?.enabled ?? true,
-      provider: settings.agenticTools?.webSearch?.provider || 'tavily',
-      apiKey: settings.agenticTools?.webSearch?.apiKey || '',
-      googleCseId: settings.agenticTools?.webSearch?.googleCseId || '',
-    },
-    imageGeneration: {
-      enabled: settings.agenticTools?.imageGeneration?.enabled ?? true,
-      provider: settings.agenticTools?.imageGeneration?.provider || 'openai',
-      apiKey: settings.agenticTools?.imageGeneration?.apiKey || '',
-      model: settings.agenticTools?.imageGeneration?.model || 'dall-e-3',
-    },
-  });
+  const [provider, setProvider] = useState(settings.agenticTools?.webSearch?.provider || 'tavily');
+  const [apiKey, setApiKey] = useState(settings.agenticTools?.webSearch?.apiKey || '');
+  const [googleCseId, setGoogleCseId] = useState(settings.agenticTools?.webSearch?.googleCseId || '');
+  const [showApiKey, setShowApiKey] = useState(false);
   
-  const [showSearchKey, setShowSearchKey] = useState(false);
-  const [showImageKey, setShowImageKey] = useState(false);
-  const [expandedSection, setExpandedSection] = useState('search'); // 'search' | 'image' | null
-  
-  // Auto-save settings
+  // Auto-save
   useEffect(() => {
     const timer = setTimeout(() => {
       updateSettings({
         agenticTools: {
-          webSearch: localSettings.webSearch,
-          imageGeneration: localSettings.imageGeneration,
+          ...settings.agenticTools,
+          webSearch: { provider, apiKey, googleCseId },
         },
       });
     }, 300);
     return () => clearTimeout(timer);
-  }, [localSettings]);
+  }, [provider, apiKey, googleCseId]);
   
-  const openLink = (url) => {
-    Linking.openURL(url);
-  };
-  
-  const selectedSearchProvider = SEARCH_PROVIDERS.find(p => p.id === localSettings.webSearch.provider);
-  const selectedImageProvider = IMAGE_PROVIDERS.find(p => p.id === localSettings.imageGeneration.provider);
+  const selectedProvider = SEARCH_PROVIDERS.find(p => p.id === provider);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header} {...dragHandlers}>
-        <Text style={styles.headerTitle}>Agentic Tools</Text>
-      </View>
-      
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {/* Info Banner */}
-        <View style={styles.infoBanner}>
-          <Info size={16} color={COLORS.primary} />
-          <Text style={styles.infoText}>
-            Configure API keys for AI agent tools. These enable web search and image generation when Agentic Mode is active.
-          </Text>
-        </View>
-        
-        {/* Web Search Section */}
-        <View style={styles.section}>
-          <Pressable 
-            style={styles.sectionHeader}
-            onPress={() => setExpandedSection(expandedSection === 'search' ? null : 'search')}
+    <ScrollView showsVerticalScrollIndicator={false} style={styles.subContainer} contentContainerStyle={styles.content}>
+      {/* Provider Selection */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Search Provider</Text>
+        {SEARCH_PROVIDERS.map(p => (
+          <Pressable
+            key={p.id}
+            style={[styles.providerCard, provider === p.id && styles.providerCardActive]}
+            onPress={() => setProvider(p.id)}
+            android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
           >
-            <View style={styles.sectionHeaderLeft}>
-              <Search size={20} color={COLORS.primary} />
+            <View style={styles.providerRow}>
               <View>
-                <Text style={styles.sectionTitle}>Web Search</Text>
-                <Text style={styles.sectionSubtitle}>{selectedSearchProvider?.name}</Text>
-              </View>
-            </View>
-            <View style={styles.sectionHeaderRight}>
-              <Switch
-                value={localSettings.webSearch.enabled}
-                onValueChange={(val) => setLocalSettings(prev => ({
-                  ...prev,
-                  webSearch: { ...prev.webSearch, enabled: val },
-                }))}
-                trackColor={{ false: COLORS.borderLight, true: COLORS.success }}
-                thumbColor={COLORS.fg}
-              />
-              <ChevronDown 
-                size={20} 
-                color={COLORS.fgMuted}
-                style={{ transform: [{ rotate: expandedSection === 'search' ? '180deg' : '0deg' }] }}
-              />
-            </View>
-          </Pressable>
-          
-          {expandedSection === 'search' && (
-            <View style={styles.sectionContent}>
-              {/* Provider Selection */}
-              <Text style={styles.label}>Provider</Text>
-              <View style={styles.providerGrid}>
-                {SEARCH_PROVIDERS.map(provider => (
-                  <Pressable
-                    key={provider.id}
-                    style={[
-                      styles.providerCard,
-                      localSettings.webSearch.provider === provider.id && styles.providerCardActive,
-                    ]}
-                    onPress={() => setLocalSettings(prev => ({
-                      ...prev,
-                      webSearch: { ...prev.webSearch, provider: provider.id },
-                    }))}
-                  >
-                    <View style={styles.providerCardHeader}>
-                      <Text style={[
-                        styles.providerName,
-                        localSettings.webSearch.provider === provider.id && styles.providerNameActive,
-                      ]}>
-                        {provider.name}
-                      </Text>
-                      {localSettings.webSearch.provider === provider.id && (
-                        <Check size={16} color={COLORS.primary} />
-                      )}
-                    </View>
-                    <Text style={styles.providerDesc}>{provider.description}</Text>
-                    {provider.freeCredits && (
-                      <Text style={styles.freeTag}>Free tier available</Text>
-                    )}
-                  </Pressable>
-                ))}
-              </View>
-              
-              {/* API Key */}
-              <Text style={styles.label}>API Key</Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.input}
-                  value={localSettings.webSearch.apiKey}
-                  onChangeText={(text) => setLocalSettings(prev => ({
-                    ...prev,
-                    webSearch: { ...prev.webSearch, apiKey: text },
-                  }))}
-                  placeholder={`Enter ${selectedSearchProvider?.name} API key`}
-                  placeholderTextColor={COLORS.fgMuted}
-                  secureTextEntry={!showSearchKey}
-                  autoCapitalize="none"
-                />
-                <Pressable style={styles.eyeBtn} onPress={() => setShowSearchKey(!showSearchKey)}>
-                  {showSearchKey ? <EyeClosed size={20} color={COLORS.fgMuted} /> : <Eye size={20} color={COLORS.fgMuted} />}
-                </Pressable>
-              </View>
-              
-              {/* Get API Key Link */}
-              <Pressable 
-                style={styles.linkBtn}
-                onPress={() => {
-                  const urls = {
-                    tavily: 'https://app.tavily.com/home',
-                    serpapi: 'https://serpapi.com/manage-api-key',
-                    google: 'https://programmablesearchengine.google.com/',
-                  };
-                  openLink(urls[localSettings.webSearch.provider] || urls.tavily);
-                }}
-              >
-                <ExternalLink size={14} color={COLORS.primary} />
-                <Text style={styles.linkText}>Get {selectedSearchProvider?.name} API Key</Text>
-              </Pressable>
-              
-              {/* Google CSE ID (only for Google) */}
-              {localSettings.webSearch.provider === 'google' && (
-                <>
-                  <Text style={styles.label}>Custom Search Engine ID</Text>
-                  <TextInput
-                    style={styles.inputFull}
-                    value={localSettings.webSearch.googleCseId}
-                    onChangeText={(text) => setLocalSettings(prev => ({
-                      ...prev,
-                      webSearch: { ...prev.webSearch, googleCseId: text },
-                    }))}
-                    placeholder="Enter your CSE ID (cx parameter)"
-                    placeholderTextColor={COLORS.fgMuted}
-                    autoCapitalize="none"
-                  />
-                </>
-              )}
-            </View>
-          )}
-        </View>
-        
-        {/* Image Generation Section */}
-        <View style={styles.section}>
-          <Pressable 
-            style={styles.sectionHeader}
-            onPress={() => setExpandedSection(expandedSection === 'image' ? null : 'image')}
-          >
-            <View style={styles.sectionHeaderLeft}>
-              <ImageIcon size={20} color={COLORS.accent} />
-              <View>
-                <Text style={styles.sectionTitle}>Image Generation</Text>
-                <Text style={styles.sectionSubtitle}>{selectedImageProvider?.name}</Text>
-              </View>
-            </View>
-            <View style={styles.sectionHeaderRight}>
-              <Switch
-                value={localSettings.imageGeneration.enabled}
-                onValueChange={(val) => setLocalSettings(prev => ({
-                  ...prev,
-                  imageGeneration: { ...prev.imageGeneration, enabled: val },
-                }))}
-                trackColor={{ false: COLORS.borderLight, true: COLORS.success }}
-                thumbColor={COLORS.fg}
-              />
-              <ChevronDown 
-                size={20} 
-                color={COLORS.fgMuted}
-                style={{ transform: [{ rotate: expandedSection === 'image' ? '180deg' : '0deg' }] }}
-              />
-            </View>
-          </Pressable>
-          
-          {expandedSection === 'image' && (
-            <View style={styles.sectionContent}>
-              {/* Provider Selection */}
-              <Text style={styles.label}>Provider</Text>
-              <View style={styles.providerGrid}>
-                {IMAGE_PROVIDERS.map(provider => (
-                  <Pressable
-                    key={provider.id}
-                    style={[
-                      styles.providerCard,
-                      localSettings.imageGeneration.provider === provider.id && styles.providerCardActive,
-                    ]}
-                    onPress={() => setLocalSettings(prev => ({
-                      ...prev,
-                      imageGeneration: { 
-                        ...prev.imageGeneration, 
-                        provider: provider.id,
-                        model: provider.models[0],
-                      },
-                    }))}
-                  >
-                    <View style={styles.providerCardHeader}>
-                      <Text style={[
-                        styles.providerName,
-                        localSettings.imageGeneration.provider === provider.id && styles.providerNameActive,
-                      ]}>
-                        {provider.name}
-                      </Text>
-                      {localSettings.imageGeneration.provider === provider.id && (
-                        <Check size={16} color={COLORS.accent} />
-                      )}
-                    </View>
-                    <Text style={styles.providerDesc}>{provider.description}</Text>
-                  </Pressable>
-                ))}
-              </View>
-              
-              {/* API Key */}
-              <Text style={styles.label}>API Key</Text>
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={styles.input}
-                  value={localSettings.imageGeneration.apiKey}
-                  onChangeText={(text) => setLocalSettings(prev => ({
-                    ...prev,
-                    imageGeneration: { ...prev.imageGeneration, apiKey: text },
-                  }))}
-                  placeholder={
-                    localSettings.imageGeneration.provider === 'openai'
-                      ? 'Leave empty to use main OpenAI key'
-                      : `Enter ${selectedImageProvider?.name} API key`
-                  }
-                  placeholderTextColor={COLORS.fgMuted}
-                  secureTextEntry={!showImageKey}
-                  autoCapitalize="none"
-                />
-                <Pressable style={styles.eyeBtn} onPress={() => setShowImageKey(!showImageKey)}>
-                  {showImageKey ? <EyeClosed size={20} color={COLORS.fgMuted} /> : <Eye size={20} color={COLORS.fgMuted} />}
-                </Pressable>
-              </View>
-              
-              {/* Info for OpenAI */}
-              {localSettings.imageGeneration.provider === 'openai' && !localSettings.imageGeneration.apiKey && (
-                <Text style={styles.hintText}>
-                  Will use your main OpenAI API key if left empty
+                <Text style={[styles.providerName, provider === p.id && styles.providerNameActive]}>
+                  {p.name}
                 </Text>
-              )}
-              
-              {/* Get API Key Link */}
-              <Pressable 
-                style={styles.linkBtn}
-                onPress={() => {
-                  const urls = {
-                    openai: 'https://platform.openai.com/api-keys',
-                    stability: 'https://platform.stability.ai/account/keys',
-                    replicate: 'https://replicate.com/account/api-tokens',
-                  };
-                  openLink(urls[localSettings.imageGeneration.provider] || urls.openai);
-                }}
-              >
-                <ExternalLink size={14} color={COLORS.primary} />
-                <Text style={styles.linkText}>Get {selectedImageProvider?.name} API Key</Text>
-              </Pressable>
-              
-              {/* Model Selection */}
-              <Text style={styles.label}>Model</Text>
-              <View style={styles.modelChips}>
-                {selectedImageProvider?.models.map(model => (
-                  <Pressable
-                    key={model}
-                    style={[
-                      styles.modelChip,
-                      localSettings.imageGeneration.model === model && styles.modelChipActive,
-                    ]}
-                    onPress={() => setLocalSettings(prev => ({
-                      ...prev,
-                      imageGeneration: { ...prev.imageGeneration, model },
-                    }))}
-                  >
-                    <Text style={[
-                      styles.modelChipText,
-                      localSettings.imageGeneration.model === model && styles.modelChipTextActive,
-                    ]}>
-                      {model}
-                    </Text>
-                  </Pressable>
-                ))}
+                <Text style={styles.providerDesc}>{p.desc}</Text>
               </View>
+              {provider === p.id && <Check size={18} color={COLORS.primary} />}
             </View>
-          )}
+          </Pressable>
+        ))}
+      </View>
+
+      {/* API Key */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>API Key</Text>
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.inputFlex}
+            value={apiKey}
+            onChangeText={setApiKey}
+            placeholder={`Enter ${selectedProvider?.name} API key`}
+            placeholderTextColor={COLORS.fgMuted}
+            secureTextEntry={!showApiKey}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Pressable style={styles.eyeBtn} onPress={() => setShowApiKey(!showApiKey)}>
+            {showApiKey ? <EyeClosed size={20} color={COLORS.fgMuted} /> : <Eye size={20} color={COLORS.fgMuted} />}
+          </Pressable>
         </View>
-        
-        {/* Usage Tips */}
-        <View style={styles.tipsSection}>
-          <Text style={styles.tipsTitle}>💡 How to use</Text>
-          <Text style={styles.tipText}>
-            1. Enable <Text style={styles.tipBold}>Agentic Mode</Text> in Model Config
-          </Text>
-          <Text style={styles.tipText}>
-            2. Ask Clustrix to search the web or generate images
-          </Text>
-          <Text style={styles.tipText}>
-            3. Examples: "Search for latest news about AI" or "Generate an image of a sunset"
+        <Pressable 
+          style={styles.linkRow}
+          onPress={() => Linking.openURL(selectedProvider?.url)}
+        >
+          <ExternalLink size={14} color={COLORS.primary} />
+          <Text style={styles.linkText}>Get {selectedProvider?.name} API Key</Text>
+        </Pressable>
+      </View>
+
+      {/* Google CSE ID (only for Google) */}
+      {provider === 'google' && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Search Engine ID</Text>
+          <TextInput
+            style={styles.input}
+            value={googleCseId}
+            onChangeText={setGoogleCseId}
+            placeholder="Enter your CSE ID (cx parameter)"
+            placeholderTextColor={COLORS.fgMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Text style={styles.hint}>Found in your Custom Search Engine settings</Text>
+        </View>
+      )}
+
+      {/* Status indicator */}
+      <View style={styles.section}>
+        <View style={[styles.statusRow, apiKey ? styles.statusOk : styles.statusWarn]}>
+          <Ionicons 
+            name={apiKey ? "checkmark-circle" : "warning"} 
+            size={18} 
+            color={apiKey ? COLORS.success : COLORS.warning} 
+          />
+          <Text style={[styles.statusText, apiKey ? styles.statusTextOk : styles.statusTextWarn]}>
+            {apiKey ? `${selectedProvider?.name} configured` : 'No API key - web search disabled'}
           </Text>
         </View>
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: COLORS.bgSecondaryv2,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  headerTitle: { 
-    color: COLORS.fg, 
-    fontSize: 18, 
-    fontFamily: FONTS.display,
-  },
-  content: { flex: 1 },
-  contentContainer: { 
-    padding: 16, 
-    paddingBottom: 40,
-  },
-  
-  // Info Banner
-  infoBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: COLORS.primary + '15',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '30',
-  },
-  infoText: {
-    flex: 1,
-    color: COLORS.fg,
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  
-  // Section
-  section: {
-    backgroundColor: COLORS.inputBg,
-    borderRadius: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-    overflow: 'hidden',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  sectionHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  sectionHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  sectionTitle: {
-    color: COLORS.fg,
-    fontSize: 15,
-    fontFamily: FONTS.display,
-  },
-  sectionSubtitle: {
-    color: COLORS.fgMuted,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  sectionContent: {
-    padding: 16,
-    paddingTop: 0,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
-  },
-  
-  // Labels
-  label: {
-    color: COLORS.fgMuted,
-    fontSize: 12,
-    fontFamily: FONTS.ai,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  
-  // Provider Grid
-  providerGrid: {
-    gap: 10,
+  subContainer: { flex: 1, paddingTop: 10 },
+  content: { paddingBottom: 40 },
+  section: { marginBottom: 20 },
+  sectionTitle: { 
+    color: COLORS.fgMuted, 
+    fontSize: 12, 
+    fontFamily: FONTS.ai, 
+    textTransform: 'uppercase', 
+    letterSpacing: 0.5, 
+    paddingHorizontal: 4, 
+    marginBottom: 6 
   },
   providerCard: {
-    backgroundColor: COLORS.bg,
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 15,
+    padding: 14,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
@@ -473,16 +152,15 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
     backgroundColor: COLORS.primary + '10',
   },
-  providerCardHeader: {
+  providerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    alignItems: 'center',
   },
   providerName: {
     color: COLORS.fg,
     fontSize: 14,
-    fontFamily: FONTS.display,
+    fontFamily: FONTS.sans,
   },
   providerNameActive: {
     color: COLORS.primary,
@@ -490,109 +168,72 @@ const styles = StyleSheet.create({
   providerDesc: {
     color: COLORS.fgMuted,
     fontSize: 12,
-  },
-  freeTag: {
-    color: COLORS.success,
-    fontSize: 10,
-    marginTop: 6,
-    fontFamily: FONTS.ai,
-  },
-  
-  // Input
-  inputRow: {
-    position: 'relative',
+    marginTop: 2,
   },
   input: {
-    backgroundColor: COLORS.bg,
-    borderRadius: 12,
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 15,
     padding: 14,
-    paddingRight: 50,
     color: COLORS.fg,
     fontSize: 14,
-    fontFamily: FONTS.mono,
+    fontFamily: FONTS.sans,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
-  inputFull: {
-    backgroundColor: COLORS.bg,
-    borderRadius: 12,
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  inputFlex: {
+    flex: 1,
     padding: 14,
     color: COLORS.fg,
     fontSize: 14,
     fontFamily: FONTS.mono,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
   },
   eyeBtn: {
-    position: 'absolute',
-    right: 14,
-    top: 14,
+    padding: 14,
   },
-  hintText: {
-    color: COLORS.fgMuted,
-    fontSize: 11,
-    marginTop: 6,
-    fontStyle: 'italic',
-  },
-  
-  // Link Button
-  linkBtn: {
+  linkRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 10,
+    marginTop: 8,
   },
   linkText: {
     color: COLORS.primary,
     fontSize: 13,
   },
-  
-  // Model Chips
-  modelChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  modelChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: COLORS.bg,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  modelChipActive: {
-    borderColor: COLORS.accent,
-    backgroundColor: COLORS.accent + '20',
-  },
-  modelChipText: {
+  hint: {
     color: COLORS.fgMuted,
     fontSize: 12,
+    marginTop: 6,
+    paddingHorizontal: 4,
   },
-  modelChipTextActive: {
-    color: COLORS.accent,
-  },
-  
-  // Tips Section
-  tipsSection: {
-    backgroundColor: COLORS.bgSecondary,
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
     borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
   },
-  tipsTitle: {
-    color: COLORS.fg,
-    fontSize: 14,
-    fontFamily: FONTS.display,
-    marginBottom: 12,
+  statusOk: {
+    backgroundColor: COLORS.success + '15',
   },
-  tipText: {
-    color: COLORS.fgMuted,
+  statusWarn: {
+    backgroundColor: COLORS.warning + '15',
+  },
+  statusText: {
     fontSize: 13,
-    lineHeight: 22,
   },
-  tipBold: {
-    color: COLORS.primary,
-    fontWeight: '600',
+  statusTextOk: {
+    color: COLORS.success,
+  },
+  statusTextWarn: {
+    color: COLORS.warning,
   },
 });

@@ -520,7 +520,7 @@ function createThrottledChunkHandler(onChunk, interval = 500) {
  * Stream chat - main entry point
  * Throttles chunk delivery to frontend every 500ms for smoother rendering
  */
-export async function streamChat({ messages, model, provider, baseUrl, apiKey, onChunk, onThink, onDone, onError, signal }) {
+export async function streamChat({ messages, model, provider, baseUrl, apiKey, onChunk, onThink, onDone, onError, onSearchResults, signal }) {
   const providerLower = (provider || '').toLowerCase();
   const base = baseUrl || DEFAULT_PROVIDERS[providerLower]?.baseUrl || DEFAULT_PROVIDERS.openai.baseUrl;
   
@@ -534,6 +534,11 @@ export async function streamChat({ messages, model, provider, baseUrl, apiKey, o
   };
   
   try {
+    // Perplexity - non-streaming mode with built-in web search
+    if (providerLower === 'perplexity') {
+      return handlePerplexityRequest({ messages, model, baseUrl: base, apiKey, onChunk, onThink, onDone: wrappedOnDone, onError, onSearchResults, signal });
+    }
+    
     if (providerLower === 'google' || providerLower === 'gemini') {
       return streamGeminiChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError, signal });
     }
@@ -549,6 +554,80 @@ export async function streamChat({ messages, model, provider, baseUrl, apiKey, o
     return streamOpenAIChunked({ messages, model, baseUrl: base, apiKey, onChunk: throttledOnChunk, onThink, onDone: wrappedOnDone, onError, signal });
   } catch (error) {
     flushChunks(); // Flush on error too
+    onError?.(error.message);
+  }
+}
+
+/**
+ * Perplexity API - Non-streaming mode with built-in web search
+ * Returns search_results in response that should be displayed as source cards
+ */
+async function handlePerplexityRequest({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError, onSearchResults, signal }) {
+  try {
+    const formattedMessages = formatMessagesOpenAI(messages);
+    
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: formattedMessages,
+        stream: false, // Perplexity doesn't support true streaming well
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMsg = errorData.error?.message || `Perplexity error: ${response.status}`;
+      onError?.(errorMsg);
+      return;
+    }
+
+    const data = await response.json();
+    
+    // Extract search results (Perplexity built-in web search)
+    const searchResults = data.search_results || [];
+    const citations = data.citations || [];
+    
+    if (searchResults.length > 0 && onSearchResults) {
+      onSearchResults({
+        results: searchResults,
+        citations,
+      });
+    }
+    
+    // Stream the content word by word for smooth UI
+    const content = data.choices?.[0]?.message?.content || '';
+    if (content) {
+      const words = content.split(' ');
+      for (const word of words) {
+        if (signal?.aborted) break;
+        if (word.trim()) {
+          onChunk?.(word + ' ');
+          await new Promise(r => setTimeout(r, 15)); // Simulate streaming
+        }
+      }
+    }
+    
+    // Extract usage with cost (Perplexity specific)
+    const usage = data.usage ? {
+      prompt_tokens: data.usage.prompt_tokens,
+      completion_tokens: data.usage.completion_tokens,
+      total_tokens: data.usage.total_tokens,
+      cost: data.usage.cost, // Perplexity includes cost
+    } : null;
+    
+    onDone?.({ 
+      usage,
+      searchResults: searchResults.length > 0 ? { results: searchResults, citations } : null,
+    });
+    
+  } catch (error) {
+    if (error.name === 'AbortError') return;
     onError?.(error.message);
   }
 }

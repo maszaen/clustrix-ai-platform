@@ -8,7 +8,8 @@ import SlideLeftModal from '../components/SlideLeftModal';
 import AlertModal from '../components/AlertModal';
 import AccountScreen from './AccountScreen';
 import AgenticToolsScreen from './AgenticToolsScreen';
-import { LinearGradient } from 'react-native-svg';
+import ImageModelsScreen from './ImageModelsScreen';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const LANGUAGES = [
   { id: 'autodetect', name: 'Auto-detect' },
@@ -139,14 +140,15 @@ function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved })
 }
 
 // Settings Menu Content
-function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenAgenticTools, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout }) {
+function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenAgenticTools, onOpenImageModels, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout }) {
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuContent}>
       <SlideLeftModal.Category
         title="Preferences"
         items={[
           { icon: 'receipt-outline', title: 'Custom Instructions', description: 'Persona and preferences', onPress: onOpenCustomInstructions },
-          { icon: 'sparkles-outline', title: 'Agentic Tools', description: 'Web search & image gen', onPress: onOpenAgenticTools },
+          { icon: 'search-outline', title: 'Web Search', description: 'Configure search API for Agentic Mode', onPress: onOpenAgenticTools },
+          { icon: 'images-outline', title: 'Image Model', description: 'Configure image model for image gen', onPress: onOpenImageModels },
           { icon: 'person-outline', title: 'Account', description: 'Backup/restore chats', onPress: onOpenAccount },
         ]}
       />
@@ -381,6 +383,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
   const [showCustomInstructions, setShowCustomInstructions] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [showAgenticTools, setShowAgenticTools] = useState(false);
+  const [showImageModels, setShowImageModels] = useState(false);
   const [showSavedAlert, setShowSavedAlert] = useState(false);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
@@ -393,6 +396,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
         <SettingsMenuContent 
           onOpenCustomInstructions={() => setShowCustomInstructions(true)} 
           onOpenAgenticTools={() => setShowAgenticTools(true)}
+          onOpenImageModels={() => setShowImageModels(true)}
           onOpenAccount={() => setShowAccount(true)}
           onOpenPrivacyPolicy={() => setShowPrivacyPolicy(true)}
           onOpenLicense={() => setShowLicense(true)}
@@ -414,14 +418,24 @@ export default function PersonalizationScreen({ visible, onClose }) {
         />
       </SlideLeftModal>
 
-      {/* Agentic Tools Screen */}
+      {/* Web Search Config Screen */}
       <SlideLeftModal 
         visible={showAgenticTools} 
         onClose={() => setShowAgenticTools(false)} 
-        title="Agentic Tools"
+        title="Web Search"
         showGradients={false}
       >
         <AgenticToolsScreen onClose={() => setShowAgenticTools(false)} />
+      </SlideLeftModal>
+
+      {/* Image Models Screen */}
+      <SlideLeftModal 
+        visible={showImageModels} 
+        onClose={() => setShowImageModels(false)} 
+        title="Image Model"
+        showGradients={false}
+      >
+        <ImageModelsScreen onClose={() => setShowImageModels(false)} />
       </SlideLeftModal>
 
       {/* Account Screen */}

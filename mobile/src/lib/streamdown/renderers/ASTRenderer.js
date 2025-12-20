@@ -13,7 +13,6 @@
 import React from 'react';
 import { Text, View, Image, Platform } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import CodeHighlighter from 'react-native-code-highlighter';
 import { getTextStyles, getBlockStyles } from '../themes';
 import { extractComponentData } from '../core/componentParser';
 import { sanitizeURL } from '../core/sanitize';
@@ -22,53 +21,8 @@ import { sanitizeURL } from '../core/sanitize';
 // Syntax Highlighting Utilities
 // ============================================================================
 
-// Atom One Dark theme - defined inline to avoid react-syntax-highlighter import issues
-const atomOneDarkStyle = {
-  'hljs': {
-    display: 'block',
-    overflowX: 'auto',
-    padding: '0.5em',
-    color: '#abb2bf',
-    background: 'transparent',
-  },
-  'hljs-comment': { color: '#5c6370', fontStyle: 'italic' },
-  'hljs-quote': { color: '#5c6370', fontStyle: 'italic' },
-  'hljs-doctag': { color: '#c678dd' },
-  'hljs-keyword': { color: '#c678dd' },
-  'hljs-formula': { color: '#c678dd' },
-  'hljs-section': { color: '#e06c75' },
-  'hljs-name': { color: '#e06c75' },
-  'hljs-selector-tag': { color: '#e06c75' },
-  'hljs-deletion': { color: '#e06c75' },
-  'hljs-subst': { color: '#e06c75' },
-  'hljs-literal': { color: '#56b6c2' },
-  'hljs-string': { color: '#98c379' },
-  'hljs-regexp': { color: '#98c379' },
-  'hljs-addition': { color: '#98c379' },
-  'hljs-attribute': { color: '#98c379' },
-  'hljs-meta-string': { color: '#98c379' },
-  'hljs-built_in': { color: '#e6c07b' },
-  'hljs-class': { color: '#e6c07b' },
-  'hljs-attr': { color: '#d19a66' },
-  'hljs-variable': { color: '#d19a66' },
-  'hljs-template-variable': { color: '#d19a66' },
-  'hljs-type': { color: '#d19a66' },
-  'hljs-selector-class': { color: '#d19a66' },
-  'hljs-selector-attr': { color: '#d19a66' },
-  'hljs-selector-pseudo': { color: '#d19a66' },
-  'hljs-number': { color: '#d19a66' },
-  'hljs-symbol': { color: '#61aeee' },
-  'hljs-bullet': { color: '#61aeee' },
-  'hljs-link': { color: '#61aeee', textDecoration: 'underline' },
-  'hljs-meta': { color: '#61aeee' },
-  'hljs-selector-id': { color: '#61aeee' },
-  'hljs-title': { color: '#61aeee' },
-  'hljs-emphasis': { fontStyle: 'italic' },
-  'hljs-strong': { fontWeight: 'bold' },
-};
-
 /**
- * Map common language aliases to Prism language names
+ * Map common language aliases for display
  */
 function normalizeLanguage(lang) {
     const aliases = {
@@ -228,30 +182,26 @@ function renderChildren(node, theme, componentRegistry, isStreaming = false) {
 // Specialized Renderers
 // ============================================================================
 /**
- * Render a code block with syntax highlighting
+ * Render a code block (plain text with monospace font)
+ * Note: Syntax highlighting removed due to Metro bundler compatibility issues
  */
 function renderCodeBlock(node, theme, key) {
     const blockStyles = getBlockStyles(theme);
     const code = node.value.replace(/\n+$/, ''); // Trim trailing newlines
     const language = node.lang || 'text';
-    const normalizedLanguage = normalizeLanguage(language);
     
-    // Custom style that matches our theme
-    const customStyle = {
-        ...atomOneDarkStyle,
-        'hljs': {
-            ...atomOneDarkStyle['hljs'],
-            background: 'transparent',
-            color: theme.colors.syntaxDefault || '#c9d1d9',
-        },
-    };
+    const monoFont = Platform.select({
+        ios: 'Menlo',
+        android: 'monospace',
+        default: 'monospace',
+    });
     
     return (<View key={key} style={blockStyles.codeBlock}>
       {language && language !== 'text' && (<Text style={{
                 color: theme.colors.muted,
                 fontSize: 12,
                 marginBottom: 8,
-                fontFamily: theme.fonts.mono,
+                fontFamily: monoFont,
             }}>
           {language}
         </Text>)}
@@ -261,24 +211,14 @@ function renderCodeBlock(node, theme, key) {
         contentContainerStyle={{ flexGrow: 1 }}
         nestedScrollEnabled={true}
       >
-        <CodeHighlighter 
-          hljsStyle={customStyle}
-          language={normalizedLanguage}
-          textStyle={{
-            fontSize: 14,
-            fontFamily: Platform.select({
-              ios: 'Menlo',
-              android: 'monospace',
-              default: 'monospace',
-            }),
-          }}
-          containerStyle={{
-            backgroundColor: 'transparent',
-            padding: 0,
-          }}
-        >
+        <Text style={{
+          color: theme.colors.codeForeground || '#a2a9b0',
+          fontSize: 14,
+          fontFamily: monoFont,
+          lineHeight: 20,
+        }}>
           {code}
-        </CodeHighlighter>
+        </Text>
       </ScrollView>
     </View>);
 }

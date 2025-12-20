@@ -713,6 +713,14 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
 
     // Store tool results for this message
     let toolResults = [];
+    
+    // Store Perplexity search results (built-in web search)
+    let perplexitySearchResults = null;
+    
+    // Handler for Perplexity search results
+    const handleSearchResults = (results) => {
+      perplexitySearchResults = results;
+    };
 
     // Common callbacks
     const handleChunk = (chunk) => {
@@ -755,6 +763,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         usage: summary?.usage || null,
         cost: summary?.usage?.cost ?? null,
         toolResults: toolResults.length > 0 ? toolResults : undefined,
+        // Perplexity search results (built-in web search)
+        perplexityResults: summary?.searchResults || perplexitySearchResults || null,
       };
 
       if (isNewSession) {
@@ -777,12 +787,27 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     const handleError = async (error) => {
       setToolStatus(null);
       setIsStreaming(false);
-      setStreamingContent('');
+      
+      const errorMessage = `\n\n**Error:** ${error.message || error}`;
+      const finalContent = fullThinking 
+         ? `<thinking>${fullThinking}</thinking>\n\n${fullContent}${errorMessage}`
+         : `${fullContent}${errorMessage}`;
+
+      const metadata = {
+        error: true,
+        thinkContent: fullThinking || null,
+        toolResults: toolResults.length > 0 ? toolResults : undefined,
+      };
+
       if (isNewSession) {
-        await appendMessage('assistant', `Error: ${error}`, { error: true, _messageIndex: 1 }, session);
+        await appendMessage('assistant', finalContent, { ...metadata, _messageIndex: 1 }, session);
       } else {
-        await appendMessage('assistant', `Error: ${error}`, { error: true });
+        await appendMessage('assistant', finalContent, metadata);
       }
+
+      setStreamingContent('');
+      setThinkingContent('');
+      setStreamingMessageId(null);
     };
 
     const handleToolCall = (toolCall) => {
@@ -795,13 +820,18 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         name: result.name,
         success: result.success,
         data: result.data,
+        input: result.input,
+        output: result.output,
       });
       setToolStatus(null);
     };
 
     // Choose streaming function based on mode
-    if (settings.agenticMode) {
-      // Web Search mode
+    // Note: Perplexity has built-in web search, skip agentic mode
+    const isPerplexity = (settings.provider || '').toLowerCase() === 'perplexity';
+    
+    if (settings.agenticMode && !isPerplexity) {
+      // Web Search mode (skip for Perplexity - has built-in search)
       await streamAgenticChat({
         signal: ac.signal,
         messages: apiMessages,
@@ -818,7 +848,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         onError: handleError,
       });
     } else if (settings.generateImage) {
-      // Image Generation mode
+      // Image Generation mode - uses user's current provider only
       await streamImageGenChat({
         signal: ac.signal,
         messages: apiMessages,
@@ -826,8 +856,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         provider: settings.provider,
         baseUrl: settings.baseUrl || undefined,
         apiKey: settings.apiKey,
-        agenticConfig: settings.agenticTools,
-        providerApiKeys,
+        imageModel: settings.imageModel || 'auto',
         onChunk: handleChunk,
         onThink: handleThink,
         onToolCall: handleToolCall,
@@ -836,7 +865,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         onError: handleError,
       });
     } else {
-      // Normal chat mode
+      // Normal chat mode (includes Perplexity with built-in web search)
       await streamChat({
         signal: ac.signal,
         messages: apiMessages,
@@ -848,9 +877,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         onThink: handleThink,
         onDone: handleDone,
         onError: handleError,
+        onSearchResults: handleSearchResults, // Perplexity built-in search
       });
     }
-  }, [currentSession, clearDraft, saveWelcomeDraft, messages, createSession, appendMessage, settings, removeMessage, updateSession, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, setInputText, setNewMessageId, onStreamingThinking, triggerHaptic, providerApiKeys]);
+  }, [currentSession, clearDraft, saveWelcomeDraft, messages, createSession, appendMessage, settings, removeMessage, updateSession, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, setInputText, setNewMessageId, onStreamingThinking, triggerHaptic]);
 
   const handleStop = async () => {
     // 1. Abort network request

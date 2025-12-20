@@ -13,6 +13,8 @@
  * No memory system needed - AI caches context automatically per session.
  */
 
+import { DEFAULT_PROVIDERS } from './api';
+
 // ===================================================================
 // TOOL DEFINITIONS - For AI function calling (OpenAI format)
 // ===================================================================
@@ -125,7 +127,8 @@ export const IMAGE_GENERATION_TOOL_GEMINI = {
  * @param {Object} enabledTools - { webSearch: boolean, imageGeneration: boolean }
  */
 export function getAgenticTools(provider, enabledTools = { webSearch: true, imageGeneration: true }) {
-  const providerLower = (provider || 'openai').toLowerCase();
+  if (!provider) throw new Error('Provider is required for getAgenticTools');
+  const providerLower = provider.toLowerCase();
   const tools = [];
 
   if (providerLower === 'anthropic' || providerLower === 'claude') {
@@ -177,20 +180,30 @@ export async function executeWebSearch(input, config) {
   }
 
   const provider = (config.provider || 'tavily').toLowerCase();
+  
+  // Add current date to queries for up-to-date results
+  const today = new Date();
+  const dateString = today.toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
 
   try {
     let allResults = [];
 
     for (const query of queries) {
+      // Append date to query for current results
+      const queryWithDate = `${query} ${dateString}`;
       let results;
 
       if (provider === 'tavily') {
-        results = await searchTavily(query, config.apiKey);
+        results = await searchTavily(queryWithDate, config.apiKey);
       } else if (provider === 'google') {
-        results = await searchGoogle(query, config.apiKey, config.googleCseId);
+        results = await searchGoogle(queryWithDate, config.apiKey, config.googleCseId);
       } else {
         // Default: SerpAPI
-        results = await searchSerpAPI(query, config.apiKey);
+        results = await searchSerpAPI(queryWithDate, config.apiKey);
       }
 
       allResults = [...allResults, ...results];
@@ -337,9 +350,57 @@ function formatSearchOutput(results) {
 // IMAGE GENERATION EXECUTION
 // ===================================================================
 
+// ===================================================================
+// IMAGE GENERATION EXECUTION - Uses user's selected provider ONLY
+// ===================================================================
+
+// Provider image generation support map (2025 latest)
+const IMAGE_GEN_SUPPORT = {
+  openai: { 
+    supported: true, 
+    defaultModel: 'gpt-image-1.5',
+    models: ['gpt-image-1.5', 'gpt-image-1', 'dall-e-3', 'dall-e-2'] 
+  },
+  google: { 
+    supported: true, 
+    defaultModel: 'imagen-4.0-generate-001',
+    models: ['imagen-4.0-generate-001', 'imagen-3.0-generate-002', 'gemini-2.5-flash-image'] 
+  },
+  gemini: { 
+    supported: true, 
+    defaultModel: 'imagen-4.0-generate-001',
+    models: ['imagen-4.0-generate-001', 'imagen-3.0-generate-002', 'gemini-2.5-flash-image'] 
+  },
+  xai: {
+    supported: true,
+    defaultModel: 'grok-2-image-1212',
+    models: ['grok-2-image-1212']
+  },
+  zhipu: {
+    supported: true,
+    defaultModel: 'cogview-4',
+    models: ['cogview-4', 'cogview-3-flash']
+  },
+  bigmodel: {
+    supported: true,
+    defaultModel: 'cogview-4-250304',
+    models: ['cogview-4-250304', 'cogview-3-flash']
+  },
+  anthropic: { supported: false, reason: 'Anthropic/Claude does not support native image generation.' },
+  mistral: { supported: false, reason: 'Mistral does not have native image generation API.' },
+  deepseek: { supported: false, reason: 'DeepSeek Janus Pro is local-only, no hosted API.' },
+  perplexity: { supported: false, reason: 'Perplexity does not support image generation.' },
+  cerebras: { supported: false, reason: 'Cerebras does not support image generation.' },
+  groq: { supported: false, reason: 'Groq does not support image generation.' },
+  openrouter: { supported: false, reason: 'OpenRouter is a proxy - image generation depends on the underlying model.' },
+  megallm: { supported: false, reason: 'MegaLLM is a proxy, image generation not supported.' },
+};
+
 /**
- * Execute image generation using configured provider
- * @param {Object} input - { prompt, style?, size?, commentary? }
+ * Execute image generation using user's selected provider
+ * NO FALLBACK - uses provider user selected only
+ * 
+ * @param {Object} input - { prompt, style?, size? }
  * @param {Object} config - { provider, apiKey, model? }
  */
 export async function executeImageGeneration(input, config) {
@@ -352,11 +413,24 @@ export async function executeImageGeneration(input, config) {
   if (!config?.apiKey) {
     return {
       success: false,
-      output: 'Error: Image generation API key not configured. Go to Settings > Agentic Tools.',
+      output: 'Error: API key not configured for your provider.',
     };
   }
 
-  const provider = (config.provider || 'openai').toLowerCase();
+  if (!config.provider) {
+    return { success: false, output: 'Error: Provider not specified. Check your settings.' };
+  }
+  const providerLower = config.provider.toLowerCase();
+  
+  // Check if provider supports image generation
+  const support = IMAGE_GEN_SUPPORT[providerLower];
+  if (!support?.supported) {
+    const reason = support?.reason || `Provider "${config.provider}" does not support image generation.`;
+    return {
+      success: false,
+      output: `Error: ${reason}\n\nSupported providers for image generation:\n- OpenAI (DALL-E 3)\n- Google/Gemini (Imagen 3)`,
+    };
+  }
 
   // Enhance prompt with style
   const stylePrompts = {
@@ -379,13 +453,19 @@ export async function executeImageGeneration(input, config) {
   try {
     let result;
 
-    if (provider === 'stability') {
-      result = await generateWithStability(enhancedPrompt, size, config);
-    } else if (provider === 'replicate') {
-      result = await generateWithReplicate(enhancedPrompt, size, config);
-    } else {
-      // Default: OpenAI DALL-E
+    if (providerLower === 'openai') {
       result = await generateWithOpenAI(enhancedPrompt, size, config);
+    } else if (providerLower === 'google' || providerLower === 'gemini') {
+      result = await generateWithGemini(enhancedPrompt, size, config);
+    } else if (providerLower === 'xai') {
+      result = await generateWithXAI(enhancedPrompt, size, config);
+    } else if (providerLower === 'zhipu' || providerLower === 'bigmodel') {
+      result = await generateWithZhipu(enhancedPrompt, size, config);
+    } else {
+      return {
+        success: false,
+        output: `Error: No image generation implementation for provider "${config.provider}".`,
+      };
     }
 
     return {
@@ -404,11 +484,22 @@ export async function executeImageGeneration(input, config) {
   }
 }
 
+/**
+ * Generate image with OpenAI DALL-E / GPT Image
+ */
 async function generateWithOpenAI(prompt, size, config) {
-  const model = config.model || 'dall-e-3';
+  // Model from user's imageModel setting (resolved in streamImageGenChat)
+  const model = config.model;
+  if (!model) {
+    throw new Error('No image model specified. Configure in Settings > Image Model.');
+  }
+  
   const imageSize = size || '1024x1024';
+  
+  // Use user's baseUrl or get from DEFAULT_PROVIDERS
+  const baseUrl = config.baseUrl || DEFAULT_PROVIDERS.openai?.baseUrl || 'https://api.openai.com/v1';
 
-  const response = await fetch('https://api.openai.com/v1/images/generations', {
+  const response = await fetch(`${baseUrl}/images/generations`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -441,113 +532,151 @@ async function generateWithOpenAI(prompt, size, config) {
   };
 }
 
-async function generateWithStability(prompt, size, config) {
-  const model = config.model || 'stable-diffusion-xl-1024-v1-0';
-
-  let width = 1024,
-    height = 1024;
-  if (size === '1792x1024') {
-    width = 1792;
-    height = 1024;
-  } else if (size === '1024x1792') {
-    width = 1024;
-    height = 1792;
+/**
+ * Generate image with Google Gemini Imagen
+ */
+async function generateWithGemini(prompt, size, config) {
+  // Model from user's imageModel setting (resolved in streamImageGenChat)
+  const model = config.model;
+  if (!model) {
+    throw new Error('No image model specified. Configure in Settings > Image Model.');
   }
+  
+  // Use user's baseUrl or get from DEFAULT_PROVIDERS
+  const baseUrl = config.baseUrl || DEFAULT_PROVIDERS.google?.baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
+  const url = `${baseUrl}/models/${model}:predict?key=${config.apiKey}`;
 
-  const response = await fetch(`https://api.stability.ai/v1/generation/${model}/text-to-image`, {
+  // Map size to aspect ratio
+  let aspectRatio = '1:1';
+  if (size === '1792x1024') aspectRatio = '16:9';
+  else if (size === '1024x1792') aspectRatio = '9:16';
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
-      Accept: 'application/json',
     },
     body: JSON.stringify({
-      text_prompts: [{ text: prompt, weight: 1 }],
-      cfg_scale: 7,
-      width,
-      height,
-      samples: 1,
-      steps: 30,
+      instances: [{ prompt }],
+      parameters: {
+        sampleCount: 1,
+        aspectRatio,
+      },
     }),
   });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `Stability AI error: ${response.status}`);
+    throw new Error(error.error?.message || `Gemini error: ${response.status}`);
   }
 
   const data = await response.json();
-  const artifact = data.artifacts?.[0];
+  const prediction = data.predictions?.[0];
 
-  if (!artifact) {
-    throw new Error('No image generated');
+  if (!prediction?.bytesBase64Encoded) {
+    throw new Error('No image generated from Gemini');
   }
 
   return {
-    base64: artifact.base64,
+    base64: prediction.bytesBase64Encoded,
     url: null,
   };
 }
 
-async function generateWithReplicate(prompt, size, config) {
-  const model = config.model || 'stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b';
-
-  let width = 1024,
-    height = 1024;
-  if (size === '1792x1024') {
-    width = 1792;
-    height = 1024;
-  } else if (size === '1024x1792') {
-    width = 1024;
-    height = 1792;
+/**
+ * Generate image with xAI Grok (Aurora)
+ * API: https://api.x.ai/v1/images/generations
+ */
+async function generateWithXAI(prompt, size, config) {
+  const model = config.model;
+  if (!model) {
+    throw new Error('No image model specified. Configure in Settings > Image Model.');
   }
-
-  // Create prediction
-  const createResponse = await fetch('https://api.replicate.com/v1/predictions', {
+  
+  const baseUrl = config.baseUrl || DEFAULT_PROVIDERS.xai?.baseUrl || 'https://api.x.ai/v1';
+  
+  const response = await fetch(`${baseUrl}/images/generations`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Token ${config.apiKey}`,
+      Authorization: `Bearer ${config.apiKey}`,
     },
     body: JSON.stringify({
-      version: model.split(':')[1] || model,
-      input: { prompt, width, height },
+      model,
+      prompt,
+      n: 1,
     }),
   });
 
-  if (!createResponse.ok) {
-    const error = await createResponse.json().catch(() => ({}));
-    throw new Error(error.detail || `Replicate error: ${createResponse.status}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error?.message || `xAI error: ${response.status}`);
   }
 
-  const prediction = await createResponse.json();
+  const data = await response.json();
+  const imageData = data.data?.[0];
 
-  // Poll for result (max 60 seconds)
-  const maxAttempts = 30;
-  for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(r => setTimeout(r, 2000));
-
-    const pollResponse = await fetch(prediction.urls.get, {
-      headers: { Authorization: `Token ${config.apiKey}` },
-    });
-
-    if (!pollResponse.ok) {
-      throw new Error('Failed to poll prediction status');
-    }
-
-    const status = await pollResponse.json();
-
-    if (status.status === 'succeeded') {
-      const imageUrl = Array.isArray(status.output) ? status.output[0] : status.output;
-      return { url: imageUrl, base64: null };
-    }
-
-    if (status.status === 'failed') {
-      throw new Error(status.error || 'Image generation failed');
-    }
+  if (!imageData?.url && !imageData?.b64_json) {
+    throw new Error('No image generated from xAI');
   }
 
-  throw new Error('Image generation timed out');
+  return {
+    url: imageData.url,
+    base64: imageData.b64_json,
+  };
+}
+
+/**
+ * Generate image with Zhipu/BigModel CogView
+ * API: https://open.bigmodel.cn/api/paas/v4/images/generations
+ */
+async function generateWithZhipu(prompt, size, config) {
+  const model = config.model;
+  if (!model) {
+    throw new Error('No image model specified. Configure in Settings > Image Model.');
+  }
+  
+  // Zhipu/BigModel use same API - check provider to get correct default
+  const providerLower = (config.provider || '').toLowerCase();
+  const defaultBase = providerLower === 'zhipu' 
+    ? DEFAULT_PROVIDERS.zhipu?.baseUrl 
+    : DEFAULT_PROVIDERS.bigmodel?.baseUrl;
+  const baseUrl = config.baseUrl || defaultBase || 'https://open.bigmodel.cn/api/paas/v4';
+  
+  // Map size to CogView format
+  let imageSize = '1024x1024';
+  if (size === '1792x1024') imageSize = '1920x1080';
+  else if (size === '1024x1792') imageSize = '1080x1920';
+  
+  const response = await fetch(`${baseUrl}/images/generations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      prompt,
+      size: imageSize,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error?.message || `Zhipu error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const imageData = data.data?.[0];
+
+  if (!imageData?.url && !imageData?.b64_json) {
+    throw new Error('No image generated from CogView');
+  }
+
+  return {
+    url: imageData.url,
+    base64: imageData.b64_json,
+  };
 }
 
 // ===================================================================
@@ -711,17 +840,14 @@ export async function streamAgenticChat({
   onError,
   signal,
 }) {
-  const providerLower = (provider || 'openai').toLowerCase();
-  const MAX_ITERATIONS = 10;
-  
-  // For agentic mode, only enable web search tool
-  const hasWebSearchKey = agenticConfig?.webSearch?.apiKey;
-  
-  if (!hasWebSearchKey) {
-    onError?.('Web search API key not configured. Go to Settings > Agentic Tools to add your API key.');
+  if (!provider) {
+    onError?.('Provider not specified. Check your settings.');
     return;
   }
+  const providerLower = provider.toLowerCase();
+  const MAX_ITERATIONS = 50; // Match Electron
   
+  // For agentic mode, only enable web search tool (allow missing key for AI feedback)
   const tools = getAgenticTools(providerLower, { webSearch: true, imageGeneration: false });
   
   // Working copy of conversation
@@ -743,6 +869,7 @@ export async function streamAgenticChat({
       const response = await callOpenAIWithTools({
         messages: conversationMessages,
         model,
+        provider,
         baseUrl,
         apiKey,
         tools,
@@ -777,21 +904,40 @@ export async function streamAgenticChat({
       const toolCalls = parseToolCalls(assistantMessage);
       
       for (const toolCall of toolCalls) {
+        const commentary = toolCall.commentary || getDefaultCommentary(toolCall.name, toolCall.input);
+        
         // Notify UI about tool execution
         onToolCall?.({
           id: toolCall.id,
           name: toolCall.name,
           input: toolCall.input,
-          commentary: toolCall.commentary || getDefaultCommentary(toolCall.name, toolCall.input),
+          commentary: commentary,
         });
+
+        // 1. Stream COMMAND INPUT tag
+        const inputPayload = JSON.stringify({
+            command: toolCall.name,
+            args: toolCall.input,
+            commentary: commentary
+        });
+        onChunk(`<!--command-input-->${inputPayload}<!--/command-input-->`);
         
         // Execute the tool (only web_search for agentic mode)
         const result = await executeWebSearch(toolCall.input, agenticConfig.webSearch);
         
+        // 2. Stream COMMAND OUTPUT tag
+        const outputPayload = JSON.stringify({
+            success: result.success,
+            output: result.output
+        });
+        onChunk(`<!--command-output-->${outputPayload}<!--/command-output-->`);
+        
         // Notify UI about result
+        // Notify UI about result (success or failure)
         onToolResult?.({
           id: toolCall.id,
           name: toolCall.name,
+          input: toolCall.input, // Pass input to frontend
           success: result.success,
           output: result.output,
           data: result,
@@ -802,80 +948,22 @@ export async function streamAgenticChat({
       }
       
     } catch (error) {
+      console.error('[AGENTIC-CHAT] Loop error:', error);
       onError?.(error.message || 'Agentic chat error');
       return;
     }
   }
   
   // Max iterations reached
-  onError?.('Maximum search iterations reached. Please try a simpler request.');
-}
-
-/**
- * Execute image generation request
- * Uses user's main provider first (if OpenAI), then falls back to configured image API
- * 
- * @param {Object} params - Generation parameters
- */
-export async function executeImageGenerationWithFallback({
-  prompt,
-  style,
-  size,
-  mainProvider,
-  mainApiKey,
-  agenticConfig,
-  providerApiKeys,
-}) {
-  // Priority order for image generation:
-  // 1. User's selected provider (if OpenAI)
-  // 2. OpenAI from providerApiKeys
-  // 3. Configured image gen API in agenticTools settings
-  
-  const providerLower = (mainProvider || '').toLowerCase();
-  
-  // Try 1: User's main provider if it's OpenAI
-  if ((providerLower === 'openai' || providerLower.includes('openai')) && mainApiKey) {
-    try {
-      const result = await executeImageGeneration(
-        { prompt, style, size },
-        { provider: 'openai', apiKey: mainApiKey, model: 'dall-e-3' }
-      );
-      if (result.success) return result;
-    } catch (e) {
-      console.warn('Main provider image gen failed:', e.message);
-    }
-  }
-  
-  // Try 2: OpenAI from saved provider keys
-  if (providerApiKeys?.openai) {
-    try {
-      const result = await executeImageGeneration(
-        { prompt, style, size },
-        { provider: 'openai', apiKey: providerApiKeys.openai, model: 'dall-e-3' }
-      );
-      if (result.success) return result;
-    } catch (e) {
-      console.warn('OpenAI provider image gen failed:', e.message);
-    }
-  }
-  
-  // Try 3: Configured image generation API
-  if (agenticConfig?.imageGeneration?.apiKey) {
-    return executeImageGeneration(
-      { prompt, style, size },
-      agenticConfig.imageGeneration
-    );
-  }
-  
-  return {
-    success: false,
-    output: 'No image generation API available. Use OpenAI or configure an image generation API in Settings > Agentic Tools.',
-  };
+  console.warn('[AGENTIC-CHAT] Max iterations reached');
+  onDone?.({ usage: totalUsage });
 }
 
 /**
  * Stream chat with image generation capability
  * generateImage mode = AI can generate images using generate_image tool
+ * 
+ * USES USER'S SELECTED PROVIDER ONLY - NO FALLBACK
  */
 export async function streamImageGenChat({
   messages,
@@ -883,8 +971,7 @@ export async function streamImageGenChat({
   provider,
   baseUrl,
   apiKey,
-  agenticConfig,
-  providerApiKeys,
+  imageModel, // 'auto' or specific model like 'dall-e-3'
   onChunk,
   onThink,
   onToolCall,
@@ -893,17 +980,42 @@ export async function streamImageGenChat({
   onError,
   signal,
 }) {
-  const providerLower = (provider || 'openai').toLowerCase();
-  const MAX_ITERATIONS = 5; // Image gen needs fewer iterations
-  
-  // Check if we have any image generation capability
-  const hasOpenAI = providerLower === 'openai' || !!providerApiKeys?.openai;
-  const hasConfiguredImageGen = !!agenticConfig?.imageGeneration?.apiKey;
-  
-  if (!hasOpenAI && !hasConfiguredImageGen) {
-    onError?.('No image generation API available. Use OpenAI provider or configure image API in Settings > Agentic Tools.');
+  if (!provider) {
+    onError?.('Provider not specified. Check your settings.');
     return;
   }
+  
+  // 1. Determine Effective Provider based on Image Model Setting FIRST
+  // "USE SETTINGS FIRST" - user preference overrides current chat provider
+  let providerLower = provider.toLowerCase();
+  
+  if (imageModel && imageModel !== 'auto') {
+    // If specific model selected, find which provider owns it
+    // Iterate over all providers in IMAGE_GEN_SUPPORT
+    const ownerProvider = Object.keys(IMAGE_GEN_SUPPORT).find(key => 
+      IMAGE_GEN_SUPPORT[key].models?.includes(imageModel)
+    );
+    
+    // If we found a provider for this model, switch to it
+    if (ownerProvider) {
+      providerLower = ownerProvider;
+    }
+  }
+
+  const MAX_ITERATIONS = 50; // Matched with Electron backend
+  
+  // Check if (effective) user's provider supports image generation
+  const support = IMAGE_GEN_SUPPORT[providerLower];
+  if (!support?.supported) {
+    const reason = support?.reason || `Your current provider "${provider}" does not support image generation.`;
+    onError?.(`${reason}\n\nSupported providers:\n- OpenAI (GPT Image 1.5, DALL-E 3)\n- Google/Gemini (Imagen 4)`);
+    return;
+  }
+  
+  // Determine which image model to use
+  const resolvedImageModel = (!imageModel || imageModel === 'auto') 
+    ? support.defaultModel 
+    : imageModel;
   
   const tools = getAgenticTools(providerLower, { webSearch: false, imageGeneration: true });
   
@@ -921,6 +1033,7 @@ export async function streamImageGenChat({
       const response = await callOpenAIWithTools({
         messages: conversationMessages,
         model,
+        provider,
         baseUrl,
         apiKey,
         tools,
@@ -950,49 +1063,91 @@ export async function streamImageGenChat({
       const toolCalls = parseToolCalls(assistantMessage);
       
       for (const toolCall of toolCalls) {
+        const commentary = toolCall.commentary || getDefaultCommentary(toolCall.name, toolCall.input);
+        
         onToolCall?.({
           id: toolCall.id,
           name: toolCall.name,
           input: toolCall.input,
-          commentary: toolCall.commentary || getDefaultCommentary(toolCall.name, toolCall.input),
+          commentary: commentary,
         });
-        
-        // Execute image generation with fallback logic
-        const result = await executeImageGenerationWithFallback({
-          prompt: toolCall.input.prompt,
-          style: toolCall.input.style,
-          size: toolCall.input.size,
-          mainProvider: provider,
-          mainApiKey: apiKey,
-          agenticConfig,
-          providerApiKeys,
+
+        // 1. Stream COMMAND INPUT tag
+        const inputPayload = JSON.stringify({
+            command: toolCall.name,
+            args: toolCall.input,
+            commentary: commentary
         });
+        onChunk(`<!--command-input-->${inputPayload}<!--/command-input-->`);
         
+        // Execute image generation - effective provider/model already set in logic above
+        let result;
+        try {
+          if (toolCall.name === 'generate_image') {
+              result = await executeImageGeneration(
+                {
+                  prompt: toolCall.input.prompt,
+                  style: toolCall.input.style,
+                  size: toolCall.input.size,
+                },
+                {
+                  provider: providerLower,
+                  apiKey: apiKey,
+                  baseUrl: baseUrl,
+                  model: resolvedImageModel,
+                }
+              );
+          } else {
+             result = { success: false, output: `Unknown tool: ${toolCall.name}` };
+          }
+        } catch (error) {
+          result = { success: false, output: `Tool execution failed: ${error.message}` };
+        }
+        
+        // Notify UI about result (success or failure)
+        // 2. Stream COMMAND OUTPUT tag
+        const outputPayload = JSON.stringify({
+            success: result.success,
+            output: result.output
+        });
+        onChunk(`<!--command-output-->${outputPayload}<!--/command-output-->`);
+
+        // Notify UI about result (success or failure)
         onToolResult?.({
           id: toolCall.id,
           name: toolCall.name,
+          input: toolCall.input,
           success: result.success,
           output: result.output,
-          data: result,
+          data: result
         });
         
         conversationMessages.push(formatToolResult(toolCall.id, result));
       }
       
     } catch (error) {
+      console.error('[IMAGE-GEN] Loop error:', error);
       onError?.(error.message || 'Image generation error');
       return;
     }
   }
   
-  onError?.('Maximum iterations reached.');
+  console.warn('[IMAGE-GEN] Max iterations reached');
+  onDone?.({ usage: totalUsage });
 }
 
 /**
- * Make OpenAI API call with tools (non-streaming for tool calls)
+ * Make OpenAI-compatible API call with tools (non-streaming for tool calls)
+ * Works with: OpenAI, OpenRouter, Groq, Zhipu, BigModel, xAI, etc.
  */
-async function callOpenAIWithTools({ messages, model, baseUrl, apiKey, tools, onChunk, onThink }) {
-  const base = baseUrl || 'https://api.openai.com/v1';
+async function callOpenAIWithTools({ messages, model, provider, baseUrl, apiKey, tools, onChunk, onThink }) {
+  // Use user's baseUrl or get default from provider
+  const providerLower = (provider || '').toLowerCase();
+  const base = baseUrl || DEFAULT_PROVIDERS[providerLower]?.baseUrl;
+  
+  if (!base) {
+    throw new Error(`No baseUrl configured for provider "${provider}". Check your settings.`);
+  }
   
   const body = {
     model,

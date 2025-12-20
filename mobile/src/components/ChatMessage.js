@@ -9,7 +9,9 @@ import { PanelBottomOpen, RotateCcw, Copy, Check, ThumbsUp, ThumbsDown, Info, Cl
 import * as Clipboard from 'expo-clipboard';
 import ContextMenu from './ContextMenu';
 import MessageAttachments from './MessageAttachments';
-import ToolResultView from './ToolResultView';
+import ToolResultView, { PerplexitySearchCards } from './ToolResultView';
+import { parseAgentContent } from '../utils/agenticParser';
+import CommandGroup from './CommandGroup';
 
 // PERF: Memoized StreamdownRN wrapper to cache rendered markdown for completed messages
 // This prevents expensive re-parsing during list recycling and session loads
@@ -435,16 +437,31 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
   
   // Memoize parsing - only recalculate when content changes
   const blocks = useMemo(() => {
-    return isUser 
-      ? [{ type: 'text', content: message.content }] 
-      : parseThinkingBlocks(message.content || '');
+    if (isUser) return [{ type: 'text', content: message.content }];
+    
+    // 1. First separate thinking blocks from regular content
+    const initialBlocks = parseThinkingBlocks(message.content || '');
+    
+    // 2. Then parse commands within the text blocks
+    const finalBlocks = [];
+    initialBlocks.forEach(block => {
+      if (block.type === 'text') {
+        const agentBlocks = parseAgentContent(block.content);
+        finalBlocks.push(...agentBlocks);
+      } else {
+        finalBlocks.push(block);
+      }
+    });
+    
+    return finalBlocks;
   }, [message.content, isUser]);
   
   // Memoize derived values
-  const { hasThinking, thinkingContent, textContent } = useMemo(() => ({
+  const { hasThinking, thinkingContent, textContent, hasCommands } = useMemo(() => ({
     hasThinking: blocks.some(b => b.type === 'thinking'),
     thinkingContent: blocks.find(b => b.type === 'thinking')?.content || '',
     textContent: blocks.filter(b => b.type === 'text').map(b => b.content).join(''),
+    hasCommands: blocks.some(b => b.type === 'command_group' || b.type === 'command_unit'),
   }), [blocks]);
 
   // Fade in action buttons after stream completes
@@ -587,7 +604,7 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
     );
   }
 
-  const isLoading = message.isStreaming && (!textContent || textContent === '...') && !message.toolStatus;
+  const isLoading = message.isStreaming && (!textContent || textContent === '...') && !message.toolStatus && !hasCommands;
   const hasToolStatus = message.isStreaming && message.toolStatus;
 
   return (
@@ -636,16 +653,41 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
                 </View>
               ))}
               
-              {/* Text content */}
-              {textContent && textContent.trim() && textContent !== '...' && (
-                <View style={{paddingHorizontal: 16}}>
-                  <MemoizedMarkdown
-                    content={textContent}
-                    isStreaming={message.isStreaming}
-                    theme={MARKDOWN_THEME}
-                  />
+              {/* Perplexity Search Results - built-in web search */}
+              {message.perplexityResults && (
+                <View style={{marginBottom: 12, paddingHorizontal: 16}}>
+                  <PerplexitySearchCards searchResults={message.perplexityResults} />
                 </View>
               )}
+              
+              {/* Text content and Commands mixed */}
+              {blocks.map((block, index) => {
+                if (block.type === 'thinking') return null; // Rendered at top
+                
+                if (block.type === 'command_group') {
+                  return (
+                    <View key={`cmd-${index}`} style={{paddingHorizontal: 16, marginVertical: 4}}>
+                      <CommandGroup group={block} />
+                    </View>
+                  );
+                }
+                
+                if (block.type === 'text' && (block.content || block.content === '')) {
+                   // Even empty text might be needed if it's acting as a spacer or cursor holder in streaming
+                   if (!block.content.trim() && !message.isStreaming) return null;
+                   
+                   return (
+                    <View key={`txt-${index}`} style={{paddingHorizontal: 16}}>
+                      <MemoizedMarkdown
+                        content={block.content}
+                        isStreaming={message.isStreaming && index === blocks.length - 1}
+                        theme={MARKDOWN_THEME}
+                      />
+                    </View>
+                   );
+                }
+                return null;
+              })}
             </>
           )}
         </LongPressWrapper>

@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
-import Reanimated, { ZoomIn, ZoomOut, LinearTransition } from 'react-native-reanimated';
+import Reanimated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { X, FileText, File, FileImage, FileVideo, FileAudio, FileCode, FileSpreadsheet, FileArchive } from 'lucide-react-native';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
@@ -110,8 +110,8 @@ function AttachmentPreview({ attachments = [], onRemove }) {
             <Reanimated.View 
               key={key} 
               style={[styles.imageItem, { width: targetWidth }]}
-              entering={ZoomIn.duration(ANIM_DURATION)}
-              exiting={ZoomOut.duration(ANIM_DURATION)}
+              entering={FadeIn.duration(ANIM_DURATION)}
+              exiting={FadeOut.duration(ANIM_DURATION)}
               layout={LinearTransition.springify().damping(30).stiffness(350).mass(1)}
             >
               <Image 
@@ -137,9 +137,9 @@ function AttachmentPreview({ attachments = [], onRemove }) {
             <Reanimated.View 
               key={key} 
               style={styles.fileItem}
-              entering={ZoomIn.duration(ANIM_DURATION)}
-              exiting={ZoomOut.duration(ANIM_DURATION)}
-              layout={Layout.springify().damping(30).stiffness(350).mass(1)}
+              entering={FadeIn.duration(ANIM_DURATION)}
+              exiting={FadeOut.duration(ANIM_DURATION)}
+              layout={LinearTransition.springify().damping(30).stiffness(350).mass(1)}
             >
               {/* File icon - top left */}
               <View style={styles.fileIconContainer}>

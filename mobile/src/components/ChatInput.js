@@ -7,7 +7,7 @@ import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LucideCombine, LucideImage, LucideX } from 'lucide-react-native';
-import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, ZoomIn, ZoomOut, LinearTransition } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, FadeOut, FadeIn, LinearTransition } from 'react-native-reanimated';
 import AttachmentPreview from './AttachmentPreview';
 
 // Animation config - TWEAK HERE
@@ -177,8 +177,8 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
                   return (
                     <Reanimated.View 
                       key="agentic"
-                      entering={ZoomIn.duration(100)}
-                      exiting={ZoomOut.duration(100)}
+                      entering={FadeIn.duration(100)}
+                      exiting={FadeOut.duration(100)}
                       layout={LinearTransition.springify().damping(30).stiffness(350).mass(1)}
                     >
                       <View style={styles.pill}>
@@ -196,8 +196,8 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
                   return (
                     <Reanimated.View 
                       key="generate_image"
-                      entering={ZoomIn.duration(200)}
-                      exiting={ZoomOut.duration(200)}
+                      entering={FadeIn.duration(100)}
+                      exiting={FadeOut.duration(100)}
                       layout={LinearTransition.springify().damping(30).stiffness(350).mass(1)}
                     >
                       <View style={styles.pill}>

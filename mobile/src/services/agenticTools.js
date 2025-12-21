@@ -771,13 +771,16 @@ export function parseGeminiToolCall(part) {
 
 /**
  * Format tool result for sending back to AI (OpenAI format)
+ * Also includes name for Gemini/Claude compatibility when needed
  * @param {string} toolCallId - Tool call ID
  * @param {Object} result - Execution result
+ * @param {string} [toolName] - Tool name (optional, for Gemini)
  */
-export function formatToolResult(toolCallId, result) {
+export function formatToolResult(toolCallId, result, toolName = null) {
   return {
     role: 'tool',
     tool_call_id: toolCallId,
+    name: toolName, // For Gemini compatibility
     content: result.output || 'Tool executed with no output.',
   };
 }
@@ -805,6 +808,337 @@ export function formatGeminiToolResult(toolName, result) {
       },
     },
   };
+}
+
+// ===================================================================
+// CLAUDE STREAMING WITH TOOLS (Native Anthropic format)
+// ===================================================================
+
+/**
+ * Call Claude API with tools (STREAMING like desktop)
+ * Uses native Anthropic tool_use / tool_result format
+ */
+async function callClaudeWithTools({ messages, model, provider, baseUrl, apiKey, tools, onChunk, onThink, signal }) {
+  const base = baseUrl || DEFAULT_PROVIDERS.anthropic?.baseUrl || 'https://api.anthropic.com/v1';
+  
+  // Extract system prompt and format messages for Claude
+  let systemPrompt = '';
+  const claudeMessages = [];
+  
+  for (const m of messages) {
+    if (m.role === 'system') {
+      systemPrompt = m.content;
+    } else if (m.role === 'tool') {
+      // Convert OpenAI tool result to Claude format
+      claudeMessages.push({
+        role: 'user',
+        content: [{
+          type: 'tool_result',
+          tool_use_id: m.tool_call_id,
+          content: m.content,
+        }],
+      });
+    } else if (m.role === 'assistant' && m.tool_calls) {
+      // Convert OpenAI tool_calls to Claude tool_use
+      const content = [];
+      if (m.content) content.push({ type: 'text', text: m.content });
+      for (const tc of m.tool_calls) {
+        let input = {};
+        try { input = JSON.parse(tc.function?.arguments || '{}'); } catch {}
+        content.push({
+          type: 'tool_use',
+          id: tc.id,
+          name: tc.function?.name,
+          input,
+        });
+      }
+      claudeMessages.push({ role: 'assistant', content });
+    } else {
+      claudeMessages.push({ role: m.role, content: m.content });
+    }
+  }
+  
+  // Convert OpenAI tools to Claude format
+  const claudeTools = tools.map(t => ({
+    name: t.function?.name || t.name,
+    description: t.function?.description || t.description,
+    input_schema: t.function?.parameters || t.input_schema || t.parameters,
+  }));
+  
+  const body = {
+    model,
+    max_tokens: 4096,
+    system: systemPrompt,
+    messages: claudeMessages,
+    tools: claudeTools,
+    stream: true,
+  };
+  
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    
+    if (signal) {
+      if (signal.aborted) return reject(new Error('Aborted'));
+      signal.addEventListener('abort', () => { xhr.abort(); reject(new Error('Aborted')); });
+    }
+    
+    xhr.open('POST', `${base}/messages`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('x-api-key', apiKey);
+    xhr.setRequestHeader('anthropic-version', '2023-06-01');
+    
+    // Accumulate response
+    const fullResponse = { content: [], stop_reason: null, usage: {} };
+    let currentBlock = null;
+    let buffer = '';
+    let lastIdx = 0;
+    
+    xhr.onprogress = () => {
+      buffer += xhr.responseText.slice(lastIdx);
+      lastIdx = xhr.responseText.length;
+      
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr) continue;
+        
+        try {
+          const event = JSON.parse(jsonStr);
+          
+          switch (event.type) {
+            case 'content_block_start':
+              currentBlock = event.content_block;
+              if (currentBlock.type === 'text') currentBlock.text = '';
+              if (currentBlock.type === 'tool_use') currentBlock.input = '';
+              break;
+              
+            case 'content_block_delta':
+              if (event.delta?.type === 'text_delta' && currentBlock?.type === 'text') {
+                const text = event.delta.text || '';
+                currentBlock.text += text;
+                if (text && onChunk) onChunk(text);
+              } else if (event.delta?.type === 'input_json_delta' && currentBlock?.type === 'tool_use') {
+                currentBlock.input += event.delta.partial_json || '';
+              } else if (event.delta?.type === 'thinking_delta' && onThink) {
+                onThink(event.delta.thinking || '');
+              }
+              break;
+              
+            case 'content_block_stop':
+              if (currentBlock) {
+                if (currentBlock.type === 'tool_use' && typeof currentBlock.input === 'string') {
+                  try { currentBlock.input = JSON.parse(currentBlock.input || '{}'); } catch { currentBlock.input = {}; }
+                }
+                fullResponse.content.push(currentBlock);
+              }
+              currentBlock = null;
+              break;
+              
+            case 'message_delta':
+              if (event.delta?.stop_reason) fullResponse.stop_reason = event.delta.stop_reason;
+              if (event.usage) fullResponse.usage = event.usage;
+              break;
+          }
+        } catch {}
+      }
+    };
+    
+    xhr.onload = () => {
+      if (xhr.status >= 400) {
+        let msg = `Claude error: ${xhr.status}`;
+        try { msg = JSON.parse(xhr.responseText).error?.message || msg; } catch {}
+        return reject(new Error(msg));
+      }
+      
+      // Convert Claude response to OpenAI-like format
+      const toolCalls = fullResponse.content
+        .filter(c => c.type === 'tool_use')
+        .map(c => ({
+          id: c.id,
+          type: 'function',
+          function: { name: c.name, arguments: JSON.stringify(c.input || {}) },
+        }));
+      
+      const textContent = fullResponse.content
+        .filter(c => c.type === 'text')
+        .map(c => c.text)
+        .join('');
+      
+      resolve({
+        message: {
+          role: 'assistant',
+          content: textContent,
+          tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+        },
+        finishReason: fullResponse.stop_reason,
+        usage: fullResponse.usage,
+      });
+    };
+    
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.send(JSON.stringify(body));
+  });
+}
+
+// ===================================================================
+// GEMINI STREAMING WITH TOOLS (Native Google format)
+// ===================================================================
+
+/**
+ * Call Gemini API with tools (STREAMING like desktop)
+ * Uses native functionCall / functionResponse format
+ */
+async function callGeminiWithTools({ messages, model, provider, baseUrl, apiKey, tools, onChunk, onThink, signal }) {
+  const base = baseUrl || DEFAULT_PROVIDERS.google?.baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
+  
+  // Build contents in Gemini format
+  let systemInstruction = '';
+  const contents = [];
+  
+  for (const m of messages) {
+    if (m.role === 'system') {
+      systemInstruction = m.content;
+    } else if (m.role === 'tool') {
+      // Convert tool result to Gemini functionResponse
+      contents.push({
+        role: 'function',
+        parts: [{
+          functionResponse: {
+            name: m.name || 'tool_response',
+            response: { result: m.content },
+          },
+        }],
+      });
+    } else if (m.role === 'assistant' && m.tool_calls) {
+      // Convert tool calls to Gemini functionCall
+      const parts = [];
+      if (m.content) parts.push({ text: m.content });
+      for (const tc of m.tool_calls) {
+        let args = {};
+        try { args = JSON.parse(tc.function?.arguments || '{}'); } catch {}
+        parts.push({ functionCall: { name: tc.function?.name, args } });
+      }
+      contents.push({ role: 'model', parts });
+    } else {
+      contents.push({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      });
+    }
+  }
+  
+  // Convert tools to Gemini functionDeclarations format
+  // Handle both OpenAI format and already-formatted Gemini tools
+  let geminiTools = [];
+  
+  for (const t of tools) {
+    if (t.functionDeclarations) {
+      // Already in Gemini format (from getAgenticTools for Gemini provider)
+      geminiTools.push(t);
+    } else if (t.function?.name || t.name) {
+      // OpenAI format - convert to Gemini
+      geminiTools.push({
+        functionDeclarations: [{
+          name: t.function?.name || t.name,
+          description: t.function?.description || t.description,
+          parameters: t.function?.parameters || t.parameters,
+        }]
+      });
+    }
+  }
+  
+  const url = `${base}/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`;
+  const body = {
+    contents,
+    tools: geminiTools.length > 0 ? geminiTools : undefined,
+    systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
+    generationConfig: { maxOutputTokens: 8192 },
+  };
+  
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    
+    if (signal) {
+      if (signal.aborted) return reject(new Error('Aborted'));
+      signal.addEventListener('abort', () => { xhr.abort(); reject(new Error('Aborted')); });
+    }
+    
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    
+    let accumulatedText = '';
+    const functionCalls = [];
+    let finishReason = 'STOP';
+    let usageData = null;
+    let buffer = '';
+    let lastIdx = 0;
+    
+    xhr.onprogress = () => {
+      buffer += xhr.responseText.slice(lastIdx);
+      lastIdx = xhr.responseText.length;
+      
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr) continue;
+        
+        try {
+          const event = JSON.parse(jsonStr);
+          const candidate = event.candidates?.[0];
+          
+          if (candidate?.content?.parts) {
+            for (const part of candidate.content.parts) {
+              if (part.thought && part.text && onThink) {
+                onThink(part.text);
+              } else if (part.text) {
+                accumulatedText += part.text;
+                if (onChunk) onChunk(part.text);
+              }
+              if (part.functionCall) {
+                functionCalls.push(part.functionCall);
+              }
+            }
+          }
+          if (candidate?.finishReason) finishReason = candidate.finishReason;
+          if (event.usageMetadata) usageData = event.usageMetadata;
+        } catch {}
+      }
+    };
+    
+    xhr.onload = () => {
+      if (xhr.status >= 400) {
+        let msg = `Gemini error: ${xhr.status}`;
+        try { msg = JSON.parse(xhr.responseText).error?.message || msg; } catch {}
+        return reject(new Error(msg));
+      }
+      
+      // Convert to OpenAI-like format
+      const toolCalls = functionCalls.map((fc, i) => ({
+        id: `gemini_${Date.now()}_${i}`,
+        type: 'function',
+        function: { name: fc.name, arguments: JSON.stringify(fc.args || {}) },
+      }));
+      
+      resolve({
+        message: {
+          role: 'assistant',
+          content: accumulatedText,
+          tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+        },
+        finishReason,
+        usage: usageData,
+      });
+    };
+    
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.send(JSON.stringify(body));
+  });
 }
 
 // ===================================================================
@@ -865,8 +1199,9 @@ export async function streamAgenticChat({
     }
     
     try {
-      // Make API call with tools
-      const response = await callOpenAIWithTools({
+      // Select streaming handler based on provider (like desktop routing)
+      let response;
+      const callParams = {
         messages: conversationMessages,
         model,
         provider,
@@ -875,7 +1210,17 @@ export async function streamAgenticChat({
         tools,
         onChunk,
         onThink,
-      });
+        signal,
+      };
+      
+      if (providerLower === 'anthropic' || model.toLowerCase().includes('claude')) {
+        response = await callClaudeWithTools(callParams);
+      } else if (providerLower === 'google' || providerLower === 'gemini' || model.toLowerCase().includes('gemini')) {
+        response = await callGeminiWithTools(callParams);
+      } else {
+        // OpenAI and compatible (OpenRouter, Groq, xAI, DeepSeek, etc.)
+        response = await callOpenAIWithTools(callParams);
+      }
       
       if (!response) {
         onError?.('Empty response from API');
@@ -943,8 +1288,8 @@ export async function streamAgenticChat({
           data: result,
         });
         
-        // Add tool result to conversation
-        conversationMessages.push(formatToolResult(toolCall.id, result));
+        // Add tool result to conversation (include name for Gemini)
+        conversationMessages.push(formatToolResult(toolCall.id, result, toolCall.name));
       }
       
     } catch (error) {
@@ -1030,7 +1375,9 @@ export async function streamImageGenChat({
     }
     
     try {
-      const response = await callOpenAIWithTools({
+      // Select streaming handler based on provider (like desktop routing)
+      let response;
+      const callParams = {
         messages: conversationMessages,
         model,
         provider,
@@ -1039,7 +1386,17 @@ export async function streamImageGenChat({
         tools,
         onChunk,
         onThink,
-      });
+        signal,
+      };
+      
+      if (providerLower === 'anthropic' || model.toLowerCase().includes('claude')) {
+        response = await callClaudeWithTools(callParams);
+      } else if (providerLower === 'google' || providerLower === 'gemini' || model.toLowerCase().includes('gemini')) {
+        response = await callGeminiWithTools(callParams);
+      } else {
+        // OpenAI and compatible
+        response = await callOpenAIWithTools(callParams);
+      }
       
       if (!response) {
         onError?.('Empty response from API');
@@ -1122,7 +1479,7 @@ export async function streamImageGenChat({
           data: result
         });
         
-        conversationMessages.push(formatToolResult(toolCall.id, result));
+        conversationMessages.push(formatToolResult(toolCall.id, result, toolCall.name));
       }
       
     } catch (error) {
@@ -1137,10 +1494,15 @@ export async function streamImageGenChat({
 }
 
 /**
- * Make OpenAI-compatible API call with tools (non-streaming for tool calls)
+ * Make OpenAI-compatible API call with tools (STREAMING like desktop)
  * Works with: OpenAI, OpenRouter, Groq, Zhipu, BigModel, xAI, etc.
+ * 
+ * Flow matches Electron desktop:
+ * 1. Stream text content to UI in real-time
+ * 2. Accumulate tool_calls as they arrive
+ * 3. Return full message after stream completes
  */
-async function callOpenAIWithTools({ messages, model, provider, baseUrl, apiKey, tools, onChunk, onThink }) {
+async function callOpenAIWithTools({ messages, model, provider, baseUrl, apiKey, tools, onChunk, onThink, signal }) {
   // Use user's baseUrl or get default from provider
   const providerLower = (provider || '').toLowerCase();
   const base = baseUrl || DEFAULT_PROVIDERS[providerLower]?.baseUrl;
@@ -1162,40 +1524,130 @@ async function callOpenAIWithTools({ messages, model, provider, baseUrl, apiKey,
     }),
     tools,
     tool_choice: 'auto',
-    stream: false,
+    stream: true, // STREAMING enabled like desktop
   };
   
-  const response = await fetch(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    
+    if (signal) {
+      if (signal.aborted) return reject(new Error('Aborted'));
+      signal.addEventListener('abort', () => {
+        xhr.abort();
+        reject(new Error('Aborted'));
+      });
+    }
+    
+    xhr.open('POST', `${base}/chat/completions`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Authorization', `Bearer ${apiKey}`);
+    
+    // Accumulate full response while streaming (like desktop callOpenAIAPI)
+    const fullMessage = {
+      role: 'assistant',
+      content: '',
+      tool_calls: []
+    };
+    const toolCallBuffers = new Map(); // index -> { id, type, function: { name, arguments } }
+    let finishReason = null;
+    let buffer = '';
+    let lastProcessedIndex = 0;
+    let usageData = null;
+    
+    xhr.onprogress = () => {
+      const newData = xhr.responseText.slice(lastProcessedIndex);
+      lastProcessedIndex = xhr.responseText.length;
+      buffer += newData;
+      
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr || jsonStr === '[DONE]') continue;
+        
+        try {
+          const event = JSON.parse(jsonStr);
+          const delta = event.choices?.[0]?.delta;
+          
+          if (!delta) continue;
+          
+          // Stream text content to UI immediately (core desktop behavior)
+          if (delta.content) {
+            fullMessage.content += delta.content;
+            if (onChunk) onChunk(delta.content);
+          }
+          
+          // Handle reasoning/thinking content
+          const reasoning = delta.reasoning_content || delta.reasoning || delta.thoughts || '';
+          if (reasoning && onThink) {
+            onThink(reasoning);
+          }
+          
+          // Accumulate tool calls (streamed in chunks)
+          if (delta.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index;
+              if (!toolCallBuffers.has(idx)) {
+                toolCallBuffers.set(idx, {
+                  id: tc.id || '',
+                  type: 'function',
+                  function: { name: '', arguments: '' }
+                });
+              }
+              const buf = toolCallBuffers.get(idx);
+              if (tc.id) buf.id = tc.id;
+              if (tc.function?.name) buf.function.name += tc.function.name;
+              if (tc.function?.arguments) buf.function.arguments += tc.function.arguments;
+            }
+          }
+          
+          // Capture finish reason
+          if (event.choices?.[0]?.finish_reason) {
+            finishReason = event.choices[0].finish_reason;
+          }
+          
+          // Capture usage if provided
+          if (event.usage) {
+            usageData = event.usage;
+          }
+        } catch (e) {
+          // Ignore parse errors for malformed chunks
+        }
+      }
+    };
+    
+    xhr.onload = () => {
+      if (xhr.status && xhr.status >= 400) {
+        let errorMsg = `API error: ${xhr.status}`;
+        try {
+          const errData = JSON.parse(xhr.responseText);
+          errorMsg = errData.error?.message || errorMsg;
+        } catch {}
+        return reject(new Error(errorMsg));
+      }
+      
+      // Convert tool call buffers to array (like desktop)
+      if (toolCallBuffers.size > 0) {
+        fullMessage.tool_calls = Array.from(toolCallBuffers.values());
+      } else {
+        delete fullMessage.tool_calls;
+      }
+      
+      resolve({
+        message: fullMessage,
+        finishReason,
+        usage: usageData,
+      });
+    };
+    
+    xhr.onerror = () => {
+      reject(new Error('Network error'));
+    };
+    
+    xhr.send(JSON.stringify(body));
   });
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.error?.message || `API error: ${response.status}`);
-  }
-  
-  const data = await response.json();
-  const choice = data.choices?.[0];
-  
-  if (!choice) {
-    throw new Error('No response from API');
-  }
-  
-  // Send text content to UI
-  if (choice.message?.content && onChunk) {
-    onChunk(choice.message.content);
-  }
-  
-  return {
-    message: choice.message,
-    finishReason: choice.finish_reason,
-    usage: data.usage || null,
-  };
 }
 
 /**

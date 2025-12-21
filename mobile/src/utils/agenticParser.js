@@ -122,7 +122,13 @@ export const transformCommandText = (cmdName, args) => {
     }
     
     if (cmdName === 'web_search') {
-        return `Search Web: "${args}"`; // args is string for web_search
+        // args is object { queries: [...], commentary?: string }
+        const queries = args?.queries || [];
+        if (Array.isArray(queries) && queries.length > 0) {
+            const preview = queries.slice(0, 2).join('", "');
+            return `Search Web: "${preview}"${queries.length > 2 ? '...' : ''}`;
+        }
+        return 'Search Web';
     }
     
     if (cmdName === 'run_command') {

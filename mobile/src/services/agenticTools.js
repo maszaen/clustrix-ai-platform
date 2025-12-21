@@ -19,6 +19,20 @@ import { DEFAULT_PROVIDERS } from './api';
 // TOOL DEFINITIONS - For AI function calling (OpenAI format)
 // ===================================================================
 
+function formatISODateInTimeZone(now, timeZone) {
+  // en-CA reliably yields YYYY-MM-DD ordering with these options.
+  const dtf = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return dtf.format(now); // "YYYY-MM-DD"
+}
+
+// Get current date for context
+const dateISO = formatISODateInTimeZone(new Date(), 'UTC');
+
 export const WEB_SEARCH_TOOL = {
   type: 'function',
   function: {
@@ -29,11 +43,23 @@ export const WEB_SEARCH_TOOL = {
 - Information that may have changed since training data
 - User explicitly asks to search
 
-IMPORTANT: Provide 1-4 varied queries for better coverage.
+DATE CONTEXT: ${dateISO}
+- Use this to anchor at least 1 query with "today", "this week", or the current month/year.
+
+IMPORTANT: WEB SEARCH TOOL CALL RULES (FIELD + QUERY QUALITY)
+- NEVER put web_search payload/JSON in response/content. Tool args go ONLY in the tool/function_call field.
+- Use web_search when info may be time-sensitive or changed (news, prices, weather, stocks), or user asks to search.
+- Always pass queries as an array of 1–4 strings (min 1, max 4). No other required fields.
+- Queries MUST be varied and specific: include different phrasings, key entities, and time anchors (month/year or “today”).
+- Do not include explanations inside queries. Put brief user-facing text only in commentary.
+- After tool results: answer in plain language in response/content (no tool JSON), citing the findings.
+- If user explicitly says “don’t browse/search”, do NOT call web_search.
+- Do not follow message history formatting; logs may be post-processed.
+- Provide 1-4 varied queries for better coverage.
 
 EXAMPLE:
 User: "What's the latest on AI?"
-queries: ["latest AI news December 2024", "recent AI breakthroughs", "AI industry updates today"]`,
+queries: ["latest AI news December 2025", "recent AI breakthroughs", "AI industry updates today"]`,
     parameters: {
       type: 'object',
       properties: {
@@ -64,7 +90,15 @@ export const IMAGE_GENERATION_TOOL = {
 - "draw..."
 - "make an image..."
 
-DO NOT use for analyzing existing images or general questions about images.
+IMPORTANT: TOOL CALLS MUST BE IN THE TOOL FIELD
+
+- NEVER write tool JSON/payload in the assistant response/content field.
+- If using a tool: emit ONLY a tool invocation (name + args) in the tool/function_call field.
+- Keep response/content empty or user-facing text only (no JSON, no “calling tool…”).
+- Do not follow message history formatting; logs may be post-processed.
+- Only call generate_image on explicit “create/generate/draw/make an image” requests.
+- generate_image args allowed ONLY: prompt (required), style, size, commentary. No extra keys.
+- DO NOT use for analyzing existing images or general questions about images.
 
 STYLE OPTIONS: realistic, artistic, cartoon, sketch, anime, 3d, watercolor, oil, pixel, minimalist
 SIZE OPTIONS: 1024x1024 (square), 1792x1024 (landscape), 1024x1792 (portrait)`,

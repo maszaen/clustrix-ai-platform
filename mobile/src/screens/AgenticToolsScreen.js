@@ -22,9 +22,26 @@ export default function AgenticToolsScreen({ onClose }) {
   const { settings, updateSettings } = useApp();
   
   const [provider, setProvider] = useState(settings.agenticTools?.webSearch?.provider || 'tavily');
-  const [apiKey, setApiKey] = useState(settings.agenticTools?.webSearch?.apiKey || '');
+  
+  // Store keys for all providers
+  // Initialize from settings.keys OR fallback to current apiKey for the current provider
+  const [keys, setKeys] = useState(settings.agenticTools?.webSearch?.keys || {
+    [settings.agenticTools?.webSearch?.provider || 'tavily']: settings.agenticTools?.webSearch?.apiKey || ''
+  });
+
   const [googleCseId, setGoogleCseId] = useState(settings.agenticTools?.webSearch?.googleCseId || '');
   const [showApiKey, setShowApiKey] = useState(false);
+  
+  // Get current key safely
+  const currentApiKey = keys[provider] || '';
+
+  // Update key for current provider
+  const updateKey = (text) => {
+    setKeys(prev => ({
+      ...prev,
+      [provider]: text
+    }));
+  };
   
   // Auto-save
   useEffect(() => {
@@ -32,12 +49,17 @@ export default function AgenticToolsScreen({ onClose }) {
       updateSettings({
         agenticTools: {
           ...settings.agenticTools,
-          webSearch: { provider, apiKey, googleCseId },
+          webSearch: { 
+            provider, 
+            apiKey: keys[provider] || '', // Save active key for service compatibility
+            keys, // Save all keys map
+            googleCseId 
+          },
         },
       });
     }, 300);
     return () => clearTimeout(timer);
-  }, [provider, apiKey, googleCseId]);
+  }, [provider, keys, googleCseId]);
   
   const selectedProvider = SEARCH_PROVIDERS.find(p => p.id === provider);
 
@@ -72,8 +94,8 @@ export default function AgenticToolsScreen({ onClose }) {
         <View style={styles.inputRow}>
           <TextInput
             style={styles.inputFlex}
-            value={apiKey}
-            onChangeText={setApiKey}
+            value={currentApiKey}
+            onChangeText={updateKey}
             placeholder={`Enter ${selectedProvider?.name} API key`}
             placeholderTextColor={COLORS.fgMuted}
             secureTextEntry={!showApiKey}
@@ -112,14 +134,14 @@ export default function AgenticToolsScreen({ onClose }) {
 
       {/* Status indicator */}
       <View style={styles.section}>
-        <View style={[styles.statusRow, apiKey ? styles.statusOk : styles.statusWarn]}>
+        <View style={[styles.statusRow, currentApiKey ? styles.statusOk : styles.statusWarn]}>
           <Ionicons 
-            name={apiKey ? "checkmark-circle" : "warning"} 
+            name={currentApiKey ? "checkmark-circle" : "warning"} 
             size={18} 
-            color={apiKey ? COLORS.success : COLORS.warning} 
+            color={currentApiKey ? COLORS.success : COLORS.warning} 
           />
-          <Text style={[styles.statusText, apiKey ? styles.statusTextOk : styles.statusTextWarn]}>
-            {apiKey ? `${selectedProvider?.name} configured` : 'No API key - web search disabled'}
+          <Text style={[styles.statusText, currentApiKey ? styles.statusTextOk : styles.statusTextWarn]}>
+            {currentApiKey ? `${selectedProvider?.name} configured` : 'No API key - web search disabled'}
           </Text>
         </View>
       </View>

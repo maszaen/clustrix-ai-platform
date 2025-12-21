@@ -3,8 +3,10 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Layers, ChevronDown, ChevronRight } from 'lucide-react-native';
 import CommandBlock from './CommandBlock';
+import { COLORS } from '../constants/colors';
 
-if (Platform.OS === 'android') {
+// Only enable LayoutAnimation on old architecture (fabric check)
+if (Platform.OS === 'android' && !global?.nativeFabricUIManager) {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
   }
@@ -36,11 +38,11 @@ const CommandGroup = ({ group }) => {
             >
                 <View style={styles.left}>
                     <View style={styles.iconContainer}>
-                        <Layers size={14} color="#6b7280" />
+                        <Layers size={14} color={COLORS.fgMuted} />
                     </View>
                     <Text style={styles.title}>{count} Steps Executed</Text>
                 </View>
-                {expanded ? <ChevronDown size={14} color="#6b7280" /> : <ChevronRight size={14} color="#6b7280" />}
+                {expanded ? <ChevronDown size={14} color={COLORS.fgMuted} /> : <ChevronRight size={14} color={COLORS.fgMuted} />}
             </TouchableOpacity>
             
             {expanded && (
@@ -58,9 +60,9 @@ const styles = StyleSheet.create({
     container: {
         marginVertical: 4,
         borderRadius: 8,
-        backgroundColor: '#f9fafb',
+        backgroundColor: COLORS.bgSecondary,
         borderWidth: 1,
-        borderColor: '#e5e7eb',
+        borderColor: COLORS.borderLight,
         overflow: 'hidden',
     },
     header: {
@@ -80,14 +82,15 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 12,
         fontWeight: '600',
-        color: '#4b5563',
+        color: COLORS.fgMuted,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     list: {
-        padding: 8,
-        paddingTop: 0,
+        paddingHorizontal: 8,
+        paddingBottom: 4,
     }
 });
 
 export default CommandGroup;
+

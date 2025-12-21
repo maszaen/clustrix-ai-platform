@@ -151,6 +151,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const [retryReason, setRetryReason] = useState('');
   const [metadataMenu, setMetadataMenu] = useState({ visible: false, message: null, position: null });
   const [toolStatus, setToolStatus] = useState(null); // { name, commentary } - for tool execution indicator
+  const [isWaitingForIteration, setIsWaitingForIteration] = useState(false); // True when waiting for next agentic iteration
   const lastHapticTime = useRef(0);
 
   // Memoized toggle handler for ChatInput
@@ -724,6 +725,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
 
     // Common callbacks
     const handleChunk = (chunk) => {
+      // Reset waiting state when new content arrives
+      setIsWaitingForIteration(false);
       fullContent += chunk;
       setStreamingContent(fullContent);
       triggerHaptic();
@@ -740,6 +743,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
 
     const handleDone = async (summary = {}) => {
       setToolStatus(null);
+      setIsWaitingForIteration(false);
       
       if (!fullContent.trim()) {
         await removeMessage(session.id, userMessageIndex);
@@ -824,6 +828,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         output: result.output,
       });
       setToolStatus(null);
+      // Show loader while waiting for next iteration
+      setIsWaitingForIteration(true);
     };
 
     // Choose streaming function based on mode
@@ -1224,6 +1230,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       isStreaming: true,
       shouldHaveSpacer,
       toolStatus: toolStatus, // { name, commentary } for tool execution indicator
+      isWaitingForIteration: isWaitingForIteration, // Show typewriter while waiting for next agentic iteration
     });
   }
   

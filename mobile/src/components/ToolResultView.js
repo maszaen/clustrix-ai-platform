@@ -3,12 +3,12 @@
  * Shows web search results and generated images in a nice UI
  */
 
-import { useState, memo, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, Pressable, Linking, ActivityIndicator, Modal, Dimensions, ScrollView } from 'react-native';
-import { Globe, ExternalLink, Image as ImageIcon, Search, Download, X, Sparkles, Maximize2 } from 'lucide-react-native';
+import { useState, memo, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, Image, Pressable, Linking, ActivityIndicator, Dimensions, ScrollView } from 'react-native';
+import { Globe, ExternalLink, Image as ImageIcon, Search, Download, Sparkles, Maximize2 } from 'lucide-react-native';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as MediaLibrary from 'expo-media-library';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -195,23 +195,47 @@ export const PerplexitySearchCards = memo(function PerplexitySearchCards({ searc
 /**
  * Generated Image View
  */
-export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, imageBase64, prompt, style, isLoading }) {
-  const [modalVisible, setModalVisible] = useState(false);
+export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, imageBase64, prompt, style, isLoading, onImagePress }) {
   const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState(null);
+  const [cachedUri, setCachedUri] = useState(null);
 
-  // Get the image source
-  const imageSource = imageBase64
-    ? { uri: `data:image/png;base64,${imageBase64}` }
-    : imageUrl
-      ? { uri: imageUrl }
-      : null;
+  // Save base64 to cache file on mount - so modal can use file URI instead of data URI
+  useEffect(() => {
+    const cacheImage = async () => {
+      if (imageBase64 && !cachedUri) {
+        try {
+          const filename = `generated_${Date.now()}.png`;
+          const fileUri = FileSystem.cacheDirectory + filename;
+          await FileSystem.writeAsStringAsync(fileUri, imageBase64, {
+            encoding: 'base64',
+          });
+          setCachedUri(fileUri);
+        } catch (e) {
+          console.log('Failed to cache generated image:', e);
+        }
+      }
+    };
+    cacheImage();
+  }, [imageBase64]);
+
+  // Get the image source - prefer cached file URI over data URI
+  const imageSource = cachedUri
+    ? { uri: cachedUri }
+    : imageBase64
+      ? { uri: `data:image/png;base64,${imageBase64}` }
+      : imageUrl
+        ? { uri: imageUrl }
+        : null;
 
   const handleSave = useCallback(async () => {
     if (!imageSource) return;
 
     try {
       setSaving(true);
+      setError(null);
+      setSaveSuccess(false);
 
       // Request permission
       const { status } = await MediaLibrary.requestPermissionsAsync();
@@ -227,48 +251,64 @@ export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, i
         const filename = `clustrix_image_${Date.now()}.png`;
         localUri = FileSystem.documentDirectory + filename;
         await FileSystem.writeAsStringAsync(localUri, imageBase64, {
-          encoding: FileSystem.EncodingType.Base64,
+          encoding: 'base64', // Use string directly - EncodingType may not be available
         });
       } else if (imageUrl) {
-        // Download image
+        // Download image from URL
         const filename = `clustrix_image_${Date.now()}.png`;
         localUri = FileSystem.documentDirectory + filename;
         const downloadResult = await FileSystem.downloadAsync(imageUrl, localUri);
         localUri = downloadResult.uri;
       }
 
-      // Save to media library
-      await MediaLibrary.saveToLibraryAsync(localUri);
-      
-      // Clean up temp file
-      await FileSystem.deleteAsync(localUri, { idempotent: true });
-      
-      setError(null);
+      if (localUri) {
+        // Save to media library
+        await MediaLibrary.saveToLibraryAsync(localUri);
+        
+        // Clean up temp file
+        await FileSystem.deleteAsync(localUri, { idempotent: true });
+        
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2000);
+      }
     } catch (e) {
       setError('Failed to save image');
       console.error('Save image error:', e);
     } finally {
       setSaving(false);
     }
-  }, [imageSource, imageBase64, imageUrl]);
+  }, [imageBase64, imageUrl]);
+
+  // Open image in App.js level modal with download capability
+  const handleImagePress = useCallback(() => {
+    if (imageSource && onImagePress) {
+      // Only pass uri and isDownloadable - modal extracts base64 from data URI automatically
+      onImagePress({ 
+        uri: imageSource.uri, 
+        isDownloadable: true, 
+      });
+    }
+  }, [imageSource, onImagePress]);
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.toolHeader}>
-          <ImageIcon size={18} color={COLORS.accent} />
-          <Text style={styles.toolTitle}>Generating Image...</Text>
-        </View>
-        <View style={styles.imageLoadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Creating your image</Text>
-          {prompt && (
-            <Text style={styles.promptPreview} numberOfLines={2}>
-              "{prompt}"
-            </Text>
-          )}
-        </View>
-      </View>
+      <>
+      </>
+      // <View style={styles.container}>
+      //   <View style={styles.toolHeader}>
+      //     <ImageIcon size={18} color={COLORS.accent} />
+      //     <Text style={styles.toolTitle}>Generating Image...</Text>
+      //   </View>
+      //   <View style={styles.imageLoadingContainer}>
+      //     <ActivityIndicator size="large" color={COLORS.primary} />
+      //     <Text style={styles.loadingText}>Creating your image</Text>
+      //     {prompt && (
+      //       <Text style={styles.promptPreview} numberOfLines={2}>
+      //         "{prompt}"
+      //       </Text>
+      //     )}
+      //   </View>
+      // </View>
     );
   }
 
@@ -285,15 +325,24 @@ export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, i
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container2}>
       <View style={styles.toolHeader}>
-        <ImageIcon size={18} color={COLORS.accent} />
-        <Text style={styles.toolTitle}>Generated Image</Text>
-        {style && (
-          <View style={styles.styleBadge}>
-            <Text style={styles.styleBadgeText}>{style}</Text>
-          </View>
-        )}
+        
+        {/* Download button in header */}
+        {/* <Pressable
+          style={[styles.headerDownloadBtn, saving && styles.actionBtnDisabled]}
+          onPress={handleSave}
+          disabled={saving}
+          android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color={COLORS.fg} />
+          ) : saveSuccess ? (
+            <Sparkles size={18} color={COLORS.success} />
+          ) : (
+            <Download size={18} color={COLORS.fg} />
+          )}
+        </Pressable> */}
       </View>
 
       {prompt && (
@@ -304,7 +353,7 @@ export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, i
 
       <Pressable
         style={styles.imageContainer}
-        onPress={() => setModalVisible(true)}
+        onPress={handleImagePress}
       >
         <Image
           source={imageSource}
@@ -312,70 +361,17 @@ export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, i
           resizeMode="cover"
         />
         <View style={styles.imageOverlay}>
-          <Maximize2 size={24} color={COLORS.fg} />
+          {style && (
+          <View style={styles.styleBadge}>
+            <Text style={styles.styleBadgeText}>{style}</Text>
+          </View>
+        )}
         </View>
       </Pressable>
-
-      <View style={styles.imageActions}>
-        <Pressable
-          style={[styles.actionBtn, saving && styles.actionBtnDisabled]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={COLORS.fg} />
-          ) : (
-            <>
-              <Download size={16} color={COLORS.fg} />
-              <Text style={styles.actionBtnText}>Save</Text>
-            </>
-          )}
-        </Pressable>
-      </View>
 
       {error && (
         <Text style={styles.saveError}>{error}</Text>
       )}
-
-      {/* Full screen modal */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <Pressable
-            style={styles.modalCloseBtn}
-            onPress={() => setModalVisible(false)}
-          >
-            <X size={24} color={COLORS.fg} />
-          </Pressable>
-          
-          <Image
-            source={imageSource}
-            style={styles.modalImage}
-            resizeMode="contain"
-          />
-          
-          <View style={styles.modalActions}>
-            <Pressable
-              style={styles.modalActionBtn}
-              onPress={handleSave}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator size="small" color={COLORS.fg} />
-              ) : (
-                <>
-                  <Download size={20} color={COLORS.fg} />
-                  <Text style={styles.modalActionText}>Save to Gallery</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 });
@@ -384,7 +380,7 @@ export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, i
  * Generic Tool Result Display
  * Automatically renders the appropriate view based on tool type
  */
-export default function ToolResultView({ toolName, result, isLoading }) {
+export default function ToolResultView({ toolName, result, isLoading, onImagePress }) {
   if (toolName === 'web_search') {
     return (
       <WebSearchResults
@@ -402,6 +398,7 @@ export default function ToolResultView({ toolName, result, isLoading }) {
         prompt={result?.prompt}
         style={result?.style}
         isLoading={isLoading}
+        onImagePress={onImagePress}
       />
     );
   }
@@ -426,7 +423,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
-  
+  container2: {
+    marginVertical: 0,
+    borderTopColor: COLORS.borderLight,
+    borderTopWidth: 1,
+    borderWidth: 1,
+    paddingBottom: 6,
+  },
   // Tool Header
   toolHeader: {
     flexDirection: 'row',
@@ -548,20 +551,29 @@ const styles = StyleSheet.create({
   },
   promptText: {
     color: COLORS.fgMuted,
-    fontSize: 12,
-    fontStyle: 'italic',
+    fontSize: 15,
+    fontFamily: FONTS.ai,
     marginBottom: 10,
   },
   styleBadge: {
-    backgroundColor: COLORS.accent + '30',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: 20,
   },
   styleBadgeText: {
-    color: COLORS.accent,
+    color: COLORS.fg,
     fontSize: 11,
     textTransform: 'capitalize',
+  },
+  headerDownloadBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.inputBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
   },
   imageContainer: {
     position: 'relative',
@@ -579,8 +591,8 @@ const styles = StyleSheet.create({
     top: 8,
     right: 8,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 8,
-    padding: 6,
+    borderRadius: 20,
+    padding: 3,
   },
   imageActions: {
     flexDirection: 'row',

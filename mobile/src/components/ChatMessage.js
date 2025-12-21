@@ -362,40 +362,40 @@ function TypewriterLoader() {
 }
 
 // Tool Status Indicator - shows when a tool is executing
-const ToolStatusIndicator = memo(({ toolStatus }) => {
-  const spinAnim = useRef(new Animated.Value(0)).current;
+// const ToolStatusIndicator = memo(({ toolStatus }) => {
+//   const spinAnim = useRef(new Animated.Value(0)).current;
   
-  useEffect(() => {
-    const spin = Animated.loop(
-      Animated.timing(spinAnim, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    );
-    spin.start();
-    return () => spin.stop();
-  }, []);
+//   useEffect(() => {
+//     const spin = Animated.loop(
+//       Animated.timing(spinAnim, {
+//         toValue: 1,
+//         duration: 1000,
+//         easing: Easing.linear,
+//         useNativeDriver: true,
+//       })
+//     );
+//     spin.start();
+//     return () => spin.stop();
+//   }, []);
   
-  const spinInterpolate = spinAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+//   const spinInterpolate = spinAnim.interpolate({
+//     inputRange: [0, 1],
+//     outputRange: ['0deg', '360deg'],
+//   });
   
-  const icon = toolStatus.name === 'web_search' ? Search : ImageIcon;
-  const Icon = icon;
+//   const icon = toolStatus.name === 'web_search' ? Search : ImageIcon;
+//   const Icon = icon;
   
-  return (
-    <View style={styles.toolStatusContainer}>
-      <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
-        <Loader2 size={14} color={COLORS.primary} strokeWidth={2} />
-      </Animated.View>
-      <Icon size={14} color={COLORS.fgMuted} strokeWidth={2} style={{ marginLeft: 6 }} />
-      <Text style={styles.toolStatusText}>{toolStatus.commentary}</Text>
-    </View>
-  );
-});
+//   return (
+//     <View style={styles.toolStatusContainer}>
+//       <Animated.View style={{ transform: [{ rotate: spinInterpolate }] }}>
+//         <Loader2 size={14} color={COLORS.primary} strokeWidth={2} />
+//       </Animated.View>
+//       <Icon size={14} color={COLORS.fgMuted} strokeWidth={2} style={{ marginLeft: 6 }} />
+//       <Text style={styles.toolStatusText}>{toolStatus.commentary}</Text>
+//     </View>
+//   );
+// });
 
 // Memoized ChatMessage - only re-renders when props actually change
 // CRITICAL for performance during streaming (prevents all messages re-rendering on each chunk)
@@ -604,8 +604,13 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
     );
   }
 
-  const isLoading = message.isStreaming && (!textContent || textContent === '...') && !message.toolStatus && !hasCommands;
-  const hasToolStatus = message.isStreaming && message.toolStatus;
+  // Initial loading - no content yet (shows typewriter as main content)
+  const isInitialLoading = message.isStreaming && (!textContent || textContent === '...') && !message.toolStatus && !hasCommands;
+  
+  // Waiting for next iteration - content exists, show loader at bottom
+  const isWaitingIteration = message.isStreaming && message.isWaitingForIteration && !isInitialLoading;
+  
+  // const hasToolStatus = message.isStreaming && message.toolStatus;
 
   return (
     <>
@@ -624,11 +629,11 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
         )}
         
         {/* Tool Status Indicator - shown when tool is executing */}
-        {hasToolStatus && (
+        {/* {hasToolStatus && (
           <View style={{paddingHorizontal: 16, paddingVertical: 8}}>
             <ToolStatusIndicator toolStatus={message.toolStatus} />
           </View>
-        )}
+        )} */}
         
         <LongPressWrapper 
           onLongPress={handleLongPress} 
@@ -637,30 +642,14 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
           isUser={false}
           >
           
-          {isLoading ? (
+          {/* Show typewriter only when first loading (no content yet) */}
+          {isInitialLoading ? (
             <View style={{paddingHorizontal: 16}}>
               <TypewriterLoader />
             </View>
           ) : (
             <>
-              {/* Tool Results - shown for messages with tool results */}
-              {message.toolResults?.map((result, idx) => (
-                <View key={result.id || idx} style={{marginBottom: 12}}>
-                  <ToolResultView 
-                    toolName={result.name} 
-                    result={result.data} 
-                  />
-                </View>
-              ))}
-              
-              {/* Perplexity Search Results - built-in web search */}
-              {message.perplexityResults && (
-                <View style={{marginBottom: 12, paddingHorizontal: 16}}>
-                  <PerplexitySearchCards searchResults={message.perplexityResults} />
-                </View>
-              )}
-              
-              {/* Text content and Commands mixed */}
+              {/* Text content and Commands mixed - render first */}
               {blocks.map((block, index) => {
                 if (block.type === 'thinking') return null; // Rendered at top
                 
@@ -688,11 +677,36 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
                 }
                 return null;
               })}
+              
+              {/* Tool Results - shown AFTER command tools, not before */}
+              {message.toolResults?.map((result, idx) => (
+                <View key={result.id || idx} style={{marginTop: 8, paddingHorizontal: 16}}>
+                  <ToolResultView 
+                    toolName={result.name} 
+                    result={result.data}
+                    onImagePress={onImagePress}
+                  />
+                </View>
+              ))}
+              
+              {/* Perplexity Search Results - built-in web search */}
+              {message.perplexityResults && (
+                <View style={{marginTop: 8, paddingHorizontal: 16}}>
+                  <PerplexitySearchCards searchResults={message.perplexityResults} />
+                </View>
+              )}
+              
+              {/* Loader hydrated at BOTTOM when waiting for next iteration */}
+              {isWaitingIteration && (
+                <View style={{paddingHorizontal: 16, marginTop: 12}}>
+                  <TypewriterLoader />
+                </View>
+              )}
             </>
           )}
         </LongPressWrapper>
 
-        {!isLoading && showActions && (
+        {!isInitialLoading && showActions && (
           <Animated.View style={[styles.actionRow, { opacity: actionsOpacity }]}>
             
 

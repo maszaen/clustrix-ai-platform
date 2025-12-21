@@ -21,10 +21,12 @@ export const parseAgentContent = (content) => {
       const rawPayload = match[2];
       let payload = null;
       try {
-          payload = JSON.parse(rawPayload);
+          // Sanitize: remove control characters (U+0000 to U+001F) except valid whitespace
+          const sanitized = rawPayload.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+          payload = JSON.parse(sanitized);
       } catch (e) {
-          console.warn('Failed to parse command payload', e);
-          payload = { raw: rawPayload };
+          // If still fails, don't log warning - just use raw
+          payload = { raw: rawPayload.trim() };
       }
 
       blocks.push({

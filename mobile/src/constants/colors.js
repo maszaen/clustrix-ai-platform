@@ -36,6 +36,7 @@ export const COLORS = {
 
   // Status
   danger: '#ef4444',
+  error: '#ef4444', // alias for danger
   success: '#22c55e',
   warning: '#f59e0b',
 };

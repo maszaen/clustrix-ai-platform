@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions, BackHandler, Image as RNImage, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Animated, Dimensions, BackHandler, Image as RNImage, StatusBar, ActivityIndicator } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ReanimatedAnimated, { 
   useSharedValue, 
@@ -9,17 +9,21 @@ import ReanimatedAnimated, {
   runOnJS 
 } from 'react-native-reanimated';
 import { Pressable } from 'react-native-gesture-handler';
-import { X } from 'lucide-react-native';
+import { X, Download } from 'lucide-react-native';
 import { COLORS } from '../constants/colors';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as MediaLibrary from 'expo-media-library';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 /**
  * Full-screen image viewer with pinch-to-zoom and pan
+ * @param {boolean} isDownloadable - If true, shows download button
  */
-function ImageViewerModal({ visible, image, onClose }) {
+function ImageViewerModal({ visible, image, onClose, isDownloadable = false }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   
   // Reanimated values for gestures
   const scale = useSharedValue(1);
@@ -92,6 +96,54 @@ function ImageViewerModal({ visible, image, onClose }) {
     });
     return () => backHandler.remove();
   }, [visible, onClose]);
+  
+  // Internal save handler - auto-detects data URIs
+  const handleSave = useCallback(async () => {
+    if (isDownloading || !image?.uri) return;
+    
+    try {
+      setIsDownloading(true);
+      
+      // Request permission
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Permission denied to save image');
+        return;
+      }
+
+      let localUri;
+      const uri = image.uri;
+
+      // Check if it's a data URI (base64)
+      if (uri.startsWith('data:image')) {
+        // Extract base64 from data URI
+        const base64Match = uri.match(/base64,(.+)$/);
+        if (base64Match) {
+          const base64Data = base64Match[1];
+          const filename = `clustrix_image_${Date.now()}.png`;
+          localUri = FileSystem.documentDirectory + filename;
+          await FileSystem.writeAsStringAsync(localUri, base64Data, {
+            encoding: 'base64',
+          });
+        }
+      } else {
+        // Regular URL - download it
+        const filename = `clustrix_image_${Date.now()}.png`;
+        localUri = FileSystem.documentDirectory + filename;
+        const downloadResult = await FileSystem.downloadAsync(uri, localUri);
+        localUri = downloadResult.uri;
+      }
+
+      if (localUri) {
+        await MediaLibrary.saveToLibraryAsync(localUri);
+        await FileSystem.deleteAsync(localUri, { idempotent: true });
+      }
+    } catch (e) {
+      console.error('Save image error:', e);
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [image?.uri, isDownloading]);
   
   // Pinch gesture for zoom
   const pinchGesture = Gesture.Pinch()
@@ -187,7 +239,7 @@ function ImageViewerModal({ visible, image, onClose }) {
         <View style={styles.background} />
       </GestureDetector>
       
-      {/* Close button */}
+      {/* Close button - left side */}
       <Pressable 
         style={styles.closeButton} 
         onPress={onClose}
@@ -195,6 +247,22 @@ function ImageViewerModal({ visible, image, onClose }) {
       >
         <X size={24} color="#fff" strokeWidth={2} />
       </Pressable>
+      
+      {/* Download button - right side (only if isDownloadable) */}
+      {isDownloadable && (
+        <Pressable 
+          style={styles.downloadButton} 
+          onPress={handleSave}
+          android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
+          disabled={isDownloading}
+        >
+          {isDownloading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Download size={24} color="#fff" strokeWidth={2} />
+          )}
+        </Pressable>
+      )}
       
       {/* Zoomable/pannable image */}
       {image && (
@@ -204,6 +272,7 @@ function ImageViewerModal({ visible, image, onClose }) {
               source={{ uri: image.uri }}
               style={[styles.image, { width: imageDims.width, height: imageDims.height }]}
               resizeMode="contain"
+              fadeDuration={200}
             />
           </ReanimatedAnimated.View>
         </GestureDetector>
@@ -245,6 +314,29 @@ const styles = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 4,
     // Shadow untuk Android
+    elevation: 3,
+  },
+  downloadButton: {
+    position: 'absolute',
+    top: 50,
+    right: 16,
+    width: 45,
+    height: 45,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    backgroundColor: COLORS.inputBg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 4,
+      height: 4,
+    },
+    shadowOpacity: 1,
+    shadowRadius: 4,
     elevation: 3,
   },
   imageContainer: {

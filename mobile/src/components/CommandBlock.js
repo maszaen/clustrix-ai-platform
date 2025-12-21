@@ -3,8 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { ChevronDown, ChevronRight, CheckCircle, XCircle, Loader2 } from 'lucide-react-native';
 import { transformCommandText } from '../utils/agenticParser';
+import { COLORS } from '../constants/colors';
 
-if (Platform.OS === 'android') {
+// Only enable LayoutAnimation on old architecture (fabric check)
+if (Platform.OS === 'android' && !global?.nativeFabricUIManager) {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
   }
@@ -54,8 +56,8 @@ const CommandBlock = ({ command }) => {
         outputRange: ['0deg', '360deg'],
     });
 
-    const borderColor = !isSuccess && status === 'complete' ? '#fca5a5' : '#e5e7eb';
-    const bgColor = !isSuccess && status === 'complete' ? '#fef2f2' : '#f9fafb';
+    const borderColor = !isSuccess && status === 'complete' ? COLORS.danger + '60' : COLORS.borderLight;
+    const bgColor = !isSuccess && status === 'complete' ? COLORS.danger + '15' : COLORS.bgSecondary;
 
     return (
         <View style={[styles.container, { borderColor }]}>
@@ -68,12 +70,12 @@ const CommandBlock = ({ command }) => {
                     <View style={styles.iconContainer}>
                         {isRunning ? (
                             <Animated.View style={{ transform: [{ rotate }] }}>
-                                <Loader2 size={16} color="#6366f1" />
+                                <Loader2 size={16} color={COLORS.primary} />
                             </Animated.View>
                         ) : isSuccess ? (
-                            <CheckCircle size={16} color="#10b981" />
+                            <CheckCircle size={16} color={COLORS.success} />
                         ) : (
-                            <XCircle size={16} color="#ef4444" />
+                            <XCircle size={16} color={COLORS.danger} />
                         )}
                     </View>
                     
@@ -82,7 +84,7 @@ const CommandBlock = ({ command }) => {
                     </Text>
                 </View>
 
-                {expanded ? <ChevronDown size={16} color="#6b7280" /> : <ChevronRight size={16} color="#6b7280" />}
+                {expanded ? <ChevronDown size={16} color={COLORS.fgMuted} /> : <ChevronRight size={16} color={COLORS.fgMuted} />}
             </TouchableOpacity>
 
             {/* Commentary is vital context, show it nicely */}
@@ -113,7 +115,7 @@ const styles = StyleSheet.create({
         marginVertical: 4,
         borderRadius: 8,
         borderWidth: 1,
-        backgroundColor: '#fff',
+        backgroundColor: COLORS.bgSecondary,
         overflow: 'hidden',
         width: '100%',
     },
@@ -138,32 +140,32 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 13,
         fontWeight: '600',
-        color: '#374151',
-        fontFamily: 'System', // Use system font for UI elements
+        color: COLORS.fg,
+        fontFamily: 'System',
     },
     commentary: {
         paddingHorizontal: 12,
         paddingVertical: 8,
-        backgroundColor: '#fff',
+        backgroundColor: COLORS.surface,
         borderTopWidth: 1,
-        borderTopColor: '#f3f4f6',
+        borderTopColor: COLORS.borderLight,
     },
     commentaryLabel: {
         fontSize: 10,
-        color: '#9ca3af', // muted
+        color: COLORS.fgMuted,
         marginBottom: 2,
         fontWeight: '700',
         textTransform: 'uppercase',
     },
     commentaryText: {
         fontSize: 13,
-        color: '#4b5563',
+        color: COLORS.fgMuted,
         lineHeight: 18,
     },
     outputContainer: {
         borderTopWidth: 1,
-        borderTopColor: '#e5e7eb',
-        backgroundColor: '#111827', // Dark terminal background
+        borderTopColor: COLORS.borderLight,
+        backgroundColor: COLORS.bg,
         padding: 12,
     },
     outputHeader: {
@@ -173,15 +175,16 @@ const styles = StyleSheet.create({
     },
     outputLabel: {
         fontSize: 10,
-        color: '#6b7280',
+        color: COLORS.fgMuted,
         fontWeight: '700',
     },
     outputText: {
-        fontFamily: 'monospace', // Monospace for terminal output
+        fontFamily: 'monospace',
         fontSize: 12,
-        color: '#e5e7eb', // bright text on dark bg
+        color: COLORS.fg,
         lineHeight: 16,
     }
 });
 
 export default CommandBlock;
+

@@ -470,7 +470,7 @@ export async function executeImageGeneration(input, config) {
 
     return {
       success: true,
-      output: `Image generated successfully!\n\nPrompt: "${prompt}"${style ? `\nStyle: ${style}` : ''}`,
+      output: `Image generated successfully!\n\nPrompt: "${prompt}"${style ? `\nStyle: ${style}` : ''}\n\nIMPORTANT: The image is already displayed in the UI. Do NOT include markdown image links, placeholders like [Image], or say "here is the image". Simply acknowledge the image was created and continue the conversation naturally.`,
       imageUrl: result.url,
       imageBase64: result.base64,
       prompt,

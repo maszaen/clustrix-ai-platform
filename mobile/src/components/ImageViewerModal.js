@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions, BackHandler, Image as RNImage, StatusBar, ActivityIndicator } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import ReanimatedAnimated, { 
@@ -34,7 +34,8 @@ function ImageViewerModal({ visible, image, onClose, isDownloadable = false }) {
   const savedTranslateY = useSharedValue(0);
   
   // Calculate image dimensions to fit screen while maintaining aspect ratio
-  const getImageDimensions = useCallback(() => {
+  // Use useMemo with explicit deps to recalculate when image properties change
+  const imageDims = useMemo(() => {
     if (!image) return { width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.6 };
     
     const imgWidth = image.width || 800;
@@ -55,9 +56,8 @@ function ImageViewerModal({ visible, image, onClose, isDownloadable = false }) {
     }
     
     return { width, height };
-  }, [image]);
-  
-  const imageDims = getImageDimensions();
+  }, [image?.uri, image?.width, image?.height]);
+
   
   // Reset zoom/pan when image changes
   useEffect(() => {

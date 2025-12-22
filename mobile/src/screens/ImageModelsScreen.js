@@ -12,6 +12,7 @@ import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { Check, Sparkles, AlertCircle } from 'lucide-react-native';
+import DropdownSelect from '../components/DropdownSelect';
 
 // Image models by provider (2025 latest)
 const IMAGE_MODELS = {
@@ -28,7 +29,7 @@ const IMAGE_MODELS = {
     { id: 'imagen-3.0-generate-002', name: 'Imagen 3', desc: 'High quality, artifact-free' },
     { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash Image', desc: 'Native generation, free tier' },
   ],
-  gemini: [
+  gemini: [ // Legacy alias for google
     { id: 'auto', name: 'Auto', desc: 'Best available (Imagen 4)', isAuto: true },
     { id: 'imagen-4.0-generate-001', name: 'Imagen 4', desc: 'Latest - best text rendering' },
     { id: 'imagen-3.0-generate-002', name: 'Imagen 3', desc: 'High quality, artifact-free' },
@@ -48,10 +49,18 @@ const IMAGE_MODELS = {
     { id: 'cogview-4-250304', name: 'CogView 4', desc: 'HD quality, ¥0.06/image' },
     { id: 'cogview-3-flash', name: 'CogView 3 Flash', desc: 'Free tier, fast generation' },
   ],
+  openrouter: [
+    { id: 'auto', name: 'Auto', desc: 'Best available', isAuto: true },
+    { id: 'black-forest-labs/flux-1.1-pro', name: 'Flux 1.1 Pro', desc: 'SOTA Quality, very fast' },
+    { id: 'black-forest-labs/flux-1-schnell', name: 'Flux 1 Schnell', desc: 'Fastest, good quality' },
+    { id: 'recraft-ai/recraft-v3', name: 'Recraft V3', desc: 'Best for vector/design/text' },
+    { id: 'stability-ai/stable-diffusion-3.5-large', name: 'SD 3.5 Large', desc: 'Stable Diffusion latest' },
+    { id: 'midjourney/midjourney-v6.1', name: 'Midjourney 6.1', desc: 'Via proxy, high artistic quality' },
+  ],
 };
 
-// Providers that DON'T support image generation
-const UNSUPPORTED_PROVIDERS = ['anthropic', 'mistral', 'deepseek', 'perplexity', 'cerebras', 'groq', 'openrouter', 'megallm'];
+// Providers that DON'T support image generation or are not configured
+const UNSUPPORTED_PROVIDERS = ['anthropic', 'mistral', 'deepseek', 'perplexity', 'cerebras', 'groq', 'megallm'];
 
 export default function ImageModelsScreen({ onClose }) {
   const { settings, updateSettings } = useApp();
@@ -113,27 +122,12 @@ export default function ImageModelsScreen({ onClose }) {
           {/* Model Selection */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Image Model</Text>
-            {availableModels.map(model => (
-              <Pressable
-                key={model.id}
-                style={[styles.modelCard, selectedModel === model.id && styles.modelCardActive]}
-                onPress={() => setSelectedModel(model.id)}
-                android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-              >
-                <View style={styles.modelRow}>
-                  <View style={styles.modelInfo}>
-                    <View style={styles.modelNameRow}>
-                      {model.isAuto && <Sparkles size={14} color={COLORS.primary} />}
-                      <Text style={[styles.modelName, selectedModel === model.id && styles.modelNameActive]}>
-                        {model.name}
-                      </Text>
-                    </View>
-                    <Text style={styles.modelDesc}>{model.desc}</Text>
-                  </View>
-                  {selectedModel === model.id && <Check size={18} color={COLORS.primary} />}
-                </View>
-              </Pressable>
-            ))}
+            <DropdownSelect
+              label="Select Image Model"
+              value={selectedModel}
+              options={availableModels}
+              onSelect={(item) => setSelectedModel(item.id)}
+            />
           </View>
 
           {/* Info */}
@@ -151,7 +145,7 @@ export default function ImageModelsScreen({ onClose }) {
             <Text style={styles.warningText}>
               Your current provider ({settings.provider}) does not support image generation.
               {'\n\n'}
-              Switch to <Text style={styles.highlight}>OpenAI</Text> or <Text style={styles.highlight}>Google</Text> in Model Settings to use this feature.
+              Switch to <Text style={styles.highlight}>OpenAI</Text>, <Text style={styles.highlight}>Google</Text>, or <Text style={styles.highlight}>OpenRouter</Text> in Model Settings to use this feature.
             </Text>
           </View>
         </View>
@@ -217,44 +211,6 @@ const styles = StyleSheet.create({
   unsupportedText: {
     color: COLORS.danger,
     fontSize: 11,
-  },
-  modelCard: {
-    backgroundColor: COLORS.inputBg,
-    borderRadius: 15,
-    padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  modelCardActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary + '10',
-  },
-  modelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  modelInfo: {
-    flex: 1,
-  },
-  modelNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  modelName: {
-    color: COLORS.fg,
-    fontSize: 14,
-    fontFamily: FONTS.sans,
-  },
-  modelNameActive: {
-    color: COLORS.primary,
-  },
-  modelDesc: {
-    color: COLORS.fgMuted,
-    fontSize: 12,
-    marginTop: 2,
   },
   infoText: {
     color: COLORS.fgMuted,

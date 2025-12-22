@@ -200,6 +200,7 @@ export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, i
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState(null);
   const [cachedUri, setCachedUri] = useState(null);
+  const [imageDimensions, setImageDimensions] = useState({ width: 1024, height: 1024 });
 
   // Save base64 to cache file on mount - so modal can use file URI instead of data URI
   useEffect(() => {
@@ -212,13 +213,27 @@ export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, i
             encoding: 'base64',
           });
           setCachedUri(fileUri);
+          
+          // Get actual image dimensions
+          Image.getSize(fileUri, (width, height) => {
+            setImageDimensions({ width, height });
+          }, (err) => {
+            console.log('Failed to get image size:', err);
+          });
         } catch (e) {
           console.log('Failed to cache generated image:', e);
         }
+      } else if (imageUrl && !cachedUri) {
+        // For URL-based images, get size directly
+        Image.getSize(imageUrl, (width, height) => {
+          setImageDimensions({ width, height });
+        }, (err) => {
+          console.log('Failed to get image size from URL:', err);
+        });
       }
     };
     cacheImage();
-  }, [imageBase64]);
+  }, [imageBase64, imageUrl]);
 
   // Get the image source - prefer cached file URI over data URI
   const imageSource = cachedUri
@@ -282,13 +297,15 @@ export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, i
   // Open image in App.js level modal with download capability
   const handleImagePress = useCallback(() => {
     if (imageSource && onImagePress) {
-      // Only pass uri and isDownloadable - modal extracts base64 from data URI automatically
+      // Pass uri, isDownloadable, and actual dimensions from Image.getSize
       onImagePress({ 
         uri: imageSource.uri, 
-        isDownloadable: true, 
+        isDownloadable: true,
+        width: imageDimensions.width,
+        height: imageDimensions.height,
       });
     }
-  }, [imageSource, onImagePress]);
+  }, [imageSource, onImagePress, imageDimensions]);
 
   if (isLoading) {
     return (

@@ -11,6 +11,7 @@ import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { Eye, EyeClosed, ExternalLink, Check } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DropdownSelect from '../components/DropdownSelect';
 
 const SEARCH_PROVIDERS = [
   { id: 'tavily', name: 'Tavily', desc: 'AI-optimized search', url: 'https://app.tavily.com/home' },
@@ -68,24 +69,12 @@ export default function AgenticToolsScreen({ onClose }) {
       {/* Provider Selection */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Search Provider</Text>
-        {SEARCH_PROVIDERS.map(p => (
-          <Pressable
-            key={p.id}
-            style={[styles.providerCard, provider === p.id && styles.providerCardActive]}
-            onPress={() => setProvider(p.id)}
-            android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-          >
-            <View style={styles.providerRow}>
-              <View>
-                <Text style={[styles.providerName, provider === p.id && styles.providerNameActive]}>
-                  {p.name}
-                </Text>
-                <Text style={styles.providerDesc}>{p.desc}</Text>
-              </View>
-              {provider === p.id && <Check size={18} color={COLORS.primary} />}
-            </View>
-          </Pressable>
-        ))}
+        <DropdownSelect
+          label="Select Search Provider"
+          value={provider}
+          options={SEARCH_PROVIDERS}
+          onSelect={(item) => setProvider(item.id)}
+        />
       </View>
 
       {/* API Key */}
@@ -161,36 +150,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5, 
     paddingHorizontal: 4, 
     marginBottom: 6 
-  },
-  providerCard: {
-    backgroundColor: COLORS.inputBg,
-    borderRadius: 15,
-    padding: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  providerCardActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primary + '10',
-  },
-  providerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  providerName: {
-    color: COLORS.fg,
-    fontSize: 14,
-    fontFamily: FONTS.sans,
-  },
-  providerNameActive: {
-    color: COLORS.primary,
-  },
-  providerDesc: {
-    color: COLORS.fgMuted,
-    fontSize: 12,
-    marginTop: 2,
   },
   input: {
     backgroundColor: COLORS.inputBg,

@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         flex: 1,
-        paddingRight: 10,
+        paddingRight: 29,
     },
     iconContainer: {
         marginRight: 8,

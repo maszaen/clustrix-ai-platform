@@ -152,69 +152,68 @@ export default function AccountScreen({ visible, onClose }) {
           {isLoggedIn ? (
             // Logged in state
             <View style={styles.loggedInContainer}>
-              {/* Profile Section */}
-              <View style={styles.profileSection}>
-              <Image
-                source={{ uri: currentUser?.avatarUrl }}
-                style={styles.profileImage}
-              />
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>{currentUser?.name}</Text>
-                <Text style={styles.profileEmail}>{currentUser?.email}</Text>
-                              <View style={styles.providerBadge}>
-                  <Ionicons 
-                    name="logo-google" 
-                    size={12} 
-                    color={COLORS.fgMuted} 
-                  />
-                  <Text style={styles.providerText}>Google</Text>
+              {/* Card Group - Profile & Sync */}
+              <View style={styles.cardGroup}>
+                {/* Profile Card - Top */}
+                <View style={[styles.card, styles.cardTop]}>
+                  <View style={styles.profileRow}>
+                    <Image
+                      source={{ uri: currentUser?.avatarUrl }}
+                      style={styles.profileImage}
+                    />
+                    <View style={styles.profileInfo}>
+                      <Text style={styles.profileName}>{currentUser?.name}</Text>
+                      <Text style={styles.profileEmail}>{currentUser?.email}</Text>
+                    </View>
+                    <Pressable 
+                      style={styles.logoutBadge} 
+                      onPress={handleLogout}
+                      android_ripple={{ color: 'rgba(239,68,68,0.2)', borderless: true }}
+                    >
+                      <Ionicons name="log-out-outline" size={18} color="#ef4444" />
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* Sync Card - Bottom */}
+                <View style={[styles.card, styles.cardBottom]}>
+                  <View style={styles.syncHeader}>
+                    <Text style={styles.syncLabel}>Last backup:</Text>
+                    <Text style={styles.syncTime}>
+                      {lastBackupTime ? formatBackupTime(lastBackupTime) : 'Not synced'}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.syncActions}>
+                    <Pressable 
+                      style={[styles.syncBtn, isBackingUp && styles.syncBtnDisabled]}
+                      onPress={handleBackup}
+                      disabled={isBackingUp}
+                      android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+                    >
+                      {isBackingUp ? (
+                        <ActivityIndicator size="small" color={COLORS.fg} />
+                      ) : (
+                        <Ionicons name="cloud-upload-outline" size={18} color={COLORS.fg} />
+                      )}
+                      <Text style={styles.syncBtnText}>
+                        {isBackingUp ? 'Syncing...' : 'Backup'}
+                      </Text>
+                    </Pressable>
+                    
+                    <Pressable 
+                      style={[styles.syncBtn, isBackingUp && styles.syncBtnDisabled]}
+                      onPress={handleRestore}
+                      disabled={isBackingUp}
+                      android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+                    >
+                      <Ionicons name="cloud-download-outline" size={18} color={COLORS.fg} />
+                      <Text style={styles.syncBtnText}>Restore</Text>
+                    </Pressable>
+                  </View>
                 </View>
               </View>
             </View>
-
-            {/* Backup Section */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Cloud Backup</Text>
-              <View style={styles.backupInfo}>
-                <Text style={styles.backupLabel}>Last backup:</Text>
-                <Text style={styles.backupTime}>{formatBackupTime(lastBackupTime)}</Text>
-              </View>
-              
-              <View style={styles.backupButtons}>
-                <Pressable 
-                  style={[styles.backupBtn, isBackingUp && styles.backupBtnDisabled]}
-                  onPress={handleBackup}
-                  disabled={isBackingUp}
-                  android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
-                >
-                  {isBackingUp ? (
-                    <ActivityIndicator size="small" color={COLORS.fg} />
-                  ) : (
-                    <Ionicons name="cloud-upload-outline" size={18} color={COLORS.fg} />
-                  )}
-                  <Text style={styles.backupBtnText}>
-                    {isBackingUp ? 'Backing up...' : 'Backup Now'}
-                  </Text>
-                </Pressable>
-                
-                <Pressable 
-                  style={[styles.backupBtn, styles.restoreBtn]}
-                  onPress={handleRestore}
-                  disabled={isBackingUp}
-                  android_ripple={{ color: 'rgba(255,255,255,0.15)' }}
-                >
-                  <Ionicons name="cloud-download-outline" size={18} color={COLORS.fg} />
-                  <Text style={styles.backupBtnText}>Restore</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {/* Logout Button */}
-            <Pressable style={styles.logoutBtn} onPress={handleLogout} android_ripple={{ color: 'rgba(255,100,100,0.2)' }}>
-              <Ionicons name="log-out-outline" size={18} color={COLORS.danger} />
-              <Text style={styles.logoutBtnText}>Logout</Text>
-            </Pressable>
-          </View>
         ) : (
           // Not logged in state
           <View style={styles.notLoggedInContainer}>
@@ -277,27 +276,42 @@ const styles = StyleSheet.create({
   loggedInContainer: {
     flex: 1,
   },
-  profileSection: {
+  cardGroup: {
+    gap: 3,
+  },
+  card: {
+    backgroundColor: COLORS.bgSecondary,
+    padding: 14,
+  },
+  cardTop: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderBottomLeftRadius: 5,
+    borderBottomRightRadius: 5,
+  },
+  cardBottom: {
+    borderTopLeftRadius: 5,
+    borderTopRightRadius: 5,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 32,
-    paddingBottom: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
   },
   profileImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: COLORS.inputBg,
   },
   profileInfo: {
-    marginLeft: 16,
     flex: 1,
+    marginHorizontal: 16,
   },
   profileName: {
     fontSize: 18,
-    fontFamily: FONTS.display,
+    fontFamily: FONTS.sans,
     color: COLORS.fg,
   },
   profileEmail: {
@@ -305,81 +319,50 @@ const styles = StyleSheet.create({
     color: COLORS.fgMuted,
     marginTop: 2,
   },
-  providerBadge: {
+  logoutBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  syncHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    backgroundColor: COLORS.inputBg,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  providerText: {
-    fontSize: 11,
-    color: COLORS.fgMuted,
-    marginLeft: 4,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontFamily: FONTS.display,
-    color: COLORS.fgMuted,
-    marginBottom: 12,
-  },
-  backupInfo: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 10,
   },
-  backupLabel: {
-    fontSize: 14,
+  syncLabel: {
+    fontSize: 13,
     color: COLORS.fgMuted,
   },
-  backupTime: {
-    fontSize: 14,
-    color: COLORS.fg,
+  syncTime: {
+    fontSize: 12,
+    color: COLORS.fgMuted,
   },
-  backupButtons: {
+  syncActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
-  backupBtn: {
+  syncBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
     backgroundColor: COLORS.inputBg,
-    paddingVertical: 14,
-    borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
-  backupBtnDisabled: {
-    opacity: 0.6,
+  syncBtnDisabled: {
+    opacity: 0.5,
   },
-  restoreBtn: {
-    backgroundColor: 'transparent',
-  },
-  backupBtnText: {
-    fontSize: 14,
+  syncBtnText: {
+    fontSize: 13,
     color: COLORS.fg,
-  },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    marginTop: 'auto',
-    marginBottom: 40,
-  },
-  logoutBtnText: {
-    fontSize: 14,
-    color: COLORS.danger,
   },
   // Not logged in styles
   notLoggedInContainer: {

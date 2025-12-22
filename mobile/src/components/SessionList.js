@@ -21,7 +21,7 @@ const SessionItem = memo(function SessionItem({ session, isActive, onSelect, onL
       style={[styles.sessionItem, isActive && styles.sessionItemActive]}
       onPress={() => onSelect(session)}
       onLongPress={(e) => onLongPress(session, e.nativeEvent)}
-      delayLongPress={200}
+      delayLongPress={300}
       android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
     >
       <Text 
@@ -42,30 +42,28 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
   const [displayCount, setDisplayCount] = useState(20); // Lazy load: start with 20 items
   const searchInputRef = useRef(null);
 
-  const filteredSessions = searchQuery 
-    ? sessions.filter(s => s.name?.toLowerCase().includes(searchQuery.toLowerCase()))
-    : sessions;
-
-  // Separate favorites and regular sessions
-  const favoriteSessions = filteredSessions.filter(s => s.is_favorite);
-  const regularSessions = filteredSessions.filter(s => !s.is_favorite);
-  
-  // Combined and sliced for lazy loading
-  const allSessions = useMemo(() => 
-    [...favoriteSessions, ...regularSessions], 
-    [favoriteSessions, regularSessions]
-  );
-  const displayedSessions = useMemo(() => 
-    allSessions.slice(0, displayCount), 
-    [allSessions, displayCount]
-  );
+  // Combine filtering and sorting into a single memoized computation
+  const displayedSessions = useMemo(() => {
+    // Filter by search query
+    const filtered = searchQuery
+      ? sessions.filter(s => s.name?.toLowerCase().includes(searchQuery.toLowerCase()))
+      : sessions;
+    
+    // Separate favorites and regular sessions
+    const favorites = filtered.filter(s => s.is_favorite);
+    const regular = filtered.filter(s => !s.is_favorite);
+    
+    // Combine and slice for lazy loading
+    const combined = [...favorites, ...regular];
+    return combined.slice(0, displayCount);
+  }, [sessions, searchQuery, displayCount]);
   
   // Load more handler
   const handleLoadMore = useCallback(() => {
-    if (displayCount < allSessions.length) {
-      setDisplayCount(prev => Math.min(prev + 20, allSessions.length));
+    if (displayCount < sessions.length) {
+      setDisplayCount(prev => Math.min(prev + 20, sessions.length));
     }
-  }, [displayCount, allSessions.length]);
+  }, [displayCount, sessions.length]);
 
   // Handle session select - if already active, just close sidebar
   const handleSelectSession = useCallback((session) => {
@@ -83,7 +81,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
     setContextMenu({
       visible: true,
       session,
-      position: { x: event.pageX, y: event.pageY - 20 },
+      position: { x: event.pageX, y: event.pageY - 0 },
     });
     onContextMenuChange?.(true);
   };
@@ -203,22 +201,27 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
       {/* Sessions */}
       <LegendList
         data={displayedSessions}
-        extraData={currentSession}
+        extraData={[currentSession?.id, displayedSessions.map(s => `${s.id}-${s.is_favorite}`).join(',')]}
         keyExtractor={(item) => item.id}
-        style={{ width: SCREEN_WIDTH }}
+        style={displayedSessions.length > 0 ? { width: SCREEN_WIDTH } : undefined}
         renderItem={({ item, index }) => {
-          const favCount = favoriteSessions.length;
-          const isFirstFavorite = index === 0 && favCount > 0;
-          const isFirstRegular = index === favCount && regularSessions.length > 0 && favCount > 0;
+          // Get prev item to determine if we need section header
+          const prevItem = index > 0 ? displayedSessions[index - 1] : null;
+          
+          // Show "Favorites" header before first favorite item
+          const showFavoritesHeader = item.is_favorite && (index === 0 || !prevItem?.is_favorite);
+          
+          // Show "Recent" header before first non-favorite item that comes after favorites
+          const showRecentHeader = !item.is_favorite && prevItem?.is_favorite === true;
           
           return (
-            <>
-              {isFirstFavorite && (
+            <React.Fragment key={`${item.id}-${item.is_favorite}`}>
+              {showFavoritesHeader && (
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Favorites</Text>
                 </View>
               )}
-              {isFirstRegular && (
+              {showRecentHeader && (
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>Recent</Text>
                 </View>
@@ -230,13 +233,13 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
                 onLongPress={handleLongPress}
                 onToggleFavorite={onToggleFavorite}
               />
-            </>
+            </React.Fragment>
           );
         }}
         contentContainerStyle={styles.sessionList}
         showsVerticalScrollIndicator={false}
         estimatedItemSize={45}
-        recycleItems={true}
+        recycleItems={false}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.02}
         ListEmptyComponent={

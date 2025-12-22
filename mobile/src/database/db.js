@@ -11,6 +11,7 @@ export async function initDatabase() {
       name TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
+      is_favorite INTEGER DEFAULT 0,
       metadata TEXT
     );
     
@@ -82,6 +83,13 @@ export async function initDatabase() {
     // Column already exists, ignore
   }
   
+  // Migration: Add is_favorite column to sessions if not exists
+  try {
+    await db.runAsync('ALTER TABLE sessions ADD COLUMN is_favorite INTEGER DEFAULT 0');
+  } catch (e) {
+    // Column already exists, ignore
+  }
+  
   return db;
 }
 
@@ -91,7 +99,12 @@ export function getDb() {
 
 // Sessions
 export async function getAllSessions() {
-  return await db.getAllAsync('SELECT * FROM sessions ORDER BY updated_at DESC');
+  const rows = await db.getAllAsync('SELECT * FROM sessions ORDER BY updated_at DESC');
+  // Convert is_favorite from INTEGER (0/1) to boolean
+  return (rows || []).map(row => ({
+    ...row,
+    is_favorite: row.is_favorite === 1,
+  }));
 }
 
 export async function getSession(id) {
@@ -101,13 +114,14 @@ export async function getSession(id) {
 export async function saveSession(session) {
   const now = Date.now();
   await db.runAsync(
-    `INSERT INTO sessions (id, name, created_at, updated_at, metadata)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO sessions (id, name, created_at, updated_at, is_favorite, metadata)
+     VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
        updated_at = excluded.updated_at,
+       is_favorite = excluded.is_favorite,
        metadata = excluded.metadata`,
-    [session.id, session.name, session.created_at || now, now, JSON.stringify(session.metadata || {})]
+    [session.id, session.name, session.created_at || now, now, session.is_favorite ? 1 : 0, JSON.stringify(session.metadata || {})]
   );
 }
 
@@ -530,8 +544,8 @@ export async function importAllData(backupData) {
     // Import sessions
     for (const session of (sessions || [])) {
       await db.runAsync(
-        'INSERT INTO sessions (id, name, created_at, updated_at, metadata) VALUES (?, ?, ?, ?, ?)',
-        [session.id, session.name, session.created_at, session.updated_at, session.metadata || '{}']
+        'INSERT INTO sessions (id, name, created_at, updated_at, is_favorite, metadata) VALUES (?, ?, ?, ?, ?, ?)',
+        [session.id, session.name, session.created_at, session.updated_at, session.is_favorite ? 1 : 0, session.metadata || '{}']
       );
     }
     

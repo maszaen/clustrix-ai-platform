@@ -33,6 +33,7 @@ export default function AccountScreen({ visible, onClose }) {
     logout,
     backupNow,
     restoreBackup,
+    sessions,
   } = useApp();
   
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -112,6 +113,9 @@ export default function AccountScreen({ visible, onClose }) {
     if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`;
     return date.toLocaleDateString();
   };
+
+  // Calculate usage stats
+  const totalChats = sessions?.length || 0;
   
   // Get alert modal props based on type
   const getAlertProps = () => {
@@ -152,7 +156,7 @@ export default function AccountScreen({ visible, onClose }) {
           {isLoggedIn ? (
             // Logged in state
             <View style={styles.loggedInContainer}>
-              {/* Card Group - Profile & Sync */}
+              {/* Card Group - Profile, Stats & Sync */}
               <View style={styles.cardGroup}>
                 {/* Profile Card - Top */}
                 <View style={[styles.card, styles.cardTop]}>
@@ -172,6 +176,26 @@ export default function AccountScreen({ visible, onClose }) {
                     >
                       <Ionicons name="log-out-outline" size={18} color="#ef4444" />
                     </Pressable>
+                  </View>
+                </View>
+
+                {/* Stats Card - Middle */}
+                <View style={[styles.card, styles.cardMiddle]}>
+                  <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statValue}>{totalChats}</Text>
+                      <Text style={styles.statLabel}>Chats</Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statItem}>
+                      <Text style={styles.statValue}>{totalChats}</Text>
+                      <Text style={styles.statLabel}>Synced</Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statItem}>
+                      <Text style={styles.statValue}>G-Drive</Text>
+                      <Text style={styles.statLabel}>Storage</Text>
+                    </View>
                   </View>
                 </View>
 
@@ -289,11 +313,38 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 5,
     borderBottomRightRadius: 5,
   },
+  cardMiddle: {
+    borderRadius: 5,
+  },
   cardBottom: {
     borderTopLeftRadius: 5,
     borderTopRightRadius: 5,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    color: COLORS.fg,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: COLORS.fgMuted,
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: COLORS.borderLight,
   },
   profileRow: {
     flexDirection: 'row',

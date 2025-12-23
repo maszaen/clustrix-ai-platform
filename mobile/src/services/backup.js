@@ -186,3 +186,51 @@ export async function restoreFromCloud() {
   return await restoreFromGoogleDrive(accessToken);
 }
 
+/**
+ * Check if cloud backup exists and get metadata
+ * Returns { exists, sessionCount, lastBackupTime, exportedAt } or { exists: false }
+ */
+export async function checkCloudBackup() {
+  console.log('[Backup] Checking cloud backup...');
+  
+  const accessToken = await getValidAccessToken();
+  
+  if (!accessToken) {
+    return { exists: false, needsReauth: true };
+  }
+  
+  try {
+    const file = await findGoogleDriveBackup(accessToken);
+    
+    if (!file) {
+      return { exists: false };
+    }
+    
+    // Download file content to get metadata
+    const response = await fetch(
+      `${GOOGLE_DRIVE_APPDATA_URL}/${file.id}?alt=media`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      return { exists: false };
+    }
+    
+    const content = await response.text();
+    const backupData = JSON.parse(content);
+    
+    return {
+      exists: true,
+      sessionCount: backupData.data?.sessions?.length || 0,
+      exportedAt: backupData.exportedAt,
+      history: backupData.history || [],
+    };
+  } catch (error) {
+    console.error('[Backup] Check cloud backup error:', error);
+    return { exists: false, error: error.message };
+  }
+}

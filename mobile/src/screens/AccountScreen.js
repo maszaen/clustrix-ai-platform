@@ -34,6 +34,8 @@ export default function AccountScreen({ visible, onClose }) {
     backupNow,
     restoreBackup,
     sessions,
+    cloudBackupInfo,
+    backupHistory,
   } = useApp();
   
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -117,6 +119,30 @@ export default function AccountScreen({ visible, onClose }) {
   // Calculate usage stats
   const totalChats = sessions?.length || 0;
   
+  // Count synced sessions (sessions that were updated before or at last backup time)
+  const syncedChats = lastBackupTime 
+    ? sessions?.filter(s => s.updated_at <= lastBackupTime).length || 0
+    : 0;
+  
+  // Unsynced chats count
+  const unsyncedChats = totalChats - syncedChats;
+  
+  // Alert conditions
+  const showCloudDataAlert = cloudBackupInfo?.exists && !lastBackupTime && totalChats === 0;
+  const showBackupReminder = true; // just for testing
+  // const showBackupReminder = unsyncedChats >= 10;
+  
+  // Format history date
+  const formatHistoryDate = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+  
   // Get alert modal props based on type
   const getAlertProps = () => {
     switch (alert.type) {
@@ -156,87 +182,156 @@ export default function AccountScreen({ visible, onClose }) {
           {isLoggedIn ? (
             // Logged in state
             <View style={styles.loggedInContainer}>
-              {/* Card Group - Profile, Stats & Sync */}
-              <View style={styles.cardGroup}>
-                {/* Profile Card - Top */}
-                <View style={[styles.card, styles.cardTop]}>
-                  <View style={styles.profileRow}>
-                    <Image
-                      source={{ uri: currentUser?.avatarUrl }}
-                      style={styles.profileImage}
-                    />
-                    <View style={styles.profileInfo}>
-                      <Text style={styles.profileName}>{currentUser?.name}</Text>
-                      <Text style={styles.profileEmail}>{currentUser?.email}</Text>
-                    </View>
-                    <Pressable 
-                      style={styles.logoutBadge} 
-                      onPress={handleLogout}
-                      android_ripple={{ color: 'rgba(239,68,68,0.2)', borderless: true }}
-                    >
-                      <Ionicons name="log-out-outline" size={18} color="#ef4444" />
-                    </Pressable>
+              {/* Unified Card - Profile, Stats & Sync */}
+              <View style={styles.unifiedCard}>
+                {/* Profile Section */}
+                <View style={styles.profileRow}>
+                  <Image
+                    source={{ uri: currentUser?.avatarUrl }}
+                    style={styles.profileImage}
+                  />
+                  <View style={styles.profileInfo}>
+                    <Text style={styles.profileName}>{currentUser?.name}</Text>
+                    <Text style={styles.profileEmail}>{currentUser?.email}</Text>
+                  </View>
+                  <Pressable 
+                    style={styles.logoutBadge} 
+                    onPress={handleLogout}
+                    android_ripple={{ color: 'rgba(239,68,68,0.2)', borderless: true }}
+                  >
+                    <Ionicons name="log-out-outline" size={18} color="#ef4444" />
+                  </Pressable>
+                </View>
+
+                {/* Separator */}
+                <View style={styles.cardSeparator} />
+
+                {/* Stats Section */}
+                <View style={styles.statsRow}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{totalChats}/{syncedChats}</Text>
+                    <Text style={styles.statLabel}>Synced chat</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>G-Drive</Text>
+                    <Text style={styles.statLabel}>Storage</Text>
                   </View>
                 </View>
 
-                {/* Stats Card - Middle */}
-                <View style={[styles.card, styles.cardMiddle]}>
-                  <View style={styles.statsRow}>
-                    <View style={styles.statItem}>
-                      <Text style={styles.statValue}>{totalChats}</Text>
-                      <Text style={styles.statLabel}>Chats</Text>
-                    </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statItem}>
-                      <Text style={styles.statValue}>{totalChats}</Text>
-                      <Text style={styles.statLabel}>Synced</Text>
-                    </View>
-                    <View style={styles.statDivider} />
-                    <View style={styles.statItem}>
-                      <Text style={styles.statValue}>G-Drive</Text>
-                      <Text style={styles.statLabel}>Storage</Text>
-                    </View>
-                  </View>
-                </View>
+                {/* Separator */}
+                <View style={styles.cardSeparator} />
 
-                {/* Sync Card - Bottom */}
-                <View style={[styles.card, styles.cardBottom]}>
-                  <View style={styles.syncHeader}>
-                    <Text style={styles.syncLabel}>Last backup:</Text>
-                    <Text style={styles.syncTime}>
-                      {lastBackupTime ? formatBackupTime(lastBackupTime) : 'Not synced'}
+                {/* Sync Section */}
+                <View style={styles.syncHeader}>
+                  <Text style={styles.syncLabel}>Last backup:</Text>
+                  <Text style={styles.syncTime}>
+                    {lastBackupTime ? formatBackupTime(lastBackupTime) : 'Not synced'}
+                  </Text>
+                </View>
+                
+                <View style={styles.syncActions}>
+                  <Pressable 
+                    style={[styles.syncBtn, isBackingUp && styles.syncBtnDisabled]}
+                    onPress={handleBackup}
+                    disabled={isBackingUp}
+                    android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+                  >
+                    {isBackingUp ? (
+                      <ActivityIndicator size="small" color={COLORS.fg} />
+                    ) : (
+                      <Ionicons name="cloud-upload-outline" size={18} color={COLORS.fg} />
+                    )}
+                    <Text style={styles.syncBtnText}>
+                      {isBackingUp ? 'Syncing...' : 'Backup'}
                     </Text>
-                  </View>
+                  </Pressable>
                   
-                  <View style={styles.syncActions}>
-                    <Pressable 
-                      style={[styles.syncBtn, isBackingUp && styles.syncBtnDisabled]}
-                      onPress={handleBackup}
-                      disabled={isBackingUp}
-                      android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-                    >
-                      {isBackingUp ? (
-                        <ActivityIndicator size="small" color={COLORS.fg} />
-                      ) : (
-                        <Ionicons name="cloud-upload-outline" size={18} color={COLORS.fg} />
-                      )}
-                      <Text style={styles.syncBtnText}>
-                        {isBackingUp ? 'Syncing...' : 'Backup'}
-                      </Text>
-                    </Pressable>
-                    
-                    <Pressable 
-                      style={[styles.syncBtn, isBackingUp && styles.syncBtnDisabled]}
-                      onPress={handleRestore}
-                      disabled={isBackingUp}
-                      android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-                    >
-                      <Ionicons name="cloud-download-outline" size={18} color={COLORS.fg} />
-                      <Text style={styles.syncBtnText}>Restore</Text>
-                    </Pressable>
-                  </View>
+                  <Pressable 
+                    style={[styles.syncBtn, isBackingUp && styles.syncBtnDisabled]}
+                    onPress={handleRestore}
+                    disabled={isBackingUp}
+                    android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+                  >
+                    <Ionicons name="cloud-download-outline" size={18} color={COLORS.fg} />
+                    <Text style={styles.syncBtnText}>Restore</Text>
+                  </Pressable>
                 </View>
               </View>
+
+              {/* Alert Cards */}
+              {showCloudDataAlert && (
+                <Pressable 
+                  style={styles.alertCard}
+                  onPress={handleRestore}
+                  android_ripple={{ color: 'rgba(99,102,241,0.2)' }}
+                >
+                  <View style={styles.alertIconContainer}>
+                    <Ionicons name="cloud-done" size={24} color="#6366f1" />
+                  </View>
+                  <View style={styles.alertContent}>
+                    <Text style={styles.alertTitle}>Cloud backup found!</Text>
+                    <Text style={styles.alertMessage}>
+                      You have {cloudBackupInfo.sessionCount} chats saved. Tap to restore.
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={COLORS.fgMuted} />
+                </Pressable>
+              )}
+
+              {showBackupReminder && (
+                <Pressable 
+                  style={[styles.alertCard, styles.alertWarning]}
+                  onPress={handleBackup}
+                  android_ripple={{ color: 'rgba(245,158,11,0.2)' }}
+                >
+                  <View style={[styles.alertIconContainer, styles.alertIconWarning]}>
+                    <Ionicons name="warning" size={24} color="#f59e0b" />
+                  </View>
+                  <View style={styles.alertContent}>
+                    <Text style={styles.alertTitle}>{unsyncedChats} chats not backed up</Text>
+                    <Text style={styles.alertMessage}>
+                      Tap to backup now and keep your data safe.
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={COLORS.fgMuted} />
+                </Pressable>
+              )}
+
+              {/* Backup History */}
+              {backupHistory.length > 0 && (
+                <View style={styles.historySection}>
+                  <Text style={styles.historySectionTitle}>Sync History</Text>
+                  {backupHistory.slice(0, 5).map((item, index) => (
+                    <View key={item.id || index} style={styles.historyItem}>
+                      <View style={[
+                        styles.historyIcon, 
+                        item.type === 'backup' ? styles.historyIconBackup : styles.historyIconRestore,
+                        !item.success && styles.historyIconFailed
+                      ]}>
+                        <Ionicons 
+                          name={item.type === 'backup' ? 'cloud-upload' : 'cloud-download'} 
+                          size={14} 
+                          color={item.success ? (item.type === 'backup' ? '#10b981' : '#6366f1') : '#ef4444'} 
+                        />
+                      </View>
+                      <View style={styles.historyInfo}>
+                        <Text style={styles.historyTitle}>
+                          {item.type === 'backup' ? 'Backup' : 'Restore'}{item.success ? '' : ' failed'}
+                        </Text>
+                        <Text style={styles.historyMeta}>
+                          {formatHistoryDate(item.timestamp)} • {item.session_count} chats
+                        </Text>
+                      </View>
+                      {item.success ? (
+                        <Ionicons name="checkmark-circle" size={18} color="#10b981" />
+                      ) : (
+                        <Ionicons name="close-circle" size={18} color="#ef4444" />
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
         ) : (
           // Not logged in state
@@ -321,6 +416,19 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 5,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
+  },
+  cardSingle: {
+    borderRadius: 20,
+  },
+  unifiedCard: {
+    backgroundColor: COLORS.bgSecondary,
+    borderRadius: 20,
+    padding: 14,
+  },
+  cardSeparator: {
+    height: 1,
+    backgroundColor: COLORS.borderLight,
+    marginVertical: 14,
   },
   statsRow: {
     flexDirection: 'row',
@@ -473,6 +581,94 @@ const styles = StyleSheet.create({
     color: COLORS.fgMuted,
     textAlign: 'center',
     marginTop: 14,
-    lineHeight: 18,
+  },
+  // Alert Cards
+  alertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
+  },
+  alertWarning: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderColor: 'rgba(245, 158, 11, 0.2)',
+  },
+  alertIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  alertIconWarning: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+  },
+  alertContent: {
+    flex: 1,
+  },
+  alertTitle: {
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    color: COLORS.fg,
+    marginBottom: 2,
+  },
+  alertMessage: {
+    fontSize: 12,
+    color: COLORS.fgMuted,
+    lineHeight: 16,
+  },
+  // History Section
+  historySection: {
+    marginTop: 24,
+  },
+  historySectionTitle: {
+    fontSize: 13,
+    fontFamily: FONTS.ai,
+    color: COLORS.fgMuted,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  historyIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  historyIconBackup: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  historyIconRestore: {
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+  },
+  historyIconFailed: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  },
+  historyInfo: {
+    flex: 1,
+  },
+  historyTitle: {
+    fontSize: 14,
+    color: COLORS.fg,
+  },
+  historyMeta: {
+    fontSize: 12,
+    color: COLORS.fgMuted,
+    marginTop: 2,
   },
 });

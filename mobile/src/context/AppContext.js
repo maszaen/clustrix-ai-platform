@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { InteractionManager } from 'react-native';
-import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, getMessagesPaginated, getOlderMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey, exportAllData, importAllData, getDraft, saveDraft, deleteDraft, updateMessageMetadata, deleteMessage, getPersonaDraft, savePersonaDraft } from '../database/db';
+import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, getMessagesPaginated, getOlderMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey, exportAllData, importAllData, getDraft, saveDraft, deleteDraft, updateMessageMetadata, deleteMessage, getPersonaDraft, savePersonaDraft, addBackupHistory, getBackupHistory } from '../database/db';
 import { generateSessionId } from '../utils/ids';
 import { loginWithGoogle, logout as authLogout, getStoredAuth, getLastBackupTime } from '../services/auth';
-import { backupToCloud, restoreFromCloud } from '../services/backup';
+import { backupToCloud, restoreFromCloud, checkCloudBackup } from '../services/backup';
 import { WELCOME_MESSAGES } from '../constants/strings';
 
 // PERF: Debug flag - set to false in production
@@ -81,6 +81,10 @@ export function AppProvider({ children }) {
   const [lastBackupTime, setLastBackupTime] = useState(null);
   const [isBackingUp, setIsBackingUp] = useState(false);
   
+  // Backup info state
+  const [cloudBackupInfo, setCloudBackupInfo] = useState(null); // { exists, sessionCount, exportedAt }
+  const [backupHistory, setBackupHistory] = useState([]);
+  
   // Ref to track latest session ID for async operations
   const latestSessionIdRef = useRef(null);
 
@@ -107,11 +111,19 @@ export function AppProvider({ children }) {
         setCurrentUser(storedAuth.user);
         setAuthProvider(storedAuth.provider);
         setAccessToken(storedAuth.accessToken);
+        
+        // Check cloud backup info if logged in
+        const cloudInfo = await checkCloudBackup();
+        setCloudBackupInfo(cloudInfo);
       }
       
       // Load last backup time
       const backupTime = await getLastBackupTime();
       setLastBackupTime(backupTime);
+      
+      // Load backup history
+      const history = await getBackupHistory(20);
+      setBackupHistory(history);
       
       // Generate messages (use loaded persona name if available)
       const personaName = loadedSettings?.persona?.name || 'friend';
@@ -521,21 +533,36 @@ export function AppProvider({ children }) {
     try {
       // Export all data
       const backupData = await exportAllData();
+      const sessionCount = backupData.data?.sessions?.length || 0;
       
       // Backup to cloud (token refresh handled automatically)
       const result = await backupToCloud(backupData);
       
       if (result.success) {
         setLastBackupTime(Date.now());
+        // Save backup history
+        await addBackupHistory('backup', sessionCount, true);
+        const history = await getBackupHistory(20);
+        setBackupHistory(history);
+        // Update cloud backup info
+        setCloudBackupInfo({ exists: true, sessionCount, exportedAt: Date.now() });
       } else if (result.needsReauth) {
         // Token refresh failed, user needs to login again
         setCurrentUser(null);
         setAuthProvider(null);
         setAccessToken(null);
+      } else {
+        // Save failed backup to history
+        await addBackupHistory('backup', sessionCount, false, result.error);
+        const history = await getBackupHistory(20);
+        setBackupHistory(history);
       }
       
       return result;
     } catch (error) {
+      await addBackupHistory('backup', 0, false, error.message);
+      const history = await getBackupHistory(20);
+      setBackupHistory(history);
       return { success: false, error: error.message };
     } finally {
       setIsBackingUp(false);
@@ -560,8 +587,15 @@ export function AppProvider({ children }) {
       }
       
       if (result.success && result.data) {
+        const sessionCount = result.data.data?.sessions?.length || 0;
+        
         // Import data
         await importAllData(result.data);
+        
+        // Save restore history
+        await addBackupHistory('restore', sessionCount, true);
+        const history = await getBackupHistory(20);
+        setBackupHistory(history);
         
         // Reload all data
         const [loadedSessions, loadedSettings, loadedModels] = await Promise.all([
@@ -572,10 +606,20 @@ export function AppProvider({ children }) {
         setSessions(loadedSessions || []);
         if (loadedSettings) setSettings({ ...DEFAULT_SETTINGS, ...loadedSettings });
         setCustomModels(loadedModels || []);
+        
+        // Update last backup time to now (data is in sync)
+        setLastBackupTime(Date.now());
+      } else if (!result.success) {
+        await addBackupHistory('restore', 0, false, result.error);
+        const history = await getBackupHistory(20);
+        setBackupHistory(history);
       }
       
       return result;
     } catch (error) {
+      await addBackupHistory('restore', 0, false, error.message);
+      const history = await getBackupHistory(20);
+      setBackupHistory(history);
       return { success: false, error: error.message };
     }
   }, [currentUser]);
@@ -636,6 +680,9 @@ export function AppProvider({ children }) {
     logout: handleLogout,
     backupNow: handleBackupNow,
     restoreBackup: handleRestoreBackup,
+    // Backup info
+    cloudBackupInfo,
+    backupHistory,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

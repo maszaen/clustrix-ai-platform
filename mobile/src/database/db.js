@@ -74,6 +74,16 @@ export async function initDatabase() {
       data TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     );
+
+    -- Backup history table for tracking backup/restore operations
+    CREATE TABLE IF NOT EXISTS backup_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL,
+      timestamp INTEGER NOT NULL,
+      session_count INTEGER DEFAULT 0,
+      success INTEGER DEFAULT 1,
+      error_message TEXT
+    );
   `);
   
   // Migration: Add think_duration column if not exists (for existing databases)
@@ -482,6 +492,41 @@ export async function savePersonaDraft(value, key = 'welcome_draft') {
      ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
     [key, value, now]
   );
+}
+
+// ========================================
+// Backup History
+// ========================================
+
+/**
+ * Add a backup/restore history entry
+ * @param {string} type - 'backup' or 'restore'
+ * @param {number} sessionCount - Number of sessions backed up/restored
+ * @param {boolean} success - Whether operation succeeded
+ * @param {string} errorMessage - Error message if failed
+ */
+export async function addBackupHistory(type, sessionCount, success = true, errorMessage = null) {
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT INTO backup_history (type, timestamp, session_count, success, error_message)
+     VALUES (?, ?, ?, ?, ?)`,
+    [type, now, sessionCount, success ? 1 : 0, errorMessage]
+  );
+}
+
+/**
+ * Get backup history entries (most recent first)
+ * @param {number} limit - Max entries to return
+ */
+export async function getBackupHistory(limit = 20) {
+  const rows = await db.getAllAsync(
+    'SELECT * FROM backup_history ORDER BY timestamp DESC LIMIT ?',
+    [limit]
+  );
+  return (rows || []).map(row => ({
+    ...row,
+    success: row.success === 1,
+  }));
 }
 
 // ========================================

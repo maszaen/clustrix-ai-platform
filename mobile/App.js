@@ -911,8 +911,13 @@ function MainApp() {
         {({ scrollRef, dragHandlers }) => (
           <View style={styles.thinkingModalContainer}>
             <View style={styles.thinkingModalHeader} {...dragHandlers}>
-              <Ionicons name="bulb-outline" size={18} color={COLORS.fgMuted} />
-              <Text style={styles.thinkingModalTitle}>Thinking Process</Text>
+              <Text style={styles.thinkingModalTitle}>Thought Process</Text>
+              <LinearGradient
+                colors={[COLORS.bgSecondaryv2, COLORS.bgSecondaryv2, COLORS.bgSecondaryv2, 'transparent']}
+                locations={[0, 0.5, 0.7, 1]}
+                style={[styles.floatingHeader, { height: 60 }]}
+                pointerEvents="none"
+              />
             </View>
             <ScrollView 
               ref={scrollRef}
@@ -945,7 +950,7 @@ function MainApp() {
                   },
                   fonts: {
                     regular: FONTS.sans,
-                    bold: FONTS.aiBold,
+                    bold: FONTS.sans,
                     mono: FONTS.mono,
                   },
                   spacing: {
@@ -1260,12 +1265,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
   },
   thinkingModalTitle: {
     color: COLORS.fg,
     fontSize: 16,
+    zIndex: 6,
     fontFamily: FONTS.display,
   },
   thinkingModalScroll: {
@@ -1274,6 +1278,7 @@ const styles = StyleSheet.create({
   thinkingModalContent: {
     paddingVertical: 16,
     paddingBottom: 120,
+    
   },
   // Select text modal styles (SlideLeftModal content)
   selectTextScrollView: {

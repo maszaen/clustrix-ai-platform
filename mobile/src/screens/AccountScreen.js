@@ -39,6 +39,7 @@ export default function AccountScreen({ visible, onClose }) {
   } = useApp();
   
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   
   // Alert modal states
   const [alert, setAlert] = useState({
@@ -92,15 +93,20 @@ export default function AccountScreen({ visible, onClose }) {
   
   const confirmRestore = async () => {
     hideAlert();
-    const result = await restoreBackup();
-    if (result.success) {
-      if (result.notFound) {
-        showAlert('warning', 'No Backup Found', 'No cloud backup was found for your account.');
+    setIsRestoring(true);
+    try {
+      const result = await restoreBackup();
+      if (result.success) {
+        if (result.notFound) {
+          showAlert('warning', 'No Backup Found', 'No cloud backup was found for your account.');
+        } else {
+          showAlert('success', 'Restore Complete', 'Your data has been restored from the cloud.');
+        }
       } else {
-        showAlert('success', 'Restore Complete', 'Your data has been restored from the cloud.');
+        showAlert('error', 'Restore Failed', result.error || 'Failed to restore data');
       }
-    } else {
-      showAlert('error', 'Restore Failed', result.error || 'Failed to restore data');
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -129,8 +135,9 @@ export default function AccountScreen({ visible, onClose }) {
   
   // Alert conditions
   const showCloudDataAlert = cloudBackupInfo?.exists && !lastBackupTime && totalChats === 0;
-  const showBackupReminder = true; // just for testing
-  // const showBackupReminder = unsyncedChats >= 10;
+  // const showCloudDataAlert = cloudBackupInfo?.exists && !lastBackupTime && totalChats === 0;
+  // const showBackupReminder = true; // just for testing
+  const showBackupReminder = unsyncedChats >= 15;
   
   // Format history date
   const formatHistoryDate = (timestamp) => {
@@ -183,7 +190,6 @@ export default function AccountScreen({ visible, onClose }) {
             // Logged in state
             <View style={styles.loggedInContainer}>
               {/* Unified Card - Profile, Stats & Sync */}
-              <View style={styles.unifiedCard}>
                 {/* Profile Section */}
                 <View style={styles.profileRow}>
                   <Image
@@ -200,41 +206,25 @@ export default function AccountScreen({ visible, onClose }) {
                     android_ripple={{ color: 'rgba(239,68,68,0.2)', borderless: true }}
                   >
                     <Ionicons name="log-out-outline" size={18} color="#ef4444" />
+                    <Text style={{color: '#ef4444'}}>Logout</Text>
                   </Pressable>
                 </View>
 
                 {/* Separator */}
-                <View style={styles.cardSeparator} />
+                {/* <View style={styles.cardSeparator} /> */}
 
-                {/* Stats Section */}
-                <View style={styles.statsRow}>
-                  <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{totalChats}/{syncedChats}</Text>
-                    <Text style={styles.statLabel}>Synced chat</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statItem}>
-                    <Text style={styles.statValue}>G-Drive</Text>
-                    <Text style={styles.statLabel}>Storage</Text>
-                  </View>
-                </View>
-
-                {/* Separator */}
-                <View style={styles.cardSeparator} />
-
-                {/* Sync Section */}
+                  {/* Sync Section */}
                 <View style={styles.syncHeader}>
                   <Text style={styles.syncLabel}>Last backup:</Text>
                   <Text style={styles.syncTime}>
                     {lastBackupTime ? formatBackupTime(lastBackupTime) : 'Not synced'}
                   </Text>
                 </View>
-                
                 <View style={styles.syncActions}>
                   <Pressable 
-                    style={[styles.syncBtn, isBackingUp && styles.syncBtnDisabled]}
+                    style={[styles.syncBtn, (isBackingUp || isRestoring) && styles.syncBtnDisabled]}
                     onPress={handleBackup}
-                    disabled={isBackingUp}
+                    disabled={isBackingUp || isRestoring}
                     android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
                   >
                     {isBackingUp ? (
@@ -248,16 +238,39 @@ export default function AccountScreen({ visible, onClose }) {
                   </Pressable>
                   
                   <Pressable 
-                    style={[styles.syncBtn, isBackingUp && styles.syncBtnDisabled]}
+                    style={[styles.syncBtn2, (isBackingUp || isRestoring) && styles.syncBtnDisabled]}
                     onPress={handleRestore}
-                    disabled={isBackingUp}
+                    disabled={isBackingUp || isRestoring}
                     android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
                   >
-                    <Ionicons name="cloud-download-outline" size={18} color={COLORS.fg} />
-                    <Text style={styles.syncBtnText}>Restore</Text>
+                    {isRestoring ? (
+                      <ActivityIndicator size="small" color={COLORS.fg} />
+                    ) : (
+                      <Ionicons name="cloud-download-outline" size={18} color={COLORS.fg} />
+                    )}
+                    <Text style={styles.syncBtnText}>
+                      {isRestoring ? 'Restoring...' : 'Restore'}
+                    </Text>
                   </Pressable>
                 </View>
-              </View>
+
+                {/* Stats Section */}
+                <View style={styles.statsRow}>
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>{syncedChats}/{totalChats}</Text>
+                    <Text style={styles.statLabel}>Synced chat</Text>
+                  </View>
+                  <View style={styles.statDivider} />
+                  <View style={styles.statItem}>
+                    <Text style={styles.statValue}>G-Drive</Text>
+                    <Text style={styles.statLabel}>Storage</Text>
+                  </View>
+                </View>
+
+                {/* Separator */}
+                {/* <View style={styles.cardSeparator} /> */}
+
+              
 
               {/* Alert Cards */}
               {showCloudDataAlert && (
@@ -301,8 +314,7 @@ export default function AccountScreen({ visible, onClose }) {
               {/* Backup History */}
               {backupHistory.length > 0 && (
                 <View style={styles.historySection}>
-                  <Text style={styles.historySectionTitle}>Sync History</Text>
-                  {backupHistory.slice(0, 5).map((item, index) => (
+                  {backupHistory.slice(0, 4).map((item, index) => (
                     <View key={item.id || index} style={styles.historyItem}>
                       <View style={[
                         styles.historyIcon, 
@@ -421,19 +433,28 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   unifiedCard: {
-    backgroundColor: COLORS.bgSecondary,
+    backgroundColor: 'rgba(99, 102, 241, 0.06)',
     borderRadius: 20,
     padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.2)',
   },
   cardSeparator: {
     height: 1,
-    backgroundColor: COLORS.borderLight,
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
     marginVertical: 14,
   },
   statsRow: {
+    marginVertical: 3,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
+    backgroundColor: COLORS.bgSecondary,
+    paddingVertical: 16,
+    borderBottomRightRadius: 20,
+    borderBottomLeftRadius: 20,
+    borderTopLeftRadius: 5,
+    borderTopRightRadius: 5,
   },
   statItem: {
     alignItems: 'center',
@@ -455,33 +476,46 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.borderLight,
   },
   profileRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
   },
   profileImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.inputBg,
+    width: 76,
+    height: 76,
+    marginBottom: 16,
+    borderRadius: 48,
+    backgroundColor: COLORS.bgSecondary,
   },
   profileInfo: {
     flex: 1,
     marginHorizontal: 16,
+    justifyContent: 'center',
+    alignContent: 'center',
+    textAlign: 'center',
   },
   profileName: {
     fontSize: 18,
+    justifyContent: 'center',
+    alignContent: 'center',
+    textAlign: 'center',
     fontFamily: FONTS.sans,
     color: COLORS.fg,
   },
   profileEmail: {
     fontSize: 13,
+    justifyContent: 'center',
+    alignContent: 'center',
+    textAlign: 'center',
     color: COLORS.fgMuted,
     marginTop: 2,
   },
   logoutBadge: {
-    width: 36,
-    height: 36,
+    height: 30,
+    marginTop: 8,
     borderRadius: 18,
+    gap: 6,
+    flexDirection: 'row',
+    paddingHorizontal: 16,
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -490,7 +524,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginVertical: 10,
+    paddingHorizontal: 10,
   },
   syncLabel: {
     fontSize: 13,
@@ -502,19 +537,29 @@ const styles = StyleSheet.create({
   },
   syncActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 0,
   },
   syncBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
     paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: COLORS.inputBg,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
+    borderTopLeftRadius: 20,
+    borderBottomLeftRadius: 5,
+    backgroundColor: COLORS.bgSecondary,
+  },
+  syncBtn2: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    borderTopRightRadius: 20,
+    borderBottomRightRadius: 5,
+    backgroundColor: COLORS.bgSecondary,
   },
   syncBtnDisabled: {
     opacity: 0.5,
@@ -587,7 +632,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(99, 102, 241, 0.08)',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 14,
     marginTop: 16,
     borderWidth: 1,
@@ -625,7 +670,7 @@ const styles = StyleSheet.create({
   },
   // History Section
   historySection: {
-    marginTop: 24,
+    marginTop: 16,
   },
   historySectionTitle: {
     fontSize: 13,
@@ -639,8 +684,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
+    paddingHorizontal: 10,
+    // borderBottomWidth: 1,
+    // borderBottomColor: COLORS.borderLight,
   },
   historyIcon: {
     width: 28,

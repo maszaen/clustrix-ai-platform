@@ -111,10 +111,6 @@ export function AppProvider({ children }) {
         setCurrentUser(storedAuth.user);
         setAuthProvider(storedAuth.provider);
         setAccessToken(storedAuth.accessToken);
-        
-        // Check cloud backup info if logged in
-        const cloudInfo = await checkCloudBackup();
-        setCloudBackupInfo(cloudInfo);
       }
       
       // Load last backup time
@@ -508,6 +504,10 @@ export function AppProvider({ children }) {
       setCurrentUser(result.user);
       setAuthProvider('google');
       setAccessToken(result.accessToken);
+      
+      // Check cloud backup info after login
+      const cloudInfo = await checkCloudBackup();
+      setCloudBackupInfo(cloudInfo);
     }
     return result;
   }, []);

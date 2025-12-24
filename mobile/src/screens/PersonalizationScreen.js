@@ -422,12 +422,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
         onClose={() => setShowAbout(false)} 
         title="About Clustrix"
       >
-        <LinearGradient
-        colors={[COLORS.bg90, COLORS.bg90, COLORS.bg70, 'transparent']}
-        locations={[0, 0.5, 0.7, 1]}
-        style={[styles.floatingHeader, { height: 80 }]}
-        pointerEvents="none"
-      />
+       
         <AboutClustrixContent />
       </SlideLeftModal>
       

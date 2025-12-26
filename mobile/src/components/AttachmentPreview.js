@@ -84,7 +84,7 @@ function AttachmentPreview({ attachments = [], onRemove }) {
       {[...attachments].reverse().map((attachment) => {
         const originalIndex = attachments.indexOf(attachment);
         const key = attachment.id || originalIndex;
-        const isImage = attachment.type === 'image';
+        const isImage = attachment.type === 'image';                                                          
         
         if (isImage) {
           // Dynamic aspect ratio logic

@@ -716,7 +716,7 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
               android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
             >
               <View style={styles.actionBtnInner}>
-                {copied ? <Check size={17} color={COLORS.primary} strokeWidth={2} /> : <Copy size={17} color={COLORS.fgMuted} strokeWidth={2} />}
+                {copied ? <Check size={16} color={COLORS.primary} strokeWidth={2} /> : <Copy size={16} color={COLORS.fgMuted} strokeWidth={2} />}
               </View>
             </Pressable>
 
@@ -732,7 +732,7 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
                 android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
               >
                 <View style={styles.actionBtnInner}>
-                  <Info size={17} color={COLORS.fgMuted} strokeWidth={2} />
+                  <Info size={16} color={COLORS.fgMuted} strokeWidth={2} />
                 </View>
               </Pressable>
             </View>
@@ -743,7 +743,7 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
               android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
             >
               <View style={styles.actionBtnInner}>
-                <ThumbsUp size={17} color={message.isLiked === true ? COLORS.primary : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === true ? COLORS.primary : 'none'} />
+                <ThumbsUp size={16} color={message.isLiked === true ? COLORS.primary : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === true ? COLORS.primary : 'none'} />
               </View>
             </Pressable>
 
@@ -753,7 +753,7 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
               android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
             >
               <View style={styles.actionBtnInner}>
-                <ThumbsDown size={17} color={message.isLiked === false ? '#f87171' : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === false ? '#f87171' : 'none'} />
+                <ThumbsDown size={16} color={message.isLiked === false ? '#f87171' : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === false ? '#f87171' : 'none'} />
               </View>
             </Pressable>
 
@@ -766,7 +766,7 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
                 android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
               >
                 <View style={styles.actionBtnInner}>
-                  <RotateCcw size={17} color={COLORS.fgMuted} strokeWidth={2} />
+                  <RotateCcw size={16} color={COLORS.fgMuted} strokeWidth={2} />
                 </View>
               </Pressable>
             )}

@@ -154,8 +154,8 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
     <View style={styles.wrapper}>
       <LinearGradient
         colors={['transparent', COLORS.bg70, COLORS.bg90, COLORS.bg90]}
-        locations={[0, 0.45, 0.6, 1]}
-        style={[styles.bottomFade, { height: insets.bottom + 85 + extraInputHeight + attachmentHeight + agenticHeight }]}
+        locations={[0, 0.35, 0.6, 1]}
+        style={[styles.bottomFade, { height: insets.bottom + 90 + extraInputHeight + attachmentHeight + agenticHeight }]}
         pointerEvents="none"
       />
       
@@ -255,7 +255,7 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
           
           {isStreaming ? (
             <Pressable style={styles.stopButton} onPress={onStop} android_ripple={{ color: 'rgba(255,255,255,0.3)', borderless: true }}>
-              <Ionicons name="stop" size={20} color={COLORS.fg} />
+              <Ionicons name="stop" size={20} color={COLORS.icon} />
             </Pressable>
           ) : (
             <Pressable 
@@ -344,10 +344,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
   },
   stopButton: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: 28,
-    backgroundColor: COLORS.surface,
+    marginTop: 'auto',
+    color: COLORS.icon,
+    backgroundColor: COLORS.accent,
     justifyContent: 'center',
     alignItems: 'center',
   },

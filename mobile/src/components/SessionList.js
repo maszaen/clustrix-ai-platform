@@ -158,7 +158,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
           <TextInput
             ref={searchInputRef}
             style={styles.searchInput}
-            placeholder="Search..."
+            placeholder="Search"
             placeholderTextColor={COLORS.fgMuted}
             value={searchQuery}
             onFocus={() => onSearchQueryChange?.(true)}
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 45,
-    backgroundColor: COLORS.inputBg,
+    backgroundColor: COLORS.borderLight,
     borderRadius: 50,
     borderWidth: 1,
     borderColor: COLORS.inputBg,
@@ -351,8 +351,8 @@ const styles = StyleSheet.create({
   },
   sessionTitle: {
     flex: 1,
-    color: COLORS.fgMuted,
-    fontSize: 15,
+    color: COLORS.fg,
+    fontSize: 14.7,
     fontFamily: FONTS.sans,
   },
   sessionTitleActive: {

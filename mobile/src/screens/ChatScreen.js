@@ -10,7 +10,7 @@ import { WebView } from 'react-native-webview';
 import { useApp } from '../context/AppContext';
 import { streamChat, generateTitle, buildSystemPrompt } from '../services/api';
 import { streamAgenticChat, streamImageGenChat } from '../services/agenticTools';
-import { extractPdfContent, isPdfUnsupportedError, convertExtractedPdfToAttachments } from '../services/pdfExtractor';
+import { usePdfExtractor, isPdfUnsupportedError, convertExtractedPdfToAttachments } from '../services/pdfExtractor';
 import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import ContextMenuFixed from '../components/ContextMenuFixed';
@@ -154,6 +154,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const [toolStatus, setToolStatus] = useState(null); // { name, commentary } - for tool execution indicator
   const [isWaitingForIteration, setIsWaitingForIteration] = useState(false); // True when waiting for next agentic iteration
   const lastHapticTime = useRef(0);
+  
+  // PDF extraction hook - WebView-based
+  const { extract: extractPdf, extracting: pdfExtracting, ExtractorComponent } = usePdfExtractor();
   
   // PDF retry state - when API returns "unsupported PDF format", extract and retry
   const pdfRetryDataRef = useRef(null); // Store data needed for retry
@@ -795,11 +798,18 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     const handleError = async (error) => {
       const errorMsg = error.message || error || '';
       
+      // DEBUG: Log error for PDF detection check
+      console.log('[handleError] Error received:', errorMsg);
+      console.log('[handleError] isPdfUnsupportedError:', isPdfUnsupportedError(errorMsg));
+      
       // Check if this is a PDF unsupported error and we have PDF attachments to retry with
       const hasPdfAttachments = attachments.some(a => 
         a.type === 'file' && a.base64 && 
         (a.mimeType === 'application/pdf' || a.name?.toLowerCase().endsWith('.pdf'))
       );
+      
+      console.log('[handleError] hasPdfAttachments:', hasPdfAttachments);
+      console.log('[handleError] pdfRetryDataRef.current?.retried:', pdfRetryDataRef.current?.retried);
       
       // If PDF format not supported and we have PDFs, try to extract and retry
       if (isPdfUnsupportedError(errorMsg) && hasPdfAttachments && !pdfRetryDataRef.current?.retried) {
@@ -823,7 +833,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
           const extractedResults = await Promise.all(
             pdfAttachments.map(async (pdf) => {
               try {
-                const extracted = await extractPdfContent(pdf.base64, pdf.name);
+                const extracted = await extractPdf(pdf.base64);
                 return { pdf, extracted, success: true };
               } catch (e) {
                 console.warn('[handleError] Failed to extract PDF:', pdf.name, e);
@@ -835,18 +845,53 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
           // Convert extracted PDFs to text + images
           let additionalText = '';
           const extractedImages = [];
+          let anySuccess = false;
           
           for (const result of extractedResults) {
-            if (result.success && result.extracted) {
+            if (result.success && result.extracted && result.extracted.text) {
               const { textContent, imageAttachments } = convertExtractedPdfToAttachments(
                 result.extracted, 
                 result.pdf.name
               );
               additionalText += textContent + '\n\n';
               extractedImages.push(...imageAttachments);
+              anySuccess = true;
             } else {
-              additionalText += `[PDF: ${result.pdf.name} - Failed to extract: ${result.error}]\n\n`;
+              additionalText += `[PDF: ${result.pdf.name} - Could not extract text]\n\n`;
             }
+          }
+          
+          // If NO extractions succeeded, don't retry - show helpful error
+          if (!anySuccess) {
+            console.log('[handleError] All PDF extractions failed, showing helpful error');
+            setToolStatus(null);
+            pdfRetryDataRef.current = { retried: true }; // Prevent infinite loop
+            
+            // Show a helpful error message instead
+            const helpfulError = `This provider (${settings.provider}) cannot process PDF files directly, and text extraction failed.\n\n**Solutions:**\n- Use **Gemini**, **Claude**, or **OpenAI** (GPT-4o) - they support PDF natively\n- Copy-paste the text content from your PDF\n- Use a text-based file format instead (.txt, .md)`;
+            
+            // Fall through to normal error handling with helpful message
+            const finalContent = fullThinking 
+              ? `<thinking>${fullThinking}</thinking>\n\n${fullContent}\n\n**Error:** ${helpfulError}`
+              : `${fullContent}\n\n**Error:** ${helpfulError}`;
+
+            const metadata = {
+              error: true,
+              thinkContent: fullThinking || null,
+              toolResults: toolResults.length > 0 ? toolResults : undefined,
+            };
+
+            if (isNewSession) {
+              await appendMessage('assistant', finalContent, { ...metadata, _messageIndex: 1 }, session);
+            } else {
+              await appendMessage('assistant', finalContent, metadata);
+            }
+
+            setIsStreaming(false);
+            setStreamingContent('');
+            setThinkingContent('');
+            setStreamingMessageId(null);
+            return; // Exit - don't retry
           }
           
           // Rebuild attachments with extracted content instead of PDFs
@@ -1789,6 +1834,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
           },
         ]}
       />
+      
+      {/* Hidden WebView for PDF extraction */}
+      {ExtractorComponent}
     </View>
   );
 });

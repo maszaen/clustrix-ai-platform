@@ -109,13 +109,13 @@ export function getTextStyles(theme) {
         body: {
             color: theme.colors.foreground,
             ...withFont('regular'),
-            fontSize: 15,
+            fontSize: 14.7,
             lineHeight: 24,
         },
         heading1: {
             color: theme.colors.foreground,
             ...withFont('bold'),
-            fontSize: 18,
+            fontSize: 17,
             lineHeight: 36,
             fontWeight: 'normal',  // Font is already bold natively
             marginBottom: theme.spacing.block,
@@ -131,7 +131,7 @@ export function getTextStyles(theme) {
         heading3: {
             color: theme.colors.foreground,
             ...withFont('bold'),
-            fontSize: 16,
+            fontSize: 17,
             lineHeight: 28,
             fontWeight: 'normal',  // Font is already bold natively
             marginBottom: theme.spacing.block,
@@ -139,7 +139,7 @@ export function getTextStyles(theme) {
         heading4: {
             color: theme.colors.foreground,
             ...withFont('bold'),
-            fontSize: 15,
+            fontSize: 14.7,
             lineHeight: 26,
             fontWeight: 'normal',  // Font is already bold natively
             marginBottom: theme.spacing.block,
@@ -147,7 +147,7 @@ export function getTextStyles(theme) {
         heading5: {
             color: theme.colors.foreground,
             ...withFont('bold'),
-            fontSize: 15,
+            fontSize: 14.7,
             lineHeight: 24,
             fontWeight: 'normal',  // Font is already bold natively
             marginBottom: theme.spacing.block,
@@ -155,7 +155,7 @@ export function getTextStyles(theme) {
         heading6: {
             color: theme.colors.foreground,
             ...withFont('bold'),
-            fontSize: 15,
+            fontSize: 14.7,
             lineHeight: 22,
             fontWeight: 'normal',  // Font is already bold natively
             marginBottom: theme.spacing.block,
@@ -163,7 +163,7 @@ export function getTextStyles(theme) {
         paragraph: {
             color: theme.colors.foreground,
             ...withFont('regular'),
-            fontSize: 16,
+            fontSize: 14.7,
             lineHeight: 24,
             marginBottom: theme.spacing.block,
         },

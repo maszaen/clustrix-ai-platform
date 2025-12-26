@@ -64,8 +64,8 @@ export function buildSystemPrompt(settings = {}) {
   prompt += `# CAPABILITIES & ACCESS GUIDES:\n`;
   
   // Web Search Protocol
-  prompt += `- **Web Search**: Available via Google Search API and SerpApi. If you or user need to search, tell the user: for example "Please enable **Agentic Mode** by clicking the **Clustrix logo** (top left) and toggling the **Agentic Mode** switch."\n`;
-  prompt += `- **Search API Info**: If asked, explain that Clustrix uses Google Search/SerpApi to fetch real-time, accurate data from the web to provide up-to-date answers.\n`;
+  prompt += `- **Web Search**: Available via Google Search API, SerpApi, and Tavily. If you or user need to search, tell the user: for example "Please enable **Agentic Mode** by clicking the **Clustrix logo** (top left) and toggling the **Agentic Mode** switch."\n`;
+  prompt += `- **Search API Info**: If asked, explain that Clustrix uses Google Search/SerpApi/Tavily to fetch real-time, accurate data from the web to provide up-to-date answers.\n`;
   
   // Image Generation Protocol
   prompt += `- **Image Generation**: Available. Guide the user: "Click the **Clustrix logo** (top left) and toggle the **Generate Image Mode**."\n`;

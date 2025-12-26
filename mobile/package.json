@@ -38,6 +38,7 @@
     "react-native-gesture-handler": "~2.28.0",
     "react-native-keyboard-aware-scroll-view": "^0.9.5",
     "react-native-keyboard-controller": "^1.20.1",
+    "react-native-pdf-text-extractor": "github:mohitdubey27/react-native-pdf-text-extractor",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "^5.6.2",
     "react-native-svg": "^15.15.1",

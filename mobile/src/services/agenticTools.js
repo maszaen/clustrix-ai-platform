@@ -13,7 +13,7 @@
  * No memory system needed - AI caches context automatically per session.
  */
 
-import { DEFAULT_PROVIDERS } from './api';
+import { DEFAULT_PROVIDERS, normalizeUsage } from './api';
 
 // ===================================================================
 // TOOL DEFINITIONS - For AI function calling (OpenAI format)
@@ -1261,11 +1261,15 @@ export async function streamAgenticChat({
         return;
       }
       
-      // Merge usage
+      // Merge usage - normalize across providers (Gemini, Anthropic, OpenAI formats)
       if (response.usage) {
-        if (!totalUsage) totalUsage = { prompt_tokens: 0, completion_tokens: 0 };
-        totalUsage.prompt_tokens += response.usage.prompt_tokens || 0;
-        totalUsage.completion_tokens += response.usage.completion_tokens || 0;
+        const normalized = normalizeUsage(provider, response.usage);
+        if (normalized) {
+          if (!totalUsage) totalUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+          totalUsage.prompt_tokens += normalized.prompt_tokens || 0;
+          totalUsage.completion_tokens += normalized.completion_tokens || 0;
+          totalUsage.total_tokens += normalized.total_tokens || 0;
+        }
       }
       
       const assistantMessage = response.message;
@@ -1437,10 +1441,15 @@ export async function streamImageGenChat({
         return;
       }
       
+      // Merge usage - normalize across providers (Gemini, Anthropic, OpenAI formats)
       if (response.usage) {
-        if (!totalUsage) totalUsage = { prompt_tokens: 0, completion_tokens: 0 };
-        totalUsage.prompt_tokens += response.usage.prompt_tokens || 0;
-        totalUsage.completion_tokens += response.usage.completion_tokens || 0;
+        const normalized = normalizeUsage(provider, response.usage);
+        if (normalized) {
+          if (!totalUsage) totalUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+          totalUsage.prompt_tokens += normalized.prompt_tokens || 0;
+          totalUsage.completion_tokens += normalized.completion_tokens || 0;
+          totalUsage.total_tokens += normalized.total_tokens || 0;
+        }
       }
       
       const assistantMessage = response.message;

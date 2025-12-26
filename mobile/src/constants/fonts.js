@@ -27,6 +27,6 @@ export const fontAssets = {
   'Capricorn-Display': require('../../assets/fonts/Capricorn-Display.otf'),
   'Capricorn-Display-Italic': require('../../assets/fonts/Capricorn-Display-Italic.otf'),
   'Capricorn-AI-Text': require('../../assets/fonts/Capricorn-AI-Text-Bold-2.otf'),
-  'AnthropicSerif-AI-Text-Bold': require('../../assets/fonts/AnthropicSerif-AI-Text-Bold.otf'),
+  'AnthropicSerif-AI-Text-Bold': require('../../assets/fonts/AnthropicSerif-AI-Text-Bold.ttf'),
   'ClaudeCode': require('../../assets/fonts/ClaudeCode.otf'),
 };

@@ -10,6 +10,7 @@ import { WebView } from 'react-native-webview';
 import { useApp } from '../context/AppContext';
 import { streamChat, generateTitle, buildSystemPrompt } from '../services/api';
 import { streamAgenticChat, streamImageGenChat } from '../services/agenticTools';
+import { extractPdfContent, isPdfUnsupportedError, convertExtractedPdfToAttachments } from '../services/pdfExtractor';
 import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import ContextMenuFixed from '../components/ContextMenuFixed';
@@ -153,6 +154,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const [toolStatus, setToolStatus] = useState(null); // { name, commentary } - for tool execution indicator
   const [isWaitingForIteration, setIsWaitingForIteration] = useState(false); // True when waiting for next agentic iteration
   const lastHapticTime = useRef(0);
+  
+  // PDF retry state - when API returns "unsupported PDF format", extract and retry
+  const pdfRetryDataRef = useRef(null); // Store data needed for retry
 
   // Memoized toggle handler for ChatInput
   const handleToggleAgentic = useCallback(() => {
@@ -789,10 +793,170 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     };
 
     const handleError = async (error) => {
+      const errorMsg = error.message || error || '';
+      
+      // Check if this is a PDF unsupported error and we have PDF attachments to retry with
+      const hasPdfAttachments = attachments.some(a => 
+        a.type === 'file' && a.base64 && 
+        (a.mimeType === 'application/pdf' || a.name?.toLowerCase().endsWith('.pdf'))
+      );
+      
+      // If PDF format not supported and we have PDFs, try to extract and retry
+      if (isPdfUnsupportedError(errorMsg) && hasPdfAttachments && !pdfRetryDataRef.current?.retried) {
+        console.log('[handleError] PDF unsupported error detected, attempting extraction and retry...');
+        
+        // Find PDF attachments
+        const pdfAttachments = attachments.filter(a => 
+          a.type === 'file' && a.base64 && 
+          (a.mimeType === 'application/pdf' || a.name?.toLowerCase().endsWith('.pdf'))
+        );
+        const nonPdfAttachments = attachments.filter(a => 
+          !(a.type === 'file' && a.base64 && 
+            (a.mimeType === 'application/pdf' || a.name?.toLowerCase().endsWith('.pdf')))
+        );
+        
+        // Store retry context and trigger extraction
+        try {
+          setToolStatus({ name: 'PDF Extraction', commentary: 'Extracting text and images from PDF...' });
+          
+          // Extract all PDFs
+          const extractedResults = await Promise.all(
+            pdfAttachments.map(async (pdf) => {
+              try {
+                const extracted = await extractPdfContent(pdf.base64, pdf.name);
+                return { pdf, extracted, success: true };
+              } catch (e) {
+                console.warn('[handleError] Failed to extract PDF:', pdf.name, e);
+                return { pdf, error: e.message, success: false };
+              }
+            })
+          );
+          
+          // Convert extracted PDFs to text + images
+          let additionalText = '';
+          const extractedImages = [];
+          
+          for (const result of extractedResults) {
+            if (result.success && result.extracted) {
+              const { textContent, imageAttachments } = convertExtractedPdfToAttachments(
+                result.extracted, 
+                result.pdf.name
+              );
+              additionalText += textContent + '\n\n';
+              extractedImages.push(...imageAttachments);
+            } else {
+              additionalText += `[PDF: ${result.pdf.name} - Failed to extract: ${result.error}]\n\n`;
+            }
+          }
+          
+          // Rebuild attachments with extracted content instead of PDFs
+          const newAttachments = [
+            ...nonPdfAttachments,
+            ...extractedImages.map((img, idx) => ({
+              ...img,
+              id: Date.now() + idx, // Generate unique IDs
+            })),
+          ];
+          
+          // Rebuild user message with extracted text prepended
+          const newText = additionalText.trim() + '\n\n' + text;
+          
+          // Mark as retried to prevent infinite loop
+          pdfRetryDataRef.current = { retried: true };
+          
+          // Clear current streaming state
+          setStreamingContent('');
+          setThinkingContent('');
+          fullContent = '';
+          fullThinking = '';
+          toolResults = [];
+          
+          // Rebuild API messages with extracted content
+          const newUserMessage = {
+            role: 'user',
+            content: newText,
+            attachments: newAttachments.length > 0 ? newAttachments : undefined,
+          };
+          
+          const newApiMessages = isNewSession 
+            ? [{ role: 'system', content: systemPrompt }, newUserMessage]
+            : [
+                { role: 'system', content: systemPrompt }, 
+                ...messages.map(m => ({ role: m.role, content: m.content, attachments: m.attachments })), 
+                newUserMessage
+              ];
+          
+          setToolStatus({ name: 'Retrying', commentary: 'Retrying with extracted PDF content...' });
+          
+          // Retry the API call
+          const isPerplexity = (settings.provider || '').toLowerCase() === 'perplexity';
+          
+          if (settings.agenticMode && !isPerplexity) {
+            await streamAgenticChat({
+              signal: ac.signal,
+              messages: newApiMessages,
+              model: settings.model,
+              provider: settings.provider,
+              baseUrl: settings.baseUrl || undefined,
+              apiKey: settings.apiKey,
+              agenticConfig: settings.agenticTools,
+              onChunk: handleChunk,
+              onThink: handleThink,
+              onToolCall: handleToolCall,
+              onToolResult: handleToolResult,
+              onDone: handleDone,
+              onError: handleError, // Will catch final errors after retry
+            });
+          } else if (settings.generateImage) {
+            await streamImageGenChat({
+              signal: ac.signal,
+              messages: newApiMessages,
+              model: settings.model,
+              provider: settings.provider,
+              baseUrl: settings.baseUrl || undefined,
+              apiKey: settings.apiKey,
+              imageModel: settings.imageModel || 'auto',
+              onChunk: handleChunk,
+              onThink: handleThink,
+              onToolCall: handleToolCall,
+              onToolResult: handleToolResult,
+              onDone: handleDone,
+              onError: handleError,
+            });
+          } else {
+            await streamChat({
+              signal: ac.signal,
+              messages: newApiMessages,
+              model: settings.model,
+              provider: settings.provider,
+              baseUrl: settings.baseUrl || undefined,
+              apiKey: settings.apiKey,
+              onChunk: handleChunk,
+              onThink: handleThink,
+              onDone: handleDone,
+              onError: handleError,
+              onSearchResults: handleSearchResults,
+            });
+          }
+          
+          return; // Exit - retry handlers will take over
+          
+        } catch (extractError) {
+          console.error('[handleError] PDF extraction failed:', extractError);
+          // Fall through to show original error + extraction failure
+        } finally {
+          setToolStatus(null);
+        }
+      }
+      
+      // Reset retry flag for next send
+      pdfRetryDataRef.current = null;
+      
+      // Normal error handling - show error to user
       setToolStatus(null);
       setIsStreaming(false);
       
-      const errorMessage = `\n\n**Error:** ${error.message || error}`;
+      const errorMessage = `\n\n**Error:** ${errorMsg}`;
       const finalContent = fullThinking 
          ? `<thinking>${fullThinking}</thinking>\n\n${fullContent}${errorMessage}`
          : `${fullContent}${errorMessage}`;

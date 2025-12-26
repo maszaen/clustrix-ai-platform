@@ -28,7 +28,7 @@ import { StreamdownRN } from './src/lib/streamdown';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Image as ImageIcon, FileText, Camera, Pencil, Trash2 } from 'lucide-react-native';
+import { Image as ImageIcon, FileText, Camera, Pencil, Trash2, LucideAtom } from 'lucide-react-native';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from './src/context/AppContext';
 import ChatScreen from './src/screens/ChatScreen';
@@ -911,11 +911,12 @@ function MainApp() {
         {({ scrollRef, dragHandlers }) => (
           <View style={styles.thinkingModalContainer}>
             <View style={styles.thinkingModalHeader} {...dragHandlers}>
+              <LucideAtom style={styles.lucideAtom} size={20} color={COLORS.fg} strokeWidth={1.3} /> 
               <Text style={styles.thinkingModalTitle}>Thought Process</Text>
               <LinearGradient
                 colors={[COLORS.bgSecondaryv2, COLORS.bgSecondaryv2, COLORS.bgSecondaryv2, 'transparent']}
                 locations={[0, 0.5, 0.7, 1]}
-                style={[styles.floatingHeader, { height: 60 }]}
+                style={[styles.floatingHeader, { height: 45 }]}
                 pointerEvents="none"
               />
             </View>
@@ -949,8 +950,8 @@ function MainApp() {
                     syntaxOperator: '#c97070',
                   },
                   fonts: {
-                    regular: FONTS.sans,
-                    bold: FONTS.sans,
+                    regular: FONTS.ai,
+                    bold: FONTS.aiBold,
                     mono: FONTS.mono,
                   },
                   spacing: {
@@ -1264,7 +1265,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingBottom: 12,
+  },
+  lucideAtom: {
+    zIndex: 9,
+    marginBottom: 2,
   },
   thinkingModalTitle: {
     color: COLORS.fg,

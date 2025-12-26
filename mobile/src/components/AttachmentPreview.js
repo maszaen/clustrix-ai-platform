@@ -42,7 +42,7 @@ const getFileIcon = (mimeType, filename) => {
   }
   // Archive
   if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
-    return { icon: FileArchive, color: '#795548' };
+    return { icon: FileArchive, color: '#8c6051ff' };
   }
   // Word/Text
   if (mimeType?.includes('word') || ['doc', 'docx', 'txt', 'rtf'].includes(ext)) {

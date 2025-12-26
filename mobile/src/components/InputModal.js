@@ -98,13 +98,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: 16,
   },
   modal: {
     width: '100%',
     backgroundColor: COLORS.bgSecondary,
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
   },
   title: {
     color: COLORS.fg,
@@ -162,10 +162,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   submitDisabled: {
-    backgroundColor: COLORS.borderLight,
+    backgroundColor: COLORS.accent,
   },
   submitText: {
-    color: '#fff',
+    color: COLORS.fg,
     fontSize: 15,
     fontFamily: FONTS.sans,
   },

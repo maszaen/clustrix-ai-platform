@@ -1,0 +1,19 @@
+# Ignore environment files with secrets
+.env
+.env.local
+
+# Firebase service account
+firebase-service-account.json
+*-service-account.json
+
+# Node
+node_modules/
+npm-debug.log
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

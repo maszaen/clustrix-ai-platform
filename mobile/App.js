@@ -12,6 +12,7 @@ import {
   Keyboard,
   Image,
   Alert,
+  Switch,
 } from 'react-native';
 import { GestureHandlerRootView, Gesture, GestureDetector, Pressable, ScrollView } from 'react-native-gesture-handler';
 import Reanimated, { 
@@ -28,7 +29,7 @@ import { StreamdownRN } from './src/lib/streamdown';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Image as ImageIcon, FileText, Camera, Pencil, Trash2, LucideAtom } from 'lucide-react-native';
+import { Image as ImageIcon, FileText, Camera, Pencil, Trash2, LucideAtom, Bot, Sparkles, LineSquiggle, LucideCombine } from 'lucide-react-native';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppProvider, useApp } from './src/context/AppContext';
 import ChatScreen from './src/screens/ChatScreen';
@@ -140,7 +141,7 @@ function WelcomeOverlay({ message, accentColor, visible, onFadeComplete }) {
 
 function MainApp() {
   const insets = useSafeAreaInsets();
-  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime, settings, splashMessage, setSplashComplete, setIsLoadingSession } = useApp();
+  const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime, settings, updateSettings, splashMessage, setSplashComplete, setIsLoadingSession } = useApp();
   const [showPersonalization, setShowPersonalization] = useState(false);
   const [showModels, setShowModels] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -865,11 +866,11 @@ function MainApp() {
       {/* Account Modal */}
 
       {/* Models List Modal */}
-      <SlideUpModal ref={modelsModalRef} visible={showModels} onClose={closeModels} showBottomGradient autoExpanded>
+      <SlideUpModal ref={modelsModalRef} visible={showModels} onClose={closeModels} showBottomGradient>
         {({ dragHandlers }) => (
           <ModelsListScreen 
             onClose={() => modelsModalRef.current?.close() || closeModels()} 
-            dragHandlers={dragHandlers} 
+            dragHandlers={dragHandlers}
           />
         )}
       </SlideUpModal>
@@ -908,7 +909,7 @@ function MainApp() {
         showBottomGradient
         bottomInset={insets.bottom}
       >
-        {({ scrollRef, dragHandlers }) => (
+        {({ dragHandlers }) => (
           <View style={styles.thinkingModalContainer}>
             <View style={styles.thinkingModalHeader} {...dragHandlers}>
               <LucideAtom style={styles.lucideAtom} size={20} color={COLORS.fg} strokeWidth={1.3} /> 
@@ -920,12 +921,10 @@ function MainApp() {
                 pointerEvents="none"
               />
             </View>
-            <ScrollView 
-              ref={scrollRef}
+            <ScrollView
               style={styles.thinkingModalScroll}
               contentContainerStyle={styles.thinkingModalContent}
               showsVerticalScrollIndicator={false}
-              scrollEventThrottle={16}
               bounces={false}
             >
               <StreamdownRN 
@@ -939,7 +938,6 @@ function MainApp() {
                     codeForeground: '#8a9199',
                     border: COLORS.borderLight,
                     link: '#a3c4f3',
-                    // Syntax highlighting (muted)
                     syntaxDefault: '#8a9199',
                     syntaxKeyword: '#c97070',
                     syntaxString: '#8ab4d8',
@@ -988,48 +986,86 @@ function MainApp() {
         showBottomGradient
       >
         <View style={styles.attachmentModalContent}>
-          
-          <Pressable
-            style={styles.attachmentOption}
-            onPress={handleSelectImages}
-            android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-          >
-            <View style={styles.attachmentOptionIcon}>
-              <ImageIcon size={28} color={COLORS.icon} strokeWidth={1.3} />
+          <View style={styles.attachmentRowParent}>
+            <View style={styles.attachmentRow}>          
+              <Pressable
+                style={styles.attachmentOption}
+                onPress={handleSelectImages}
+                android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+              >
+                <View style={styles.attachmentOptionIcon}>
+                  <ImageIcon size={28} color={COLORS.icon} strokeWidth={1.3} />
+                </View>
+                <View style={styles.attachmentOptionText}>
+                  <Text style={styles.attachmentOptionLabel}>Photos</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                style={styles.attachmentOption}
+                onPress={handleSelectFiles}
+                android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+              >
+                <View style={styles.attachmentOptionIcon}>
+                  <FileText size={28} color={COLORS.icon} strokeWidth={1.3} />
+                </View>
+                <View style={styles.attachmentOptionText}>
+                  <Text style={styles.attachmentOptionLabel}>Files</Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                style={[styles.attachmentOption, { borderBottomWidth: 0 }]}
+                onPress={handleOpenCamera}
+                android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+              >
+                <View style={styles.attachmentOptionIcon}>
+                  <Camera size={28} color={COLORS.icon} strokeWidth={1.3} />
+                </View>
+                <View style={styles.attachmentOptionText}>
+                  <Text style={styles.attachmentOptionLabel}>Camera</Text>
+                </View>
+              </Pressable>
             </View>
-            <View style={styles.attachmentOptionText}>
-              <Text style={styles.attachmentOptionLabel}>Upload Images</Text>
-              <Text style={styles.attachmentOptionSublabel}>JPEG, PNG, GIF, WebP</Text>
-            </View>
-          </Pressable>
-          
-          <Pressable
-            style={styles.attachmentOption}
-            onPress={handleSelectFiles}
-            android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-          >
-            <View style={styles.attachmentOptionIcon}>
-              <FileText size={28} color={COLORS.icon} strokeWidth={1.3} />
-            </View>
-            <View style={styles.attachmentOptionText}>
-              <Text style={styles.attachmentOptionLabel}>Upload Files</Text>
-              <Text style={styles.attachmentOptionSublabel}>PDF, TXT, DOC, etc.</Text>
-            </View>
-          </Pressable>
-          
-          <Pressable
-            style={[styles.attachmentOption, { borderBottomWidth: 0 }]}
-            onPress={handleOpenCamera}
-            android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-          >
-            <View style={styles.attachmentOptionIcon}>
-              <Camera size={28} color={COLORS.icon} strokeWidth={1.3} />
-            </View>
-            <View style={styles.attachmentOptionText}>
-              <Text style={styles.attachmentOptionLabel}>Take Photo</Text>
-              <Text style={styles.attachmentOptionSublabel}>Use camera</Text>
-            </View>
-          </Pressable>
+          </View>
+
+          {/* Toggles - exact same as ModelsListScreen */}
+          <View style={styles.attachmentToggleCard}>
+            <Pressable 
+              style={styles.attachmentToggleRowTop}
+              onPress={() => updateSettings({ agenticMode: !settings.agenticMode })}
+            >
+              <LucideCombine size={25} color={settings.agenticMode ? COLORS.primary : COLORS.fgMuted} strokeWidth={1.5} style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.attachmentToggleLabel}>Agentic Mode</Text>
+                <Text style={styles.attachmentToggleSublabel}>Allow the AI to use tools</Text>
+              </View>
+              <Switch
+                value={settings.agenticMode}
+                onValueChange={(val) => updateSettings({ agenticMode: val })}
+                trackColor={{ false: COLORS.borderLight, true: COLORS.primary }}
+                thumbColor={COLORS.fg}
+              />
+            </Pressable>
+
+
+            <Pressable 
+              style={styles.attachmentToggleRowBottom}
+              onPress={() => updateSettings({ generateImage: !settings.generateImage })}
+            >
+              <LineSquiggle size={25} color={settings.generateImage ? COLORS.primary : COLORS.fgMuted} strokeWidth={1.5} style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.attachmentToggleLabel}>Generate Image</Text>
+                <Text style={styles.attachmentToggleSublabel}>Enable image generation</Text>
+              </View>
+              <Switch
+                value={settings.generateImage}
+                onValueChange={(val) => updateSettings({ generateImage: val })}
+                trackColor={{ false: COLORS.borderLight, true: COLORS.primary }}
+                thumbColor={COLORS.fg}
+              />
+            </Pressable>
+          </View>
         </View>
       </SlideUpModal>
 
@@ -1218,6 +1254,23 @@ const styles = StyleSheet.create({
   // Attachment modal styles
   attachmentModalContent: {
     paddingHorizontal: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  attachmentRowParent: {
+    display: 'flex',
+    width: '100%',
+    paddingLeft: 16,
+    paddingRight: 16,
+    paddingBottom: 16,
+  },
+  attachmentRow: {
+    display: 'flex',
+    flexDirection: 'row',
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+    paddingBottom: 16,
   },
   attachmentModalTitle: {
     fontSize: 16,
@@ -1227,12 +1280,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   attachmentOption: {
-    flexDirection: 'row',
+    display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 14,
     paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
+    height: 100,
+    flex: 1,
+    borderRadius: 15,
+    backgroundColor: COLORS.borderLight,
   },
   attachmentOptionIcon: {
     width: 44,
@@ -1244,7 +1301,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   attachmentOptionText: {
-    flex: 1,
+    marginTop: 0,
   },
   attachmentOptionLabel: {
     fontSize: 15,
@@ -1256,6 +1313,46 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: FONTS.sans,
     color: COLORS.fgMuted,
+  },
+  attachmentToggleCard: {
+    width: '100%',
+    borderRadius: 12,
+    marginTop: 0,
+    marginHorizontal: 16,    
+    borderWidth: 0,
+    overflow: 'hidden',
+  },
+  attachmentToggleRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 5,
+    paddingLeft: 23,
+  },
+  attachmentToggleRowBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 5,
+    paddingLeft: 23,
+  },
+  attachmentToggleDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderLight,
+    marginHorizontal: 16,
+  },
+  attachmentToggleLabel: {
+    color: COLORS.fg,
+    fontSize: 15,
+    fontFamily: FONTS.sans,
+  },
+  attachmentToggleSublabel: {
+    color: COLORS.fgMuted,
+    fontSize: 12,
+    marginTop: 0,
   },
   thinkingModalContainer: {
     flex: 1,

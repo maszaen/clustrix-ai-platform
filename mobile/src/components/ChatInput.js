@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { LinearGradient } from 'expo-linear-gradient';
-import { LucideCombine, LucideImage, LucideX } from 'lucide-react-native';
+import { LineSquiggle, LucideCombine, LucideImage, LucideX } from 'lucide-react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, FadeOut, FadeIn, LinearTransition } from 'react-native-reanimated';
 import AttachmentPreview from './AttachmentPreview';
 
@@ -201,7 +201,7 @@ function ChatInputComponent({ onSend, isStreaming, onStop, placeholder = 'Ask an
                       layout={LinearTransition.springify().damping(30).stiffness(350).mass(1)}
                     >
                       <View style={styles.pill}>
-                        <LucideImage size={20} color={COLORS.primary} strokeWidth={2} /> 
+                        <LineSquiggle size={20} color={COLORS.primary} strokeWidth={2} /> 
                         <Text style={styles.pillText}>Image</Text>
                         <Pressable onPress={() => handlePillClose('generate_image')} hitSlop={12}>
                         <LucideX size={15} color={COLORS.primary} strokeWidth={2} />

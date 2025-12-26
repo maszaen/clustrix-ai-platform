@@ -1,21 +1,22 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback, Pressable, Switch } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback, Pressable, Switch, ActivityIndicator } from 'react-native';
 import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { DEFAULT_PROVIDERS } from '../services/api';
+import { getCloudModels } from '../services/clustrixCloud';
 import ContextMenu from '../components/ContextMenu';
 import InputModal from '../components/InputModal';
 import ConfirmModal from '../components/ConfirmModal';
 import AlertModal from '../components/AlertModal';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { Eye, EyeClosed, Pencil, Trash2 } from 'lucide-react-native';
+import { Eye, EyeClosed, Pencil, Trash2, Cloud, CloudOff } from 'lucide-react-native';
 import { DEFAULT_PROVIDERS_LIST, DEFAULT_MODELS } from '../constants/providers';
 
 
 // Dropdown Select Component with optional "Add New" option
-function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNew, addNewLabel }) {
+function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNew, addNewLabel, disabled }) {
   const [visible, setVisible] = useState(false);
   const selected = options.find(o => o.id === value || o.model_id === value);
 
@@ -26,11 +27,15 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
 
   return (
     <View>
-      <Pressable style={styles.dropdown} onPress={() => setVisible(true)} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
-        <Text style={styles.dropdownText}>
+      <Pressable 
+        style={[styles.dropdown, disabled && styles.dropdownDisabled]} 
+        onPress={() => !disabled && setVisible(true)} 
+        android_ripple={disabled ? null : { color: 'rgba(255,255,255,0.1)' }}
+      >
+        <Text style={[styles.dropdownText, disabled && styles.dropdownTextDisabled]}>
           {renderOption ? renderOption(selected) : (selected?.name || selected?.label || 'Select model')}
         </Text>
-        <Ionicons name="chevron-down" size={18} color={COLORS.fgMuted} />
+        <Ionicons name="chevron-down" size={18} color={disabled ? COLORS.fgMuted : COLORS.fgMuted} />
       </Pressable>
 
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
@@ -89,6 +94,13 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
 export default function ModelsListScreen({ onClose, dragHandlers }) {
   const { settings, updateSettings, customModels, addCustomModel, updateCustomModel, deleteCustomModel, customProviders, addCustomProvider, updateCustomProvider, deleteCustomProvider, providerApiKeys, updateProviderApiKey } = useApp();
 
+  // Cloud mode state
+  const [useCloudMode, setUseCloudMode] = useState(settings.useClustrixCloud ?? false);
+  const [cloudModels, setCloudModels] = useState([]);
+  const [cloudProviders, setCloudProviders] = useState([]);
+  const [isLoadingCloud, setIsLoadingCloud] = useState(false);
+  const [cloudError, setCloudError] = useState(null);
+
   const [localSettings, setLocalSettings] = useState({
     provider: settings.provider || 'openrouter',
     model: settings.model || '',
@@ -97,6 +109,44 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
     agenticMode: settings.agenticMode ?? false,
     generateImage: settings.generateImage ?? false,
   });
+
+  // Sync cloud mode from settings
+  useEffect(() => {
+    setUseCloudMode(settings.useClustrixCloud ?? false);
+  }, [settings.useClustrixCloud]);
+
+  // Fetch cloud models when cloud mode is enabled
+  useEffect(() => {
+    if (useCloudMode) {
+      setIsLoadingCloud(true);
+      setCloudError(null);
+      getCloudModels().then(result => {
+        if (result.success) {
+          setCloudModels(result.models);
+          setCloudProviders(result.providers);
+          
+          // Auto-select first available provider/model if current is not available
+          if (result.providers.length > 0) {
+            const currentProviderAvailable = result.providers.some(p => p.id === localSettings.provider);
+            if (!currentProviderAvailable) {
+              const firstProvider = result.providers[0];
+              const firstModel = result.models.find(m => m.provider === firstProvider.id);
+              setLocalSettings(prev => ({
+                ...prev,
+                provider: firstProvider.id,
+                model: firstModel?.id || '',
+              }));
+            }
+          }
+        } else {
+          setCloudError(result.error || 'Failed to load cloud models');
+        }
+        setIsLoadingCloud(false);
+      });
+    } else {
+      setCloudError(null);
+    }
+  }, [useCloudMode]);
 
   useEffect(() => {
     setLocalSettings(prev => ({ 
@@ -118,11 +168,20 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
   const showAlert = (type, title, message) => setAlert({ visible: true, type, title, message });
   const hideAlert = () => setAlert(prev => ({ ...prev, visible: false }));
 
-  // Combine default and custom providers
-  const allProviders = [...DEFAULT_PROVIDERS_LIST, ...customProviders.map(p => ({ id: p.id, name: p.name, base_url: p.base_url, is_custom: true }))];
+  // Combine default and custom providers (or use cloud providers)
+  const allProviders = useCloudMode 
+    ? cloudProviders 
+    : [...DEFAULT_PROVIDERS_LIST, ...customProviders.map(p => ({ id: p.id, name: p.name, base_url: p.base_url, is_custom: true }))];
 
-  // Get models for current provider
+  // Get models for current provider (or use cloud models)
   const getModelsForProvider = (providerId) => {
+    if (useCloudMode) {
+      return cloudModels.filter(m => m.provider === providerId).map(m => ({
+        model_id: m.id,
+        label: m.name,
+        provider: m.provider,
+      }));
+    }
     const defaultModels = DEFAULT_MODELS.filter(m => m.provider === providerId);
     const custom = customModels.filter(m => m.provider === providerId);
     return [...defaultModels, ...custom];
@@ -280,6 +339,59 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
           onCancel={() => setAddProviderModal(false)}
         />
 
+        {/* Cloud Mode Toggle */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Mode</Text>
+          <View style={styles.toggleCard}>
+            <Pressable 
+              style={styles.toggleRowTop}
+              onPress={() => {
+                const val = !useCloudMode;
+                setUseCloudMode(val);
+                updateSettings({ useClustrixCloud: val });
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                {useCloudMode ? (
+                  <Cloud size={25} color={COLORS.primary} style={{ marginRight: 14 }} />
+                ) : (
+                  <CloudOff size={25} color={COLORS.fgMuted} style={{ marginRight: 14 }} />
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>Use Clustrix Cloud</Text>
+                  <Text style={styles.switchDescription}>
+                    {useCloudMode ? 'Using Clustrix backend (no API key needed)' : 'Using your own API keys (no limitation)'}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={useCloudMode}
+                onValueChange={(val) => {
+                  setUseCloudMode(val);
+                  updateSettings({ useClustrixCloud: val });
+                }}
+                trackColor={{ false: COLORS.borderLight, true: COLORS.primary }}
+                thumbColor={COLORS.fg}
+              />
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Loading indicator for cloud mode */}
+        {useCloudMode && isLoadingCloud && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading available models...</Text>
+          </View>
+        )}
+
+        {/* Error message for cloud mode */}
+        {useCloudMode && cloudError && !isLoadingCloud && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.errorText}>{cloudError}</Text>
+          </View>
+        )}
+
         {/* Provider Dropdown */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Provider</Text>
@@ -288,10 +400,11 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
             value={localSettings.provider}
             options={allProviders}
             onSelect={handleProviderChange}
-            onAddNew={() => setAddProviderModal(true)}
+            onAddNew={useCloudMode ? null : () => setAddProviderModal(true)}
             addNewLabel="Add Custom Provider"
+            disabled={useCloudMode && (isLoadingCloud || allProviders.length === 0)}
           />
-          {customProviders.length > 0 && (
+          {!useCloudMode && customProviders.length > 0 && (
             <View style={styles.modelChips}>
               {customProviders.map(provider => (
                 <Pressable
@@ -311,39 +424,43 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
           )}
         </View>
 
-        {/* API Key */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>API Key</Text>
-          <View style={styles.inputRow}>
+        {/* API Key - Hidden in cloud mode */}
+        {!useCloudMode && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>API Key</Text>
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.inputApiKey}
+                value={localSettings.apiKey}
+                onChangeText={(text) => setLocalSettings({ ...localSettings, apiKey: text })}
+                placeholder="Enter your API key"
+                placeholderTextColor={COLORS.fgMuted}
+                secureTextEntry={!showApiKey}
+                autoCapitalize="none"
+              />
+              <Pressable style={styles.eyeBtn} onPress={() => setShowApiKey(!showApiKey)} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
+                {showApiKey ? <EyeClosed size={20} color={COLORS.fgMuted} /> :
+                  <Eye size={20} color={COLORS.fgMuted} />
+                }
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Base URL - Hidden in cloud mode */}
+        {!useCloudMode && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Base URL (Optional)</Text>
             <TextInput
-              style={styles.inputApiKey}
-              value={localSettings.apiKey}
-              onChangeText={(text) => setLocalSettings({ ...localSettings, apiKey: text })}
-              placeholder="Enter your API key"
+              style={styles.input}
+              value={localSettings.baseUrl}
+              onChangeText={(text) => setLocalSettings({ ...localSettings, baseUrl: text })}
+              placeholder={DEFAULT_PROVIDERS[localSettings.provider]?.baseUrl || 'https://api.example.com/v1'}
               placeholderTextColor={COLORS.fgMuted}
-              secureTextEntry={!showApiKey}
               autoCapitalize="none"
             />
-            <Pressable style={styles.eyeBtn} onPress={() => setShowApiKey(!showApiKey)} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
-              {showApiKey ? <EyeClosed size={20} color={COLORS.fgMuted} /> :
-                <Eye size={20} color={COLORS.fgMuted} />
-              }
-            </Pressable>
           </View>
-        </View>
-
-        {/* Base URL */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Base URL (Optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={localSettings.baseUrl}
-            onChangeText={(text) => setLocalSettings({ ...localSettings, baseUrl: text })}
-            placeholder={DEFAULT_PROVIDERS[localSettings.provider]?.baseUrl || 'https://api.example.com/v1'}
-            placeholderTextColor={COLORS.fgMuted}
-            autoCapitalize="none"
-          />
-        </View>
+        )}
 
         {/* Model Dropdown */}
         <View style={styles.section}>
@@ -354,14 +471,12 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
             options={availableModels}
             onSelect={(item) => setLocalSettings({ ...localSettings, model: item.model_id })}
             renderOption={(item) => item?.label || item?.model_id || 'Select model'}
-            onAddNew={() => setAddModelModal(true)}
+            onAddNew={useCloudMode ? null : () => setAddModelModal(true)}
             addNewLabel="Add Custom Model"
+            disabled={useCloudMode && (isLoadingCloud || availableModels.length === 0)}
           />
-          {availableModels.filter(m => !m.is_default).length > 0 && (
-            <Text style={styles.hint}>Long press custom models to rename/delete</Text>
-          )}
 
-          {availableModels.filter(m => !m.is_default).length > 0 && (
+          {!useCloudMode && availableModels.filter(m => !m.is_default).length > 0 && (
             <View style={styles.modelChips}>
               {availableModels.filter(m => !m.is_default).map(model => (
                 <Pressable
@@ -379,62 +494,9 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
               ))}
             </View>
           )}
-        </View>
-
-        {/* Feature Toggles - Connected Card */}
-        <View style={styles.section}>
-
-          <Text style={styles.sectionTitle}>Other Config</Text>
-          <View style={styles.toggleCard}>
-            <Pressable 
-              style={styles.toggleRowTop}
-              onPress={() => {
-                const val = !localSettings.agenticMode;
-                setLocalSettings(prev => ({ ...prev, agenticMode: val }));
-                updateSettings({ agenticMode: val });
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Agentic Mode</Text>
-                <Text style={styles.switchDescription}>Allow the AI to use tools</Text>
-              </View>
-              <Switch
-                value={localSettings.agenticMode}
-                onValueChange={(val) => {
-                  setLocalSettings(prev => ({ ...prev, agenticMode: val }));
-                  updateSettings({ agenticMode: val });
-                }}
-                trackColor={{ false: COLORS.borderLight, true: COLORS.success }}
-                thumbColor={COLORS.fg}
-                
-              />
-            </Pressable>
-
-            <View style={styles.toggleDivider} />
-
-            <Pressable 
-              style={styles.toggleRowBottom}
-              onPress={() => {
-                const val = !localSettings.generateImage;
-                setLocalSettings(prev => ({ ...prev, generateImage: val }));
-                updateSettings({ generateImage: val });
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Generate Image</Text>
-                <Text style={styles.switchDescription}>Enable image generation</Text>
-              </View>
-              <Switch
-                value={localSettings.generateImage}
-                onValueChange={(val) => {
-                  setLocalSettings(prev => ({ ...prev, generateImage: val }));
-                  updateSettings({ generateImage: val });
-                }}
-                trackColor={{ false: COLORS.borderLight, true: COLORS.success }}
-                thumbColor={COLORS.fg}
-              />
-            </Pressable>
-          </View>
+          {!useCloudMode && availableModels.filter(m => !m.is_default).length > 0 && (
+            <Text style={styles.hint}>Long press custom models to rename/delete</Text>
+          )}
         </View>
       </ScrollView>
       
@@ -504,7 +566,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
+  dropdownDisabled: {
+    opacity: 0.5,
+  },
   dropdownText: { color: COLORS.fg, fontSize: 14, fontFamily: FONTS.sans },
+  dropdownTextDisabled: { color: COLORS.fgMuted },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -545,7 +611,7 @@ const styles = StyleSheet.create({
   },
   addNewText: { color: COLORS.primary, fontSize: 14, fontFamily: FONTS.sans },
   hint: { color: COLORS.fgMuted, fontSize: 11, marginTop: 8, marginLeft: 10 },
-  modelChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  modelChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, },
   modelChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -590,8 +656,27 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.borderLight,
     marginHorizontal: 16,
   },
-  switchDescription: { color: COLORS.fgMuted, fontSize: 12, marginTop: 4 },
+  switchDescription: { color: COLORS.fgMuted, fontSize: 12, marginTop: 0 },
   label: {
     color: COLORS.fg,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  loadingText: {
+    color: COLORS.fgMuted,
+    fontSize: 14,
+    fontFamily: FONTS.sans,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 14,
+    fontFamily: FONTS.sans,
+    textAlign: 'center',
   },
 });

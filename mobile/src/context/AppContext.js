@@ -21,6 +21,8 @@ const DEFAULT_SETTINGS = {
   agenticMode: false,
   generateImage: false,
   imageModel: 'auto', // 'auto' or specific model like 'dall-e-3', 'imagen-4.0-generate-001'
+  // Clustrix Cloud mode - use backend instead of direct API calls
+  useClustrixCloud: false,
   // Web search API configuration (for Agentic Mode)
   agenticTools: {
     webSearch: {

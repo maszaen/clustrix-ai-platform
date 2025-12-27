@@ -237,5 +237,30 @@ export const DEFAULT_MODELS = [
 
   { provider: 'openrouter', model_id: 'arcee-ai/trinity-mini', label: 'Trinity Mini (Free, 26B MoE)', is_default: true },
 
-  { provider: 'megallm', model_id: 'gpt-5.1', label: 'GPT-5.1 (via MegaLLM proxy)', is_default: true },
+  { provider: 'megallm', model_id: 'gpt-5.1', label: 'GPT 5.1', is_default: true },
+
+  // MegaLLM - Claude Models
+  { provider: 'megallm', model_id: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5 (20250929)', is_default: true },
+  { provider: 'megallm', model_id: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (20250514)', is_default: true },
+  { provider: 'megallm', model_id: 'claude-opus-4-1-20250805', label: 'Claude Opus 4.1 (20250805)', is_default: true },
+  { provider: 'megallm', model_id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (20251001)', is_default: true },
+
+  // MegaLLM - GPT Models
+  { provider: 'megallm', model_id: 'gpt-4.1', label: 'GPT-4.1', is_default: true },
+  { provider: 'megallm', model_id: 'gpt-5-mini', label: 'GPT-5 Mini', is_default: true },
+  { provider: 'megallm', model_id: 'gpt-5', label: 'GPT-5', is_default: true },
+  { provider: 'megallm', model_id: 'gpt-4o-mini', label: 'GPT-4o Mini', is_default: true },
+  { provider: 'megallm', model_id: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo', is_default: true },
+  { provider: 'megallm', model_id: 'gpt-4o', label: 'GPT-4o', is_default: true },
+  { provider: 'megallm', model_id: 'openai-gpt-oss-120b', label: 'OpenAI GPT OSS 120B', is_default: true },
+
+  // MegaLLM - Grok Models
+  { provider: 'megallm', model_id: 'grok-4.1-fast-reasoning', label: 'Grok 4.1 Fast (Reasoning)', is_default: true },
+  { provider: 'megallm', model_id: 'grok-4.1-fast-non-reasoning', label: 'Grok 4.1 Fast (Non-Reasoning)', is_default: true },
+
+  // MegaLLM - Moonshot & Qwen Models
+  { provider: 'megallm', model_id: 'moonshotai/kimi-k2-instruct-0905', label: 'Kimi K2 Instruct (0905)', is_default: true },
+  { provider: 'megallm', model_id: 'qwen/qwen3-next-80b-a3b-instruct', label: 'Qwen3 Next 80B A3B Instruct', is_default: true },
+  { provider: 'megallm', model_id: 'alibaba-qwen3-32b', label: 'Alibaba Qwen3 32B', is_default: true },
+  { provider: 'megallm', model_id: 'qwen3-coder-480b-a35b-instruct', label: 'Qwen3 Coder 480B A35B Instruct', is_default: true },
 ]; 

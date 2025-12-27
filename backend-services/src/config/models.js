@@ -138,6 +138,31 @@ const ALL_MODELS = {
 
   // ========== MegaLLM ==========
   'megallm/gpt-5.1': { provider: 'megallm', name: 'GPT-5.1 (MegaLLM)', envKey: 'MEGALLM_API_KEY', enabled: true },
+  
+  // MegaLLM - Claude Models
+  'megallm/claude-sonnet-4-5-20250929': { provider: 'megallm', name: 'Claude Sonnet 4.5 (20250929)', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/claude-sonnet-4-20250514': { provider: 'megallm', name: 'Claude Sonnet 4 (20250514)', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/claude-opus-4-1-20250805': { provider: 'megallm', name: 'Claude Opus 4.1 (20250805)', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/claude-haiku-4-5-20251001': { provider: 'megallm', name: 'Claude Haiku 4.5 (20251001)', envKey: 'MEGALLM_API_KEY', enabled: true },
+
+  // MegaLLM - GPT Models
+  'megallm/gpt-4.1': { provider: 'megallm', name: 'GPT-4.1', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/gpt-5-mini': { provider: 'megallm', name: 'GPT-5 Mini', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/gpt-5': { provider: 'megallm', name: 'GPT-5', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/gpt-4o-mini': { provider: 'megallm', name: 'GPT-4o Mini', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/gpt-3.5-turbo': { provider: 'megallm', name: 'GPT-3.5 Turbo', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/gpt-4o': { provider: 'megallm', name: 'GPT-4o', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/openai-gpt-oss-120b': { provider: 'megallm', name: 'OpenAI GPT OSS 120B', envKey: 'MEGALLM_API_KEY', enabled: true },
+
+  // MegaLLM - Grok Models
+  'megallm/grok-4.1-fast-reasoning': { provider: 'megallm', name: 'Grok 4.1 Fast (Reasoning)', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/grok-4.1-fast-non-reasoning': { provider: 'megallm', name: 'Grok 4.1 Fast (Non-Reasoning)', envKey: 'MEGALLM_API_KEY', enabled: true },
+
+  // MegaLLM - Moonshot & Qwen Models
+  'megallm/moonshotai/kimi-k2-instruct-0905': { provider: 'megallm', name: 'Kimi K2 Instruct (0905)', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/qwen/qwen3-next-80b-a3b-instruct': { provider: 'megallm', name: 'Qwen3 Next 80B A3B Instruct', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/alibaba-qwen3-32b': { provider: 'megallm', name: 'Alibaba Qwen3 32B', envKey: 'MEGALLM_API_KEY', enabled: true },
+  'megallm/qwen3-coder-480b-a35b-instruct': { provider: 'megallm', name: 'Qwen3 Coder 480B A35B Instruct', envKey: 'MEGALLM_API_KEY', enabled: true },
 };
 
 // ==== PERSISTENCE LOGIC ====

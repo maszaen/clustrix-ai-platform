@@ -263,4 +263,7 @@ export const DEFAULT_MODELS = [
   { provider: 'megallm', model_id: 'qwen/qwen3-next-80b-a3b-instruct', label: 'Qwen3 Next 80B A3B Instruct', is_default: true },
   { provider: 'megallm', model_id: 'alibaba-qwen3-32b', label: 'Alibaba Qwen3 32B', is_default: true },
   { provider: 'megallm', model_id: 'qwen3-coder-480b-a35b-instruct', label: 'Qwen3 Coder 480B A35B Instruct', is_default: true },
+
+  // MegaLLM - Gemini Models
+  { provider: 'megallm', model_id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', is_default: true },
 ]; 

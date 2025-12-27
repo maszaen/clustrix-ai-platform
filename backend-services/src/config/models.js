@@ -163,6 +163,9 @@ const ALL_MODELS = {
   'megallm/qwen/qwen3-next-80b-a3b-instruct': { provider: 'megallm', name: 'Qwen3 Next 80B A3B Instruct', envKey: 'MEGALLM_API_KEY', enabled: true },
   'megallm/alibaba-qwen3-32b': { provider: 'megallm', name: 'Alibaba Qwen3 32B', envKey: 'MEGALLM_API_KEY', enabled: true },
   'megallm/qwen3-coder-480b-a35b-instruct': { provider: 'megallm', name: 'Qwen3 Coder 480B A35B Instruct', envKey: 'MEGALLM_API_KEY', enabled: true },
+
+  // MegaLLM - Gemini Models
+  'megallm/gemini-2.5-pro': { provider: 'megallm', name: 'Gemini 2.5 Pro', envKey: 'MEGALLM_API_KEY', enabled: true },
 };
 
 // ==== PERSISTENCE LOGIC ====

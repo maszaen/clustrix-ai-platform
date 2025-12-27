@@ -5,6 +5,8 @@
 # Firebase service account
 firebase-service-account.json
 *-service-account.json
+*-firebase-adminsdk-*.json
+firebase-service-account.json
 
 # Node
 node_modules/

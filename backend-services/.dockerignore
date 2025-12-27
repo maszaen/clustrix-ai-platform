@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+.env
+*.log
+.git
+.gitignore
+*.md
+firebase-service-account.json
+model-settings.json
+.dockerignore
+Dockerfile
+deploy.sh
+deploy.ps1

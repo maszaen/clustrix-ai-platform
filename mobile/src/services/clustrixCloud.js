@@ -4,10 +4,11 @@
  * Handles communication with Clustrix backend for cloud mode
  */
 
-// Backend URL - change this after deployment
-// For local testing: http://10.0.2.2:8080 (Android emulator) or http://localhost:8080 (web)
-// For real device on same network: http://YOUR_PC_IP:8080
-export const BACKEND_URL = 'http://192.168.100.18:8080'; // PC IP for real device
+// Backend URL - Production (Cloud Run)
+export const BACKEND_URL = 'https://clustrix-backend-50765975600.asia-southeast1.run.app';
+
+// For local development, uncomment this:
+// export const BACKEND_URL = 'http://192.168.100.18:8080';
 
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';

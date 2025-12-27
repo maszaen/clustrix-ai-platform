@@ -3,11 +3,12 @@ npm-debug.log
 .env
 *.log
 .git
-.gitignore
 *.md
 firebase-service-account.json
+*-firebase-adminsdk-*.json
 model-settings.json
-.dockerignore
-Dockerfile
 deploy.sh
 deploy.ps1
+setup-secrets.ps1
+env-vars.yaml
+firebase-config-temp.txt

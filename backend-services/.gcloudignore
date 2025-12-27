@@ -1,0 +1,23 @@
+# Ignore these when uploading to Cloud Build
+node_modules/
+.env
+.env.local
+*.log
+.git/
+*.md
+firebase-service-account.json
+*-service-account.json
+*-firebase-adminsdk-*.json
+model-settings.json
+deploy.sh
+deploy.ps1
+setup-secrets.ps1
+env-vars.yaml
+firebase-config-temp.txt
+
+# Important: DO NOT ignore these
+!src/
+!src/**
+!package.json
+!package-lock.json
+!Dockerfile

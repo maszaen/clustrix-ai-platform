@@ -1,24 +1,19 @@
-# Use Node.js 20 LTS Alpine for smaller image
-FROM node:20-alpine
+# Use Node.js 18 (LTS)
+FROM node:18-slim
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files first (for better caching)
-COPY package*.json ./
+# Copy package files first
+COPY package.json package-lock.json ./
 
-# Install production dependencies only
-RUN npm ci --omit=dev
+# Install dependencies
+RUN npm ci --only=production
 
 # Copy source code
-COPY src ./src
-
-# Set environment
-ENV NODE_ENV=production
-ENV PORT=8080
+COPY src/ ./src/
 
 # Expose port
 EXPOSE 8080
 
-# Start the server
+# Start server
 CMD ["node", "src/index.js"]

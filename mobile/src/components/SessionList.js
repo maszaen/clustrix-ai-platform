@@ -1,6 +1,5 @@
 import React, { useState, useRef, memo, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, Animated, Dimensions } from 'react-native';
-import { LegendList } from '@legendapp/list';
+import { View, Text, StyleSheet, TextInput, Animated, Dimensions, FlatList } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { Pressable } from 'react-native-gesture-handler';
@@ -199,7 +198,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
       </View>
 
       {/* Sessions */}
-      <LegendList
+      <FlatList
         data={displayedSessions}
         extraData={[currentSession?.id, displayedSessions.map(s => `${s.id}-${s.is_favorite}`).join(',')]}
         keyExtractor={(item) => item.id}
@@ -238,9 +237,6 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
         }}
         contentContainerStyle={styles.sessionList}
         showsVerticalScrollIndicator={false}
-        estimatedItemSize={45}
-        recycleItems={false}
-        drawDistance={5000} 
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
         ListEmptyComponent={

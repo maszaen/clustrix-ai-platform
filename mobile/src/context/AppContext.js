@@ -675,6 +675,7 @@ export function AppProvider({ children }) {
     // Auth
     currentUser,
     authProvider,
+    accessToken, // Expose access token for API calls
     isLoggedIn: !!currentUser,
     lastBackupTime,
     isBackingUp,

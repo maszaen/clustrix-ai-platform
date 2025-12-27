@@ -591,8 +591,29 @@ function createThrottledChunkHandler(onChunk, interval = 500) {
 /**
  * Stream chat - main entry point
  * Throttles chunk delivery to frontend every 500ms for smoother rendering
+ * 
+ * @param {Object} options
+ * @param {boolean} options.useCloud - If true, use Clustrix Cloud backend
+ * @param {string} options.idToken - Google ID token for cloud auth
  */
-export async function streamChat({ messages, model, provider, baseUrl, apiKey, onChunk, onThink, onDone, onError, onSearchResults, signal }) {
+export async function streamChat({ messages, model, provider, baseUrl, apiKey, onChunk, onThink, onDone, onError, onSearchResults, signal, useCloud, idToken, userEmail }) {
+  
+  // ==== CLUSTRIX CLOUD MODE ====
+  // Route through backend instead of direct API calls
+  if (useCloud) {
+    const { streamCloudChat } = await import('./clustrixCloud');
+    return streamCloudChat({
+      idToken,
+      userEmail,
+      model,
+      messages,
+      signal,
+      onChunk,
+      onDone,
+      onError,
+    });
+  }
+  
   const providerLower = (provider || '').toLowerCase();
   const base = baseUrl || DEFAULT_PROVIDERS[providerLower]?.baseUrl || DEFAULT_PROVIDERS.openai.baseUrl;
   

@@ -5,14 +5,31 @@
  */
 
 // Backend URL - change this after deployment
-const BACKEND_URL = 'https://clustrix-backend-xxxxx-xx.a.run.app'; // TODO: Update after deploy
+// For local testing: http://10.0.2.2:8080 (Android emulator) or http://localhost:8080 (web)
+// For real device on same network: http://YOUR_PC_IP:8080
+export const BACKEND_URL = 'http://192.168.100.18:8080'; // PC IP for real device
+
+import { Platform } from 'react-native';
+import * as Device from 'expo-device';
+
+// Helper to get device name
+function getDeviceName() {
+  const model = Device.modelName || Device.designName || 'Unknown Device';
+  return `${model} (${Platform.OS})`;
+}
 
 /**
  * Get available models from Clustrix Cloud
  */
-export async function getCloudModels() {
+export async function getCloudModels(idToken, userEmail) {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/models`);
+    const headers = {
+      'X-Device-Name': getDeviceName(),
+    };
+    if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+    if (userEmail) headers['X-User-Email'] = userEmail;
+
+    const response = await fetch(`${BACKEND_URL}/api/models`, { headers });
     if (!response.ok) {
       throw new Error('Failed to fetch cloud models');
     }
@@ -35,12 +52,16 @@ export async function getCloudModels() {
 /**
  * Get user usage stats
  */
-export async function getCloudUsage(idToken) {
+export async function getCloudUsage(idToken, userEmail) {
   try {
+    const headers = {
+      'Authorization': `Bearer ${idToken}`,
+      'X-Device-Name': getDeviceName(),
+    };
+    if (userEmail) headers['X-User-Email'] = userEmail;
+
     const response = await fetch(`${BACKEND_URL}/api/user/usage`, {
-      headers: {
-        'Authorization': `Bearer ${idToken}`,
-      },
+      headers,
     });
     if (!response.ok) {
       throw new Error('Failed to fetch usage');
@@ -74,71 +95,86 @@ export async function streamCloudChat({
   onError,
   temperature,
   max_tokens,
+  userEmail,
 }) {
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${idToken}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        stream: true,
-        temperature,
-        max_tokens,
-      }),
-      signal,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Cloud API error: ${response.status}`);
+  if (!idToken) {
+    onError?.('Authentication required. Please sign in with Google.');
+    return;
+  }
+  const token = idToken;
+  
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    
+    if (signal) {
+      if (signal.aborted) return resolve();
+      signal.addEventListener('abort', () => {
+        xhr.abort();
+        resolve();
+      });
     }
 
-    // Read SSE stream
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    xhr.open('POST', `${BACKEND_URL}/api/chat`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('X-Device-Name', getDeviceName());
+    if (userEmail) xhr.setRequestHeader('X-User-Email', userEmail);
+
     let buffer = '';
+    let lastIndex = 0;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
+    xhr.onprogress = () => {
+      const newData = xhr.responseText.slice(lastIndex);
+      lastIndex = xhr.responseText.length;
+      buffer += newData;
+      
       const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
+      buffer = lines.pop() || '';
+      
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') {
-            onDone?.();
-            return;
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+        
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            onChunk?.(content);
           }
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              onChunk?.(content);
-            }
-          } catch (e) {
-            // Ignore parse errors for partial data
-          }
+        } catch (e) {
+          // ignore
         }
       }
-    }
+    };
 
-    onDone?.();
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      onDone?.();
-      return;
-    }
-    console.error('[ClustrixCloud] Stream error:', error);
-    onError?.(error);
-  }
+    xhr.onload = () => {
+      if (xhr.status >= 400) {
+        let msg = `Request failed (${xhr.status})`;
+        try {
+            const errJson = JSON.parse(xhr.responseText);
+            msg = errJson.error || errJson.message || msg;
+        } catch {}
+        onError?.(msg);
+      } else {
+        onDone?.();
+      }
+      resolve();
+    };
+
+    xhr.onerror = () => {
+      onError?.('Network error');
+      resolve();
+    };
+
+    xhr.send(JSON.stringify({
+      model,
+      messages,
+      stream: true,
+      temperature,
+      max_tokens,
+    }));
+  });
 }
 
 /**

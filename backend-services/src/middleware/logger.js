@@ -22,6 +22,19 @@ function requestLogger(req, res, next) {
   res.send = function(body) {
     const duration = Date.now() - startTime;
     
+    // Extract device name (Header or UserAgent)
+    let device = req.headers['x-device-name'];
+    if (!device) {
+      const ua = req.headers['user-agent'] || '';
+      if (ua.includes('Postman')) device = 'Postman';
+      else if (ua.includes('okhttp')) device = 'Android App'; // Default for React Native
+      else if (ua.includes('CFNetwork')) device = 'iOS App';
+      else if (ua.includes('Chrome')) device = 'Chrome (Web)';
+      else if (ua.includes('Firefox')) device = 'Firefox (Web)';
+      else if (ua.includes('Safari')) device = 'Safari (Web)';
+      else device = 'Unknown Device';
+    }
+
     const log = {
       id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
       timestamp: new Date().toISOString(),
@@ -29,6 +42,7 @@ function requestLogger(req, res, next) {
       path: req.path,
       userId: req.user?.uid || null,
       userEmail: req.user?.email || null,
+      device: device, // Added device field
       statusCode: res.statusCode,
       duration,
       ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
@@ -37,16 +51,27 @@ function requestLogger(req, res, next) {
       bodySize: JSON.stringify(req.body || {}).length,
     };
     
-    // Add to logs
-    requestLogs.push(log);
+    // Use originalUrl to capture full path including query params
+    const fullPath = req.originalUrl || req.url;
     
-    // Trim old logs
-    if (requestLogs.length > MAX_LOGS) {
-      requestLogs.splice(0, requestLogs.length - MAX_LOGS);
+    // Filter out polling noise only (logs and stats)
+    // Allows GET /admin (dashboard view) to still be logged
+    const isNoise = fullPath.includes('/logs') || 
+                    fullPath.includes('/stats') || 
+                    fullPath.includes('favicon.ico');
+
+    if (!isNoise) {
+      // Add to logs
+      requestLogs.push(log);
+      
+      // Trim old logs
+      if (requestLogs.length > MAX_LOGS) {
+        requestLogs.splice(0, requestLogs.length - MAX_LOGS);
+      }
+      
+      // Console log
+      console.log(`[${log.timestamp}] ${log.device} | ${log.userEmail || 'Anon'} | ${log.method} ${fullPath.split('?')[0]} - ${log.statusCode} (${log.duration}ms)`);
     }
-    
-    // Console log
-    console.log(`[${log.timestamp}] ${log.method} ${log.path} - ${log.statusCode} (${log.duration}ms) - User: ${log.userEmail || 'anonymous'}`);
     
     return originalSend.call(this, body);
   };

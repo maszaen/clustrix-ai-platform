@@ -22,7 +22,9 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Allow inline scripts for Admin Panel
+}));
 app.use(cors({
   origin: '*', // Allow all origins (mobile app)
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -38,10 +40,8 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Public routes
-app.get('/api/models', modelsRouter);
-
 // Protected routes (require Google auth)
+app.use('/api/models', verifyGoogleToken, modelsRouter);
 app.use('/api/chat', verifyGoogleToken, rateLimiter, chatRouter);
 app.use('/api/user', verifyGoogleToken, userRouter);
 

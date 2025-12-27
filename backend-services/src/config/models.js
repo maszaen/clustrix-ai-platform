@@ -1,3 +1,7 @@
+
+const fs = require('fs');
+const path = require('path');
+
 /**
  * Models Configuration for Clustrix Cloud
  * 
@@ -133,6 +137,30 @@ const ALL_MODELS = {
   'megallm/gpt-5.1': { provider: 'megallm', name: 'GPT-5.1 (MegaLLM)', envKey: 'MEGALLM_API_KEY', enabled: true },
 };
 
+// ==== PERSISTENCE LOGIC ====
+const SETTINGS_FILE = path.join(__dirname, '../../model-settings.json');
+
+// Load settings on init
+try {
+  if (fs.existsSync(SETTINGS_FILE)) {
+    const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
+    const settings = JSON.parse(data);
+    for (const [id, enabled] of Object.entries(settings)) {
+      if (ALL_MODELS[id]) ALL_MODELS[id].enabled = enabled;
+    }
+  }
+} catch (e) { console.error('Failed to load model settings', e); }
+
+function saveSettings() {
+  try {
+    const settings = {};
+    for (const [id, config] of Object.entries(ALL_MODELS)) {
+      settings[id] = config.enabled;
+    }
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+  } catch (e) { console.error('Failed to save model settings', e); }
+}
+
 /**
  * Get available models based on:
  * 1. API key exists
@@ -213,11 +241,52 @@ function getAllModelsStatus() {
  * Toggle model enabled status (for admin)
  */
 function setModelEnabled(modelId, enabled) {
+  console.log(`[Config] Request to toggle model: '${modelId}' to ${enabled} (Type: ${typeof enabled})`);
+  
   if (ALL_MODELS[modelId]) {
     ALL_MODELS[modelId].enabled = enabled;
+    console.log(`[Config] Model ${modelId} status updated to ${enabled} in memory.`);
+    
+    try {
+      saveSettings(); 
+      console.log(`[Config] Settings saved to file.`);
+    } catch(e) {
+      console.error(`[Config] Error saving settings:`, e);
+    }
+    
     return true;
   }
+  
+  console.warn(`[Config] Model '${modelId}' not found in ALL_MODELS.`);
   return false;
+}
+
+/**
+ * Toggle all models for a specific provider
+ */
+function setProviderEnabled(providerId, enabled) {
+  console.log(`[Config] Request to toggle provider: '${providerId}' to ${enabled}`);
+  let changed = false;
+
+  for (const [id, config] of Object.entries(ALL_MODELS)) {
+    if (config.provider === providerId) {
+      if (ALL_MODELS[id].enabled !== enabled) {
+        ALL_MODELS[id].enabled = enabled;
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    try {
+      saveSettings();
+      console.log(`[Config] Provider update saved to file.`);
+      return true;
+    } catch(e) {
+      console.error(`[Config] Error saving settings:`, e);
+    }
+  }
+  return changed;
 }
 
 module.exports = {
@@ -229,4 +298,5 @@ module.exports = {
   getAvailableProviders,
   getAllModelsStatus,
   setModelEnabled,
+  setProviderEnabled,
 };

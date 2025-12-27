@@ -50,6 +50,19 @@ async function verifyGoogleToken(req, res, next) {
   
   const token = authHeader.split('Bearer ')[1];
   
+  // SUPER DEV MODE: Trusted Email Header (requested by user)
+  // Allows mobile app to just send 'X-User-Email' for logging
+  const explicitEmail = req.headers['x-user-email'];
+  if (explicitEmail) {
+    req.user = {
+      uid: 'dev_user',
+      email: explicitEmail,
+      name: explicitEmail.split('@')[0],
+      picture: null,
+    };
+    return next();
+  }
+
   // Development mode - accept mock tokens
   if (process.env.NODE_ENV === 'development' && token.startsWith('dev_')) {
     req.user = {
@@ -63,7 +76,25 @@ async function verifyGoogleToken(req, res, next) {
   
   // Initialize Firebase if needed
   if (!initFirebase()) {
-    // Mock mode for local dev
+    // Fallback for Dev: If real JWT token but no Firebase creds, decode payload insecurely
+    // This allows showing real email in logs even without backend verify setup
+    if (token.split('.').length === 3) {
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        req.user = {
+          uid: payload.sub || 'unknown_uid',
+          email: payload.email || 'unknown@jwt.local',
+          name: payload.name || payload.email?.split('@')[0] || 'Unknown',
+          picture: payload.picture,
+        };
+        console.warn(`[AUTH] Insecurely decoded token for ${req.user.email} (No Firebase Creds)`);
+        return next();
+      } catch (e) {
+        console.warn('[AUTH] Failed to decode JWT payload:', e.message);
+      }
+    }
+
+    // Mock mode for local dev (if decoding failed or not a JWT)
     req.user = {
       uid: 'mock_user',
       email: 'mock@clustrix.local',

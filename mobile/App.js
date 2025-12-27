@@ -866,7 +866,7 @@ function MainApp() {
       {/* Account Modal */}
 
       {/* Models List Modal */}
-      <SlideUpModal ref={modelsModalRef} visible={showModels} onClose={closeModels} showBottomGradient>
+      <SlideUpModal ref={modelsModalRef} visible={showModels} onClose={closeModels} showBottomGradient autoExpanded>
         {({ dragHandlers }) => (
           <ModelsListScreen 
             onClose={() => modelsModalRef.current?.close() || closeModels()} 

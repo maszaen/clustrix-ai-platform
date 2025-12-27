@@ -92,7 +92,7 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
 }
 
 export default function ModelsListScreen({ onClose, dragHandlers }) {
-  const { settings, updateSettings, customModels, addCustomModel, updateCustomModel, deleteCustomModel, customProviders, addCustomProvider, updateCustomProvider, deleteCustomProvider, providerApiKeys, updateProviderApiKey } = useApp();
+  const { settings, updateSettings, customModels, addCustomModel, updateCustomModel, deleteCustomModel, customProviders, addCustomProvider, updateCustomProvider, deleteCustomProvider, providerApiKeys, updateProviderApiKey, accessToken, currentUser } = useApp();
 
   // Cloud mode state
   const [useCloudMode, setUseCloudMode] = useState(settings.useClustrixCloud ?? false);
@@ -120,7 +120,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
     if (useCloudMode) {
       setIsLoadingCloud(true);
       setCloudError(null);
-      getCloudModels().then(result => {
+      getCloudModels(accessToken, currentUser?.email).then(result => {
         if (result.success) {
           setCloudModels(result.models);
           setCloudProviders(result.providers);
@@ -146,7 +146,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
     } else {
       setCloudError(null);
     }
-  }, [useCloudMode]);
+  }, [useCloudMode, accessToken, currentUser]);
 
   useEffect(() => {
     setLocalSettings(prev => ({ 
@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
-    padding: 24,
+    padding: 16,
   },
   dropdownModal: {
     backgroundColor: COLORS.bgSecondary,

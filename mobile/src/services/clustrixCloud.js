@@ -36,10 +36,13 @@ async function getFreshToken(fallbackToken) {
  */
 export async function getCloudModels(idToken, userEmail) {
   try {
+    // Get fresh token (auto-refreshes if needed)
+    const token = await getFreshToken(idToken);
+    
     const headers = {
       'X-Device-Name': getDeviceName(),
     };
-    if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     if (userEmail) headers['X-User-Email'] = userEmail;
 
     const response = await fetch(`${BACKEND_URL}/api/models`, { headers });
@@ -67,8 +70,11 @@ export async function getCloudModels(idToken, userEmail) {
  */
 export async function getCloudUsage(idToken, userEmail) {
   try {
+    // Get fresh token (auto-refreshes if needed)
+    const token = await getFreshToken(idToken);
+    
     const headers = {
-      'Authorization': `Bearer ${idToken}`,
+      'Authorization': `Bearer ${token}`,
       'X-Device-Name': getDeviceName(),
     };
     if (userEmail) headers['X-User-Email'] = userEmail;

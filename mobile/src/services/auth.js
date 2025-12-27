@@ -149,29 +149,34 @@ export async function refreshGoogleToken() {
 }
 
 /**
- * Get valid access token - refreshes automatically if needed
- * This should be called before any API operation (backup/restore)
+ * Get valid ID token - auto-refreshes via silent sign-in
+ * Returns fresh idToken for backend API calls
  */
 export async function getValidAccessToken() {
   try {
-    // First try to get stored token
-    const stored = await getStoredAuth();
-    if (!stored) {
-      console.log('[Auth] No stored auth found');
+    const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+    
+    // Configure if not already
+    GoogleSignin.configure({
+      webClientId: '907693456473-cnui64m5d30cc3p34i1kl5u3up9up8lm.apps.googleusercontent.com',
+      offlineAccess: true,
+      scopes: ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
+    });
+    
+    // Check if signed in
+    if (!GoogleSignin.hasPreviousSignIn()) {
+      console.log('[Auth] No previous sign-in');
       return null;
     }
     
-    // Try to refresh token to ensure it's valid
-    const refreshed = await refreshGoogleToken();
-    if (refreshed) {
-      return refreshed.accessToken;
-    }
+    // Silent sign-in refreshes tokens automatically
+    await GoogleSignin.signInSilently();
+    const tokens = await GoogleSignin.getTokens();
     
-    // If refresh fails, return stored token (might still work)
-    console.log('[Auth] Refresh failed, returning stored token');
-    return stored.accessToken;
+    console.log('[Auth] Token refreshed successfully');
+    return tokens.idToken;
   } catch (error) {
-    console.error('[Auth] Error getting valid token:', error);
+    console.error('[Auth] Token refresh failed:', error.message);
     return null;
   }
 }

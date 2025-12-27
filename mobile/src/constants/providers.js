@@ -229,6 +229,9 @@ export const DEFAULT_MODELS = [
   { provider: 'mistral', model_id: 'ministral-8b-latest', label: 'Ministral 8B (Small)', is_default: true },
 
   { provider: 'cerebras', model_id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B (Cerebras)', is_default: true },
+  { provider: 'cerebras', model_id: 'gpt-oss-120b', label: 'GPT OSS 120B', is_default: true },
+  { provider: 'cerebras', model_id: 'zai-glm-4.6', label: 'GLM 4.6', is_default: true },
+  { provider: 'cerebras', model_id: 'qwen-3-235b-a22b-instruct-2507', label: 'Qwen 3 235b A22b Instruct', is_default: true },
 
   { provider: 'groq', model_id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Groq Versatile)', is_default: true },
 

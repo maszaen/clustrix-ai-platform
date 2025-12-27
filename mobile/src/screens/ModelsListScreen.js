@@ -352,10 +352,14 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                {useCloudMode ? (
-                  <Cloud size={25} color={COLORS.primary} style={{ marginRight: 14 }} />
+                {!useCloudMode ? (
+                  <CloudOff size={25} color={COLORS.fgMuted} strokeWidth={1.5} style={{ marginRight: 14 }} />
                 ) : (
-                  <CloudOff size={25} color={COLORS.fgMuted} style={{ marginRight: 14 }} />
+                  isLoadingCloud ? (
+                    <ActivityIndicator size={25} color={COLORS.primary} style={{ marginRight: 14 }} />
+                  ) : (
+                    <Cloud size={25} color={COLORS.primary} strokeWidth={1.5} style={{ marginRight: 14 }} />
+                  )
                 )}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.label}>Use Clustrix Cloud</Text>
@@ -378,12 +382,12 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
         </View>
 
         {/* Loading indicator for cloud mode */}
-        {useCloudMode && isLoadingCloud && (
+        {/* {useCloudMode && isLoadingCloud && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color={COLORS.primary} />
             <Text style={styles.loadingText}>Loading available models...</Text>
           </View>
-        )}
+        )} */}
 
         {/* Error message for cloud mode */}
         {useCloudMode && cloudError && !isLoadingCloud && (

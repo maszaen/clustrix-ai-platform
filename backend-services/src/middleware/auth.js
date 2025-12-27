@@ -5,15 +5,28 @@
  */
 
 const admin = require('firebase-admin');
+const fs = require('fs');
+const path = require('path');
 
 // Initialize Firebase Admin (lazy)
 let firebaseInitialized = false;
+let firebaseAvailable = null; // null = not checked, true/false = result
+
 function initFirebase() {
-  if (firebaseInitialized) return;
+  if (firebaseInitialized) return true;
+  if (firebaseAvailable === false) return false; // Already tried and failed
   
   try {
-    // Try to use service account file
+    // Check if service account file exists
     if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      const credPath = path.resolve(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+      if (!fs.existsSync(credPath)) {
+        console.warn(`[AUTH] Firebase credentials file not found: ${credPath}`);
+        console.warn('[AUTH] Running in mock/JWT-decode mode');
+        firebaseAvailable = false;
+        return false;
+      }
+      
       admin.initializeApp({
         credential: admin.credential.applicationDefault(),
       });
@@ -24,13 +37,18 @@ function initFirebase() {
       });
     } else {
       // For local dev without Firebase, just mock
-      console.warn('[AUTH] No Firebase credentials, running in mock mode');
+      console.warn('[AUTH] No Firebase credentials configured, running in mock mode');
+      firebaseAvailable = false;
       return false;
     }
+    
     firebaseInitialized = true;
+    firebaseAvailable = true;
+    console.log('[AUTH] Firebase initialized successfully');
     return true;
   } catch (err) {
-    console.error('[AUTH] Firebase init error:', err);
+    console.error('[AUTH] Firebase init error:', err.message);
+    firebaseAvailable = false;
     return false;
   }
 }
@@ -50,24 +68,15 @@ async function verifyGoogleToken(req, res, next) {
   
   const token = authHeader.split('Bearer ')[1];
   
-  // SUPER DEV MODE: Trusted Email Header (requested by user)
-  // Allows mobile app to just send 'X-User-Email' for logging
-  const explicitEmail = req.headers['x-user-email'];
-  if (explicitEmail) {
-    req.user = {
-      uid: 'dev_user',
-      email: explicitEmail,
-      name: explicitEmail.split('@')[0],
-      picture: null,
-    };
-    return next();
-  }
+  // NOTE: X-User-Email header is now ONLY used for logging purposes
+  // It does NOT bypass authentication - token must still be valid
+  const logEmail = req.headers['x-user-email'];
 
-  // Development mode - accept mock tokens
+  // Development mode - accept mock tokens (ONLY in dev environment)
   if (process.env.NODE_ENV === 'development' && token.startsWith('dev_')) {
     req.user = {
       uid: token.replace('dev_', ''),
-      email: 'dev@clustrix.local',
+      email: logEmail || 'dev@clustrix.local',
       name: 'Developer',
       picture: null,
     };

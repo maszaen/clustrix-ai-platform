@@ -5,25 +5,51 @@
  */
 
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const { getLogs } = require('../middleware/logger');
 const { getAvailableModels, getAvailableProviders, getAllModelsStatus, setModelEnabled, PROVIDER_NAMES } = require('../config/models');
 
 /**
- * Admin auth middleware
+ * Admin auth middleware with security improvements
  */
 function adminAuth(req, res, next) {
   const secret = req.headers['x-admin-secret'] || req.query.secret;
+  const validSecret = process.env.ADMIN_SECRET;
   
-  // Log removed to prevent spam
-  
-  if (!process.env.ADMIN_SECRET) {
+  // Check if ADMIN_SECRET is configured
+  if (!validSecret) {
     console.error('[AdminAuth] Error: ADMIN_SECRET not found in env!');
     return res.status(500).json({ error: 'Admin secret not configured', code: 'CONFIG_ERROR' });
   }
   
-  if (secret !== process.env.ADMIN_SECRET) {
-    console.warn(`[AdminAuth] Access Denied. Secret provided: '${secret}'`);
+  // Warn if using default secret (security risk)
+  if (validSecret === 'your-super-secret-admin-key-change-this') {
+    console.warn('[AdminAuth] WARNING: Using default ADMIN_SECRET! Change this in production!');
+  }
+  
+  // Check if secret is provided
+  if (!secret) {
+    return res.status(403).json({ error: 'Admin secret required', code: 'FORBIDDEN' });
+  }
+  
+  // Timing-safe comparison to prevent timing attacks
+  try {
+    const secretBuffer = Buffer.from(String(secret));
+    const validBuffer = Buffer.from(validSecret);
+    
+    // Length check (timingSafeEqual requires same length)
+    if (secretBuffer.length !== validBuffer.length) {
+      console.warn(`[AdminAuth] Access Denied. Invalid secret length.`);
+      return res.status(403).json({ error: 'Invalid admin secret', code: 'FORBIDDEN' });
+    }
+    
+    if (!crypto.timingSafeEqual(secretBuffer, validBuffer)) {
+      console.warn(`[AdminAuth] Access Denied. Invalid secret.`);
+      return res.status(403).json({ error: 'Invalid admin secret', code: 'FORBIDDEN' });
+    }
+  } catch (err) {
+    console.warn(`[AdminAuth] Access Denied. Comparison error.`);
     return res.status(403).json({ error: 'Invalid admin secret', code: 'FORBIDDEN' });
   }
   
@@ -59,6 +85,104 @@ router.get('/stats', (req, res) => {
     },
     availableModels: getAvailableModels().length,
     availableProviders: getAvailableProviders().length,
+  });
+});
+
+// ===================================================================
+// ANALYTICS ENDPOINTS (OpenRouter-style)
+// ===================================================================
+
+const { 
+  getDashboardStats, 
+  getRecentRequests, 
+  getAllUserStats, 
+  getUserDetails,
+  getModelStats,
+  getProviderStats,
+  getOnlineUsers 
+} = require('../services/analytics');
+
+/**
+ * GET /admin/analytics/dashboard
+ * Main analytics dashboard with overview stats
+ */
+router.get('/analytics/dashboard', (req, res) => {
+  const stats = getDashboardStats();
+  res.json(stats);
+});
+
+/**
+ * GET /admin/analytics/requests
+ * Recent requests with filtering and pagination
+ */
+router.get('/analytics/requests', (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  const offset = parseInt(req.query.offset) || 0;
+  
+  const filters = {
+    userId: req.query.userId,
+    model: req.query.model,
+    provider: req.query.provider,
+    mode: req.query.mode,
+    success: req.query.success === 'true' ? true : req.query.success === 'false' ? false : undefined,
+  };
+  
+  const result = getRecentRequests(limit, offset, filters);
+  res.json(result);
+});
+
+/**
+ * GET /admin/analytics/users
+ * All user statistics
+ */
+router.get('/analytics/users', (req, res) => {
+  const users = getAllUserStats();
+  res.json({ users, total: users.length });
+});
+
+/**
+ * GET /admin/analytics/users/:userId
+ * Detailed stats for a specific user
+ */
+router.get('/analytics/users/:userId', (req, res) => {
+  const details = getUserDetails(req.params.userId);
+  if (!details) {
+    return res.status(404).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
+  }
+  res.json(details);
+});
+
+/**
+ * GET /admin/analytics/models
+ * Model usage statistics
+ */
+router.get('/analytics/models', (req, res) => {
+  const models = getModelStats();
+  res.json({ models, total: models.length });
+});
+
+/**
+ * GET /admin/analytics/providers
+ * Provider statistics
+ */
+router.get('/analytics/providers', (req, res) => {
+  const providers = getProviderStats();
+  res.json({ providers, total: providers.length });
+});
+
+/**
+ * GET /admin/analytics/online
+ * Currently online users
+ */
+router.get('/analytics/online', (req, res) => {
+  const online = getOnlineUsers();
+  res.json({ 
+    users: online.map(u => ({
+      email: u.email,
+      device: u.deviceName,
+      lastActivity: new Date(u.lastActivity).toISOString(),
+    })),
+    count: online.length,
   });
 });
 
@@ -181,7 +305,7 @@ router.get('/', (req, res) => {
     .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
     
     header { margin-bottom: 40px; border-bottom: 1px solid var(--border); padding-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-    h1 { margin: 0; font-size: 24px; font-weight: 700; background: linear-gradient(to right, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    h1 { margin: 0; font-size: 24px; font-weight: 700;  }
     .subtitle { color: var(--text-muted); font-size: 14px; margin-top: 5px; }
 
     .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px; }
@@ -236,7 +360,7 @@ router.get('/', (req, res) => {
     input:checked + .slider:before { transform: translateX(20px); }
     input:disabled + .slider { opacity: 0.3; cursor: not-allowed; }
 
-    .table-container { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; margin-top: 40px; }
+    .table-container { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; margin-top: 0px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th { background: #0f172a; text-align: left; padding: 12px 20px; color: var(--text-muted); font-weight: 500; font-size: 12px; }
     td { padding: 12px 20px; border-top: 1px solid var(--border); color: var(--text-main); }
@@ -245,6 +369,22 @@ router.get('/', (req, res) => {
     .method { font-family: monospace; font-size: 11px; padding: 2px 6px; background: #334155; border-radius: 4px; }
     .live-dot { height: 8px; width: 8px; background: var(--success); border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+    
+    .search-container { position: relative; margin-bottom: 30px; }
+    .search-input { 
+      width: 100%; 
+      padding: 14px 20px; 
+      padding-left: 45px;
+      background: var(--bg-card); 
+      border: 1px solid var(--border); 
+      border-radius: 12px; 
+      color: var(--text-main); 
+      font-size: 14px; 
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .search-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1); }
+    .search-icon { position: absolute; left: 15px; top: 14px; color: var(--text-muted); pointer-events: none; }
   </style>
 </head>
 <body>
@@ -274,6 +414,56 @@ router.get('/', (req, res) => {
         <div class="stat-val" id="total-req">${logs.length}</div>
         <div class="stat-label">Total Requests</div>
       </div>
+      <div class="stat-card" style="border: 1px solid var(--success);">
+        <div class="stat-val" id="online-count" style="color: var(--success);">-</div>
+        <div class="stat-label">🟢 Online Now</div>
+      </div>
+    </div>
+
+    <!-- Analytics Quick View -->
+    <div class="provider-section" style="margin-bottom: 30px;">
+      <div class="provider-header">
+        <div class="provider-title">📊 Analytics (Cloud Mode)</div>
+        <button onclick="refreshAnalytics()" style="padding: 6px 12px; background: var(--accent); color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">Refresh</button>
+      </div>
+      <div style="padding: 20px;">
+        <div class="grid-stats" style="margin-bottom: 0;">
+          <div class="stat-card">
+            <div class="stat-val" id="total-tokens">-</div>
+            <div class="stat-label">Total Tokens (24h)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="total-cost">-</div>
+            <div class="stat-label">Est. Cost (24h)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="unique-users">-</div>
+            <div class="stat-label">Unique Users (24h)</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="error-rate">-</div>
+            <div class="stat-label">Error Rate (24h)</div>
+          </div>
+        </div>
+        
+        <!-- Online Users List -->
+        <div style="margin-top: 20px;">
+          <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">ONLINE USERS</div>
+          <div id="online-users-list" style="display: flex; flex-wrap: wrap; gap: 10px;"></div>
+        </div>
+        
+        <!-- Top Models (24h) -->
+        <div style="margin-top: 20px;">
+          <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">TOP MODELS (24h)</div>
+          <div id="top-models-list" style="display: flex; flex-wrap: wrap; gap: 10px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="search-container">
+      <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input type="text" id="search-input" class="search-input" placeholder="Search models, providers, or logs..." autocomplete="off">
     </div>
 
     <h2>📦 Model Configuration</h2>
@@ -285,7 +475,7 @@ router.get('/', (req, res) => {
        const allEnabled = providerModels.every(m => m.enabled);
        
        return `
-       <div class="provider-section">
+       <div class="provider-section" data-provider="${providerId}" data-name="${providerName}">
          <div class="provider-header">
            <div class="provider-title">
              ${providerName}
@@ -353,10 +543,59 @@ router.get('/', (req, res) => {
   </div>
 
   <script>
-
     const SECRET = "${secret}";
     const SECRET_PARAM = '?secret=' + encodeURIComponent(SECRET);
     
+    // Search Logic
+    let searchQuery = '';
+    const searchInput = document.getElementById('search-input');
+    
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value.toLowerCase();
+      applyFilters();
+    });
+    
+    function applyFilters() {
+      if (!searchQuery) {
+        // Reset all
+        document.querySelectorAll('.provider-section').forEach(el => el.style.display = '');
+        document.querySelectorAll('.model-item').forEach(el => el.style.display = '');
+        document.querySelectorAll('#logs-body tr').forEach(el => el.style.display = '');
+        return;
+      }
+      
+      // Filter Models
+      const providers = document.querySelectorAll('.provider-section');
+      providers.forEach(p => {
+        const models = p.querySelectorAll('.model-item');
+        let hasVisibleModel = false;
+        const providerName = p.dataset.name.toLowerCase();
+        const providerMatch = providerName.includes(searchQuery);
+
+        models.forEach(m => {
+          const text = m.innerText.toLowerCase();
+          // If provider matches, show all its models? NO, let's filter specifically.
+          // Unless user searched "OpenAI", then maybe they want to see all OpenAI models.
+          const match = text.includes(searchQuery) || providerMatch;
+          
+          m.style.display = match ? 'flex' : 'none';
+          if (match) hasVisibleModel = true;
+        });
+        
+        // Show provider if it has visible models
+        p.style.display = hasVisibleModel ? 'block' : 'none';
+      });
+      
+      // Filter Logs
+      const rows = document.querySelectorAll('#logs-body tr');
+      rows.forEach(r => {
+        const text = r.innerText.toLowerCase();
+        // Skip log searching if query is clearly for a model/provider (optional heuristic)
+        // But for now, search everything
+        r.style.display = text.includes(searchQuery) ? 'table-row' : 'none';
+      });
+    }
+
     // 1. No-Reload Toggle Model
     async function toggleModel(modelId, enabled, checkbox) {
       try {
@@ -490,11 +729,66 @@ router.get('/', (req, res) => {
         }).join('');
         
         document.getElementById('logs-body').innerHTML = rows;
+        // Re-apply filter after polling updates the table
+        if (searchQuery) applyFilters();
+        
       } catch(e) { console.error('Polling error', e); }
     }
     
+    // Analytics polling
+    async function refreshAnalytics() {
+      try {
+        const res = await fetch('/admin/analytics/dashboard?secret=' + SECRET);
+        if (!res.ok) throw new Error('Failed to fetch analytics');
+        const data = await res.json();
+        
+        // Update stats
+        document.getElementById('online-count').textContent = data.overview?.onlineNow || 0;
+        document.getElementById('total-tokens').textContent = formatNumber(data.last24h?.tokens || 0);
+        document.getElementById('total-cost').textContent = '$' + (data.last24h?.cost || 0).toFixed(2);
+        document.getElementById('unique-users').textContent = data.last24h?.uniqueUsers || 0;
+        document.getElementById('error-rate').textContent = (data.last24h?.errorRate || 0) + '%';
+        
+        // Online users
+        const onlineList = document.getElementById('online-users-list');
+        if (data.onlineUsers && data.onlineUsers.length > 0) {
+          onlineList.innerHTML = data.onlineUsers.map(u => 
+            \`<div style="background: var(--bg-hover); padding: 8px 12px; border-radius: 8px; font-size: 12px;">
+              <div style="font-weight: 600;">\${u.email}</div>
+              <div style="color: var(--text-muted); font-size: 11px;">\${u.device}</div>
+            </div>\`
+          ).join('');
+        } else {
+          onlineList.innerHTML = '<div style="color: var(--text-muted); font-size: 12px;">No users online</div>';
+        }
+        
+        // Top models
+        const modelsList = document.getElementById('top-models-list');
+        if (data.topModels && data.topModels.length > 0) {
+          modelsList.innerHTML = data.topModels.map(m => 
+            \`<div style="background: var(--bg-hover); padding: 8px 12px; border-radius: 8px; font-size: 12px;">
+              <span style="font-weight: 600;">\${m.model}</span>
+              <span style="color: var(--accent); margin-left: 8px;">\${m.count}x</span>
+            </div>\`
+          ).join('');
+        } else {
+          modelsList.innerHTML = '<div style="color: var(--text-muted); font-size: 12px;">No data yet</div>';
+        }
+      } catch(e) { 
+        console.error('Analytics error', e); 
+      }
+    }
+    
+    function formatNumber(num) {
+      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+      return num.toString();
+    }
+    
     setInterval(pollLogs, 2000);
+    setInterval(refreshAnalytics, 10000); // Refresh analytics every 10s
     pollLogs();
+    refreshAnalytics();
   </script>
 </body>
 </html>

@@ -126,6 +126,9 @@ const ALL_MODELS = {
 
   // ========== Cerebras ==========
   'meta-llama/llama-3.3-70b-instruct': { provider: 'cerebras', name: 'Llama 3.3 70B (Cerebras)', envKey: 'CEREBRAS_API_KEY', enabled: true },
+  'gpt-oss-120b': { provider: 'cerebras', name: 'GPT OSS 120B', envKey: 'CEREBRAS_API_KEY', enabled: true },
+  'zai-glm-4.6': { provider: 'cerebras', name: 'GLM 4.6', envKey: 'CEREBRAS_API_KEY', enabled: true },
+  'qwen-3-235b-a22b-instruct-2507': { provider: 'cerebras', name: 'Qwen 3 235b A22b Instruct', envKey: 'CEREBRAS_API_KEY', enabled: true },
 
   // ========== Groq ==========
   'llama-3.3-70b-versatile': { provider: 'groq', name: 'Llama 3.3 70B (Groq)', envKey: 'GROQ_API_KEY', enabled: true },

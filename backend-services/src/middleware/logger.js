@@ -7,6 +7,20 @@
 const fs = require('fs');
 const path = require('path');
 
+// Lazy import analytics to avoid circular deps
+let updateOnlineStatus = null;
+function getAnalytics() {
+  if (!updateOnlineStatus) {
+    try {
+      const analytics = require('../services/analytics');
+      updateOnlineStatus = analytics.updateOnlineStatus;
+    } catch (e) {
+      updateOnlineStatus = () => {}; // noop if not available
+    }
+  }
+  return { updateOnlineStatus };
+}
+
 // Logs storage (in-memory for now, can be replaced with DB)
 const requestLogs = [];
 const MAX_LOGS = 10000; // Keep last 10k logs in memory
@@ -51,6 +65,12 @@ function requestLogger(req, res, next) {
       bodySize: JSON.stringify(req.body || {}).length,
     };
     
+    // Update online status for authenticated users
+    if (req.user?.uid) {
+      const { updateOnlineStatus } = getAnalytics();
+      updateOnlineStatus(req.user.uid, req.user.email, device);
+    }
+    
     // Use originalUrl to capture full path including query params
     const fullPath = req.originalUrl || req.url;
     
@@ -58,6 +78,7 @@ function requestLogger(req, res, next) {
     // Allows GET /admin (dashboard view) to still be logged
     const isNoise = fullPath.includes('/logs') || 
                     fullPath.includes('/stats') || 
+                    fullPath.includes('/analytics') ||
                     fullPath.includes('favicon.ico');
 
     if (!isNoise) {

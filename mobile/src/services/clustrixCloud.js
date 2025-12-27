@@ -11,11 +11,23 @@ export const BACKEND_URL = 'http://192.168.100.18:8080'; // PC IP for real devic
 
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
+import { getValidAccessToken } from './auth';
 
 // Helper to get device name
 function getDeviceName() {
   const model = Device.modelName || Device.designName || 'Unknown Device';
   return `${model} (${Platform.OS})`;
+}
+
+// Helper to get fresh token (auto-refreshes if needed)
+async function getFreshToken(fallbackToken) {
+  // Try to get a fresh token via auto-refresh
+  const freshToken = await getValidAccessToken();
+  if (freshToken) {
+    return freshToken;
+  }
+  // Fallback to passed token (might be expired but worth a try)
+  return fallbackToken;
 }
 
 /**
@@ -97,11 +109,13 @@ export async function streamCloudChat({
   max_tokens,
   userEmail,
 }) {
-  if (!idToken) {
+  // Get fresh token (auto-refreshes if expired)
+  const token = await getFreshToken(idToken);
+  
+  if (!token) {
     onError?.('Authentication required. Please sign in with Google.');
     return;
   }
-  const token = idToken;
   
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
@@ -192,10 +206,241 @@ export function setBackendUrl(url) {
   console.log('[ClustrixCloud] Backend URL would be set to:', url);
 }
 
+/**
+ * Stream agentic chat (web search) through Clustrix Cloud
+ */
+export async function streamCloudAgentic({
+  idToken,
+  model,
+  messages,
+  signal,
+  onChunk,
+  onToolCall,
+  onToolResult,
+  onDone,
+  onError,
+  temperature,
+  max_tokens,
+  userEmail,
+}) {
+  // Get fresh token (auto-refreshes if expired)
+  const token = await getFreshToken(idToken);
+  
+  if (!token) {
+    onError?.('Authentication required. Please sign in with Google.');
+    return;
+  }
+  
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    
+    if (signal) {
+      if (signal.aborted) return resolve();
+      signal.addEventListener('abort', () => {
+        xhr.abort();
+        resolve();
+      });
+    }
+
+    xhr.open('POST', `${BACKEND_URL}/api/agentic`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('X-Device-Name', getDeviceName());
+    if (userEmail) xhr.setRequestHeader('X-User-Email', userEmail);
+
+    let buffer = '';
+    let lastIndex = 0;
+
+    xhr.onprogress = () => {
+      const newData = xhr.responseText.slice(lastIndex);
+      lastIndex = xhr.responseText.length;
+      buffer += newData;
+      
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+        
+        try {
+          const parsed = JSON.parse(data);
+          
+          // Handle tool result (triggers waiting for iteration loader)
+          if (parsed.tool_result) {
+            onToolResult?.({
+              id: parsed.tool_result.id,
+              name: parsed.tool_result.name,
+              success: parsed.tool_result.success,
+            });
+            continue;
+          }
+          
+          // Handle content chunk (command-input/command-output tags are now inside content)
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            onChunk?.(content);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 400) {
+        let msg = `Request failed (${xhr.status})`;
+        try {
+            const errJson = JSON.parse(xhr.responseText);
+            msg = errJson.error || errJson.message || msg;
+        } catch {}
+        onError?.(msg);
+      } else {
+        onDone?.();
+      }
+      resolve();
+    };
+
+    xhr.onerror = () => {
+      onError?.('Network error');
+      resolve();
+    };
+
+    xhr.send(JSON.stringify({
+      model,
+      messages,
+      stream: true,
+      temperature,
+      max_tokens,
+    }));
+  });
+}
+
+/**
+ * Stream image gen chat through Clustrix Cloud
+ */
+export async function streamCloudImageGen({
+  idToken,
+  model,
+  messages,
+  imageModel,
+  signal,
+  onChunk,
+  onToolCall,
+  onToolResult,
+  onDone,
+  onError,
+  temperature,
+  max_tokens,
+  userEmail,
+}) {
+  // Get fresh token (auto-refreshes if expired)
+  const token = await getFreshToken(idToken);
+  
+  if (!token) {
+    onError?.('Authentication required. Please sign in with Google.');
+    return;
+  }
+  
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    
+    if (signal) {
+      if (signal.aborted) return resolve();
+      signal.addEventListener('abort', () => {
+        xhr.abort();
+        resolve();
+      });
+    }
+
+    xhr.open('POST', `${BACKEND_URL}/api/image-gen`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('X-Device-Name', getDeviceName());
+    if (userEmail) xhr.setRequestHeader('X-User-Email', userEmail);
+
+    let buffer = '';
+    let lastIndex = 0;
+
+    xhr.onprogress = () => {
+      const newData = xhr.responseText.slice(lastIndex);
+      lastIndex = xhr.responseText.length;
+      buffer += newData;
+      
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+        
+        try {
+          const parsed = JSON.parse(data);
+          
+          // Handle image result separately (not stored in message content)
+          if (parsed.image_result) {
+            onToolResult?.({
+              name: 'generate_image',
+              success: true,
+              data: {
+                imageUrl: parsed.image_result.imageUrl,
+                imageBase64: parsed.image_result.imageBase64,
+                prompt: parsed.image_result.prompt,
+                style: parsed.image_result.style,
+              },
+            });
+            continue;
+          }
+          
+          // Handle content chunk (command-input/command-output tags are now inside content)
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            onChunk?.(content);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 400) {
+        let msg = `Request failed (${xhr.status})`;
+        try {
+            const errJson = JSON.parse(xhr.responseText);
+            msg = errJson.error || errJson.message || msg;
+        } catch {}
+        onError?.(msg);
+      } else {
+        onDone?.();
+      }
+      resolve();
+    };
+
+    xhr.onerror = () => {
+      onError?.('Network error');
+      resolve();
+    };
+
+    xhr.send(JSON.stringify({
+      model,
+      messages,
+      imageModel,
+      stream: true,
+      temperature,
+      max_tokens,
+    }));
+  });
+}
+
 export default {
   getCloudModels,
   getCloudUsage,
   streamCloudChat,
+  streamCloudAgentic,
+  streamCloudImageGen,
   getBackendUrl,
   setBackendUrl,
 };

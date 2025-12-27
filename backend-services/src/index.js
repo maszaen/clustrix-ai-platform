@@ -12,11 +12,14 @@ const helmet = require('helmet');
 const { verifyGoogleToken } = require('./middleware/auth');
 const { rateLimiter } = require('./middleware/rateLimit');
 const { requestLogger } = require('./middleware/logger');
+const { validateChatRequest, validateImageGenRequest } = require('./middleware/validation');
 
 const chatRouter = require('./routes/chat');
 const modelsRouter = require('./routes/models');
 const userRouter = require('./routes/user');
 const adminRouter = require('./routes/admin');
+const agenticRouter = require('./routes/agentic');
+const imageGenRouter = require('./routes/imageGen');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -28,7 +31,7 @@ app.use(helmet({
 app.use(cors({
   origin: '*', // Allow all origins (mobile app)
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-Name', 'X-User-Email'],
 }));
 app.use(express.json({ limit: '10mb' })); // For large PDF/image payloads
 
@@ -40,9 +43,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Protected routes (require Google auth)
+// Protected routes (require Google auth + validation)
 app.use('/api/models', verifyGoogleToken, modelsRouter);
-app.use('/api/chat', verifyGoogleToken, rateLimiter, chatRouter);
+app.use('/api/chat', verifyGoogleToken, rateLimiter, validateChatRequest, chatRouter);
+app.use('/api/agentic', verifyGoogleToken, rateLimiter, validateChatRequest, agenticRouter);
+app.use('/api/image-gen', verifyGoogleToken, rateLimiter, validateImageGenRequest, imageGenRouter);
 app.use('/api/user', verifyGoogleToken, userRouter);
 
 // Admin routes (require admin secret)

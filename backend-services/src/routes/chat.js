@@ -8,6 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const { getModelConfig } = require('../config/models');
+const { trackRequest } = require('../services/analytics');
 
 /**
  * POST /api/chat
@@ -15,6 +16,8 @@ const { getModelConfig } = require('../config/models');
  * Body: { model, messages, stream?, temperature?, max_tokens? }
  */
 router.post('/', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { model, messages, stream = true, temperature, max_tokens } = req.body;
     
@@ -37,6 +40,14 @@ router.post('/', async (req, res) => {
     
     console.log(`[CHAT] User ${req.user.email} requesting ${model} (${config.provider})`);
     
+    // Store response data for analytics
+    req.analyticsData = {
+      startTime,
+      model,
+      provider: config.provider,
+      messages,
+    };
+    
     // Route to appropriate provider
     switch (config.provider) {
       case 'gemini':
@@ -53,6 +64,22 @@ router.post('/', async (req, res) => {
     
   } catch (err) {
     console.error('[CHAT ERROR]', err);
+    
+    // Track error
+    trackRequest({
+      userId: req.user?.uid,
+      userEmail: req.user?.email,
+      deviceName: req.headers['x-device-name'],
+      model: req.body?.model || 'unknown',
+      provider: 'unknown',
+      messages: req.body?.messages || [],
+      responsePreview: err.message,
+      duration: Date.now() - startTime,
+      success: false,
+      errorMessage: err.message,
+      mode: 'chat',
+    });
+    
     if (!res.headersSent) {
       res.status(500).json({ error: err.message, code: 'CHAT_ERROR' });
     }

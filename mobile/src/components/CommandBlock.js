@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { ChevronDown, ChevronRight, CheckCircle, XCircle, Loader2 } from 'lucide-react-native';
 import { transformCommandText } from '../utils/agenticParser';
+import { GeneratedImageView } from './ToolResultView';
 import { COLORS } from '../constants/colors';
 
 // Only enable LayoutAnimation on old architecture (fabric check)
@@ -95,8 +96,20 @@ const CommandBlock = ({ command }) => {
                 </View>
             )}
 
-            {/* Output */}
-            {expanded && (
+            {/* Image Output - for generate_image tool */}
+            {(output?.imageBase64 || output?.imageUrl) && (
+                <View style={styles.imageOutputContainer}>
+                    <GeneratedImageView
+                        imageBase64={output.imageBase64}
+                        imageUrl={output.imageUrl}
+                        prompt={input.args?.prompt}
+                        style={input.args?.style}
+                    />
+                </View>
+            )}
+
+            {/* Text Output - only show if no image */}
+            {expanded && !(output?.imageBase64 || output?.imageUrl) && (
                 <View style={styles.outputContainer}>
                     <View style={styles.outputHeader}>
                         <Text style={styles.outputLabel}>OUTPUT</Text>
@@ -183,7 +196,12 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: COLORS.fg,
         lineHeight: 16,
-    }
+    },
+    imageOutputContainer: {
+        borderTopWidth: 1,
+        borderTopColor: COLORS.borderLight,
+        overflow: 'hidden',
+    },
 });
 
 export default CommandBlock;

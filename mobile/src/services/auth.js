@@ -7,7 +7,7 @@ import * as SecureStore from 'expo-secure-store';
 
 // Google OAuth configuration
 const GOOGLE_CONFIG = {
-  webClientId: '907693456473-cnui64m5d30cc3p34i1kl5u3up9up8lm.apps.googleusercontent.com',
+  webClientId: '50765975600-07gl5g8f1gai0rt22n2jpp03rjsbmnm0.apps.googleusercontent.com',
   scopes: ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
 };
 
@@ -158,7 +158,7 @@ export async function getValidAccessToken() {
     
     // Configure if not already
     GoogleSignin.configure({
-      webClientId: '907693456473-cnui64m5d30cc3p34i1kl5u3up9up8lm.apps.googleusercontent.com',
+      webClientId: '50765975600-07gl5g8f1gai0rt22n2jpp03rjsbmnm0.apps.googleusercontent.com',
       offlineAccess: true,
       scopes: ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
     });
@@ -177,6 +177,39 @@ export async function getValidAccessToken() {
     return tokens.idToken;
   } catch (error) {
     console.error('[Auth] Token refresh failed:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Get valid Access Token for Google Drive API
+ * Returns fresh accessToken (not idToken) for Drive operations
+ */
+export async function getValidDriveToken() {
+  try {
+    const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+    
+    // Configure if not already
+    GoogleSignin.configure({
+      webClientId: '50765975600-07gl5g8f1gai0rt22n2jpp03rjsbmnm0.apps.googleusercontent.com',
+      offlineAccess: true,
+      scopes: ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
+    });
+    
+    // Check if signed in
+    if (!GoogleSignin.hasPreviousSignIn()) {
+      console.log('[Auth] No previous sign-in');
+      return null;
+    }
+    
+    // Silent sign-in refreshes tokens automatically
+    await GoogleSignin.signInSilently();
+    const tokens = await GoogleSignin.getTokens();
+    
+    console.log('[Auth] Drive token refreshed successfully');
+    return tokens.accessToken;
+  } catch (error) {
+    console.error('[Auth] Drive token refresh failed:', error.message);
     return null;
   }
 }

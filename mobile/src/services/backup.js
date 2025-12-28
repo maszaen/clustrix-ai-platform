@@ -4,7 +4,7 @@
  */
 
 import * as Crypto from 'expo-crypto';
-import { setLastBackupTime, getValidAccessToken } from './auth';
+import { setLastBackupTime, getValidDriveToken } from './auth';
 
 const GOOGLE_DRIVE_APPDATA_URL = 'https://www.googleapis.com/drive/v3/files';
 const GOOGLE_DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files';
@@ -153,7 +153,7 @@ export async function backupToCloud(backupData) {
   console.log('[Backup] Preparing backup...');
   
   // Get valid (refreshed) access token
-  const accessToken = await getValidAccessToken();
+  const accessToken = await getValidDriveToken();
   
   if (!accessToken) {
     return {
@@ -173,7 +173,7 @@ export async function restoreFromCloud() {
   console.log('[Backup] Preparing restore...');
   
   // Get valid (refreshed) access token
-  const accessToken = await getValidAccessToken();
+  const accessToken = await getValidDriveToken();
   
   if (!accessToken) {
     return {
@@ -193,7 +193,7 @@ export async function restoreFromCloud() {
 export async function checkCloudBackup() {
   console.log('[Backup] Checking cloud backup...');
   
-  const accessToken = await getValidAccessToken();
+  const accessToken = await getValidDriveToken();
   
   if (!accessToken) {
     return { exists: false, needsReauth: true };

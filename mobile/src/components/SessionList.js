@@ -158,7 +158,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
             ref={searchInputRef}
             style={styles.searchInput}
             placeholder="Search"
-            placeholderTextColor={COLORS.fgMuted}
+            placeholderTextColor={COLORS.icon}
             value={searchQuery}
             onFocus={() => onSearchQueryChange?.(true)}
             onChangeText={(text) => {

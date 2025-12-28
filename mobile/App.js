@@ -989,6 +989,18 @@ function MainApp() {
           <View style={styles.attachmentRowParent}>
             <View style={styles.attachmentRow}>          
               <Pressable
+                style={[styles.attachmentOption, { borderBottomWidth: 0 }]}
+                onPress={handleOpenCamera}
+                android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+              >
+                <View style={styles.attachmentOptionIcon}>
+                  <Camera size={28} color={COLORS.icon} strokeWidth={1.3} />
+                </View>
+                <View style={styles.attachmentOptionText}>
+                  <Text style={styles.attachmentOptionLabel}>Camera</Text>
+                </View>
+              </Pressable>
+              <Pressable
                 style={styles.attachmentOption}
                 onPress={handleSelectImages}
                 android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
@@ -1014,18 +1026,6 @@ function MainApp() {
                 </View>
               </Pressable>
 
-              <Pressable
-                style={[styles.attachmentOption, { borderBottomWidth: 0 }]}
-                onPress={handleOpenCamera}
-                android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-              >
-                <View style={styles.attachmentOptionIcon}>
-                  <Camera size={28} color={COLORS.icon} strokeWidth={1.3} />
-                </View>
-                <View style={styles.attachmentOptionText}>
-                  <Text style={styles.attachmentOptionLabel}>Camera</Text>
-                </View>
-              </Pressable>
             </View>
           </View>
 

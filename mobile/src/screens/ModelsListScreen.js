@@ -339,62 +339,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
           onCancel={() => setAddProviderModal(false)}
         />
 
-        {/* Cloud Mode Toggle */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Mode</Text>
-          <View style={styles.toggleCard}>
-            <Pressable 
-              style={styles.toggleRowTop}
-              onPress={() => {
-                const val = !useCloudMode;
-                setUseCloudMode(val);
-                updateSettings({ useClustrixCloud: val });
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                {!useCloudMode ? (
-                  <CloudOff size={25} color={COLORS.fgMuted} strokeWidth={1.5} style={{ marginRight: 14 }} />
-                ) : (
-                  isLoadingCloud ? (
-                    <ActivityIndicator size={25} color={COLORS.primary} style={{ marginRight: 14 }} />
-                  ) : (
-                    <Cloud size={25} color={COLORS.primary} strokeWidth={1.5} style={{ marginRight: 14 }} />
-                  )
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Use Clustrix Cloud</Text>
-                  <Text style={styles.switchDescription}>
-                    {useCloudMode ? 'Using Clustrix backend (no API key needed)' : 'Using your own API keys (no limitation)'}
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={useCloudMode}
-                onValueChange={(val) => {
-                  setUseCloudMode(val);
-                  updateSettings({ useClustrixCloud: val });
-                }}
-                trackColor={{ false: COLORS.borderLight, true: COLORS.primary }}
-                thumbColor={COLORS.fg}
-              />
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Loading indicator for cloud mode */}
-        {/* {useCloudMode && isLoadingCloud && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={styles.loadingText}>Loading available models...</Text>
-          </View>
-        )} */}
-
-        {/* Error message for cloud mode */}
-        {useCloudMode && cloudError && !isLoadingCloud && (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.errorText}>{cloudError}</Text>
-          </View>
-        )}
+        
 
         {/* Provider Dropdown */}
         <View style={styles.section}>
@@ -502,6 +447,69 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
             <Text style={styles.hint}>Long press custom models to rename/delete</Text>
           )}
         </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 25, marginTop: 10, }}>
+          <View style={{ flex: 1, height: 1, backgroundColor: COLORS.borderLight }} />
+          <Text style={{ marginHorizontal: 15, color: COLORS.fgMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }}>Free Mode (Limited)</Text>
+          <View style={{ flex: 1, height: 1, backgroundColor: COLORS.borderLight }} />
+        </View>
+
+        {/* Cloud Mode Toggle */}
+        <View style={styles.section}>
+          <View style={styles.toggleCard}>
+            <Pressable 
+              style={styles.toggleRowTop}
+              onPress={() => {
+                const val = !useCloudMode;
+                setUseCloudMode(val);
+                updateSettings({ useClustrixCloud: val });
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                {!useCloudMode ? (
+                  <CloudOff size={25} color={COLORS.fgMuted} strokeWidth={1.5} style={{ marginRight: 14 }} />
+                ) : (
+                  isLoadingCloud ? (
+                    <ActivityIndicator size={25} color={COLORS.primary} style={{ marginRight: 14 }} />
+                  ) : (
+                    <Cloud size={25} color={COLORS.primary} strokeWidth={1.5} style={{ marginRight: 14 }} />
+                  )
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>Turn {useCloudMode ? 'off' : 'on'} Clustrix Cloud</Text>
+                  <Text style={styles.switchDescription}>
+                    {useCloudMode ? 'Current: Using Clustrix Cloud (free)' : 'Current: Using your own API keys'}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={useCloudMode}
+                onValueChange={(val) => {
+                  setUseCloudMode(val);
+                  updateSettings({ useClustrixCloud: val });
+                }}
+                trackColor={{ false: COLORS.borderLight, true: COLORS.primary }}
+                thumbColor={COLORS.fg}
+              />
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Loading indicator for cloud mode */}
+        {/* {useCloudMode && isLoadingCloud && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading available models...</Text>
+          </View>
+        )} */}
+
+        {/* Error message for cloud mode */}
+        {useCloudMode && cloudError && !isLoadingCloud && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.errorText}>{cloudError}</Text>
+          </View>
+        )}
+        
       </ScrollView>
       
       {/* Alert Modal */}

@@ -39,6 +39,15 @@ export async function getCloudModels(idToken, userEmail) {
     // Get fresh token (auto-refreshes if needed)
     const token = await getFreshToken(idToken);
     
+    if (!token) {
+      return {
+        success: false,
+        error: 'Failed to authenticate. Please login first to use Clustrix Cloud Services',
+        models: [],
+        providers: [],
+      };
+    }
+    
     const headers = {
       'X-Device-Name': getDeviceName(),
     };
@@ -120,7 +129,7 @@ export async function streamCloudChat({
   const token = await getFreshToken(idToken);
   
   if (!token) {
-    onError?.('Authentication required. Please sign in with Google.');
+    onError?.('Failed to authenticate. Please login first to use Clustrix Cloud Services');
     return;
   }
   
@@ -234,7 +243,7 @@ export async function streamCloudAgentic({
   const token = await getFreshToken(idToken);
   
   if (!token) {
-    onError?.('Authentication required. Please sign in with Google.');
+    onError?.('Failed to authenticate. Please login first to use Clustrix Cloud Services');
     return;
   }
   
@@ -346,7 +355,7 @@ export async function streamCloudImageGen({
   const token = await getFreshToken(idToken);
   
   if (!token) {
-    onError?.('Authentication required. Please sign in with Google.');
+    onError?.('Failed to authenticate. Please login first to use Clustrix Cloud Services');
     return;
   }
   

@@ -370,7 +370,7 @@ export default function AccountScreen({ visible, onClose }) {
                 android_ripple={{ color: 'rgba(0,0,0,0.2)' }}
               >
                 {isLoggingIn ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color="#000" />
                 ) : (
                   
                   <SvgXml xml={GOOGLE_FAVICON} width={23} height={23} />

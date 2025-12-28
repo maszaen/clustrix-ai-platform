@@ -298,7 +298,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       // Use ref to get current spacer state without adding to deps
       setShowSpacer(currentShowSpacer => {
         const contentWithoutSpacer = listContentHeight - (currentShowSpacer ? SPACER_HEIGHT : 0);
-        const viewportThreshold = listLayoutHeight * 0.9;
+        const viewportThreshold = listLayoutHeight * 0.5;
         
         if (contentWithoutSpacer < viewportThreshold && listLayoutHeight > 0) {
           // Content is small, no spacer needed
@@ -679,8 +679,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       });
     }
     
-    // Scroll to bottom
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    // Scroll to bottom - delay 500ms to ensure spacer is rendered first
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 500);
     setTimeout(() => setNewMessageId(null), 500);
     
     // Build system prompt with persona settings
@@ -786,13 +786,21 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         await appendMessage('assistant', content, metadata);
       }
 
-      setIsStreaming(false);
-      setStreamingContent('');
-      setThinkingContent('');
-      setStreamingMessageId(null);
+      // Delay clearing streaming states to prevent blink
+      // This gives React time to render the saved message before removing the streaming message
+      setTimeout(() => {
+        setIsStreaming(false);
+        setStreamingContent('');
+        setThinkingContent('');
+        setStreamingMessageId(null);
+      }, 50);
 
       if (isNewSession) {
-        const title = await generateTitle(text, settings.model, settings.provider, settings.baseUrl, settings.apiKey);
+        const title = await generateTitle(text, settings.model, settings.provider, settings.baseUrl, settings.apiKey, {
+          useCloud: settings.useClustrixCloud,
+          idToken: accessToken,
+          userEmail: currentUser?.email,
+        });
         await updateSession({ name: title }, session);
       }
     };

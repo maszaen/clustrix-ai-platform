@@ -450,7 +450,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
 
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 25, marginTop: 10, }}>
           <View style={{ flex: 1, height: 1, backgroundColor: COLORS.borderLight }} />
-          <Text style={{ marginHorizontal: 15, color: COLORS.fgMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }}>Free Mode (Limited)</Text>
+          <Text style={{ marginHorizontal: 15, color: COLORS.fgMuted, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }}>Switch Mode (BYOK/Cloud)</Text>
           <View style={{ flex: 1, height: 1, backgroundColor: COLORS.borderLight }} />
         </View>
 
@@ -476,9 +476,9 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
                   )
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Turn {useCloudMode ? 'off' : 'on'} Clustrix Cloud</Text>
+                  <Text style={styles.label}>Turn {useCloudMode ? 'off' : 'on'} Clustrix Cloud Services</Text>
                   <Text style={styles.switchDescription}>
-                    {useCloudMode ? 'Current: Using Clustrix Cloud (free)' : 'Current: Using your own API keys'}
+                    {useCloudMode ? '[Current] Using free Clustrix Cloud Services' : '[Current] Using your own API keys'}
                   </Text>
                 </View>
               </View>

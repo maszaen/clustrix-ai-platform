@@ -1448,13 +1448,29 @@ export async function chat({ messages, model, provider, baseUrl, apiKey }) {
   return json.choices?.[0]?.message?.content || '';
 }
 
-export async function generateTitle(content, model, provider, baseUrl, apiKey) {
+export async function generateTitle(content, model, provider, baseUrl, apiKey, { useCloud, idToken, userEmail } = {}) {
   const messages = [
     { role: 'system', content: 'You are a title generator. Your job is to summarize the user query into a 3-6 word title. The title must be Title Case and have no punctuation. If the query is code, summarize its purpose. (Your response only the 3-6 title)' },
     { role: 'user', content: content.slice(0, 500) }
   ];
   
   try {
+    // Use cloud mode if enabled
+    if (useCloud) {
+      const { streamCloudChat } = await import('./clustrixCloud');
+      let result = '';
+      await streamCloudChat({
+        idToken,
+        userEmail,
+        model,
+        messages,
+        onChunk: (chunk) => { result += chunk; },
+        onDone: () => {},
+        onError: () => {},
+      });
+      return result.replace(/^["']|["']$/g, '').trim() || 'New Chat';
+    }
+    
     const title = await chat({ messages, model, provider, baseUrl, apiKey });
     // Clean up title - remove quotes, extra whitespace
     return title.replace(/^["']|["']$/g, '').trim() || 'New Chat';

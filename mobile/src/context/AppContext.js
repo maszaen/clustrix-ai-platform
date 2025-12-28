@@ -280,7 +280,11 @@ export function AppProvider({ children }) {
     if (!session) return;
     const updated = { ...session, ...updates, updated_at: Date.now() };
     await saveSession(updated);
-    setCurrentSession(updated);
+    // Only update currentSession state if this is still the active session
+    // This prevents navigation back to a session when user has already switched away
+    if (currentSession?.id === session.id) {
+      setCurrentSession(updated);
+    }
     setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));
   }, [currentSession]);
 

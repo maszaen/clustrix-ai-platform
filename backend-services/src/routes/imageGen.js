@@ -382,6 +382,9 @@ router.post('/', async (req, res) => {
     
     // Agentic loop for image generation
     let conversationMessages = [...messages];
+    let totalInputTokens = Math.ceil(JSON.stringify(messages).length / 4);
+    let totalOutputTokens = 0;
+    let fullContent = '';
     
     for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
       let response;
@@ -402,6 +405,15 @@ router.post('/', async (req, res) => {
       const assistantMessage = response.message;
       conversationMessages.push(assistantMessage);
       
+      // Accumulate tokens
+      if (response.usage) {
+        totalInputTokens += response.usage.prompt_tokens || response.usage.input_tokens || 0;
+        totalOutputTokens += response.usage.completion_tokens || response.usage.output_tokens || 0;
+      } else {
+        totalOutputTokens += Math.ceil((assistantMessage.content || '').length / 4);
+      }
+      fullContent += assistantMessage.content || '';
+      
       // Stream content
       if (stream && assistantMessage.content) {
         res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: assistantMessage.content } }] })}\n\n`);
@@ -409,6 +421,22 @@ router.post('/', async (req, res) => {
       
       // Check if done (no tool calls)
       if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+        // Track success
+        trackRequest({
+          userId: req.user?.uid,
+          userEmail: req.user?.email,
+          deviceName: req.headers['x-device-name'],
+          model: config.modelId,
+          provider: config.provider,
+          messages,
+          responsePreview: fullContent,
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
+          duration: Date.now() - startTime,
+          success: true,
+          mode: 'image-gen',
+        });
+        
         if (stream) {
           res.write('data: [DONE]\n\n');
           res.end();
@@ -471,7 +499,22 @@ router.post('/', async (req, res) => {
       }
     }
     
-    // Max iterations reached
+    // Max iterations reached - still track as success
+    trackRequest({
+      userId: req.user?.uid,
+      userEmail: req.user?.email,
+      deviceName: req.headers['x-device-name'],
+      model: config.modelId,
+      provider: config.provider,
+      messages,
+      responsePreview: fullContent + ' [MAX_ITERATIONS]',
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+      duration: Date.now() - startTime,
+      success: true,
+      mode: 'image-gen',
+    });
+    
     if (stream) {
       res.write('data: [DONE]\n\n');
       res.end();

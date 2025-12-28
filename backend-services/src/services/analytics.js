@@ -200,6 +200,8 @@ function updateUserStats(userId, userEmail, request) {
       errorCount: 0,
       models: {},
       devices: new Set(),
+      recentLogs: [],        // Last 5 request logs for tracing
+      recentInteractions: [], // Last 5 prompt/response pairs
     };
     analytics.userStats.set(userId, stats);
   }
@@ -218,6 +220,29 @@ function updateUserStats(userId, userEmail, request) {
   
   // Track model usage
   stats.models[request.model] = (stats.models[request.model] || 0) + 1;
+  
+  // Store last 5 logs for tracing (minimal info)
+  stats.recentLogs.unshift({
+    timestamp: request.timestamp,
+    model: request.model,
+    mode: request.mode,
+    success: request.success,
+    duration: request.duration,
+    inputTokens: request.inputTokens,
+    outputTokens: request.outputTokens,
+    errorMessage: request.errorMessage,
+  });
+  if (stats.recentLogs.length > 5) stats.recentLogs.pop();
+  
+  // Store last 5 prompt/response pairs (500 char slice)
+  stats.recentInteractions.unshift({
+    timestamp: request.timestamp,
+    model: request.model,
+    prompt: (request.promptPreview || '').slice(0, 500),
+    response: (request.responsePreview || '').slice(0, 500),
+    success: request.success,
+  });
+  if (stats.recentInteractions.length > 5) stats.recentInteractions.pop();
 }
 
 /**

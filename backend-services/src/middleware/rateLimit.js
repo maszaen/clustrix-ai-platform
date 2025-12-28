@@ -11,6 +11,9 @@
 // In-memory store: { [userId]: { count: number, resetAt: timestamp, lastRequest: timestamp } }
 const userLimits = new Map();
 
+// Unlimited users (admin granted)
+const unlimitedUsers = new Set();
+
 // Burst protection: max requests per minute
 const BURST_LIMIT = 10;
 const BURST_WINDOW_MS = 60 * 1000; // 1 minute
@@ -32,6 +35,13 @@ function rateLimiter(req, res, next) {
   const userId = req.user?.uid;
   if (!userId) {
     return res.status(401).json({ error: 'User not authenticated', code: 'AUTH_REQUIRED' });
+  }
+  
+  // Skip rate limiting for unlimited users
+  if (unlimitedUsers.has(userId)) {
+    res.setHeader('X-RateLimit-Limit', 'unlimited');
+    res.setHeader('X-RateLimit-Remaining', 'unlimited');
+    return next();
   }
   
   const now = Date.now();
@@ -110,13 +120,61 @@ function getEndOfDay() {
 function getUserUsage(userId) {
   const userData = userLimits.get(userId);
   const maxRequests = parseInt(process.env.RATE_LIMIT_FREE) || 50;
+  const isUnlimited = unlimitedUsers.has(userId);
   
   return {
     used: userData?.count || 0,
-    limit: maxRequests,
-    remaining: maxRequests - (userData?.count || 0),
+    limit: isUnlimited ? 'unlimited' : maxRequests,
+    remaining: isUnlimited ? 'unlimited' : maxRequests - (userData?.count || 0),
     resetAt: userData?.resetAt ? new Date(userData.resetAt).toISOString() : null,
+    isUnlimited,
   };
 }
 
-module.exports = { rateLimiter, getUserUsage };
+/**
+ * Reset user's daily limit (admin function)
+ */
+function resetUserLimit(userId) {
+  userLimits.delete(userId);
+  return { success: true, message: `Limit reset for user ${userId}` };
+}
+
+/**
+ * Grant unlimited access to user (admin function)
+ */
+function grantUnlimited(userId) {
+  unlimitedUsers.add(userId);
+  return { success: true, message: `Unlimited access granted to ${userId}` };
+}
+
+/**
+ * Revoke unlimited access from user (admin function)
+ */
+function revokeUnlimited(userId) {
+  unlimitedUsers.delete(userId);
+  return { success: true, message: `Unlimited access revoked from ${userId}` };
+}
+
+/**
+ * Check if user has unlimited access
+ */
+function isUnlimited(userId) {
+  return unlimitedUsers.has(userId);
+}
+
+/**
+ * Get all unlimited users
+ */
+function getUnlimitedUsers() {
+  return Array.from(unlimitedUsers);
+}
+
+module.exports = { 
+  rateLimiter, 
+  getUserUsage,
+  resetUserLimit,
+  grantUnlimited,
+  revokeUnlimited,
+  isUnlimited,
+  getUnlimitedUsers,
+};

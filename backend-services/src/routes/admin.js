@@ -186,6 +186,90 @@ router.get('/analytics/online', (req, res) => {
   });
 });
 
+// ===================================================================
+// USER MANAGEMENT ENDPOINTS
+// ===================================================================
+
+const { 
+  getUserUsage, 
+  resetUserLimit, 
+  grantUnlimited, 
+  revokeUnlimited,
+  getUnlimitedUsers,
+} = require('../middleware/rateLimit');
+
+/**
+ * GET /admin/users
+ * List all users with their usage and config
+ */
+router.get('/users', (req, res) => {
+  const users = getAllUserStats();
+  const unlimitedList = getUnlimitedUsers();
+  
+  // Enhance with usage and unlimited status
+  const enhancedUsers = users.map(u => ({
+    ...u,
+    usage: getUserUsage(u.userId),
+    isUnlimited: unlimitedList.includes(u.userId),
+  }));
+  
+  res.json({ users: enhancedUsers, total: enhancedUsers.length });
+});
+
+/**
+ * GET /admin/users/:userId
+ * Get detailed user info including recent logs and interactions
+ */
+router.get('/users/:userId', (req, res) => {
+  const userId = req.params.userId;
+  const details = getUserDetails(userId);
+  
+  if (!details) {
+    return res.status(404).json({ error: 'User not found', code: 'USER_NOT_FOUND' });
+  }
+  
+  const unlimitedList = getUnlimitedUsers();
+  
+  res.json({
+    ...details,
+    devices: Array.from(details.devices || []),
+    usage: getUserUsage(userId),
+    isUnlimited: unlimitedList.includes(userId),
+    recentLogs: details.recentLogs || [],
+    recentInteractions: details.recentInteractions || [],
+  });
+});
+
+/**
+ * POST /admin/users/:userId/reset-limit
+ * Reset user's daily limit
+ */
+router.post('/users/:userId/reset-limit', (req, res) => {
+  const result = resetUserLimit(req.params.userId);
+  console.log(`[Admin] Reset limit for user ${req.params.userId}`);
+  res.json(result);
+});
+
+/**
+ * POST /admin/users/:userId/grant-unlimited
+ * Grant unlimited access to user
+ */
+router.post('/users/:userId/grant-unlimited', (req, res) => {
+  const result = grantUnlimited(req.params.userId);
+  console.log(`[Admin] Granted unlimited to user ${req.params.userId}`);
+  res.json(result);
+});
+
+/**
+ * POST /admin/users/:userId/revoke-unlimited
+ * Revoke unlimited access from user
+ */
+router.post('/users/:userId/revoke-unlimited', (req, res) => {
+  const result = revokeUnlimited(req.params.userId);
+  console.log(`[Admin] Revoked unlimited from user ${req.params.userId}`);
+  res.json(result);
+});
+
 /**
  * GET /admin/logs
  */
@@ -456,6 +540,81 @@ router.get('/', (req, res) => {
         <div style="margin-top: 20px;">
           <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">TOP MODELS (24h)</div>
           <div id="top-models-list" style="display: flex; flex-wrap: wrap; gap: 10px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Management Section -->
+    <div class="provider-section" style="margin-bottom: 30px;">
+      <div class="provider-header">
+        <div class="provider-title">👥 User Management</div>
+        <button onclick="loadUsers()" style="padding: 6px 12px; background: var(--accent); color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">Refresh</button>
+      </div>
+      <div style="padding: 20px;">
+        <div class="table-container" style="margin-top: 0;">
+          <table>
+            <thead>
+              <tr>
+                <th>EMAIL</th>
+                <th>REQUESTS</th>
+                <th>TOKENS</th>
+                <th>USAGE</th>
+                <th>STATUS</th>
+                <th>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody id="users-body">
+              <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading users...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Detail Modal -->
+    <div id="user-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 1000; overflow-y: auto;">
+      <div style="max-width: 800px; margin: 50px auto; background: var(--bg-card); border-radius: 16px; border: 1px solid var(--border);">
+        <div style="padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-size: 18px; font-weight: 600;" id="modal-user-email">User Details</div>
+            <div style="font-size: 12px; color: var(--text-muted);" id="modal-user-id"></div>
+          </div>
+          <button onclick="closeUserModal()" style="background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer;">&times;</button>
+        </div>
+        <div style="padding: 20px;">
+          <!-- User Stats -->
+          <div class="grid-stats" style="margin-bottom: 20px;">
+            <div class="stat-card">
+              <div class="stat-val" id="modal-requests">-</div>
+              <div class="stat-label">Total Requests</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-val" id="modal-tokens">-</div>
+              <div class="stat-label">Total Tokens</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-val" id="modal-usage">-</div>
+              <div class="stat-label">Today's Usage</div>
+            </div>
+          </div>
+
+          <!-- Admin Actions -->
+          <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button onclick="resetUserLimitAction()" style="padding: 10px 20px; background: var(--accent); color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">🔄 Reset Daily Limit</button>
+            <button id="unlimited-btn" onclick="toggleUnlimitedAction()" style="padding: 10px 20px; background: var(--success); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">⚡ Grant Unlimited</button>
+          </div>
+
+          <!-- Recent Logs -->
+          <div style="margin-bottom: 20px;">
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">📋 Last 5 Logs</div>
+            <div id="modal-logs" style="font-size: 12px; font-family: monospace; background: var(--bg-dark); padding: 15px; border-radius: 8px; max-height: 200px; overflow-y: auto;"></div>
+          </div>
+
+          <!-- Recent Interactions -->
+          <div>
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">💬 Last 5 Interactions</div>
+            <div id="modal-interactions" style="font-size: 12px;"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -785,10 +944,153 @@ router.get('/', (req, res) => {
       return num.toString();
     }
     
+    // User Management
+    let currentUserId = null;
+    let currentUserUnlimited = false;
+    
+    async function loadUsers() {
+      try {
+        const res = await fetch('/admin/users' + SECRET_PARAM);
+        if (!res.ok) throw new Error('Failed to load users');
+        const data = await res.json();
+        
+        const tbody = document.getElementById('users-body');
+        if (data.users.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">No users yet</td></tr>';
+          return;
+        }
+        
+        tbody.innerHTML = data.users.map(u => {
+          const usageText = u.isUnlimited ? '∞' : \`\${u.usage?.used || 0}/\${u.usage?.limit || 50}\`;
+          const statusBadge = u.isUnlimited 
+            ? '<span class="badge key-ok">UNLIMITED</span>' 
+            : '<span class="badge">NORMAL</span>';
+          
+          return \`<tr style="cursor: pointer;" onclick="showUserDetail('\${u.userId}')">
+            <td style="font-weight: 500;">\${u.email}</td>
+            <td>\${u.totalRequests}</td>
+            <td>\${formatNumber(u.totalTokens)}</td>
+            <td>\${usageText}</td>
+            <td>\${statusBadge}</td>
+            <td>
+              <button onclick="event.stopPropagation(); showUserDetail('\${u.userId}')" style="padding: 4px 10px; background: var(--bg-hover); border: 1px solid var(--border); border-radius: 4px; color: var(--text-main); cursor: pointer; font-size: 11px;">View</button>
+            </td>
+          </tr>\`;
+        }).join('');
+      } catch(e) {
+        console.error('Load users error', e);
+      }
+    }
+    
+    async function showUserDetail(userId) {
+      currentUserId = userId;
+      document.getElementById('user-modal').style.display = 'block';
+      
+      try {
+        const res = await fetch('/admin/users/' + userId + SECRET_PARAM);
+        if (!res.ok) throw new Error('Failed to load user');
+        const u = await res.json();
+        
+        currentUserUnlimited = u.isUnlimited;
+        
+        document.getElementById('modal-user-email').textContent = u.email;
+        document.getElementById('modal-user-id').textContent = 'ID: ' + u.userId;
+        document.getElementById('modal-requests').textContent = u.totalRequests;
+        document.getElementById('modal-tokens').textContent = formatNumber(u.totalTokens);
+        document.getElementById('modal-usage').textContent = u.isUnlimited ? '∞' : \`\${u.usage?.used || 0}/\${u.usage?.limit || 50}\`;
+        
+        // Update unlimited button
+        const btn = document.getElementById('unlimited-btn');
+        if (u.isUnlimited) {
+          btn.textContent = '🚫 Revoke Unlimited';
+          btn.style.background = 'var(--error)';
+        } else {
+          btn.textContent = '⚡ Grant Unlimited';
+          btn.style.background = 'var(--success)';
+        }
+        
+        // Recent logs
+        const logsDiv = document.getElementById('modal-logs');
+        if (u.recentLogs && u.recentLogs.length > 0) {
+          logsDiv.innerHTML = u.recentLogs.map(l => \`<div style="margin-bottom: 8px; padding: 8px; background: var(--bg-card); border-radius: 4px;">
+            <span style="color: var(--text-muted);">\${new Date(l.timestamp).toLocaleString()}</span>
+            <span style="color: \${l.success ? 'var(--success)' : 'var(--error)'}; margin-left: 10px;">\${l.success ? '✓' : '✗'}</span>
+            <span style="margin-left: 10px;">\${l.model}</span>
+            <span style="color: var(--text-muted); margin-left: 10px;">\${l.inputTokens || 0}→\${l.outputTokens || 0} tokens</span>
+            \${l.errorMessage ? \`<div style="color: var(--error); margin-top: 4px;">\${l.errorMessage}</div>\` : ''}
+          </div>\`).join('');
+        } else {
+          logsDiv.innerHTML = '<div style="color: var(--text-muted);">No logs yet</div>';
+        }
+        
+        // Recent interactions
+        const interDiv = document.getElementById('modal-interactions');
+        if (u.recentInteractions && u.recentInteractions.length > 0) {
+          interDiv.innerHTML = u.recentInteractions.map(i => \`<div style="margin-bottom: 12px; padding: 12px; background: var(--bg-dark); border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span style="color: var(--text-muted); font-size: 11px;">\${new Date(i.timestamp).toLocaleString()}</span>
+              <span style="font-size: 11px;">\${i.model}</span>
+            </div>
+            <div style="margin-bottom: 8px;">
+              <div style="color: var(--accent); font-size: 11px; margin-bottom: 4px;">PROMPT:</div>
+              <div style="background: var(--bg-card); padding: 8px; border-radius: 4px; word-break: break-word;">\${escapeHtml(i.prompt || '[empty]')}</div>
+            </div>
+            <div>
+              <div style="color: var(--success); font-size: 11px; margin-bottom: 4px;">RESPONSE:</div>
+              <div style="background: var(--bg-card); padding: 8px; border-radius: 4px; word-break: break-word;">\${escapeHtml(i.response || '[empty]')}</div>
+            </div>
+          </div>\`).join('');
+        } else {
+          interDiv.innerHTML = '<div style="color: var(--text-muted);">No interactions yet</div>';
+        }
+      } catch(e) {
+        console.error('User detail error', e);
+      }
+    }
+    
+    function closeUserModal() {
+      document.getElementById('user-modal').style.display = 'none';
+      currentUserId = null;
+    }
+    
+    async function resetUserLimitAction() {
+      if (!currentUserId) return;
+      try {
+        const res = await fetch('/admin/users/' + currentUserId + '/reset-limit' + SECRET_PARAM, { method: 'POST' });
+        if (!res.ok) throw new Error('Failed to reset limit');
+        alert('Limit reset successfully!');
+        showUserDetail(currentUserId);
+        loadUsers();
+      } catch(e) {
+        alert('Error: ' + e.message);
+      }
+    }
+    
+    async function toggleUnlimitedAction() {
+      if (!currentUserId) return;
+      const endpoint = currentUserUnlimited ? 'revoke-unlimited' : 'grant-unlimited';
+      try {
+        const res = await fetch('/admin/users/' + currentUserId + '/' + endpoint + SECRET_PARAM, { method: 'POST' });
+        if (!res.ok) throw new Error('Failed to toggle unlimited');
+        alert(currentUserUnlimited ? 'Unlimited revoked!' : 'Unlimited granted!');
+        showUserDetail(currentUserId);
+        loadUsers();
+      } catch(e) {
+        alert('Error: ' + e.message);
+      }
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
     setInterval(pollLogs, 2000);
     setInterval(refreshAnalytics, 10000); // Refresh analytics every 10s
     pollLogs();
     refreshAnalytics();
+    loadUsers(); // Load users on page load
   </script>
 </body>
 </html>

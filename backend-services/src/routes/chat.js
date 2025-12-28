@@ -96,6 +96,7 @@ async function handleOpenAIChat(req, res, config, messages, options) {
     model: config.modelId,
     messages,
     stream: options.stream,
+    stream_options: options.stream ? { include_usage: true } : undefined,
   };
   
   if (options.temperature !== undefined) body.temperature = options.temperature;
@@ -123,6 +124,8 @@ async function handleOpenAIChat(req, res, config, messages, options) {
     
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let fullContent = '';
+    let usageData = null;
     
     try {
       while (true) {
@@ -131,12 +134,66 @@ async function handleOpenAIChat(req, res, config, messages, options) {
         
         const chunk = decoder.decode(value, { stream: true });
         res.write(chunk);
+        
+        // Extract content and usage from chunks
+        const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            const content = data.choices?.[0]?.delta?.content || '';
+            fullContent += content;
+            
+            // Capture usage when provided (OpenAI sends it in final chunk)
+            if (data.usage) {
+              usageData = data.usage;
+            }
+          } catch {}
+        }
       }
     } finally {
       res.end();
+      
+      // Track success request with actual usage
+      const inputTokens = usageData?.prompt_tokens || Math.ceil(JSON.stringify(messages).length / 4);
+      const outputTokens = usageData?.completion_tokens || Math.ceil(fullContent.length / 4);
+      
+      trackRequest({
+        userId: req.user?.uid,
+        userEmail: req.user?.email,
+        deviceName: req.headers['x-device-name'],
+        model: config.modelId,
+        provider: config.provider,
+        messages,
+        responsePreview: fullContent,
+        inputTokens,
+        outputTokens,
+        duration: Date.now() - req.analyticsData?.startTime,
+        success: true,
+        mode: 'chat',
+      });
     }
   } else {
     const data = await response.json();
+    
+    // Track non-streaming request
+    const inputTokens = data.usage?.prompt_tokens || Math.ceil(JSON.stringify(messages).length / 4);
+    const outputTokens = data.usage?.completion_tokens || 0;
+    
+    trackRequest({
+      userId: req.user?.uid,
+      userEmail: req.user?.email,
+      deviceName: req.headers['x-device-name'],
+      model: config.modelId,
+      provider: config.provider,
+      messages,
+      responsePreview: data.choices?.[0]?.message?.content,
+      inputTokens,
+      outputTokens,
+      duration: Date.now() - req.analyticsData?.startTime,
+      success: true,
+      mode: 'chat',
+    });
+    
     res.json(data);
   }
 }
@@ -185,6 +242,8 @@ async function handleGeminiChat(req, res, config, messages, options) {
     
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let fullContent = '';
+    let usageData = null;
     
     try {
       while (true) {
@@ -199,18 +258,68 @@ async function handleGeminiChat(req, res, config, messages, options) {
             const data = JSON.parse(line);
             const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
             if (content) {
+              fullContent += content;
               res.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
+            }
+            
+            // Capture usage metadata (Gemini sends it in chunks)
+            if (data.usageMetadata) {
+              usageData = data.usageMetadata;
             }
           } catch {}
         }
       }
+      
+      // Send usage event before [DONE]
+      if (usageData) {
+        res.write(`data: ${JSON.stringify({ usage: usageData })}\n\n`);
+      }
       res.write('data: [DONE]\n\n');
     } finally {
       res.end();
+      
+      // Track success request with actual usage
+      const inputTokens = usageData?.promptTokenCount || Math.ceil(JSON.stringify(messages).length / 4);
+      const outputTokens = usageData?.candidatesTokenCount || Math.ceil(fullContent.length / 4);
+      
+      trackRequest({
+        userId: req.user?.uid,
+        userEmail: req.user?.email,
+        deviceName: req.headers['x-device-name'],
+        model: config.modelId,
+        provider: config.provider,
+        messages,
+        responsePreview: fullContent,
+        inputTokens,
+        outputTokens,
+        duration: Date.now() - req.analyticsData?.startTime,
+        success: true,
+        mode: 'chat',
+      });
     }
   } else {
     const data = await response.json();
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    // Track non-streaming request
+    const inputTokens = data.usageMetadata?.promptTokenCount || Math.ceil(JSON.stringify(messages).length / 4);
+    const outputTokens = data.usageMetadata?.candidatesTokenCount || Math.ceil(content.length / 4);
+    
+    trackRequest({
+      userId: req.user?.uid,
+      userEmail: req.user?.email,
+      deviceName: req.headers['x-device-name'],
+      model: config.modelId,
+      provider: config.provider,
+      messages,
+      responsePreview: content,
+      inputTokens,
+      outputTokens,
+      duration: Date.now() - req.analyticsData?.startTime,
+      success: true,
+      mode: 'chat',
+    });
+    
     res.json({
       choices: [{ message: { role: 'assistant', content } }],
       usage: data.usageMetadata,
@@ -259,6 +368,8 @@ async function handleAnthropicChat(req, res, config, messages, options) {
     
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let fullContent = '';
+    let usageData = null;
     
     try {
       while (true) {
@@ -273,18 +384,70 @@ async function handleAnthropicChat(req, res, config, messages, options) {
             const data = JSON.parse(line.slice(6));
             if (data.type === 'content_block_delta') {
               const content = data.delta?.text || '';
+              fullContent += content;
               res.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
+            }
+            
+            // Capture usage (Anthropic sends it in message_delta or message_stop)
+            if (data.usage) {
+              usageData = data.usage;
+            } else if (data.type === 'message_delta' && data.usage) {
+              usageData = { ...usageData, ...data.usage };
             }
           } catch {}
         }
       }
+      
+      // Send usage event before [DONE]
+      if (usageData) {
+        res.write(`data: ${JSON.stringify({ usage: usageData })}\n\n`);
+      }
       res.write('data: [DONE]\n\n');
     } finally {
       res.end();
+      
+      // Track success request with actual usage
+      const inputTokens = usageData?.input_tokens || Math.ceil(JSON.stringify(messages).length / 4);
+      const outputTokens = usageData?.output_tokens || Math.ceil(fullContent.length / 4);
+      
+      trackRequest({
+        userId: req.user?.uid,
+        userEmail: req.user?.email,
+        deviceName: req.headers['x-device-name'],
+        model: config.modelId,
+        provider: config.provider,
+        messages,
+        responsePreview: fullContent,
+        inputTokens,
+        outputTokens,
+        duration: Date.now() - req.analyticsData?.startTime,
+        success: true,
+        mode: 'chat',
+      });
     }
   } else {
     const data = await response.json();
     const content = data.content?.[0]?.text || '';
+    
+    // Track non-streaming request
+    const inputTokens = data.usage?.input_tokens || Math.ceil(JSON.stringify(messages).length / 4);
+    const outputTokens = data.usage?.output_tokens || Math.ceil(content.length / 4);
+    
+    trackRequest({
+      userId: req.user?.uid,
+      userEmail: req.user?.email,
+      deviceName: req.headers['x-device-name'],
+      model: config.modelId,
+      provider: config.provider,
+      messages,
+      responsePreview: content,
+      inputTokens,
+      outputTokens,
+      duration: Date.now() - req.analyticsData?.startTime,
+      success: true,
+      mode: 'chat',
+    });
+    
     res.json({
       choices: [{ message: { role: 'assistant', content } }],
       usage: data.usage,

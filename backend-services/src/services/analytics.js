@@ -11,6 +11,8 @@
  *          Local Mode = full privacy, no data sent
  */
 
+const { saveUserStats, loadAllUserStats } = require('./database');
+
 // In-memory storage (for production, use Redis/PostgreSQL)
 const analytics = {
   requests: [],           // Recent requests log
@@ -25,6 +27,29 @@ const analytics = {
 const MAX_REQUESTS_LOG = 10000;  // Keep last 10k requests
 const PREVIEW_LENGTH = 100;      // Truncate prompts/responses
 const ONLINE_TIMEOUT_MS = 5 * 60 * 1000; // 5 min = offline
+const SAVE_INTERVAL_MS = 5 * 60 * 1000; // Save to Firestore every 5 minutes
+
+// Load user stats from Firestore on init
+(async function initAnalytics() {
+  try {
+    const stats = await loadAllUserStats();
+    if (stats.size > 0) {
+      analytics.userStats = stats;
+      console.log(`[Analytics] Loaded ${stats.size} user stats from Firestore`);
+    }
+  } catch (e) {
+    console.error('[Analytics] Failed to load user stats:', e.message);
+  }
+})();
+
+// Periodically save user stats to Firestore
+setInterval(() => {
+  for (const [userId, stats] of analytics.userStats) {
+    saveUserStats(userId, stats).catch(e => 
+      console.error('[Analytics] Failed to save user stats:', e.message)
+    );
+  }
+}, SAVE_INTERVAL_MS);
 
 // Cost estimates per 1M tokens (approximate, update as needed)
 const COST_PER_MILLION = {
@@ -130,6 +155,7 @@ function trackRequest({
   provider,
   messages,
   responsePreview,
+  thinkingPreview = '',
   inputTokens = 0,
   outputTokens = 0,
   duration = 0,
@@ -152,6 +178,7 @@ function trackRequest({
     mode,
     promptPreview,
     responsePreview: truncateText(responsePreview),
+    thinkingPreview: thinkingPreview ? truncateText(thinkingPreview, 200) : '',
     inputTokens,
     outputTokens,
     totalTokens: inputTokens + outputTokens,
@@ -239,6 +266,7 @@ function updateUserStats(userId, userEmail, request) {
     timestamp: request.timestamp,
     model: request.model,
     prompt: (request.promptPreview || '').slice(0, 500),
+    thinking: (request.thinkingPreview || '').slice(0, 500),
     response: (request.responsePreview || '').slice(0, 500),
     success: request.success,
   });

@@ -8,11 +8,38 @@
  * to ensure consistent rate limiting across all instances.
  */
 
+const { saveUnlimitedUser, loadUnlimitedUsers, saveBlockedUser, loadBlockedUsers } = require('../services/database');
+
 // In-memory store: { [userId]: { count: number, resetAt: timestamp, lastRequest: timestamp } }
 const userLimits = new Map();
 
 // Unlimited users (admin granted)
 const unlimitedUsers = new Set();
+
+// Blocked users (admin blocked)
+const blockedUsers = new Set();
+
+// Load unlimited users from Firestore on init
+(async function initUnlimitedUsers() {
+  try {
+    const users = await loadUnlimitedUsers();
+    users.forEach(userId => unlimitedUsers.add(userId));
+    console.log(`[RateLimit] Loaded ${users.length} unlimited users from Firestore`);
+  } catch (e) {
+    console.error('[RateLimit] Failed to load unlimited users:', e.message);
+  }
+})();
+
+// Load blocked users from Firestore on init
+(async function initBlockedUsers() {
+  try {
+    const users = await loadBlockedUsers();
+    users.forEach(userId => blockedUsers.add(userId));
+    console.log(`[RateLimit] Loaded ${users.length} blocked users from Firestore`);
+  } catch (e) {
+    console.error('[RateLimit] Failed to load blocked users:', e.message);
+  }
+})();
 
 // Burst protection: max requests per minute
 const BURST_LIMIT = 10;
@@ -35,6 +62,14 @@ function rateLimiter(req, res, next) {
   const userId = req.user?.uid;
   if (!userId) {
     return res.status(401).json({ error: 'User not authenticated', code: 'AUTH_REQUIRED' });
+  }
+  
+  // Check if user is blocked
+  if (blockedUsers.has(userId)) {
+    return res.status(403).json({ 
+      error: 'Your account has been blocked. Contact support for assistance.', 
+      code: 'USER_BLOCKED' 
+    });
   }
   
   // Skip rate limiting for unlimited users
@@ -120,14 +155,16 @@ function getEndOfDay() {
 function getUserUsage(userId) {
   const userData = userLimits.get(userId);
   const maxRequests = parseInt(process.env.RATE_LIMIT_FREE) || 50;
-  const isUnlimited = unlimitedUsers.has(userId);
+  const isUnlimitedUser = unlimitedUsers.has(userId);
+  const isBlockedUser = blockedUsers.has(userId);
   
   return {
     used: userData?.count || 0,
-    limit: isUnlimited ? 'unlimited' : maxRequests,
-    remaining: isUnlimited ? 'unlimited' : maxRequests - (userData?.count || 0),
+    limit: isUnlimitedUser ? 'unlimited' : maxRequests,
+    remaining: isUnlimitedUser ? 'unlimited' : maxRequests - (userData?.count || 0),
     resetAt: userData?.resetAt ? new Date(userData.resetAt).toISOString() : null,
-    isUnlimited,
+    isUnlimited: isUnlimitedUser,
+    isBlocked: isBlockedUser,
   };
 }
 
@@ -144,6 +181,7 @@ function resetUserLimit(userId) {
  */
 function grantUnlimited(userId) {
   unlimitedUsers.add(userId);
+  saveUnlimitedUser(userId, true); // Persist to Firestore
   return { success: true, message: `Unlimited access granted to ${userId}` };
 }
 
@@ -152,6 +190,7 @@ function grantUnlimited(userId) {
  */
 function revokeUnlimited(userId) {
   unlimitedUsers.delete(userId);
+  saveUnlimitedUser(userId, false); // Persist to Firestore
   return { success: true, message: `Unlimited access revoked from ${userId}` };
 }
 
@@ -169,6 +208,38 @@ function getUnlimitedUsers() {
   return Array.from(unlimitedUsers);
 }
 
+/**
+ * Block user (admin function)
+ */
+function blockUser(userId) {
+  blockedUsers.add(userId);
+  saveBlockedUser(userId, true); // Persist to Firestore
+  return { success: true, message: `User ${userId} has been blocked` };
+}
+
+/**
+ * Unblock user (admin function)
+ */
+function unblockUser(userId) {
+  blockedUsers.delete(userId);
+  saveBlockedUser(userId, false); // Persist to Firestore
+  return { success: true, message: `User ${userId} has been unblocked` };
+}
+
+/**
+ * Check if user is blocked
+ */
+function isBlocked(userId) {
+  return blockedUsers.has(userId);
+}
+
+/**
+ * Get all blocked users
+ */
+function getBlockedUsers() {
+  return Array.from(blockedUsers);
+}
+
 module.exports = { 
   rateLimiter, 
   getUserUsage,
@@ -177,4 +248,9 @@ module.exports = {
   revokeUnlimited,
   isUnlimited,
   getUnlimitedUsers,
+  blockUser,
+  unblockUser,
+  isBlocked,
+  getBlockedUsers,
 };
+

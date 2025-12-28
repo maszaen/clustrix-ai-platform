@@ -438,6 +438,14 @@ router.post('/', async (req, res) => {
         });
         
         if (stream) {
+          // Send usage event before [DONE] so frontend can display token count
+          res.write(`data: ${JSON.stringify({ 
+            usage: { 
+              prompt_tokens: totalInputTokens, 
+              completion_tokens: totalOutputTokens,
+              total_tokens: totalInputTokens + totalOutputTokens,
+            } 
+          })}\n\n`);
           res.write('data: [DONE]\n\n');
           res.end();
         } else {
@@ -516,6 +524,14 @@ router.post('/', async (req, res) => {
     });
     
     if (stream) {
+      // Send usage event before [DONE]
+      res.write(`data: ${JSON.stringify({ 
+        usage: { 
+          prompt_tokens: totalInputTokens, 
+          completion_tokens: totalOutputTokens,
+          total_tokens: totalInputTokens + totalOutputTokens,
+        } 
+      })}\n\n`);
       res.write('data: [DONE]\n\n');
       res.end();
     } else {

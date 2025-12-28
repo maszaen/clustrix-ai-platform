@@ -168,28 +168,34 @@ const ALL_MODELS = {
   'megallm/gemini-2.5-pro': { provider: 'megallm', name: 'Gemini 2.5 Pro', envKey: 'MEGALLM_API_KEY', enabled: true },
 };
 
-// ==== PERSISTENCE LOGIC ====
-const SETTINGS_FILE = path.join(__dirname, '../../model-settings.json');
+// ==== PERSISTENCE LOGIC (Firestore) ====
+const { saveModelSettings, loadModelSettings } = require('../services/database');
 
-// Load settings on init
-try {
-  if (fs.existsSync(SETTINGS_FILE)) {
-    const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
-    const settings = JSON.parse(data);
+// Load settings from Firestore on init
+let firestoreLoaded = false;
+
+async function initModelSettings() {
+  if (firestoreLoaded) return;
+  try {
+    const settings = await loadModelSettings();
     for (const [id, enabled] of Object.entries(settings)) {
       if (ALL_MODELS[id]) ALL_MODELS[id].enabled = enabled;
     }
+    firestoreLoaded = true;
+    console.log('[Models] Loaded settings from Firestore');
+  } catch (e) { 
+    console.error('[Models] Failed to load settings from Firestore:', e.message);
   }
-} catch (e) { console.error('Failed to load model settings', e); }
+}
 
-function saveSettings() {
-  try {
-    const settings = {};
-    for (const [id, config] of Object.entries(ALL_MODELS)) {
-      settings[id] = config.enabled;
-    }
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-  } catch (e) { console.error('Failed to save model settings', e); }
+// Call init (non-blocking)
+initModelSettings();
+
+function saveSettings(modelId, enabled) {
+  // Save to Firestore (non-blocking)
+  saveModelSettings(modelId, enabled).catch(e => 
+    console.error('[Models] Failed to save to Firestore:', e.message)
+  );
 }
 
 /**
@@ -278,12 +284,9 @@ function setModelEnabled(modelId, enabled) {
     ALL_MODELS[modelId].enabled = enabled;
     console.log(`[Config] Model ${modelId} status updated to ${enabled} in memory.`);
     
-    try {
-      saveSettings(); 
-      console.log(`[Config] Settings saved to file.`);
-    } catch(e) {
-      console.error(`[Config] Error saving settings:`, e);
-    }
+    // Save to Firestore
+    saveSettings(modelId, enabled);
+    console.log(`[Config] Settings saved to Firestore.`);
     
     return true;
   }
@@ -303,19 +306,14 @@ function setProviderEnabled(providerId, enabled) {
     if (config.provider === providerId) {
       if (ALL_MODELS[id].enabled !== enabled) {
         ALL_MODELS[id].enabled = enabled;
+        saveSettings(id, enabled); // Save each to Firestore
         changed = true;
       }
     }
   }
 
   if (changed) {
-    try {
-      saveSettings();
-      console.log(`[Config] Provider update saved to file.`);
-      return true;
-    } catch(e) {
-      console.error(`[Config] Error saving settings:`, e);
-    }
+    console.log(`[Config] Provider ${providerId} models saved to Firestore.`);
   }
   return changed;
 }

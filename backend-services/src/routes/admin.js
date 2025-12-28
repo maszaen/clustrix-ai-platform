@@ -196,6 +196,10 @@ const {
   grantUnlimited, 
   revokeUnlimited,
   getUnlimitedUsers,
+  blockUser,
+  unblockUser,
+  isBlocked,
+  getBlockedUsers,
 } = require('../middleware/rateLimit');
 
 /**
@@ -205,12 +209,14 @@ const {
 router.get('/users', (req, res) => {
   const users = getAllUserStats();
   const unlimitedList = getUnlimitedUsers();
+  const blockedList = getBlockedUsers();
   
-  // Enhance with usage and unlimited status
+  // Enhance with usage, unlimited and blocked status
   const enhancedUsers = users.map(u => ({
     ...u,
     usage: getUserUsage(u.userId),
     isUnlimited: unlimitedList.includes(u.userId),
+    isBlocked: blockedList.includes(u.userId),
   }));
   
   res.json({ users: enhancedUsers, total: enhancedUsers.length });
@@ -267,6 +273,26 @@ router.post('/users/:userId/grant-unlimited', (req, res) => {
 router.post('/users/:userId/revoke-unlimited', (req, res) => {
   const result = revokeUnlimited(req.params.userId);
   console.log(`[Admin] Revoked unlimited from user ${req.params.userId}`);
+  res.json(result);
+});
+
+/**
+ * POST /admin/users/:userId/block
+ * Block user from using the service
+ */
+router.post('/users/:userId/block', (req, res) => {
+  const result = blockUser(req.params.userId);
+  console.log(`[Admin] Blocked user ${req.params.userId}`);
+  res.json(result);
+});
+
+/**
+ * POST /admin/users/:userId/unblock
+ * Unblock user
+ */
+router.post('/users/:userId/unblock', (req, res) => {
+  const result = unblockUser(req.params.userId);
+  console.log(`[Admin] Unblocked user ${req.params.userId}`);
   res.json(result);
 });
 

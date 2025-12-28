@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const { getModelConfig } = require('../config/models');
 const { trackRequest } = require('../services/analytics');
+const { parseThinkingFromResponse } = require('../utils/thinkingParser');
 
 /**
  * POST /api/chat
@@ -153,6 +154,9 @@ async function handleOpenAIChat(req, res, config, messages, options) {
     } finally {
       res.end();
       
+      // Parse thinking from response
+      const parsed = parseThinkingFromResponse(fullContent);
+      
       // Track success request with actual usage
       const inputTokens = usageData?.prompt_tokens || Math.ceil(JSON.stringify(messages).length / 4);
       const outputTokens = usageData?.completion_tokens || Math.ceil(fullContent.length / 4);
@@ -164,7 +168,8 @@ async function handleOpenAIChat(req, res, config, messages, options) {
         model: config.modelId,
         provider: config.provider,
         messages,
-        responsePreview: fullContent,
+        responsePreview: parsed.response || fullContent,
+        thinkingPreview: parsed.thinking,
         inputTokens,
         outputTokens,
         duration: Date.now() - req.analyticsData?.startTime,
@@ -174,6 +179,8 @@ async function handleOpenAIChat(req, res, config, messages, options) {
     }
   } else {
     const data = await response.json();
+    const rawContent = data.choices?.[0]?.message?.content;
+    const parsed = parseThinkingFromResponse(rawContent);
     
     // Track non-streaming request
     const inputTokens = data.usage?.prompt_tokens || Math.ceil(JSON.stringify(messages).length / 4);
@@ -186,7 +193,8 @@ async function handleOpenAIChat(req, res, config, messages, options) {
       model: config.modelId,
       provider: config.provider,
       messages,
-      responsePreview: data.choices?.[0]?.message?.content,
+      responsePreview: parsed.response || rawContent,
+      thinkingPreview: parsed.thinking,
       inputTokens,
       outputTokens,
       duration: Date.now() - req.analyticsData?.startTime,
@@ -278,6 +286,9 @@ async function handleGeminiChat(req, res, config, messages, options) {
     } finally {
       res.end();
       
+      // Parse thinking from response
+      const parsed = parseThinkingFromResponse(fullContent);
+      
       // Track success request with actual usage
       const inputTokens = usageData?.promptTokenCount || Math.ceil(JSON.stringify(messages).length / 4);
       const outputTokens = usageData?.candidatesTokenCount || Math.ceil(fullContent.length / 4);
@@ -289,7 +300,8 @@ async function handleGeminiChat(req, res, config, messages, options) {
         model: config.modelId,
         provider: config.provider,
         messages,
-        responsePreview: fullContent,
+        responsePreview: parsed.response || fullContent,
+        thinkingPreview: parsed.thinking,
         inputTokens,
         outputTokens,
         duration: Date.now() - req.analyticsData?.startTime,
@@ -299,11 +311,12 @@ async function handleGeminiChat(req, res, config, messages, options) {
     }
   } else {
     const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const parsed = parseThinkingFromResponse(rawContent);
     
     // Track non-streaming request
     const inputTokens = data.usageMetadata?.promptTokenCount || Math.ceil(JSON.stringify(messages).length / 4);
-    const outputTokens = data.usageMetadata?.candidatesTokenCount || Math.ceil(content.length / 4);
+    const outputTokens = data.usageMetadata?.candidatesTokenCount || Math.ceil(rawContent.length / 4);
     
     trackRequest({
       userId: req.user?.uid,
@@ -312,7 +325,8 @@ async function handleGeminiChat(req, res, config, messages, options) {
       model: config.modelId,
       provider: config.provider,
       messages,
-      responsePreview: content,
+      responsePreview: parsed.response || rawContent,
+      thinkingPreview: parsed.thinking,
       inputTokens,
       outputTokens,
       duration: Date.now() - req.analyticsData?.startTime,
@@ -406,6 +420,9 @@ async function handleAnthropicChat(req, res, config, messages, options) {
     } finally {
       res.end();
       
+      // Parse thinking from response
+      const parsed = parseThinkingFromResponse(fullContent);
+      
       // Track success request with actual usage
       const inputTokens = usageData?.input_tokens || Math.ceil(JSON.stringify(messages).length / 4);
       const outputTokens = usageData?.output_tokens || Math.ceil(fullContent.length / 4);
@@ -417,7 +434,8 @@ async function handleAnthropicChat(req, res, config, messages, options) {
         model: config.modelId,
         provider: config.provider,
         messages,
-        responsePreview: fullContent,
+        responsePreview: parsed.response || fullContent,
+        thinkingPreview: parsed.thinking,
         inputTokens,
         outputTokens,
         duration: Date.now() - req.analyticsData?.startTime,
@@ -427,11 +445,12 @@ async function handleAnthropicChat(req, res, config, messages, options) {
     }
   } else {
     const data = await response.json();
-    const content = data.content?.[0]?.text || '';
+    const rawContent = data.content?.[0]?.text || '';
+    const parsed = parseThinkingFromResponse(rawContent);
     
     // Track non-streaming request
     const inputTokens = data.usage?.input_tokens || Math.ceil(JSON.stringify(messages).length / 4);
-    const outputTokens = data.usage?.output_tokens || Math.ceil(content.length / 4);
+    const outputTokens = data.usage?.output_tokens || Math.ceil(rawContent.length / 4);
     
     trackRequest({
       userId: req.user?.uid,
@@ -440,7 +459,8 @@ async function handleAnthropicChat(req, res, config, messages, options) {
       model: config.modelId,
       provider: config.provider,
       messages,
-      responsePreview: content,
+      responsePreview: parsed.response || rawContent,
+      thinkingPreview: parsed.thinking,
       inputTokens,
       outputTokens,
       duration: Date.now() - req.analyticsData?.startTime,

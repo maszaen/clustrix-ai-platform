@@ -8,6 +8,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const path = require('path');
 
 const { verifyGoogleToken } = require('./middleware/auth');
 const { rateLimiter } = require('./middleware/rateLimit');
@@ -35,12 +36,27 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' })); // For large PDF/image payloads
 
+// Serve static files from public folder
+app.use('/public', express.static(path.join(__dirname, '../public')));
+
 // Request logging
 app.use(requestLogger);
 
 // Health check (for GCP)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// New admin console (sidebar version) - requires admin secret via query param
+app.get('/console', (req, res) => {
+  const secret = req.query.secret;
+  const validSecret = process.env.ADMIN_SECRET;
+  
+  if (!secret || secret !== validSecret) {
+    return res.status(403).send('Access denied. Append ?secret=YOUR_ADMIN_SECRET to the URL.');
+  }
+  
+  res.sendFile(path.join(__dirname, '../public/admin.html'));
 });
 
 // Protected routes (require Google auth + validation)

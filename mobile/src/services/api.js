@@ -543,6 +543,43 @@ function formatMessagesGemini(messages) {
   return { contents, systemInstruction };
 }
 
+/**
+ * Ensure messages alternate between user and assistant roles
+ * Required by some APIs (Perplexity) that don't allow consecutive messages of the same role
+ * Merges consecutive messages of the same role into one
+ */
+function ensureAlternatingMessages(messages) {
+  if (!messages || messages.length === 0) return messages;
+  
+  const result = [];
+  
+  for (const msg of messages) {
+    // System messages are always kept as-is at the start
+    if (msg.role === 'system') {
+      result.push(msg);
+      continue;
+    }
+    
+    const lastMsg = result[result.length - 1];
+    
+    // If same role as previous non-system message, merge content
+    if (lastMsg && lastMsg.role === msg.role && lastMsg.role !== 'system') {
+      // Handle both string and array content
+      const lastContent = typeof lastMsg.content === 'string' ? lastMsg.content : JSON.stringify(lastMsg.content);
+      const newContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+      lastMsg.content = lastContent + '\n\n' + newContent;
+    } else {
+      result.push({ ...msg });
+    }
+  }
+  
+  // Ensure we end with a user message (required by some APIs)
+  if (result.length > 0 && result[result.length - 1].role === 'assistant') {
+    // Remove trailing empty assistant or let it be - API usually handles this
+  }
+  
+  return result;
+}
 
 /**
  * Create throttled chunk handler - accumulates chunks and flushes every interval
@@ -657,7 +694,11 @@ export async function streamChat({ messages, model, provider, baseUrl, apiKey, o
  */
 async function handlePerplexityRequest({ messages, model, baseUrl, apiKey, onChunk, onThink, onDone, onError, onSearchResults, signal }) {
   try {
-    const formattedMessages = formatMessagesOpenAI(messages, { provider: 'perplexity' });
+    let formattedMessages = formatMessagesOpenAI(messages, { provider: 'perplexity' });
+    
+    // Perplexity requires strict alternating messages: system → user → assistant → user → ...
+    // Merge consecutive messages of the same role to comply
+    formattedMessages = ensureAlternatingMessages(formattedMessages);
     
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',

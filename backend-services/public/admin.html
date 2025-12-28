@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clustrix Console</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    :root {
+      /* Exact colors from Electron dark-contrast-theme */
+      --bg: #161718;
+      --bg-secondary: #1f2123;
+      --bg-hover: #393c3e;
+      --surface: #1a1a1a;
+      --fg: #FFFFFF;
+      --fg-muted: #C8CCD1;
+      --fg-subtle: #7a7e82;
+      --border: #313737;
+      --border-input: #555b5b;
+      --primary: #E0EDFF;
+      --primary-light: #1a2f55;
+      --accent: #0d4299;
+      --success: #62f018;
+      --error: #f01929;
+      --warning: #fae956;
+      
+      /* Spacing */
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 12px;
+      --space-lg: 16px;
+      --space-xl: 24px;
+      --space-2xl: 32px;
+      
+      /* Radius */
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-full: 9999px;
+      
+      /* Layout */
+      --sidebar-w: 260px;
+      --max-w: 1200px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ===== LAYOUT ===== */
+    .app { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      z-index: 100;
+    }
+
+    .sidebar-header {
+      padding: var(--space-lg);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-icon {
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-icon svg { width: 14px; height: 14px; color: #000; }
+
+    .sidebar-nav { 
+      flex: 1; 
+      padding: var(--space-md); 
+      overflow-y: auto;
+    }
+
+    .nav-group { margin-bottom: var(--space-lg); }
+
+    .nav-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fg-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: var(--space-sm) var(--space-md);
+      margin-bottom: var(--space-xs);
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-full);
+      color: var(--fg-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+
+    .nav-item:hover { background: var(--bg-hover); color: var(--fg); }
+    .nav-item.active { background: var(--primary-light); color: var(--primary); }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.8; }
+    .nav-item.active svg { opacity: 1; }
+
+    .sidebar-footer {
+      padding: var(--space-lg);
+      border-top: 1px solid var(--border);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--fg-subtle);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--success);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--success);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    /* Main */
+    .main {
+      flex: 1;
+      margin-left: var(--sidebar-w);
+      min-height: 100vh;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: var(--space-2xl) var(--space-xl);
+      width: 100%;
+    }
+
+    /* ===== HEADER ===== */
+    .page-header {
+      margin-bottom: var(--space-xl);
+      flex-shrink: 0;
+      max-width: 100%;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+
+    .page-subtitle {
+      font-size: 13px;
+      color: var(--fg-subtle);
+    }
+
+    /* Page content - scrollable horizontally for tables on mobile */
+    .page-content {
+      width: 100%;
+      max-width: 100vw;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ===== STATS ===== */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--space-md);
+      margin-bottom: var(--space-xl);
+    }
+
+    .stat-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      transition: border-color 0.2s ease;
+    }
+
+    .stat-card:hover { border-color: var(--border-input); }
+
+    .stat-card.glow {
+      border-color: var(--success);
+      background: linear-gradient(135deg, var(--bg-secondary), rgba(98, 240, 24, 0.05));
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--fg-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 6px;
+    }
+
+    /* ===== CARDS ===== */
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-bottom: var(--space-lg);
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-md) var(--space-lg);
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.015);
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+
+    .card-body { padding: var(--space-lg); }
+    .card-body.flush { padding: 0; }
+
+    /* ===== GRID ===== */
+    .row { display: grid; gap: var(--space-md); }
+    .row-2 { grid-template-columns: repeat(2, 1fr); }
+    .row-3 { grid-template-columns: repeat(3, 1fr); }
+
+    /* ===== CHIPS ===== */
+    .chip-list { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-hover);
+      padding: 6px 12px;
+      border-radius: var(--radius-full);
+      font-size: 12px;
+    }
+
+    .chip-name { font-weight: 600; }
+    .chip-meta { color: var(--fg-subtle); font-size: 11px; }
+
+    /* ===== BUTTONS ===== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #000;
+    }
+
+    .btn-primary:hover { filter: brightness(0.9); }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--fg-muted);
+      border-color: var(--border);
+    }
+
+    .btn-ghost:hover {
+      background: var(--bg-hover);
+      color: var(--fg);
+      border-color: var(--border-input);
+    }
+
+    .btn-success {
+      background: rgba(98, 240, 24, 0.15);
+      color: var(--success);
+      border-color: var(--success);
+    }
+
+    .btn-success:hover {
+      background: rgba(98, 240, 24, 0.25);
+    }
+
+    .btn-danger {
+      background: rgba(240, 25, 41, 0.1);
+      color: var(--error);
+      border-color: rgba(240, 25, 41, 0.4);
+    }
+
+    .btn-danger:hover {
+      background: rgba(240, 25, 41, 0.2);
+      border-color: var(--error);
+    }
+
+    .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+    /* ===== TABLE ===== */
+    .tbl-wrap { 
+      overflow-x: auto; 
+      -webkit-overflow-scrolling: touch;
+      max-width: 100%;
+    }
+
+    table { 
+      width: 100%; 
+      min-width: 600px; /* Force horizontal scroll on small screens */
+      border-collapse: collapse; 
+    }
+
+    th {
+      text-align: left;
+      padding: var(--space-sm) var(--space-lg);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fg-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: var(--space-md) var(--space-lg);
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    tr.clickable { cursor: pointer; }
+
+    /* ===== BADGES ===== */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-success { background: rgba(98, 240, 24, 0.15); color: var(--success); }
+    .badge-error { background: rgba(240, 25, 41, 0.15); color: var(--error); }
+    .badge-muted { background: var(--bg-hover); color: var(--fg-muted); }
+    .badge-primary { background: var(--primary-light); color: var(--primary); }
+
+    /* ===== TOGGLE ===== */
+    .toggle {
+      position: relative;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .toggle input { display: none; }
+
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--border-input);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+
+    .toggle-track::before {
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      left: 3px;
+      top: 3px;
+      background: var(--fg);
+      border-radius: 50%;
+      transition: 0.2s ease;
+    }
+
+    input:checked + .toggle-track { background: var(--primary); }
+    input:checked + .toggle-track::before { transform: translateX(16px); background: #000; }
+    input:disabled + .toggle-track { opacity: 0.3; cursor: not-allowed; }
+
+    /* ===== SEARCH ===== */
+    .search-box {
+      position: relative;
+      margin-bottom: var(--space-lg);
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 10px 14px 10px 40px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--fg);
+      font-size: 13px;
+      transition: border-color 0.2s ease;
+    }
+
+    .search-box input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .search-box input::placeholder { color: var(--fg-subtle); }
+
+    .search-box svg {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 16px;
+      height: 16px;
+      color: var(--fg-subtle);
+    }
+
+    /* ===== PROVIDER BLOCK ===== */
+    .provider {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-bottom: var(--space-md);
+    }
+
+    .provider-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-md) var(--space-lg);
+      background: rgba(255,255,255,0.015);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .provider-name {
+      font-weight: 600;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+
+    .provider-models {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1px;
+      background: var(--border);
+    }
+
+    .model-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-md) var(--space-lg);
+      background: var(--bg-secondary);
+    }
+
+    .model-row:hover { background: var(--bg-hover); }
+    .model-name { font-weight: 500; font-size: 13px; }
+    .model-id { font-size: 11px; color: var(--fg-subtle); font-family: monospace; margin-top: 2px; }
+
+    /* ===== MODAL ===== */
+    .modal-wrap {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      overflow: hidden;
+      padding: 40px 20px;
+    }
+
+    .modal-wrap.open { 
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    .modal {
+      width: 100%;
+      max-width: 700px;
+      max-height: calc(100vh - 80px);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: var(--space-lg) var(--space-xl);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .modal-title { font-size: 16px; font-weight: 600; }
+    .modal-sub { font-size: 12px; color: var(--fg-subtle); margin-top: 2px; }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--fg-muted);
+      font-size: 22px;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+    }
+
+    .modal-close:hover { color: var(--fg); }
+    .modal-body { 
+      padding: var(--space-xl); 
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .section { margin-bottom: var(--space-xl); }
+    .section:last-child { margin-bottom: 0; }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fg-subtle);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: var(--space-md);
+    }
+
+    .log-item {
+      background: var(--surface);
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-sm);
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .log-item:last-child { margin-bottom: 0; }
+
+    .log-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      flex-wrap: wrap;
+    }
+
+    .log-time { color: var(--fg-subtle); }
+    .log-model { color: var(--primary); }
+    .log-error { color: var(--error); margin-top: 4px; }
+
+    .interaction {
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      margin-bottom: var(--space-md);
+    }
+
+    .interaction:last-child { margin-bottom: 0; }
+
+    .interaction-head {
+      display: flex;
+      justify-content: space-between;
+      padding: var(--space-sm) var(--space-md);
+      background: rgba(255,255,255,0.02);
+      font-size: 11px;
+      color: var(--fg-subtle);
+    }
+
+    .interaction-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: var(--space-sm) var(--space-md) 4px;
+    }
+
+    .interaction-label.prompt { color: var(--primary); }
+    .interaction-label.thinking { color: var(--warning); }
+    .interaction-label.response { color: var(--success); }
+
+    .interaction-text {
+      padding: 4px var(--space-md) var(--space-md);
+      font-size: 12px;
+      color: var(--fg-muted);
+      word-break: break-word;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+
+    /* ===== EMPTY ===== */
+    .empty {
+      text-align: center;
+      padding: var(--space-xl);
+      color: var(--fg-subtle);
+      font-size: 13px;
+    }
+
+    /* ===== UTILITIES ===== */
+    .flex { display: flex; }
+    .flex-between { justify-content: space-between; }
+    .flex-center { align-items: center; }
+    .gap-sm { gap: var(--space-sm); }
+    .gap-md { gap: var(--space-md); }
+    .mb-md { margin-bottom: var(--space-md); }
+    .mb-lg { margin-bottom: var(--space-lg); }
+    .text-muted { color: var(--fg-subtle); }
+    .text-sm { font-size: 12px; }
+    .mono { font-family: 'SF Mono', Consolas, monospace; }
+    .strong { font-weight: 600; }
+
+    /* ===== PAGES ===== */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 1100px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .row-2 { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { 
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        width: 280px;
+      }
+      .sidebar.open { transform: translateX(0); }
+      .main { margin-left: 0; }
+      .container { padding: var(--space-lg); }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .mobile-bar { display: flex !important; }
+      .row-3 { grid-template-columns: 1fr; }
+      .modal-wrap { padding: 20px 16px; }
+      .modal { max-height: calc(100vh - 40px); }
+    }
+
+    @media (max-width: 480px) {
+      .stats-row { grid-template-columns: 1fr; }
+      .sidebar { width: 100%; }
+    }
+
+    .mobile-bar {
+      display: none;
+      align-items: center;
+      gap: var(--space-md);
+      padding: var(--space-md) var(--space-lg);
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .mobile-bar .logo {
+      font-size: 14px;
+    }
+
+    .mobile-btn {
+      background: none;
+      border: none;
+      color: var(--fg);
+      cursor: pointer;
+      padding: 8px;
+      border-radius: var(--radius-sm);
+      transition: background 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .mobile-btn:hover { background: var(--bg-hover); }
+
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 99;
+      backdrop-filter: blur(2px);
+    }
+
+    .overlay.open { display: block; }
+
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-input); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Overlay -->
+    <div class="overlay" id="overlay" onclick="toggleNav()"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg>
+          </div>
+          Clustrix Console
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-group">
+          <div class="nav-label">Dashboard</div>
+          <button class="nav-item active" data-page="overview">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+            Overview
+          </button>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-label">Manage</div>
+          <button class="nav-item" data-page="users">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87m-4-12a4 4 0 0 1 0 7.75"/></svg>
+            Users
+          </button>
+          <button class="nav-item" data-page="models">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42m12.72-12.72l1.42-1.42"/></svg>
+            Models
+          </button>
+          <button class="nav-item" data-page="logs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8m8 4H8"/></svg>
+            Logs
+          </button>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-badge">
+          <span class="status-dot"></span>
+          <span>Live Connected</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- Mobile Bar - at top of main content -->
+      <div class="mobile-bar">
+        <button class="mobile-btn" onclick="toggleNav()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+        <div class="logo">
+          <div class="logo-icon" style="width: 20px; height: 20px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg>
+          </div>
+          Clustrix
+        </div>
+      </div>
+
+      <div class="container">
+
+        <!-- OVERVIEW -->
+        <div id="page-overview" class="page active">
+          <div class="page-header">
+            <h1 class="page-title">Overview</h1>
+            <p class="page-subtitle">Real-time monitoring dashboard</p>
+          </div>
+
+          <div class="page-content">
+            <div class="stats-row">
+              <div class="stat-card glow">
+                <div class="stat-value" id="s-online">—</div>
+                <div class="stat-label">Online Now</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="s-requests">—</div>
+                <div class="stat-label">Requests (24h)</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="s-tokens">—</div>
+                <div class="stat-label">Tokens (24h)</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="s-cost">—</div>
+                <div class="stat-label">Est. Cost (24h)</div>
+              </div>
+            </div>
+
+            <div class="row row-2">
+              <div class="card">
+                <div class="card-head">
+                  <span class="card-title">🟢 Online Users</span>
+                  <button class="btn btn-sm btn-ghost" onclick="loadDash()">Refresh</button>
+                </div>
+                <div class="card-body">
+                  <div id="online-users" class="chip-list"><span class="text-muted text-sm">Loading...</span></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <span class="card-title">📊 Top Models (24h)</span>
+                </div>
+                <div class="card-body">
+                  <div id="top-models" class="chip-list"><span class="text-muted text-sm">Loading...</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- USERS -->
+        <div id="page-users" class="page">
+          <div class="page-header flex flex-between flex-center">
+            <div>
+              <h1 class="page-title">Users</h1>
+              <p class="page-subtitle">Manage access and view activity</p>
+            </div>
+            <button class="btn btn-ghost" onclick="loadUsers()">Refresh</button>
+          </div>
+
+          <div class="page-content">
+            <div class="card">
+              <div class="card-body flush tbl-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Email</th>
+                      <th>Requests</th>
+                      <th>Tokens</th>
+                      <th>Usage</th>
+                      <th>Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="users-body">
+                    <tr><td colspan="6" class="empty">Loading...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MODELS -->
+        <div id="page-models" class="page">
+          <div class="page-header">
+            <h1 class="page-title">Models</h1>
+            <p class="page-subtitle">Enable or disable AI models by provider</p>
+          </div>
+
+          <div class="page-content">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input type="text" id="model-search" placeholder="Search models..." oninput="filterModels(this.value)">
+            </div>
+
+            <div id="models-container"></div>
+          </div>
+        </div>
+
+        <!-- LOGS -->
+        <div id="page-logs" class="page">
+          <div class="page-header flex flex-between flex-center">
+            <div>
+              <h1 class="page-title">Logs</h1>
+              <p class="page-subtitle">Live request traffic</p>
+            </div>
+            <button class="btn btn-ghost" onclick="loadLogs()">Refresh</button>
+          </div>
+          <div class="page-content"></div>
+            <div class="card">
+              <div class="card-body flush tbl-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>Device</th>
+                      <th>User</th>
+                      <th>Endpoint</th>
+                      <th>Status</th>
+                      <th>Latency</th>
+                    </tr>
+                  </thead>
+                  <tbody id="logs-body">
+                    <tr><td colspan="6" class="empty">Loading...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- User Modal -->
+  <div id="user-modal" class="modal-wrap" onclick="handleModalBackdrop(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title" id="m-email">User Details</div>
+          <div class="modal-sub" id="m-id"></div>
+        </div>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="row row-3 mb-lg">
+          <div class="stat-card">
+            <div class="stat-value" id="m-requests">—</div>
+            <div class="stat-label">Requests</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="m-tokens">—</div>
+            <div class="stat-label">Tokens</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="m-usage">—</div>
+            <div class="stat-label">Today</div>
+          </div>
+        </div>
+
+        <div class="flex gap-sm mb-lg" style="flex-wrap: wrap;">
+          <button class="btn btn-ghost" onclick="resetLimit()">Reset Limit</button>
+          <button class="btn btn-success" id="m-unlimited" onclick="toggleUnlimited()">Grant Unlimited</button>
+          <button class="btn btn-danger" id="m-block" onclick="toggleBlock()">Block User</button>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Recent Logs</div>
+          <div id="m-logs"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Recent Interactions</div>
+          <div id="m-interactions"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SECRET = new URLSearchParams(location.search).get('secret') || '';
+    const API = p => p + (p.includes('?') ? '&' : '?') + 'secret=' + encodeURIComponent(SECRET);
+    let currentUser = null, userUnlimited = false, userBlocked = false;
+
+    // Nav
+    document.querySelectorAll('.nav-item').forEach(b => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        document.getElementById('page-' + b.dataset.page).classList.add('active');
+        closeNav();
+      });
+    });
+
+    function toggleNav() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('overlay').classList.toggle('open');
+    }
+    function closeNav() {
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('overlay').classList.remove('open');
+    }
+
+    function handleModalBackdrop(event) {
+      if (event.target === event.currentTarget) {
+        closeModal();
+      }
+    }
+
+    // Helpers
+    const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(n);
+    const esc = t => { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
+
+    // Dashboard
+    async function loadDash() {
+      try {
+        const r = await fetch(API('/admin/analytics/dashboard'));
+        const d = await r.json();
+        document.getElementById('s-online').textContent = d.overview?.onlineNow ?? 0;
+        document.getElementById('s-requests').textContent = fmt(d.last24h?.requests ?? 0);
+        document.getElementById('s-tokens').textContent = fmt(d.last24h?.tokens ?? 0);
+        document.getElementById('s-cost').textContent = '$' + (d.last24h?.cost ?? 0).toFixed(2);
+
+        const ou = document.getElementById('online-users');
+        ou.innerHTML = d.onlineUsers?.length
+          ? d.onlineUsers.map(u => `<div class="chip"><span class="chip-name">${u.email}</span><span class="chip-meta">${u.device || '—'}</span></div>`).join('')
+          : '<span class="text-muted text-sm">No users online</span>';
+
+        const tm = document.getElementById('top-models');
+        tm.innerHTML = d.topModels?.length
+          ? d.topModels.map(m => `<div class="chip"><span class="chip-name">${m.model}</span><span class="badge badge-primary">${m.count}×</span></div>`).join('')
+          : '<span class="text-muted text-sm">No data</span>';
+      } catch(e) { console.error(e); }
+    }
+
+    // Users
+    async function loadUsers() {
+      try {
+        const r = await fetch(API('/admin/users'));
+        const d = await r.json();
+        const tb = document.getElementById('users-body');
+        if (!d.users?.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">No users</td></tr>'; return; }
+        tb.innerHTML = d.users.map(u => {
+          const usage = u.isUnlimited ? '∞' : `${u.usage?.used||0}/${u.usage?.limit||50}`;
+          let badge = '<span class="badge badge-muted">Normal</span>';
+          if (u.isBlocked) badge = '<span class="badge badge-error">Blocked</span>';
+          else if (u.isUnlimited) badge = '<span class="badge badge-success">Unlimited</span>';
+          return `<tr class="clickable" onclick="showUser('${u.userId}')">
+            <td><strong>${u.email}</strong></td>
+            <td>${u.totalRequests}</td>
+            <td>${fmt(u.totalTokens)}</td>
+            <td>${usage}</td>
+            <td>${badge}</td>
+            <td><button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();showUser('${u.userId}')">View</button></td>
+          </tr>`;
+        }).join('');
+      } catch(e) { console.error(e); }
+    }
+
+    async function showUser(id) {
+      currentUser = id;
+      document.getElementById('user-modal').classList.add('open');
+      try {
+        const r = await fetch(API('/admin/users/' + id));
+        const u = await r.json();
+        userUnlimited = u.isUnlimited;
+        userBlocked = u.usage?.isBlocked || false;
+        document.getElementById('m-email').textContent = u.email;
+        document.getElementById('m-id').textContent = 'ID: ' + u.userId;
+        document.getElementById('m-requests').textContent = u.totalRequests;
+        document.getElementById('m-tokens').textContent = fmt(u.totalTokens);
+        document.getElementById('m-usage').textContent = u.isUnlimited ? '∞' : `${u.usage?.used||0}/${u.usage?.limit||50}`;
+        
+        const unlimitedBtn = document.getElementById('m-unlimited');
+        unlimitedBtn.textContent = u.isUnlimited ? 'Revoke Unlimited' : 'Grant Unlimited';
+        unlimitedBtn.className = u.isUnlimited ? 'btn btn-ghost' : 'btn btn-success';
+
+        const blockBtn = document.getElementById('m-block');
+        blockBtn.textContent = userBlocked ? 'Unblock User' : 'Block User';
+        blockBtn.className = userBlocked ? 'btn btn-success' : 'btn btn-danger';
+
+        const logs = document.getElementById('m-logs');
+        logs.innerHTML = u.recentLogs?.length
+          ? u.recentLogs.map(l => `<div class="log-item"><div class="log-row"><span class="log-time">${new Date(l.timestamp).toLocaleString()}</span><span class="${l.success?'badge badge-success':'badge badge-error'}">${l.success?'OK':'ERR'}</span><span class="log-model">${l.model}</span><span class="text-muted">${l.inputTokens||0}→${l.outputTokens||0}</span></div>${l.errorMessage?`<div class="log-error">${l.errorMessage}</div>`:''}</div>`).join('')
+          : '<span class="text-muted text-sm">No logs</span>';
+
+        const inter = document.getElementById('m-interactions');
+        inter.innerHTML = u.recentInteractions?.length
+          ? u.recentInteractions.map(i => {
+            const hasThinking = i.thinking && i.thinking.trim();
+            return `<div class="interaction">
+              <div class="interaction-head"><span>${new Date(i.timestamp).toLocaleString()}</span><span>${i.model}</span></div>
+              <div class="interaction-label prompt">Prompt</div>
+              <div class="interaction-text">${esc(i.prompt || '[empty]')}</div>
+              ${hasThinking ? `<div class="interaction-label thinking">Thinking</div><div class="interaction-text">${esc(i.thinking)}</div>` : ''}
+              <div class="interaction-label response">Response</div>
+              <div class="interaction-text">${esc(i.response || '[empty]')}</div>
+            </div>`;
+          }).join('')
+          : '<span class="text-muted text-sm">No interactions</span>';
+      } catch(e) { console.error(e); }
+    }
+
+    function closeModal() {
+      document.getElementById('user-modal').classList.remove('open');
+      currentUser = null;
+    }
+
+    async function resetLimit() {
+      if (!currentUser) return;
+      await fetch(API('/admin/users/' + currentUser + '/reset-limit'), { method: 'POST' });
+      alert('Limit reset!');
+      showUser(currentUser);
+    }
+
+    async function toggleUnlimited() {
+      if (!currentUser) return;
+      await fetch(API('/admin/users/' + currentUser + '/' + (userUnlimited ? 'revoke-unlimited' : 'grant-unlimited')), { method: 'POST' });
+      alert(userUnlimited ? 'Revoked!' : 'Granted!');
+      showUser(currentUser);
+      loadUsers();
+    }
+
+    async function toggleBlock() {
+      if (!currentUser) return;
+      const action = userBlocked ? 'unblock' : 'block';
+      await fetch(API('/admin/users/' + currentUser + '/' + action), { method: 'POST' });
+      alert(userBlocked ? 'User unblocked!' : 'User blocked!');
+      showUser(currentUser);
+      loadUsers();
+    }
+
+    // Models
+    async function loadModels() {
+      try {
+        const r = await fetch(API('/admin/models'));
+        const d = await r.json();
+        const grouped = {};
+        d.models.forEach(m => { if (!grouped[m.provider]) grouped[m.provider] = []; grouped[m.provider].push(m); });
+        const c = document.getElementById('models-container');
+        c.innerHTML = Object.keys(grouped).sort().map(p => `
+          <div class="provider" data-provider="${p}">
+            <div class="provider-head">
+              <div class="provider-name">${p.toUpperCase()} ${grouped[p].some(m=>m.hasApiKey)?'<span class="badge badge-success">Key</span>':'<span class="badge badge-error">No Key</span>'}</div>
+              <label class="toggle"><input type="checkbox" ${grouped[p].every(m=>m.enabled)&&grouped[p].some(m=>m.hasApiKey)?'checked':''} ${grouped[p].some(m=>m.hasApiKey)?'':'disabled'} onchange="toggleProvider('${p}',this.checked)"><span class="toggle-track"></span></label>
+            </div>
+            <div class="provider-models">${grouped[p].map(m => `<div class="model-row" data-id="${m.id}"><div><div class="model-name">${m.name}</div><div class="model-id">${m.id}</div></div><label class="toggle"><input type="checkbox" ${m.enabled&&m.hasApiKey?'checked':''} ${m.hasApiKey?'':'disabled'} onchange="toggleModel('${m.id}',this.checked)"><span class="toggle-track"></span></label></div>`).join('')}</div>
+          </div>
+        `).join('');
+      } catch(e) { console.error(e); }
+    }
+
+    async function toggleModel(id, en) {
+      await fetch(API('/admin/toggle-model'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ modelId: id, enabled: en }) });
+    }
+
+    async function toggleProvider(id, en) {
+      await fetch(API('/admin/toggle-provider'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ providerId: id, enabled: en }) });
+      loadModels();
+    }
+
+    function filterModels(q) {
+      q = q.toLowerCase();
+      document.querySelectorAll('.provider').forEach(p => {
+        const items = p.querySelectorAll('.model-row');
+        let vis = false;
+        items.forEach(i => {
+          const match = i.textContent.toLowerCase().includes(q) || p.dataset.provider.toLowerCase().includes(q);
+          i.style.display = match ? '' : 'none';
+          if (match) vis = true;
+        });
+        p.style.display = vis || !q ? '' : 'none';
+      });
+    }
+
+    // Logs
+    async function loadLogs() {
+      try {
+        const r = await fetch(API('/admin/logs?limit=50'));
+        const d = await r.json();
+        const tb = document.getElementById('logs-body');
+        if (!d.logs?.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">No logs</td></tr>'; return; }
+        tb.innerHTML = d.logs.map(l => `<tr>
+          <td class="text-muted">${new Date(l.timestamp).toLocaleTimeString()}</td>
+          <td>${l.device || '—'}</td>
+          <td>${l.userEmail || 'Anon'}</td>
+          <td><code class="badge badge-muted">${l.method||'REQ'}</code> ${l.path}</td>
+          <td><span class="badge ${l.statusCode<400?'badge-success':'badge-error'}">${l.statusCode}</span></td>
+          <td class="mono">${l.duration}ms</td>
+        </tr>`).join('');
+      } catch(e) { console.error(e); }
+    }
+
+    // Init
+    loadDash(); loadUsers(); loadModels(); loadLogs();
+    setInterval(loadDash, 10000);
+    setInterval(loadLogs, 5000);
+  </script>
+</body>
+</html>

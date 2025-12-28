@@ -12,6 +12,9 @@ RUN npm ci --only=production
 # Copy source code
 COPY src/ ./src/
 
+# Copy public assets (admin panel HTML)
+COPY public/ ./public/
+
 # Expose port
 EXPOSE 8080
 

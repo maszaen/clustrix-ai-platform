@@ -9,7 +9,11 @@ const express = require('express');
 const router = express.Router();
 const { getModelConfig } = require('../config/models');
 const { trackRequest } = require('../services/analytics');
-const { parseThinkingFromResponse } = require('../utils/thinkingParser');
+const { 
+  parseThinkingFromResponse,
+  createThinkingParserState,
+  parseThinkingPatterns
+} = require('../utils/thinkingParser');
 
 /**
  * POST /api/chat
@@ -51,7 +55,7 @@ router.post('/', async (req, res) => {
     
     // Route to appropriate provider
     switch (config.provider) {
-      case 'gemini':
+      case 'google':  // Gemini models use 'google' as provider in models.js
         await handleGeminiChat(req, res, config, messages, { temperature, max_tokens, stream });
         break;
       case 'anthropic':
@@ -127,6 +131,7 @@ async function handleOpenAIChat(req, res, config, messages, options) {
     const decoder = new TextDecoder();
     let fullContent = '';
     let usageData = null;
+    let buffer = ''; // Buffer for split lines
     
     try {
       while (true) {
@@ -134,21 +139,52 @@ async function handleOpenAIChat(req, res, config, messages, options) {
         if (done) break;
         
         const chunk = decoder.decode(value, { stream: true });
-        res.write(chunk);
         
-        // Extract content and usage from chunks
-        const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
+        // Append chunk to buffer and split by newlines
+        buffer += chunk;
+        const lines = buffer.split('\n');
+        
+        // Process all complete lines, keep the last one in buffer (might be incomplete)
+        buffer = lines.pop() || '';
+        
         for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          if (line.trim() === 'data: [DONE]') continue;
+          
           try {
             const data = JSON.parse(line.slice(6));
-            const content = data.choices?.[0]?.delta?.content || '';
-            fullContent += content;
             
-            // Capture usage when provided (OpenAI sends it in final chunk)
+            // Extract thinking (reasoning_content, reasoning, thoughts, etc.)
+            const delta = data.choices?.[0]?.delta;
+            const reasoning = delta?.reasoning_content || delta?.reasoning || delta?.thoughts || delta?.thinking;
+            
+            if (reasoning) {
+              // Forward reasoning/thinking to mobile as standard 'thoughts' field (mobile expects this)
+              res.write(`data: ${JSON.stringify({ choices: [{ delta: { thoughts: reasoning, thinking: reasoning, reasoning_content: reasoning } }] })}\n\n`);
+              // Also track for admin logs? Current parser separates it from content, but native fields don't go into content usually.
+              // So we should append to fullContent IF we want parser to find it, OR handle it separately.
+              // Let's rely on parser for now: append to fullContent wrapped in tags? No, cleaner to track separately?
+              // The current trackRequest uses `parseThinkingFromResponse(fullContent)`.
+              // If native thinking is NOT in content, trackRequest won't see it.
+              // BUT, for now let's just forward to mobile. Admin logs for native thinking might be a future improvement.
+              // WAIT! User said "RESPONSE DI PANEL KADANG GA PAS".
+              // If I don't log thinking, the panel will just show response. That's actually GOOD (requested behavior).
+            }
+            
+            // Extract content
+            const content = delta?.content || '';
+            if (content) {
+              fullContent += content;
+              res.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
+            }
+            
+            // Capture usage
             if (data.usage) {
               usageData = data.usage;
             }
-          } catch {}
+          } catch (e) {
+            // Ignore parse errors
+          }
         }
       }
     } finally {
@@ -222,16 +258,37 @@ async function handleGeminiChat(req, res, config, messages, options) {
   const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
   
   const endpoint = options.stream ? 'streamGenerateContent' : 'generateContent';
-  const url = `${config.baseUrl}/models/${config.modelId}:${endpoint}?key=${config.apiKey}`;
+  const url = `${config.baseUrl}/models/${config.modelId}:${endpoint}?key=${config.apiKey}${options.stream ? '&alt=sse' : ''}`;
   
   const body = {
     contents: geminiMessages,
     systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
+    // Base generation config
     generationConfig: {
-      temperature: options.temperature,
-      maxOutputTokens: options.max_tokens,
+      maxOutputTokens: options.max_tokens || 8192,
     },
   };
+
+  // Configure thinking for supported models
+  // STRICTLY MIMIC MOBILE: Override generationConfig for thinking models to avoid conflicts (e.g. temperature)
+  const modelLower = config.modelId.toLowerCase();
+  const isThinkingModel = modelLower.includes('thinking') || modelLower.includes('2.5-pro') || modelLower.includes('2.5-flash');
+  
+  if (isThinkingModel) {
+    // Mobile app sets specific config for thinking
+    body.generationConfig = {
+      maxOutputTokens: 8192, // Enforce sufficient tokens for thinking
+      thinkingConfig: {
+        thinkingBudget: modelLower.includes('2.5-pro') ? 16384 : 8192,
+        includeThoughts: true
+      }
+    };
+  } else {
+    // Non-thinking models get temperature
+    if (options.temperature !== undefined) {
+      body.generationConfig.temperature = options.temperature;
+    }
+  }
   
   const response = await fetch(url, {
     method: 'POST',
@@ -252,6 +309,8 @@ async function handleGeminiChat(req, res, config, messages, options) {
     const decoder = new TextDecoder();
     let fullContent = '';
     let usageData = null;
+    let buffer = '';
+    let parserState = createThinkingParserState();
     
     try {
       while (true) {
@@ -259,17 +318,63 @@ async function handleGeminiChat(req, res, config, messages, options) {
         if (done) break;
         
         const text = decoder.decode(value, { stream: true });
-        // Convert Gemini stream format to OpenAI SSE format
-        const lines = text.split('\n').filter(l => l.trim());
+        buffer += text;
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep partial line
+        
         for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          
           try {
-            const data = JSON.parse(line);
-            const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            if (content) {
-              fullContent += content;
-              res.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
-            }
+            const data = JSON.parse(line.slice(6));
             
+            // Handle native Gemini thinking (thought: true) or text parts
+            const parts = data.candidates?.[0]?.content?.parts || [];
+            
+            for (const part of parts) {
+              // 1. Native thinking part (Gemini 2.5 Pro / Flash Thinking native mode)
+              if (part.thought === true && part.text) {
+                 res.write(`data: ${JSON.stringify({ choices: [{ delta: { thoughts: part.text, thinking: part.text, reasoning_content: part.text } }] })}\n\n`);
+                 // Native thoughts are separate, so we don't append to fullContent (clean response)
+              } else if (part.text) {
+                // 2. Text part - Use Stateful Parsing for Tags/Regex 
+                // This handles <think>...</think>, *(Internal Reasoning: ...)*, etc across chunks
+                const parsed = parseThinkingPatterns(part.text, parserState);
+                
+                // Update state for next chunk
+                parserState.partialTag = parsed.partialTag;
+                parserState.insideThinkingBlock = parsed.insideThinkingBlock;
+                parserState.currentBlockType = parsed.currentBlockType;
+                parserState.hasSeenContent = parsed.hasSeenContent; // Should this update state? yes returned object has it.
+
+                // Send thinking content found in this chunk
+                if (parsed.thinkingText) {
+                   res.write(`data: ${JSON.stringify({ choices: [{ delta: { thoughts: parsed.thinkingText, thinking: parsed.thinkingText, reasoning_content: parsed.thinkingText } }] })}\n\n`);
+                }
+                
+                // Send cleaned content (real response)
+                if (parsed.cleanedContent) {
+                   res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: parsed.cleanedContent } }] })}\n\n`);
+                   fullContent += parsed.cleanedContent;
+                }
+              }
+            }
+
+            // 3. Metadata thinking check (from main.js logic)
+            const candidateThoughts = data.candidates?.[0]?.groundingMetadata?.thoughts ||
+                                      data.candidates?.[0]?.thoughts ||
+                                      data.modelThoughts;
+            
+            if (candidateThoughts) {
+               const thoughtText = typeof candidateThoughts === 'string' 
+                 ? candidateThoughts 
+                 : JSON.stringify(candidateThoughts);
+               
+               if (thoughtText) {
+                 res.write(`data: ${JSON.stringify({ choices: [{ delta: { thoughts: thoughtText, thinking: thoughtText, reasoning_content: thoughtText } }] })}\n\n`);
+               }
+            }
+
             // Capture usage metadata (Gemini sends it in chunks)
             if (data.usageMetadata) {
               usageData = data.usageMetadata;
@@ -384,6 +489,7 @@ async function handleAnthropicChat(req, res, config, messages, options) {
     const decoder = new TextDecoder();
     let fullContent = '';
     let usageData = null;
+    let buffer = '';
     
     try {
       while (true) {
@@ -391,15 +497,31 @@ async function handleAnthropicChat(req, res, config, messages, options) {
         if (done) break;
         
         const text = decoder.decode(value, { stream: true });
-        // Convert Anthropic stream format to OpenAI SSE format
-        const lines = text.split('\n').filter(l => l.startsWith('data: '));
+        buffer += text;
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
         for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          if (line.trim() === 'data: [DONE]') continue;
+          
           try {
             const data = JSON.parse(line.slice(6));
+             
             if (data.type === 'content_block_delta') {
-              const content = data.delta?.text || '';
-              fullContent += content;
-              res.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
+              const delta = data.delta;
+              
+              if (delta?.type === 'thinking_delta' && delta.thinking) {
+                 // Forward native thinking to mobile
+                 fullContent += delta.thinking; // Log it all, parser fixes it later
+                 res.write(`data: ${JSON.stringify({ choices: [{ delta: { thoughts: delta.thinking, thinking: delta.thinking } }] })}\n\n`);
+              } else {
+                 const content = delta?.text || '';
+                 if (content) {
+                   fullContent += content;
+                   res.write(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
+                 }
+              }
             }
             
             // Capture usage (Anthropic sends it in message_delta or message_stop)

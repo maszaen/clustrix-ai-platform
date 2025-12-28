@@ -30,12 +30,22 @@ const ONLINE_TIMEOUT_MS = 5 * 60 * 1000; // 5 min = offline
 const SAVE_INTERVAL_MS = 5 * 60 * 1000; // Save to Firestore every 5 minutes
 
 // Load user stats from Firestore on init
+// Load user stats from Firestore on init
 (async function initAnalytics() {
   try {
     const stats = await loadAllUserStats();
     if (stats.size > 0) {
-      analytics.userStats = stats;
-      console.log(`[Analytics] Loaded ${stats.size} user stats from Firestore`);
+      console.log(`[Analytics] Loading ${stats.size} user stats from Firestore...`);
+      for (const [userId, userStat] of stats) {
+        // Merge with existing in-memory stats if any (race condition handling)
+        if (analytics.userStats.has(userId)) {
+          const current = analytics.userStats.get(userId);
+          analytics.userStats.set(userId, { ...userStat, ...current });
+        } else {
+          analytics.userStats.set(userId, userStat);
+        }
+      }
+      console.log(`[Analytics] Analytics initialized.`);
     }
   } catch (e) {
     console.error('[Analytics] Failed to load user stats:', e.message);
@@ -271,6 +281,11 @@ function updateUserStats(userId, userEmail, request) {
     success: request.success,
   });
   if (stats.recentInteractions.length > 5) stats.recentInteractions.pop();
+
+  // Save to DB (fire and forget)
+  saveUserStats(userId, stats).catch(err => 
+    console.error(`[Analytics] Failed to save stats for ${userId}:`, err.message)
+  );
 }
 
 /**

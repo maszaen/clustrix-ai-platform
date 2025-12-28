@@ -1262,6 +1262,7 @@ export async function streamAgenticChat({
           messages: conversationMessages,
           signal,
           onChunk,
+          onThink,
           onToolCall,
           onToolResult,
           onDone,

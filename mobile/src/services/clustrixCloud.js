@@ -119,6 +119,7 @@ export async function streamCloudChat({
   messages,
   signal,
   onChunk,
+  onThink,
   onDone,
   onError,
   temperature,
@@ -152,6 +153,7 @@ export async function streamCloudChat({
 
     let buffer = '';
     let lastIndex = 0;
+    let usageData = null;  // Track usage from backend
 
     xhr.onprogress = () => {
       const newData = xhr.responseText.slice(lastIndex);
@@ -168,7 +170,21 @@ export async function streamCloudChat({
         
         try {
           const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
+          
+          // Capture usage event from backend
+          if (parsed.usage) {
+            usageData = parsed.usage;
+          }
+          
+          const delta = parsed.choices?.[0]?.delta;
+          const content = delta?.content;
+          
+          // Check for any potential thinking key
+          const thoughts = delta?.thoughts || delta?.thinking || delta?.reasoning || delta?.reasoning_content;
+          
+          if (thoughts) {
+            onThink?.(thoughts);
+          }
           if (content) {
             onChunk?.(content);
           }
@@ -187,7 +203,7 @@ export async function streamCloudChat({
         } catch {}
         onError?.(msg);
       } else {
-        onDone?.();
+        onDone?.({ usage: usageData });
       }
       resolve();
     };
@@ -231,6 +247,7 @@ export async function streamCloudAgentic({
   messages,
   signal,
   onChunk,
+  onThink,
   onToolCall,
   onToolResult,
   onDone,
@@ -266,6 +283,7 @@ export async function streamCloudAgentic({
 
     let buffer = '';
     let lastIndex = 0;
+    let usageData = null;  // Track usage from backend (may be cumulative for agentic)
 
     xhr.onprogress = () => {
       const newData = xhr.responseText.slice(lastIndex);
@@ -283,6 +301,18 @@ export async function streamCloudAgentic({
         try {
           const parsed = JSON.parse(data);
           
+          // Capture usage event from backend (incremental for agentic)
+          if (parsed.usage) {
+            // Accumulate usage for multi-iteration agentic calls
+            if (!usageData) {
+              usageData = parsed.usage;
+            } else {
+              usageData.prompt_tokens = (usageData.prompt_tokens || 0) + (parsed.usage.prompt_tokens || 0);
+              usageData.completion_tokens = (usageData.completion_tokens || 0) + (parsed.usage.completion_tokens || 0);
+              usageData.total_tokens = (usageData.total_tokens || 0) + (parsed.usage.total_tokens || 0);
+            }
+          }
+          
           // Handle tool result (triggers waiting for iteration loader)
           if (parsed.tool_result) {
             onToolResult?.({
@@ -294,7 +324,13 @@ export async function streamCloudAgentic({
           }
           
           // Handle content chunk (command-input/command-output tags are now inside content)
-          const content = parsed.choices?.[0]?.delta?.content;
+          const delta = parsed.choices?.[0]?.delta;
+          const content = delta?.content;
+          const thoughts = delta?.thoughts || delta?.thinking || delta?.reasoning || delta?.reasoning_content;
+
+          if (thoughts) {
+             onThink?.(thoughts);
+          }
           if (content) {
             onChunk?.(content);
           }
@@ -313,7 +349,7 @@ export async function streamCloudAgentic({
         } catch {}
         onError?.(msg);
       } else {
-        onDone?.();
+        onDone?.({ usage: usageData });
       }
       resolve();
     };
@@ -378,6 +414,7 @@ export async function streamCloudImageGen({
 
     let buffer = '';
     let lastIndex = 0;
+    let usageData = null;  // Track usage from backend
 
     xhr.onprogress = () => {
       const newData = xhr.responseText.slice(lastIndex);
@@ -394,6 +431,18 @@ export async function streamCloudImageGen({
         
         try {
           const parsed = JSON.parse(data);
+          
+          // Capture usage event from backend
+          if (parsed.usage) {
+            // Accumulate usage for multi-iteration image gen calls
+            if (!usageData) {
+              usageData = parsed.usage;
+            } else {
+              usageData.prompt_tokens = (usageData.prompt_tokens || 0) + (parsed.usage.prompt_tokens || 0);
+              usageData.completion_tokens = (usageData.completion_tokens || 0) + (parsed.usage.completion_tokens || 0);
+              usageData.total_tokens = (usageData.total_tokens || 0) + (parsed.usage.total_tokens || 0);
+            }
+          }
           
           // Handle image result separately (not stored in message content)
           if (parsed.image_result) {
@@ -430,7 +479,7 @@ export async function streamCloudImageGen({
         } catch {}
         onError?.(msg);
       } else {
-        onDone?.();
+        onDone?.({ usage: usageData });
       }
       resolve();
     };

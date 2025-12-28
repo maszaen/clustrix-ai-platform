@@ -646,6 +646,7 @@ export async function streamChat({ messages, model, provider, baseUrl, apiKey, o
       messages,
       signal,
       onChunk,
+      onThink,
       onDone,
       onError,
     });

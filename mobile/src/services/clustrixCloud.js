@@ -32,6 +32,102 @@ async function getFreshToken(fallbackToken) {
 }
 
 /**
+ * Format messages with attachments for cloud API
+ * Converts images/files to OpenAI-compatible multimodal format
+ * Same logic as formatMessagesOpenAI in api.js
+ */
+function formatMessagesForCloud(messages) {
+  return messages
+    .filter(m => {
+      // Filter out empty assistant messages
+      if (m.role !== 'assistant') return true;
+      return m.content && m.content.trim().length > 0;
+    })
+    .map(m => {
+      // Check if message has attachments
+      const images = m.attachments?.filter(a => a.type === 'image' && a.base64) || [];
+      const readableFiles = m.attachments?.filter(a => a.type === 'file' && a.textContent) || [];
+      const pdfDocs = m.attachments?.filter(a => 
+        a.type === 'file' && a.base64 && !a.textContent && 
+        (a.mimeType === 'application/pdf' || a.name?.toLowerCase().endsWith('.pdf'))
+      ) || [];
+      const otherDocs = m.attachments?.filter(a => 
+        a.type === 'file' && a.base64 && !a.textContent && 
+        a.mimeType !== 'application/pdf' && !a.name?.toLowerCase().endsWith('.pdf')
+      ) || [];
+      const unreadableFiles = m.attachments?.filter(a => a.type === 'file' && !a.textContent && !a.base64) || [];
+      
+      // Cloud backend supports PDFs via vision
+      const documentsToInclude = [...pdfDocs, ...otherDocs];
+      
+      const hasAttachments = images.length > 0 || readableFiles.length > 0 || 
+                             documentsToInclude.length > 0 || unreadableFiles.length > 0;
+      
+      if (hasAttachments && m.role === 'user') {
+        // Build text content with file contents
+        let textParts = [];
+        
+        // Add readable file contents first
+        for (const file of readableFiles) {
+          textParts.push(`[File: ${file.name}]\n${file.textContent}\n[End File]`);
+        }
+        
+        // Mention unreadable binary files
+        for (const file of unreadableFiles) {
+          textParts.push(`[Attached file: ${file.name} (${file.mimeType || 'binary'}) - Content cannot be read directly]`);
+        }
+        
+        // Add user text
+        if (m.content?.trim()) {
+          textParts.push(m.content);
+        }
+        
+        const fullText = textParts.join('\n\n');
+        
+        // If has images or documents, use multi-modal format
+        if (images.length > 0 || documentsToInclude.length > 0) {
+          const content = [];
+          
+          // Add images first
+          for (const img of images) {
+            content.push({
+              type: 'image_url',
+              image_url: {
+                url: `data:${img.mimeType || 'image/jpeg'};base64,${img.base64}`,
+                detail: 'auto'
+              }
+            });
+          }
+          
+          // Add PDF/documents as images
+          for (const doc of documentsToInclude) {
+            content.push({
+              type: 'image_url',
+              image_url: {
+                url: `data:${doc.mimeType || 'application/pdf'};base64,${doc.base64}`,
+                detail: 'auto'
+              }
+            });
+          }
+          
+          // Add text
+          if (fullText.trim()) {
+            content.push({ type: 'text', text: fullText });
+          }
+          
+          return { role: m.role, content };
+        }
+        
+        // Text only (with file contents)
+        return { role: m.role, content: fullText };
+      }
+      
+      // No attachments - return as-is
+      return { role: m.role, content: m.content };
+    });
+}
+
+/**
  * Get available models from Clustrix Cloud
  */
 export async function getCloudModels(idToken, userEmail) {
@@ -134,6 +230,9 @@ export async function streamCloudChat({
     return;
   }
   
+  // Format messages with attachments (same as local mode)
+  const formattedMessages = formatMessagesForCloud(messages);
+  
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     
@@ -215,7 +314,7 @@ export async function streamCloudChat({
 
     xhr.send(JSON.stringify({
       model,
-      messages,
+      messages: formattedMessages,
       stream: true,
       temperature,
       max_tokens,
@@ -361,7 +460,7 @@ export async function streamCloudAgentic({
 
     xhr.send(JSON.stringify({
       model,
-      messages,
+      messages: formatMessagesForCloud(messages),
       stream: true,
       temperature,
       max_tokens,
@@ -491,7 +590,7 @@ export async function streamCloudImageGen({
 
     xhr.send(JSON.stringify({
       model,
-      messages,
+      messages: formatMessagesForCloud(messages),
       imageModel,
       stream: true,
       temperature,

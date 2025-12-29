@@ -1380,7 +1380,14 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     
     const stableStreamingId = `streaming-retry-${Date.now()}`;
     setStreamingMessageId(stableStreamingId);
-    log('[Retry] Streaming started with ID:', stableStreamingId);
+    
+    // Calculate expected message index for streaming message (SAMA seperti handleSend)
+    // After deleting AI message, the new AI will take the same index
+    const lastMsgIndex = messages.length > 0 ? (messages[messages.length - 1].message_index ?? messages.length - 1) : -1;
+    const expectedAssistantIndex = lastMsgIndex + 1; // Next index after current last message
+    setStreamingMessageIndex(expectedAssistantIndex);
+    
+    log('[Retry] Streaming started with ID:', stableStreamingId, 'index:', expectedAssistantIndex);
 
     let fullContent = '';
     let fullThinking = '';

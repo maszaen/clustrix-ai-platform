@@ -15,6 +15,63 @@ const {
   createThinkingParserState,
   parseThinkingPatterns
 } = require('../utils/thinkingParser');
+const { checkProviderTokenLimit, trackProviderTokens } = require('../middleware/rateLimit');
+
+/**
+ * Convert OpenAI-style content to Gemini parts format
+ * Handles both string content and multimodal array content
+ */
+function convertToGeminiParts(content) {
+  // Simple string content
+  if (typeof content === 'string') {
+    return [{ text: content }];
+  }
+  
+  // Multimodal array content (OpenAI format)
+  if (Array.isArray(content)) {
+    const parts = [];
+    
+    for (const item of content) {
+      if (item.type === 'text' && item.text) {
+        // Text part
+        parts.push({ text: item.text });
+      } else if (item.type === 'image_url' && item.image_url?.url) {
+        // Image part - convert from data URL to Gemini inline_data format
+        const url = item.image_url.url;
+        
+        if (url.startsWith('data:')) {
+          // Parse data URL: data:mime/type;base64,DATA
+          const matches = url.match(/^data:([^;]+);base64,(.+)$/);
+          if (matches) {
+            const mimeType = matches[1];
+            const base64Data = matches[2];
+            
+            parts.push({
+              inline_data: {
+                mime_type: mimeType,
+                data: base64Data,
+              }
+            });
+          }
+        } else {
+          // External URL - use file_data (Gemini supports this for some URLs)
+          parts.push({
+            file_data: {
+              mime_type: 'image/jpeg', // Default, Gemini will detect
+              file_uri: url,
+            }
+          });
+        }
+      }
+    }
+    
+    // Ensure at least one part exists
+    return parts.length > 0 ? parts : [{ text: '' }];
+  }
+  
+  // Fallback
+  return [{ text: String(content || '') }];
+}
 
 /**
  * POST /api/chat
@@ -45,6 +102,12 @@ router.post('/', async (req, res) => {
     }
     
     console.log(`[CHAT] User ${req.user.email} requesting ${model} (${config.provider})`);
+    
+    // Check provider token limit BEFORE making request
+    const providerLimitError = checkProviderTokenLimit(req.user.uid, config.provider);
+    if (providerLimitError) {
+      return res.status(429).json(providerLimitError);
+    }
     
     // Store response data for analytics
     req.analyticsData = {
@@ -229,6 +292,9 @@ async function handleOpenAIChat(req, res, config, messages, options) {
         success: true,
         mode: 'chat',
       });
+      
+      // Track provider token usage for rate limiting
+      trackProviderTokens(req.user?.uid, config.provider, inputTokens + outputTokens);
     }
   } else {
     const data = await response.json();
@@ -255,6 +321,9 @@ async function handleOpenAIChat(req, res, config, messages, options) {
       mode: 'chat',
     });
     
+    // Track provider token usage for rate limiting
+    trackProviderTokens(req.user?.uid, config.provider, inputTokens + outputTokens);
+    
     res.json(data);
   }
 }
@@ -263,12 +332,12 @@ async function handleOpenAIChat(req, res, config, messages, options) {
  * Handle Gemini chat
  */
 async function handleGeminiChat(req, res, config, messages, options) {
-  // Convert to Gemini format
+  // Convert to Gemini format - handle multimodal content
   const geminiMessages = messages
     .filter(m => m.role !== 'system')
     .map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }],
+      parts: convertToGeminiParts(m.content),
     }));
   
   // Extract system prompt
@@ -441,6 +510,9 @@ async function handleGeminiChat(req, res, config, messages, options) {
         success: true,
         mode: 'chat',
       });
+      
+      // Track provider token usage for rate limiting
+      trackProviderTokens(req.user?.uid, config.provider, inputTokens + outputTokens);
     }
   } else {
     const data = await response.json();
@@ -467,6 +539,9 @@ async function handleGeminiChat(req, res, config, messages, options) {
       mode: 'chat',
     });
     
+    // Track provider token usage for rate limiting
+    trackProviderTokens(req.user?.uid, config.provider, inputTokens + outputTokens);
+    
     res.json({
       choices: [{ message: { role: 'assistant', content } }],
       usage: data.usageMetadata,
@@ -475,14 +550,79 @@ async function handleGeminiChat(req, res, config, messages, options) {
 }
 
 /**
+ * Convert OpenAI-style content to Anthropic format
+ * Anthropic uses different structure for images
+ */
+function convertToAnthropicContent(content) {
+  // Simple string content
+  if (typeof content === 'string') {
+    return content;
+  }
+  
+  // Multimodal array content (OpenAI format -> Anthropic format)
+  if (Array.isArray(content)) {
+    const parts = [];
+    
+    for (const item of content) {
+      if (item.type === 'text' && item.text) {
+        // Text part - same format
+        parts.push({ type: 'text', text: item.text });
+      } else if (item.type === 'image_url' && item.image_url?.url) {
+        // Image part - convert from OpenAI to Anthropic format
+        const url = item.image_url.url;
+        
+        if (url.startsWith('data:')) {
+          // Parse data URL: data:mime/type;base64,DATA
+          const matches = url.match(/^data:([^;]+);base64,(.+)$/);
+          if (matches) {
+            const mediaType = matches[1];
+            const base64Data = matches[2];
+            
+            parts.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: base64Data,
+              }
+            });
+          }
+        } else {
+          // External URL - Anthropic supports URL directly
+          parts.push({
+            type: 'image',
+            source: {
+              type: 'url',
+              url: url,
+            }
+          });
+        }
+      }
+    }
+    
+    return parts.length > 0 ? parts : content;
+  }
+  
+  return content;
+}
+
+/**
  * Handle Anthropic chat
  */
 async function handleAnthropicChat(req, res, config, messages, options) {
   const url = `${config.baseUrl}/messages`;
   
-  // Extract system prompt
-  const systemPrompt = messages.find(m => m.role === 'system')?.content;
-  const chatMessages = messages.filter(m => m.role !== 'system');
+  // Extract system prompt (handle multimodal system prompt)
+  const systemMsg = messages.find(m => m.role === 'system');
+  const systemPrompt = systemMsg ? (typeof systemMsg.content === 'string' ? systemMsg.content : systemMsg.content) : undefined;
+  
+  // Convert messages to Anthropic format
+  const chatMessages = messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({
+      role: m.role,
+      content: convertToAnthropicContent(m.content),
+    }));
   
   const body = {
     model: config.modelId,
@@ -603,6 +743,9 @@ async function handleAnthropicChat(req, res, config, messages, options) {
         success: true,
         mode: 'chat',
       });
+      
+      // Track provider token usage for rate limiting
+      trackProviderTokens(req.user?.uid, config.provider, inputTokens + outputTokens);
     }
   } else {
     const data = await response.json();
@@ -628,6 +771,9 @@ async function handleAnthropicChat(req, res, config, messages, options) {
       success: true,
       mode: 'chat',
     });
+    
+    // Track provider token usage for rate limiting
+    trackProviderTokens(req.user?.uid, config.provider, inputTokens + outputTokens);
     
     res.json({
       choices: [{ message: { role: 'assistant', content } }],

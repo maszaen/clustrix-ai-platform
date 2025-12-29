@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const { getModelConfig } = require('../config/models');
 const { calculateCost } = require('../config/pricing');
+const { checkProviderTokenLimit, trackProviderTokens } = require('../middleware/rateLimit');
 
 // ===================================================================
 // TOOL DEFINITIONS
@@ -245,6 +246,12 @@ router.post('/', async (req, res) => {
     
     console.log(`[AGENTIC] User ${req.user.email} requesting ${model} (${config.provider})`);
     
+    // Check provider token limit BEFORE making request
+    const providerLimitError = checkProviderTokenLimit(req.user.uid, config.provider);
+    if (providerLimitError) {
+      return res.status(429).json(providerLimitError);
+    }
+    
     // Search config from env
     const searchConfig = {
       tavilyApiKey: process.env.TAVILY_API_KEY,
@@ -324,6 +331,9 @@ router.post('/', async (req, res) => {
           success: true,
           mode: 'agentic',
         });
+        
+        // Track provider token usage for rate limiting
+        trackProviderTokens(req.user?.uid, config.provider, totalInputTokens + totalOutputTokens);
         
         if (stream) {
           // Send usage event before [DONE] so frontend can display token count + cost
@@ -410,6 +420,9 @@ router.post('/', async (req, res) => {
       success: true,
       mode: 'agentic',
     });
+    
+    // Track provider token usage for rate limiting (even on max iterations)
+    trackProviderTokens(req.user?.uid, config.provider, totalInputTokens + totalOutputTokens);
     
     if (stream) {
       // Send usage event before [DONE]

@@ -11,7 +11,7 @@
  *          Local Mode = full privacy, no data sent
  */
 
-const { saveUserStats, loadAllUserStats } = require('./database');
+const { saveUserStats, loadAllUserStats, saveRequestLog, loadRequestLogs, deleteOldRequestLogs } = require('./database');
 
 // In-memory storage (for production, use Redis/PostgreSQL)
 const analytics = {
@@ -33,6 +33,7 @@ const SAVE_INTERVAL_MS = 5 * 60 * 1000; // Save to Firestore every 5 minutes
 // Load user stats from Firestore on init
 (async function initAnalytics() {
   try {
+    // Load user stats
     const stats = await loadAllUserStats();
     if (stats.size > 0) {
       console.log(`[Analytics] Loading ${stats.size} user stats from Firestore...`);
@@ -45,10 +46,18 @@ const SAVE_INTERVAL_MS = 5 * 60 * 1000; // Save to Firestore every 5 minutes
           analytics.userStats.set(userId, userStat);
         }
       }
-      console.log(`[Analytics] Analytics initialized.`);
     }
+    
+    // Load recent request logs (last 24h for dashboard)
+    const requests = await loadRequestLogs(24, MAX_REQUESTS_LOG);
+    if (requests.length > 0) {
+      console.log(`[Analytics] Loading ${requests.length} request logs from Firestore...`);
+      analytics.requests = requests;
+    }
+    
+    console.log(`[Analytics] Analytics initialized.`);
   } catch (e) {
-    console.error('[Analytics] Failed to load user stats:', e.message);
+    console.error('[Analytics] Failed to load analytics data:', e.message);
   }
 })();
 
@@ -60,6 +69,25 @@ setInterval(() => {
     );
   }
 }, SAVE_INTERVAL_MS);
+
+// Cleanup old request logs every 6 hours (delete logs older than 7 days)
+setInterval(async () => {
+  try {
+    let deleted = 0;
+    let batch;
+    // Keep deleting in batches until no more old logs
+    do {
+      batch = await deleteOldRequestLogs(7);
+      deleted += batch;
+    } while (batch > 0);
+    
+    if (deleted > 0) {
+      console.log(`[Analytics] Cleanup: deleted ${deleted} request logs older than 7 days`);
+    }
+  } catch (e) {
+    console.error('[Analytics] Cleanup failed:', e.message);
+  }
+}, 6 * 60 * 60 * 1000); // Every 6 hours
 
 // Cost estimates per 1M tokens (approximate, update as needed)
 const COST_PER_MILLION = {
@@ -203,6 +231,11 @@ function trackRequest({
   if (analytics.requests.length > MAX_REQUESTS_LOG) {
     analytics.requests.pop();
   }
+  
+  // Save to Firestore (fire and forget)
+  saveRequestLog(request).catch(err => 
+    console.error('[Analytics] Failed to save request log:', err.message)
+  );
   
   // Update user stats
   updateUserStats(userId, userEmail, request);

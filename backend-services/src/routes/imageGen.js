@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const { getModelConfig } = require('../config/models');
 const { calculateCost } = require('../config/pricing');
+const { checkProviderTokenLimit, trackProviderTokens } = require('../middleware/rateLimit');
 
 // ===================================================================
 // IMAGE GENERATION SUPPORT MAP
@@ -366,6 +367,12 @@ router.post('/', async (req, res) => {
     
     console.log(`[IMAGE-GEN] User ${req.user.email} requesting ${model} (${config.provider})`);
     
+    // Check provider token limit BEFORE making request
+    const providerLimitError = checkProviderTokenLimit(req.user.uid, config.provider);
+    if (providerLimitError) {
+      return res.status(429).json(providerLimitError);
+    }
+    
     // Image generation config
     const imageConfig = {
       provider: config.provider,
@@ -437,6 +444,9 @@ router.post('/', async (req, res) => {
           success: true,
           mode: 'image-gen',
         });
+        
+        // Track provider token usage for rate limiting
+        trackProviderTokens(req.user?.uid, config.provider, totalInputTokens + totalOutputTokens);
         
         if (stream) {
           // Send usage event before [DONE] so frontend can display token count + cost
@@ -525,6 +535,9 @@ router.post('/', async (req, res) => {
       success: true,
       mode: 'image-gen',
     });
+    
+    // Track provider token usage for rate limiting (even on max iterations)
+    trackProviderTokens(req.user?.uid, config.provider, totalInputTokens + totalOutputTokens);
     
     if (stream) {
       // Send usage event before [DONE]

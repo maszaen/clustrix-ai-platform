@@ -24,7 +24,7 @@ const PROVIDER_URLS = {
   zhipu: 'https://open.bigmodel.cn/api/paas/v4',
   bigmodel: 'https://open.bigmodel.cn/api/paas/v4',
   perplexity: 'https://api.perplexity.ai',
-  megallm: 'https://api.megallm.xyz/v1',
+  megallm: 'https://ai.megallm.io/v1',
   deepseek: 'https://api.deepseek.com/v1',
   mistral: 'https://api.mistral.ai/v1',
   cerebras: 'https://api.cerebras.ai/v1',

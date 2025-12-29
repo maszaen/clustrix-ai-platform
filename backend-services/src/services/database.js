@@ -212,6 +212,91 @@ async function saveAnalyticsSummary(date, summary) {
 }
 
 // ===================================================================
+// REQUEST LOGS (Individual request persistence)
+// ===================================================================
+
+/**
+ * Save individual request log to Firestore
+ * Uses request ID as document ID for deduplication
+ */
+async function saveRequestLog(request) {
+  const db = getDb();
+  if (!db) return;
+  
+  try {
+    await db.collection('requestLogs').doc(request.id).set({
+      ...request,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    console.error('[DB] Error saving request log:', err.message);
+  }
+}
+
+/**
+ * Load recent request logs from Firestore
+ * @param {number} hours - Load requests from last N hours (default 24)
+ * @param {number} limit - Max number of requests to load (default 10000)
+ */
+async function loadRequestLogs(hours = 24, limit = 10000) {
+  const db = getDb();
+  if (!db) return [];
+  
+  try {
+    const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+    
+    const snapshot = await db.collection('requestLogs')
+      .where('timestamp', '>=', cutoffTime)
+      .orderBy('timestamp', 'desc')
+      .limit(limit)
+      .get();
+    
+    const requests = [];
+    snapshot.forEach(doc => {
+      requests.push(doc.data());
+    });
+    
+    console.log(`[DB] Loaded ${requests.length} request logs from last ${hours}h`);
+    return requests;
+  } catch (err) {
+    console.error('[DB] Error loading request logs:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Delete old request logs (cleanup job)
+ * @param {number} daysOld - Delete requests older than N days
+ */
+async function deleteOldRequestLogs(daysOld = 7) {
+  const db = getDb();
+  if (!db) return 0;
+  
+  try {
+    const cutoffTime = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000).toISOString();
+    
+    const snapshot = await db.collection('requestLogs')
+      .where('timestamp', '<', cutoffTime)
+      .limit(500) // Batch delete limit
+      .get();
+    
+    if (snapshot.empty) return 0;
+    
+    const batch = db.batch();
+    snapshot.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+    
+    console.log(`[DB] Deleted ${snapshot.size} old request logs`);
+    return snapshot.size;
+  } catch (err) {
+    console.error('[DB] Error deleting old request logs:', err.message);
+    return 0;
+  }
+}
+
+// ===================================================================
 // BLOCKED USERS
 // ===================================================================
 
@@ -287,5 +372,8 @@ module.exports = {
   saveUserStats,
   loadAllUserStats,
   saveAnalyticsSummary,
+  saveRequestLog,
+  loadRequestLogs,
+  deleteOldRequestLogs,
 };
 

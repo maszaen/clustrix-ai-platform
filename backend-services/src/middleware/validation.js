@@ -5,9 +5,59 @@
  */
 
 // Maximum message sizes
-const MAX_MESSAGE_LENGTH = 100000; // 100k chars per message
+const MAX_MESSAGE_LENGTH = 100000; // 100k chars per text message
 const MAX_MESSAGES_COUNT = 100; // Max messages in conversation
 const MAX_PROMPT_LENGTH = 10000; // Max image prompt length
+const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20MB per image (base64)
+
+/**
+ * Calculate content length excluding image data
+ * For multimodal messages, only count text content
+ */
+function getTextContentLength(content) {
+  if (typeof content === 'string') {
+    return content.length;
+  }
+  
+  if (Array.isArray(content)) {
+    // Multimodal content - only count text parts, skip image_url
+    let textLength = 0;
+    for (const part of content) {
+      if (part.type === 'text' && part.text) {
+        textLength += part.text.length;
+      }
+      // Skip image_url parts - they have separate size limits
+    }
+    return textLength;
+  }
+  
+  return 0;
+}
+
+/**
+ * Validate image parts in multimodal content
+ */
+function validateImageParts(content, messageIndex) {
+  if (!Array.isArray(content)) return null;
+  
+  for (const part of content) {
+    if (part.type === 'image_url' && part.image_url?.url) {
+      const url = part.image_url.url;
+      // Check if it's base64 data URL
+      if (url.startsWith('data:')) {
+        // Extract base64 part after comma
+        const base64Part = url.split(',')[1] || '';
+        if (base64Part.length > MAX_IMAGE_SIZE) {
+          return {
+            error: `Image in message ${messageIndex} exceeds maximum size of 20MB`,
+            code: 'IMAGE_TOO_LARGE',
+          };
+        }
+      }
+    }
+  }
+  return null;
+}
 
 /**
  * Validate chat request body
@@ -64,16 +114,20 @@ function validateChatRequest(req, res, next) {
       });
     }
     
-    // Check content length
-    const contentLength = typeof msg.content === 'string' 
-      ? msg.content.length 
-      : JSON.stringify(msg.content || '').length;
+    // Check text content length (excluding images)
+    const contentLength = getTextContentLength(msg.content);
       
     if (contentLength > MAX_MESSAGE_LENGTH) {
       return res.status(400).json({
-        error: `Message ${i} exceeds maximum length of ${MAX_MESSAGE_LENGTH}`,
+        error: `Message ${i} text exceeds maximum length of ${MAX_MESSAGE_LENGTH}`,
         code: 'MESSAGE_TOO_LONG',
       });
+    }
+    
+    // Validate image parts separately
+    const imageError = validateImageParts(msg.content, i);
+    if (imageError) {
+      return res.status(400).json(imageError);
     }
   }
   

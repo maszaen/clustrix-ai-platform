@@ -11,7 +11,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import AlertModal from '../components/AlertModal';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { Eye, EyeClosed, Pencil, Trash2, Cloud, CloudOff } from 'lucide-react-native';
+import { Eye, EyeClosed, Pencil, Trash2, Cloud, CloudOff, Unplug, PlugZap, Server, ServerOff, DnaOff, Dna } from 'lucide-react-native';
 import { DEFAULT_PROVIDERS_LIST, DEFAULT_MODELS } from '../constants/providers';
 
 
@@ -510,18 +510,18 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                 {!useCloudMode ? (
-                  <CloudOff size={25} color={COLORS.fgMuted} strokeWidth={1.5} style={{ marginRight: 14 }} />
+                  <DnaOff size={25} color={COLORS.fgMuted} strokeWidth={1.5} style={{ marginRight: 14 }} />
                 ) : (
                   isLoadingCloud ? (
                     <ActivityIndicator size={25} color={COLORS.primary} style={{ marginRight: 14 }} />
                   ) : (
-                    <Cloud size={25} color={COLORS.primary} strokeWidth={1.5} style={{ marginRight: 14 }} />
+                    <Dna size={25} color={COLORS.primary} strokeWidth={1.5} style={{ marginRight: 14 }} />
                   )
                 )}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.label}>Turn {useCloudMode ? 'off' : 'on'} Clustrix Cloud Services</Text>
                   <Text style={styles.switchDescription}>
-                    {useCloudMode ? '[Current] Using free Clustrix Cloud Services' : '[Current] Using your own API keys'}
+                    {useCloudMode ? 'Using free Clustrix Cloud Services' : 'Using your own API keys'}
                   </Text>
                 </View>
               </View>

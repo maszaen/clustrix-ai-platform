@@ -219,10 +219,8 @@ export function getBlockStyles(theme) {
             borderLeftColor: theme.colors.muted,
             paddingLeft: theme.spacing.indent,
             marginBottom: theme.spacing.block,
-            paddingVertical: 6,
             marginLeft: 1,
-            borderRadius: 8,
-            backgroundColor: COLORS.bgSecondary,
+            borderRadius: 2,
         },
         list: {
             marginBottom: theme.spacing.block,

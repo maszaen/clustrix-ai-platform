@@ -1385,7 +1385,7 @@ const styles = StyleSheet.create({
   selectTextScrollView: {
     flex: 1,
     paddingHorizontal: 0,
-    paddingTop: 16,
+    paddingTop: 1,
   },
   selectTextBody: {
     color: COLORS.fg,

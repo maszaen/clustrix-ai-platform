@@ -4,8 +4,11 @@
  */
 
 import { useState, memo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, Pressable, Linking, ActivityIndicator, Dimensions, ScrollView } from 'react-native';
-import { Globe, ExternalLink, Image as ImageIcon, Search, Download, Sparkles, Maximize2 } from 'lucide-react-native';
+import { View, Text, StyleSheet, Image, Pressable, Linking, ActivityIndicator, Dimensions } from 'react-native';
+// Use gesture-handler components to prevent sidebar swipe conflicts on horizontal scroll
+import { ScrollView, PanGestureHandler } from 'react-native-gesture-handler';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ExternalLink, Image as ImageIcon, Search, Download, Sparkles, Maximize2 } from 'lucide-react-native';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -13,8 +16,106 @@ import * as MediaLibrary from 'expo-media-library';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+// Gradient constants for horizontal scroll
+const GRADIENT_MAX_WIDTH = 26;   // Max gradient width in pixels
+const GRADIENT_THRESHOLD = 100;  // Scroll distance for full gradient (0 to full in 100px)
+
 /**
- * Web Search Result Card
+ * Horizontal ScrollView with fade gradients on left/right edges
+ * - Left gradient: 0 width initially, grows to 16px after 100px scroll
+ * - Right gradient: 16px initially, shrinks to 0 when near end (100px threshold)
+ * - Wrapped with PanGestureHandler to capture horizontal gestures and prevent sidebar swipe
+ */
+const HorizontalScrollWithGradients = memo(function HorizontalScrollWithGradients({ children, contentContainerStyle }) {
+  const [leftGradientWidth, setLeftGradientWidth] = useState(0);
+  const [rightGradientWidth, setRightGradientWidth] = useState(GRADIENT_MAX_WIDTH);
+  const [contentWidth, setContentWidth] = useState(0);
+  const [layoutWidth, setLayoutWidth] = useState(0);
+
+  // Handle scroll to update gradient widths
+  const handleScroll = useCallback((event) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const scrollX = contentOffset.x;
+    const maxScroll = contentSize.width - layoutMeasurement.height;
+    
+    // Left gradient: 0 at start, grows as user scrolls right (max at 100px scroll)
+    const leftWidth = Math.min(GRADIENT_MAX_WIDTH, (scrollX / GRADIENT_THRESHOLD) * GRADIENT_MAX_WIDTH);
+    setLeftGradientWidth(Math.max(0, leftWidth));
+    
+    // Right gradient: full at start, shrinks as user approaches end (100px threshold)
+    const distanceFromEnd = maxScroll - scrollX;
+    const rightWidth = Math.min(GRADIENT_MAX_WIDTH, (distanceFromEnd / GRADIENT_THRESHOLD) * GRADIENT_MAX_WIDTH);
+    setRightGradientWidth(Math.max(0, rightWidth));
+  }, []);
+
+  // Track content size to determine if scrollable
+  const handleContentSizeChange = useCallback((width, height) => {
+    setContentWidth(width);
+  }, []);
+
+  const handleLayout = useCallback((event) => {
+    setLayoutWidth(event.nativeEvent.layout.width);
+  }, []);
+
+  // Check if content is scrollable (content wider than container)
+  const isScrollable = contentWidth > layoutWidth;
+
+  return (
+    // PanGestureHandler wrapper captures horizontal gestures to prevent sidebar from intercepting
+    <PanGestureHandler activeOffsetX={[-10, 10]} failOffsetY={[-20, 20]}>
+      <View style={styles.horizontalScrollWrapper}>
+        {/* Left gradient - fades content on left edge */}
+        {isScrollable && leftGradientWidth > 0 && (
+          <View style={[styles.leftGradient, { width: leftGradientWidth }]} pointerEvents="none">
+            <LinearGradient
+              colors={[COLORS.bg, 'transparent']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
+        )}
+        
+        {/* Scrollable content */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          onScroll={handleScroll}
+          onContentSizeChange={handleContentSizeChange}
+          onLayout={handleLayout}
+          scrollEventThrottle={16}
+          contentContainerStyle={[contentContainerStyle, styles.scrollContentMinHeight]}
+        >
+          {children}
+        </ScrollView>
+        
+        {/* Right gradient - fades content on right edge */}
+        {isScrollable && rightGradientWidth > 0 && (
+          <View style={[styles.rightGradient, { width: rightGradientWidth - 10 }]} pointerEvents="none">
+            <LinearGradient
+              colors={['transparent', COLORS.bg]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
+        )}
+      </View>
+    </PanGestureHandler>
+  );
+});
+
+/**
+ * Spacer element between cards - transparent View that handles touch
+ * This ensures scrolling works even when touching the gap between cards
+ */
+const CardSpacer = memo(function CardSpacer() {
+  return <View style={styles.cardSpacer} />;
+});
+
+/**
+ * Web Search Result Card - Horizontal scroll card (unified with Perplexity style)
+ * Displays agentic web search results in horizontal scrolling cards
  */
 const SearchResultCard = memo(function SearchResultCard({ result, isFirst }) {
   const handlePress = useCallback(() => {
@@ -23,7 +124,16 @@ const SearchResultCard = memo(function SearchResultCard({ result, isFirst }) {
     }
   }, [result.link]);
 
-  // AI summary card (from Tavily)
+  // Extract domain from URL
+  const getDomain = () => {
+    try {
+      return result.link ? new URL(result.link).hostname.replace('www.', '') : 'web';
+    } catch {
+      return 'web';
+    }
+  };
+
+  // AI summary card (from Tavily) - keep as full-width card
   if (result.source === 'tavily_answer') {
     return (
       <View style={styles.summaryCard}>
@@ -36,83 +146,75 @@ const SearchResultCard = memo(function SearchResultCard({ result, isFirst }) {
     );
   }
 
+  // Horizontal scroll card style (like Perplexity)
   return (
     <Pressable
-      style={[styles.resultCard, isFirst && styles.resultCardFirst]}
+      style={[styles.pplxCard, isFirst && styles.pplxCardFirst]}
       onPress={handlePress}
       android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
     >
-      <View style={styles.resultHeader}>
-        <Globe size={14} color={COLORS.fgMuted} />
-        <Text style={styles.resultDomain} numberOfLines={1}>
-          {result.link ? new URL(result.link).hostname.replace('www.', '') : 'Unknown'}
-        </Text>
-        <ExternalLink size={12} color={COLORS.fgMuted} />
+      <View style={styles.pplxCardMeta}>
+        <Text style={styles.pplxCardSource}>{getDomain()}</Text>
       </View>
-      <Text style={styles.resultTitle} numberOfLines={2}>
+      <Text style={styles.pplxCardTitle} numberOfLines={2}>
         {result.title || 'Untitled'}
       </Text>
       {result.snippet && (
-        <Text style={styles.resultSnippet} numberOfLines={3}>
+        <Text style={styles.pplxCardSnippet} numberOfLines={3}>
           {result.snippet}
         </Text>
       )}
+      <View style={styles.pplxCardLink}>
+        <Text style={styles.pplxCardLinkText}>View source</Text>
+        <ExternalLink size={12} color={COLORS.primary} />
+      </View>
     </Pressable>
   );
 });
 
 /**
- * Web Search Results Container
+ * Web Search Results Container - Horizontal scrolling cards (unified with Perplexity)
  */
 export const WebSearchResults = memo(function WebSearchResults({ results, query }) {
-  const [showAll, setShowAll] = useState(false);
-  
+  // Don't render anything if no results
   if (!results || results.length === 0) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.toolHeader}>
-          <Search size={18} color={COLORS.primary} />
-          <Text style={styles.toolTitle}>Web Search</Text>
-        </View>
-        <Text style={styles.noResults}>No results found</Text>
-      </View>
-    );
+    return null;
   }
 
-  const displayResults = showAll ? results : results.slice(0, 4);
+  // Separate AI summary from regular results
+  const aiSummary = results.find(r => r.source === 'tavily_answer');
+  const webResults = results.filter(r => r.source !== 'tavily_answer');
 
   return (
-    <View style={styles.container}>
-      <View style={styles.toolHeader}>
-        <Search size={18} color={COLORS.primary} />
-        <Text style={styles.toolTitle}>Web Search Results</Text>
-        <Text style={styles.resultCount}>{results.length} results</Text>
+    <View style={styles.pplxContainer}>
+      {/* Header */}
+      <View style={styles.pplxHeader}>
+        <View style={styles.pplxLogoPlaceholder}>
+          <Search size={14} color={COLORS.primary} />
+        </View>
+        <Text style={styles.pplxHeaderText}>
+          Search Results ({webResults.length})
+        </Text>
       </View>
       
-      {query && (
-        <Text style={styles.queryText}>"{query}"</Text>
+      {/* AI Summary (if available from Tavily) */}
+      {aiSummary && (
+        <SearchResultCard result={aiSummary} isFirst={true} />
       )}
       
-      <View style={styles.resultsContainer}>
-        {displayResults.map((result, index) => (
-          <SearchResultCard
-            key={result.link || index}
-            result={result}
-            isFirst={index === 0}
-          />
+      {/* Horizontal scroll container with fade gradients */}
+      <HorizontalScrollWithGradients contentContainerStyle={styles.pplxScrollContainer}>
+        {webResults.map((result, index) => (
+          <View key={result.link || index} style={styles.cardWithSpacer}>
+            <SearchResultCard
+              result={result}
+              isFirst={index === 0}
+            />
+            {/* Add spacer after each card except the last one */}
+            {index < webResults.length - 1 && <CardSpacer />}
+          </View>
         ))}
-      </View>
-      
-      {results.length > 4 && !showAll && (
-        <Pressable
-          style={styles.showMoreBtn}
-          onPress={() => setShowAll(true)}
-        >
-          <Text style={styles.showMoreText}>
-            Show {results.length - 4} more results
-          </Text>
-        </Pressable>
-      )}
+      </HorizontalScrollWithGradients>
     </View>
   );
 });
@@ -173,20 +275,19 @@ export const PerplexitySearchCards = memo(function PerplexitySearchCards({ searc
         </Text>
       </View>
       
-      {/* Horizontal scroll container */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.pplxScrollContainer}
-      >
+      {/* Horizontal scroll container with fade gradients */}
+      <HorizontalScrollWithGradients contentContainerStyle={styles.pplxScrollContainer}>
         {results.map((result, index) => (
-          <PerplexitySearchCard
-            key={result.url || index}
-            result={result}
-            isFirst={index === 0}
-          />
+          <View key={result.url || index} style={styles.cardWithSpacer}>
+            <PerplexitySearchCard
+              result={result}
+              isFirst={index === 0}
+            />
+            {/* Add spacer after each card except the last one */}
+            {index < results.length - 1 && <CardSpacer />}
+          </View>
         ))}
-      </ScrollView>
+      </HorizontalScrollWithGradients>
     </View>
   );
 });
@@ -362,11 +463,7 @@ export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, i
         </Pressable> */}
       </View>
 
-      {prompt && (
-        <Text style={styles.promptText} numberOfLines={2}>
-          "{prompt}"
-        </Text>
-      )}
+      
 
       <Pressable
         style={styles.imageContainer}
@@ -383,6 +480,13 @@ export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, i
             <Text style={styles.styleBadgeText}>{style}</Text>
           </View>
         )}
+        </View>
+        <View style={styles.imageTextOverlay}>
+          {prompt && (
+            <Text style={styles.promptText} numberOfLines={2}>
+              "{prompt}"
+            </Text>
+          )}
         </View>
       </Pressable>
 
@@ -442,9 +546,7 @@ const styles = StyleSheet.create({
   },
   container2: {
     marginVertical: 0,
-    borderTopColor: COLORS.borderLight,
-    borderTopWidth: 1,
-    borderWidth: 1,
+    paddingHorizontal: 16,
     paddingBottom: 6,
   },
   // Tool Header
@@ -611,6 +713,17 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 3,
   },
+
+  imageTextOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    left: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+  },
+
   imageActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -702,6 +815,7 @@ const styles = StyleSheet.create({
   pplxHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
     gap: 8,
     marginBottom: 10,
   },
@@ -720,8 +834,18 @@ const styles = StyleSheet.create({
   },
   pplxScrollContainer: {
     flexDirection: 'row',
-    gap: 10,
+    paddingHorizontal: 16,
     paddingVertical: 4,
+  },
+  // Container for card + spacer - keeps them in a row
+  cardWithSpacer: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  // Spacer between cards - transparent View that handles touch for scrolling
+  cardSpacer: {
+    width: 10,
+    backgroundColor: 'transparent',
   },
   pplxCard: {
     width: 220,
@@ -778,5 +902,27 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontSize: 11,
     fontFamily: FONTS.display,
+  },
+  
+  // Horizontal scroll with gradients
+  horizontalScrollWrapper: {
+    position: 'relative',
+  },
+  scrollContentMinHeight: {
+    minHeight: 140, // Ensures touch area covers gaps between cards
+  },
+  leftGradient: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 10,
+  },
+  rightGradient: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 10,
   },
 });

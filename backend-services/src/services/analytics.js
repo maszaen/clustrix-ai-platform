@@ -11,7 +11,7 @@
  *          Local Mode = full privacy, no data sent
  */
 
-const { saveUserStats, loadAllUserStats, saveRequestLog, loadRequestLogs, deleteOldRequestLogs } = require('./database');
+const { saveUserStats, loadAllUserStats, saveRequestLog, loadRequestLogs, deleteOldRequestLogs, saveDailyStats, loadDailyStats } = require('./database');
 
 // In-memory storage (for production, use Redis/PostgreSQL)
 const analytics = {
@@ -21,6 +21,8 @@ const analytics = {
   providerStats: new Map(), // Per-provider statistics
   onlineUsers: new Map(), // Currently active users (heartbeat)
   hourlyStats: [],        // Hourly aggregated stats
+  dailyUniqueUsers: new Set(), // Today's unique users
+  currentDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD
 };
 
 // Configuration
@@ -29,7 +31,6 @@ const PREVIEW_LENGTH = 100;      // Truncate prompts/responses
 const ONLINE_TIMEOUT_MS = 5 * 60 * 1000; // 5 min = offline
 const SAVE_INTERVAL_MS = 5 * 60 * 1000; // Save to Firestore every 5 minutes
 
-// Load user stats from Firestore on init
 // Load user stats from Firestore on init
 (async function initAnalytics() {
   try {
@@ -55,6 +56,14 @@ const SAVE_INTERVAL_MS = 5 * 60 * 1000; // Save to Firestore every 5 minutes
       analytics.requests = requests;
     }
     
+    // Load today's daily stats to restore unique users
+    const today = new Date().toISOString().split('T')[0];
+    const todayStats = await loadDailyStats(today);
+    if (todayStats && todayStats.uniqueUsers) {
+      todayStats.uniqueUsers.forEach(uid => analytics.dailyUniqueUsers.add(uid));
+      console.log(`[Analytics] Restored ${analytics.dailyUniqueUsers.size} unique users for today`);
+    }
+    
     console.log(`[Analytics] Analytics initialized.`);
   } catch (e) {
     console.error('[Analytics] Failed to load analytics data:', e.message);
@@ -69,6 +78,50 @@ setInterval(() => {
     );
   }
 }, SAVE_INTERVAL_MS);
+
+// Save daily stats every 5 minutes and handle day rollover
+setInterval(async () => {
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Check for day rollover
+  if (today !== analytics.currentDate) {
+    console.log(`[Analytics] Day rollover: ${analytics.currentDate} -> ${today}`);
+    // Save final stats for previous day before reset
+    await saveDailyStatsNow(analytics.currentDate);
+    // Reset for new day
+    analytics.dailyUniqueUsers.clear();
+    analytics.currentDate = today;
+  }
+  
+  // Save current day stats
+  await saveDailyStatsNow(today);
+}, SAVE_INTERVAL_MS);
+
+/**
+ * Save daily stats to Firestore
+ */
+async function saveDailyStatsNow(date) {
+  try {
+    const dayStart = new Date(date + 'T00:00:00Z').getTime();
+    const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+    
+    // Calculate stats for the day from requests
+    const dayRequests = analytics.requests.filter(r => {
+      const ts = new Date(r.timestamp).getTime();
+      return ts >= dayStart && ts < dayEnd;
+    });
+    
+    await saveDailyStats(date, {
+      uniqueUsers: Array.from(analytics.dailyUniqueUsers),
+      uniqueUserCount: analytics.dailyUniqueUsers.size,
+      totalRequests: dayRequests.length,
+      totalTokens: dayRequests.reduce((sum, r) => sum + (r.totalTokens || 0), 0),
+      totalCost: dayRequests.reduce((sum, r) => sum + (r.cost || 0), 0),
+    });
+  } catch (e) {
+    console.error('[Analytics] Failed to save daily stats:', e.message);
+  }
+}
 
 // Cleanup old request logs every 6 hours (delete logs older than 7 days)
 setInterval(async () => {
@@ -248,6 +301,9 @@ function trackRequest({
   
   // Update online status
   updateOnlineStatus(userId, userEmail, deviceName);
+  
+  // Track daily unique user
+  analytics.dailyUniqueUsers.add(userId);
   
   return request;
 }
@@ -493,6 +549,7 @@ function getDashboardStats() {
       totalCost: Math.round(totalCost * 100) / 100,
       uniqueUsers: analytics.userStats.size,
       onlineNow: onlineUsers.length,
+      dailyUniqueUsers: analytics.dailyUniqueUsers.size,
     },
     last24h: {
       requests: last24h.length,

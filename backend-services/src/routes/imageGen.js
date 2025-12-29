@@ -64,24 +64,7 @@ const IMAGE_GENERATION_TOOL = {
   type: 'function',
   function: {
     name: 'generate_image',
-    description: `Generate an image from text description. Use ONLY when user explicitly requests image creation:
-- "create an image of..."
-- "generate a picture of..."
-- "draw..."
-- "make an image..."
-
-IMPORTANT: TOOL CALLS MUST BE IN THE TOOL FIELD
-
-- NEVER write tool JSON/payload in the assistant response/content field.
-- If using a tool: emit ONLY a tool invocation (name + args) in the tool/function_call field.
-- Keep response/content empty or user-facing text only (no JSON, no "calling tool…").
-- Do not follow message history formatting; logs may be post-processed.
-- Only call generate_image on explicit "create/generate/draw/make an image" requests.
-- generate_image args allowed ONLY: prompt (required), style, size, commentary. No extra keys.
-- DO NOT use for analyzing existing images or general questions about images.
-
-STYLE OPTIONS: realistic, artistic, cartoon, sketch, anime, 3d, watercolor, oil, pixel, minimalist
-SIZE OPTIONS: 1024x1024 (square), 1792x1024 (landscape), 1024x1792 (portrait)`,
+    description: `Generate an image from text description. Use ONLY when user explicitly requests: "create/generate/draw/make an image". Put tool args ONLY in function_call field, not in response content. Styles: realistic, artistic, cartoon, sketch, anime, 3d, watercolor, oil, pixel, minimalist. Sizes: 1024x1024 (square), 1792x1024 (landscape), 1024x1792 (portrait).`,
     parameters: {
       type: 'object',
       properties: {

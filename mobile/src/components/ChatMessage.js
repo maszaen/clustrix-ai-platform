@@ -682,7 +682,7 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
               
               {/* Tool Results - shown AFTER command tools, not before */}
               {message.toolResults?.map((result, idx) => (
-                <View key={result.id || idx} style={{marginTop: 8, paddingHorizontal: 16}}>
+                <View key={result.id || idx} style={{marginTop: 0, paddingHorizontal: 0}}>
                   <ToolResultView 
                     toolName={result.name} 
                     result={result.data}
@@ -693,7 +693,7 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
               
               {/* Perplexity Search Results - built-in web search */}
               {message.perplexityResults && (
-                <View style={{marginTop: 8, paddingHorizontal: 16}}>
+                <View style={{marginTop: 0, paddingHorizontal: 0}}>
                   <PerplexitySearchCards searchResults={message.perplexityResults} />
                 </View>
               )}

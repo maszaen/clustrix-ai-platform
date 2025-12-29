@@ -37,29 +37,7 @@ export const WEB_SEARCH_TOOL = {
   type: 'function',
   function: {
     name: 'web_search',
-    description: `Search the web for current information. Use when you need:
-- Up-to-date information (news, prices, weather, stocks)
-- Recent events or announcements
-- Information that may have changed since training data
-- User explicitly asks to search
-
-DATE CONTEXT: ${dateISO}
-- Use this to anchor at least 1 query with "today", "this week", or the current month/year.
-
-IMPORTANT: WEB SEARCH TOOL CALL RULES (FIELD + QUERY QUALITY)
-- NEVER put web_search payload/JSON in response/content. Tool args go ONLY in the tool/function_call field.
-- Use web_search when info may be time-sensitive or changed (news, prices, weather, stocks), or user asks to search.
-- Always pass queries as an array of 1–4 strings (min 1, max 4). No other required fields.
-- Queries MUST be varied and specific: include different phrasings, key entities, and time anchors (month/year or “today”).
-- Do not include explanations inside queries. Put brief user-facing text only in commentary.
-- After tool results: answer in plain language in response/content (no tool JSON), citing the findings.
-- If user explicitly says “don’t browse/search”, do NOT call web_search.
-- Do not follow message history formatting; logs may be post-processed.
-- Provide 1-4 varied queries for better coverage.
-
-EXAMPLE:
-User: "What's the latest on AI?"
-queries: ["latest AI news December 2025", "recent AI breakthroughs", "AI industry updates today"]`,
+    description: `Search the web for current information. Use for: up-to-date news, prices, weather, stocks, recent events, or when user asks to search. DATE: ${dateISO}. Provide 1-4 varied, specific queries with time anchors (month/year). Put tool args ONLY in function_call field, not in response content. After results: answer in plain language citing findings.`,
     parameters: {
       type: 'object',
       properties: {
@@ -84,24 +62,7 @@ export const IMAGE_GENERATION_TOOL = {
   type: 'function',
   function: {
     name: 'generate_image',
-    description: `Generate an image from text description. Use ONLY when user explicitly requests image creation:
-- "create an image of..."
-- "generate a picture of..."
-- "draw..."
-- "make an image..."
-
-IMPORTANT: TOOL CALLS MUST BE IN THE TOOL FIELD
-
-- NEVER write tool JSON/payload in the assistant response/content field.
-- If using a tool: emit ONLY a tool invocation (name + args) in the tool/function_call field.
-- Keep response/content empty or user-facing text only (no JSON, no “calling tool…”).
-- Do not follow message history formatting; logs may be post-processed.
-- Only call generate_image on explicit “create/generate/draw/make an image” requests.
-- generate_image args allowed ONLY: prompt (required), style, size, commentary. No extra keys.
-- DO NOT use for analyzing existing images or general questions about images.
-
-STYLE OPTIONS: realistic, artistic, cartoon, sketch, anime, 3d, watercolor, oil, pixel, minimalist
-SIZE OPTIONS: 1024x1024 (square), 1792x1024 (landscape), 1024x1792 (portrait)`,
+    description: `Generate an image from text description. Use ONLY when user explicitly requests: "create/generate/draw/make an image". Put tool args ONLY in function_call field, not in response content. Styles: realistic, artistic, cartoon, sketch, anime, 3d, watercolor, oil, pixel, minimalist. Sizes: 1024x1024 (square), 1792x1024 (landscape), 1024x1792 (portrait).`,
     parameters: {
       type: 'object',
       properties: {

@@ -362,6 +362,170 @@ function decodeDocId(id) {
   return id.replace(/__SLASH__/g, '/');
 }
 
+// ===================================================================
+// RATE LIMITS (Persist daily request count & provider tokens)
+// ===================================================================
+
+/**
+ * Save user rate limit data
+ * @param {string} userId 
+ * @param {object} limitData - { dailyCount, dailyResetAt, burstCount, burstResetAt }
+ */
+async function saveUserRateLimit(userId, limitData) {
+  const db = getDb();
+  if (!db) return;
+  
+  try {
+    await db.collection('userRateLimits').doc(userId).set({
+      userId,
+      ...limitData,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.error('[DB] Error saving user rate limit:', err.message);
+  }
+}
+
+/**
+ * Load all user rate limits
+ */
+async function loadAllUserRateLimits() {
+  const db = getDb();
+  if (!db) return new Map();
+  
+  try {
+    const snapshot = await db.collection('userRateLimits').get();
+    const limits = new Map();
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      limits.set(data.userId, {
+        count: data.dailyCount || 0,
+        resetAt: data.dailyResetAt || 0,
+        burstCount: data.burstCount || 0,
+        burstResetAt: data.burstResetAt || 0,
+      });
+    });
+    console.log(`[DB] Loaded ${limits.size} user rate limits`);
+    return limits;
+  } catch (err) {
+    console.error('[DB] Error loading user rate limits:', err.message);
+    return new Map();
+  }
+}
+
+/**
+ * Save provider token usage for a user
+ * @param {string} userId 
+ * @param {object} providerTokens - { [provider]: { tokens, resetAt } }
+ */
+async function saveProviderTokenUsage(userId, providerTokens) {
+  const db = getDb();
+  if (!db) return;
+  
+  try {
+    await db.collection('providerTokenUsage').doc(userId).set({
+      userId,
+      providers: providerTokens,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch (err) {
+    console.error('[DB] Error saving provider token usage:', err.message);
+  }
+}
+
+/**
+ * Load all provider token usage
+ */
+async function loadAllProviderTokenUsage() {
+  const db = getDb();
+  if (!db) return new Map();
+  
+  try {
+    const snapshot = await db.collection('providerTokenUsage').get();
+    const usage = new Map();
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      usage.set(data.userId, data.providers || {});
+    });
+    console.log(`[DB] Loaded ${usage.size} provider token usage records`);
+    return usage;
+  } catch (err) {
+    console.error('[DB] Error loading provider token usage:', err.message);
+    return new Map();
+  }
+}
+
+// ===================================================================
+// DAILY STATS (Unique users per day)
+// ===================================================================
+
+/**
+ * Save daily stats (unique users, requests, etc.)
+ * @param {string} date - YYYY-MM-DD format
+ * @param {object} stats - { uniqueUsers: [], totalRequests, totalTokens, totalCost }
+ */
+async function saveDailyStats(date, stats) {
+  const db = getDb();
+  if (!db) return;
+  
+  try {
+    await db.collection('dailyStats').doc(date).set({
+      date,
+      ...stats,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    console.log(`[DB] Saved daily stats for ${date}`);
+  } catch (err) {
+    console.error('[DB] Error saving daily stats:', err.message);
+  }
+}
+
+/**
+ * Load daily stats for a specific date
+ * @param {string} date - YYYY-MM-DD format
+ */
+async function loadDailyStats(date) {
+  const db = getDb();
+  if (!db) return null;
+  
+  try {
+    const doc = await db.collection('dailyStats').doc(date).get();
+    if (!doc.exists) return null;
+    return doc.data();
+  } catch (err) {
+    console.error('[DB] Error loading daily stats:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Load daily stats for date range (for charts/history)
+ * @param {number} days - Number of days to load
+ */
+async function loadDailyStatsRange(days = 7) {
+  const db = getDb();
+  if (!db) return [];
+  
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffStr = cutoffDate.toISOString().split('T')[0];
+    
+    const snapshot = await db.collection('dailyStats')
+      .where('date', '>=', cutoffStr)
+      .orderBy('date', 'desc')
+      .get();
+    
+    const stats = [];
+    snapshot.forEach(doc => stats.push(doc.data()));
+    console.log(`[DB] Loaded ${stats.length} daily stats records`);
+    return stats;
+  } catch (err) {
+    console.error('[DB] Error loading daily stats range:', err.message);
+    return [];
+  }
+}
+
 module.exports = {
   saveModelSettings,
   loadModelSettings,
@@ -375,5 +539,14 @@ module.exports = {
   saveRequestLog,
   loadRequestLogs,
   deleteOldRequestLogs,
+  // Rate limits
+  saveUserRateLimit,
+  loadAllUserRateLimits,
+  saveProviderTokenUsage,
+  loadAllProviderTokenUsage,
+  // Daily stats
+  saveDailyStats,
+  loadDailyStats,
+  loadDailyStatsRange,
 };
 

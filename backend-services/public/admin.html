@@ -210,7 +210,7 @@
     /* ===== STATS ===== */
     .stats-row {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: var(--space-md);
       margin-bottom: var(--space-xl);
     }
@@ -678,7 +678,7 @@
 
     /* ===== RESPONSIVE ===== */
     @media (max-width: 1100px) {
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .stats-row { grid-template-columns: repeat(3, 1fr); }
       .row-2 { grid-template-columns: 1fr; }
     }
 
@@ -831,6 +831,10 @@
                 <div class="stat-label">Online Now</div>
               </div>
               <div class="stat-card">
+                <div class="stat-value" id="s-daily-unique">—</div>
+                <div class="stat-label">Unique Users (Today)</div>
+              </div>
+              <div class="stat-card">
                 <div class="stat-value" id="s-requests">—</div>
                 <div class="stat-label">Requests (24h)</div>
               </div>
@@ -886,7 +890,7 @@
                       <th>Email</th>
                       <th>Requests</th>
                       <th>Tokens</th>
-                      <th>Usage</th>
+                      <th>Daily Usage</th>
                       <th>Status</th>
                       <th></th>
                     </tr>
@@ -967,15 +971,31 @@
         <div class="row row-3 mb-lg">
           <div class="stat-card">
             <div class="stat-value" id="m-requests">—</div>
-            <div class="stat-label">Requests</div>
+            <div class="stat-label">Total Requests</div>
           </div>
           <div class="stat-card">
             <div class="stat-value" id="m-tokens">—</div>
-            <div class="stat-label">Tokens</div>
+            <div class="stat-label">Total Tokens</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value" id="m-usage">—</div>
-            <div class="stat-label">Today</div>
+            <div class="stat-value" id="m-cost">—</div>
+            <div class="stat-label">Total Cost</div>
+          </div>
+        </div>
+
+        <!-- Current Rate Limits Section -->
+        <div class="section">
+          <div class="section-title">📊 Current Rate Limits</div>
+          <div class="row row-2 mb-lg">
+            <div class="stat-card" style="border-left: 3px solid var(--primary);">
+              <div class="stat-value" id="m-daily-usage">—</div>
+              <div class="stat-label">Daily Requests</div>
+              <div class="text-sm text-muted" id="m-daily-reset" style="margin-top: 4px;"></div>
+            </div>
+            <div class="stat-card" style="border-left: 3px solid var(--warning);">
+              <div id="m-provider-tokens" style="font-size: 13px;"></div>
+              <div class="stat-label" style="margin-top: 8px;">Provider Token Usage (12h)</div>
+            </div>
           </div>
         </div>
 
@@ -1039,6 +1059,7 @@
         const r = await fetch(API('/admin/analytics/dashboard'));
         const d = await r.json();
         document.getElementById('s-online').textContent = d.overview?.onlineNow ?? 0;
+        document.getElementById('s-daily-unique').textContent = d.overview?.dailyUniqueUsers ?? 0;
         document.getElementById('s-requests').textContent = fmt(d.last24h?.requests ?? 0);
         document.getElementById('s-tokens').textContent = fmt(d.last24h?.tokens ?? 0);
         document.getElementById('s-cost').textContent = '$' + (d.last24h?.cost ?? 0).toFixed(2);
@@ -1063,15 +1084,28 @@
         const tb = document.getElementById('users-body');
         if (!d.users?.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">No users</td></tr>'; return; }
         tb.innerHTML = d.users.map(u => {
-          const usage = u.isUnlimited ? '∞' : `${u.usage?.used||0}/${u.usage?.limit||50}`;
+          const dailyUsed = u.usage?.used || 0;
+          const dailyLimit = u.usage?.limit || 50;
+          const usage = u.isUnlimited ? '∞' : `${dailyUsed}/${dailyLimit}`;
+          const pct = u.isUnlimited ? 0 : Math.round((dailyUsed / dailyLimit) * 100);
+          const usageColor = pct >= 90 ? 'var(--error)' : pct >= 70 ? 'var(--warning)' : 'var(--success)';
+          
           let badge = '<span class="badge badge-muted">Normal</span>';
           if (u.isBlocked) badge = '<span class="badge badge-error">Blocked</span>';
           else if (u.isUnlimited) badge = '<span class="badge badge-success">Unlimited</span>';
+          
           return `<tr class="clickable" onclick="showUser('${u.userId}')">
             <td><strong>${u.email}</strong></td>
             <td>${u.totalRequests}</td>
             <td>${fmt(u.totalTokens)}</td>
-            <td>${usage}</td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="color: ${u.isUnlimited ? 'var(--success)' : usageColor};">${usage}</span>
+                ${!u.isUnlimited ? `<div style="background: var(--bg-hover); border-radius: 2px; height: 4px; width: 50px; overflow: hidden;">
+                  <div style="background: ${usageColor}; height: 100%; width: ${Math.min(pct, 100)}%;"></div>
+                </div>` : ''}
+              </div>
+            </td>
             <td>${badge}</td>
             <td><button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();showUser('${u.userId}')">View</button></td>
           </tr>`;
@@ -1091,7 +1125,47 @@
         document.getElementById('m-id').textContent = 'ID: ' + u.userId;
         document.getElementById('m-requests').textContent = u.totalRequests;
         document.getElementById('m-tokens').textContent = fmt(u.totalTokens);
-        document.getElementById('m-usage').textContent = u.isUnlimited ? '∞' : `${u.usage?.used||0}/${u.usage?.limit||50}`;
+        document.getElementById('m-cost').textContent = '$' + (u.totalCost || 0).toFixed(4);
+        
+        // Daily usage with reset time
+        const dailyUsed = u.usage?.used || 0;
+        const dailyLimit = u.isUnlimited ? '∞' : (u.usage?.limit || 50);
+        document.getElementById('m-daily-usage').textContent = u.isUnlimited ? '∞' : `${dailyUsed}/${dailyLimit}`;
+        
+        // Reset time
+        const resetEl = document.getElementById('m-daily-reset');
+        if (u.usage?.resetAt && !u.isUnlimited) {
+          const resetDate = new Date(u.usage.resetAt);
+          resetEl.textContent = `Resets: ${resetDate.toLocaleString()}`;
+        } else {
+          resetEl.textContent = u.isUnlimited ? 'Unlimited access' : '';
+        }
+        
+        // Provider token usage
+        const providerEl = document.getElementById('m-provider-tokens');
+        const providerTokens = u.providerTokenUsage || {};
+        const providerLimit = u.providerTokenLimit || 100000;
+        
+        if (u.isUnlimited) {
+          providerEl.innerHTML = '<div style="color: var(--success);">∞ Unlimited</div>';
+        } else if (Object.keys(providerTokens).length === 0) {
+          providerEl.innerHTML = '<div class="text-muted">No usage yet</div>';
+        } else {
+          providerEl.innerHTML = Object.entries(providerTokens).map(([provider, data]) => {
+            const pct = Math.round((data.tokensUsed / providerLimit) * 100);
+            const color = pct >= 90 ? 'var(--error)' : pct >= 70 ? 'var(--warning)' : 'var(--success)';
+            return `<div style="margin-bottom: 8px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <span style="font-weight: 600; text-transform: capitalize;">${provider}</span>
+                <span style="color: ${color};">${fmt(data.tokensUsed)}/${fmt(providerLimit)}</span>
+              </div>
+              <div style="background: var(--bg-hover); border-radius: 4px; height: 6px; overflow: hidden;">
+                <div style="background: ${color}; height: 100%; width: ${Math.min(pct, 100)}%;"></div>
+              </div>
+              <div class="text-muted text-sm" style="margin-top: 2px;">Resets: ${data.timeRemaining}</div>
+            </div>`;
+          }).join('');
+        }
         
         const unlimitedBtn = document.getElementById('m-unlimited');
         unlimitedBtn.textContent = u.isUnlimited ? 'Revoke Unlimited' : 'Grant Unlimited';

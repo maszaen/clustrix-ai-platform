@@ -200,6 +200,8 @@ const {
   unblockUser,
   isBlocked,
   getBlockedUsers,
+  getProviderTokenUsage,
+  PROVIDER_TOKEN_LIMIT,
 } = require('../middleware/rateLimit');
 
 /**
@@ -224,7 +226,7 @@ router.get('/users', (req, res) => {
 
 /**
  * GET /admin/users/:userId
- * Get detailed user info including recent logs and interactions
+ * Get detailed user info including recent logs, interactions, and rate limits
  */
 router.get('/users/:userId', (req, res) => {
   const userId = req.params.userId;
@@ -235,6 +237,7 @@ router.get('/users/:userId', (req, res) => {
   }
   
   const unlimitedList = getUnlimitedUsers();
+  const providerTokens = getProviderTokenUsage(userId);
   
   res.json({
     ...details,
@@ -243,6 +246,9 @@ router.get('/users/:userId', (req, res) => {
     isUnlimited: unlimitedList.includes(userId),
     recentLogs: details.recentLogs || [],
     recentInteractions: details.recentInteractions || [],
+    // Rate limit details
+    providerTokenUsage: providerTokens,
+    providerTokenLimit: PROVIDER_TOKEN_LIMIT,
   });
 });
 

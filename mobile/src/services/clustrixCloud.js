@@ -302,6 +302,30 @@ export async function streamCloudChat({
         } catch {}
         onError?.(msg);
       } else {
+        // Check for Perplexity non-streaming response (has search_results)
+        try {
+          const jsonResponse = JSON.parse(xhr.responseText);
+          if (jsonResponse.choices && !usageData) {
+            // Non-streaming response (Perplexity)
+            const content = jsonResponse.choices?.[0]?.message?.content || '';
+            if (content) {
+              onChunk?.(content);
+            }
+            // Extract Perplexity search results
+            const searchResults = jsonResponse.search_results || [];
+            const citations = jsonResponse.citations || [];
+            
+            onDone?.({ 
+              usage: jsonResponse.usage,
+              // Pass search results for Perplexity UI
+              searchResults: searchResults.length > 0 ? { results: searchResults, citations } : null,
+            });
+            resolve();
+            return;
+          }
+        } catch (e) {
+          // Not JSON or streaming response, continue normally
+        }
         onDone?.({ usage: usageData });
       }
       resolve();
@@ -417,7 +441,10 @@ export async function streamCloudAgentic({
             onToolResult?.({
               id: parsed.tool_result.id,
               name: parsed.tool_result.name,
+              input: parsed.tool_result.input,
               success: parsed.tool_result.success,
+              output: parsed.tool_result.output,
+              data: parsed.tool_result.data,
             });
             continue;
           }

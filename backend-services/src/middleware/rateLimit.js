@@ -11,7 +11,12 @@
  * to ensure consistent rate limiting across all instances.
  */
 
-const { saveUnlimitedUser, loadUnlimitedUsers, saveBlockedUser, loadBlockedUsers } = require('../services/database');
+const { 
+  saveUnlimitedUser, loadUnlimitedUsers, 
+  saveBlockedUser, loadBlockedUsers,
+  saveUserRateLimit, loadAllUserRateLimits,
+  saveProviderTokenUsage, loadAllProviderTokenUsage,
+} = require('../services/database');
 
 // In-memory store: { [userId]: { count: number, resetAt: timestamp, lastRequest: timestamp } }
 const userLimits = new Map();
@@ -25,27 +30,80 @@ const unlimitedUsers = new Set();
 // Blocked users (admin blocked)
 const blockedUsers = new Set();
 
-// Load unlimited users from Firestore on init
-(async function initUnlimitedUsers() {
+// Track if init is complete
+let initComplete = false;
+
+// Save interval for rate limits (every 1 minute)
+const RATE_LIMIT_SAVE_INTERVAL = 60 * 1000;
+
+// Load all persisted data on init
+(async function initRateLimiter() {
   try {
-    const users = await loadUnlimitedUsers();
-    users.forEach(userId => unlimitedUsers.add(userId));
-    console.log(`[RateLimit] Loaded ${users.length} unlimited users from Firestore`);
+    // Load unlimited users
+    const unlimited = await loadUnlimitedUsers();
+    unlimited.forEach(userId => unlimitedUsers.add(userId));
+    console.log(`[RateLimit] Loaded ${unlimited.length} unlimited users`);
+    
+    // Load blocked users
+    const blocked = await loadBlockedUsers();
+    blocked.forEach(userId => blockedUsers.add(userId));
+    console.log(`[RateLimit] Loaded ${blocked.length} blocked users`);
+    
+    // Load user rate limits (daily request counts)
+    const limits = await loadAllUserRateLimits();
+    const now = Date.now();
+    for (const [userId, data] of limits) {
+      // Only restore if not expired
+      if (data.resetAt > now) {
+        userLimits.set(userId, data);
+      }
+    }
+    console.log(`[RateLimit] Loaded ${userLimits.size} active user rate limits`);
+    
+    // Load provider token usage
+    const providerUsage = await loadAllProviderTokenUsage();
+    for (const [userId, providers] of providerUsage) {
+      // Filter out expired providers
+      const validProviders = {};
+      for (const [provider, data] of Object.entries(providers)) {
+        if (data.resetAt > now) {
+          validProviders[provider] = data;
+        }
+      }
+      if (Object.keys(validProviders).length > 0) {
+        providerTokenUsage.set(userId, validProviders);
+      }
+    }
+    console.log(`[RateLimit] Loaded ${providerTokenUsage.size} provider token usage records`);
+    
+    initComplete = true;
+    console.log('[RateLimit] Initialization complete');
   } catch (e) {
-    console.error('[RateLimit] Failed to load unlimited users:', e.message);
+    console.error('[RateLimit] Failed to initialize:', e.message);
+    initComplete = true; // Continue anyway
   }
 })();
 
-// Load blocked users from Firestore on init
-(async function initBlockedUsers() {
-  try {
-    const users = await loadBlockedUsers();
-    users.forEach(userId => blockedUsers.add(userId));
-    console.log(`[RateLimit] Loaded ${users.length} blocked users from Firestore`);
-  } catch (e) {
-    console.error('[RateLimit] Failed to load blocked users:', e.message);
+// Periodically save rate limits to Firestore
+setInterval(() => {
+  if (!initComplete) return;
+  
+  // Save user rate limits
+  for (const [userId, data] of userLimits) {
+    saveUserRateLimit(userId, {
+      dailyCount: data.count,
+      dailyResetAt: data.resetAt,
+      burstCount: data.burstCount || 0,
+      burstResetAt: data.burstResetAt || 0,
+    }).catch(e => console.error('[RateLimit] Failed to save rate limit:', e.message));
   }
-})();
+  
+  // Save provider token usage
+  for (const [userId, providers] of providerTokenUsage) {
+    saveProviderTokenUsage(userId, providers)
+      .catch(e => console.error('[RateLimit] Failed to save provider tokens:', e.message));
+  }
+}, RATE_LIMIT_SAVE_INTERVAL);
 
 // Burst protection: max requests per minute
 const BURST_LIMIT = 10;

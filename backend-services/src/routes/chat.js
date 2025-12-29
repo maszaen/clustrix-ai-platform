@@ -125,6 +125,10 @@ router.post('/', async (req, res) => {
       case 'anthropic':
         await handleAnthropicChat(req, res, config, messages, { temperature, max_tokens, stream });
         break;
+      case 'perplexity':
+        // Perplexity has built-in web search, use non-streaming for search_results
+        await handlePerplexityChat(req, res, config, messages, { temperature, max_tokens });
+        break;
       default:
         // OpenAI-compatible providers (openai, groq, mistral, deepseek, xai, openrouter)
         await handleOpenAIChat(req, res, config, messages, { temperature, max_tokens, stream });
@@ -154,6 +158,86 @@ router.post('/', async (req, res) => {
     }
   }
 });
+
+/**
+ * Handle Perplexity chat - Non-streaming with built-in web search
+ * Perplexity returns search_results and citations in response
+ */
+async function handlePerplexityChat(req, res, config, messages, options) {
+  const startTime = Date.now();
+  const url = `${config.baseUrl}/chat/completions`;
+  
+  const body = {
+    model: config.modelId,
+    messages,
+    stream: false, // Perplexity search_results only available in non-streaming
+    ...(options.temperature !== undefined && { temperature: options.temperature }),
+    ...(options.max_tokens && { max_tokens: options.max_tokens }),
+  };
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Perplexity API error: ${error}`);
+  }
+  
+  const data = await response.json();
+  
+  // Extract content
+  const content = data.choices?.[0]?.message?.content || '';
+  
+  // Extract Perplexity-specific search results and citations
+  const searchResults = data.search_results || [];
+  const citations = data.citations || [];
+  
+  // Parse thinking from content
+  const parsed = parseThinkingFromResponse(content);
+  
+  // Calculate usage and cost
+  const inputTokens = data.usage?.prompt_tokens || 0;
+  const outputTokens = data.usage?.completion_tokens || 0;
+  const cost = calculateCost(config.modelId, inputTokens, outputTokens);
+  
+  // Track request
+  trackRequest({
+    userId: req.user?.uid,
+    userEmail: req.user?.email,
+    deviceName: req.headers['x-device-name'],
+    model: config.modelId,
+    provider: config.provider,
+    messages,
+    responsePreview: parsed.response || content,
+    thinkingPreview: parsed.thinking || '',
+    inputTokens,
+    outputTokens,
+    duration: Date.now() - startTime,
+    success: true,
+    mode: 'chat',
+  });
+  
+  // Track provider token usage
+  trackProviderTokens(req.user?.uid, config.provider, inputTokens + outputTokens);
+  
+  // Return response with search_results for UI
+  res.json({
+    ...data,
+    // Ensure search_results and citations are included for mobile UI
+    search_results: searchResults,
+    citations: citations,
+    usage: {
+      ...data.usage,
+      cost,
+    },
+  });
+}
 
 /**
  * Handle OpenAI-compatible chat (OpenAI, Groq, Mistral, DeepSeek, xAI, OpenRouter)

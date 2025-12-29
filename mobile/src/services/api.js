@@ -63,20 +63,33 @@ export function buildSystemPrompt(settings = {}) {
 
   prompt += `# CAPABILITIES & ACCESS GUIDES:\n`;
   
+  // App Navigation Guide
+  prompt += `## APP NAVIGATION:\n`;
+  prompt += `- **Plus Button (+ bottom-left)**: Access special modes - Agentic Mode (web search), Generate Image Mode, and attach files/images.\n`;
+  prompt += `- **Clustrix Logo (top-left)**: Access Settings - Model selection, Cloud Mode, Persona settings, Language preferences.\n\n`;
+  
   // Web Search Protocol
-  prompt += `- **Web Search**: Available via Google Search API, SerpApi, and Tavily. If you or user need to search, tell the user: for example "Please enable **Agentic Mode** by clicking the **Clustrix logo** (top left) and toggling the **Agentic Mode** switch."\n`;
-  prompt += `- **Search API Info**: If asked, explain that Clustrix uses Google Search/SerpApi/Tavily to fetch real-time, accurate data from the web to provide up-to-date answers.\n`;
+  prompt += `## WEB SEARCH (Agentic Mode):\n`;
+  prompt += `- **How to Enable**: Tap the **Plus button (+)** at the bottom-left corner → Toggle **"Agentic Mode"** ON.\n`;
+  prompt += `- **What it does**: Enables real-time web search using Google Search API, SerpApi, or Tavily to fetch up-to-date information.\n`;
+  prompt += `- **When to suggest**: If user asks about current events, latest news, real-time data, or anything requiring fresh information.\n`;
   
   // Image Generation Protocol
-  prompt += `- **Image Generation**: Available. Guide the user: "Click the **Clustrix logo** (top left) and toggle the **Generate Image Mode**."\n`;
+  prompt += `## IMAGE GENERATION:\n`;
+  prompt += `- **How to Enable**: Tap the **Plus button (+)** at the bottom-left corner → Toggle **"Generate Image Mode"** ON.\n`;
+  prompt += `- **What it does**: Generates images based on text descriptions using AI image generation models.\n`;
+  prompt += `- **When to suggest**: If user wants to create, generate, or visualize images.\n`;
   
   // Vision & Files
-  prompt += `- **Vision & File Analysis**: Fully supported. Users can directly send images or PDFs for analysis.\n\n`;
+  prompt += `## VISION & FILE ANALYSIS:\n`;
+  prompt += `- **How to Use**: Tap the **Plus button (+)** at the bottom-left corner → Select image or PDF file to attach.\n`;
+  prompt += `- **Supported**: Images (JPG, PNG, etc.) and PDF documents for analysis.\n\n`;
 
   // ERROR HANDLING & TROUBLESHOOTING
   prompt += `# ERROR HANDLING PROTOCOL:\n`;
   prompt += `- If an error occurs during image generation or any task, stay calm and empathetic.\n`;
-  prompt += `- Tell the user: for example "It seems the current model doesn't support this specific task or encountered an error. Don't worry, you can try switching to another supported model in the settings (click the clustrix logo in top left, and switch model)."\n\n`;
+  prompt += `- Guide the user: "It seems the current model doesn't support this task or encountered an error. You can try switching to another model by tapping the **Clustrix logo** (top-left) → **Select Model**."\n`;
+  prompt += `- For mode-specific errors: Remind user to check if the correct mode is enabled via the **Plus button (+)**.\n\n`;
   // Language
   prompt += `# RESPONSE LANGUAGE:\n`;
   if (language === "indonesia") prompt += "Always respond in Indonesian.\n";
@@ -1492,9 +1505,49 @@ export async function chat({ messages, model, provider, baseUrl, apiKey }) {
   return json.choices?.[0]?.message?.content || '';
 }
 
+/**
+ * Generate a short title for a chat session
+ * Uses special prompt for Perplexity since it always searches and tends to be verbose
+ */
 export async function generateTitle(content, model, provider, baseUrl, apiKey, { useCloud, idToken, userEmail } = {}) {
+  // Special strict prompt for Perplexity - it tends to search and give verbose responses
+  const isPerplexity = provider === 'perplexity';
+  
+  const systemPrompt = isPerplexity
+    ? `You are a title generator. Generate ONLY a short title (3-6 words) for the user's message.
+
+RULES:
+- Output ONLY the title, nothing else
+- No explanations, no search results, no additional text
+- No punctuation (no periods, colons, quotes)
+- No markdown formatting (no bold, italic, etc)
+- Title Case format
+- 3-6 words maximum
+
+EXAMPLES:
+User: "How do I center a div in CSS?"
+Output: CSS Div Centering Methods
+
+User: "What's the weather in Tokyo?"
+Output: Tokyo Weather Inquiry
+
+User: "Can you help me write a Python script to scrape websites?"
+Output: Python Web Scraping Script
+
+User: "I'm having issues with my React useEffect hook"
+Output: React UseEffect Hook Issues
+
+User: "Explain quantum computing to me"
+Output: Quantum Computing Explanation
+
+User: "function calculateSum(a, b) { return a + b; }"
+Output: Sum Calculator Function
+
+RESPOND WITH ONLY THE TITLE. NO OTHER TEXT.`
+    : 'You are a title generator. Your job is to summarize the user query into a 3-6 word title. The title must be Title Case and have no punctuation. If the query is code, summarize its purpose. (Your response only the 3-6 title)';
+
   const messages = [
-    { role: 'system', content: 'You are a title generator. Your job is to summarize the user query into a 3-6 word title. The title must be Title Case and have no punctuation. If the query is code, summarize its purpose. (Your response only the 3-6 title)' },
+    { role: 'system', content: systemPrompt },
     { role: 'user', content: content.slice(0, 500) }
   ];
   
@@ -1512,13 +1565,30 @@ export async function generateTitle(content, model, provider, baseUrl, apiKey, {
         onDone: () => {},
         onError: () => {},
       });
-      return result.replace(/^["']|["']$/g, '').trim() || 'New Chat';
+      // Clean up - remove quotes, markdown, extra whitespace, citations
+      return cleanTitle(result);
     }
     
     const title = await chat({ messages, model, provider, baseUrl, apiKey });
-    // Clean up title - remove quotes, extra whitespace
-    return title.replace(/^["']|["']$/g, '').trim() || 'New Chat';
+    return cleanTitle(title);
   } catch {
     return 'Untitled';
   }
 }
+
+/**
+ * Clean up generated title - remove quotes, markdown, citations, extra whitespace
+ */
+function cleanTitle(title) {
+  if (!title) return 'New Chat';
+  
+  return title
+    .replace(/^["']|["']$/g, '')      // Remove surrounding quotes
+    .replace(/\*\*/g, '')              // Remove bold markdown
+    .replace(/\*/g, '')                // Remove italic markdown
+    .replace(/\[[\d,\s]+\]/g, '')      // Remove citation brackets like [1] or [1, 2]
+    .replace(/[.,:;!?]$/g, '')         // Remove trailing punctuation
+    .replace(/\n.*/g, '')              // Take only first line
+    .trim() || 'New Chat';
+}
+

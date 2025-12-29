@@ -32,29 +32,7 @@ const WEB_SEARCH_TOOL = {
   type: 'function',
   function: {
     name: 'web_search',
-    description: `Search the web for current information. Use when you need:
-- Up-to-date information (news, prices, weather, stocks)
-- Recent events or announcements
-- Information that may have changed since training data
-- User explicitly asks to search
-
-DATE CONTEXT: ${dateISO}
-- Use this to anchor at least 1 query with "today", "this week", or the current month/year.
-
-IMPORTANT: WEB SEARCH TOOL CALL RULES (FIELD + QUERY QUALITY)
-- NEVER put web_search payload/JSON in response/content. Tool args go ONLY in the tool/function_call field.
-- Use web_search when info may be time-sensitive or changed (news, prices, weather, stocks), or user asks to search.
-- Always pass queries as an array of 1–4 strings (min 1, max 4). No other required fields.
-- Queries MUST be varied and specific: include different phrasings, key entities, and time anchors (month/year or "today").
-- Do not include explanations inside queries. Put brief user-facing text only in commentary.
-- After tool results: answer in plain language in response/content (no tool JSON), citing the findings.
-- If user explicitly says "don't browse/search", do NOT call web_search.
-- Do not follow message history formatting; logs may be post-processed.
-- Provide 1-4 varied queries for better coverage.
-
-EXAMPLE:
-User: "What's the latest on AI?"
-queries: ["latest AI news December 2025", "recent AI breakthroughs", "AI industry updates today"]`,
+    description: `Search the web for current information. Use for: up-to-date news, prices, weather, stocks, recent events, or when user asks to search. DATE: ${dateISO}. Provide 1-4 varied, specific queries with time anchors (month/year). Put tool args ONLY in function_call field, not in response content. After results: answer in plain language citing findings.`,
     parameters: {
       type: 'object',
       properties: {
@@ -63,7 +41,7 @@ queries: ["latest AI news December 2025", "recent AI breakthroughs", "AI industr
           items: { type: 'string' },
           minItems: 1,
           maxItems: 4,
-          description: 'Search queries (1-4). Use specific, varied queries.',
+          description: 'Search queries (1-4). Use specific, varied queries with time anchors.',
         },
         commentary: {
           type: 'string',
@@ -386,11 +364,15 @@ router.post('/', async (req, res) => {
           res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: `<!--command-output-->${outputPayload}<!--/command-output-->` } }] })}\n\n`);
           
           // Send tool_result event to trigger client's handleToolResult (shows waiting for iteration loader)
+          // Include data for UI to display search results
           res.write(`data: ${JSON.stringify({ 
             tool_result: { 
               id: toolCall.id,
               name: toolCall.function?.name,
+              input: input,
               success: result.success,
+              output: result.output,
+              data: result,
             } 
           })}\n\n`);
         }

@@ -8,6 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const { getModelConfig } = require('../config/models');
+const { calculateCost } = require('../config/pricing');
 const { trackRequest } = require('../services/analytics');
 const { 
   parseThinkingFromResponse,
@@ -188,6 +189,22 @@ async function handleOpenAIChat(req, res, config, messages, options) {
         }
       }
     } finally {
+      // Send usage event with cost before ending stream
+      if (usageData) {
+        const inputTokens = usageData.prompt_tokens || 0;
+        const outputTokens = usageData.completion_tokens || 0;
+        const cost = calculateCost(config.modelId, inputTokens, outputTokens);
+        
+        res.write(`data: ${JSON.stringify({ 
+          usage: {
+            prompt_tokens: inputTokens,
+            completion_tokens: outputTokens,
+            total_tokens: inputTokens + outputTokens,
+            cost: cost,
+          }
+        })}\n\n`);
+      }
+      res.write('data: [DONE]\n\n');
       res.end();
       
       // Parse thinking from response
@@ -385,7 +402,18 @@ async function handleGeminiChat(req, res, config, messages, options) {
       
       // Send usage event before [DONE]
       if (usageData) {
-        res.write(`data: ${JSON.stringify({ usage: usageData })}\n\n`);
+        const inputTokens = usageData.promptTokenCount || 0;
+        const outputTokens = usageData.candidatesTokenCount || 0;
+        const cost = calculateCost(config.modelId, inputTokens, outputTokens);
+        
+        res.write(`data: ${JSON.stringify({ 
+          usage: {
+            prompt_tokens: inputTokens,
+            completion_tokens: outputTokens,
+            total_tokens: inputTokens + outputTokens,
+            cost: cost,
+          }
+        })}\n\n`);
       }
       res.write('data: [DONE]\n\n');
     } finally {
@@ -536,7 +564,18 @@ async function handleAnthropicChat(req, res, config, messages, options) {
       
       // Send usage event before [DONE]
       if (usageData) {
-        res.write(`data: ${JSON.stringify({ usage: usageData })}\n\n`);
+        const inputTokens = usageData.input_tokens || 0;
+        const outputTokens = usageData.output_tokens || 0;
+        const cost = calculateCost(config.modelId, inputTokens, outputTokens);
+        
+        res.write(`data: ${JSON.stringify({ 
+          usage: {
+            prompt_tokens: inputTokens,
+            completion_tokens: outputTokens,
+            total_tokens: inputTokens + outputTokens,
+            cost: cost,
+          }
+        })}\n\n`);
       }
       res.write('data: [DONE]\n\n');
     } finally {

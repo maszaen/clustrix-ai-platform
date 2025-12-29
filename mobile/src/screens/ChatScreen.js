@@ -787,13 +787,14 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       }
 
       // Delay clearing streaming states to prevent blink
-      // This gives React time to render the saved message before removing the streaming message
+      // 2 second delay ensures React fully renders saved message before removing streaming message
+      // Shorter delays (50-500ms) cause visible blink on slower devices
       setTimeout(() => {
         setIsStreaming(false);
         setStreamingContent('');
         setThinkingContent('');
         setStreamingMessageId(null);
-      }, 50);
+      }, 2000);
 
       if (isNewSession) {
         const title = await generateTitle(text, settings.model, settings.provider, settings.baseUrl, settings.apiKey, {

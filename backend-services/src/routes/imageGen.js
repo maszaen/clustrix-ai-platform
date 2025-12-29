@@ -8,6 +8,7 @@
 const express = require('express');
 const router = express.Router();
 const { getModelConfig } = require('../config/models');
+const { calculateCost } = require('../config/pricing');
 
 // ===================================================================
 // IMAGE GENERATION SUPPORT MAP
@@ -438,12 +439,14 @@ router.post('/', async (req, res) => {
         });
         
         if (stream) {
-          // Send usage event before [DONE] so frontend can display token count
+          // Send usage event before [DONE] so frontend can display token count + cost
+          const cost = calculateCost(config.modelId, totalInputTokens, totalOutputTokens);
           res.write(`data: ${JSON.stringify({ 
             usage: { 
               prompt_tokens: totalInputTokens, 
               completion_tokens: totalOutputTokens,
               total_tokens: totalInputTokens + totalOutputTokens,
+              cost: cost,
             } 
           })}\n\n`);
           res.write('data: [DONE]\n\n');

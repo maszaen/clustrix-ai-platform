@@ -100,20 +100,51 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
   const [cloudProviders, setCloudProviders] = useState([]);
   const [isLoadingCloud, setIsLoadingCloud] = useState(false);
   const [cloudError, setCloudError] = useState(null);
+  
+  // Local mode deferred loading - prevents stuttering on modal open
+  // When cloud mode is OFF, delay loading providers/models to let slide animation complete
+  const [isLocalDataReady, setIsLocalDataReady] = useState(settings.useClustrixCloud ?? false);
 
   const [localSettings, setLocalSettings] = useState({
     provider: settings.provider || 'openrouter',
     model: settings.model || '',
-    apiKey: providerApiKeys[settings.provider] || settings.apiKey || '',
-    baseUrl: settings.baseUrl || '',
+    apiKey: providerApiKeys[settings.provider || 'openrouter'] || settings.apiKey || '',
+    baseUrl: settings.baseUrl || DEFAULT_PROVIDERS[settings.provider || 'openrouter']?.baseUrl || '',
     agenticMode: settings.agenticMode ?? false,
     generateImage: settings.generateImage ?? false,
   });
+
+  // Sync localSettings when providerApiKeys changes (e.g., after initial load)
+  useEffect(() => {
+    const currentApiKey = providerApiKeys[localSettings.provider];
+    const currentProvider = [...DEFAULT_PROVIDERS_LIST, ...customProviders].find(p => p.id === localSettings.provider);
+    const currentBaseUrl = currentProvider?.base_url || DEFAULT_PROVIDERS[localSettings.provider]?.baseUrl || '';
+    
+    setLocalSettings(prev => ({
+      ...prev,
+      apiKey: currentApiKey || prev.apiKey || '',
+      baseUrl: prev.baseUrl || currentBaseUrl || '',
+    }));
+  }, [providerApiKeys, localSettings.provider, customProviders]);
 
   // Sync cloud mode from settings
   useEffect(() => {
     setUseCloudMode(settings.useClustrixCloud ?? false);
   }, [settings.useClustrixCloud]);
+  
+  // Deferred loading for local mode - wait 500ms after mount to load data
+  // This lets the slide-up animation complete smoothly before heavy render
+  useEffect(() => {
+    if (!useCloudMode && !isLocalDataReady) {
+      const timer = setTimeout(() => {
+        setIsLocalDataReady(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    } else if (useCloudMode) {
+      // Cloud mode doesn't need deferred loading (data comes from fetch)
+      setIsLocalDataReady(true);
+    }
+  }, [useCloudMode]);
 
   // Fetch cloud models when cloud mode is enabled
   useEffect(() => {
@@ -169,11 +200,15 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
   const hideAlert = () => setAlert(prev => ({ ...prev, visible: false }));
 
   // Combine default and custom providers (or use cloud providers)
+  // Return empty array if local data not ready yet (deferred loading)
   const allProviders = useCloudMode 
     ? cloudProviders 
-    : [...DEFAULT_PROVIDERS_LIST, ...customProviders.map(p => ({ id: p.id, name: p.name, base_url: p.base_url, is_custom: true }))];
+    : (isLocalDataReady 
+        ? [...DEFAULT_PROVIDERS_LIST, ...customProviders.map(p => ({ id: p.id, name: p.name, base_url: p.base_url, is_custom: true }))]
+        : []);
 
   // Get models for current provider (or use cloud models)
+  // Return empty array if local data not ready yet (deferred loading)
   const getModelsForProvider = (providerId) => {
     if (useCloudMode) {
       return cloudModels.filter(m => m.provider === providerId).map(m => ({
@@ -182,6 +217,8 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
         provider: m.provider,
       }));
     }
+    // Deferred loading - return empty until ready
+    if (!isLocalDataReady) return [];
     const defaultModels = DEFAULT_MODELS.filter(m => m.provider === providerId);
     const custom = customModels.filter(m => m.provider === providerId);
     return [...defaultModels, ...custom];
@@ -189,10 +226,15 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
 
   const availableModels = getModelsForProvider(localSettings.provider);
 
-  // Auto-save effect with debounce
+  // Track if user has interacted with the form (prevents auto-save on initial load)
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+
+  // Auto-save effect with debounce - only after user interaction
   useEffect(() => {
+    // Skip auto-save until user has interacted
+    if (!hasUserInteracted) return;
+    
     const timer = setTimeout(async () => {
-      // Allow saving even if incomplete, validation happens during chat
       await updateProviderApiKey(localSettings.provider, localSettings.apiKey);
       updateSettings({
         provider: localSettings.provider,
@@ -202,11 +244,12 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
         agenticMode: localSettings.agenticMode,
         generateImage: localSettings.generateImage,
       });
-    }, 100);
+    }, 500);
     return () => clearTimeout(timer);
-  }, [localSettings.provider, localSettings.model, localSettings.baseUrl, localSettings.apiKey]); // Exclude toggles from debounce loop
+  }, [localSettings.provider, localSettings.model, localSettings.baseUrl, localSettings.apiKey, hasUserInteracted]);
 
   const handleProviderChange = (provider) => {
+    setHasUserInteracted(true);
     const models = getModelsForProvider(provider.id);
     const newSettings = {
       ...localSettings,
@@ -351,9 +394,9 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
             onSelect={handleProviderChange}
             onAddNew={useCloudMode ? null : () => setAddProviderModal(true)}
             addNewLabel="Add Custom Provider"
-            disabled={useCloudMode && (isLoadingCloud || allProviders.length === 0)}
+            disabled={(useCloudMode && (isLoadingCloud || allProviders.length === 0)) || (!useCloudMode && !isLocalDataReady)}
           />
-          {!useCloudMode && customProviders.length > 0 && (
+          {!useCloudMode && isLocalDataReady && customProviders.length > 0 && (
             <View style={styles.modelChips}>
               {customProviders.map(provider => (
                 <Pressable
@@ -381,7 +424,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
               <TextInput
                 style={styles.inputApiKey}
                 value={localSettings.apiKey}
-                onChangeText={(text) => setLocalSettings({ ...localSettings, apiKey: text })}
+                onChangeText={(text) => { setHasUserInteracted(true); setLocalSettings({ ...localSettings, apiKey: text }); }}
                 placeholder="Enter your API key"
                 placeholderTextColor={COLORS.fgMuted}
                 secureTextEntry={!showApiKey}
@@ -403,7 +446,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
             <TextInput
               style={styles.input}
               value={localSettings.baseUrl}
-              onChangeText={(text) => setLocalSettings({ ...localSettings, baseUrl: text })}
+              onChangeText={(text) => { setHasUserInteracted(true); setLocalSettings({ ...localSettings, baseUrl: text }); }}
               placeholder={DEFAULT_PROVIDERS[localSettings.provider]?.baseUrl || 'https://api.example.com/v1'}
               placeholderTextColor={COLORS.fgMuted}
               autoCapitalize="none"
@@ -418,14 +461,14 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
             label="Select Model"
             value={localSettings.model}
             options={availableModels}
-            onSelect={(item) => setLocalSettings({ ...localSettings, model: item.model_id })}
+            onSelect={(item) => { setHasUserInteracted(true); setLocalSettings({ ...localSettings, model: item.model_id }); }}
             renderOption={(item) => item?.label || item?.model_id || 'Select model'}
             onAddNew={useCloudMode ? null : () => setAddModelModal(true)}
             addNewLabel="Add Custom Model"
-            disabled={useCloudMode && (isLoadingCloud || availableModels.length === 0)}
+            disabled={(useCloudMode && (isLoadingCloud || availableModels.length === 0)) || (!useCloudMode && !isLocalDataReady)}
           />
 
-          {!useCloudMode && availableModels.filter(m => !m.is_default).length > 0 && (
+          {!useCloudMode && isLocalDataReady && availableModels.filter(m => !m.is_default).length > 0 && (
             <View style={styles.modelChips}>
               {availableModels.filter(m => !m.is_default).map(model => (
                 <Pressable
@@ -443,7 +486,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
               ))}
             </View>
           )}
-          {!useCloudMode && availableModels.filter(m => !m.is_default).length > 0 && (
+          {!useCloudMode && isLocalDataReady && availableModels.filter(m => !m.is_default).length > 0 && (
             <Text style={styles.hint}>Long press custom models to rename/delete</Text>
           )}
         </View>

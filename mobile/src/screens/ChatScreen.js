@@ -4,7 +4,7 @@ import ReanimatedModule, { useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { LegendList } from '@legendapp/list';
 import { Ionicons } from '@expo/vector-icons';
-import { Info, Server, ArrowDownCircle, ArrowUpCircle, BarChart3, DollarSign } from 'lucide-react-native';
+import { Info, Server, ArrowDownCircle, ArrowUpCircle, BarChart3, DollarSign, Minimize2, Maximize2, MessageSquare, ListChevronsDownUp, ListChevronsUpDown, MessageCircleQuestion } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { WebView } from 'react-native-webview';
 import { useApp } from '../context/AppContext';
@@ -140,6 +140,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const [thinkingContent, setThinkingContent] = useState('');
   const [newMessageId, setNewMessageId] = useState(null);
   const [streamingMessageId, setStreamingMessageId] = useState(null); // Stable ID for streaming message to prevent blink
+  const [streamingMessageIndex, setStreamingMessageIndex] = useState(null); // Stable index for streaming message key - prevents key change during stream
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [attachmentCount, setAttachmentCount] = useState(0); // Track attachment count for layout adjustments
@@ -149,7 +150,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const loadingTimeoutRef = useRef(null);
   const [inputText, setInputText] = useState('');
   const [retryTarget, setRetryTarget] = useState(null);
-  const [retryOptionsVisible, setRetryOptionsVisible] = useState(false);
+  const [retryMenu, setRetryMenu] = useState({ visible: false, message: null, position: null }); // Retry context menu state (like metadata)
   const [retryReasonVisible, setRetryReasonVisible] = useState(false);
   const [retryReason, setRetryReason] = useState('');
   const [metadataMenu, setMetadataMenu] = useState({ visible: false, message: null, position: null });
@@ -189,6 +190,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const isSendingFromWelcome = useRef(false);
   const abortControllerRef = useRef(null);
   const lastCreatedSessionId = useRef(null);
+  const isGeneratingTitleRef = useRef(false); // Prevent duplicate title generation requests
   const shouldScrollOnSizeChange = useRef(false); // Flag: scroll to bottom on every content size change
   const itemHeights = useRef({});
   const trigger = currentSession && messages.length > 0;
@@ -326,6 +328,31 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       });
     }
   }, [isStreaming, listContentHeight, listLayoutHeight]); // Removed showSpacer from deps
+
+  // Clear streaming state when saved assistant message appears
+  // This prevents blink by keeping streaming message visible until saved message is in state
+  // Flow: stream ends → isStreaming=false → appendMessage saves → messages updates → 
+  //       this effect detects saved message → waits for render → clears streamingContent
+  useEffect(() => {
+    // Only run when stream just ended (isStreaming=false) but we still have streaming content
+    if (!isStreaming && streamingContent) {
+      // Check if last message is a saved assistant response
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg?.role === 'assistant') {
+        // Saved message exists - wait for next frame to ensure it's rendered
+        // Then clear streaming state so streaming message disappears
+        // Using requestAnimationFrame + setTimeout ensures layout is complete
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            setStreamingContent('');
+            setThinkingContent('');
+            setStreamingMessageId(null);
+            setStreamingMessageIndex(null);
+          }, 100); // Small delay after frame to ensure paint is complete
+        });
+      }
+    }
+  }, [isStreaming, streamingContent, messages]);
 
   // React to isLoadingSession - show skeleton and enable scroll-on-size-change
   useEffect(() => {
@@ -709,6 +736,20 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     // Generate stable ID for this streaming message (prevents blink on save)
     const stableStreamingId = `streaming-${Date.now()}`;
     setStreamingMessageId(stableStreamingId);
+    
+    // Store stable index for streaming message key
+    // This MUST stay constant during entire stream to prevent key change → unmount → blink
+    // IMPORTANT: Use actual message_index from last message, NOT messages.length!
+    // With pagination/lazy load, messages.length != actual message count
+    // For new session: user=0, assistant=1
+    // For existing session: 
+    //   - messages state here is BEFORE user message is appended (closure)
+    //   - last message has index N
+    //   - user message will get index N+1
+    //   - assistant message will get index N+2
+    const lastMsgIndex = messages.length > 0 ? (messages[messages.length - 1].message_index ?? messages.length - 1) : -1;
+    const expectedAssistantIndex = isNewSession ? 1 : lastMsgIndex + 2;
+    setStreamingMessageIndex(expectedAssistantIndex);
 
     let fullContent = '';
     let fullThinking = '';
@@ -760,6 +801,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         setStreamingContent('');
         setThinkingContent('');
         setStreamingMessageId(null);
+        setStreamingMessageIndex(null);
         setInputText(text);
         return;
       }
@@ -786,23 +828,34 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         await appendMessage('assistant', content, metadata);
       }
 
-      // Delay clearing streaming states to prevent blink
-      // 2 second delay ensures React fully renders saved message before removing streaming message
-      // Shorter delays (50-500ms) cause visible blink on slower devices
-      setTimeout(() => {
-        setIsStreaming(false);
-        setStreamingContent('');
-        setThinkingContent('');
-        setStreamingMessageId(null);
-      }, 2000);
+      // DON'T clear streamingContent here - it causes blink!
+      // The streaming message needs to stay visible until saved message is rendered
+      // Only set isStreaming to false to indicate stream is complete
+      // streamingContent will be cleared by useEffect when saved message appears
+      setIsStreaming(false);
 
-      if (isNewSession) {
-        const title = await generateTitle(text, settings.model, settings.provider, settings.baseUrl, settings.apiKey, {
-          useCloud: settings.useClustrixCloud,
-          idToken: accessToken,
-          userEmail: currentUser?.email,
-        });
-        await updateSession({ name: title }, session);
+      // Generate title if needed (new session OR existing session with default title)
+      // Use ref to prevent duplicate requests if already generating
+      const currentTitle = isNewSession ? 'New Chat' : (sessionRef.current?.name || '');
+      const needsTitle = !currentTitle || currentTitle === 'New Chat' || currentTitle === 'Untitled';
+      
+      if (needsTitle && !isGeneratingTitleRef.current) {
+        isGeneratingTitleRef.current = true;
+        try {
+          const title = await generateTitle(text, settings.model, settings.provider, settings.baseUrl, settings.apiKey, {
+            useCloud: settings.useClustrixCloud,
+            idToken: accessToken,
+            userEmail: currentUser?.email,
+          });
+          // Update session with generated title
+          if (isNewSession) {
+            await updateSession({ name: title }, session);
+          } else {
+            await updateSession({ name: title });
+          }
+        } finally {
+          isGeneratingTitleRef.current = false;
+        }
       }
     };
 
@@ -902,6 +955,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
             setStreamingContent('');
             setThinkingContent('');
             setStreamingMessageId(null);
+            setStreamingMessageIndex(null);
             return; // Exit - don't retry
           }
           
@@ -1039,6 +1093,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       setStreamingContent('');
       setThinkingContent('');
       setStreamingMessageId(null);
+      setStreamingMessageIndex(null);
     };
 
     const handleToolCall = (toolCall) => {
@@ -1136,6 +1191,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     setStreamingContent('');
     setThinkingContent('');
     setStreamingMessageId(null);
+    setStreamingMessageIndex(null);
 
     // 3. Restore last user message to input and delete from chat
     // Ensure we have messages and the last one is from user (it should be, AI is not added yet)
@@ -1211,10 +1267,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     return '';
   }, [messages]);
 
-  // Retry modal trigger
-  const handleRetryModal = useCallback((message) => {
+  // Retry menu trigger - opens context menu at button position (like metadata)
+  const handleRetryModal = useCallback((message, buttonPosition) => {
     setRetryTarget(message);
-    setRetryOptionsVisible(true);
+    setRetryMenu({ visible: true, message, position: buttonPosition });
   }, []);
 
   // Retry submission with prompt injection rules
@@ -1271,7 +1327,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     log('[Retry] Injected prompt:', injectedUserPrompt.substring(0, 150));
 
     // Close modals and clear state
-    setRetryOptionsVisible(false);
+    setRetryMenu({ visible: false, message: null, position: null });
     setRetryReasonVisible(false);
     setRetryReason('');
     setRetryTarget(null);
@@ -1381,6 +1437,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         setStreamingContent('');
         setThinkingContent('');
         setStreamingMessageId(null);
+        setStreamingMessageIndex(null);
         log('[Retry] Complete!');
       },
       onError: async (error) => {
@@ -1389,16 +1446,17 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         setStreamingContent('');
         setThinkingContent('');
         setStreamingMessageId(null);
+        setStreamingMessageIndex(null);
         await appendMessage('assistant', `Error: ${error}`, { error: true });
       },
     });
-  }, [retryTarget, currentSession, removeMessage, messages, settings, appendMessage, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, onStreamingThinking, triggerHaptic]);
+  }, [retryTarget, currentSession, removeMessage, messages, settings, appendMessage, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, setStreamingMessageIndex, onStreamingThinking, triggerHaptic]);
 
   // Handle like/dislike toggle
   const handleReaction = useCallback((message, liked) => {
     if (!currentSession || message?.message_index === undefined) return;
-    const newState = message.isLiked === liked ? null : liked;
-    setMessageMetadata(currentSession.id, message.message_index, { isLiked: newState });
+    // liked can be: true (like), false (dislike), or null (unlike/undislike)
+    setMessageMetadata(currentSession.id, message.message_index, { isLiked: liked });
   }, [currentSession, setMessageMetadata]);
 
   // Open metadata context menu with position
@@ -1414,7 +1472,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       isUser={item.role === 'user'}
       isNew={item._key === newMessageId}
       onShowThinking={onShowThinking}
-      onRetry={item.isLastAiMessage ? () => handleRetryModal(item) : null}
+      onRetry={item.isLastAiMessage ? (msg, pos) => handleRetryModal(msg || item, pos) : null}
       onSelectText={onSelectText}
       onReact={(liked) => handleReaction(item, liked)}
       onShowMetadata={(msg, pos) => handleMetadataOpen(msg || item, pos)}
@@ -1426,23 +1484,38 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   // Key must be STABLE across prepends - use message_index only (not array index!)
   // Array index changes when prepending, causing LegendList to think items are new
   // Use FULL session ID in key to prevent recycler confusion across sessions
-  // ALSO use message.id as fallback for uniqueness when message_index might be duplicate
+  // Key format: msg-{session}-{message_index}-{role}-{suffix}
+  // For assistant messages, use 'streaming' suffix to match streaming message key
+  // This ensures smooth transition from streaming to saved (same key = no remount = no blink)
   const displayMessagesBase = useMemo(() => {
     const seen = new Set();
-    return messages.map((m, idx) => {
-      // Primary key format - use message.id if available for guaranteed uniqueness
-      const uniqueId = m.id || `idx-${idx}`;
-      const key = `msg-${currentSession?.id || 'x'}-${m.message_index}-${m.role}-${uniqueId}`;
-      
-      // Dedupe check (shouldn't happen, but safety)
-      if (seen.has(key)) {
-        console.warn('[ChatScreen] Duplicate key detected, adding suffix:', key);
-        return { ...m, _key: `${key}-dup-${idx}` };
-      }
-      seen.add(key);
-      return { ...m, _key: key };
-    });
-  }, [messages, currentSession?.id]);
+    const filtered = messages
+      // Filter out the saved assistant message that matches streaming index
+      // This prevents duplicate display during the brief transition period
+      .filter((m, idx) => {
+        // If streaming content exists and this message has same index as streaming, hide it
+        // The streaming message will show instead (with same content)
+        if (streamingContent && streamingMessageIndex !== null && m.role === 'assistant' && m.message_index === streamingMessageIndex) {
+          return false;
+        }
+        return true;
+      })
+      .map((m, idx) => {
+        // For assistant messages, use 'streaming' suffix to match streaming message key
+        // This allows LegendList to reuse the same item when transitioning from streaming to saved
+        const suffix = m.role === 'assistant' ? 'streaming' : (m.id || `idx-${idx}`);
+        const key = `msg-${currentSession?.id || 'x'}-${m.message_index}-${m.role}-${suffix}`;
+        
+        // Dedupe check (shouldn't happen, but safety)
+        if (seen.has(key)) {
+          console.warn('[ChatScreen] Duplicate key detected, adding suffix:', key);
+          return { ...m, _key: `${key}-dup-${idx}` };
+        }
+        seen.add(key);
+        return { ...m, _key: key };
+      });
+    return filtered;
+  }, [messages, currentSession?.id, streamingContent, streamingMessageIndex]);
   
   // Create mutable copy for streaming message push
   let displayMessages = [...displayMessagesBase];
@@ -1450,18 +1523,21 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   // Check if content exceeds viewport - 30px threshold
   const shouldHaveSpacer = listContentHeight >= (listLayoutHeight - 30);
   
-  // Only show streaming message if we're actually streaming AND no saved assistant message exists yet
-  // This prevents duplicate display during the brief state transition
-  const lastMessage = displayMessages[displayMessages.length - 1];
-  const alreadyHasSavedResponse = lastMessage?.role === 'assistant' && !lastMessage?.isStreaming;
+  // Streaming message visibility - simple logic:
+  // Show streaming message while we have streaming content
+  // Hide when streamingContent is cleared (by useEffect after saved message renders)
+  // This ensures streaming message stays visible until saved message is fully rendered
+  const shouldShowStreamingMessage = !!streamingContent || isStreaming;
   
-  if ((streamingContent || isStreaming) && !alreadyHasSavedResponse) {
-    // Key must be UNIQUE - use streamingMessageId for guaranteed uniqueness
-    // This prevents any collision with saved messages
-    const streamingIndex = messages.length;
+  if (shouldShowStreamingMessage && streamingMessageIndex !== null) {
+    // Use STABLE streamingMessageIndex set at stream start - NOT messages.length!
+    // messages.length changes when appendMessage adds saved message, causing key change → unmount → blink
     const sessionIdPart = currentSession?.id || 'x';
+    const streamingKey = `msg-${sessionIdPart}-${streamingMessageIndex}-assistant-streaming`;
+    // Use same key format as saved messages: msg-{session}-{index}-{role}-{uniqueId}
+    // For streaming, use 'streaming' as uniqueId - will be replaced by actual id when saved
     displayMessages.push({
-      _key: `msg-${sessionIdPart}-${streamingIndex}-assistant-streaming-${streamingMessageId || 'active'}`,
+      _key: streamingKey,
       role: 'assistant',
       content: thinkingContent ? `<thinking>${thinkingContent}</thinking>\n\n${streamingContent}` : streamingContent || (toolStatus ? '' : '...'),
       isStreaming: true,
@@ -1772,44 +1848,44 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         </View>
       </ReanimatedModule.View>
 
-      <Modal
-        visible={retryOptionsVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRetryOptionsVisible(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setRetryOptionsVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.retryCard}>
-                <Text style={styles.retryTitle}>Retry response</Text>
-                <Pressable style={styles.retryOption} onPress={() => handleRetrySubmit('concise')} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
-                  <Text style={styles.retryOptionText}>Concise response</Text>
-                </Pressable>
-                <Pressable style={styles.retryOption} onPress={() => handleRetrySubmit('detailed')} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
-                  <Text style={styles.retryOptionText}>Detailed response</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.retryOption, styles.retryOptionLast]}
-                  onPress={() => {
-                    setRetryOptionsVisible(false);
-                    setRetryReasonVisible(true);
-                  }}
-                  android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-                >
-                  <Text style={styles.retryOptionText}>Other (give reason)</Text>
-                </Pressable>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+      {/* Retry context menu - positioned same as metadata */}
+      <ContextMenuFixed
+        visible={retryMenu.visible}
+        onClose={() => setRetryMenu({ visible: false, message: null, position: null })}
+        sessionName="Retry response"
+        position={retryMenu.position ? {
+          // Position near the button - if button is in lower half of screen, show above it
+          top: retryMenu.position.y > 400 ? undefined : retryMenu.position.y + 80,
+          bottom: retryMenu.position.y > 400 ? (Dimensions.get('window').height - retryMenu.position.y + -38) : undefined,
+          left: 76,
+        } : { top: 100, left: 16 }}
+        options={[
+          { 
+            label: 'Concise response', 
+            icon: ListChevronsDownUp, 
+            onPress: () => handleRetrySubmit('concise') 
+          },
+          { 
+            label: 'Detailed response', 
+            icon: ListChevronsUpDown, 
+            onPress: () => handleRetrySubmit('detailed') 
+          },
+          { 
+            label: 'Other (give reason)', 
+            icon: MessageCircleQuestion, 
+            onPress: () => {
+              setRetryMenu({ visible: false, message: null, position: null });
+              setRetryReasonVisible(true);
+            }
+          },
+        ]}
+      />
 
       {/* Retry reason modal */}
       <InputModal
         visible={retryReasonVisible}
-        title="Why retry?"
-        fields={[{ key: 'reason', label: 'Reason', placeholder: 'Explain what to fix', value: retryReason, multiline: true, required: true }]}
+        title="Give reason why retry?"
+        fields={[{ key: 'reason', label: '', placeholder: 'Explain what to fix', value: retryReason, multiline: true, required: true }]}
         submitText="Send"
         onSubmit={(values) => handleRetrySubmit('other', values.reason)}
         onCancel={() => {
@@ -1990,21 +2066,25 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: COLORS.bgSecondary,
     borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
   },
   retryTitle: {
     color: COLORS.fg,
     fontSize: 17,
     fontFamily: FONTS.display,
     marginBottom: 8,
+    borderBottomWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+
+    borderBottomColor: COLORS.borderLight,
   },
   retryOption: {
     paddingVertical: 12,
+    paddingHorizontal: 16,
+
   },
   retryOptionLast: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
+    
   },
   retryOptionText: {
     color: COLORS.fg,

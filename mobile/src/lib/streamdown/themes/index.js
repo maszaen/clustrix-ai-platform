@@ -8,6 +8,7 @@
  * to set their own fonts. Only monospace is specified for code blocks.
  */
 import { Platform } from 'react-native';
+import { COLORS } from '../../../constants/colors';
 // ============================================================================
 // Color Palettes
 // ============================================================================
@@ -117,6 +118,7 @@ export function getTextStyles(theme) {
             ...withFont('bold'),
             fontSize: 17,
             lineHeight: 36,
+            color: COLORS.aiBold,
             fontWeight: 'normal',  // Font is already bold natively
             marginBottom: theme.spacing.block,
         },
@@ -125,6 +127,7 @@ export function getTextStyles(theme) {
             ...withFont('bold'),
             fontSize: 17,
             lineHeight: 32,
+            color: COLORS.aiBold,
             fontWeight: 'normal',  // Font is already bold natively
             marginBottom: theme.spacing.block,
         },
@@ -133,6 +136,7 @@ export function getTextStyles(theme) {
             ...withFont('bold'),
             fontSize: 17,
             lineHeight: 28,
+            color: COLORS.aiBold,
             fontWeight: 'normal',  // Font is already bold natively
             marginBottom: theme.spacing.block,
         },
@@ -140,6 +144,7 @@ export function getTextStyles(theme) {
             color: theme.colors.foreground,
             ...withFont('bold'),
             fontSize: 14.7,
+            color: COLORS.aiBold,
             lineHeight: 26,
             fontWeight: 'normal',  // Font is already bold natively
             marginBottom: theme.spacing.block,
@@ -150,12 +155,14 @@ export function getTextStyles(theme) {
             fontSize: 14.7,
             lineHeight: 24,
             fontWeight: 'normal',  // Font is already bold natively
+            color: COLORS.aiBold,
             marginBottom: theme.spacing.block,
         },
         heading6: {
             color: theme.colors.foreground,
             ...withFont('bold'),
             fontSize: 14.7,
+            color: COLORS.aiBold,
             lineHeight: 22,
             fontWeight: 'normal',  // Font is already bold natively
             marginBottom: theme.spacing.block,
@@ -169,6 +176,7 @@ export function getTextStyles(theme) {
         },
         bold: {
             ...withFont('bold'),
+            color: COLORS.aiBold,
             fontWeight: 'normal',  // Font is already bold natively
         },
         italic: {
@@ -176,10 +184,10 @@ export function getTextStyles(theme) {
             // Use italic font file from theme.fonts.italic if provided
         },
         code: {
-            ...withFont('mono'),
-            fontSize: 14,
-            color: theme.colors.codeForeground,
-            backgroundColor: theme.colors.codeBackground,
+            ...withFont('bold'),
+            fontSize: 14.7,
+            color: COLORS.fgMuted,
+            backgroundColor: COLORS.primaryLight,
             paddingHorizontal: 4,
             paddingVertical: 2,
             borderRadius: 4,
@@ -207,10 +215,14 @@ export function getBlockStyles(theme) {
             borderColor: theme.colors.border,
         },
         blockquote: {
-            borderLeftWidth: 4,
+            borderLeftWidth: 2,
             borderLeftColor: theme.colors.muted,
             paddingLeft: theme.spacing.indent,
             marginBottom: theme.spacing.block,
+            paddingVertical: 6,
+            marginLeft: 1,
+            borderRadius: 8,
+            backgroundColor: COLORS.bgSecondary,
         },
         list: {
             marginBottom: theme.spacing.block,

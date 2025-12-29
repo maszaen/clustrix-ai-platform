@@ -400,6 +400,8 @@ function TypewriterLoader() {
 // Memoized ChatMessage - only re-renders when props actually change
 // CRITICAL for performance during streaming (prevents all messages re-rendering on each chunk)
 const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowThinking, onRetry, onReact, onShowMetadata, onSelectText, onImagePress }) {
+
+  
   // Animation for new user messages - fade in + subtle slide from right
   const fadeAnim = useRef(new Animated.Value(isNew && isUser ? 0 : 1)).current;
   const scaleAnim = useRef(new Animated.Value(isNew && isUser ? 0.95 : 1)).current;
@@ -408,11 +410,11 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
   const [showActions, setShowActions] = useState(!message.isStreaming && !isUser);
   const actionsOpacity = useRef(new Animated.Value(!message.isStreaming && !isUser ? 1 : 0)).current;
   const metadataBtnRef = useRef(null);
+  const retryBtnRef = useRef(null); // Ref for retry button position measurement
   
   // Context menu state
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
-  const messageRef = useRef(null);
   
   useEffect(() => {
     if (isNew && isUser) {
@@ -708,8 +710,8 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
 
         {!isInitialLoading && showActions && (
           <Animated.View style={[styles.actionRow, { opacity: actionsOpacity }]}>
-            
 
+            {/* Copy button */}
             <Pressable 
               style={styles.actionBtn} 
               onPress={handleCopy}
@@ -720,6 +722,7 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
               </View>
             </Pressable>
 
+            {/* Metadata button */}
             <View ref={metadataBtnRef} collapsable={false}>
               <Pressable 
                 style={styles.actionBtn} 
@@ -737,38 +740,50 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
               </Pressable>
             </View>
 
-            <Pressable 
-              style={styles.actionBtn} 
-              onPress={() => onReact?.(true)}
-              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
-            >
-              <View style={styles.actionBtnInner}>
-                <ThumbsUp size={16} color={message.isLiked === true ? COLORS.primary : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === true ? COLORS.primary : 'none'} />
-              </View>
-            </Pressable>
-
-            <Pressable 
-              style={styles.actionBtn} 
-              onPress={() => onReact?.(false)}
-              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
-            >
-              <View style={styles.actionBtnInner}>
-                <ThumbsDown size={16} color={message.isLiked === false ? '#f87171' : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === false ? '#f87171' : 'none'} />
-              </View>
-            </Pressable>
-
-            
-
-            {onRetry && (
+            {/* ThumbsUp button - hidden when disliked */}
+            {message.isLiked !== false && (
               <Pressable 
                 style={styles.actionBtn} 
-                onPress={() => onRetry?.(message)}
+                onPress={() => onReact?.(message.isLiked === true ? null : true)}
                 android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
               >
                 <View style={styles.actionBtnInner}>
-                  <RotateCcw size={16} color={COLORS.fgMuted} strokeWidth={2} />
+                  <ThumbsUp size={16} color={message.isLiked === true ? COLORS.fgMuted : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === true ? COLORS.icon : 'none'} />
                 </View>
               </Pressable>
+            )}
+
+            {/* ThumbsDown button - hidden when liked */}
+            {message.isLiked !== true && (
+              <Pressable 
+                style={styles.actionBtn} 
+                onPress={() => onReact?.(message.isLiked === false ? null : false)}
+                android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+              >
+                <View style={styles.actionBtnInner}>
+                  <ThumbsDown size={16} color={message.isLiked === false ? COLORS.fgMuted : COLORS.fgMuted} strokeWidth={2} fill={message.isLiked === false ? COLORS.icon : 'none'} />
+                </View>
+              </Pressable>
+            )}
+
+            {/* Retry button */}
+            {onRetry && (
+              <View ref={retryBtnRef} collapsable={false}>
+                <Pressable 
+                  style={styles.actionBtn} 
+                  onPress={() => {
+                    // Measure button position for menu placement (like metadata)
+                    retryBtnRef.current?.measureInWindow((x, y, width, height) => {
+                      onRetry?.(message, { x, y, width, height });
+                    });
+                  }}
+                  android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false }}
+                >
+                  <View style={styles.actionBtnInner}>
+                    <RotateCcw size={16} color={COLORS.fgMuted} strokeWidth={2} />
+                  </View>
+                </Pressable>
+              </View>
             )}
           </Animated.View>
         )}

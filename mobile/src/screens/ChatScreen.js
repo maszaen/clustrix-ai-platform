@@ -1564,7 +1564,14 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   
   // Normal order: oldest first, newest last
 
-  // Load more messages when scroll to top
+  // Refs for manual scroll position adjustment during prepend
+  // Using distance from BOTTOM approach - more accurate than offset from top
+  const prependScrollAdjustRef = useRef({
+    isPrepending: false,
+    distanceFromBottom: 0, // Distance from bottom before prepend
+  });
+
+  // Load more messages when scroll to top - with manual scroll position adjustment
   const handleLoadMore = useCallback(async () => {
     // Guard: Already loading or no more data
     if (isLoadingMore || !hasMoreMessages) return;
@@ -1572,6 +1579,16 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     // Guard: Debounce
     if (loadingTimeoutRef.current) return;
     loadingTimeoutRef.current = 'pending';
+    
+    // Calculate distance from BOTTOM before prepending
+    // distanceFromBottom = contentHeight - layoutHeight - scrollOffset
+    const distanceFromBottom = lastContentHeight.current - lastLayoutHeight.current - lastScrollOffset.current;
+    
+    // Save state BEFORE prepending
+    prependScrollAdjustRef.current = {
+      isPrepending: true,
+      distanceFromBottom: distanceFromBottom,
+    };
     
     loadingTimeoutRef.current = setTimeout(async () => {
       await loadMoreMessages();
@@ -1735,9 +1752,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
                 data={displayMessages}
                 keyExtractor={(item) => item._key}
                 renderItem={renderMessage}
-                estimatedItemSize={avgHeight}
+                // estimatedItemSize={avgHeight}
                 recycleItems={true}
-                drawDistance={5000}  // Increased for smoother pre-rendering of long sessions
+                drawDistance={2000}  // Increased for smoother pre-rendering of long sessions
                 initialScrollIndex={displayMessages.length > 0 ? displayMessages.length - 1 : undefined}  // Start at bottom
                 maintainScrollAtEnd
                 maintainScrollAtEndThreshold={0.02}
@@ -1749,9 +1766,27 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
-                maintainVisibleContentPosition={true}
+                maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
                 waitForInitialLayout={true}
                 onContentSizeChange={(w, h) => {
+                  // Manual scroll position adjustment after prepending messages
+                  // Using distance from BOTTOM approach for accuracy
+                  if (prependScrollAdjustRef.current.isPrepending) {
+                    const { distanceFromBottom } = prependScrollAdjustRef.current;
+                    
+                    // Calculate new scroll offset to maintain same distance from bottom
+                    // newOffset = newContentHeight - layoutHeight - distanceFromBottom
+                    const newOffset = h - lastLayoutHeight.current - distanceFromBottom;
+                    
+                    // Only adjust if valid offset
+                    if (newOffset >= 0) {
+                      flatListRef.current?.scrollToOffset({ offset: newOffset, animated: false });
+                    }
+                    
+                    // Reset prepend state
+                    prependScrollAdjustRef.current.isPrepending = false;
+                  }
+                  
                   setListContentHeight(h);
                   lastContentHeight.current = h;
                   
@@ -1771,6 +1806,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
                   const layoutMeasurement = e.nativeEvent?.layoutMeasurement || { width: 0, height: 0 };
                   
                   if (layoutMeasurement.height === 0) return;
+                  
+                  // Track scroll offset for prepend adjustment
+                  lastScrollOffset.current = contentOffset.y;
                   
                   // Calculate distance from bottom (normal list)
                   const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;

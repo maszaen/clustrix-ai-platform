@@ -196,6 +196,12 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const isGeneratingTitleRef = useRef(false); // Prevent duplicate title generation requests
   const shouldScrollOnSizeChange = useRef(false); // Flag: scroll to bottom on every content size change
   const itemHeights = useRef({});
+  
+  // FlashList unmount delay - ensure full unmount before remount on session change
+  // This prevents duplicate key issues when switching sessions rapidly
+  const [listMountKey, setListMountKey] = useState(currentSession?.id || 'welcome');
+  const listUnmountTimeoutRef = useRef(null);
+  
   const trigger = currentSession && messages.length > 0;
   
   // Scroll to bottom button - use refs to avoid re-render interference with maintainVisibleContentPosition
@@ -249,6 +255,20 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     const paddingValue = -keyboardAnimatedHeight.value;
     return {
       paddingBottom: paddingValue > 0 ? paddingValue + 75 : 85,
+    };
+  });
+  
+  // Animated style for FlashList container - use translateY to move content up with keyboard
+  // Native keyboard pushes content, but we use transform for smoother animation
+  const listContainerAnimatedStyle = useAnimatedStyle(() => {
+    // Skip animation when sidebar is open
+    if (sidebarOpen) {
+      return { transform: [{ translateY: 0 }] };
+    }
+    // keyboardAnimatedHeight.value is negative when keyboard open (e.g. -300)
+    // Use full keyboard height for transform - footer padding will be reduced accordingly
+    return {
+      transform: [{ translateY: keyboardAnimatedHeight.value }],
     };
   });
   
@@ -513,6 +533,21 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     const isWelcomeToSession = !wasSession && currentSession?.id;
     const isSessionToWelcome = wasSession && (currentSession?.id === undefined || currentSession?.id === null);
 
+    // FlashList unmount delay - set key to null first, then to new session after delay
+    // This ensures FlashList fully unmounts before remounting with new data
+    if (isSessionToSession || isWelcomeToSession || isSessionToWelcome) {
+      // Clear any pending timeout
+      if (listUnmountTimeoutRef.current) {
+        clearTimeout(listUnmountTimeoutRef.current);
+      }
+      // Set to null to unmount FlashList
+      setListMountKey(null);
+      // After brief delay, set to new session ID to remount
+      listUnmountTimeoutRef.current = setTimeout(() => {
+        setListMountKey(currentSession?.id || 'welcome');
+      }, 50);
+    }
+
     
     // Robust check for sending from welcome: flag OR matching ID of just-created session
     const sendingFromWelcome = isSendingFromWelcome.current || (currentSession?.id && lastCreatedSessionId.current === currentSession.id);
@@ -591,6 +626,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     
     return () => {
       if (skeletonTimeoutRef.current) clearTimeout(skeletonTimeoutRef.current);
+      if (listUnmountTimeoutRef.current) clearTimeout(listUnmountTimeoutRef.current);
     };
   }, [currentSession?.id, skeletonOpacity]);
 
@@ -1499,6 +1535,18 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   // This ensures smooth transition from streaming to saved (same key = no remount = no blink)
   const displayMessagesBase = useMemo(() => {
     const seen = new Set();
+    
+    // DEBUG: Check for duplicate message_index in source messages
+    const indexCount = {};
+    messages.forEach(m => {
+      const idx = m.message_index;
+      indexCount[idx] = (indexCount[idx] || 0) + 1;
+    });
+    const duplicateIndices = Object.entries(indexCount).filter(([k, v]) => v > 1);
+    if (duplicateIndices.length > 0) {
+      console.warn('[ChatScreen] DUPLICATE message_index in messages array:', duplicateIndices);
+    }
+    
     const filtered = messages
       // Filter out the saved assistant message that matches streaming index
       // This prevents duplicate display during the brief transition period
@@ -1692,9 +1740,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     if (showSpacer) {
       return <View style={{ height: SPACER_HEIGHT + dynamicOffset }} />;
     }
-    // Default minimal footer for keyboard handling
-    return <View style={{ height: (Platform.OS === 'android' ? keyboardHeight + 75 : 85) + dynamicOffset }} />;
-  }, [showSpacer, keyboardHeight, attachmentCount, pillCount, inputExtraHeight]);
+    // Default minimal footer - keyboard height handled by container transform, not padding
+    // Only add base padding for input area
+    return <View style={{ height: 85 + dynamicOffset }} />;
+  }, [showSpacer, attachmentCount, pillCount, inputExtraHeight]);
 
   const onItemLayout = useCallback((index, height) => {
   itemHeights.current[index] = height;
@@ -1739,18 +1788,18 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         </>
       ) : (
         <>
-          <Animated.View style={{ flex: 1, opacity: contentFadeAnim }}>
+          <ReanimatedModule.View style={[{ flex: 1 }, listContainerAnimatedStyle]}>
+            {/* Only render FlashList when listMountKey is set - ensures full unmount between sessions */}
+            {listMountKey && (
               <FlashList
-                key={currentSession?.id || 'welcome'}  // Force remount on session change to reset recycled state
+                key={listMountKey}
                 ref={flatListRef}
                 data={displayMessages}
                 keyExtractor={(item) => item._key}
                 renderItem={renderMessage}
                 estimatedItemSize={440}
-                drawDistance={2500}  // Increased for smoother pre-rendering of long sessions
-                // FlashList: use initialScrollIndex for initial scroll to bottom
+                drawDistance={2500}
                 initialScrollIndex={!initialScrollDoneRef.current && displayMessages.length > 0 ? displayMessages.length - 1 : undefined}
-                // FlashList: maintainVisibleContentPosition for prepend without layout shift
                 maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
                 onStartReached={() => {
                   handleLoadMore();
@@ -1763,15 +1812,11 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
                 onContentSizeChange={(w, h) => {
-                  // Mark initial scroll as done after first content render
                   if (!initialScrollDoneRef.current && displayMessages.length > 0) {
                     initialScrollDoneRef.current = true;
                   }
-                  
                   setListContentHeight(h);
                   lastContentHeight.current = h;
-                  
-                  // Scroll to bottom on every size change while loading from sidebar
                   if (shouldScrollOnSizeChange.current) {
                     flatListRef.current?.scrollToEnd({ animated: false });
                   }
@@ -1781,26 +1826,21 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
                   lastLayoutHeight.current = e.nativeEvent.layout.height;
                 }}
                 onScroll={(e) => {
-                  // Simple scroll handler - calls debounced state handler
                   const contentOffset = e.nativeEvent?.contentOffset || { x: 0, y: 0 };
                   const contentSize = e.nativeEvent?.contentSize || { width: 0, height: 0 };
                   const layoutMeasurement = e.nativeEvent?.layoutMeasurement || { width: 0, height: 0 };
-                  
                   if (layoutMeasurement.height === 0) return;
-                  
                   lastScrollOffset.current = contentOffset.y;
                   lastContentHeight.current = contentSize.height;
                   lastLayoutHeight.current = layoutMeasurement.height;
-                  
-                  // Calculate distance from bottom (normal list)
                   const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
                   const nearBottom = distanceFromBottom < 400;
-                  
                   handleScrollState(contentOffset.y, distanceFromBottom, nearBottom, contentSize.height, layoutMeasurement.height);
                 }}
                 scrollEventThrottle={16}
               />
-          </Animated.View>
+            )}
+          </ReanimatedModule.View>
           {/* Skeleton Overlay - full height, zIndex below input so form stays visible */}
           {showSkeleton && (
             <Animated.View style={[styles.skeletonContainer, { opacity: skeletonOpacity, paddingTop: topInset + 70 }]}>

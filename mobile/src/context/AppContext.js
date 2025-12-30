@@ -149,8 +149,20 @@ export function AppProvider({ children }) {
         // Only set messages if this is still the current session
         if (latestSessionIdRef.current === targetSessionId) {
           const totalCount = result.totalCount ?? result.messages?.length ?? 0;
-          setExpectedMessageCount(result.messages?.length || 0);
-          setMessages(result.messages || []);
+          
+          // Dedupe messages by message_index to prevent duplicate key issues
+          // This can happen if useEffect runs twice (React StrictMode) or race conditions
+          const seenIndices = new Set();
+          const dedupedMessages = (result.messages || []).filter(m => {
+            if (seenIndices.has(m.message_index)) {
+              return false;
+            }
+            seenIndices.add(m.message_index);
+            return true;
+          });
+          
+          setExpectedMessageCount(dedupedMessages.length);
+          setMessages(dedupedMessages);
           setHasMoreMessages(result.hasMore);
           setOldestLoadedIndex(result.oldestLoadedIndex);
           setIsLoadingSession(false);
@@ -211,11 +223,21 @@ export function AppProvider({ children }) {
           log('[LoadMore] Prepending to prev length:', prev.length);
           const updated = [...result.messages, ...prev];
 
+          // Dedupe by message_index - keep first occurrence (older messages take priority)
+          const seenIndices = new Set();
+          const deduped = updated.filter(m => {
+            if (seenIndices.has(m.message_index)) {
+              return false;
+            }
+            seenIndices.add(m.message_index);
+            return true;
+          });
+
           // Maintain a stable next index using the highest message_index we know about
-          const latestKnownIndex = updated.reduce((max, msg) => Math.max(max, msg.message_index ?? -1), -1);
+          const latestKnownIndex = deduped.reduce((max, msg) => Math.max(max, msg.message_index ?? -1), -1);
           nextMessageIndexRef.current = Math.max(nextMessageIndexRef.current, latestKnownIndex + 1);
 
-          return updated;
+          return deduped;
         });
         setHasMoreMessages(result.hasMore);
         // Use oldestLoadedIndex from result (more accurate)

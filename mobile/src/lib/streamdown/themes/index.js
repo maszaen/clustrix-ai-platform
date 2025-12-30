@@ -215,8 +215,8 @@ export function getBlockStyles(theme) {
             borderColor: theme.colors.border,
         },
         blockquote: {
-            borderLeftWidth: 2,
-            borderLeftColor: theme.colors.muted,
+            borderLeftWidth: 3,
+            borderLeftColor: COLORS.borderLight,
             paddingLeft: theme.spacing.indent,
             marginBottom: theme.spacing.block,
             marginLeft: 1,

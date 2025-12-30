@@ -148,6 +148,8 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const [pillCount, setPillCount] = useState(0); // Track pills count for layout adjustments
   // Pagination is now handled by context (hasMoreMessages, loadMoreMessages, isLoadingMore)
   const loadingTimeoutRef = useRef(null);
+  // Track if initial scroll has been applied - prevents re-applying on data changes
+  const initialScrollDoneRef = useRef(false);
   const [inputText, setInputText] = useState('');
   const [retryTarget, setRetryTarget] = useState(null);
   const [retryMenu, setRetryMenu] = useState({ visible: false, message: null, position: null }); // Retry context menu state (like metadata)
@@ -742,9 +744,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     // IMPORTANT: Use actual message_index from last message, NOT messages.length!
     // With pagination/lazy load, messages.length != actual message count
     // For new session: user=0, assistant=1
-    // For existing session: 
+    // For existing session (inverted list - index 0 = newest):
     //   - messages state here is BEFORE user message is appended (closure)
-    //   - last message has index N
+    //   - newest message (index 0) has message_index N
     //   - user message will get index N+1
     //   - assistant message will get index N+2
     const lastMsgIndex = messages.length > 0 ? (messages[messages.length - 1].message_index ?? messages.length - 1) : -1;
@@ -1528,7 +1530,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   let displayMessages = [...displayMessagesBase];
   
   // Check if content exceeds viewport - 30px threshold
-  const shouldHaveSpacer = listContentHeight >= (listLayoutHeight - 30);
+  const shouldHaveSpacer = listContentHeight >= (listLayoutHeight - 50);
   
   // Streaming message visibility - simple logic:
   // Show streaming message while we have streaming content
@@ -1573,25 +1575,39 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
 
   // Load more messages when scroll to top - with manual scroll position adjustment
   const handleLoadMore = useCallback(async () => {
+    const t = Date.now();
+    console.log('[APP#handleLoadMore] t=' + t + ' TRIGGERED isLoadingMore=' + isLoadingMore + ' hasMoreMessages=' + hasMoreMessages);
+    
     // Guard: Already loading or no more data
-    if (isLoadingMore || !hasMoreMessages) return;
+    if (isLoadingMore || !hasMoreMessages) {
+      console.log('[APP#handleLoadMore] t=' + t + ' SKIPPED (guard)');
+      return;
+    }
     
     // Guard: Debounce
-    if (loadingTimeoutRef.current) return;
+    if (loadingTimeoutRef.current) {
+      console.log('[APP#handleLoadMore] t=' + t + ' SKIPPED (debounce)');
+      return;
+    }
     loadingTimeoutRef.current = 'pending';
     
-    // Calculate distance from BOTTOM before prepending
-    // distanceFromBottom = contentHeight - layoutHeight - scrollOffset
-    const distanceFromBottom = lastContentHeight.current - lastLayoutHeight.current - lastScrollOffset.current;
+    // Use distanceFromBottom captured when scroll actually hit 0
+    // Fallback to current calculation if not captured yet
+    const distanceFromBottom = prependScrollAdjustRef.current.capturedDistFromBottom ?? 
+      (lastContentHeight.current - lastLayoutHeight.current - lastScrollOffset.current);
     
-    // Save state BEFORE prepending
+    console.log('[APP#handleLoadMore] t=' + t + ' BEFORE contentHeight=' + lastContentHeight.current.toFixed(1) + ' layoutHeight=' + lastLayoutHeight.current.toFixed(1) + ' scrollOffset=' + lastScrollOffset.current.toFixed(1) + ' distFromBottom=' + distanceFromBottom.toFixed(1) + ' (captured=' + (prependScrollAdjustRef.current.capturedDistFromBottom !== undefined) + ')');
+    
+    // Save state BEFORE prepending - clear captured value after use
     prependScrollAdjustRef.current = {
       isPrepending: true,
       distanceFromBottom: distanceFromBottom,
     };
     
     loadingTimeoutRef.current = setTimeout(async () => {
+      console.log('[APP#handleLoadMore] t=' + Date.now() + ' CALLING loadMoreMessages()');
       await loadMoreMessages();
+      console.log('[APP#handleLoadMore] t=' + Date.now() + ' loadMoreMessages() DONE');
       loadingTimeoutRef.current = null;
     }, 150);
   }, [isLoadingMore, hasMoreMessages, loadMoreMessages]);
@@ -1754,11 +1770,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
                 renderItem={renderMessage}
                 // estimatedItemSize={avgHeight}
                 recycleItems={true}
-                drawDistance={2000}  // Increased for smoother pre-rendering of long sessions
-                initialScrollIndex={displayMessages.length > 0 ? displayMessages.length - 1 : undefined}  // Start at bottom
+                drawDistance={2500}  // Increased for smoother pre-rendering of long sessions
+                // Only apply initialScrollIndex on first render, skip after to prevent scroll reset on prepend
+                initialScrollIndex={!initialScrollDoneRef.current && displayMessages.length > 0 ? displayMessages.length - 1 : undefined}
                 maintainScrollAtEnd
                 maintainScrollAtEndThreshold={0.02}
-                onStartReached={() => {handleLoadMore()}}
+                onStartReached={() => {
+                  console.log('[APP#onStartReached] t=' + Date.now() + ' FIRED scroll=' + lastScrollOffset.current.toFixed(1));
+                  handleLoadMore();
+                }}
                 onStartReachedThreshold={0.02}
                 ListHeaderComponent={ListHeader}
                 ListFooterComponent={ListFooter}
@@ -1766,25 +1786,75 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
-                maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+                maintainVisibleContentPosition={true}
                 waitForInitialLayout={true}
                 onContentSizeChange={(w, h) => {
-                  // Manual scroll position adjustment after prepending messages
-                  // Using distance from BOTTOM approach for accuracy
+                  // Mark initial scroll as done after first content render
+                  if (!initialScrollDoneRef.current && displayMessages.length > 0) {
+                    initialScrollDoneRef.current = true;
+                  }
+                  
+                  // APP-LEVEL scroll position adjustment after prepending messages
+                  // Start AGGRESSIVE RAF LOOP when prepend detected
                   if (prependScrollAdjustRef.current.isPrepending) {
                     const { distanceFromBottom } = prependScrollAdjustRef.current;
                     
-                    // Calculate new scroll offset to maintain same distance from bottom
-                    // newOffset = newContentHeight - layoutHeight - distanceFromBottom
-                    const newOffset = h - lastLayoutHeight.current - distanceFromBottom;
-                    
-                    // Only adjust if valid offset
-                    if (newOffset >= 0) {
-                      flatListRef.current?.scrollToOffset({ offset: newOffset, animated: false });
-                    }
-                    
-                    // Reset prepend state
+                    // Reset prepend state FIRST to prevent re-entry
                     prependScrollAdjustRef.current.isPrepending = false;
+                    prependScrollAdjustRef.current.isLooping = true;
+                    prependScrollAdjustRef.current.userScrollDelta = 0;
+                    
+                    console.log('[APP#onContentSizeChange] PREPEND DETECTED h=' + h.toFixed(1) + ' targetDistFromBottom=' + distanceFromBottom.toFixed(1));
+                    
+                    // Start aggressive RAF loop - runs every frame until stable
+                    let loopCount = 0;
+                    const maxLoops = 200; // More loops for stability
+                    let targetDistFromBottom = distanceFromBottom;
+                    
+                    const rescrollLoop = () => {
+                      loopCount++;
+                      
+                      // Get current values
+                      const currentH = lastContentHeight.current;
+                      const currentLayout = lastLayoutHeight.current;
+                      const currentScroll = lastScrollOffset.current;
+                      
+                      // Adjust target if user scrolled manually
+                      const userDelta = prependScrollAdjustRef.current.userScrollDelta || 0;
+                      if (userDelta !== 0) {
+                        // User scrolled - adjust target distance to respect user intent
+                        targetDistFromBottom = targetDistFromBottom + userDelta;
+                        prependScrollAdjustRef.current.userScrollDelta = 0; // Reset after applying
+                        console.log('[APP#rafLoop] ADJUSTED target by userDelta=' + userDelta.toFixed(1) + ' newTarget=' + targetDistFromBottom.toFixed(1));
+                      }
+                      
+                      // Calculate current distance from bottom
+                      const currentDistFromBottom = currentH - currentLayout - currentScroll;
+                      const diff = Math.abs(currentDistFromBottom - targetDistFromBottom);
+                      
+                      // Calculate target scroll offset to maintain distance from bottom
+                      const targetOffset = currentH - currentLayout - targetDistFromBottom;
+                      
+                      // Only log every 10 loops to reduce spam
+                      if (loopCount <= 5 || loopCount % 10 === 0 || diff <= 2) {
+                        console.log('[APP#rafLoop] #' + loopCount + ' h=' + currentH.toFixed(1) + ' scroll=' + currentScroll.toFixed(1) + ' currentDist=' + currentDistFromBottom.toFixed(1) + ' targetDist=' + targetDistFromBottom.toFixed(1) + ' diff=' + diff.toFixed(1));
+                      }
+                      
+                      // If diff > 2px and not maxed out, scroll and continue loop
+                      if (diff > 2 && loopCount < maxLoops && targetOffset >= 0) {
+                        prependScrollAdjustRef.current.justScrolledProgrammatic = true;
+                        flatListRef.current?.scrollToOffset({ offset: targetOffset, animated: false });
+                        // Continue loop next frame
+                        requestAnimationFrame(rescrollLoop);
+                      } else {
+                        // Done looping
+                        prependScrollAdjustRef.current.isLooping = false;
+                        console.log('[APP#rafLoop] DONE after ' + loopCount + ' loops, final diff=' + diff.toFixed(1));
+                      }
+                    };
+                    
+                    // Start loop immediately
+                    requestAnimationFrame(rescrollLoop);
                   }
                   
                   setListContentHeight(h);
@@ -1807,8 +1877,31 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
                   
                   if (layoutMeasurement.height === 0) return;
                   
-                  // Track scroll offset for prepend adjustment
+                  // Track scroll offset for prepend adjustment - CRITICAL for RAF loop
+                  const prevScroll = lastScrollOffset.current;
                   lastScrollOffset.current = contentOffset.y;
+                  lastContentHeight.current = contentSize.height;
+                  lastLayoutHeight.current = layoutMeasurement.height;
+                  
+                  // CAPTURE distanceFromBottom when user ACTUALLY reaches scroll=0
+                  // This is the TRUE position before layout shift
+                  if (contentOffset.y <= 5 && !prependScrollAdjustRef.current.isPrepending) {
+                    const distFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+                    prependScrollAdjustRef.current.capturedDistFromBottom = distFromBottom;
+                    console.log('[APP#onScroll] CAPTURED at scroll=0 distFromBottom=' + distFromBottom.toFixed(1));
+                  }
+                  
+                  // Track user scroll during RAF loop - detect manual scroll by user
+                  if (prependScrollAdjustRef.current.isLooping) {
+                    const scrollDelta = contentOffset.y - prevScroll;
+                    // If scroll changed but NOT from our programmatic scroll, it's user scroll
+                    if (Math.abs(scrollDelta) > 1 && !prependScrollAdjustRef.current.justScrolledProgrammatic) {
+                      // User scrolled manually - adjust target to not fight user
+                      prependScrollAdjustRef.current.userScrollDelta = (prependScrollAdjustRef.current.userScrollDelta || 0) + scrollDelta;
+                      console.log('[APP#onScroll] USER SCROLL detected delta=' + scrollDelta.toFixed(1) + ' totalUserDelta=' + prependScrollAdjustRef.current.userScrollDelta.toFixed(1));
+                    }
+                    prependScrollAdjustRef.current.justScrolledProgrammatic = false;
+                  }
                   
                   // Calculate distance from bottom (normal list)
                   const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;

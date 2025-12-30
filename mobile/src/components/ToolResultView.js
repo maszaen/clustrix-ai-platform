@@ -484,7 +484,7 @@ export const GeneratedImageView = memo(function GeneratedImageView({ imageUrl, i
         <View style={styles.imageTextOverlay}>
           {prompt && (
             <Text style={styles.promptText} numberOfLines={2}>
-              "{prompt}"
+              {prompt}
             </Text>
           )}
         </View>
@@ -670,7 +670,7 @@ const styles = StyleSheet.create({
   },
   promptText: {
     color: COLORS.fgMuted,
-    fontSize: 15,
+    fontSize: 14.7,
     fontFamily: FONTS.ai,
     marginBottom: 10,
   },

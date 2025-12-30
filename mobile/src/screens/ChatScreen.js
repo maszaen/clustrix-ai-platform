@@ -3,6 +3,7 @@ import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, A
 import ReanimatedModule, { useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { LegendList } from '@legendapp/list';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Info, Server, ArrowDownCircle, ArrowUpCircle, BarChart3, DollarSign, Minimize2, Maximize2, MessageSquare, ListChevronsDownUp, ListChevronsUpDown, MessageCircleQuestion } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -1567,47 +1568,24 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   // Normal order: oldest first, newest last
 
   // Refs for manual scroll position adjustment during prepend
-  // Using distance from BOTTOM approach - more accurate than offset from top
-  const prependScrollAdjustRef = useRef({
-    isPrepending: false,
-    distanceFromBottom: 0, // Distance from bottom before prepend
-  });
+  // Ref for tracking scroll state during load more
+  const prependScrollAdjustRef = useRef(null);
 
-  // Load more messages when scroll to top - with manual scroll position adjustment
+  // Load more messages when scroll to top
   const handleLoadMore = useCallback(async () => {
-    const t = Date.now();
-    console.log('[APP#handleLoadMore] t=' + t + ' TRIGGERED isLoadingMore=' + isLoadingMore + ' hasMoreMessages=' + hasMoreMessages);
-    
     // Guard: Already loading or no more data
     if (isLoadingMore || !hasMoreMessages) {
-      console.log('[APP#handleLoadMore] t=' + t + ' SKIPPED (guard)');
       return;
     }
     
     // Guard: Debounce
     if (loadingTimeoutRef.current) {
-      console.log('[APP#handleLoadMore] t=' + t + ' SKIPPED (debounce)');
       return;
     }
     loadingTimeoutRef.current = 'pending';
     
-    // Use distanceFromBottom captured when scroll actually hit 0
-    // Fallback to current calculation if not captured yet
-    const distanceFromBottom = prependScrollAdjustRef.current.capturedDistFromBottom ?? 
-      (lastContentHeight.current - lastLayoutHeight.current - lastScrollOffset.current);
-    
-    console.log('[APP#handleLoadMore] t=' + t + ' BEFORE contentHeight=' + lastContentHeight.current.toFixed(1) + ' layoutHeight=' + lastLayoutHeight.current.toFixed(1) + ' scrollOffset=' + lastScrollOffset.current.toFixed(1) + ' distFromBottom=' + distanceFromBottom.toFixed(1) + ' (captured=' + (prependScrollAdjustRef.current.capturedDistFromBottom !== undefined) + ')');
-    
-    // Save state BEFORE prepending - clear captured value after use
-    prependScrollAdjustRef.current = {
-      isPrepending: true,
-      distanceFromBottom: distanceFromBottom,
-    };
-    
     loadingTimeoutRef.current = setTimeout(async () => {
-      console.log('[APP#handleLoadMore] t=' + Date.now() + ' CALLING loadMoreMessages()');
       await loadMoreMessages();
-      console.log('[APP#handleLoadMore] t=' + Date.now() + ' loadMoreMessages() DONE');
       loadingTimeoutRef.current = null;
     }, 150);
   }, [isLoadingMore, hasMoreMessages, loadMoreMessages]);
@@ -1762,21 +1740,19 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       ) : (
         <>
           <Animated.View style={{ flex: 1, opacity: contentFadeAnim }}>
-              <LegendList
+              <FlashList
                 key={currentSession?.id || 'welcome'}  // Force remount on session change to reset recycled state
                 ref={flatListRef}
                 data={displayMessages}
                 keyExtractor={(item) => item._key}
                 renderItem={renderMessage}
-                // estimatedItemSize={avgHeight}
-                recycleItems={true}
+                estimatedItemSize={440}
                 drawDistance={2500}  // Increased for smoother pre-rendering of long sessions
-                // Only apply initialScrollIndex on first render, skip after to prevent scroll reset on prepend
+                // FlashList: use initialScrollIndex for initial scroll to bottom
                 initialScrollIndex={!initialScrollDoneRef.current && displayMessages.length > 0 ? displayMessages.length - 1 : undefined}
-                maintainScrollAtEnd
-                maintainScrollAtEndThreshold={0.02}
+                // FlashList: maintainVisibleContentPosition for prepend without layout shift
+                maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
                 onStartReached={() => {
-                  console.log('[APP#onStartReached] t=' + Date.now() + ' FIRED scroll=' + lastScrollOffset.current.toFixed(1));
                   handleLoadMore();
                 }}
                 onStartReachedThreshold={0.02}
@@ -1786,75 +1762,10 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
-                maintainVisibleContentPosition={true}
-                waitForInitialLayout={true}
                 onContentSizeChange={(w, h) => {
                   // Mark initial scroll as done after first content render
                   if (!initialScrollDoneRef.current && displayMessages.length > 0) {
                     initialScrollDoneRef.current = true;
-                  }
-                  
-                  // APP-LEVEL scroll position adjustment after prepending messages
-                  // Start AGGRESSIVE RAF LOOP when prepend detected
-                  if (prependScrollAdjustRef.current.isPrepending) {
-                    const { distanceFromBottom } = prependScrollAdjustRef.current;
-                    
-                    // Reset prepend state FIRST to prevent re-entry
-                    prependScrollAdjustRef.current.isPrepending = false;
-                    prependScrollAdjustRef.current.isLooping = true;
-                    prependScrollAdjustRef.current.userScrollDelta = 0;
-                    
-                    console.log('[APP#onContentSizeChange] PREPEND DETECTED h=' + h.toFixed(1) + ' targetDistFromBottom=' + distanceFromBottom.toFixed(1));
-                    
-                    // Start aggressive RAF loop - runs every frame until stable
-                    let loopCount = 0;
-                    const maxLoops = 200; // More loops for stability
-                    let targetDistFromBottom = distanceFromBottom;
-                    
-                    const rescrollLoop = () => {
-                      loopCount++;
-                      
-                      // Get current values
-                      const currentH = lastContentHeight.current;
-                      const currentLayout = lastLayoutHeight.current;
-                      const currentScroll = lastScrollOffset.current;
-                      
-                      // Adjust target if user scrolled manually
-                      const userDelta = prependScrollAdjustRef.current.userScrollDelta || 0;
-                      if (userDelta !== 0) {
-                        // User scrolled - adjust target distance to respect user intent
-                        targetDistFromBottom = targetDistFromBottom + userDelta;
-                        prependScrollAdjustRef.current.userScrollDelta = 0; // Reset after applying
-                        console.log('[APP#rafLoop] ADJUSTED target by userDelta=' + userDelta.toFixed(1) + ' newTarget=' + targetDistFromBottom.toFixed(1));
-                      }
-                      
-                      // Calculate current distance from bottom
-                      const currentDistFromBottom = currentH - currentLayout - currentScroll;
-                      const diff = Math.abs(currentDistFromBottom - targetDistFromBottom);
-                      
-                      // Calculate target scroll offset to maintain distance from bottom
-                      const targetOffset = currentH - currentLayout - targetDistFromBottom;
-                      
-                      // Only log every 10 loops to reduce spam
-                      if (loopCount <= 5 || loopCount % 10 === 0 || diff <= 2) {
-                        console.log('[APP#rafLoop] #' + loopCount + ' h=' + currentH.toFixed(1) + ' scroll=' + currentScroll.toFixed(1) + ' currentDist=' + currentDistFromBottom.toFixed(1) + ' targetDist=' + targetDistFromBottom.toFixed(1) + ' diff=' + diff.toFixed(1));
-                      }
-                      
-                      // If diff > 2px and not maxed out, scroll and continue loop
-                      if (diff > 2 && loopCount < maxLoops && targetOffset >= 0) {
-                        prependScrollAdjustRef.current.justScrolledProgrammatic = true;
-                        flatListRef.current?.scrollToOffset({ offset: targetOffset, animated: false });
-                        // Continue loop next frame
-                        requestAnimationFrame(rescrollLoop);
-                      } else {
-                        // Done looping
-                        prependScrollAdjustRef.current.isLooping = false;
-                        console.log('[APP#rafLoop] DONE after ' + loopCount + ' loops, final diff=' + diff.toFixed(1));
-                      }
-                    };
-                    
-                    // Start loop immediately
-                    requestAnimationFrame(rescrollLoop);
                   }
                   
                   setListContentHeight(h);
@@ -1877,31 +1788,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
                   
                   if (layoutMeasurement.height === 0) return;
                   
-                  // Track scroll offset for prepend adjustment - CRITICAL for RAF loop
-                  const prevScroll = lastScrollOffset.current;
                   lastScrollOffset.current = contentOffset.y;
                   lastContentHeight.current = contentSize.height;
                   lastLayoutHeight.current = layoutMeasurement.height;
-                  
-                  // CAPTURE distanceFromBottom when user ACTUALLY reaches scroll=0
-                  // This is the TRUE position before layout shift
-                  if (contentOffset.y <= 5 && !prependScrollAdjustRef.current.isPrepending) {
-                    const distFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-                    prependScrollAdjustRef.current.capturedDistFromBottom = distFromBottom;
-                    console.log('[APP#onScroll] CAPTURED at scroll=0 distFromBottom=' + distFromBottom.toFixed(1));
-                  }
-                  
-                  // Track user scroll during RAF loop - detect manual scroll by user
-                  if (prependScrollAdjustRef.current.isLooping) {
-                    const scrollDelta = contentOffset.y - prevScroll;
-                    // If scroll changed but NOT from our programmatic scroll, it's user scroll
-                    if (Math.abs(scrollDelta) > 1 && !prependScrollAdjustRef.current.justScrolledProgrammatic) {
-                      // User scrolled manually - adjust target to not fight user
-                      prependScrollAdjustRef.current.userScrollDelta = (prependScrollAdjustRef.current.userScrollDelta || 0) + scrollDelta;
-                      console.log('[APP#onScroll] USER SCROLL detected delta=' + scrollDelta.toFixed(1) + ' totalUserDelta=' + prependScrollAdjustRef.current.userScrollDelta.toFixed(1));
-                    }
-                    prependScrollAdjustRef.current.justScrolledProgrammatic = false;
-                  }
                   
                   // Calculate distance from bottom (normal list)
                   const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;

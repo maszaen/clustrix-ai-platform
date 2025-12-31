@@ -239,7 +239,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     // Proportional offset - reduce movement by ~10% for tighter keyboard gap
     // height.value goes from 0 (closed) to negative (open, e.g. -300)
     // This smoothly scales with keyboard height
-    const offset = -keyboardAnimatedHeight.value * 0.05;
+    const offset = -keyboardAnimatedHeight.value * 0.001;
     return {
       transform: [{ translateY: keyboardAnimatedHeight.value + offset }],
     };
@@ -441,7 +441,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
           timeoutId = setTimeout(() => {
             if (intervalId) clearInterval(intervalId);
             hideSkeleton();
-          }, 2000);
+          }, 3000);
         }
       } else {
         // Case 2: List NOT rendered yet (welcome->session) - listContentHeight === 0
@@ -1745,9 +1745,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     return <View style={{ height: 85 + dynamicOffset }} />;
   }, [showSpacer, attachmentCount, pillCount, inputExtraHeight]);
 
-  const onItemLayout = useCallback((index, height) => {
-  itemHeights.current[index] = height;
-  }, []);
+  // const onItemLayout = useCallback((index, height) => {
+  // itemHeights.current[index] = height;
+  // }, []);
 
   // Calculate average
   const avgHeight = useMemo(() => {

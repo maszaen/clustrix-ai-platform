@@ -2,6 +2,34 @@ import * as SQLite from 'expo-sqlite';
 
 let db = null;
 
+// Normalize attachment metadata to keep backward compatibility with older databases
+// Older records may only store base64 without a URI, causing blank previews.
+// This helper builds a data URI from base64 so Image components can render correctly.
+function normalizeAttachments(attachments = []) {
+  return attachments.map(att => {
+    // Derive MIME type from metadata or filename for proper data URI prefix
+    const lowerName = att.name?.toLowerCase() || '';
+    const inferredMime = att.mimeType ||
+      (lowerName.endsWith('.png') ? 'image/png'
+        : lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') ? 'image/jpeg'
+        : lowerName.endsWith('.gif') ? 'image/gif'
+        : lowerName.endsWith('.webp') ? 'image/webp'
+        : lowerName.endsWith('.heic') ? 'image/heic'
+        : 'application/octet-stream');
+
+    let uri = att.uri;
+
+    // Backwards compatibility: older rows stored only base64 → rebuild a renderable URI
+    if (!uri && att.base64) {
+      uri = att.base64.startsWith('data:')
+        ? att.base64
+        : `data:${inferredMime};base64,${att.base64}`;
+    }
+
+    return { ...att, uri };
+  });
+}
+
 export async function initDatabase() {
   db = await SQLite.openDatabaseAsync('clustrix.db');
   
@@ -166,10 +194,15 @@ export async function getMessages(sessionId) {
       }
     }
 
+    const attachments = Array.isArray(metadata.attachments)
+      ? normalizeAttachments(metadata.attachments)
+      : undefined;
+
     return {
       ...row,
       ...metadata,
-      metadata,
+      attachments,
+      metadata: { ...metadata, attachments },
       thinkContent: thinkContent || metadata.thinkContent || null,
       thinkDuration: row.think_duration || metadata.thinkDuration || null,
     };
@@ -192,7 +225,8 @@ export async function getSessionAttachments(sessionId) {
     try {
       const metadata = row.metadata ? JSON.parse(row.metadata) : {};
       if (metadata.attachments && Array.isArray(metadata.attachments)) {
-        for (const att of metadata.attachments) {
+        const normalized = normalizeAttachments(metadata.attachments);
+        for (const att of normalized) {
           // Avoid duplicates by name
           if (!attachments.some(a => a.name === att.name)) {
             attachments.push(att);
@@ -346,10 +380,15 @@ export async function getOlderMessages(sessionId, beforeIndex, charLimit = 5000)
       }
     }
 
+    const attachments = Array.isArray(metadata.attachments)
+      ? normalizeAttachments(metadata.attachments)
+      : undefined;
+
     return {
       ...row,
       ...metadata,
-      metadata,
+      attachments,
+      metadata: { ...metadata, attachments },
       thinkContent: thinkContent || metadata.thinkContent || null,
       thinkDuration: row.think_duration || metadata.thinkDuration || null,
     };

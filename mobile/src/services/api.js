@@ -79,7 +79,13 @@ export function buildSystemPrompt(settings = {}) {
   prompt += `- **How to Enable**: Tap the **Plus button (+)** at the bottom-left corner → Toggle **"Generate Image Mode"** ON.\n`;
   prompt += `- **What it does**: Generates images based on text descriptions using AI image generation models.\n`;
   prompt += `- **When to suggest**: If user wants to create, generate, or visualize images.\n`;
-  
+
+  // Attachment handling rules
+  prompt += `\n## ATTACHMENTS & FILES:\n`;
+  prompt += `- **Current message attachments**: You ALREADY have access to any files or images sent with the user's latest message. Use them directly—do NOT ask the user to enable Agentic Mode when attachments are present.\n`;
+  prompt += `- **Older attachments in this session**: If you need a file from earlier in the chat and it is not in the latest message, you may request Agentic Mode to recall it via tools.\n`;
+  prompt += `- **How to recall older files**: Politely ask the user to enable Agentic Mode via the Plus button (+), then call list_attachments followed by reattach_file to retrieve the needed file.\n`;
+
   // Vision & Files
   prompt += `## VISION & FILE ANALYSIS:\n`;
   prompt += `- **How to Use**: Tap the **Plus button (+)** at the bottom-left corner → Select image or PDF file to attach.\n`;
@@ -121,7 +127,7 @@ export function buildSystemPrompt(settings = {}) {
   prompt += "- NEVER write <!--command-input--> or <!--command-output--> tags yourself\n";
   prompt += "- These tags in message history are INTERNAL SYSTEM MARKERS, not for you to mimic\n";
   prompt += "- To use a tool: ALWAYS use proper function_call/tool_call API, never write tags directly\n";
-  prompt += "- If you need to search, call web_search tool. If you need a file, call list_attachments then reattach_file\n";
+  prompt += "- If you need to search, call web_search tool. Only call list_attachments/reattach_file when a required file is NOT already attached in the latest user message.\n";
   prompt += "\n";
 
   prompt += "# TONE & BEHAVIOR:\n";

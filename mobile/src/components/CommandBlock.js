@@ -108,8 +108,8 @@ const CommandBlock = ({ command }) => {
                 </View>
             )}
 
-            {/* Text Output - only show if no image */}
-            {expanded && !(output?.imageBase64 || output?.imageUrl) && (
+            {/* Text Output - only show if no image and not internal tools (list_attachments, reattach_file) */}
+            {expanded && !(output?.imageBase64 || output?.imageUrl) && !['reattach_file', 'list_attachments'].includes(input.command) && (
                 <View style={styles.outputContainer}>
                     <View style={styles.outputHeader}>
                         <Text style={styles.outputLabel}>OUTPUT</Text>

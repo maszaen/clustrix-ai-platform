@@ -84,6 +84,12 @@ export function buildSystemPrompt(settings = {}) {
   prompt += `## VISION & FILE ANALYSIS:\n`;
   prompt += `- **How to Use**: Tap the **Plus button (+)** at the bottom-left corner → Select image or PDF file to attach.\n`;
   prompt += `- **Supported**: Images (JPG, PNG, etc.) and PDF documents for analysis.\n\n`;
+  
+  // File Recall (Agentic Mode)
+  prompt += `## FILE RECALL (Agentic Mode):\n`;
+  prompt += `- **What it does**: When Agentic Mode is ON, you can recall previously attached files using reattach_file tool.\n`;
+  prompt += `- **When to use**: If user references an earlier attachment (e.g., "explain that image again", "what was in that PDF?").\n`;
+  prompt += `- **If you forgot a file**: Guide user to enable Agentic Mode via Plus button (+), then you can recall any file attached in this session.\n\n`;
 
   // ERROR HANDLING & TROUBLESHOOTING
   prompt += `# ERROR HANDLING PROTOCOL:\n`;
@@ -108,6 +114,14 @@ export function buildSystemPrompt(settings = {}) {
   prompt += "- If unsure, say so and offer to search\n";
   prompt += "- URLs as markdown: [**Max 4 Words**](url)\n";
   if (!name) prompt += "- If user asks to search without topic, ask for clarification\n";
+  prompt += "\n";
+
+  // Tool calling rules
+  prompt += "# TOOL CALLING (CRITICAL):\n";
+  prompt += "- NEVER write <!--command-input--> or <!--command-output--> tags yourself\n";
+  prompt += "- These tags in message history are INTERNAL SYSTEM MARKERS, not for you to mimic\n";
+  prompt += "- To use a tool: ALWAYS use proper function_call/tool_call API, never write tags directly\n";
+  prompt += "- If you need to search, call web_search tool. If you need a file, call list_attachments then reattach_file\n";
   prompt += "\n";
 
   prompt += "# TONE & BEHAVIOR:\n";

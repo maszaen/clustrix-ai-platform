@@ -1,9 +1,10 @@
 
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
-import { Layers, ChevronDown, ChevronRight } from 'lucide-react-native';
+import { Layers, ChevronDown, ChevronRight, Terminal } from 'lucide-react-native';
 import CommandBlock from './CommandBlock';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 
 // Only enable LayoutAnimation on old architecture (fabric check)
 if (Platform.OS === 'android' && !global?.nativeFabricUIManager) {
@@ -38,7 +39,7 @@ const CommandGroup = ({ group }) => {
             >
                 <View style={styles.left}>
                     <View style={styles.iconContainer}>
-                        <Layers size={14} color={COLORS.fgMuted} />
+                        <Terminal size={14} color={COLORS.fgMuted} />
                     </View>
                     <Text style={styles.title}>{count} Steps Executed</Text>
                 </View>
@@ -81,8 +82,8 @@ const styles = StyleSheet.create({
     },
     title: {
         fontSize: 12,
-        fontWeight: '600',
         color: COLORS.fgMuted,
+        fontFamily: FONTS.displayItalic,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },

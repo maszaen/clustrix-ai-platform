@@ -525,14 +525,15 @@ export default function ToolResultView({ toolName, result, isLoading, onImagePre
   }
 
   // Unknown tool - show raw output
-  return (
-    <View style={styles.container}>
-      <View style={styles.toolHeader}>
-        <Text style={styles.toolTitle}>{toolName}</Text>
-      </View>
-      <Text style={styles.rawOutput}>{result?.output || 'No output'}</Text>
-    </View>
-  );
+  return
+  // return (
+  //   <View style={styles.container}>
+  //     <View style={styles.toolHeader}>
+  //       <Text style={styles.toolTitle}>{toolName}</Text>
+  //     </View>
+  //     <Text style={styles.rawOutput}>{result?.output || 'No output'}</Text>
+  //   </View>
+  // );
 }
 
 const styles = StyleSheet.create({
@@ -546,7 +547,7 @@ const styles = StyleSheet.create({
   },
   container2: {
     marginVertical: 0,
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     paddingBottom: 6,
   },
   // Tool Header

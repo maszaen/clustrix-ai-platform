@@ -133,6 +133,15 @@ export const transformCommandText = (cmdName, args) => {
         return 'Search Web';
     }
     
+    if (cmdName === 'reattach_file') {
+        const filename = args?.filename || '';
+        return `Recall File: "${filename}"`;
+    }
+    
+    if (cmdName === 'list_attachments') {
+        return 'List Session Files';
+    }
+    
     if (cmdName === 'run_command') {
         const cmd = args || '';
         return `Run: ${cmd.length > 50 ? cmd.substring(0, 50) + '...' : cmd}`;

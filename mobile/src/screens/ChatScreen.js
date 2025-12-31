@@ -159,6 +159,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const [metadataMenu, setMetadataMenu] = useState({ visible: false, message: null, position: null });
   const [toolStatus, setToolStatus] = useState(null); // { name, commentary } - for tool execution indicator
   const [isWaitingForIteration, setIsWaitingForIteration] = useState(false); // True when waiting for next agentic iteration
+  const sessionAttachmentsRef = useRef([]); // Track all attachments sent in current session for reattach_file tool
   const lastHapticTime = useRef(0);
   
   // PDF extraction hook - WebView-based
@@ -228,6 +229,50 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       Keyboard.dismiss();
     }
   }, [sidebarOpen]);
+  
+  // Populate sessionAttachments from messages
+  // Also resets when session changes (new session ID means start fresh)
+  const prevSessionForAttachmentsRef = useRef(currentSession?.id);
+  useEffect(() => {
+    const sessionChanged = prevSessionForAttachmentsRef.current !== currentSession?.id;
+    
+    if (sessionChanged) {
+      prevSessionForAttachmentsRef.current = currentSession?.id;
+      log('[Session Change] Session changed to:', currentSession?.id);
+    }
+    
+    // No session = no attachments to track
+    if (!currentSession?.id) {
+      sessionAttachmentsRef.current = [];
+      return;
+    }
+    
+    // Extract attachments from all loaded messages
+    const existingAttachments = [];
+    for (const msg of messages) {
+      if (msg.attachments && msg.attachments.length > 0) {
+        for (const att of msg.attachments) {
+          // Avoid duplicates by name
+          if (!existingAttachments.some(a => a.name === att.name)) {
+            existingAttachments.push(att);
+          }
+        }
+      }
+    }
+    
+    if (sessionChanged) {
+      // On session change, only use attachments from loaded messages
+      sessionAttachmentsRef.current = existingAttachments;
+    } else {
+      // On load more, merge with newly sent attachments (from handleSend)
+      const newlySent = sessionAttachmentsRef.current.filter(
+        a => !existingAttachments.some(e => e.name === a.name)
+      );
+      sessionAttachmentsRef.current = [...existingAttachments, ...newlySent];
+    }
+    
+    log('[SessionAttachments] Current:', sessionAttachmentsRef.current.map(a => a.name));
+  }, [messages, currentSession?.id]);
   
   // Smooth keyboard animation for INPUT ONLY using react-native-keyboard-controller
   const { height: keyboardAnimatedHeight } = useReanimatedKeyboardAnimation();
@@ -731,6 +776,15 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       textContent: a.textContent,
     }));
     
+    // Collect attachments for reattach_file tool (track all attachments in session)
+    if (attachmentMeta.length > 0) {
+      // Add new attachments, avoiding duplicates by name
+      const existingNames = sessionAttachmentsRef.current.map(a => a.name);
+      const newAttachments = attachmentMeta.filter(a => !existingNames.includes(a.name));
+      sessionAttachmentsRef.current = [...sessionAttachmentsRef.current, ...newAttachments];
+      log('[handleSend] sessionAttachments updated:', sessionAttachmentsRef.current.map(a => a.name));
+    }
+    
     // DEBUG: Log attachmentMeta
     log('[handleSend] attachmentMeta:', attachmentMeta.length, attachmentMeta.map(a => ({ type: a.type, name: a.name })));
     // For new session from welcome screen, pass session directly to appendMessage
@@ -895,6 +949,14 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         } finally {
           isGeneratingTitleRef.current = false;
         }
+      }
+      
+      // Auto-enable agentic mode if user sent attachments in this session
+      // This allows reattach_file tool in subsequent messages
+      // Note: We enable AFTER stream completes so user gets thinking on first message
+      if (sessionAttachmentsRef.current.length > 0 && !settings.agenticMode) {
+        log('[handleDone] Auto-enabling agentic mode for reattach_file tool');
+        updateSettings({ agenticMode: true });
       }
     };
 
@@ -1167,7 +1229,11 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         baseUrl: settings.baseUrl || undefined,
         apiKey: settings.apiKey,
         useCloud: settings.useClustrixCloud,
-        agenticConfig: settings.agenticTools,
+        agenticConfig: {
+          ...settings.agenticTools,
+          sessionId: session?.id || currentSession?.id, // For list_attachments to query DB directly
+          sessionAttachments: sessionAttachmentsRef.current, // For reattach_file tool
+        },
         idToken: accessToken,
         userEmail: currentUser?.email,
         onChunk: handleChunk,

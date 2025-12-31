@@ -53,6 +53,48 @@ const WEB_SEARCH_TOOL = {
   },
 };
 
+// List attachments tool - AI queries available files
+const LIST_ATTACHMENTS_TOOL = {
+  type: 'function',
+  function: {
+    name: 'list_attachments',
+    description: `Call this FIRST when user references a file they sent earlier (e.g., "that image", "the file", "explain that photo"). Returns list of available filenames to use with reattach_file.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        commentary: {
+          type: 'string',
+          description: 'Brief explanation (e.g., "Checking available files")',
+        },
+      },
+      required: [],
+    },
+  },
+};
+
+// Reattach file tool - AI retrieves file content
+const REATTACH_FILE_TOOL = {
+  type: 'function',
+  function: {
+    name: 'reattach_file',
+    description: `Retrieve a previously attached file by filename. Use after calling list_attachments to get available files. Returns file content for analysis.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        filename: {
+          type: 'string',
+          description: 'Exact filename from list_attachments result',
+        },
+        commentary: {
+          type: 'string',
+          description: 'Brief explanation shown to user (e.g., "Recalling your image")',
+        },
+      },
+      required: ['filename'],
+    },
+  },
+};
+
 // Claude format
 const WEB_SEARCH_TOOL_CLAUDE = {
   name: 'web_search',
@@ -60,14 +102,42 @@ const WEB_SEARCH_TOOL_CLAUDE = {
   input_schema: WEB_SEARCH_TOOL.function.parameters,
 };
 
+const LIST_ATTACHMENTS_TOOL_CLAUDE = {
+  name: 'list_attachments',
+  description: LIST_ATTACHMENTS_TOOL.function.description,
+  input_schema: LIST_ATTACHMENTS_TOOL.function.parameters,
+};
+
+const REATTACH_FILE_TOOL_CLAUDE = {
+  name: 'reattach_file',
+  description: REATTACH_FILE_TOOL.function.description,
+  input_schema: REATTACH_FILE_TOOL.function.parameters,
+};
+
 // Gemini format
 const WEB_SEARCH_TOOL_GEMINI = {
-  functionDeclarations: [{
-    name: 'web_search',
-    description: WEB_SEARCH_TOOL.function.description,
-    parameters: WEB_SEARCH_TOOL.function.parameters,
-  }],
+  functionDeclarations: [
+    {
+      name: 'web_search',
+      description: WEB_SEARCH_TOOL.function.description,
+      parameters: WEB_SEARCH_TOOL.function.parameters,
+    },
+    {
+      name: 'list_attachments',
+      description: LIST_ATTACHMENTS_TOOL.function.description,
+      parameters: LIST_ATTACHMENTS_TOOL.function.parameters,
+    },
+    {
+      name: 'reattach_file',
+      description: REATTACH_FILE_TOOL.function.description,
+      parameters: REATTACH_FILE_TOOL.function.parameters,
+    },
+  ],
 };
+
+// All OpenAI-format tools
+const OPENAI_TOOLS = [WEB_SEARCH_TOOL, LIST_ATTACHMENTS_TOOL, REATTACH_FILE_TOOL];
+const CLAUDE_TOOLS = [WEB_SEARCH_TOOL_CLAUDE, LIST_ATTACHMENTS_TOOL_CLAUDE, REATTACH_FILE_TOOL_CLAUDE];
 
 // ===================================================================
 // WEB SEARCH EXECUTION
@@ -176,6 +246,101 @@ function formatSearchOutput(results) {
   ).join('\n\n');
 }
 
+// ===================================================================
+// ATTACHMENT TOOL EXECUTION
+// ===================================================================
+
+/**
+ * Execute list_attachments - return list of available files from request
+ * Attachments are passed from client in request body
+ */
+function executeListAttachments(input, attachments) {
+  if (!attachments || attachments.length === 0) {
+    return {
+      success: true,
+      output: 'No files were attached in this session.',
+      files: [],
+    };
+  }
+  
+  const fileList = attachments.map(a => {
+    const type = a.type === 'image' ? 'Image' : 'File';
+    return `- ${type}: "${a.name}"${a.mimeType ? ` (${a.mimeType})` : ''}`;
+  }).join('\n');
+  
+  return {
+    success: true,
+    output: `Available files in this session:\n${fileList}`,
+    files: attachments.map(a => ({ name: a.name, type: a.type, mimeType: a.mimeType })),
+  };
+}
+
+/**
+ * Execute reattach_file - retrieve file content by filename
+ * Returns the attachment content if found
+ */
+function executeReattachFile(input, attachments) {
+  const { filename } = input;
+  
+  if (!filename) {
+    return { success: false, output: 'Filename is required.' };
+  }
+  
+  if (!attachments || attachments.length === 0) {
+    return { success: false, output: 'No files available in this session.' };
+  }
+  
+  // Find attachment by filename (case-insensitive)
+  const attachment = attachments.find(a => 
+    a.name?.toLowerCase() === filename.toLowerCase()
+  );
+  
+  if (!attachment) {
+    const available = attachments.map(a => a.name).join(', ') || 'none';
+    return { 
+      success: false, 
+      output: `File "${filename}" not found. Available files: ${available}` 
+    };
+  }
+  
+  // For text files, return textContent
+  if (attachment.textContent) {
+    return {
+      success: true,
+      output: `[File: ${attachment.name}]\n${attachment.textContent}\n[End File]`,
+      textContent: attachment.textContent,
+    };
+  }
+  
+  // For images with base64
+  if (attachment.base64) {
+    return {
+      success: true,
+      output: `Image "${attachment.name}" recalled successfully. [Base64 content available]`,
+      base64: attachment.base64,
+      mimeType: attachment.mimeType,
+    };
+  }
+  
+  // For images with data URI
+  if (attachment.uri && attachment.uri.startsWith('data:')) {
+    const base64Match = attachment.uri.match(/base64,(.+)$/);
+    if (base64Match) {
+      return {
+        success: true,
+        output: `Image "${attachment.name}" recalled successfully. [Base64 content available]`,
+        base64: base64Match[1],
+        mimeType: attachment.mimeType,
+      };
+    }
+  }
+  
+  return {
+    success: false,
+    output: `File "${attachment.name}" found but content is not available.`,
+  };
+}
+
 // Helper to generate default commentary for tool calls
 function getDefaultCommentary(toolName, input) {
   if (toolName === 'web_search' && input.queries) {
@@ -183,6 +348,12 @@ function getDefaultCommentary(toolName, input) {
   }
   if (toolName === 'generate_image' && input.prompt) {
     return `Generating: ${input.prompt.slice(0, 50)}...`;
+  }
+  if (toolName === 'list_attachments') {
+    return 'Checking available files...';
+  }
+  if (toolName === 'reattach_file' && input.filename) {
+    return `Recalling: ${input.filename}`;
   }
   return `Executing ${toolName || 'tool'}...`;
 }
@@ -198,13 +369,13 @@ const MAX_ITERATIONS = 10;
 /**
  * POST /api/agentic
  * 
- * Body: { model, messages, stream?, temperature?, max_tokens? }
+ * Body: { model, messages, stream?, temperature?, max_tokens?, sessionAttachments? }
  */
 router.post('/', async (req, res) => {
   const startTime = Date.now();
   
   try {
-    const { model, messages, stream = true, temperature, max_tokens } = req.body;
+    const { model, messages, stream = true, temperature, max_tokens, sessionAttachments = [] } = req.body;
     
     if (!model) {
       return res.status(400).json({ error: 'Model is required', code: 'MISSING_MODEL' });
@@ -337,25 +508,39 @@ router.post('/', async (req, res) => {
         let input = {};
         try { input = JSON.parse(toolCall.function?.arguments || '{}'); } catch {}
         
-        const commentary = input.commentary || getDefaultCommentary(toolCall.function?.name, input);
+        const toolName = toolCall.function?.name;
+        const commentary = input.commentary || getDefaultCommentary(toolName, input);
+        
+        // Internal tools that don't show full output in UI
+        const isInternalTool = ['list_attachments', 'reattach_file'].includes(toolName);
         
         // 1. Stream COMMAND INPUT tag (exact mobile format)
         if (stream) {
           const inputPayload = JSON.stringify({
-            command: toolCall.function?.name,
+            command: toolName,
             args: input,
             commentary: commentary,
           });
           res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: `<!--command-input-->${inputPayload}<!--/command-input-->` } }] })}\n\n`);
         }
         
-        // Execute search
-        const result = await executeWebSearch(input, searchConfig);
+        // Execute the appropriate tool
+        let result;
+        if (toolName === 'web_search') {
+          result = await executeWebSearch(input, searchConfig);
+        } else if (toolName === 'list_attachments') {
+          result = executeListAttachments(input, sessionAttachments);
+        } else if (toolName === 'reattach_file') {
+          result = executeReattachFile(input, sessionAttachments);
+        } else {
+          result = { success: false, output: `Unknown tool: ${toolName}` };
+        }
         
         // Track tool result tokens
         totalInputTokens += Math.ceil((result.output || '').length / 4);
         
-        // 2. Stream COMMAND OUTPUT tag (exact mobile format)
+        // 2. Stream COMMAND OUTPUT tag (always - marks CommandBlock as complete)
+        // Note: Client hides output section for internal tools
         if (stream) {
           const outputPayload = JSON.stringify({
             success: result.success,
@@ -363,12 +548,11 @@ router.post('/', async (req, res) => {
           });
           res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: `<!--command-output-->${outputPayload}<!--/command-output-->` } }] })}\n\n`);
           
-          // Send tool_result event to trigger client's handleToolResult (shows waiting for iteration loader)
-          // Include data for UI to display search results
+          // Send tool_result event to trigger client's handleToolResult
           res.write(`data: ${JSON.stringify({ 
             tool_result: { 
               id: toolCall.id,
-              name: toolCall.function?.name,
+              name: toolName,
               input: input,
               success: result.success,
               output: result.output,
@@ -381,7 +565,7 @@ router.post('/', async (req, res) => {
         conversationMessages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
-          name: toolCall.function?.name,
+          name: toolName,
           content: result.output,
         });
       }
@@ -458,7 +642,7 @@ async function callOpenAIWithTools(config, messages, options) {
   const body = {
     model: config.modelId,
     messages,
-    tools: [WEB_SEARCH_TOOL],
+    tools: OPENAI_TOOLS,
     tool_choice: 'auto',
     stream: false, // Non-streaming for tool loop simplicity
   };
@@ -536,7 +720,7 @@ async function callClaudeWithTools(config, messages, options) {
     max_tokens: options.max_tokens || 4096,
     system: systemPrompt,
     messages: claudeMessages,
-    tools: [WEB_SEARCH_TOOL_CLAUDE],
+    tools: CLAUDE_TOOLS,
   };
   
   if (options.temperature !== undefined) body.temperature = options.temperature;

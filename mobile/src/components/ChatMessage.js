@@ -682,7 +682,7 @@ const ChatMessage = memo(function ChatMessage({ message, isUser, isNew, onShowTh
                 
                 if (block.type === 'command_group') {
                   return (
-                    <View key={`cmd-${index}`} style={{paddingHorizontal: 16, marginVertical: 4}}>
+                    <View key={`cmd-${index}`} style={{paddingHorizontal: 10, marginVertical: 4}}>
                       <CommandGroup group={block} />
                     </View>
                   );

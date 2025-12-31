@@ -14,6 +14,7 @@
  */
 
 import { DEFAULT_PROVIDERS, normalizeUsage } from './api';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // ===================================================================
 // TOOL DEFINITIONS - For AI function calling (OpenAI format)
@@ -58,6 +59,7 @@ export const WEB_SEARCH_TOOL = {
   },
 };
 
+
 export const IMAGE_GENERATION_TOOL = {
   type: 'function',
   function: {
@@ -90,6 +92,48 @@ export const IMAGE_GENERATION_TOOL = {
   },
 };
 
+// Reattach file tool - allows AI to recall previously attached files
+export const REATTACH_FILE_TOOL = {
+  type: 'function',
+  function: {
+    name: 'reattach_file',
+    description: `Retrieve a previously attached file by filename. Use after calling list_attachments to get available files. Returns file content for analysis.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        filename: {
+          type: 'string',
+          description: 'Exact filename from list_attachments result',
+        },
+        commentary: {
+          type: 'string',
+          description: 'Brief explanation shown to user (e.g., "Recalling your image")',
+        },
+      },
+      required: ['filename'],
+    },
+  },
+};
+
+// List attachments tool - AI can query available files in session
+export const LIST_ATTACHMENTS_TOOL = {
+  type: 'function',
+  function: {
+    name: 'list_attachments',
+    description: `Call this FIRST when user references a file they sent earlier (e.g., "that image", "the file", "explain that photo"). Returns list of available filenames to use with reattach_file.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        commentary: {
+          type: 'string',
+          description: 'Brief explanation (e.g., "Checking available files")',
+        },
+      },
+      required: [],
+    },
+  },
+};
+
 // Claude/Anthropic format
 export const WEB_SEARCH_TOOL_CLAUDE = {
   name: 'web_search',
@@ -101,6 +145,18 @@ export const IMAGE_GENERATION_TOOL_CLAUDE = {
   name: 'generate_image',
   description: IMAGE_GENERATION_TOOL.function.description,
   input_schema: IMAGE_GENERATION_TOOL.function.parameters,
+};
+
+export const REATTACH_FILE_TOOL_CLAUDE = {
+  name: 'reattach_file',
+  description: REATTACH_FILE_TOOL.function.description,
+  input_schema: REATTACH_FILE_TOOL.function.parameters,
+};
+
+export const LIST_ATTACHMENTS_TOOL_CLAUDE = {
+  name: 'list_attachments',
+  description: LIST_ATTACHMENTS_TOOL.function.description,
+  input_schema: LIST_ATTACHMENTS_TOOL.function.parameters,
 };
 
 // Gemini format
@@ -116,12 +172,24 @@ export const IMAGE_GENERATION_TOOL_GEMINI = {
   parameters: IMAGE_GENERATION_TOOL.function.parameters,
 };
 
+export const REATTACH_FILE_TOOL_GEMINI = {
+  name: 'reattach_file',
+  description: REATTACH_FILE_TOOL.function.description,
+  parameters: REATTACH_FILE_TOOL.function.parameters,
+};
+
+export const LIST_ATTACHMENTS_TOOL_GEMINI = {
+  name: 'list_attachments',
+  description: LIST_ATTACHMENTS_TOOL.function.description,
+  parameters: LIST_ATTACHMENTS_TOOL.function.parameters,
+};
+
 /**
  * Get tools array for AI provider
  * @param {string} provider - 'openai' | 'anthropic' | 'google' | etc
- * @param {Object} enabledTools - { webSearch: boolean, imageGeneration: boolean }
+ * @param {Object} enabledTools - { webSearch: boolean, imageGeneration: boolean, attachmentTools: boolean }
  */
-export function getAgenticTools(provider, enabledTools = { webSearch: true, imageGeneration: true }) {
+export function getAgenticTools(provider, enabledTools = { webSearch: true, imageGeneration: true, attachmentTools: true }) {
   if (!provider) throw new Error('Provider is required for getAgenticTools');
   const providerLower = provider.toLowerCase();
   const tools = [];
@@ -130,11 +198,19 @@ export function getAgenticTools(provider, enabledTools = { webSearch: true, imag
     // Anthropic format
     if (enabledTools.webSearch) tools.push(WEB_SEARCH_TOOL_CLAUDE);
     if (enabledTools.imageGeneration) tools.push(IMAGE_GENERATION_TOOL_CLAUDE);
+    if (enabledTools.attachmentTools) {
+      tools.push(LIST_ATTACHMENTS_TOOL_CLAUDE);
+      tools.push(REATTACH_FILE_TOOL_CLAUDE);
+    }
   } else if (providerLower === 'google' || providerLower === 'gemini') {
     // Gemini format (wrapped in functionDeclarations)
     const functions = [];
     if (enabledTools.webSearch) functions.push(WEB_SEARCH_TOOL_GEMINI);
     if (enabledTools.imageGeneration) functions.push(IMAGE_GENERATION_TOOL_GEMINI);
+    if (enabledTools.attachmentTools) {
+      functions.push(LIST_ATTACHMENTS_TOOL_GEMINI);
+      functions.push(REATTACH_FILE_TOOL_GEMINI);
+    }
     if (functions.length > 0) {
       tools.push({ functionDeclarations: functions });
     }
@@ -142,6 +218,10 @@ export function getAgenticTools(provider, enabledTools = { webSearch: true, imag
     // OpenAI format (default)
     if (enabledTools.webSearch) tools.push(WEB_SEARCH_TOOL);
     if (enabledTools.imageGeneration) tools.push(IMAGE_GENERATION_TOOL);
+    if (enabledTools.attachmentTools) {
+      tools.push(LIST_ATTACHMENTS_TOOL);
+      tools.push(REATTACH_FILE_TOOL);
+    }
   }
 
   return tools;
@@ -675,6 +755,160 @@ async function generateWithZhipu(prompt, size, config) {
 }
 
 // ===================================================================
+// REATTACH FILE EXECUTION
+// ===================================================================
+
+/**
+ * Execute list attachments - return list of available files in session
+ * Queries database directly to find ALL attachments regardless of loaded messages
+ * @param {Object} input - { commentary?: string }
+ * @param {Object} config - { sessionId: string } - Session ID to query
+ * @returns {Promise<{success: boolean, output: string, files: Array}>}
+ */
+export async function executeListAttachments(input, config) {
+  const { sessionId } = config;
+  
+  if (!sessionId) {
+    return {
+      success: false,
+      output: 'Session ID not available.',
+      files: [],
+    };
+  }
+  
+  // Import dynamically to avoid circular dependency
+  const { getSessionAttachments } = await import('../database/db.js');
+  
+  try {
+    const attachments = await getSessionAttachments(sessionId);
+    
+    if (attachments.length === 0) {
+      return {
+        success: true,
+        output: 'No files were attached in this session.',
+        files: [],
+      };
+    }
+    
+    const fileList = attachments.map(a => {
+      const type = a.type === 'image' ? 'Image' : 'File';
+      return `- ${type}: "${a.name}"${a.mimeType ? ` (${a.mimeType})` : ''}`;
+    }).join('\n');
+    
+    return {
+      success: true,
+      output: `Available files in this session:\n${fileList}`,
+      files: attachments.map(a => ({ name: a.name, type: a.type, mimeType: a.mimeType })),
+    };
+  } catch (error) {
+    return {
+      success: false,
+      output: `Error querying attachments: ${error.message}`,
+      files: [],
+    };
+  }
+}
+
+/**
+ * Execute reattach file - recall a previously attached file by filename
+ * Queries database directly to find attachment regardless of loaded messages
+ * @param {Object} input - { filename: string, commentary?: string }
+ * @param {Object} config - { sessionId: string } - Session ID to query
+ * @returns {Promise<{success: boolean, output: string, base64?: string, textContent?: string}>}
+ */
+export async function executeReattachFile(input, config) {
+  const { filename } = input;
+  const { sessionId } = config;
+  
+  if (!filename) {
+    return { success: false, output: 'Filename is required.' };
+  }
+  
+  if (!sessionId) {
+    return { success: false, output: 'Session ID not available.' };
+  }
+  
+  // Import dynamically to avoid circular dependency
+  const { getSessionAttachments } = await import('../database/db.js');
+  
+  try {
+    const attachments = await getSessionAttachments(sessionId);
+    
+    // Find attachment by filename (case-insensitive)
+    const attachment = attachments.find(a => 
+      a.name?.toLowerCase() === filename.toLowerCase()
+    );
+    
+    if (!attachment) {
+      const available = attachments.map(a => a.name).join(', ') || 'none';
+      return { 
+        success: false, 
+        output: `File "${filename}" not found. Available files: ${available}` 
+      };
+    }
+    
+    // For text files, return textContent if available
+    if (attachment.textContent) {
+      return {
+        success: true,
+        output: `[File: ${attachment.name}]\n${attachment.textContent}\n[End File]`,
+        textContent: attachment.textContent,
+      };
+    }
+    
+    // For images/binary files, re-encode from URI if available
+    if (attachment.uri) {
+      // Check if URI is a data URI (already base64)
+      if (attachment.uri.startsWith('data:')) {
+        const base64Match = attachment.uri.match(/base64,(.+)$/);
+        if (base64Match) {
+          return {
+            success: true,
+            output: `Image "${attachment.name}" recalled successfully.`,
+            base64: base64Match[1],
+            mimeType: attachment.mimeType,
+          };
+        }
+      }
+      
+      // Try to read from file URI
+      const fileInfo = await FileSystem.getInfoAsync(attachment.uri);
+      if (fileInfo.exists) {
+        const base64 = await FileSystem.readAsStringAsync(attachment.uri, {
+          encoding: 'base64',
+        });
+        return {
+          success: true,
+          output: `File "${attachment.name}" recalled successfully.`,
+          base64,
+          mimeType: attachment.mimeType,
+        };
+      }
+    }
+    
+    // Check if attachment has base64 stored directly
+    if (attachment.base64) {
+      return {
+        success: true,
+        output: `File "${attachment.name}" recalled successfully.`,
+        base64: attachment.base64,
+        mimeType: attachment.mimeType,
+      };
+    }
+    
+    return {
+      success: false,
+      output: `File "${attachment.name}" exists in history but content is no longer available. The file may have been deleted from device.`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      output: `Error recalling file "${attachment.name}": ${error.message}`,
+    };
+  }
+}
+
+// ===================================================================
 // UNIFIED TOOL EXECUTOR
 // ===================================================================
 
@@ -693,10 +927,13 @@ export async function executeTool(toolName, input, config) {
     case 'generate_image':
       return executeImageGeneration(input, config.imageGeneration);
 
+    case 'reattach_file':
+      return executeReattachFile(input, config.reattachFile);
+
     default:
       return {
         success: false,
-        output: `Unknown tool: ${toolName}. Available tools: web_search, generate_image`,
+        output: `Unknown tool: ${toolName}. Available tools: web_search, generate_image, reattach_file`,
       };
   }
 }
@@ -1014,7 +1251,16 @@ async function callGeminiWithTools({ messages, model, provider, baseUrl, apiKey,
       for (const tc of m.tool_calls) {
         let args = {};
         try { args = JSON.parse(tc.function?.arguments || '{}'); } catch {}
-        parts.push({ functionCall: { name: tc.function?.name, args } });
+        
+        // Build part with functionCall
+        const part = { functionCall: { name: tc.function?.name, args } };
+        
+        // Include thoughtSignature if present (required for Gemini 3)
+        if (tc._geminiThoughtSignature) {
+          part.thoughtSignature = tc._geminiThoughtSignature;
+        }
+        
+        parts.push(part);
       }
       contents.push({ role: 'model', parts });
     } else {
@@ -1046,11 +1292,22 @@ async function callGeminiWithTools({ messages, model, provider, baseUrl, apiKey,
   }
   
   const url = `${base}/models/${model}:streamGenerateContent?key=${apiKey}&alt=sse`;
+  
+  // Build tool config for Gemini
+  const toolConfig = geminiTools.length > 0 ? {
+    functionCallingConfig: {
+      mode: 'AUTO',
+    }
+  } : undefined;
+  
   const body = {
     contents,
     tools: geminiTools.length > 0 ? geminiTools : undefined,
+    toolConfig,
     systemInstruction: systemInstruction ? { parts: [{ text: systemInstruction }] } : undefined,
-    generationConfig: { maxOutputTokens: 8192 },
+    generationConfig: { 
+      maxOutputTokens: 8192,
+    },
   };
   
   return new Promise((resolve, reject) => {
@@ -1065,7 +1322,7 @@ async function callGeminiWithTools({ messages, model, provider, baseUrl, apiKey,
     xhr.setRequestHeader('Content-Type', 'application/json');
     
     let accumulatedText = '';
-    const functionCalls = [];
+    const functionCalls = []; // Will store { functionCall, thoughtSignature }
     let finishReason = 'STOP';
     let usageData = null;
     let buffer = '';
@@ -1096,7 +1353,11 @@ async function callGeminiWithTools({ messages, model, provider, baseUrl, apiKey,
                 if (onChunk) onChunk(part.text);
               }
               if (part.functionCall) {
-                functionCalls.push(part.functionCall);
+                // Capture thoughtSignature if present (required for Gemini 3)
+                functionCalls.push({
+                  functionCall: part.functionCall,
+                  thoughtSignature: part.thoughtSignature || null,
+                });
               }
             }
           }
@@ -1113,11 +1374,13 @@ async function callGeminiWithTools({ messages, model, provider, baseUrl, apiKey,
         return reject(new Error(msg));
       }
       
-      // Convert to OpenAI-like format
+      // Convert to OpenAI-like format, preserving Gemini-specific data
       const toolCalls = functionCalls.map((fc, i) => ({
         id: `gemini_${Date.now()}_${i}`,
         type: 'function',
-        function: { name: fc.name, arguments: JSON.stringify(fc.args || {}) },
+        function: { name: fc.functionCall.name, arguments: JSON.stringify(fc.functionCall.args || {}) },
+        // Preserve thoughtSignature for Gemini tool result handling
+        _geminiThoughtSignature: fc.thoughtSignature,
       }));
       
       resolve({
@@ -1179,8 +1442,12 @@ export async function streamAgenticChat({
   const providerLower = provider.toLowerCase();
   const MAX_ITERATIONS = 50; // Match Electron
   
-  // For agentic mode, only enable web search tool (allow missing key for AI feedback)
-  const tools = getAgenticTools(providerLower, { webSearch: true, imageGeneration: false });
+  // For agentic mode, enable web search + attachment tools (list & reattach)
+  const tools = getAgenticTools(providerLower, { 
+    webSearch: true, 
+    imageGeneration: false,
+    attachmentTools: true,  // Always enable - AI can query and will get empty list if none
+  });
   
   // Working copy of conversation
   let conversationMessages = [...messages];
@@ -1216,11 +1483,23 @@ export async function streamAgenticChat({
         // Use dedicated cloud agentic endpoint
         const { streamCloudAgentic } = await import('./clustrixCloud');
         
+        // Query attachments from database for cloud endpoint (it can't access local DB)
+        let sessionAttachments = [];
+        if (agenticConfig?.sessionId) {
+          try {
+            const { getSessionAttachments } = await import('../database/db.js');
+            sessionAttachments = await getSessionAttachments(agenticConfig.sessionId);
+          } catch (e) {
+            console.warn('[AGENTIC] Failed to load session attachments for cloud:', e.message);
+          }
+        }
+        
         // Delegate to cloud endpoint - it handles the full agentic loop server-side
         return streamCloudAgentic({
           idToken: idToken || apiKey,
           model,
           messages: conversationMessages,
+          sessionAttachments, // Pass attachments for list_attachments and reattach_file tools
           signal,
           onChunk,
           onThink,
@@ -1280,7 +1559,10 @@ export async function streamAgenticChat({
           commentary: commentary,
         });
 
-        // 1. Stream COMMAND INPUT tag
+        // Internal tools that shouldn't show OUTPUT in CommandBlock
+        const isInternalTool = ['list_attachments', 'reattach_file'].includes(toolCall.name);
+
+        // 1. Stream COMMAND INPUT tag (always - shows CommandBlock header)
         const inputPayload = JSON.stringify({
             command: toolCall.name,
             args: toolCall.input,
@@ -1288,10 +1570,32 @@ export async function streamAgenticChat({
         });
         onChunk(`<!--command-input-->${inputPayload}<!--/command-input-->`);
         
-        // Execute the tool (only web_search for agentic mode)
-        const result = await executeWebSearch(toolCall.input, agenticConfig.webSearch);
+        // Execute the tool
+        let result;
+        if (toolCall.name === 'web_search') {
+          result = await executeWebSearch(toolCall.input, agenticConfig.webSearch);
+        } else if (toolCall.name === 'list_attachments') {
+          result = await executeListAttachments(toolCall.input, { 
+            sessionId: agenticConfig.sessionId 
+          });
+        } else if (toolCall.name === 'reattach_file') {
+          result = await executeReattachFile(toolCall.input, { 
+            sessionId: agenticConfig.sessionId 
+          });
+          
+          // If reattach was successful and has base64, inject it into next message as attachment
+          if (result.success && (result.base64 || result.textContent)) {
+            // Format tool result to include the file content for AI to see
+            const fileContent = result.textContent || 
+              `[Image: ${toolCall.input.filename} - Base64 content available]`;
+            result.output = fileContent;
+          }
+        } else {
+          result = { success: false, output: `Unknown tool: ${toolCall.name}` };
+        }
         
-        // 2. Stream COMMAND OUTPUT tag
+        // 2. Stream COMMAND OUTPUT tag (always - marks CommandBlock as complete)
+        // Note: CommandBlock.js hides output section for internal tools (list_attachments, reattach_file)
         const outputPayload = JSON.stringify({
             success: result.success,
             output: result.output

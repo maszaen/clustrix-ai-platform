@@ -368,6 +368,7 @@ export async function streamCloudAgentic({
   idToken,
   model,
   messages,
+  sessionAttachments, // For list_attachments and reattach_file tools
   signal,
   onChunk,
   onThink,
@@ -488,6 +489,7 @@ export async function streamCloudAgentic({
     xhr.send(JSON.stringify({
       model,
       messages: formatMessagesForCloud(messages),
+      sessionAttachments: sessionAttachments || [], // For file recall tools
       stream: true,
       temperature,
       max_tokens,

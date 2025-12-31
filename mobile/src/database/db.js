@@ -176,6 +176,37 @@ export async function getMessages(sessionId) {
   });
 }
 
+/**
+ * Get all attachments from a session's messages (directly from DB, ignores pagination)
+ * Used by list_attachments tool to find files regardless of loaded messages
+ */
+export async function getSessionAttachments(sessionId) {
+  const rows = await db.getAllAsync(
+    'SELECT metadata FROM messages WHERE session_id = ? AND role = ?',
+    [sessionId, 'user']
+  );
+  
+  const attachments = [];
+  
+  for (const row of rows) {
+    try {
+      const metadata = row.metadata ? JSON.parse(row.metadata) : {};
+      if (metadata.attachments && Array.isArray(metadata.attachments)) {
+        for (const att of metadata.attachments) {
+          // Avoid duplicates by name
+          if (!attachments.some(a => a.name === att.name)) {
+            attachments.push(att);
+          }
+        }
+      }
+    } catch (e) {
+      // Skip malformed metadata
+    }
+  }
+  
+  return attachments;
+}
+
 // Get message count for a session
 export async function getMessageCount(sessionId) {
   const result = await db.getFirstAsync(

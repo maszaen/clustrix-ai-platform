@@ -9,7 +9,7 @@ import { FONTS } from '../constants/fonts';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Gradient constants - pixel based
-const GRADIENT_MAX_HEIGHT = 100; // Max gradient height in pixels
+const GRADIENT_MAX_HEIGHT = 50; // Max gradient height in pixels
 const GRADIENT_THRESHOLD = 200; // Scroll distance for full gradient (0 to full in 200px)
 
 /**

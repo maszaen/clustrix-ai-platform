@@ -149,7 +149,7 @@ const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser 
       maxDist={15}
       enabled={!disabled}
     >
-      <Animated.View>
+      <Animated.View style={isUser ? { alignSelf: 'flex-end', maxWidth: '85%' } : undefined}>
         <TouchableWithoutFeedback onPress={handleTap}>
           <View ref={containerRef} style={[style, { overflow: 'hidden' }]}>
             {children}

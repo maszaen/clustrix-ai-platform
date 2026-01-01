@@ -824,18 +824,19 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 4,
-    backgroundColor: COLORS.primary + '20',
+    backgroundColor: COLORS.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pplxHeaderText: {
     color: COLORS.fg,
     fontSize: 13,
+    marginTop: 3,
     fontFamily: FONTS.display,
   },
   pplxScrollContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     paddingVertical: 4,
   },
   // Container for card + spacer - keeps them in a row

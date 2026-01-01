@@ -1488,7 +1488,42 @@ export async function streamAgenticChat({
         if (agenticConfig?.sessionId) {
           try {
             const { getSessionAttachments } = await import('../database/db.js');
-            sessionAttachments = await getSessionAttachments(agenticConfig.sessionId);
+            const rawAttachments = await getSessionAttachments(agenticConfig.sessionId);
+            
+            // Populate base64 content for each attachment from URI/file system
+            // Backend needs this because it can't access mobile's local files
+            sessionAttachments = await Promise.all(rawAttachments.map(async (att) => {
+              // Skip if already has base64 or textContent
+              if (att.base64 || att.textContent) {
+                return att;
+              }
+              
+              // Try to read base64 from URI
+              if (att.uri) {
+                try {
+                  // Data URI already contains base64
+                  if (att.uri.startsWith('data:')) {
+                    const base64Match = att.uri.match(/base64,(.+)$/);
+                    if (base64Match) {
+                      return { ...att, base64: base64Match[1] };
+                    }
+                  }
+                  
+                  // File URI - read from file system
+                  const fileInfo = await FileSystem.getInfoAsync(att.uri);
+                  if (fileInfo.exists) {
+                    const base64 = await FileSystem.readAsStringAsync(att.uri, {
+                      encoding: 'base64',
+                    });
+                    return { ...att, base64 };
+                  }
+                } catch (readErr) {
+                  console.warn(`[AGENTIC] Failed to read file ${att.name}:`, readErr.message);
+                }
+              }
+              
+              return att;
+            }));
           } catch (e) {
             console.warn('[AGENTIC] Failed to load session attachments for cloud:', e.message);
           }

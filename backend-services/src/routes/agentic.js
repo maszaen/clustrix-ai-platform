@@ -10,6 +10,7 @@ const router = express.Router();
 const { getModelConfig } = require('../config/models');
 const { calculateCost } = require('../config/pricing');
 const { checkProviderTokenLimit, trackProviderTokens } = require('../middleware/rateLimit');
+const { getDb } = require('../services/database');
 
 // ===================================================================
 // TOOL DEFINITIONS
@@ -275,28 +276,74 @@ function executeListAttachments(input, attachments) {
   };
 }
 
+
+
+/**
+ * Helper: Find file content in DB (requestLogs)
+ */
+async function findFileContentInDb(userId, filename) {
+  const db = getDb();
+  if (!db || !userId) return null;
+  
+  try {
+    // Search in recent request logs (last 20 requests to save reads)
+    // This assumes the file was attached in a recent conversation
+    const snapshot = await db.collection('requestLogs')
+      .where('userId', '==', userId)
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get();
+      
+    const filenameLower = filename.toLowerCase();
+    
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      const messages = data.messages || [];
+      
+      // Check messages for attachments with content
+      for (const msg of messages) {
+        if (msg.attachments && Array.isArray(msg.attachments)) {
+          const found = msg.attachments.find(a => 
+            a.name?.toLowerCase() === filenameLower && (a.base64 || a.textContent)
+          );
+          if (found) return found;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`[AGENTIC] Error searching DB for file "${filename}":`, err.message);
+  }
+  return null;
+}
+
 /**
  * Execute reattach_file - retrieve file content by filename
  * Returns the attachment content if found
  */
-function executeReattachFile(input, attachments) {
+async function executeReattachFile(input, attachments, userId) {
   const { filename } = input;
   
   if (!filename) {
     return { success: false, output: 'Filename is required.' };
   }
   
-  if (!attachments || attachments.length === 0) {
-    return { success: false, output: 'No files available in this session.' };
-  }
-  
-  // Find attachment by filename (case-insensitive)
-  const attachment = attachments.find(a => 
+  // 1. Try session attachments first (fastest)
+  let attachment = attachments?.find(a => 
     a.name?.toLowerCase() === filename.toLowerCase()
   );
+
+  // 2. If not found or missing content, try DB
+  if (!attachment || (!attachment.base64 && !attachment.textContent)) {
+    console.log(`[AGENTIC] File "${filename}" content missing in session, checking DB...`);
+    const dbAttachment = await findFileContentInDb(userId, filename);
+    if (dbAttachment) {
+      // Merge found content into attachment object
+      attachment = { ...attachment, ...dbAttachment };
+    }
+  }
   
   if (!attachment) {
-    const available = attachments.map(a => a.name).join(', ') || 'none';
+    const available = (attachments || []).map(a => a.name).join(', ') || 'none';
     return { 
       success: false, 
       output: `File "${filename}" not found. Available files: ${available}` 
@@ -435,13 +482,14 @@ router.post('/', async (req, res) => {
       
       switch (config.provider) {
         case 'gemini':
-          response = await callGeminiWithTools(config, conversationMessages, { temperature, max_tokens });
+        case 'google':
+          response = await callGeminiWithTools(config, conversationMessages, { temperature, max_tokens }, stream ? res : null);
           break;
         case 'anthropic':
-          response = await callClaudeWithTools(config, conversationMessages, { temperature, max_tokens });
+          response = await callClaudeWithTools(config, conversationMessages, { temperature, max_tokens }, stream ? res : null);
           break;
         default:
-          response = await callOpenAIWithTools(config, conversationMessages, { temperature, max_tokens });
+          response = await callOpenAIWithTools(config, conversationMessages, { temperature, max_tokens }, stream ? res : null);
           break;
       }
       
@@ -458,10 +506,7 @@ router.post('/', async (req, res) => {
       }
       fullContent += assistantMessage.content || '';
       
-      // Stream content
-      if (stream && assistantMessage.content) {
-        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: assistantMessage.content } }] })}\n\n`);
-      }
+      // NOTE: Content is already streamed in real-time inside callXXXWithTools functions
       
       // Check if done (no tool calls)
       if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
@@ -514,7 +559,7 @@ router.post('/', async (req, res) => {
         // Internal tools that don't show full output in UI
         const isInternalTool = ['list_attachments', 'reattach_file'].includes(toolName);
         
-        // 1. Stream COMMAND INPUT tag (exact mobile format)
+        // 1. Stream COMMAND INPUT tag for ALL tools (creates CommandBlock in UI)
         if (stream) {
           const inputPayload = JSON.stringify({
             command: toolName,
@@ -531,7 +576,7 @@ router.post('/', async (req, res) => {
         } else if (toolName === 'list_attachments') {
           result = executeListAttachments(input, sessionAttachments);
         } else if (toolName === 'reattach_file') {
-          result = executeReattachFile(input, sessionAttachments);
+          result = await executeReattachFile(input, sessionAttachments, req.user?.uid);
         } else {
           result = { success: false, output: `Unknown tool: ${toolName}` };
         }
@@ -539,16 +584,18 @@ router.post('/', async (req, res) => {
         // Track tool result tokens
         totalInputTokens += Math.ceil((result.output || '').length / 4);
         
-        // 2. Stream COMMAND OUTPUT tag (always - marks CommandBlock as complete)
-        // Note: Client hides output section for internal tools
+        // 2. Stream COMMAND OUTPUT tag for ALL tools (marks CommandBlock as complete)
         if (stream) {
           const outputPayload = JSON.stringify({
             success: result.success,
             output: result.output,
           });
           res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: `<!--command-output-->${outputPayload}<!--/command-output-->` } }] })}\n\n`);
-          
-          // Send tool_result event to trigger client's handleToolResult
+        }
+        
+        // 3. Send tool_result event for ALL tools to trigger "thinking" loader on client
+        // Mobile hides internal tools in UI but needs the event to set isWaitingForIteration(true)
+        if (stream) {
           res.write(`data: ${JSON.stringify({ 
             tool_result: { 
               id: toolCall.id,
@@ -636,7 +683,7 @@ router.post('/', async (req, res) => {
 // PROVIDER-SPECIFIC TOOL CALLING
 // ===================================================================
 
-async function callOpenAIWithTools(config, messages, options) {
+async function callOpenAIWithTools(config, messages, options, res) {
   const url = `${config.baseUrl}/chat/completions`;
   
   const body = {
@@ -644,7 +691,8 @@ async function callOpenAIWithTools(config, messages, options) {
     messages,
     tools: OPENAI_TOOLS,
     tool_choice: 'auto',
-    stream: false, // Non-streaming for tool loop simplicity
+    stream: true,
+    stream_options: { include_usage: true },
   };
   
   if (options.temperature !== undefined) body.temperature = options.temperature;
@@ -664,20 +712,93 @@ async function callOpenAIWithTools(config, messages, options) {
     throw new Error(`${config.provider} API error: ${error}`);
   }
   
-  const data = await response.json();
-  const choice = data.choices?.[0];
+  // Stream and accumulate like mobile
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullContent = '';
+  let toolCallsMap = {};  // Track by index for proper accumulation
+  let usageData = null;
+  
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    buffer += decoder.decode(value, { stream: true });
+    
+    // Split by newline, keep incomplete line in buffer
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data:')) continue;
+      
+      const jsonStr = trimmed.slice(5).trim();  // Remove 'data:' prefix
+      if (!jsonStr || jsonStr === '[DONE]') continue;
+      
+      try {
+        const data = JSON.parse(jsonStr);
+        const delta = data.choices?.[0]?.delta;
+        
+        // Stream content real-time
+        if (delta?.content) {
+          fullContent += delta.content;
+          res?.write(`data: ${JSON.stringify({ choices: [{ delta: { content: delta.content } }] })}\n\n`);
+        }
+        
+        // Stream thinking/reasoning
+        const reasoning = delta?.reasoning_content || delta?.reasoning || delta?.thoughts;
+        if (reasoning) {
+          res?.write(`data: ${JSON.stringify({ choices: [{ delta: { thoughts: reasoning, thinking: reasoning } }] })}\n\n`);
+        }
+        
+        // Accumulate tool calls - like mobile state machine
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index ?? 0;
+            
+            // Initialize if not exists
+            if (!toolCallsMap[idx]) {
+              toolCallsMap[idx] = { 
+                id: '', 
+                type: 'function', 
+                function: { name: '', arguments: '' } 
+              };
+            }
+            
+            // ID only comes once, don't append
+            if (tc.id) toolCallsMap[idx].id = tc.id;
+            // Name and arguments come in chunks, append!
+            if (tc.function?.name) toolCallsMap[idx].function.name += tc.function.name;
+            if (tc.function?.arguments) toolCallsMap[idx].function.arguments += tc.function.arguments;
+          }
+        }
+        
+        // Capture usage
+        if (data.usage) {
+          usageData = data.usage;
+        }
+      } catch (e) {
+        // Ignore parse errors - incomplete JSON in buffer
+      }
+    }
+  }
+  
+  // Convert map to array, filter empty
+  const toolCalls = Object.values(toolCallsMap).filter(tc => tc.id && tc.function.name);
   
   return {
     message: {
       role: 'assistant',
-      content: choice?.message?.content || '',
-      tool_calls: choice?.message?.tool_calls,
+      content: fullContent,
+      tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
     },
-    usage: data.usage,
+    usage: usageData,
   };
 }
 
-async function callClaudeWithTools(config, messages, options) {
+async function callClaudeWithTools(config, messages, options, res) {
   const url = `${config.baseUrl}/messages`;
   
   // Convert messages to Claude format
@@ -721,6 +842,7 @@ async function callClaudeWithTools(config, messages, options) {
     system: systemPrompt,
     messages: claudeMessages,
     tools: CLAUDE_TOOLS,
+    stream: true,
   };
   
   if (options.temperature !== undefined) body.temperature = options.temperature;
@@ -740,10 +862,78 @@ async function callClaudeWithTools(config, messages, options) {
     throw new Error(`Anthropic API error: ${error}`);
   }
   
-  const data = await response.json();
+  // Stream and accumulate like mobile - Claude uses event types
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
   
-  // Convert Claude response to OpenAI format
-  const toolCalls = (data.content || [])
+  // State machine like mobile
+  const fullResponse = { content: [], usage: {} };
+  let currentBlock = null;
+  
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      
+      const jsonStr = trimmed.slice(5).trim();
+      if (!jsonStr) continue;
+      
+      try {
+        const event = JSON.parse(jsonStr);
+        
+        switch (event.type) {
+          case 'content_block_start':
+            currentBlock = { ...event.content_block };
+            if (currentBlock.type === 'text') currentBlock.text = '';
+            if (currentBlock.type === 'tool_use') currentBlock.input = '';
+            break;
+            
+          case 'content_block_delta':
+            if (event.delta?.type === 'text_delta' && currentBlock?.type === 'text') {
+              const text = event.delta.text || '';
+              currentBlock.text += text;
+              // Stream real-time!
+              if (text && res) {
+                res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`);
+              }
+            } else if (event.delta?.type === 'input_json_delta' && currentBlock?.type === 'tool_use') {
+              currentBlock.input += event.delta.partial_json || '';
+            } else if (event.delta?.type === 'thinking_delta' && res) {
+              const thinking = event.delta.thinking || '';
+              res.write(`data: ${JSON.stringify({ choices: [{ delta: { thoughts: thinking, thinking: thinking } }] })}\n\n`);
+            }
+            break;
+            
+          case 'content_block_stop':
+            if (currentBlock) {
+              if (currentBlock.type === 'tool_use' && typeof currentBlock.input === 'string') {
+                try { currentBlock.input = JSON.parse(currentBlock.input || '{}'); } catch { currentBlock.input = {}; }
+              }
+              fullResponse.content.push(currentBlock);
+            }
+            currentBlock = null;
+            break;
+            
+          case 'message_delta':
+            if (event.usage) fullResponse.usage = event.usage;
+            break;
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+  }
+  
+  // Convert to OpenAI format
+  const toolCalls = fullResponse.content
     .filter(c => c.type === 'tool_use')
     .map(c => ({
       id: c.id,
@@ -751,7 +941,7 @@ async function callClaudeWithTools(config, messages, options) {
       function: { name: c.name, arguments: JSON.stringify(c.input || {}) },
     }));
   
-  const textContent = (data.content || [])
+  const textContent = fullResponse.content
     .filter(c => c.type === 'text')
     .map(c => c.text)
     .join('');
@@ -762,11 +952,11 @@ async function callClaudeWithTools(config, messages, options) {
       content: textContent,
       tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
     },
-    usage: data.usage,
+    usage: fullResponse.usage,
   };
 }
 
-async function callGeminiWithTools(config, messages, options) {
+async function callGeminiWithTools(config, messages, options, res) {
   // Build contents in Gemini format
   let systemInstruction = '';
   const contents = [];
@@ -790,7 +980,13 @@ async function callGeminiWithTools(config, messages, options) {
       for (const tc of m.tool_calls) {
         let args = {};
         try { args = JSON.parse(tc.function?.arguments || '{}'); } catch {}
-        parts.push({ functionCall: { name: tc.function?.name, args } });
+        
+        // Include thoughtSignature if present (required for Gemini 3)
+        const part = { functionCall: { name: tc.function?.name, args } };
+        if (tc._geminiThoughtSignature) {
+          part.thoughtSignature = tc._geminiThoughtSignature;
+        }
+        parts.push(part);
       }
       contents.push({ role: 'model', parts });
     } else {
@@ -801,7 +997,8 @@ async function callGeminiWithTools(config, messages, options) {
     }
   }
   
-  const url = `${config.baseUrl}/models/${config.modelId}:generateContent?key=${config.apiKey}`;
+  // Use streaming endpoint like mobile
+  const url = `${config.baseUrl}/models/${config.modelId}:streamGenerateContent?key=${config.apiKey}&alt=sse`;
   const body = {
     contents,
     tools: [WEB_SEARCH_TOOL_GEMINI],
@@ -823,12 +1020,63 @@ async function callGeminiWithTools(config, messages, options) {
     throw new Error(`Gemini API error: ${error}`);
   }
   
-  const data = await response.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
+  // Stream and accumulate like mobile
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullContent = '';
+  const functionCalls = [];
+  let usageData = null;
   
-  // Extract text and function calls
-  const textParts = parts.filter(p => p.text).map(p => p.text).join('');
-  const functionCalls = parts.filter(p => p.functionCall);
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      
+      const jsonStr = trimmed.slice(5).trim();
+      if (!jsonStr) continue;
+      
+      try {
+        const data = JSON.parse(jsonStr);
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        
+        for (const part of parts) {
+          // Stream text content real-time
+          if (part.text) {
+            // Check for native thinking (Gemini 2.5)
+            if (part.thought === true) {
+              res?.write(`data: ${JSON.stringify({ choices: [{ delta: { thoughts: part.text, thinking: part.text } }] })}\n\n`);
+            } else {
+              fullContent += part.text;
+              res?.write(`data: ${JSON.stringify({ choices: [{ delta: { content: part.text } }] })}\n\n`);
+            }
+          }
+          
+          // Accumulate function calls
+          if (part.functionCall) {
+            functionCalls.push({
+              functionCall: part.functionCall,
+              thoughtSignature: part.thoughtSignature || null, // Capture thoughtSignature for Gemini 3
+            });
+          }
+        }
+        
+        // Capture usage
+        if (data.usageMetadata) {
+          usageData = data.usageMetadata;
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+  }
   
   const toolCalls = functionCalls.map((fc, i) => ({
     id: `gemini_${Date.now()}_${i}`,
@@ -837,15 +1085,16 @@ async function callGeminiWithTools(config, messages, options) {
       name: fc.functionCall.name,
       arguments: JSON.stringify(fc.functionCall.args || {}),
     },
+    _geminiThoughtSignature: fc.thoughtSignature, // Persist for next turn
   }));
   
   return {
     message: {
       role: 'assistant',
-      content: textParts,
+      content: fullContent,
       tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
     },
-    usage: data.usageMetadata,
+    usage: usageData,
   };
 }
 

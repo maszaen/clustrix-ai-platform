@@ -762,7 +762,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     const newMsgKey = `msg-${sessionIdPart}-${userMessageIndex}-user`;
     setNewMessageId(newMsgKey);
     
-    // Prepare attachment metadata for storage (exclude large base64 for DB storage)
+    // Prepare attachment metadata for storage
+    // NOTE: base64 is NOT stored to keep DB size small
+    // For cloud mode reattach_file, base64 is populated on-demand from file system
     const attachmentMeta = attachments.map(a => ({
       type: a.type,
       name: a.name,
@@ -770,7 +772,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       size: a.size,
       width: a.width,
       height: a.height,
-      // Store URI for display, but not base64 (too large for DB)
+      // Store URI for display and for on-demand file reading
       uri: a.uri,
       // Include textContent for text files so AI can read them
       textContent: a.textContent,

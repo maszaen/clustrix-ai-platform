@@ -527,6 +527,8 @@ async function loadDailyStatsRange(days = 7) {
 }
 
 module.exports = {
+  // Firestore instance getter
+  getDb,
   saveModelSettings,
   loadModelSettings,
   saveUnlimitedUser,

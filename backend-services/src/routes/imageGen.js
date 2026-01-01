@@ -383,13 +383,13 @@ router.post('/', async (req, res) => {
       switch (config.provider) {
         case 'gemini':
         case 'google':
-          response = await callGeminiWithImageTool(config, conversationMessages, { temperature, max_tokens });
+          response = await callGeminiWithImageTool(config, conversationMessages, { temperature, max_tokens }, stream ? res : null);
           break;
         case 'anthropic':
-          response = await callClaudeWithImageTool(config, conversationMessages, { temperature, max_tokens });
+          response = await callClaudeWithImageTool(config, conversationMessages, { temperature, max_tokens }, stream ? res : null);
           break;
         default:
-          response = await callOpenAIWithImageTool(config, conversationMessages, { temperature, max_tokens });
+          response = await callOpenAIWithImageTool(config, conversationMessages, { temperature, max_tokens }, stream ? res : null);
           break;
       }
       
@@ -405,10 +405,7 @@ router.post('/', async (req, res) => {
       }
       fullContent += assistantMessage.content || '';
       
-      // Stream content
-      if (stream && assistantMessage.content) {
-        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: assistantMessage.content } }] })}\n\n`);
-      }
+      // NOTE: Content is already streamed in real-time inside callXXXWithImageTool functions
       
       // Check if done (no tool calls)
       if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
@@ -568,7 +565,7 @@ router.post('/', async (req, res) => {
 // PROVIDER-SPECIFIC TOOL CALLING (with Image Tool)
 // ===================================================================
 
-async function callOpenAIWithImageTool(config, messages, options) {
+async function callOpenAIWithImageTool(config, messages, options, res) {
   const url = `${config.baseUrl}/chat/completions`;
   
   const body = {
@@ -576,7 +573,8 @@ async function callOpenAIWithImageTool(config, messages, options) {
     messages,
     tools: [IMAGE_GENERATION_TOOL],
     tool_choice: 'auto',
-    stream: false,
+    stream: true,
+    stream_options: { include_usage: true },
   };
   
   if (options.temperature !== undefined) body.temperature = options.temperature;
@@ -596,20 +594,68 @@ async function callOpenAIWithImageTool(config, messages, options) {
     throw new Error(`${config.provider} API error: ${error}`);
   }
   
-  const data = await response.json();
-  const choice = data.choices?.[0];
+  // Stream and accumulate like mobile
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullContent = '';
+  let toolCallsMap = {};
+  let usageData = null;
+  
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data:')) continue;
+      
+      const jsonStr = trimmed.slice(5).trim();
+      if (!jsonStr || jsonStr === '[DONE]') continue;
+      
+      try {
+        const data = JSON.parse(jsonStr);
+        const delta = data.choices?.[0]?.delta;
+        
+        if (delta?.content) {
+          fullContent += delta.content;
+          res?.write(`data: ${JSON.stringify({ choices: [{ delta: { content: delta.content } }] })}\n\n`);
+        }
+        
+        if (delta?.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index ?? 0;
+            if (!toolCallsMap[idx]) {
+              toolCallsMap[idx] = { id: '', type: 'function', function: { name: '', arguments: '' } };
+            }
+            if (tc.id) toolCallsMap[idx].id = tc.id;
+            if (tc.function?.name) toolCallsMap[idx].function.name += tc.function.name;
+            if (tc.function?.arguments) toolCallsMap[idx].function.arguments += tc.function.arguments;
+          }
+        }
+        
+        if (data.usage) usageData = data.usage;
+      } catch (e) {}
+    }
+  }
+  
+  const toolCalls = Object.values(toolCallsMap).filter(tc => tc.id && tc.function.name);
   
   return {
     message: {
       role: 'assistant',
-      content: choice?.message?.content || '',
-      tool_calls: choice?.message?.tool_calls,
+      content: fullContent,
+      tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
     },
-    usage: data.usage,
+    usage: usageData,
   };
 }
 
-async function callClaudeWithImageTool(config, messages, options) {
+async function callClaudeWithImageTool(config, messages, options, res) {
   const url = `${config.baseUrl}/messages`;
   
   let systemPrompt = '';
@@ -652,6 +698,7 @@ async function callClaudeWithImageTool(config, messages, options) {
     system: systemPrompt,
     messages: claudeMessages,
     tools: [IMAGE_GENERATION_TOOL_CLAUDE],
+    stream: true,
   };
   
   if (options.temperature !== undefined) body.temperature = options.temperature;
@@ -671,9 +718,69 @@ async function callClaudeWithImageTool(config, messages, options) {
     throw new Error(`Anthropic API error: ${error}`);
   }
   
-  const data = await response.json();
+  // Stream and accumulate like mobile
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const fullResponse = { content: [], usage: {} };
+  let currentBlock = null;
   
-  const toolCalls = (data.content || [])
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      
+      const jsonStr = trimmed.slice(5).trim();
+      if (!jsonStr) continue;
+      
+      try {
+        const event = JSON.parse(jsonStr);
+        
+        switch (event.type) {
+          case 'content_block_start':
+            currentBlock = { ...event.content_block };
+            if (currentBlock.type === 'text') currentBlock.text = '';
+            if (currentBlock.type === 'tool_use') currentBlock.input = '';
+            break;
+            
+          case 'content_block_delta':
+            if (event.delta?.type === 'text_delta' && currentBlock?.type === 'text') {
+              const text = event.delta.text || '';
+              currentBlock.text += text;
+              if (text && res) {
+                res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\n`);
+              }
+            } else if (event.delta?.type === 'input_json_delta' && currentBlock?.type === 'tool_use') {
+              currentBlock.input += event.delta.partial_json || '';
+            }
+            break;
+            
+          case 'content_block_stop':
+            if (currentBlock) {
+              if (currentBlock.type === 'tool_use' && typeof currentBlock.input === 'string') {
+                try { currentBlock.input = JSON.parse(currentBlock.input || '{}'); } catch { currentBlock.input = {}; }
+              }
+              fullResponse.content.push(currentBlock);
+            }
+            currentBlock = null;
+            break;
+            
+          case 'message_delta':
+            if (event.usage) fullResponse.usage = event.usage;
+            break;
+        }
+      } catch (e) {}
+    }
+  }
+  
+  const toolCalls = fullResponse.content
     .filter(c => c.type === 'tool_use')
     .map(c => ({
       id: c.id,
@@ -681,7 +788,7 @@ async function callClaudeWithImageTool(config, messages, options) {
       function: { name: c.name, arguments: JSON.stringify(c.input || {}) },
     }));
   
-  const textContent = (data.content || [])
+  const textContent = fullResponse.content
     .filter(c => c.type === 'text')
     .map(c => c.text)
     .join('');
@@ -692,11 +799,11 @@ async function callClaudeWithImageTool(config, messages, options) {
       content: textContent,
       tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
     },
-    usage: data.usage,
+    usage: fullResponse.usage,
   };
 }
 
-async function callGeminiWithImageTool(config, messages, options) {
+async function callGeminiWithImageTool(config, messages, options, res) {
   let systemInstruction = '';
   const contents = [];
   
@@ -730,7 +837,8 @@ async function callGeminiWithImageTool(config, messages, options) {
     }
   }
   
-  const url = `${config.baseUrl}/models/${config.modelId}:generateContent?key=${config.apiKey}`;
+  // Use streaming endpoint like mobile
+  const url = `${config.baseUrl}/models/${config.modelId}:streamGenerateContent?key=${config.apiKey}&alt=sse`;
   const body = {
     contents,
     tools: [IMAGE_GENERATION_TOOL_GEMINI],
@@ -752,11 +860,50 @@ async function callGeminiWithImageTool(config, messages, options) {
     throw new Error(`Gemini API error: ${error}`);
   }
   
-  const data = await response.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
+  // Stream and accumulate like mobile
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let fullContent = '';
+  const functionCalls = [];
+  let usageData = null;
   
-  const textParts = parts.filter(p => p.text).map(p => p.text).join('');
-  const functionCalls = parts.filter(p => p.functionCall);
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      
+      const jsonStr = trimmed.slice(5).trim();
+      if (!jsonStr) continue;
+      
+      try {
+        const data = JSON.parse(jsonStr);
+        const parts = data.candidates?.[0]?.content?.parts || [];
+        
+        for (const part of parts) {
+          if (part.text) {
+            fullContent += part.text;
+            res?.write(`data: ${JSON.stringify({ choices: [{ delta: { content: part.text } }] })}\n\n`);
+          }
+          
+          if (part.functionCall) {
+            functionCalls.push(part.functionCall);
+          }
+        }
+        
+        if (data.usageMetadata) {
+          usageData = data.usageMetadata;
+        }
+      } catch (e) {}
+    }
+  }
   
   const toolCalls = functionCalls.map((fc, i) => ({
     id: `gemini_${Date.now()}_${i}`,
@@ -770,10 +917,10 @@ async function callGeminiWithImageTool(config, messages, options) {
   return {
     message: {
       role: 'assistant',
-      content: textParts,
+      content: fullContent,
       tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
     },
-    usage: data.usageMetadata,
+    usage: usageData,
   };
 }
 

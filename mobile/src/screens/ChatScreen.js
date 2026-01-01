@@ -1743,7 +1743,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   }, [displayMessages.length, getLastAiIndex, topInset]);
   */
   
-  // Debounced scroll state handler - runs on JS thread but throttled
+  // Scroll state handler - Implements: Hide on Scroll, Show on Stop
   const scrollStateTimeout = useRef(null);
   const handleScrollState = useCallback((offsetY, distanceFromBottom, nearBottom, contentHeight, layoutHeight) => {
     lastScrollOffset.current = offsetY;
@@ -1754,26 +1754,29 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       setShowSpacer(false);
     }
     
-    // Fast hide scroll button when near bottom
-    if (scrollButtonVisible && nearBottom && !programmaticScrollRef.current) {
-      setScrollButtonVisible(false);
+    // Logic 1: User Scroll = Fade Out (Hide immediately)
+    // Only hide if currently visible and NOT a programmatic scroll (auto-scroll)
+    if (scrollButtonVisible && !programmaticScrollRef.current) {
+        setScrollButtonVisible(false);
     }
     
-    // Debounced show button - show when scrolled away from bottom
-    const isScrollable = contentHeight > layoutHeight;
-    const shouldShow = isScrollable && !nearBottom;
-    
-    scrollPositionRef.current.showButton = shouldShow;
-    scrollPositionRef.current.isScrolling = true;
-    
+    // Logic 2: User Stop Scrolling = Fade In
+    // We detect "Stop" by calculating silence in scroll events
     if (scrollStateTimeout.current) clearTimeout(scrollStateTimeout.current);
+    
     scrollStateTimeout.current = setTimeout(() => {
-      scrollPositionRef.current.isScrolling = false;
-      if (!programmaticScrollRef.current && scrollPositionRef.current.showButton) {
+      // Scroll Stopped
+      const isScrollable = contentHeight > layoutHeight;
+      const shouldShow = isScrollable && !nearBottom;
+      
+      // Show button if valid position
+      if (shouldShow && !scrollButtonVisible && !programmaticScrollRef.current) {
         setScrollButtonVisible(true);
       }
+      
+      // Reset flags
       programmaticScrollRef.current = false;
-    }, 200);
+    }, 150); // 150ms debounce implies stopped scrolling
   }, [showSpacer, scrollButtonVisible]);
   
   // Header component for load more (appears at TOP)

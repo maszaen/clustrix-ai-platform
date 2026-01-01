@@ -1,12 +1,18 @@
-
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, LayoutAnimation, Platform, UIManager } from 'react-native';
-import { ChevronDown, ChevronRight, CheckCircle, XCircle, Loader2 } from 'lucide-react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, UIManager } from 'react-native';
+import Animated, { 
+    useSharedValue, 
+    useAnimatedStyle, 
+    withTiming, 
+    withRepeat, 
+    Easing,
+    FadeIn
+} from 'react-native-reanimated';
+import { ChevronRight, CheckCircle, XCircle, Loader2 } from 'lucide-react-native';
 import { transformCommandText } from '../utils/agenticParser';
 import { GeneratedImageView } from './ToolResultView';
 import { COLORS } from '../constants/colors';
 
-// Only enable LayoutAnimation on old architecture (fabric check)
 if (Platform.OS === 'android' && !global?.nativeFabricUIManager) {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -14,44 +20,43 @@ if (Platform.OS === 'android' && !global?.nativeFabricUIManager) {
 }
 
 const CommandBlock = ({ command, expanded, onToggle }) => {
-    // command structure from agenticParser: 
-    // { input: {command, args, commentary}, output: {success, output}, status: 'running'|'complete' }
-    
-    // Controlled component - expanded state passed from parent
     
     const toggleExpand = () => {
-        // Animation handled by parent or layout update
         onToggle && onToggle();
     };
 
     const { input, output, status } = command;
     const isRunning = status === 'running';
-    const isSuccess = output?.success !== false; // Default true unless explicitly false
+    const isSuccess = output?.success !== false;
 
-    // Auto-expand logic moved to parent
+    // Animations
+    const rotateVal = useSharedValue(0);
+    const expandVal = useSharedValue(0);
 
-
-    // Rotation animation for loader
-    const rotateAnim = useRef(new Animated.Value(0)).current;
-
+    // Loader Spin
     useEffect(() => {
         if (isRunning) {
-            Animated.loop(
-                Animated.timing(rotateAnim, {
-                    toValue: 1,
-                    duration: 1000,
-                    useNativeDriver: true,
-                })
-            ).start();
+            rotateVal.value = withRepeat(
+                withTiming(360, { duration: 1000, easing: Easing.linear }), 
+                -1
+            );
         } else {
-            rotateAnim.setValue(0);
+            rotateVal.value = 0;
         }
     }, [isRunning]);
 
-    const rotate = rotateAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '360deg'],
-    });
+    const loaderStyle = useAnimatedStyle(() => ({
+        transform: [{ rotate: `${rotateVal.value}deg` }]
+    }));
+
+    // Chevron Rotation
+    useEffect(() => {
+        expandVal.value = withTiming(expanded ? 90 : 0, { duration: 200 });
+    }, [expanded]);
+
+    const chevronStyle = useAnimatedStyle(() => ({
+        transform: [{ rotate: `${expandVal.value}deg` }]
+    }));
 
     const borderColor = !isSuccess && status === 'complete' ? COLORS.danger + '60' : COLORS.borderLight;
     const bgColor = !isSuccess && status === 'complete' ? COLORS.danger + '15' : COLORS.bgSecondary;
@@ -66,7 +71,7 @@ const CommandBlock = ({ command, expanded, onToggle }) => {
                 <View style={styles.left}>
                     <View style={styles.iconContainer}>
                         {isRunning ? (
-                            <Animated.View style={{ transform: [{ rotate }] }}>
+                            <Animated.View style={loaderStyle}>
                                 <Loader2 size={16} color={COLORS.primary} />
                             </Animated.View>
                         ) : isSuccess ? (
@@ -81,39 +86,49 @@ const CommandBlock = ({ command, expanded, onToggle }) => {
                     </Text>
                 </View>
 
-                {expanded ? <ChevronDown size={16} color={COLORS.fgMuted} /> : <ChevronRight size={16} color={COLORS.fgMuted} />}
+                <Animated.View style={chevronStyle}>
+                    <ChevronRight size={16} color={COLORS.fgMuted} />
+                </Animated.View>
             </TouchableOpacity>
 
-            {/* Commentary is vital context, show it nicely */}
-            {expanded && input.commentary && (
-                <View style={styles.commentary}>
-                    <Text style={styles.commentaryLabel}>Reasoning:</Text>
-                    <Text style={styles.commentaryText}>{input.commentary}</Text>
-                </View>
-            )}
-
-            {/* Image Output - for generate_image tool */}
-            {(output?.imageBase64 || output?.imageUrl) && (
-                <View style={styles.imageOutputContainer}>
-                    <GeneratedImageView
-                        imageBase64={output.imageBase64}
-                        imageUrl={output.imageUrl}
-                        prompt={input.args?.prompt}
-                        style={input.args?.style}
-                    />
-                </View>
-            )}
-
-            {/* Text Output - only show if no image and not internal tools (list_attachments, reattach_file) */}
-            {expanded && !(output?.imageBase64 || output?.imageUrl) && !['reattach_file', 'list_attachments'].includes(input.command) && (
-                <View style={styles.outputContainer}>
-                    <View style={styles.outputHeader}>
-                        <Text style={styles.outputLabel}>OUTPUT</Text>
-                    </View>
-                    <Text style={styles.outputText}>
-                        {output?.output ? (typeof output.output === 'string' ? output.output : JSON.stringify(output.output, null, 2)) : (isRunning ? 'Waiting for output...' : 'Completed')}
-                    </Text>
-                </View>
+            {/* Simple content fade in */}
+            {expanded && (
+                <Animated.View 
+                    entering={FadeIn.duration(200)}
+                    style={{ paddingBottom: 0 }}
+                > 
+                    {/* Commentary */}
+                    {input.commentary && (
+                        <View style={styles.commentary}>
+                            <Text style={styles.commentaryLabel}>Reasoning:</Text>
+                            <Text style={styles.commentaryText}>{input.commentary}</Text>
+                        </View>
+                    )}
+        
+                    {/* Image Output */}
+                    {(output?.imageBase64 || output?.imageUrl) && (
+                        <View style={styles.imageOutputContainer}>
+                            <GeneratedImageView
+                                imageBase64={output.imageBase64}
+                                imageUrl={output.imageUrl}
+                                prompt={input.args?.prompt}
+                                style={input.args?.style}
+                            />
+                        </View>
+                    )}
+        
+                    {/* Text Output */}
+                    {!(output?.imageBase64 || output?.imageUrl) && !['reattach_file', 'list_attachments'].includes(input.command) && (
+                        <View style={styles.outputContainer}>
+                            <View style={styles.outputHeader}>
+                                <Text style={styles.outputLabel}>OUTPUT</Text>
+                            </View>
+                            <Text style={styles.outputText}>
+                                {output?.output ? (typeof output.output === 'string' ? output.output : JSON.stringify(output.output, null, 2)) : (isRunning ? 'Waiting for output...' : 'Completed')}
+                            </Text>
+                        </View>
+                    )}
+                </Animated.View>
             )}
         </View>
     );
@@ -201,4 +216,3 @@ const styles = StyleSheet.create({
 });
 
 export default CommandBlock;
-

@@ -237,8 +237,7 @@ const PerplexitySearchCard = memo(function PerplexitySearchCard({ result, isFirs
       android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
     >
       <View style={styles.pplxCardMeta}>
-        <Text style={styles.pplxCardDate}>{result.date || 'Recent'}</Text>
-        <Text style={styles.pplxCardSource}>{result.source || 'web'}</Text>
+        <Text style={styles.pplxCardDate}>{result.date || 'Recent'} | {result.source || 'web'}</Text>
       </View>
       <Text style={styles.pplxCardTitle} numberOfLines={2}>
         {result.title || 'Untitled'}
@@ -818,12 +817,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   pplxLogoPlaceholder: {
     width: 20,
     height: 20,
-    borderRadius: 4,
+    borderRadius: 40,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
     backgroundColor: COLORS.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
@@ -868,7 +869,7 @@ const styles = StyleSheet.create({
   pplxCardDate: {
     color: COLORS.fgMuted,
     fontSize: 10,
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: COLORS.borderLight,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,

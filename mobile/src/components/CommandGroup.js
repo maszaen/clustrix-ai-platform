@@ -1,12 +1,18 @@
-
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
-import { Layers, ChevronDown, ChevronRight, Terminal } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, UIManager } from 'react-native';
+import Animated, { 
+    useSharedValue, 
+    useAnimatedStyle, 
+    withTiming, 
+    FadeIn 
+} from 'react-native-reanimated';
+import { ChevronRight, Terminal } from 'lucide-react-native';
 import CommandBlock from './CommandBlock';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 
-// Only enable LayoutAnimation on old architecture (fabric check)
+// Enable LayoutAnimation for other parts of app if needed, 
+// strictly conditional here to avoid crashes
 if (Platform.OS === 'android' && !global?.nativeFabricUIManager) {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -17,36 +23,35 @@ const CommandGroup = ({ group }) => {
     const commands = group.commands || [];
     const count = commands.length;
     
-    // Container expansion state (for multi-command groups)
     const [isGroupExpanded, setIsGroupExpanded] = useState(false);
-    
-    // Accordion state: track which inner command is expanded (Mutex logic)
-    // null = none expanded
     const [activeCmdIndex, setActiveCmdIndex] = useState(null);
 
+    // Minimal Chevron Rotation
+    const rotation = useSharedValue(0);
+    useEffect(() => {
+        rotation.value = withTiming(isGroupExpanded ? 90 : 0, { duration: 200 });
+    }, [isGroupExpanded]);
+    const chevronStyle = useAnimatedStyle(() => ({
+        transform: [{ rotate: `${rotation.value}deg` }]
+    }));
+
     const toggleGroup = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setIsGroupExpanded(!isGroupExpanded);
     };
     
     const toggleItem = (index) => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        // Mutex logic: If clicking active, close it. If clicking other, open it (and close others implicitly).
         setActiveCmdIndex(prev => prev === index ? null : index);
     };
 
-    // Auto-expand logic: If a command fails, expand the group and that specific command
+    // Auto-expand logic
     useEffect(() => {
         const errorIndex = commands.findIndex(c => c.status === 'complete' && c.output?.success === false);
         if (errorIndex !== -1) {
-             // Only auto-expand if not already interacting? 
-             // Logic: If error appears, user should see it.
              if (!isGroupExpanded) setIsGroupExpanded(true);
              if (activeCmdIndex !== errorIndex) setActiveCmdIndex(errorIndex);
         }
-    }, [commands, isGroupExpanded]); // Dep check to prevent loops? status changes trigger this.
+    }, [commands, isGroupExpanded]);
 
-    // Direct render if single command (Electron parity behavior)
     if (count === 1) {
         return (
             <CommandBlock 
@@ -72,18 +77,24 @@ const CommandGroup = ({ group }) => {
                     </View>
                     <Text style={styles.title}>{count} Steps Executed</Text>
                 </View>
-                {isGroupExpanded ? <ChevronDown size={16} color={COLORS.fgMuted} /> : <ChevronRight size={16} color={COLORS.fgMuted} />}
+                <Animated.View style={chevronStyle}>
+                    <ChevronRight size={16} color={COLORS.fgMuted} />
+                </Animated.View>
             </TouchableOpacity>
             
             <View style={styles.list}>
-                {/* Previous commands hidden when collapsed */}
+                {/* Simple Conditional Rendering with FadeIn */}
                 {isGroupExpanded && commands.slice(0, count - 1).map((cmd, i) => (
-                    <CommandBlock 
+                    <Animated.View 
                         key={i} 
-                        command={cmd} 
-                        expanded={activeCmdIndex === i}
-                        onToggle={() => toggleItem(i)}
-                    />
+                        entering={FadeIn.duration(200)}
+                    > 
+                         <CommandBlock 
+                            command={cmd} 
+                            expanded={activeCmdIndex === i}
+                            onToggle={() => toggleItem(i)}
+                        />
+                    </Animated.View>
                 ))}
 
                 {/* Last command is ALWAYS visible */}
@@ -136,4 +147,3 @@ const styles = StyleSheet.create({
 });
 
 export default CommandGroup;
-

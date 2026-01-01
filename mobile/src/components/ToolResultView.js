@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
   },
   container2: {
     marginVertical: 0,
-    paddingHorizontal: 10,
+    paddingHorizontal: 16,
     paddingBottom: 6,
   },
   // Tool Header
@@ -818,7 +818,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 16,
   },
   pplxLogoPlaceholder: {
     width: 20,
@@ -836,7 +836,7 @@ const styles = StyleSheet.create({
   },
   pplxScrollContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 10,
+    paddingHorizontal: 16,
     paddingVertical: 4,
   },
   // Container for card + spacer - keeps them in a row

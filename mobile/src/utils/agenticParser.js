@@ -81,7 +81,7 @@ export const parseAgentContent = (content) => {
           if (!currentGroup) currentGroup = { type: 'command_group', commands: [] };
 
           activeCommand = {
-              type: 'command_unit',
+              type: 'command_unit', // Still use command_unit internal type
               input: block.data,
               output: null,
               status: 'running'
@@ -115,6 +115,137 @@ export const parseAgentContent = (content) => {
   return structured;
 };
 
+/* --- CLI Command Parser (Ported from Electron renderer/core/md.js) --- */
+
+const getFilename = (path) => {
+    if (!path) return path;
+    const cleanPath = path.replace(/['"]/g, '').trim();
+    if (!cleanPath) return '';
+    
+    const parts = cleanPath.split(/[/\\]/);
+    if (parts.length === 1) return parts[0];
+    
+    const filename = parts[parts.length - 1];
+    const parent = parts[parts.length - 2];
+    
+    // Parent should be valid dir name, not just drive letter
+    if (parent && parent.length > 0 && !parent.match(/^[A-Z]:$/i)) {
+      return `${parent}/${filename}`;
+    }
+    return filename || cleanPath;
+};
+
+const transformSingleCommand = (commandText) => {
+    if (!commandText) return '';
+    const cmd = commandText.trim();
+    
+    // Helper to extract param value
+    const getParam = (paramName) => {
+        const regex = new RegExp(`-${paramName}\\s+["']?([^"'\\s-]+)["']?`, 'i');
+        const match = cmd.match(regex);
+        return match ? match[1] : null;
+    };
+    
+    // Git Commands
+    if (cmd.match(/^git\s+/i)) {
+        if (cmd.match(/^git\s+init/i)) return 'Git init repo';
+        
+        if (cmd.match(/^git\s+clone/i)) {
+            const urlMatch = cmd.match(/^git\s+clone\s+(?:--\S+\s+)*["']?([^\s"']+)["']?/i);
+            const repoName = urlMatch ? (urlMatch[1].split('/').pop()?.replace('.git','') || urlMatch[1]) : 'repo';
+            return `Git clone ${repoName}`;
+        }
+        
+        if (cmd.match(/^git\s+add/i)) {
+             const file = cmd.match(/^git\s+add\s+(.+)/i)?.[1]?.trim();
+             if (file === '.' || file === '-A' || file === '--all') return 'Git stage all changes';
+             return `Git stage ${getFilename(file) || 'files'}`;
+        }
+        
+        if (cmd.match(/^git\s+commit/i)) {
+            const msgMatch = cmd.match(/-m\s+["']([^"']+)["']/i);
+            const msg = msgMatch ? msgMatch[1] : '';
+            return msg ? `Git commit: "${msg.length > 40 ? msg.substring(0,37)+'...' : msg}"` : 'Git commit';
+        }
+
+        if (cmd.match(/^git\s+push/i)) {
+            const remote = cmd.match(/push\s+(\S+)\s+(\S+)/i);
+            if (remote) return `Git push ${remote[1]} ${remote[2]}`;
+            return 'Git push';
+        }
+
+        if (cmd.match(/^git\s+pull/i)) return 'Git pull';
+        
+        if (cmd.match(/^git\s+status/i)) return 'Git status';
+        
+        if (cmd.match(/^git\s+checkout/i)) {
+            const branch = cmd.match(/checkout\s+(?:-b\s+)?["']?([^\s"']+)["']?/i)?.[1];
+            return branch ? `Git checkout ${branch}` : 'Git checkout';
+        }
+        
+        if (cmd.match(/^git\s+merge/i)) {
+             const branch = cmd.match(/merge\s+["']?([^\s"']+)["']?/i)?.[1];
+             return branch ? `Git merge ${branch}` : 'Git merge';
+        }
+        
+        if (cmd.match(/^git\s+diff/i)) return 'Git diff';
+        if (cmd.match(/^git\s+log/i)) return 'Git log';
+    }
+
+    // NPM Commands
+    if (cmd.match(/^npm\s+/i)) {
+        const action = cmd.match(/^npm\s+(run|install|i|test|start|build)/i)?.[1];
+        if (action === 'install' || action === 'i') {
+           const pkg = cmd.split(/\s+/).slice(2).find(p => !p.startsWith('-'));
+           return pkg ? `Npm install ${pkg}` : 'Npm install';
+        }
+        if (action === 'run') {
+           const script = cmd.split(/\s+/)[2];
+           return script ? `Npm run ${script}` : 'Npm run';
+        }
+        return `Npm ${action || 'command'}`;
+    }
+
+    // File System
+    if (cmd.match(/^(?:Get-ChildItem|ls|dir)/i)) return 'List contents';
+    
+    if (cmd.match(/^(?:Set-Content|echo)\s+/i)) {
+         const file = cmd.match(/>\s*["']?([^\s"']+)["']?/i)?.[1] || getParam('Path');
+         return file ? `Write to ${getFilename(file)}` : 'Write file';
+    }
+    
+    if (cmd.match(/^(?:Remove-Item|rm|del)\s+/i)) {
+         const file = cmd.split(/\s+/).pop();
+         return `Delete ${getFilename(file)}`;
+    }
+    
+    if (cmd.match(/^(?:Move-Item|mv)\s+/i)) {
+         return 'Move files'; // simplifying regex
+    }
+    
+    if (cmd.match(/^(?:Copy-Item|cp)\s+/i)) {
+         return 'Copy files';
+    }
+
+    if (cmd.match(/^mkdir\s+/i)) {
+         const dir = cmd.split(/\s+/).pop();
+         return `Create directory ${dir}`;
+    }
+
+    // Langs
+    if (cmd.match(/^node\s+/i)) {
+        const file = cmd.match(/^node\s+["']?([^\s"']+)["']?/i)?.[1];
+        return file ? `Run Node ${getFilename(file)}` : 'Run Node';
+    }
+
+    if (cmd.match(/^python\s+/i)) {
+         const file = cmd.match(/^python\s+["']?([^\s"']+)["']?/i)?.[1];
+        return file ? `Run Python ${getFilename(file)}` : 'Run Python';
+    }
+
+    return cmd;
+};
+
 export const transformCommandText = (cmdName, args) => {
     if (!cmdName) return 'Unknown Command';
 
@@ -124,7 +255,6 @@ export const transformCommandText = (cmdName, args) => {
     }
     
     if (cmdName === 'web_search') {
-        // args is object { queries: [...], commentary?: string }
         const queries = args?.queries || [];
         if (Array.isArray(queries) && queries.length > 0) {
             const preview = queries.slice(0, 2).join('", "');
@@ -143,8 +273,16 @@ export const transformCommandText = (cmdName, args) => {
     }
     
     if (cmdName === 'run_command') {
-        const cmd = args || '';
-        return `Run: ${cmd.length > 50 ? cmd.substring(0, 50) + '...' : cmd}`;
+        const cmd = String(args || '');
+        // Naive split for now to catch simple grouped commands
+        if (cmd.includes(';') || cmd.includes('&&')) {
+           const parts = cmd.split(/[;&]+/).map(s => s.trim()).filter(Boolean);
+           if (parts.length > 1) {
+              const first = transformSingleCommand(parts[0]);
+              return `${first} (+${parts.length - 1} more)`;
+           }
+        }
+        return transformSingleCommand(cmd);
     }
 
     if (cmdName === 'read_file') {

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Layers, ChevronDown, ChevronRight, Terminal } from 'lucide-react-native';
 import CommandBlock from './CommandBlock';
@@ -14,18 +14,47 @@ if (Platform.OS === 'android' && !global?.nativeFabricUIManager) {
 }
 
 const CommandGroup = ({ group }) => {
-    const [expanded, setExpanded] = useState(false);
-    
-    const toggleExpand = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setExpanded(!expanded);
-    };
     const commands = group.commands || [];
     const count = commands.length;
+    
+    // Container expansion state (for multi-command groups)
+    const [isGroupExpanded, setIsGroupExpanded] = useState(false);
+    
+    // Accordion state: track which inner command is expanded (Mutex logic)
+    // null = none expanded
+    const [activeCmdIndex, setActiveCmdIndex] = useState(null);
+
+    const toggleGroup = () => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setIsGroupExpanded(!isGroupExpanded);
+    };
+    
+    const toggleItem = (index) => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        // Mutex logic: If clicking active, close it. If clicking other, open it (and close others implicitly).
+        setActiveCmdIndex(prev => prev === index ? null : index);
+    };
+
+    // Auto-expand logic: If a command fails, expand the group and that specific command
+    useEffect(() => {
+        const errorIndex = commands.findIndex(c => c.status === 'complete' && c.output?.success === false);
+        if (errorIndex !== -1) {
+             // Only auto-expand if not already interacting? 
+             // Logic: If error appears, user should see it.
+             if (!isGroupExpanded) setIsGroupExpanded(true);
+             if (activeCmdIndex !== errorIndex) setActiveCmdIndex(errorIndex);
+        }
+    }, [commands, isGroupExpanded]); // Dep check to prevent loops? status changes trigger this.
 
     // Direct render if single command (Electron parity behavior)
     if (count === 1) {
-        return <CommandBlock command={commands[0]} />;
+        return (
+            <CommandBlock 
+                command={commands[0]} 
+                expanded={activeCmdIndex === 0}
+                onToggle={() => toggleItem(0)}
+            />
+        );
     }
 
     if (count === 0) return null;
@@ -34,7 +63,7 @@ const CommandGroup = ({ group }) => {
         <View style={styles.container}>
             <TouchableOpacity 
                 style={styles.header}
-                onPress={toggleExpand}
+                onPress={toggleGroup}
                 activeOpacity={0.7}
             >
                 <View style={styles.left}>
@@ -43,16 +72,27 @@ const CommandGroup = ({ group }) => {
                     </View>
                     <Text style={styles.title}>{count} Steps Executed</Text>
                 </View>
-                {expanded ? <ChevronDown size={14} color={COLORS.fgMuted} /> : <ChevronRight size={14} color={COLORS.fgMuted} />}
+                {isGroupExpanded ? <ChevronDown size={16} color={COLORS.fgMuted} /> : <ChevronRight size={16} color={COLORS.fgMuted} />}
             </TouchableOpacity>
             
-            {expanded && (
-                <View style={styles.list}>
-                    {commands.map((cmd, i) => (
-                        <CommandBlock key={i} command={cmd} />
-                    ))}
-                </View>
-            )}
+            <View style={styles.list}>
+                {/* Previous commands hidden when collapsed */}
+                {isGroupExpanded && commands.slice(0, count - 1).map((cmd, i) => (
+                    <CommandBlock 
+                        key={i} 
+                        command={cmd} 
+                        expanded={activeCmdIndex === i}
+                        onToggle={() => toggleItem(i)}
+                    />
+                ))}
+
+                {/* Last command is ALWAYS visible */}
+                <CommandBlock 
+                    command={commands[count - 1]} 
+                    expanded={activeCmdIndex === (count - 1)}
+                    onToggle={() => toggleItem(count - 1)}
+                />
+            </View>
         </View>
     );
 };
@@ -60,9 +100,9 @@ const CommandGroup = ({ group }) => {
 const styles = StyleSheet.create({
     container: {
         marginVertical: 4,
-        borderRadius: 8,
+        borderRadius: 18,
         backgroundColor: COLORS.bgSecondary,
-        borderWidth: 1,
+        borderWidth: 0,
         borderColor: COLORS.borderLight,
         overflow: 'hidden',
     },
@@ -70,8 +110,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 10,
+        paddingHorizontal: 12,
         paddingVertical: 8,
+        paddingTop: 12,
+        paddingLeft: 13,
     },
     left: {
         flexDirection: 'row',
@@ -88,8 +130,8 @@ const styles = StyleSheet.create({
         letterSpacing: 0.5,
     },
     list: {
-        paddingHorizontal: 8,
-        paddingBottom: 4,
+        paddingHorizontal: 0,
+        paddingBottom: 0,
     }
 });
 

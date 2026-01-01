@@ -13,27 +13,23 @@ if (Platform.OS === 'android' && !global?.nativeFabricUIManager) {
   }
 }
 
-const CommandBlock = ({ command }) => {
+const CommandBlock = ({ command, expanded, onToggle }) => {
     // command structure from agenticParser: 
     // { input: {command, args, commentary}, output: {success, output}, status: 'running'|'complete' }
     
-    const [expanded, setExpanded] = useState(false);
+    // Controlled component - expanded state passed from parent
     
     const toggleExpand = () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setExpanded(!expanded);
+        // Animation handled by parent or layout update
+        onToggle && onToggle();
     };
 
     const { input, output, status } = command;
     const isRunning = status === 'running';
     const isSuccess = output?.success !== false; // Default true unless explicitly false
 
-    // Auto-expand on error to show details
-    useEffect(() => {
-        if (!isSuccess && status === 'complete') {
-            setExpanded(true);
-        }
-    }, [isSuccess, status]);
+    // Auto-expand logic moved to parent
+
 
     // Rotation animation for loader
     const rotateAnim = useRef(new Animated.Value(0)).current;
@@ -125,10 +121,10 @@ const CommandBlock = ({ command }) => {
 
 const styles = StyleSheet.create({
     container: {
-        marginVertical: 4,
-        borderRadius: 8,
-        borderWidth: 1,
-        backgroundColor: COLORS.bgSecondary,
+        marginVertical: 0,
+        borderRadius: 18,
+        borderWidth: 0,
+        backgroundColor: 'transparent',
         overflow: 'hidden',
         width: '100%',
     },

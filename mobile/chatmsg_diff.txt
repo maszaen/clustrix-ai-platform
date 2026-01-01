@@ -1,0 +1,156 @@
+diff --git a/mobile/src/components/ChatMessage.js b/mobile/src/components/ChatMessage.js
+index c33b716..c2e0457 100644
+--- a/mobile/src/components/ChatMessage.js
++++ b/mobile/src/components/ChatMessage.js
+@@ -1,6 +1,6 @@
+ import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+-import { View, Text, StyleSheet, TouchableOpacity, Animated, Keyboard, Easing } from 'react-native';
+-import { Pressable } from 'react-native-gesture-handler';
++import { View, Text, StyleSheet, TouchableOpacity, Animated, Keyboard, Easing, TouchableWithoutFeedback } from 'react-native';
++import { Pressable, LongPressGestureHandler, State } from 'react-native-gesture-handler';
+ import { StreamdownRN } from '../lib/streamdown';
+ import { parseThinkingBlocks } from '../utils/markdown';
+ import { COLORS } from '../constants/colors';
+@@ -69,43 +69,66 @@ const MARKDOWN_THEME = {
+   },
+ };
+ 
+-// Custom ripple wrapper using gesture-handler Pressable
+-// Allows nested ScrollViews to handle their own gestures
++// Custom long press wrapper using LongPressGestureHandler for native behavior
++// Auto-cancels if user slides (maxDist), preventing accidental triggers during scroll
+ const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser }) => {
+   const [ripples, setRipples] = useState([]);
+   const rippleIdRef = useRef(0);
+   const containerRef = useRef(null);
++  const longPressTriggeredRef = useRef(false);
+ 
+-  const handleLongPress = useCallback((e) => {
+-    if (onLongPress && !disabled) {
+-      onLongPress(e);
++  // Handle long press from gesture handler
++  const handleGestureStateChange = useCallback(({ nativeEvent }) => {
++    if (disabled) return;
++    
++    if (nativeEvent.state === State.ACTIVE) {
++      // Long press activated - trigger callback with position
++      longPressTriggeredRef.current = true;
++      if (onLongPress) {
++        onLongPress({
++          nativeEvent: {
++            pageX: nativeEvent.absoluteX,
++            pageY: nativeEvent.absoluteY,
++          }
++        });
++      }
++    } else if (nativeEvent.state === State.END || nativeEvent.state === State.CANCELLED || nativeEvent.state === State.FAILED) {
++      // Gesture ended - release ripples
++      setRipples(prev => prev.map(r => 
++        !r.released ? { ...r, released: true } : r
++      ));
++      // Reset flag after short delay
++      setTimeout(() => {
++        longPressTriggeredRef.current = false;
++      }, 100);
+     }
+   }, [onLongPress, disabled]);
+ 
+-  // Dismiss keyboard on regular tap
+-  const handlePress = useCallback(() => {
+-    Keyboard.dismiss();
+-  }, []);
+-
+-  // Start ripple - measure container to get accurate position
+-  const handlePressIn = useCallback((e) => {
+-    const { pageX, pageY } = e.nativeEvent;
++  // Handle gesture begin - start ripple
++  const handleGestureBegan = useCallback(({ nativeEvent }) => {
++    if (disabled) return;
++    
++    const { absoluteX, absoluteY } = nativeEvent;
+     const id = rippleIdRef.current++;
+     
+     // Measure container position to calculate relative touch position
+     containerRef.current?.measure((x, y, width, height, containerPageX, containerPageY) => {
+-      const relativeX = pageX - containerPageX;
+-      const relativeY = pageY - containerPageY;
++      const relativeX = absoluteX - containerPageX;
++      const relativeY = absoluteY - containerPageY;
+       
+       setRipples(prev => [
+         ...prev.map(r => !r.released ? { ...r, released: true } : r),
+         { id, x: relativeX, y: relativeY, released: false }
+       ]);
+     });
+-  }, []);
++  }, [disabled]);
+ 
+-  // Trigger fade out when finger released
+-  const handlePressOut = useCallback(() => {
++  // Dismiss keyboard on regular tap (not long press)
++  const handleTap = useCallback(() => {
++    if (!longPressTriggeredRef.current) {
++      Keyboard.dismiss();
++    }
++    // Release any active ripples
+     setRipples(prev => prev.map(r => 
+       !r.released ? { ...r, released: true } : r
+     ));
+@@ -119,31 +142,33 @@ const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser
+   const rippleSize = 80;
+ 
+   return (
+-    <Pressable
+-      ref={containerRef}
+-      onPress={handlePress}
+-      onPressIn={handlePressIn}
+-      onPressOut={handlePressOut}
+-      onLongPress={handleLongPress}
+-      delayLongPress={300}
+-      disabled={disabled}
+-      style={[style, { overflow: 'hidden' }]}
++    <LongPressGestureHandler
++      onHandlerStateChange={handleGestureStateChange}
++      onBegan={handleGestureBegan}
++      minDurationMs={350}
++      maxDist={15}
++      enabled={!disabled}
+     >
+-      {/* No pointerEvents="none" - allows nested ScrollViews to work */}
+-      {children}
+-      {/* Ripple layer - absolute positioned, doesn't block touches */}
+-      {ripples.map(ripple => (
+-        <RippleCircle 
+-          key={ripple.id}
+-          x={ripple.x} 
+-          y={ripple.y} 
+-          size={rippleSize}
+-          isUser={isUser}
+-          released={ripple.released}
+-          onComplete={() => removeRipple(ripple.id)}
+-        />
+-      ))}
+-    </Pressable>
++      <Animated.View style={isUser ? { alignSelf: 'flex-end', maxWidth: '85%' } : undefined}>
++        <TouchableWithoutFeedback onPress={handleTap}>
++          <View ref={containerRef} style={[style, { overflow: 'hidden' }]}>
++            {children}
++            {/* Ripple layer - absolute positioned, doesn't block touches */}
++            {ripples.map(ripple => (
++              <RippleCircle 
++                key={ripple.id}
++                x={ripple.x} 
++                y={ripple.y} 
++                size={rippleSize}
++                isUser={isUser}
++                released={ripple.released}
++                onComplete={() => removeRipple(ripple.id)}
++              />
++            ))}
++          </View>
++        </TouchableWithoutFeedback>
++      </Animated.View>
++    </LongPressGestureHandler>
+   );
+ });
+ 

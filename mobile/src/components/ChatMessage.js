@@ -150,23 +150,21 @@ const LongPressWrapper = memo(({ children, onLongPress, disabled, style, isUser 
       enabled={!disabled}
     >
       <Animated.View style={isUser ? { alignSelf: 'flex-end', maxWidth: '85%' } : undefined}>
-        <TouchableWithoutFeedback onPress={handleTap}>
-          <View ref={containerRef} style={[style, { overflow: 'hidden' }]}>
-            {children}
-            {/* Ripple layer - absolute positioned, doesn't block touches */}
-            {ripples.map(ripple => (
-              <RippleCircle 
-                key={ripple.id}
-                x={ripple.x} 
-                y={ripple.y} 
-                size={rippleSize}
-                isUser={isUser}
-                released={ripple.released}
-                onComplete={() => removeRipple(ripple.id)}
-              />
-            ))}
-          </View>
-        </TouchableWithoutFeedback>
+        <View ref={containerRef} style={[style, { overflow: 'hidden' }]}>
+          {children}
+          {/* Ripple layer - absolute positioned, doesn't block touches */}
+          {ripples.map(ripple => (
+            <RippleCircle 
+              key={ripple.id}
+              x={ripple.x} 
+              y={ripple.y} 
+              size={rippleSize}
+              isUser={isUser}
+              released={ripple.released}
+              onComplete={() => removeRipple(ripple.id)}
+            />
+          ))}
+        </View>
       </Animated.View>
     </LongPressGestureHandler>
   );

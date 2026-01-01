@@ -1,0 +1,116 @@
+diff --git a/mobile/src/lib/streamdown/renderers/ASTRenderer.js b/mobile/src/lib/streamdown/renderers/ASTRenderer.js
+index 9a4a03c..bad0877 100644
+--- a/mobile/src/lib/streamdown/renderers/ASTRenderer.js
++++ b/mobile/src/lib/streamdown/renderers/ASTRenderer.js
+@@ -13,15 +13,16 @@
+ import React from 'react';
+ import { Text, View, Image, Platform } from 'react-native';
+ import { ScrollView } from 'react-native-gesture-handler';
+-import SyntaxHighlighter from 'react-native-syntax-highlighter';
+ import { getTextStyles, getBlockStyles } from '../themes';
+ import { extractComponentData } from '../core/componentParser';
+ import { sanitizeURL } from '../core/sanitize';
++
+ // ============================================================================
+ // Syntax Highlighting Utilities
+ // ============================================================================
++
+ /**
+- * Map common language aliases to Prism language names
++ * Map common language aliases for display
+  */
+ function normalizeLanguage(lang) {
+     const aliases = {
+@@ -41,35 +42,6 @@ function normalizeLanguage(lang) {
+     };
+     return aliases[lang.toLowerCase()] || lang.toLowerCase();
+ }
+-/**
+- * Create Prism syntax style from theme colors
+- */
+-function createSyntaxStyle(theme) {
+-    return {
+-        'pre[class*="language-"]': {
+-            color: theme.colors.syntaxDefault,
+-            background: 'transparent',
+-        },
+-        'token': { color: theme.colors.syntaxDefault },
+-        'keyword': { color: theme.colors.syntaxKeyword },
+-        'builtin': { color: theme.colors.syntaxOperator },
+-        'class-name': { color: theme.colors.syntaxClass },
+-        'function': { color: theme.colors.syntaxFunction },
+-        'string': { color: theme.colors.syntaxString },
+-        'number': { color: theme.colors.syntaxNumber },
+-        'operator': { color: theme.colors.syntaxOperator },
+-        'comment': { color: theme.colors.syntaxComment },
+-        'punctuation': { color: theme.colors.syntaxDefault },
+-        'property': { color: theme.colors.syntaxClass },
+-        'constant': { color: theme.colors.syntaxNumber },
+-        'boolean': { color: theme.colors.syntaxNumber },
+-        'tag': { color: theme.colors.syntaxKeyword },
+-        'attr-name': { color: theme.colors.syntaxString },
+-        'attr-value': { color: theme.colors.syntaxString },
+-        'selector': { color: theme.colors.syntaxClass },
+-        'regex': { color: theme.colors.syntaxString },
+-    };
+-}
+ // ============================================================================
+ // Component Extraction (re-export for backwards compatibility)
+ // ============================================================================
+@@ -210,20 +182,26 @@ function renderChildren(node, theme, componentRegistry, isStreaming = false) {
+ // Specialized Renderers
+ // ============================================================================
+ /**
+- * Render a code block with syntax highlighting
++ * Render a code block (plain text with monospace font)
++ * Note: Syntax highlighting removed due to Metro bundler compatibility issues
+  */
+ function renderCodeBlock(node, theme, key) {
+     const blockStyles = getBlockStyles(theme);
+     const code = node.value.replace(/\n+$/, ''); // Trim trailing newlines
+     const language = node.lang || 'text';
+-    const normalizedLanguage = normalizeLanguage(language);
+-    const syntaxStyle = createSyntaxStyle(theme);
++    
++    const monoFont = Platform.select({
++        ios: 'Menlo',
++        android: 'monospace',
++        default: 'monospace',
++    });
++    
+     return (<View key={key} style={blockStyles.codeBlock}>
+       {language && language !== 'text' && (<Text style={{
+                 color: theme.colors.muted,
+                 fontSize: 12,
+                 marginBottom: 8,
+-                fontFamily: theme.fonts.mono,
++                fontFamily: monoFont,
+             }}>
+           {language}
+         </Text>)}
+@@ -233,18 +211,14 @@ function renderCodeBlock(node, theme, key) {
+         contentContainerStyle={{ flexGrow: 1 }}
+         nestedScrollEnabled={true}
+       >
+-        <SyntaxHighlighter language={normalizedLanguage} style={syntaxStyle} highlighter="prism" customStyle={{
+-            backgroundColor: 'transparent',
+-            padding: 0,
+-            margin: 0,
+-        }} fontSize={14} fontFamily={Platform.select({
+-            ios: 'Menlo',
+-            android: 'monospace',
+-            web: 'monospace',
+-            default: 'monospace',
+-        })} PreTag={View} CodeTag={Text}>
++        <Text style={{
++          color: theme.colors.codeForeground || '#a2a9b0',
++          fontSize: 14,
++          fontFamily: monoFont,
++          lineHeight: 20,
++        }}>
+           {code}
+-        </SyntaxHighlighter>
++        </Text>
+       </ScrollView>
+     </View>);
+ }

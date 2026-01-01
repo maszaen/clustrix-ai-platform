@@ -316,7 +316,6 @@ function renderTable(node, theme, componentRegistry, isStreaming = false, key) {
                 borderBottomWidth: 1,
                 borderBottomColor: theme.colors.border,
                 paddingBottom: 8,
-                // marginBottom: 8,
             }}>
             {headerRow.children.map((cell, cellIndex) => (<View key={cellIndex} style={{ width: cellWidth, paddingHorizontal: 8 }}>
                 <Text style={[styles.bold, { fontSize: 14, color: theme.colors.foreground }]}>

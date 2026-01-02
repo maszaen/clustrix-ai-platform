@@ -1235,6 +1235,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
           ...settings.agenticTools,
           sessionId: session?.id || currentSession?.id, // For list_attachments to query DB directly
           sessionAttachments: sessionAttachmentsRef.current, // For reattach_file tool
+          userId: currentUser?.id || currentUser?.uid, // For reminder tools
         },
         idToken: accessToken,
         userEmail: currentUser?.email,

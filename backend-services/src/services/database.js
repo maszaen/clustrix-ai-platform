@@ -526,6 +526,146 @@ async function loadDailyStatsRange(days = 7) {
   }
 }
 
+// ===================================================================
+// REMINDERS (User scheduled notifications)
+// ===================================================================
+
+/**
+ * Get all reminders for a user
+ * @param {string} userId 
+ */
+async function getReminders(userId) {
+  const db = getDb();
+  if (!db || !userId) return [];
+  
+  try {
+    const now = new Date().toISOString();
+    const snapshot = await db.collection('reminders')
+      .where('userId', '==', userId)
+      .where('scheduledDate', '>', now)  // Only future reminders
+      .orderBy('scheduledDate', 'asc')
+      .get();
+    
+    const reminders = [];
+    snapshot.forEach(doc => {
+      reminders.push({ id: doc.id, ...doc.data() });
+    });
+    
+    console.log(`[DB] Loaded ${reminders.length} reminders for user ${userId}`);
+    return reminders;
+  } catch (err) {
+    console.error('[DB] Error loading reminders:', err.message);
+    return [];
+  }
+}
+
+/**
+ * Get a single reminder by ID
+ * @param {string} id 
+ * @param {string} userId 
+ */
+async function getReminder(id, userId) {
+  const db = getDb();
+  if (!db || !id) return null;
+  
+  try {
+    const doc = await db.collection('reminders').doc(id).get();
+    if (!doc.exists) return null;
+    
+    const data = doc.data();
+    // Validate ownership
+    if (data.userId !== userId) return null;
+    
+    return { id: doc.id, ...data };
+  } catch (err) {
+    console.error('[DB] Error getting reminder:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Save a new reminder
+ * @param {Object} reminder 
+ */
+async function saveReminder(reminder) {
+  const db = getDb();
+  if (!db) return null;
+  
+  try {
+    const docRef = db.collection('reminders').doc(reminder.id);
+    await docRef.set({
+      userId: reminder.userId,
+      title: reminder.title,
+      message: reminder.message,
+      scheduledDate: reminder.scheduledDate,
+      notificationId: reminder.notificationId || '',
+      metadata: reminder.metadata || {},
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`[DB] Saved reminder: ${reminder.id}`);
+    return reminder.id;
+  } catch (err) {
+    console.error('[DB] Error saving reminder:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Delete a reminder by ID
+ * @param {string} id 
+ * @param {string} userId 
+ */
+async function deleteReminder(id, userId) {
+  const db = getDb();
+  if (!db || !id) return false;
+  
+  try {
+    // Validate ownership first
+    const doc = await db.collection('reminders').doc(id).get();
+    if (!doc.exists) return false;
+    if (doc.data().userId !== userId) return false;
+    
+    await db.collection('reminders').doc(id).delete();
+    console.log(`[DB] Deleted reminder: ${id}`);
+    return true;
+  } catch (err) {
+    console.error('[DB] Error deleting reminder:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Cleanup past reminders for a user
+ * @param {string} userId 
+ */
+async function cleanupPastReminders(userId) {
+  const db = getDb();
+  if (!db || !userId) return 0;
+  
+  try {
+    const now = new Date().toISOString();
+    const snapshot = await db.collection('reminders')
+      .where('userId', '==', userId)
+      .where('scheduledDate', '<', now)
+      .limit(100)
+      .get();
+    
+    if (snapshot.empty) return 0;
+    
+    const batch = db.batch();
+    snapshot.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+    
+    console.log(`[DB] Cleaned up ${snapshot.size} past reminders for user ${userId}`);
+    return snapshot.size;
+  } catch (err) {
+    console.error('[DB] Error cleaning up reminders:', err.message);
+    return 0;
+  }
+}
+
 module.exports = {
   // Firestore instance getter
   getDb,
@@ -550,5 +690,11 @@ module.exports = {
   saveDailyStats,
   loadDailyStats,
   loadDailyStatsRange,
+  // Reminders
+  getReminders,
+  getReminder,
+  saveReminder,
+  deleteReminder,
+  cleanupPastReminders,
 };
 

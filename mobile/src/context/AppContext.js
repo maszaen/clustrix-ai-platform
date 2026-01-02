@@ -5,6 +5,7 @@ import { generateSessionId } from '../utils/ids';
 import { loginWithGoogle, logout as authLogout, getStoredAuth, getLastBackupTime } from '../services/auth';
 import { backupToCloud, restoreFromCloud, checkCloudBackup } from '../services/backup';
 import { WELCOME_MESSAGES } from '../constants/strings';
+import { initializeNotifications, syncUserReminders, cleanupNotifications } from '../services/reminderSync';
 
 // PERF: Debug flag - set to false in production
 const __DEV_DEBUG__ = false;
@@ -113,6 +114,14 @@ export function AppProvider({ children }) {
         setCurrentUser(storedAuth.user);
         setAuthProvider(storedAuth.provider);
         setAccessToken(storedAuth.accessToken);
+      }
+      
+      // Initialize notification system for reminders
+      await initializeNotifications();
+      
+      // Sync user reminders with OS notifications (if user is logged in)
+      if (storedAuth?.user) {
+        syncUserReminders().catch(err => console.warn('[AppContext] Reminder sync failed:', err));
       }
       
       // Load last backup time
@@ -536,6 +545,9 @@ export function AppProvider({ children }) {
       // Check cloud backup info after login
       const cloudInfo = await checkCloudBackup();
       setCloudBackupInfo(cloudInfo);
+      
+      // Sync reminders with OS notifications after login
+      syncUserReminders().catch(err => console.warn('[AppContext] Reminder sync failed:', err));
     }
     return result;
   }, []);

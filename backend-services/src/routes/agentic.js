@@ -96,6 +96,80 @@ const REATTACH_FILE_TOOL = {
   },
 };
 
+// ===================================================================
+// REMINDER TOOL DEFINITIONS
+// ===================================================================
+
+const VIEW_REMINDER_TOOL = {
+  type: 'function',
+  function: {
+    name: 'view_reminder',
+    description: `View all scheduled reminders for the current user. Returns a list of reminders with their titles, messages, and scheduled dates.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        commentary: {
+          type: 'string',
+          description: 'Brief explanation (e.g., "Checking your reminders")',
+        },
+      },
+      required: [],
+    },
+  },
+};
+
+const SET_REMINDER_TOOL = {
+  type: 'function',
+  function: {
+    name: 'set_reminder',
+    description: `Schedule a new reminder notification. The notification will appear at the specified time even if the app is closed. Use for: scheduling follow-ups, subscription reminders, task deadlines, or any time-based alerts the user requests.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'Short title for the reminder notification (e.g., "Subscription Reminder")',
+        },
+        message: {
+          type: 'string',
+          description: 'Detailed message body for the reminder',
+        },
+        scheduledDate: {
+          type: 'string',
+          description: 'ISO 8601 date string for when the reminder should trigger (e.g., "2026-01-15T09:00:00+07:00"). Must be in the future.',
+        },
+        commentary: {
+          type: 'string',
+          description: 'Brief explanation shown to user (e.g., "Setting reminder for January 15th")',
+        },
+      },
+      required: ['title', 'message', 'scheduledDate'],
+    },
+  },
+};
+
+const REMOVE_REMINDER_TOOL = {
+  type: 'function',
+  function: {
+    name: 'remove_reminder',
+    description: `Cancel and remove a scheduled reminder. Use view_reminder first to get the reminder ID, then call this to remove it.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The unique ID of the reminder to remove (from view_reminder results)',
+        },
+        commentary: {
+          type: 'string',
+          description: 'Brief explanation shown to user (e.g., "Cancelling your reminder")',
+        },
+      },
+      required: ['id'],
+    },
+  },
+};
+
 // Claude format
 const WEB_SEARCH_TOOL_CLAUDE = {
   name: 'web_search',
@@ -113,6 +187,24 @@ const REATTACH_FILE_TOOL_CLAUDE = {
   name: 'reattach_file',
   description: REATTACH_FILE_TOOL.function.description,
   input_schema: REATTACH_FILE_TOOL.function.parameters,
+};
+
+const VIEW_REMINDER_TOOL_CLAUDE = {
+  name: 'view_reminder',
+  description: VIEW_REMINDER_TOOL.function.description,
+  input_schema: VIEW_REMINDER_TOOL.function.parameters,
+};
+
+const SET_REMINDER_TOOL_CLAUDE = {
+  name: 'set_reminder',
+  description: SET_REMINDER_TOOL.function.description,
+  input_schema: SET_REMINDER_TOOL.function.parameters,
+};
+
+const REMOVE_REMINDER_TOOL_CLAUDE = {
+  name: 'remove_reminder',
+  description: REMOVE_REMINDER_TOOL.function.description,
+  input_schema: REMOVE_REMINDER_TOOL.function.parameters,
 };
 
 // Gemini format
@@ -133,12 +225,27 @@ const WEB_SEARCH_TOOL_GEMINI = {
       description: REATTACH_FILE_TOOL.function.description,
       parameters: REATTACH_FILE_TOOL.function.parameters,
     },
+    {
+      name: 'view_reminder',
+      description: VIEW_REMINDER_TOOL.function.description,
+      parameters: VIEW_REMINDER_TOOL.function.parameters,
+    },
+    {
+      name: 'set_reminder',
+      description: SET_REMINDER_TOOL.function.description,
+      parameters: SET_REMINDER_TOOL.function.parameters,
+    },
+    {
+      name: 'remove_reminder',
+      description: REMOVE_REMINDER_TOOL.function.description,
+      parameters: REMOVE_REMINDER_TOOL.function.parameters,
+    },
   ],
 };
 
 // All OpenAI-format tools
-const OPENAI_TOOLS = [WEB_SEARCH_TOOL, LIST_ATTACHMENTS_TOOL, REATTACH_FILE_TOOL];
-const CLAUDE_TOOLS = [WEB_SEARCH_TOOL_CLAUDE, LIST_ATTACHMENTS_TOOL_CLAUDE, REATTACH_FILE_TOOL_CLAUDE];
+const OPENAI_TOOLS = [WEB_SEARCH_TOOL, LIST_ATTACHMENTS_TOOL, REATTACH_FILE_TOOL, VIEW_REMINDER_TOOL, SET_REMINDER_TOOL, REMOVE_REMINDER_TOOL];
+const CLAUDE_TOOLS = [WEB_SEARCH_TOOL_CLAUDE, LIST_ATTACHMENTS_TOOL_CLAUDE, REATTACH_FILE_TOOL_CLAUDE, VIEW_REMINDER_TOOL_CLAUDE, SET_REMINDER_TOOL_CLAUDE, REMOVE_REMINDER_TOOL_CLAUDE];
 
 // ===================================================================
 // WEB SEARCH EXECUTION
@@ -388,6 +495,198 @@ async function executeReattachFile(input, attachments, userId) {
   };
 }
 
+// ===================================================================
+// REMINDER TOOL EXECUTION
+// ===================================================================
+
+const { getReminders, getReminder, saveReminder, deleteReminder, cleanupPastReminders } = require('../services/database');
+
+/**
+ * Execute view_reminder - get all reminders for current user
+ */
+async function executeViewReminder(input, userId) {
+  if (!userId) {
+    return {
+      success: false,
+      output: 'User authentication required to view reminders.',
+      reminders: [],
+    };
+  }
+  
+  try {
+    // Clean up past reminders first
+    await cleanupPastReminders(userId);
+    
+    // Get active reminders
+    const reminders = await getReminders(userId);
+    
+    if (reminders.length === 0) {
+      return {
+        success: true,
+        output: 'You have no scheduled reminders.',
+        reminders: [],
+      };
+    }
+    
+    // Format for display
+    const lines = reminders.map((r, i) => {
+      const date = new Date(r.scheduledDate);
+      const formattedDate = date.toLocaleString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+      return `${i + 1}. **${r.title}**\n   📅 ${formattedDate}\n   💬 ${r.message}\n   🔑 ID: \`${r.id}\``;
+    });
+    
+    return {
+      success: true,
+      output: `You have ${reminders.length} scheduled reminder(s):\n\n${lines.join('\n\n')}`,
+      reminders,
+    };
+  } catch (error) {
+    console.error('[AGENTIC] Error viewing reminders:', error);
+    return {
+      success: false,
+      output: `Error retrieving reminders: ${error.message}`,
+      reminders: [],
+    };
+  }
+}
+
+/**
+ * Execute set_reminder - schedule a new notification
+ * Note: Backend stores reminder in Firestore, mobile schedules actual notification
+ */
+async function executeSetReminder(input, userId) {
+  const { title, message, scheduledDate } = input;
+  
+  if (!userId) {
+    return {
+      success: false,
+      output: 'User authentication required to set reminders.',
+    };
+  }
+  
+  if (!title || !message || !scheduledDate) {
+    return {
+      success: false,
+      output: 'Missing required fields: title, message, and scheduledDate are required.',
+    };
+  }
+  
+  // Validate date
+  const triggerDate = new Date(scheduledDate);
+  if (isNaN(triggerDate.getTime())) {
+    return {
+      success: false,
+      output: `Invalid date format: "${scheduledDate}". Please use ISO 8601 format (e.g., 2026-01-15T09:00:00+07:00).`,
+    };
+  }
+  
+  if (triggerDate.getTime() <= Date.now()) {
+    return {
+      success: false,
+      output: 'Scheduled date must be in the future.',
+    };
+  }
+  
+  try {
+    // Generate reminder ID
+    const reminderId = `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Save to Firestore (mobile will sync and schedule actual notification)
+    const reminder = {
+      id: reminderId,
+      userId,
+      title,
+      message,
+      scheduledDate: triggerDate.toISOString(),
+      notificationId: '', // Will be set by mobile when scheduling
+      metadata: input.metadata || {},
+    };
+    
+    await saveReminder(reminder);
+    
+    // Format date for display
+    const formattedDate = triggerDate.toLocaleString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    
+    return {
+      success: true,
+      output: `✅ Reminder set successfully!\n\n**${title}**\n📅 ${formattedDate}\n💬 ${message}\n\nYou'll receive a notification at that time.`,
+      reminder,
+      // Flag for mobile to schedule notification
+      needsLocalSchedule: true,
+    };
+  } catch (error) {
+    console.error('[AGENTIC] Error setting reminder:', error);
+    return {
+      success: false,
+      output: `Error setting reminder: ${error.message}`,
+    };
+  }
+}
+
+/**
+ * Execute remove_reminder - cancel a scheduled reminder
+ */
+async function executeRemoveReminder(input, userId) {
+  const { id } = input;
+  
+  if (!userId) {
+    return {
+      success: false,
+      output: 'User authentication required to remove reminders.',
+    };
+  }
+  
+  if (!id) {
+    return {
+      success: false,
+      output: 'Reminder ID is required. Use view_reminder to see available reminders.',
+    };
+  }
+  
+  try {
+    // Get reminder to validate ownership
+    const reminder = await getReminder(id, userId);
+    
+    if (!reminder) {
+      return {
+        success: false,
+        output: `Reminder with ID "${id}" not found or doesn't belong to you.`,
+      };
+    }
+    
+    // Delete from Firestore
+    await deleteReminder(id, userId);
+    
+    return {
+      success: true,
+      output: `✅ Reminder "${reminder.title}" has been cancelled and removed.`,
+      // Flag for mobile to cancel local notification
+      needsLocalCancel: true,
+      notificationId: reminder.notificationId,
+    };
+  } catch (error) {
+    console.error('[AGENTIC] Error removing reminder:', error);
+    return {
+      success: false,
+      output: `Error removing reminder: ${error.message}`,
+    };
+  }
+}
+
 // Helper to generate default commentary for tool calls
 function getDefaultCommentary(toolName, input) {
   if (toolName === 'web_search' && input.queries) {
@@ -401,6 +700,15 @@ function getDefaultCommentary(toolName, input) {
   }
   if (toolName === 'reattach_file' && input.filename) {
     return `Recalling: ${input.filename}`;
+  }
+  if (toolName === 'view_reminder') {
+    return 'Checking your reminders...';
+  }
+  if (toolName === 'set_reminder' && input.title) {
+    return `Setting reminder: ${input.title}`;
+  }
+  if (toolName === 'remove_reminder') {
+    return 'Removing reminder...';
   }
   return `Executing ${toolName || 'tool'}...`;
 }
@@ -577,6 +885,12 @@ router.post('/', async (req, res) => {
           result = executeListAttachments(input, sessionAttachments);
         } else if (toolName === 'reattach_file') {
           result = await executeReattachFile(input, sessionAttachments, req.user?.uid);
+        } else if (toolName === 'view_reminder') {
+          result = await executeViewReminder(input, req.user?.uid);
+        } else if (toolName === 'set_reminder') {
+          result = await executeSetReminder(input, req.user?.uid);
+        } else if (toolName === 'remove_reminder') {
+          result = await executeRemoveReminder(input, req.user?.uid);
         } else {
           result = { success: false, output: `Unknown tool: ${toolName}` };
         }

@@ -112,6 +112,21 @@ export async function initDatabase() {
       success INTEGER DEFAULT 1,
       error_message TEXT
     );
+
+    -- Reminders table for scheduled notifications (agentic tools)
+    CREATE TABLE IF NOT EXISTS reminders (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      scheduled_date TEXT NOT NULL,
+      notification_id TEXT NOT NULL,
+      metadata TEXT,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_reminders_user ON reminders(user_id);
+    CREATE INDEX IF NOT EXISTS idx_reminders_scheduled ON reminders(scheduled_date);
   `);
   
   // Migration: Add think_duration column if not exists (for existing databases)
@@ -711,4 +726,144 @@ export async function importAllData(backupData) {
     await db.execAsync('ROLLBACK');
     throw error;
   }
+}
+
+// ========================================
+// Reminders (for agentic tools)
+// ========================================
+
+/**
+ * Get all reminders for a user
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Array of reminder objects
+ */
+export async function getReminders(userId) {
+  const rows = await db.getAllAsync(
+    'SELECT * FROM reminders WHERE user_id = ? ORDER BY scheduled_date ASC',
+    [userId]
+  );
+  
+  return (rows || []).map(row => ({
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    message: row.message,
+    scheduledDate: row.scheduled_date,
+    notificationId: row.notification_id,
+    metadata: row.metadata ? JSON.parse(row.metadata) : {},
+    createdAt: new Date(row.created_at).toISOString(),
+  }));
+}
+
+/**
+ * Get a single reminder by ID
+ * @param {string} id - Reminder ID
+ * @param {string} userId - User ID (for ownership validation)
+ * @returns {Promise<Object|null>}
+ */
+export async function getReminder(id, userId) {
+  const row = await db.getFirstAsync(
+    'SELECT * FROM reminders WHERE id = ? AND user_id = ?',
+    [id, userId]
+  );
+  
+  if (!row) return null;
+  
+  return {
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    message: row.message,
+    scheduledDate: row.scheduled_date,
+    notificationId: row.notification_id,
+    metadata: row.metadata ? JSON.parse(row.metadata) : {},
+    createdAt: new Date(row.created_at).toISOString(),
+  };
+}
+
+/**
+ * Save a new reminder
+ * @param {Object} reminder - Reminder object
+ * @returns {Promise<void>}
+ */
+export async function saveReminder(reminder) {
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT INTO reminders (id, user_id, title, message, scheduled_date, notification_id, metadata, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      reminder.id,
+      reminder.userId,
+      reminder.title,
+      reminder.message,
+      reminder.scheduledDate,
+      reminder.notificationId,
+      JSON.stringify(reminder.metadata || {}),
+      now,
+    ]
+  );
+}
+
+/**
+ * Delete a reminder by ID
+ * @param {string} id - Reminder ID
+ * @param {string} userId - User ID (for ownership validation)
+ * @returns {Promise<boolean>} True if deleted, false if not found
+ */
+export async function deleteReminder(id, userId) {
+  const result = await db.runAsync(
+    'DELETE FROM reminders WHERE id = ? AND user_id = ?',
+    [id, userId]
+  );
+  return result.changes > 0;
+}
+
+/**
+ * Get past reminders that already fired (for cleanup)
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>}
+ */
+export async function getPastReminders(userId) {
+  const now = new Date().toISOString();
+  const rows = await db.getAllAsync(
+    'SELECT * FROM reminders WHERE user_id = ? AND scheduled_date < ?',
+    [userId, now]
+  );
+  
+  return (rows || []).map(row => ({
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    message: row.message,
+    scheduledDate: row.scheduled_date,
+    notificationId: row.notification_id,
+    metadata: row.metadata ? JSON.parse(row.metadata) : {},
+    createdAt: new Date(row.created_at).toISOString(),
+  }));
+}
+
+/**
+ * Delete all past reminders for a user
+ * @param {string} userId - User ID
+ * @returns {Promise<number>} Number of deleted reminders
+ */
+export async function cleanupPastReminders(userId) {
+  const now = new Date().toISOString();
+  const result = await db.runAsync(
+    'DELETE FROM reminders WHERE user_id = ? AND scheduled_date < ?',
+    [userId, now]
+  );
+  return result.changes || 0;
+}
+
+/**
+ * Update reminder's notificationId (for re-scheduling)
+ * @param {string} id - Reminder ID
+ * @param {string} notificationId - New notification ID from @notifee
+ */
+export async function updateReminderNotificationId(id, notificationId) {
+  await db.runAsync(
+    'UPDATE reminders SET notification_id = ? WHERE id = ?',
+    [notificationId, id]
+  );
 }

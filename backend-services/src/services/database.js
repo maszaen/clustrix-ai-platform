@@ -599,6 +599,7 @@ async function saveReminder(reminder) {
       message: reminder.message,
       scheduledDate: reminder.scheduledDate,
       notificationId: reminder.notificationId || '',
+      isCompleted: reminder.isCompleted || false,
       metadata: reminder.metadata || {},
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -607,6 +608,32 @@ async function saveReminder(reminder) {
   } catch (err) {
     console.error('[DB] Error saving reminder:', err.message);
     return null;
+  }
+}
+
+/**
+ * Mark a reminder as completed (does NOT delete)
+ * @param {string} id 
+ * @param {string} userId 
+ */
+async function completeReminder(id, userId) {
+  const db = getDb();
+  if (!db || !id) return false;
+  
+  try {
+    // Validate ownership first
+    const doc = await db.collection('reminders').doc(id).get();
+    if (!doc.exists) return false;
+    if (doc.data().userId !== userId) return false;
+    
+    await db.collection('reminders').doc(id).update({
+      isCompleted: true,
+    });
+    console.log(`[DB] Completed reminder: ${id}`);
+    return true;
+  } catch (err) {
+    console.error('[DB] Error completing reminder:', err.message);
+    return false;
   }
 }
 
@@ -635,7 +662,7 @@ async function deleteReminder(id, userId) {
 }
 
 /**
- * Cleanup past reminders for a user
+ * Cleanup past non-completed reminders for a user
  * @param {string} userId 
  */
 async function cleanupPastReminders(userId) {
@@ -647,6 +674,7 @@ async function cleanupPastReminders(userId) {
     const snapshot = await db.collection('reminders')
       .where('userId', '==', userId)
       .where('scheduledDate', '<', now)
+      .where('isCompleted', '==', false)
       .limit(100)
       .get();
     
@@ -694,7 +722,9 @@ module.exports = {
   getReminders,
   getReminder,
   saveReminder,
+  completeReminder,
   deleteReminder,
   cleanupPastReminders,
 };
+
 

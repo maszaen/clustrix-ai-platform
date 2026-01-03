@@ -1,12 +1,7 @@
 /**
  * RemindersScreen - Manage scheduled reminders
  * 
- * Features:
- * - View all reminders
- * - Add new reminder
- * - Edit existing reminder
- * - Mark as complete (delete)
- * - Delete reminder
+ * Follows the same pattern as AgenticToolsScreen
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -18,135 +13,105 @@ import {
   Pressable, 
   TextInput,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
-import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
-import { 
-  Bell, 
-  Plus, 
-  Trash2, 
-  Edit3, 
-  Check, 
-  X, 
-  Calendar,
-  Clock,
-  AlertCircle,
-} from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import SlideUpModal from '../components/SlideUpModal';
 import AlertModal from '../components/AlertModal';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-// Import database functions
 import { 
   getReminders, 
   saveReminder, 
-  deleteReminder, 
-  getReminder,
+  deleteReminder,
+  completeReminder,
 } from '../database/db';
 
-export default function RemindersScreen({ onClose }) {
+// Quick time presets
+const TIME_PRESETS = [
+  { label: 'In 1 hour', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 1); return d; } },
+  { label: 'In 3 hours', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 3); return d; } },
+  { label: 'Tomorrow 9 AM', getValue: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; } },
+  { label: 'Tomorrow 6 PM', getValue: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(18, 0, 0, 0); return d; } },
+  { label: 'In 1 week', getValue: () => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(9, 0, 0, 0); return d; } },
+  { label: 'Custom...', getValue: () => null },
+];
+
+// ============================================================
+// ADD/EDIT FORM CONTENT
+// ============================================================
+export function ReminderFormContent({ editingReminder, onSave, onClose }) {
   const { currentUser } = useApp();
   const userId = currentUser?.id || currentUser?.uid;
   
-  const [reminders, setReminders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingReminder, setEditingReminder] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  
-  // Form state
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
+  const [notifDesc, setNotifDesc] = useState('');
   const [scheduledDate, setScheduledDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
-  
-  // Load reminders
-  const loadReminders = useCallback(async () => {
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      const data = await getReminders(userId);
-      // Filter only future reminders
-      const now = new Date();
-      const futureReminders = data.filter(r => new Date(r.scheduledDate) > now);
-      setReminders(futureReminders);
-    } catch (error) {
-      console.error('[Reminders] Load error:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
+  const [selectedPreset, setSelectedPreset] = useState(null);
   
   useEffect(() => {
-    loadReminders();
-  }, [loadReminders]);
-  
-  // Reset form
-  const resetForm = () => {
-    setTitle('');
-    setMessage('');
-    // Default to 1 hour from now
-    const defaultDate = new Date();
-    defaultDate.setHours(defaultDate.getHours() + 1);
-    defaultDate.setMinutes(0);
-    setScheduledDate(defaultDate);
-  };
-  
-  // Open add modal
-  const handleOpenAdd = () => {
-    resetForm();
-    setShowAddModal(true);
-  };
-  
-  // Open edit modal
-  const handleOpenEdit = (reminder) => {
-    setEditingReminder(reminder);
-    setTitle(reminder.title);
-    setMessage(reminder.message);
-    setScheduledDate(new Date(reminder.scheduledDate));
-    setShowEditModal(true);
-  };
-  
-  // Save new reminder
-  const handleSaveNew = async () => {
-    if (!title.trim() || !message.trim()) {
-      Alert.alert('Error', 'Please fill in title and message');
-      return;
+    if (editingReminder) {
+      setTitle(editingReminder.title);
+      setMessage(editingReminder.message || '');
+      setNotifDesc(editingReminder.metadata?.notifDesc || '');
+      setScheduledDate(new Date(editingReminder.scheduledDate));
+    } else {
+      const defaultDate = new Date();
+      defaultDate.setHours(defaultDate.getHours() + 1);
+      defaultDate.setMinutes(0);
+      setTitle('');
+      setMessage('');
+      setNotifDesc('');
+      setScheduledDate(defaultDate);
+      setSelectedPreset(null);
     }
-    
-    if (scheduledDate <= new Date()) {
-      Alert.alert('Error', 'Scheduled time must be in the future');
-      return;
+  }, [editingReminder]);
+  
+  const handlePresetSelect = (preset, index) => {
+    const date = preset.getValue();
+    if (date) {
+      setScheduledDate(date);
+      setSelectedPreset(index);
+    } else {
+      setShowDatePicker(true);
+      setSelectedPreset(index);
     }
+  };
+  
+  const handleSave = async () => {
+    if (!title.trim() || !userId) return;
+    if (scheduledDate <= new Date()) return;
     
     setSaving(true);
     try {
-      const reminderId = `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      if (editingReminder) {
+        if (editingReminder.notificationId) {
+          try {
+            const { cancelNotification } = await import('../services/notifications');
+            await cancelNotification(editingReminder.notificationId);
+          } catch (e) {}
+        }
+        await deleteReminder(editingReminder.id, userId);
+      }
       
-      // Try to schedule notification
+      const reminderId = editingReminder?.id || `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const notificationBody = notifDesc.trim() || message.trim() || title.trim();
+      
       let notificationId = '';
       try {
         const { scheduleNotification } = await import('../services/notifications');
         const result = await scheduleNotification({
           title: title.trim(),
-          message: message.trim(),
+          message: notificationBody,
           scheduledDate,
-          metadata: { userId },
+          metadata: { userId, reminderId },
         });
-        if (result.success) {
-          notificationId = result.notificationId;
-        }
+        if (result.success) notificationId = result.notificationId;
       } catch (e) {
         console.warn('[Reminders] Notification not available:', e.message);
       }
@@ -155,135 +120,23 @@ export default function RemindersScreen({ onClose }) {
         id: reminderId,
         userId,
         title: title.trim(),
-        message: message.trim(),
+        message: message.trim() || title.trim(),
         scheduledDate: scheduledDate.toISOString(),
         notificationId,
-        metadata: {},
+        isCompleted: false,
+        metadata: { notifDesc: notifDesc.trim() },
       };
       
       await saveReminder(reminder);
-      await loadReminders();
-      setShowAddModal(false);
-      resetForm();
+      onSave?.();
+      onClose?.();
     } catch (error) {
-      Alert.alert('Error', error.message);
+      console.error('[Reminders] Save error:', error);
     } finally {
       setSaving(false);
     }
   };
   
-  // Save edited reminder
-  const handleSaveEdit = async () => {
-    if (!editingReminder) return;
-    
-    if (!title.trim() || !message.trim()) {
-      Alert.alert('Error', 'Please fill in title and message');
-      return;
-    }
-    
-    if (scheduledDate <= new Date()) {
-      Alert.alert('Error', 'Scheduled time must be in the future');
-      return;
-    }
-    
-    setSaving(true);
-    try {
-      // Delete old and create new (simpler than update)
-      // Cancel old notification
-      if (editingReminder.notificationId) {
-        try {
-          const { cancelNotification } = await import('../services/notifications');
-          await cancelNotification(editingReminder.notificationId);
-        } catch (e) {
-          console.warn('[Reminders] Could not cancel old notification:', e.message);
-        }
-      }
-      
-      await deleteReminder(editingReminder.id, userId);
-      
-      // Schedule new notification
-      let notificationId = '';
-      try {
-        const { scheduleNotification } = await import('../services/notifications');
-        const result = await scheduleNotification({
-          title: title.trim(),
-          message: message.trim(),
-          scheduledDate,
-          metadata: { userId },
-        });
-        if (result.success) {
-          notificationId = result.notificationId;
-        }
-      } catch (e) {
-        console.warn('[Reminders] Notification not available:', e.message);
-      }
-      
-      const reminder = {
-        id: editingReminder.id, // Keep same ID
-        userId,
-        title: title.trim(),
-        message: message.trim(),
-        scheduledDate: scheduledDate.toISOString(),
-        notificationId,
-        metadata: {},
-      };
-      
-      await saveReminder(reminder);
-      await loadReminders();
-      setShowEditModal(false);
-      setEditingReminder(null);
-      resetForm();
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-  
-  // Delete/complete reminder
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    
-    try {
-      // Cancel notification
-      if (deleteTarget.notificationId) {
-        try {
-          const { cancelNotification } = await import('../services/notifications');
-          await cancelNotification(deleteTarget.notificationId);
-        } catch (e) {
-          console.warn('[Reminders] Could not cancel notification:', e.message);
-        }
-      }
-      
-      await deleteReminder(deleteTarget.id, userId);
-      await loadReminders();
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    } finally {
-      setShowDeleteConfirm(false);
-      setDeleteTarget(null);
-    }
-  };
-  
-  // Format date for display
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-  
-  const formatTime = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  };
-  
-  // Handle date picker
   const onDateChange = (event, selected) => {
     setShowDatePicker(false);
     if (selected) {
@@ -292,6 +145,7 @@ export default function RemindersScreen({ onClose }) {
       newDate.setMonth(selected.getMonth());
       newDate.setDate(selected.getDate());
       setScheduledDate(newDate);
+      setTimeout(() => setShowTimePicker(true), 300);
     }
   };
   
@@ -305,420 +159,487 @@ export default function RemindersScreen({ onClose }) {
     }
   };
   
-  // Not logged in
+  return (
+    <>
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.subContainer} contentContainerStyle={styles.content}>
+        {/* Title */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Title</Text>
+          <TextInput
+            style={styles.input}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="What to remind?"
+            placeholderTextColor={COLORS.fgMuted}
+            maxLength={100}
+          />
+        </View>
+        
+        {/* Details */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Details (optional)</Text>
+          <TextInput
+            style={[styles.input, styles.inputMultiline]}
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Additional notes..."
+            placeholderTextColor={COLORS.fgMuted}
+            multiline
+            numberOfLines={2}
+            maxLength={300}
+          />
+        </View>
+        
+        {/* Notification Text */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Notification Text (optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={notifDesc}
+            onChangeText={setNotifDesc}
+            placeholder="Custom push notification text"
+            placeholderTextColor={COLORS.fgMuted}
+            maxLength={200}
+          />
+          <Text style={styles.hint}>Leave empty to use title as notification text.</Text>
+        </View>
+        
+        {/* When - Presets */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>When</Text>
+          <View style={styles.presetGrid}>
+            {TIME_PRESETS.map((preset, index) => (
+              <Pressable
+                key={index}
+                style={[styles.presetBtn, selectedPreset === index && styles.presetBtnActive]}
+                onPress={() => handlePresetSelect(preset, index)}
+                android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+              >
+                <Text style={[styles.presetText, selectedPreset === index && styles.presetTextActive]}>
+                  {preset.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          
+          {/* Selected Time Display */}
+          <Pressable style={styles.timeDisplay} onPress={() => setShowDatePicker(true)} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+            <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+            <Text style={styles.timeText}>
+              {scheduledDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </Text>
+            <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+            <Text style={styles.timeText}>
+              {scheduledDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+            </Text>
+          </Pressable>
+        </View>
+        
+        {/* Save Button */}
+        <View style={styles.section}>
+          <Pressable 
+            style={[styles.saveBtn, (!title.trim() || saving) && styles.saveBtnDisabled]}
+            onPress={handleSave}
+            disabled={!title.trim() || saving}
+            android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={COLORS.fg} />
+            ) : (
+              <Text style={styles.saveBtnText}>
+                {editingReminder ? 'Save Changes' : 'Create Reminder'}
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      </ScrollView>
+      
+      {showDatePicker && (
+        <DateTimePicker value={scheduledDate} mode="date" display="default" onChange={onDateChange} minimumDate={new Date()} />
+      )}
+      {showTimePicker && (
+        <DateTimePicker value={scheduledDate} mode="time" display="default" onChange={onTimeChange} />
+      )}
+    </>
+  );
+}
+
+// ============================================================
+// MAIN REMINDERS LIST
+// ============================================================
+export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm, refreshKey }) {
+  const { currentUser } = useApp();
+  const userId = currentUser?.id || currentUser?.uid;
+  
+  const [reminders, setReminders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionTarget, setActionTarget] = useState(null);
+  const [showActionAlert, setShowActionAlert] = useState(false);
+  const [actionType, setActionType] = useState(null);
+  
+  const loadReminders = useCallback(async () => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const data = await getReminders(userId);
+      const sorted = data.sort((a, b) => {
+        if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
+        return new Date(a.scheduledDate) - new Date(b.scheduledDate);
+      });
+      setReminders(sorted);
+    } catch (error) {
+      console.error('[Reminders] Load error:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
+  
+  useEffect(() => {
+    // Defer loading until after animations complete to prevent lag
+    const { InteractionManager } = require('react-native');
+    const task = InteractionManager.runAfterInteractions(() => {
+      loadReminders();
+    });
+    return () => task.cancel();
+  }, [loadReminders, refreshKey]);
+  
+  const handleAction = (reminder, type) => {
+    setActionTarget(reminder);
+    setActionType(type);
+    setShowActionAlert(true);
+  };
+  
+  const confirmAction = async () => {
+    if (!actionTarget) return;
+    try {
+      if (actionTarget.notificationId) {
+        try {
+          const { cancelNotification } = await import('../services/notifications');
+          await cancelNotification(actionTarget.notificationId);
+        } catch (e) {}
+      }
+      
+      if (actionType === 'complete') {
+        await completeReminder(actionTarget.id, userId);
+      } else {
+        await deleteReminder(actionTarget.id, userId);
+      }
+      await loadReminders();
+    } catch (error) {
+      console.error('[Reminders] Action error:', error);
+    } finally {
+      setShowActionAlert(false);
+      setActionTarget(null);
+      setActionType(null);
+    }
+  };
+  
+  const formatDateTime = (dateStr) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const isToday = date.toDateString() === now.toDateString();
+    const isTomorrow = date.toDateString() === tomorrow.toDateString();
+    const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    
+    if (isToday) return `Today, ${time}`;
+    if (isTomorrow) return `Tomorrow, ${time}`;
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + `, ${time}`;
+  };
+  
+  const getTimeLeft = (dateStr, isCompleted) => {
+    if (isCompleted) return 'Done';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diff = date - now;
+    if (diff < 0) return 'Overdue';
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `${days}d ${hours % 24}h`;
+    if (hours > 0) return `${hours}h`;
+    return `${Math.floor(diff / 60000)}m`;
+  };
+  
+  const activeReminders = reminders.filter(r => !r.isCompleted);
+  const completedReminders = reminders.filter(r => r.isCompleted);
+  
   if (!userId) {
     return (
-      <View style={styles.container}>
-        <View style={styles.emptyState}>
-          <AlertCircle size={48} color={COLORS.fgMuted} />
-          <Text style={styles.emptyTitle}>Login Required</Text>
-          <Text style={styles.emptyText}>
-            Please log in to manage your reminders.
-          </Text>
-        </View>
+      <View style={styles.emptyContainer}>
+        <Ionicons name="person-outline" size={40} color={COLORS.fgMuted} />
+        <Text style={styles.emptyTitle}>Login Required</Text>
+        <Text style={styles.emptyText}>Sign in to manage reminders.</Text>
       </View>
     );
   }
   
   return (
-    <View style={styles.container}>
-      {/* Header with Add button */}
-      <View style={styles.header}>
-        <Text style={styles.headerText}>
-          {reminders.length} reminder{reminders.length !== 1 ? 's' : ''}
-        </Text>
-        <Pressable 
-          style={styles.addButton} 
-          onPress={handleOpenAdd}
-          android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
-        >
-          <Plus size={18} color={COLORS.fg} />
-          <Text style={styles.addButtonText}>Add</Text>
-        </Pressable>
-      </View>
-      
-      {/* Content */}
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      ) : reminders.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Bell size={48} color={COLORS.fgMuted} />
-          <Text style={styles.emptyTitle}>No Reminders</Text>
-          <Text style={styles.emptyText}>
-            Tap the Add button to create your first reminder, or ask Clustrix AI to set one for you.
-          </Text>
-        </View>
-      ) : (
-        <ScrollView 
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {reminders.map((reminder) => (
-            <Animated.View 
-              key={reminder.id}
-              entering={FadeIn.duration(200)}
-              exiting={FadeOut.duration(150)}
-              layout={Layout.springify()}
-              style={styles.reminderCard}
-            >
-              <View style={styles.reminderInfo}>
-                <Text style={styles.reminderTitle} numberOfLines={2}>
-                  {reminder.title}
-                </Text>
-                <Text style={styles.reminderMessage} numberOfLines={2}>
-                  {reminder.message}
-                </Text>
-                <View style={styles.reminderMeta}>
-                  <Calendar size={12} color={COLORS.fgMuted} />
-                  <Text style={styles.reminderDate}>
-                    {formatDate(reminder.scheduledDate)}
-                  </Text>
-                  <Clock size={12} color={COLORS.fgMuted} />
-                  <Text style={styles.reminderDate}>
-                    {formatTime(reminder.scheduledDate)}
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.reminderActions}>
-                <Pressable 
-                  style={styles.actionButton}
-                  onPress={() => handleOpenEdit(reminder)}
-                  android_ripple={{ color: 'rgba(255,255,255,0.1)', borderless: true }}
-                >
-                  <Edit3 size={16} color={COLORS.fgMuted} />
-                </Pressable>
-                <Pressable 
-                  style={[styles.actionButton, styles.completeButton]}
-                  onPress={() => {
-                    setDeleteTarget(reminder);
-                    setShowDeleteConfirm(true);
-                  }}
-                  android_ripple={{ color: 'rgba(255,255,255,0.1)', borderless: true }}
-                >
-                  <Check size={16} color={COLORS.success} />
-                </Pressable>
-                <Pressable 
-                  style={[styles.actionButton, styles.deleteButton]}
-                  onPress={() => {
-                    setDeleteTarget(reminder);
-                    setShowDeleteConfirm(true);
-                  }}
-                  android_ripple={{ color: 'rgba(255,255,255,0.1)', borderless: true }}
-                >
-                  <Trash2 size={16} color={COLORS.danger} />
-                </Pressable>
-              </View>
-            </Animated.View>
-          ))}
-        </ScrollView>
-      )}
-      
-      {/* Add/Edit Modal */}
-      <SlideUpModal
-        visible={showAddModal || showEditModal}
-        onClose={() => {
-          setShowAddModal(false);
-          setShowEditModal(false);
-          setEditingReminder(null);
-          resetForm();
-        }}
-        title={showEditModal ? 'Edit Reminder' : 'New Reminder'}
-      >
-        <View style={styles.formContainer}>
-          <View style={styles.formSection}>
-            <Text style={styles.formLabel}>Title</Text>
-            <TextInput
-              style={styles.formInput}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Reminder title"
-              placeholderTextColor={COLORS.fgMuted}
-              maxLength={100}
-            />
-          </View>
-          
-          <View style={styles.formSection}>
-            <Text style={styles.formLabel}>Message</Text>
-            <TextInput
-              style={[styles.formInput, styles.formInputMultiline]}
-              value={message}
-              onChangeText={setMessage}
-              placeholder="What should I remind you about?"
-              placeholderTextColor={COLORS.fgMuted}
-              multiline
-              numberOfLines={3}
-              maxLength={500}
-            />
-          </View>
-          
-          <View style={styles.formSection}>
-            <Text style={styles.formLabel}>When</Text>
-            <View style={styles.dateTimeRow}>
-              <Pressable 
-                style={styles.dateTimeButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Calendar size={16} color={COLORS.primary} />
-                <Text style={styles.dateTimeText}>
-                  {scheduledDate.toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </Text>
-              </Pressable>
-              <Pressable 
-                style={styles.dateTimeButton}
-                onPress={() => setShowTimePicker(true)}
-              >
-                <Clock size={16} color={COLORS.primary} />
-                <Text style={styles.dateTimeText}>
-                  {scheduledDate.toLocaleTimeString('en-US', { 
-                    hour: 'numeric', 
-                    minute: '2-digit',
-                  })}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-          
+    <>
+      <ScrollView showsVerticalScrollIndicator={false} style={styles.subContainer} contentContainerStyle={styles.content}>
+        {/* Add Button */}
+        <View style={styles.section}>
           <Pressable 
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-            onPress={showEditModal ? handleSaveEdit : handleSaveNew}
-            disabled={saving}
+            style={styles.addBtn}
+            onPress={onOpenAddForm}
+            android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
           >
-            {saving ? (
-              <ActivityIndicator size="small" color={COLORS.fg} />
-            ) : (
-              <Text style={styles.saveButtonText}>
-                {showEditModal ? 'Save Changes' : 'Create Reminder'}
-              </Text>
-            )}
+            <Ionicons name="add-circle-outline" size={20} color={COLORS.primary} />
+            <Text style={styles.addBtnText}>Add Reminder</Text>
           </Pressable>
         </View>
-      </SlideUpModal>
+        
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : reminders.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="notifications-off-outline" size={40} color={COLORS.fgMuted} />
+            <Text style={styles.emptyTitle}>No Reminders</Text>
+            <Text style={styles.emptyText}>Tap above to create one.</Text>
+          </View>
+        ) : (
+          <>
+            {/* Active Reminders */}
+            {activeReminders.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Active ({activeReminders.length})</Text>
+                {activeReminders.map((reminder) => (
+                  <Pressable
+                    key={reminder.id}
+                    style={styles.reminderItem}
+                    onPress={() => onOpenEditForm?.(reminder)}
+                    android_ripple={{ color: 'rgba(255,255,255,0.05)' }}
+                  >
+                    <View style={styles.reminderLeft}>
+                      <Text style={styles.reminderTitle} numberOfLines={1}>{reminder.title}</Text>
+                      <Text style={styles.reminderTime}>{formatDateTime(reminder.scheduledDate)}</Text>
+                    </View>
+                    <Text style={styles.reminderBadge}>{getTimeLeft(reminder.scheduledDate, false)}</Text>
+                    <Pressable style={styles.iconBtn} onPress={() => handleAction(reminder, 'complete')} hitSlop={8} android_ripple={{ color: COLORS.success + '30', borderless: true }}>
+                      <Ionicons name="checkmark-circle-outline" size={22} color={COLORS.success} />
+                    </Pressable>
+                    <Pressable style={styles.iconBtn} onPress={() => handleAction(reminder, 'delete')} hitSlop={8} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
+                      <Ionicons name="trash-outline" size={20} color={COLORS.fgMuted} />
+                    </Pressable>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            
+            {/* Completed Reminders */}
+            {completedReminders.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Completed ({completedReminders.length})</Text>
+                {completedReminders.map((reminder) => (
+                  <Pressable
+                    key={reminder.id}
+                    style={[styles.reminderItem, styles.reminderItemCompleted]}
+                    android_ripple={{ color: 'rgba(255,255,255,0.02)' }}
+                  >
+                    <View style={styles.reminderLeft}>
+                      <Text style={[styles.reminderTitle, styles.reminderTitleCompleted]} numberOfLines={1}>{reminder.title}</Text>
+                      <Text style={styles.reminderTime}>Completed</Text>
+                    </View>
+                    <Pressable style={styles.iconBtn} onPress={() => handleAction(reminder, 'delete')} hitSlop={8} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
+                      <Ionicons name="trash-outline" size={20} color={COLORS.fgMuted} />
+                    </Pressable>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
       
-      {/* Date Picker */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={scheduledDate}
-          mode="date"
-          display="default"
-          onChange={onDateChange}
-          minimumDate={new Date()}
-        />
-      )}
-      
-      {/* Time Picker */}
-      {showTimePicker && (
-        <DateTimePicker
-          value={scheduledDate}
-          mode="time"
-          display="default"
-          onChange={onTimeChange}
-        />
-      )}
-      
-      {/* Delete Confirmation */}
       <AlertModal
-        visible={showDeleteConfirm}
-        title="Complete Reminder?"
-        message={`Are you sure you want to complete/delete "${deleteTarget?.title}"?`}
-        icon="checkmark-circle"
-        iconColor={COLORS.success}
-        primaryText="Complete"
+        visible={showActionAlert}
+        title={actionType === 'complete' ? 'Complete Reminder' : 'Delete Reminder'}
+        message={actionType === 'complete' ? `Mark "${actionTarget?.title}" as done?` : `Delete "${actionTarget?.title}"?`}
+        icon={actionType === 'complete' ? 'checkmark-circle' : 'trash'}
+        iconColor={actionType === 'complete' ? COLORS.success : COLORS.danger}
+        primaryText={actionType === 'complete' ? 'Complete' : 'Delete'}
         secondaryText="Cancel"
-        onPrimary={handleDelete}
-        onSecondary={() => {
-          setShowDeleteConfirm(false);
-          setDeleteTarget(null);
-        }}
+        onPrimary={confirmAction}
+        onSecondary={() => { setShowActionAlert(false); setActionTarget(null); setActionType(null); }}
+        destructive={actionType === 'delete'}
       />
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
+  subContainer: { flex: 1, paddingTop: 10 },
+  content: { paddingBottom: 40 },
+  section: { marginBottom: 20 },
+  sectionTitle: { 
+    color: COLORS.fgMuted, 
+    fontSize: 12, 
+    fontFamily: FONTS.ai, 
+    textTransform: 'uppercase', 
+    letterSpacing: 0.5, 
+    paddingHorizontal: 4, 
     marginBottom: 8,
   },
-  headerText: {
-    color: COLORS.fgMuted,
-    fontSize: 13,
-    fontFamily: FONTS.sans,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  addButtonText: {
+  input: {
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 15,
+    padding: 14,
     color: COLORS.fg,
-    fontSize: 13,
-    fontFamily: FONTS.display,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingBottom: 60,
-  },
-  emptyTitle: {
-    color: COLORS.fg,
-    fontSize: 18,
-    fontFamily: FONTS.display,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    color: COLORS.fgMuted,
     fontSize: 14,
     fontFamily: FONTS.sans,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  list: {
-    flex: 1,
-  },
-  listContent: {
-    paddingBottom: 20,
-  },
-  reminderCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    flexDirection: 'row',
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
-  reminderInfo: {
-    flex: 1,
-    marginRight: 10,
+  inputMultiline: {
+    minHeight: 70,
+    textAlignVertical: 'top',
   },
-  reminderTitle: {
-    color: COLORS.fg,
-    fontSize: 15,
-    fontFamily: FONTS.display,
-    marginBottom: 4,
-  },
-  reminderMessage: {
+  hint: {
     color: COLORS.fgMuted,
-    fontSize: 13,
-    fontFamily: FONTS.sans,
-    marginBottom: 8,
-    lineHeight: 18,
-  },
-  reminderMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  reminderDate: {
-    color: COLORS.fgMuted,
-    fontSize: 11,
-    fontFamily: FONTS.sans,
-    marginRight: 8,
-  },
-  reminderActions: {
-    justifyContent: 'center',
-    gap: 8,
-  },
-  actionButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: COLORS.bgSecondary,
-  },
-  completeButton: {
-    backgroundColor: COLORS.success + '20',
-  },
-  deleteButton: {
-    backgroundColor: COLORS.danger + '20',
-  },
-  formContainer: {
+    fontSize: 12,
+    marginTop: 6,
     paddingHorizontal: 4,
-    paddingBottom: 20,
   },
-  formSection: {
-    marginBottom: 18,
+  presetGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
   },
-  formLabel: {
+  presetBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: COLORS.inputBg,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  presetBtnActive: {
+    backgroundColor: COLORS.primary + '20',
+    borderColor: COLORS.primary,
+  },
+  presetText: {
     color: COLORS.fgMuted,
     fontSize: 12,
     fontFamily: FONTS.sans,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
   },
-  formInput: {
-    backgroundColor: COLORS.inputBg,
-    borderRadius: 12,
-    padding: 14,
-    color: COLORS.fg,
-    fontSize: 15,
-    fontFamily: FONTS.sans,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
+  presetTextActive: {
+    color: COLORS.primary,
+    fontFamily: FONTS.display,
   },
-  formInputMultiline: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  dateTimeRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  dateTimeButton: {
-    flex: 1,
+  timeDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     backgroundColor: COLORS.inputBg,
-    borderRadius: 12,
+    borderRadius: 15,
     padding: 14,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
-  dateTimeText: {
+  timeText: {
     color: COLORS.fg,
     fontSize: 14,
     fontFamily: FONTS.sans,
   },
-  saveButton: {
+  saveBtn: {
     backgroundColor: COLORS.primary,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 15,
+    padding: 14,
     alignItems: 'center',
-    marginTop: 10,
   },
-  saveButtonDisabled: {
-    opacity: 0.6,
+  saveBtnDisabled: {
+    opacity: 0.5,
   },
-  saveButtonText: {
+  saveBtnText: {
     color: COLORS.fg,
     fontSize: 15,
     fontFamily: FONTS.display,
+  },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary + '15',
+    borderRadius: 15,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+  },
+  addBtnText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontFamily: FONTS.display,
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    color: COLORS.fg,
+    fontSize: 16,
+    fontFamily: FONTS.display,
+    marginTop: 12,
+  },
+  emptyText: {
+    color: COLORS.fgMuted,
+    fontSize: 13,
+    marginTop: 4,
+  },
+  reminderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 15,
+    padding: 12,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  reminderItemCompleted: {
+    opacity: 0.5,
+  },
+  reminderLeft: {
+    flex: 1,
+  },
+  reminderTitle: {
+    color: COLORS.fg,
+    fontSize: 14,
+    fontFamily: FONTS.display,
+    marginBottom: 2,
+  },
+  reminderTitleCompleted: {
+    textDecorationLine: 'line-through',
+    color: COLORS.fgMuted,
+  },
+  reminderTime: {
+    color: COLORS.fgMuted,
+    fontSize: 12,
+    fontFamily: FONTS.sans,
+  },
+  reminderBadge: {
+    color: COLORS.primary,
+    fontSize: 11,
+    fontFamily: FONTS.display,
+    backgroundColor: COLORS.primary + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  iconBtn: {
+    padding: 6,
   },
 });

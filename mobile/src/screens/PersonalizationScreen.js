@@ -9,7 +9,7 @@ import DropdownSelect from '../components/DropdownSelect';
 import AccountScreen from './AccountScreen';
 import AgenticToolsScreen from './AgenticToolsScreen';
 import ImageModelsScreen from './ImageModelsScreen';
-import RemindersScreen from './RemindersScreen';
+import RemindersScreen, { ReminderFormContent } from './RemindersScreen';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const LANGUAGES = [
@@ -344,10 +344,34 @@ export default function PersonalizationScreen({ visible, onClose }) {
   const [showAgenticTools, setShowAgenticTools] = useState(false);
   const [showImageModels, setShowImageModels] = useState(false);
   const [showReminders, setShowReminders] = useState(false);
+  const [showReminderForm, setShowReminderForm] = useState(false);
+  const [editingReminder, setEditingReminder] = useState(null);
   const [showSavedAlert, setShowSavedAlert] = useState(false);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [reminderRefreshKey, setReminderRefreshKey] = useState(0);
+  
+  // Reminder form handlers
+  const handleOpenAddReminder = () => {
+    setEditingReminder(null);
+    setShowReminderForm(true);
+  };
+  
+  const handleOpenEditReminder = (reminder) => {
+    setEditingReminder(reminder);
+    setShowReminderForm(true);
+  };
+  
+  const handleReminderFormClose = () => {
+    setShowReminderForm(false);
+    setEditingReminder(null);
+  };
+  
+  const handleReminderSaved = () => {
+    // Increment to trigger useEffect reload in RemindersScreen
+    setReminderRefreshKey(k => k + 1);
+  };
 
   return (
     <>
@@ -409,7 +433,26 @@ export default function PersonalizationScreen({ visible, onClose }) {
         title="Manage Reminders"
         showGradients={false}
       >
-        <RemindersScreen onClose={() => setShowReminders(false)} />
+        <RemindersScreen 
+          onClose={() => setShowReminders(false)}
+          onOpenAddForm={handleOpenAddReminder}
+          onOpenEditForm={handleOpenEditReminder}
+          refreshKey={reminderRefreshKey}
+        />
+      </SlideLeftModal>
+      
+      {/* Reminder Add/Edit Form */}
+      <SlideLeftModal 
+        visible={showReminderForm} 
+        onClose={handleReminderFormClose} 
+        title={editingReminder ? "Edit Reminder" : "New Reminder"}
+        showGradients={false}
+      >
+        <ReminderFormContent 
+          editingReminder={editingReminder}
+          onSave={handleReminderSaved}
+          onClose={handleReminderFormClose}
+        />
       </SlideLeftModal>
 
       {/* Privacy Policy */}

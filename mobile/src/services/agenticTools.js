@@ -162,17 +162,25 @@ export const SET_REMINDER_TOOL = {
   type: 'function',
   function: {
     name: 'set_reminder',
-    description: `Schedule a new reminder notification. The notification will appear at the specified time even if the app is closed. Use for: scheduling follow-ups, subscription reminders, task deadlines, or any time-based alerts the user requests.`,
+    description: `Schedule a new reminder notification. The notification will appear at the specified time even if the app is closed. Use for: scheduling follow-ups, subscription reminders, task deadlines, or any time-based alerts the user requests. You MUST provide both a title AND a notification body - create engaging notification text that will grab the user's attention.`,
     parameters: {
       type: 'object',
       properties: {
         title: {
           type: 'string',
-          description: 'Short title for the reminder notification (e.g., "Subscription Reminder")',
+          description: 'Short title for the reminder (e.g., "Subscription Reminder", "Meeting with John")',
         },
         message: {
           type: 'string',
-          description: 'Detailed message body for the reminder',
+          description: 'Detailed description/notes for the reminder (stored for reference)',
+        },
+        notificationTitle: {
+          type: 'string',
+          description: 'Title shown in the push notification (e.g., "⏰ Time for your meeting!")',
+        },
+        notificationBody: {
+          type: 'string',
+          description: 'Body text shown in the push notification - make it engaging and actionable (e.g., "Your meeting with John starts now. Don\'t forget the quarterly report!")',
         },
         scheduledDate: {
           type: 'string',
@@ -183,33 +191,58 @@ export const SET_REMINDER_TOOL = {
           description: 'Brief explanation shown to user (e.g., "Setting reminder for January 15th")',
         },
       },
-      required: ['title', 'message', 'scheduledDate'],
+      required: ['title', 'notificationTitle', 'notificationBody', 'scheduledDate'],
     },
   },
 };
 
-// Remove reminder tool - cancel a scheduled reminder
+
+// Remove reminder tool - permanently delete a reminder
 export const REMOVE_REMINDER_TOOL = {
   type: 'function',
   function: {
     name: 'remove_reminder',
-    description: `Cancel and remove a scheduled reminder. Use view_reminder first to get the reminder ID, then call this to remove it.`,
+    description: `Permanently delete a scheduled reminder. This completely removes the reminder from the system. Use view_reminder first to get the reminder ID. Use this when user wants to DELETE a reminder, not just complete it.`,
     parameters: {
       type: 'object',
       properties: {
         id: {
           type: 'string',
-          description: 'The unique ID of the reminder to remove (from view_reminder results)',
+          description: 'The unique ID of the reminder to delete (from view_reminder results)',
         },
         commentary: {
           type: 'string',
-          description: 'Brief explanation shown to user (e.g., "Cancelling your reminder")',
+          description: 'Brief explanation shown to user (e.g., "Deleting your reminder")',
         },
       },
       required: ['id'],
     },
   },
 };
+
+// Complete reminder tool - mark as done without deleting
+export const COMPLETE_REMINDER_TOOL = {
+  type: 'function',
+  function: {
+    name: 'complete_reminder',
+    description: `Mark a reminder as completed. The reminder will be marked as done but NOT deleted - it will still be visible in the user's reminder history but greyed out. Use view_reminder first to get the reminder ID. Use this when user says they've done something or finished a task.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The unique ID of the reminder to mark as complete (from view_reminder results)',
+        },
+        commentary: {
+          type: 'string',
+          description: 'Brief explanation shown to user (e.g., "Marking reminder as complete")',
+        },
+      },
+      required: ['id'],
+    },
+  },
+};
+
 
 // Claude/Anthropic format
 export const WEB_SEARCH_TOOL_CLAUDE = {
@@ -253,6 +286,12 @@ export const REMOVE_REMINDER_TOOL_CLAUDE = {
   name: 'remove_reminder',
   description: REMOVE_REMINDER_TOOL.function.description,
   input_schema: REMOVE_REMINDER_TOOL.function.parameters,
+};
+
+export const COMPLETE_REMINDER_TOOL_CLAUDE = {
+  name: 'complete_reminder',
+  description: COMPLETE_REMINDER_TOOL.function.description,
+  input_schema: COMPLETE_REMINDER_TOOL.function.parameters,
 };
 
 // Gemini format
@@ -299,6 +338,12 @@ export const REMOVE_REMINDER_TOOL_GEMINI = {
   parameters: REMOVE_REMINDER_TOOL.function.parameters,
 };
 
+export const COMPLETE_REMINDER_TOOL_GEMINI = {
+  name: 'complete_reminder',
+  description: COMPLETE_REMINDER_TOOL.function.description,
+  parameters: COMPLETE_REMINDER_TOOL.function.parameters,
+};
+
 /**
  * Get tools array for AI provider
  * @param {string} provider - 'openai' | 'anthropic' | 'google' | etc
@@ -320,6 +365,7 @@ export function getAgenticTools(provider, enabledTools = { webSearch: true, imag
     if (enabledTools.reminderTools) {
       tools.push(VIEW_REMINDER_TOOL_CLAUDE);
       tools.push(SET_REMINDER_TOOL_CLAUDE);
+      tools.push(COMPLETE_REMINDER_TOOL_CLAUDE);
       tools.push(REMOVE_REMINDER_TOOL_CLAUDE);
     }
   } else if (providerLower === 'google' || providerLower === 'gemini') {
@@ -334,6 +380,7 @@ export function getAgenticTools(provider, enabledTools = { webSearch: true, imag
     if (enabledTools.reminderTools) {
       functions.push(VIEW_REMINDER_TOOL_GEMINI);
       functions.push(SET_REMINDER_TOOL_GEMINI);
+      functions.push(COMPLETE_REMINDER_TOOL_GEMINI);
       functions.push(REMOVE_REMINDER_TOOL_GEMINI);
     }
     if (functions.length > 0) {
@@ -350,6 +397,7 @@ export function getAgenticTools(provider, enabledTools = { webSearch: true, imag
     if (enabledTools.reminderTools) {
       tools.push(VIEW_REMINDER_TOOL);
       tools.push(SET_REMINDER_TOOL);
+      tools.push(COMPLETE_REMINDER_TOOL);
       tools.push(REMOVE_REMINDER_TOOL);
     }
   }
@@ -1060,7 +1108,7 @@ export async function executeViewReminder(input, config) {
   }
   
   try {
-    const { getReminders, cleanupPastReminders } = await import('../database/db.js');
+    const { getActiveReminders, cleanupPastReminders } = await import('../database/db.js');
     
     // Clean up past reminders first
     const cleanedCount = await cleanupPastReminders(userId);
@@ -1068,8 +1116,8 @@ export async function executeViewReminder(input, config) {
       console.log(`[REMINDER] Cleaned up ${cleanedCount} past reminders`);
     }
     
-    // Get active reminders
-    const reminders = await getReminders(userId);
+    // Get ACTIVE reminders only (excludes completed)
+    const reminders = await getActiveReminders(userId);
     
     if (reminders.length === 0) {
       return {
@@ -1109,12 +1157,12 @@ export async function executeViewReminder(input, config) {
 
 /**
  * Execute set_reminder - schedule a new notification
- * @param {Object} input - { title, message, scheduledDate, commentary? }
+ * @param {Object} input - { title, message, notificationTitle, notificationBody, scheduledDate, commentary? }
  * @param {Object} config - { userId: string }
  * @returns {Promise<{success: boolean, output: string, reminder?: Object}>}
  */
 export async function executeSetReminder(input, config) {
-  const { title, message, scheduledDate } = input;
+  const { title, message, notificationTitle, notificationBody, scheduledDate } = input;
   const { userId } = config;
   
   if (!userId) {
@@ -1124,10 +1172,10 @@ export async function executeSetReminder(input, config) {
     };
   }
   
-  if (!title || !message || !scheduledDate) {
+  if (!title || !scheduledDate) {
     return {
       success: false,
-      output: 'Missing required fields: title, message, and scheduledDate are required.',
+      output: 'Missing required fields: title and scheduledDate are required.',
     };
   }
   
@@ -1150,6 +1198,10 @@ export async function executeSetReminder(input, config) {
   try {
     const { saveReminder } = await import('../database/db.js');
     
+    // Use AI-provided notification title/body, fallback to reminder title/message
+    const finalNotifTitle = notificationTitle || title;
+    const finalNotifBody = notificationBody || message || title;
+    
     // Try to schedule notification via @notifee (graceful fallback if not available)
     let notificationId = '';
     let notificationScheduled = false;
@@ -1157,8 +1209,8 @@ export async function executeSetReminder(input, config) {
     try {
       const { scheduleNotification } = await import('./notifications.js');
       const scheduleResult = await scheduleNotification({
-        title,
-        message,
+        title: finalNotifTitle,
+        message: finalNotifBody,
         scheduledDate: triggerDate,
         metadata: { userId },
       });
@@ -1181,10 +1233,13 @@ export async function executeSetReminder(input, config) {
       id: reminderId,
       userId,
       title,
-      message,
+      message: message || title,
       scheduledDate: triggerDate.toISOString(),
       notificationId: notificationId,
-      metadata: input.metadata || {},
+      metadata: { 
+        notificationTitle: finalNotifTitle,
+        notificationBody: finalNotifBody,
+      },
     };
     
     await saveReminder(reminder);
@@ -1205,7 +1260,7 @@ export async function executeSetReminder(input, config) {
     
     return {
       success: true,
-      output: `✅ Reminder set successfully!\n\n**${title}**\n📅 ${formattedDate}\n💬 ${message}${notifNote}`,
+      output: `✅ Reminder set successfully!\n\n**${title}**\n📅 ${formattedDate}${message ? `\n💬 ${message}` : ''}\n\n🔔 Notification: "${finalNotifTitle}"${notifNote}`,
       reminder,
     };
   } catch (error) {
@@ -1268,12 +1323,81 @@ export async function executeRemoveReminder(input, config) {
     
     return {
       success: true,
-      output: `✅ Reminder "${reminder.title}" has been cancelled and removed.`,
+      output: `🗑️ Reminder "${reminder.title}" has been permanently deleted.`,
     };
   } catch (error) {
     return {
       success: false,
       output: `Error removing reminder: ${error.message}`,
+    };
+  }
+}
+
+/**
+ * Execute complete_reminder - mark a reminder as done (does NOT delete)
+ * @param {Object} input - { id, commentary? }
+ * @param {Object} config - { userId: string }
+ * @returns {Promise<{success: boolean, output: string}>}
+ */
+export async function executeCompleteReminder(input, config) {
+  const { id } = input;
+  const { userId } = config;
+  
+  if (!userId) {
+    return {
+      success: false,
+      output: 'User authentication required to complete reminders. Please log in.',
+    };
+  }
+  
+  if (!id) {
+    return {
+      success: false,
+      output: 'Reminder ID is required. Use view_reminder to see available reminders.',
+    };
+  }
+  
+  try {
+    const { getReminder, completeReminder } = await import('../database/db.js');
+    
+    // Get reminder to validate ownership
+    const reminder = await getReminder(id, userId);
+    
+    if (!reminder) {
+      return {
+        success: false,
+        output: `Reminder with ID "${id}" not found or doesn't belong to you.`,
+      };
+    }
+    
+    if (reminder.isCompleted) {
+      return {
+        success: true,
+        output: `Reminder "${reminder.title}" is already marked as complete.`,
+      };
+    }
+    
+    // Cancel notification in OS (no longer needed)
+    if (reminder.notificationId) {
+      try {
+        const { cancelNotification } = await import('./notifications.js');
+        await cancelNotification(reminder.notificationId);
+      } catch (notifError) {
+        console.warn('[REMINDER] Could not cancel notification:', notifError.message);
+      }
+    }
+    
+    // Mark as completed (NOT delete)
+    await completeReminder(id, userId);
+    
+    return {
+      success: true,
+      output: `✅ Reminder "${reminder.title}" has been marked as complete!\n\nThe reminder is now in your completed history.`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      output: `Error completing reminder: ${error.message}`,
     };
   }
 }
@@ -1306,13 +1430,16 @@ export async function executeTool(toolName, input, config) {
     case 'set_reminder':
       return executeSetReminder(input, config.reminder);
 
+    case 'complete_reminder':
+      return executeCompleteReminder(input, config.reminder);
+
     case 'remove_reminder':
       return executeRemoveReminder(input, config.reminder);
 
     default:
       return {
         success: false,
-        output: `Unknown tool: ${toolName}. Available tools: web_search, generate_image, reattach_file, view_reminder, set_reminder, remove_reminder`,
+        output: `Unknown tool: ${toolName}. Available tools: web_search, generate_image, reattach_file, view_reminder, set_reminder, complete_reminder, remove_reminder`,
       };
   }
 }
@@ -2013,6 +2140,10 @@ export async function streamAgenticChat({
           result = await executeSetReminder(toolCall.input, { 
             userId: agenticConfig.userId 
           });
+        } else if (toolCall.name === 'complete_reminder') {
+          result = await executeCompleteReminder(toolCall.input, { 
+            userId: agenticConfig.userId 
+          });
         } else if (toolCall.name === 'remove_reminder') {
           result = await executeRemoveReminder(toolCall.input, { 
             userId: agenticConfig.userId 
@@ -2445,8 +2576,10 @@ function getDefaultCommentary(toolName, input) {
       return 'Checking your reminders...';
     case 'set_reminder':
       return `Setting reminder: "${input.title || 'Reminder'}"`;
+    case 'complete_reminder':
+      return 'Marking reminder as complete...';
     case 'remove_reminder':
-      return 'Removing reminder...';
+      return 'Deleting reminder...';
     case 'list_attachments':
       return 'Checking available files...';
     case 'reattach_file':

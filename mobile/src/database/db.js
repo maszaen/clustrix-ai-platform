@@ -121,6 +121,7 @@ export async function initDatabase() {
       message TEXT NOT NULL,
       scheduled_date TEXT NOT NULL,
       notification_id TEXT NOT NULL,
+      is_completed INTEGER DEFAULT 0,
       metadata TEXT,
       created_at INTEGER NOT NULL
     );
@@ -139,6 +140,13 @@ export async function initDatabase() {
   // Migration: Add is_favorite column to sessions if not exists
   try {
     await db.runAsync('ALTER TABLE sessions ADD COLUMN is_favorite INTEGER DEFAULT 0');
+  } catch (e) {
+    // Column already exists, ignore
+  }
+  
+  // Migration: Add is_completed column to reminders if not exists
+  try {
+    await db.runAsync('ALTER TABLE reminders ADD COLUMN is_completed INTEGER DEFAULT 0');
   } catch (e) {
     // Column already exists, ignore
   }
@@ -728,18 +736,14 @@ export async function importAllData(backupData) {
   }
 }
 
-// ========================================
-// Reminders (for agentic tools)
-// ========================================
-
 /**
- * Get all reminders for a user
+ * Get all reminders for a user (including completed)
  * @param {string} userId - User ID
  * @returns {Promise<Array>} Array of reminder objects
  */
 export async function getReminders(userId) {
   const rows = await db.getAllAsync(
-    'SELECT * FROM reminders WHERE user_id = ? ORDER BY scheduled_date ASC',
+    'SELECT * FROM reminders WHERE user_id = ? ORDER BY is_completed ASC, scheduled_date ASC',
     [userId]
   );
   
@@ -750,6 +754,32 @@ export async function getReminders(userId) {
     message: row.message,
     scheduledDate: row.scheduled_date,
     notificationId: row.notification_id,
+    isCompleted: row.is_completed === 1,
+    metadata: row.metadata ? JSON.parse(row.metadata) : {},
+    createdAt: new Date(row.created_at).toISOString(),
+  }));
+}
+
+/**
+ * Get only active (non-completed) reminders for a user
+ * Used by view_reminder tool - excludes completed reminders
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Array of active reminder objects
+ */
+export async function getActiveReminders(userId) {
+  const rows = await db.getAllAsync(
+    'SELECT * FROM reminders WHERE user_id = ? AND is_completed = 0 ORDER BY scheduled_date ASC',
+    [userId]
+  );
+  
+  return (rows || []).map(row => ({
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    message: row.message,
+    scheduledDate: row.scheduled_date,
+    notificationId: row.notification_id,
+    isCompleted: false,
     metadata: row.metadata ? JSON.parse(row.metadata) : {},
     createdAt: new Date(row.created_at).toISOString(),
   }));
@@ -776,6 +806,7 @@ export async function getReminder(id, userId) {
     message: row.message,
     scheduledDate: row.scheduled_date,
     notificationId: row.notification_id,
+    isCompleted: row.is_completed === 1,
     metadata: row.metadata ? JSON.parse(row.metadata) : {},
     createdAt: new Date(row.created_at).toISOString(),
   };
@@ -789,15 +820,16 @@ export async function getReminder(id, userId) {
 export async function saveReminder(reminder) {
   const now = Date.now();
   await db.runAsync(
-    `INSERT INTO reminders (id, user_id, title, message, scheduled_date, notification_id, metadata, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR REPLACE INTO reminders (id, user_id, title, message, scheduled_date, notification_id, is_completed, metadata, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       reminder.id,
       reminder.userId,
       reminder.title,
       reminder.message,
       reminder.scheduledDate,
-      reminder.notificationId,
+      reminder.notificationId || '',
+      reminder.isCompleted ? 1 : 0,
       JSON.stringify(reminder.metadata || {}),
       now,
     ]
@@ -805,7 +837,21 @@ export async function saveReminder(reminder) {
 }
 
 /**
- * Delete a reminder by ID
+ * Mark a reminder as completed (does NOT delete)
+ * @param {string} id - Reminder ID
+ * @param {string} userId - User ID (for ownership validation)
+ * @returns {Promise<boolean>} True if updated, false if not found
+ */
+export async function completeReminder(id, userId) {
+  const result = await db.runAsync(
+    'UPDATE reminders SET is_completed = 1 WHERE id = ? AND user_id = ?',
+    [id, userId]
+  );
+  return result.changes > 0;
+}
+
+/**
+ * Delete a reminder by ID (permanent)
  * @param {string} id - Reminder ID
  * @param {string} userId - User ID (for ownership validation)
  * @returns {Promise<boolean>} True if deleted, false if not found
@@ -819,14 +865,14 @@ export async function deleteReminder(id, userId) {
 }
 
 /**
- * Get past reminders that already fired (for cleanup)
+ * Get past reminders that already fired (for cleanup) - only non-completed
  * @param {string} userId - User ID
  * @returns {Promise<Array>}
  */
 export async function getPastReminders(userId) {
   const now = new Date().toISOString();
   const rows = await db.getAllAsync(
-    'SELECT * FROM reminders WHERE user_id = ? AND scheduled_date < ?',
+    'SELECT * FROM reminders WHERE user_id = ? AND scheduled_date < ? AND is_completed = 0',
     [userId, now]
   );
   
@@ -837,20 +883,21 @@ export async function getPastReminders(userId) {
     message: row.message,
     scheduledDate: row.scheduled_date,
     notificationId: row.notification_id,
+    isCompleted: false,
     metadata: row.metadata ? JSON.parse(row.metadata) : {},
     createdAt: new Date(row.created_at).toISOString(),
   }));
 }
 
 /**
- * Delete all past reminders for a user
+ * Delete all past non-completed reminders for a user
  * @param {string} userId - User ID
  * @returns {Promise<number>} Number of deleted reminders
  */
 export async function cleanupPastReminders(userId) {
   const now = new Date().toISOString();
   const result = await db.runAsync(
-    'DELETE FROM reminders WHERE user_id = ? AND scheduled_date < ?',
+    'DELETE FROM reminders WHERE user_id = ? AND scheduled_date < ? AND is_completed = 0',
     [userId, now]
   );
   return result.changes || 0;
@@ -867,3 +914,4 @@ export async function updateReminderNotificationId(id, notificationId) {
     [notificationId, id]
   );
 }
+

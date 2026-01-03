@@ -283,7 +283,11 @@ export const transformCommandText = (cmdName, args) => {
     }
     
     if (cmdName === 'remove_reminder') {
-        return 'Remove Reminder';
+        return 'Delete Reminder';
+    }
+    
+    if (cmdName === 'complete_reminder') {
+        return 'Complete Reminder';
     }
     
     if (cmdName === 'run_command') {

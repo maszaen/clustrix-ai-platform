@@ -122,17 +122,25 @@ const SET_REMINDER_TOOL = {
   type: 'function',
   function: {
     name: 'set_reminder',
-    description: `Schedule a new reminder notification. The notification will appear at the specified time even if the app is closed. Use for: scheduling follow-ups, subscription reminders, task deadlines, or any time-based alerts the user requests.`,
+    description: `Schedule a new reminder notification. The notification will appear at the specified time even if the app is closed. Use for: scheduling follow-ups, subscription reminders, task deadlines, or any time-based alerts the user requests. You MUST provide both a title AND a notification body - create engaging notification text that will grab the user's attention.`,
     parameters: {
       type: 'object',
       properties: {
         title: {
           type: 'string',
-          description: 'Short title for the reminder notification (e.g., "Subscription Reminder")',
+          description: 'Short title for the reminder (e.g., "Subscription Reminder", "Meeting with John")',
         },
         message: {
           type: 'string',
-          description: 'Detailed message body for the reminder',
+          description: 'Detailed description/notes for the reminder (stored for reference)',
+        },
+        notificationTitle: {
+          type: 'string',
+          description: 'Title shown in the push notification (e.g., "⏰ Time for your meeting!")',
+        },
+        notificationBody: {
+          type: 'string',
+          description: 'Body text shown in the push notification - make it engaging and actionable (e.g., "Your meeting with John starts now. Don\'t forget the quarterly report!")',
         },
         scheduledDate: {
           type: 'string',
@@ -143,7 +151,7 @@ const SET_REMINDER_TOOL = {
           description: 'Brief explanation shown to user (e.g., "Setting reminder for January 15th")',
         },
       },
-      required: ['title', 'message', 'scheduledDate'],
+      required: ['title', 'notificationTitle', 'notificationBody', 'scheduledDate'],
     },
   },
 };
@@ -152,17 +160,39 @@ const REMOVE_REMINDER_TOOL = {
   type: 'function',
   function: {
     name: 'remove_reminder',
-    description: `Cancel and remove a scheduled reminder. Use view_reminder first to get the reminder ID, then call this to remove it.`,
+    description: `Permanently delete a scheduled reminder. This completely removes the reminder from the system. Use view_reminder first to get the reminder ID. Use this when user wants to DELETE a reminder.`,
     parameters: {
       type: 'object',
       properties: {
         id: {
           type: 'string',
-          description: 'The unique ID of the reminder to remove (from view_reminder results)',
+          description: 'The unique ID of the reminder to delete (from view_reminder results)',
         },
         commentary: {
           type: 'string',
-          description: 'Brief explanation shown to user (e.g., "Cancelling your reminder")',
+          description: 'Brief explanation shown to user (e.g., "Deleting your reminder")',
+        },
+      },
+      required: ['id'],
+    },
+  },
+};
+
+const COMPLETE_REMINDER_TOOL = {
+  type: 'function',
+  function: {
+    name: 'complete_reminder',
+    description: `Mark a reminder as completed. The reminder will be marked as done but NOT deleted - it stays in user's history. Use view_reminder first to get the reminder ID. Use this when user says they've done something or finished a task.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'The unique ID of the reminder to mark as complete (from view_reminder results)',
+        },
+        commentary: {
+          type: 'string',
+          description: 'Brief explanation shown to user (e.g., "Marking reminder as complete")',
         },
       },
       required: ['id'],
@@ -207,6 +237,12 @@ const REMOVE_REMINDER_TOOL_CLAUDE = {
   input_schema: REMOVE_REMINDER_TOOL.function.parameters,
 };
 
+const COMPLETE_REMINDER_TOOL_CLAUDE = {
+  name: 'complete_reminder',
+  description: COMPLETE_REMINDER_TOOL.function.description,
+  input_schema: COMPLETE_REMINDER_TOOL.function.parameters,
+};
+
 // Gemini format
 const WEB_SEARCH_TOOL_GEMINI = {
   functionDeclarations: [
@@ -240,12 +276,18 @@ const WEB_SEARCH_TOOL_GEMINI = {
       description: REMOVE_REMINDER_TOOL.function.description,
       parameters: REMOVE_REMINDER_TOOL.function.parameters,
     },
+    {
+      name: 'complete_reminder',
+      description: COMPLETE_REMINDER_TOOL.function.description,
+      parameters: COMPLETE_REMINDER_TOOL.function.parameters,
+    },
   ],
 };
 
 // All OpenAI-format tools
-const OPENAI_TOOLS = [WEB_SEARCH_TOOL, LIST_ATTACHMENTS_TOOL, REATTACH_FILE_TOOL, VIEW_REMINDER_TOOL, SET_REMINDER_TOOL, REMOVE_REMINDER_TOOL];
-const CLAUDE_TOOLS = [WEB_SEARCH_TOOL_CLAUDE, LIST_ATTACHMENTS_TOOL_CLAUDE, REATTACH_FILE_TOOL_CLAUDE, VIEW_REMINDER_TOOL_CLAUDE, SET_REMINDER_TOOL_CLAUDE, REMOVE_REMINDER_TOOL_CLAUDE];
+const OPENAI_TOOLS = [WEB_SEARCH_TOOL, LIST_ATTACHMENTS_TOOL, REATTACH_FILE_TOOL, VIEW_REMINDER_TOOL, SET_REMINDER_TOOL, COMPLETE_REMINDER_TOOL, REMOVE_REMINDER_TOOL];
+const CLAUDE_TOOLS = [WEB_SEARCH_TOOL_CLAUDE, LIST_ATTACHMENTS_TOOL_CLAUDE, REATTACH_FILE_TOOL_CLAUDE, VIEW_REMINDER_TOOL_CLAUDE, SET_REMINDER_TOOL_CLAUDE, COMPLETE_REMINDER_TOOL_CLAUDE, REMOVE_REMINDER_TOOL_CLAUDE];
+
 
 // ===================================================================
 // WEB SEARCH EXECUTION
@@ -499,7 +541,7 @@ async function executeReattachFile(input, attachments, userId) {
 // REMINDER TOOL EXECUTION
 // ===================================================================
 
-const { getReminders, getReminder, saveReminder, deleteReminder, cleanupPastReminders } = require('../services/database');
+const { getReminders, getReminder, saveReminder, completeReminder, deleteReminder, cleanupPastReminders } = require('../services/database');
 
 /**
  * Execute view_reminder - get all reminders for current user
@@ -562,7 +604,7 @@ async function executeViewReminder(input, userId) {
  * Note: Backend stores reminder in Firestore, mobile schedules actual notification
  */
 async function executeSetReminder(input, userId) {
-  const { title, message, scheduledDate } = input;
+  const { title, message, notificationTitle, notificationBody, scheduledDate } = input;
   
   if (!userId) {
     return {
@@ -571,10 +613,10 @@ async function executeSetReminder(input, userId) {
     };
   }
   
-  if (!title || !message || !scheduledDate) {
+  if (!title || !scheduledDate) {
     return {
       success: false,
-      output: 'Missing required fields: title, message, and scheduledDate are required.',
+      output: 'Missing required fields: title and scheduledDate are required.',
     };
   }
   
@@ -595,6 +637,10 @@ async function executeSetReminder(input, userId) {
   }
   
   try {
+    // Use AI-provided notification title/body, fallback to reminder title/message
+    const finalNotifTitle = notificationTitle || title;
+    const finalNotifBody = notificationBody || message || title;
+    
     // Generate reminder ID
     const reminderId = `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
@@ -603,10 +649,13 @@ async function executeSetReminder(input, userId) {
       id: reminderId,
       userId,
       title,
-      message,
+      message: message || title,
       scheduledDate: triggerDate.toISOString(),
       notificationId: '', // Will be set by mobile when scheduling
-      metadata: input.metadata || {},
+      metadata: {
+        notificationTitle: finalNotifTitle,
+        notificationBody: finalNotifBody,
+      },
     };
     
     await saveReminder(reminder);
@@ -623,7 +672,7 @@ async function executeSetReminder(input, userId) {
     
     return {
       success: true,
-      output: `✅ Reminder set successfully!\n\n**${title}**\n📅 ${formattedDate}\n💬 ${message}\n\nYou'll receive a notification at that time.`,
+      output: `✅ Reminder set successfully!\n\n**${title}**\n📅 ${formattedDate}${message ? `\n💬 ${message}` : ''}\n\n🔔 Notification: "${finalNotifTitle}"\n\nYou'll receive a notification at that time.`,
       reminder,
       // Flag for mobile to schedule notification
       needsLocalSchedule: true,
@@ -636,6 +685,7 @@ async function executeSetReminder(input, userId) {
     };
   }
 }
+
 
 /**
  * Execute remove_reminder - cancel a scheduled reminder
@@ -673,7 +723,7 @@ async function executeRemoveReminder(input, userId) {
     
     return {
       success: true,
-      output: `✅ Reminder "${reminder.title}" has been cancelled and removed.`,
+      output: `🗑️ Reminder "${reminder.title}" has been permanently deleted.`,
       // Flag for mobile to cancel local notification
       needsLocalCancel: true,
       notificationId: reminder.notificationId,
@@ -683,6 +733,63 @@ async function executeRemoveReminder(input, userId) {
     return {
       success: false,
       output: `Error removing reminder: ${error.message}`,
+    };
+  }
+}
+
+/**
+ * Execute complete_reminder - mark a reminder as done (does NOT delete)
+ */
+async function executeCompleteReminder(input, userId) {
+  const { id } = input;
+  
+  if (!userId) {
+    return {
+      success: false,
+      output: 'User authentication required to complete reminders.',
+    };
+  }
+  
+  if (!id) {
+    return {
+      success: false,
+      output: 'Reminder ID is required. Use view_reminder to see available reminders.',
+    };
+  }
+  
+  try {
+    // Get reminder to validate ownership
+    const reminder = await getReminder(id, userId);
+    
+    if (!reminder) {
+      return {
+        success: false,
+        output: `Reminder with ID "${id}" not found or doesn't belong to you.`,
+      };
+    }
+    
+    if (reminder.isCompleted) {
+      return {
+        success: true,
+        output: `Reminder "${reminder.title}" is already marked as complete.`,
+      };
+    }
+    
+    // Mark as completed in Firestore
+    await completeReminder(id, userId);
+    
+    return {
+      success: true,
+      output: `✅ Reminder "${reminder.title}" has been marked as complete!\n\nThe reminder is now in your completed history.`,
+      // Flag for mobile to cancel local notification
+      needsLocalCancel: true,
+      notificationId: reminder.notificationId,
+    };
+  } catch (error) {
+    console.error('[AGENTIC] Error completing reminder:', error);
+    return {
+      success: false,
+      output: `Error completing reminder: ${error.message}`,
     };
   }
 }
@@ -706,6 +813,9 @@ function getDefaultCommentary(toolName, input) {
   }
   if (toolName === 'set_reminder' && input.title) {
     return `Setting reminder: ${input.title}`;
+  }
+  if (toolName === 'complete_reminder') {
+    return 'Marking reminder as complete...';
   }
   if (toolName === 'remove_reminder') {
     return 'Removing reminder...';
@@ -889,6 +999,8 @@ router.post('/', async (req, res) => {
           result = await executeViewReminder(input, req.user?.uid);
         } else if (toolName === 'set_reminder') {
           result = await executeSetReminder(input, req.user?.uid);
+        } else if (toolName === 'complete_reminder') {
+          result = await executeCompleteReminder(input, req.user?.uid);
         } else if (toolName === 'remove_reminder') {
           result = await executeRemoveReminder(input, req.user?.uid);
         } else {

@@ -1148,35 +1148,42 @@ export async function executeSetReminder(input, config) {
   }
   
   try {
-    // Schedule notification via @notifee
-    const { scheduleNotification } = await import('./notifications.js');
     const { saveReminder } = await import('../database/db.js');
     
-    const scheduleResult = await scheduleNotification({
-      title,
-      message,
-      scheduledDate: triggerDate,
-      metadata: { userId },
-    });
+    // Try to schedule notification via @notifee (graceful fallback if not available)
+    let notificationId = '';
+    let notificationScheduled = false;
     
-    if (!scheduleResult.success) {
-      return {
-        success: false,
-        output: scheduleResult.error || 'Failed to schedule notification.',
-      };
+    try {
+      const { scheduleNotification } = await import('./notifications.js');
+      const scheduleResult = await scheduleNotification({
+        title,
+        message,
+        scheduledDate: triggerDate,
+        metadata: { userId },
+      });
+      
+      if (scheduleResult.success) {
+        notificationId = scheduleResult.notificationId;
+        notificationScheduled = true;
+      } else {
+        console.warn('[REMINDER] Notification scheduling failed:', scheduleResult.error);
+      }
+    } catch (notifError) {
+      console.warn('[REMINDER] @notifee not available, saving reminder without notification:', notifError.message);
     }
     
     // Generate reminder ID
     const reminderId = `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    // Save to database
+    // Save to database (regardless of notification success)
     const reminder = {
       id: reminderId,
       userId,
       title,
       message,
       scheduledDate: triggerDate.toISOString(),
-      notificationId: scheduleResult.notificationId,
+      notificationId: notificationId,
       metadata: input.metadata || {},
     };
     
@@ -1192,9 +1199,13 @@ export async function executeSetReminder(input, config) {
       minute: '2-digit',
     });
     
+    const notifNote = notificationScheduled 
+      ? "\n\nYou'll receive a notification at that time, even if the app is closed."
+      : "\n\n⚠️ Note: Push notifications are not configured. Reminder saved but won't trigger a notification.";
+    
     return {
       success: true,
-      output: `✅ Reminder set successfully!\n\n**${title}**\n📅 ${formattedDate}\n💬 ${message}\n\nYou'll receive a notification at that time, even if the app is closed.`,
+      output: `✅ Reminder set successfully!\n\n**${title}**\n📅 ${formattedDate}\n💬 ${message}${notifNote}`,
       reminder,
     };
   } catch (error) {
@@ -1231,7 +1242,6 @@ export async function executeRemoveReminder(input, config) {
   
   try {
     const { getReminder, deleteReminder } = await import('../database/db.js');
-    const { cancelNotification } = await import('./notifications.js');
     
     // Get reminder to validate ownership and get notificationId
     const reminder = await getReminder(id, userId);
@@ -1243,8 +1253,15 @@ export async function executeRemoveReminder(input, config) {
       };
     }
     
-    // Cancel notification in OS
-    await cancelNotification(reminder.notificationId);
+    // Try to cancel notification in OS (graceful fallback if not available)
+    if (reminder.notificationId) {
+      try {
+        const { cancelNotification } = await import('./notifications.js');
+        await cancelNotification(reminder.notificationId);
+      } catch (notifError) {
+        console.warn('[REMINDER] Could not cancel notification:', notifError.message);
+      }
+    }
     
     // Delete from database
     await deleteReminder(id, userId);

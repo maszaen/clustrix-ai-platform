@@ -7,21 +7,28 @@
  * 3. Sync local DB with OS notification state
  */
 
-import { 
-  setupNotificationChannel, 
-  syncRemindersWithOS, 
-  setupForegroundHandler,
-  setupBackgroundHandler,
-} from './notifications';
-import { 
-  getReminders, 
-  cleanupPastReminders, 
-  updateReminderNotificationId 
-} from '../database/db';
 import { getStoredAuth } from './auth';
 
+let notificationsAvailable = false;
 let isInitialized = false;
 let foregroundUnsub = null;
+
+// Dynamic imports for notification functions (graceful fallback if notifee not available)
+let notificationFunctions = null;
+
+async function loadNotificationModule() {
+  try {
+    const notifications = await import('./notifications');
+    notificationFunctions = notifications;
+    notificationsAvailable = true;
+    console.log('[ReminderSync] @notifee/react-native loaded successfully');
+    return true;
+  } catch (err) {
+    console.warn('[ReminderSync] @notifee/react-native not available, notifications disabled:', err.message);
+    notificationsAvailable = false;
+    return false;
+  }
+}
 
 /**
  * Initialize notification system on app startup
@@ -34,17 +41,22 @@ export async function initializeNotifications() {
   }
   
   try {
-    // 1. Setup Android notification channel (required for Android 8+)
-    await setupNotificationChannel();
+    // Try to load notifee module
+    const loaded = await loadNotificationModule();
     
-    // 2. Setup foreground event handler
-    foregroundUnsub = setupForegroundHandler();
-    
-    // 3. Setup background event handler (for notification taps when app is backgrounded)
-    setupBackgroundHandler();
+    if (loaded && notificationFunctions) {
+      // 1. Setup Android notification channel (required for Android 8+)
+      await notificationFunctions.setupNotificationChannel();
+      
+      // 2. Setup foreground event handler
+      foregroundUnsub = notificationFunctions.setupForegroundHandler();
+      
+      // 3. Setup background event handler (for notification taps when app is backgrounded)
+      notificationFunctions.setupBackgroundHandler();
+    }
     
     isInitialized = true;
-    console.log('[ReminderSync] Notification system initialized');
+    console.log('[ReminderSync] Notification system initialized (available:', notificationsAvailable, ')');
   } catch (error) {
     console.error('[ReminderSync] Failed to initialize notifications:', error);
   }
@@ -67,6 +79,9 @@ export async function syncUserReminders() {
     
     console.log('[ReminderSync] Starting sync for user:', userId);
     
+    // Dynamic import database functions
+    const { getReminders, cleanupPastReminders } = await import('../database/db');
+    
     // 1. Clean up past reminders from database
     const cleanedCount = await cleanupPastReminders(userId);
     if (cleanedCount > 0) {
@@ -81,8 +96,11 @@ export async function syncUserReminders() {
       return { cleaned: cleanedCount, rescheduled: 0, total: 0 };
     }
     
-    // 3. Sync with OS notifications
-    const syncResult = await syncRemindersWithOS(reminders);
+    // 3. Sync with OS notifications (if available)
+    let syncResult = { rescheduled: 0 };
+    if (notificationsAvailable && notificationFunctions) {
+      syncResult = await notificationFunctions.syncRemindersWithOS(reminders);
+    }
     
     console.log('[ReminderSync] Sync complete:', {
       cleaned: cleanedCount,
@@ -111,4 +129,11 @@ export function cleanupNotifications() {
   }
   isInitialized = false;
   console.log('[ReminderSync] Notification listeners cleaned up');
+}
+
+/**
+ * Check if notifications are available
+ */
+export function areNotificationsAvailable() {
+  return notificationsAvailable;
 }

@@ -9,6 +9,7 @@ import DropdownSelect from '../components/DropdownSelect';
 import AccountScreen from './AccountScreen';
 import AgenticToolsScreen from './AgenticToolsScreen';
 import ImageModelsScreen from './ImageModelsScreen';
+import RemindersScreen from './RemindersScreen';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const LANGUAGES = [
@@ -97,13 +98,14 @@ function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved })
 }
 
 // Settings Menu Content
-function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenAgenticTools, onOpenImageModels, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout }) {
+function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenAgenticTools, onOpenImageModels, onOpenReminders, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout }) {
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuContent}>
       <SlideLeftModal.Category
         title="Preferences"
         items={[
           { icon: 'receipt-outline', title: 'Custom Instructions', description: 'Persona and preferences', onPress: onOpenCustomInstructions },
+          { icon: 'notifications-outline', title: 'Manage Reminders', description: 'View and edit scheduled reminders', onPress: onOpenReminders },
           { icon: 'search-outline', title: 'Web Search', description: 'Configure search API for Agentic Mode', onPress: onOpenAgenticTools },
           { icon: 'images-outline', title: 'Image Model', description: 'Configure image model for image gen', onPress: onOpenImageModels },
           { icon: 'person-outline', title: 'Account', description: 'Backup/restore chats', onPress: onOpenAccount },
@@ -341,6 +343,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
   const [showAccount, setShowAccount] = useState(false);
   const [showAgenticTools, setShowAgenticTools] = useState(false);
   const [showImageModels, setShowImageModels] = useState(false);
+  const [showReminders, setShowReminders] = useState(false);
   const [showSavedAlert, setShowSavedAlert] = useState(false);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
@@ -354,6 +357,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
           onOpenCustomInstructions={() => setShowCustomInstructions(true)} 
           onOpenAgenticTools={() => setShowAgenticTools(true)}
           onOpenImageModels={() => setShowImageModels(true)}
+          onOpenReminders={() => setShowReminders(true)}
           onOpenAccount={() => setShowAccount(true)}
           onOpenPrivacyPolicy={() => setShowPrivacyPolicy(true)}
           onOpenLicense={() => setShowLicense(true)}
@@ -397,6 +401,16 @@ export default function PersonalizationScreen({ visible, onClose }) {
 
       {/* Account Screen */}
       <AccountScreen visible={showAccount} onClose={() => setShowAccount(false)} />
+
+      {/* Reminders Screen */}
+      <SlideLeftModal 
+        visible={showReminders} 
+        onClose={() => setShowReminders(false)} 
+        title="Manage Reminders"
+        showGradients={false}
+      >
+        <RemindersScreen onClose={() => setShowReminders(false)} />
+      </SlideLeftModal>
 
       {/* Privacy Policy */}
       <SlideLeftModal 

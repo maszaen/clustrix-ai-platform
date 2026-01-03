@@ -272,6 +272,20 @@ export const transformCommandText = (cmdName, args) => {
         return 'List Session Files';
     }
     
+    // Reminder tools
+    if (cmdName === 'view_reminder') {
+        return 'View Reminders';
+    }
+    
+    if (cmdName === 'set_reminder') {
+        const title = args?.title || '';
+        return `Set Reminder: "${title.length > 30 ? title.substring(0, 30) + '...' : title}"`;
+    }
+    
+    if (cmdName === 'remove_reminder') {
+        return 'Remove Reminder';
+    }
+    
     if (cmdName === 'run_command') {
         const cmd = String(args || '');
         // Naive split for now to catch simple grouped commands

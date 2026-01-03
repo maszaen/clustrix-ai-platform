@@ -82,19 +82,22 @@ function MenuCategory({ title, items }) {
  * @param {boolean} showBack - Show back button (default true)
  * @param {boolean} showGradients - Show scroll-based gradients (default true)
  */
-export default function SlideLeftModal({ visible, onClose, title, children, showBack = true, showGradients = true }) {
+export default function SlideLeftModal({ visible, onClose, title, children, showBack = true, showGradients = true, triggerOpen }) {
   const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   
   // Gradient heights based on scroll position
   const [topGradientHeight, setTopGradientHeight] = useState(0);
   const [bottomGradientHeight, setBottomGradientHeight] = useState(GRADIENT_MAX_HEIGHT);
+  // Manage pointer events to prevent blocking touches during exit animation
+  const [wrapperPointerEvents, setWrapperPointerEvents] = useState('auto');
   
   // Track content and layout dimensions
   const contentHeight = useRef(0);
   const layoutHeight = useRef(0);
 
   const open = useCallback(() => {
+    setWrapperPointerEvents('auto');
     Animated.parallel([
       Animated.spring(slideAnim, {
         toValue: 0,
@@ -111,6 +114,8 @@ export default function SlideLeftModal({ visible, onClose, title, children, show
   }, [slideAnim, overlayAnim]);
 
   const close = useCallback(() => {
+    // Immediately disable pointer events on wrapper so touches pass through to underlying screens
+    setWrapperPointerEvents('none');
     Animated.parallel([
       Animated.spring(slideAnim, {
         toValue: SCREEN_WIDTH,
@@ -123,7 +128,12 @@ export default function SlideLeftModal({ visible, onClose, title, children, show
         duration: 125,
         useNativeDriver: true,
       }),
-    ]).start(() => onClose?.());
+    ]).start((result) => {
+      // Only trigger onClose if animation finished (wasn't interrupted by an open call)
+      if (result.finished) {
+        onClose?.();
+      }
+    });
   }, [slideAnim, overlayAnim, onClose]);
 
   // Handle scroll to update gradient heights
@@ -154,7 +164,7 @@ export default function SlideLeftModal({ visible, onClose, title, children, show
       setTopGradientHeight(0);
       setBottomGradientHeight(GRADIENT_MAX_HEIGHT);
     }
-  }, [visible, open]);
+  }, [visible, open, triggerOpen]);
 
   useEffect(() => {
     if (!visible) return;
@@ -168,7 +178,7 @@ export default function SlideLeftModal({ visible, onClose, title, children, show
   if (!visible) return null;
 
   return (
-    <View style={styles.wrapper}>
+    <View style={styles.wrapper} pointerEvents={wrapperPointerEvents}>
       <Animated.View style={[styles.overlay, { opacity: overlayAnim }]} />
       <Animated.View style={[styles.container, { transform: [{ translateX: slideAnim }] }]}>
         <View style={styles.header}>

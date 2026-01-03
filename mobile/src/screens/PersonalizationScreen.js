@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
@@ -351,17 +351,20 @@ export default function PersonalizationScreen({ visible, onClose }) {
   const [showLicense, setShowLicense] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [reminderRefreshKey, setReminderRefreshKey] = useState(0);
+  const [reminderFormTrigger, setReminderFormTrigger] = useState(0);
   
   // Reminder form handlers
-  const handleOpenAddReminder = () => {
+  const handleOpenAddReminder = useCallback(() => {
     setEditingReminder(null);
     setShowReminderForm(true);
-  };
+    setReminderFormTrigger(prev => prev + 1);
+  }, []);
   
-  const handleOpenEditReminder = (reminder) => {
+  const handleOpenEditReminder = useCallback((reminder) => {
     setEditingReminder(reminder);
     setShowReminderForm(true);
-  };
+    setReminderFormTrigger(prev => prev + 1);
+  }, []);
   
   const handleReminderFormClose = () => {
     setShowReminderForm(false);
@@ -447,6 +450,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
         onClose={handleReminderFormClose} 
         title={editingReminder ? "Edit Reminder" : "New Reminder"}
         showGradients={false}
+        triggerOpen={reminderFormTrigger}
       >
         <ReminderFormContent 
           editingReminder={editingReminder}

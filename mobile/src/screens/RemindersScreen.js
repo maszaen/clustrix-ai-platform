@@ -161,7 +161,7 @@ export function ReminderFormContent({ editingReminder, onSave, onClose }) {
   
   return (
     <>
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.subContainer} contentContainerStyle={styles.content}>
+      <View style={[styles.subContainer, styles.content]}>
         {/* Title */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Title</Text>
@@ -212,8 +212,9 @@ export function ReminderFormContent({ editingReminder, onSave, onClose }) {
               <Pressable
                 key={index}
                 style={[styles.presetBtn, selectedPreset === index && styles.presetBtnActive]}
-                onPress={() => handlePresetSelect(preset, index)}
+                onPress={() => requestAnimationFrame(() => handlePresetSelect(preset, index))}
                 android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+                delayPressIn={0}
               >
                 <Text style={[styles.presetText, selectedPreset === index && styles.presetTextActive]}>
                   {preset.label}
@@ -223,7 +224,12 @@ export function ReminderFormContent({ editingReminder, onSave, onClose }) {
           </View>
           
           {/* Selected Time Display */}
-          <Pressable style={styles.timeDisplay} onPress={() => setShowDatePicker(true)} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+          <Pressable 
+            style={styles.timeDisplay} 
+            onPress={() => requestAnimationFrame(() => setShowDatePicker(true))} 
+            android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+            delayPressIn={0}
+          >
             <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
             <Text style={styles.timeText}>
               {scheduledDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
@@ -252,7 +258,7 @@ export function ReminderFormContent({ editingReminder, onSave, onClose }) {
             )}
           </Pressable>
         </View>
-      </ScrollView>
+      </View>
       
       {showDatePicker && (
         <DateTimePicker value={scheduledDate} mode="date" display="default" onChange={onDateChange} minimumDate={new Date()} />
@@ -381,13 +387,14 @@ export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm
   
   return (
     <>
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.subContainer} contentContainerStyle={styles.content}>
+      <View style={[styles.subContainer, styles.content]}>
         {/* Add Button */}
         <View style={styles.section}>
           <Pressable 
             style={styles.addBtn}
-            onPress={onOpenAddForm}
+            onPress={() => requestAnimationFrame(onOpenAddForm)}
             android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+            delayPressIn={0}
           >
             <Ionicons name="add-circle-outline" size={20} color={COLORS.primary} />
             <Text style={styles.addBtnText}>Add Reminder</Text>
@@ -414,18 +421,35 @@ export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm
                   <Pressable
                     key={reminder.id}
                     style={styles.reminderItem}
-                    onPress={() => onOpenEditForm?.(reminder)}
-                    android_ripple={{ color: 'rgba(255,255,255,0.05)' }}
+                    onPress={() => {
+                        requestAnimationFrame(() => {
+                           onOpenEditForm?.(reminder);
+                        });
+                    }}
+                    android_ripple={{ color: 'rgba(255,255,255,0.08)', foreground: true }}
+                    delayPressIn={0}
                   >
                     <View style={styles.reminderLeft}>
                       <Text style={styles.reminderTitle} numberOfLines={1}>{reminder.title}</Text>
                       <Text style={styles.reminderTime}>{formatDateTime(reminder.scheduledDate)}</Text>
                     </View>
                     <Text style={styles.reminderBadge}>{getTimeLeft(reminder.scheduledDate, false)}</Text>
-                    <Pressable style={styles.iconBtn} onPress={() => handleAction(reminder, 'complete')} hitSlop={8} android_ripple={{ color: COLORS.success + '30', borderless: true }}>
+                    <Pressable 
+                        style={styles.iconBtn} 
+                        onPress={() => handleAction(reminder, 'complete')} 
+                        hitSlop={8} 
+                        android_ripple={{ color: COLORS.success + '30', borderless: true }}
+                        delayPressIn={0}
+                    >
                       <Ionicons name="checkmark-circle-outline" size={22} color={COLORS.success} />
                     </Pressable>
-                    <Pressable style={styles.iconBtn} onPress={() => handleAction(reminder, 'delete')} hitSlop={8} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
+                    <Pressable 
+                        style={styles.iconBtn} 
+                        onPress={() => handleAction(reminder, 'delete')} 
+                        hitSlop={8} 
+                        android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
+                        delayPressIn={0}
+                    >
                       <Ionicons name="trash-outline" size={20} color={COLORS.fgMuted} />
                     </Pressable>
                   </Pressable>
@@ -441,13 +465,21 @@ export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm
                   <Pressable
                     key={reminder.id}
                     style={[styles.reminderItem, styles.reminderItemCompleted]}
+                    onPress={() => requestAnimationFrame(() => handleAction(reminder, 'delete'))}
                     android_ripple={{ color: 'rgba(255,255,255,0.02)' }}
+                    delayPressIn={0}
                   >
                     <View style={styles.reminderLeft}>
                       <Text style={[styles.reminderTitle, styles.reminderTitleCompleted]} numberOfLines={1}>{reminder.title}</Text>
                       <Text style={styles.reminderTime}>Completed</Text>
                     </View>
-                    <Pressable style={styles.iconBtn} onPress={() => handleAction(reminder, 'delete')} hitSlop={8} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
+                    <Pressable 
+                        style={styles.iconBtn} 
+                        onPress={() => requestAnimationFrame(() => handleAction(reminder, 'delete'))} 
+                        hitSlop={8} 
+                        android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
+                        delayPressIn={0}
+                    >
                       <Ionicons name="trash-outline" size={20} color={COLORS.fgMuted} />
                     </Pressable>
                   </Pressable>
@@ -456,7 +488,7 @@ export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm
             )}
           </>
         )}
-      </ScrollView>
+      </View>
       
       <AlertModal
         visible={showActionAlert}

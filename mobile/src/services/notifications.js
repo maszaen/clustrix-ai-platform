@@ -144,7 +144,7 @@ export async function scheduleNotification({ title, message, scheduledDate, meta
         android: {
           channelId: REMINDER_CHANNEL_ID,
           pressAction: { id: 'default' },
-          smallIcon: 'ic_notification', // Make sure this exists in android/app/src/main/res
+          // smallIcon: 'ic_notification', // Use default app icon
         },
         ios: {
           sound: 'default',

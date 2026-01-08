@@ -450,7 +450,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
         visible={showReminderForm} 
         onClose={handleReminderFormClose} 
         title={editingReminder ? "Edit Reminder" : "New Reminder"}
-        showGradients={false}
+        showGradients={true}
         triggerOpen={reminderFormTrigger}
       >
         <ReminderFormContent 

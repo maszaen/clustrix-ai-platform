@@ -9,7 +9,6 @@ import {
   View, 
   Text, 
   StyleSheet, 
-  ScrollView, 
   Pressable, 
   TextInput,
   ActivityIndicator,
@@ -29,16 +28,62 @@ import {
   deleteReminder,
   completeReminder,
 } from '../database/db';
+import { BellOff, BellPlus } from 'lucide-react-native';
 
-// Quick time presets
+// Quick time presets for setting the main reminder time (no Custom button - use time container)
 const TIME_PRESETS = [
-  { label: 'In 1 hour', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 1); return d; } },
-  { label: 'In 3 hours', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 3); return d; } },
+  { label: 'In 1 hour', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 1); d.setMinutes(0, 0, 0); return d; } },
+  { label: 'In 3 hours', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 3); d.setMinutes(0, 0, 0); return d; } },
   { label: 'Tomorrow 9 AM', getValue: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; } },
   { label: 'Tomorrow 6 PM', getValue: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(18, 0, 0, 0); return d; } },
-  { label: 'In 1 week', getValue: () => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(9, 0, 0, 0); return d; } },
-  { label: 'Custom...', getValue: () => null },
+  { label: 'Next week', getValue: () => { const d = new Date(); d.setDate(d.getDate() + 7); d.setHours(9, 0, 0, 0); return d; } },
 ];
+
+/**
+ * Get available "Remind me before" options based on time distance
+ * @param {Date} scheduledDate - The main reminder time
+ * @returns {Array} Available pre-reminder options
+ */
+function getAvailableWhenOptions(scheduledDate) {
+  if (!scheduledDate) return [];
+  
+  const now = Date.now();
+  const targetTime = scheduledDate.getTime();
+  const diffMs = targetTime - now;
+  const diffHours = diffMs / (1000 * 60 * 60);
+  const diffDays = diffHours / 24;
+  const diffWeeks = diffDays / 7;
+  const diffMonths = diffDays / 30;
+  
+  const options = [];
+  
+  // > 3 hours: show 1 hour option
+  if (diffHours > 3) {
+    options.push({ label: '1 hour before', minutes: 60 });
+  }
+  
+  // > 5 hours: show 3 hours option
+  if (diffHours > 5) {
+    options.push({ label: '3 hours before', minutes: 180 });
+  }
+  
+  // > 1 day: show 1 day option
+  if (diffDays > 1) {
+    options.push({ label: '1 day before', minutes: 1440 });
+  }
+  
+  // > 2 weeks: show 1 week option
+  if (diffWeeks > 2) {
+    options.push({ label: '1 week before', minutes: 10080 });
+  }
+  
+  // > 2 months: show 1 month option
+  if (diffMonths > 2) {
+    options.push({ label: '1 month before', minutes: 43200 });
+  }
+  
+  return options;
+}
 
 // ============================================================
 // ADD/EDIT FORM CONTENT
@@ -50,11 +95,19 @@ export function ReminderFormContent({ editingReminder, onSave, onClose }) {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [notifDesc, setNotifDesc] = useState('');
-  const [scheduledDate, setScheduledDate] = useState(new Date());
+  // Start with null - user must set time explicitly
+  const [scheduledDate, setScheduledDate] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState(null);
+  // Track if user used custom picker (hides preset shortcuts)
+  const [isCustomTime, setIsCustomTime] = useState(false);
+  // "Remind me before" selection (optional pre-reminder)
+  const [selectedWhen, setSelectedWhen] = useState(null);
+  
+  // Calculate available WHEN options based on scheduled time
+  const whenOptions = scheduledDate ? getAvailableWhenOptions(scheduledDate) : [];
   
   useEffect(() => {
     if (editingReminder) {
@@ -62,71 +115,176 @@ export function ReminderFormContent({ editingReminder, onSave, onClose }) {
       setMessage(editingReminder.message || '');
       setNotifDesc(editingReminder.metadata?.notifDesc || '');
       setScheduledDate(new Date(editingReminder.scheduledDate));
+      // Restore selected WHEN if exists
+      if (editingReminder.metadata?.whenMinutes) {
+        setSelectedWhen(editingReminder.metadata.whenMinutes);
+      }
     } else {
-      const defaultDate = new Date();
-      defaultDate.setHours(defaultDate.getHours() + 1);
-      defaultDate.setMinutes(0);
+      // Reset form - scheduledDate starts as null
       setTitle('');
       setMessage('');
       setNotifDesc('');
-      setScheduledDate(defaultDate);
+      setScheduledDate(null);
       setSelectedPreset(null);
+      setIsCustomTime(false);
+      setSelectedWhen(null);
     }
   }, [editingReminder]);
   
+  // Reset WHEN selection if it's no longer valid after time change
+  useEffect(() => {
+    if (selectedWhen && whenOptions.length > 0) {
+      const stillValid = whenOptions.some(opt => opt.minutes === selectedWhen);
+      if (!stillValid) {
+        setSelectedWhen(null);
+      }
+    }
+  }, [scheduledDate, whenOptions, selectedWhen]);
+  
   const handlePresetSelect = (preset, index) => {
-    const date = preset.getValue();
-    if (date) {
-      setScheduledDate(date);
+    // Toggle off if clicking the same preset
+    if (selectedPreset === index) {
+      setScheduledDate(null);
+      setSelectedPreset(null);
+      setIsCustomTime(false);
+      return;
+    }
+    
+    const value = preset.getValue();
+    if (value) {
+      setScheduledDate(value);
       setSelectedPreset(index);
-    } else {
-      setShowDatePicker(true);
-      setSelectedPreset(index);
+      setIsCustomTime(false); // Using shortcut, not custom
     }
   };
   
+  // Open custom date picker (from time container)
+  const handleCustomTimePress = () => {
+    setShowDatePicker(true);
+    // Will mark as custom after user selects date
+  };
+  
   const handleSave = async () => {
-    if (!title.trim() || !userId) return;
+    // Validate: must have title, userId, and scheduledDate
+    if (!title.trim() || !userId || !scheduledDate) return;
     if (scheduledDate <= new Date()) return;
     
     setSaving(true);
     try {
+      // Cancel old notifications if editing
       if (editingReminder) {
-        if (editingReminder.notificationId) {
-          try {
-            const { cancelNotification } = await import('../services/notifications');
-            await cancelNotification(editingReminder.notificationId);
-          } catch (e) {}
+        const { cancelNotification } = await import('../services/notifications');
+        // Cancel all notification IDs (main + pre-reminders)
+        const oldNotifIds = [
+          editingReminder.notificationId,
+          editingReminder.metadata?.autoPreNotifId,
+          editingReminder.metadata?.whenNotifId,
+        ].filter(Boolean);
+        
+        for (const nid of oldNotifIds) {
+          try { await cancelNotification(nid); } catch (e) {}
         }
         await deleteReminder(editingReminder.id, userId);
       }
       
       const reminderId = editingReminder?.id || `reminder_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const notificationBody = notifDesc.trim() || message.trim() || title.trim();
+      const { scheduleNotification } = await import('../services/notifications');
       
-      let notificationId = '';
+      // Calculate time differences
+      const now = Date.now();
+      const targetTime = scheduledDate.getTime();
+      const diffMinutes = (targetTime - now) / (1000 * 60);
+      
+      // ========================================
+      // NOTIFICATION 1: Main reminder (WAJIB)
+      // ========================================
+      let mainNotifId = '';
       try {
-        const { scheduleNotification } = await import('../services/notifications');
         const result = await scheduleNotification({
           title: title.trim(),
           message: notificationBody,
           scheduledDate,
-          metadata: { userId, reminderId },
+          metadata: { userId, reminderId, type: 'main' },
         });
-        if (result.success) notificationId = result.notificationId;
+        if (result.success) mainNotifId = result.notificationId;
       } catch (e) {
-        console.warn('[Reminders] Notification not available:', e.message);
+        console.warn('[Reminders] Main notification failed:', e.message);
       }
       
+      // ========================================
+      // NOTIFICATION 2: Auto pre-reminder (WAJIB if > 30 min)
+      // - > 90 minutes: 1 hour before
+      // - > 30 minutes but <= 90: 30 minutes before
+      // ========================================
+      let autoPreNotifId = '';
+      if (diffMinutes > 30) {
+        const autoPreMinutes = diffMinutes > 90 ? 60 : 30;
+        const autoPreDate = new Date(targetTime - autoPreMinutes * 60 * 1000);
+        
+        // Only schedule if it's in the future
+        if (autoPreDate.getTime() > now) {
+          try {
+            const preLabel = autoPreMinutes === 60 ? '1 hour' : '30 minutes';
+            const result = await scheduleNotification({
+              title: `⏰ ${preLabel} left: ${title.trim()}`,
+              message: notificationBody,
+              scheduledDate: autoPreDate,
+              metadata: { userId, reminderId, type: 'auto-pre' },
+            });
+            if (result.success) autoPreNotifId = result.notificationId;
+          } catch (e) {
+            console.warn('[Reminders] Auto pre-notification failed:', e.message);
+          }
+        }
+      }
+      
+      // ========================================
+      // NOTIFICATION 3: User-selected WHEN (OPTIONAL)
+      // ========================================
+      let whenNotifId = '';
+      if (selectedWhen) {
+        const whenDate = new Date(targetTime - selectedWhen * 60 * 1000);
+        
+        // Only schedule if it's in the future and different from auto pre-reminder
+        if (whenDate.getTime() > now) {
+          // Avoid duplicate: don't schedule if same as auto pre-reminder (within 5 min tolerance)
+          const autoPreMinutes = diffMinutes > 90 ? 60 : 30;
+          const isDuplicate = Math.abs(selectedWhen - autoPreMinutes) < 5;
+          
+          if (!isDuplicate) {
+            try {
+              const whenOpt = whenOptions.find(o => o.minutes === selectedWhen);
+              const whenLabel = whenOpt?.label || `${selectedWhen} min before`;
+              const result = await scheduleNotification({
+                title: `📅 Reminder: ${title.trim()}`,
+                message: `${whenLabel} - ${notificationBody}`,
+                scheduledDate: whenDate,
+                metadata: { userId, reminderId, type: 'when-pre' },
+              });
+              if (result.success) whenNotifId = result.notificationId;
+            } catch (e) {
+              console.warn('[Reminders] WHEN notification failed:', e.message);
+            }
+          }
+        }
+      }
+      
+      // Save reminder to database with all notification IDs
       const reminder = {
         id: reminderId,
         userId,
         title: title.trim(),
         message: message.trim() || title.trim(),
         scheduledDate: scheduledDate.toISOString(),
-        notificationId,
+        notificationId: mainNotifId,
         isCompleted: false,
-        metadata: { notifDesc: notifDesc.trim() },
+        metadata: { 
+          notifDesc: notifDesc.trim(),
+          autoPreNotifId,
+          whenNotifId,
+          whenMinutes: selectedWhen,
+        },
       };
       
       await saveReminder(reminder);
@@ -142,18 +300,26 @@ export function ReminderFormContent({ editingReminder, onSave, onClose }) {
   const onDateChange = (event, selected) => {
     setShowDatePicker(false);
     if (selected) {
-      const newDate = new Date(scheduledDate);
+      // If scheduledDate is null, create new date, otherwise update existing
+      const newDate = scheduledDate ? new Date(scheduledDate) : new Date();
       newDate.setFullYear(selected.getFullYear());
       newDate.setMonth(selected.getMonth());
       newDate.setDate(selected.getDate());
+      // If first time setting, default to next hour
+      if (!scheduledDate) {
+        newDate.setHours(newDate.getHours() + 1, 0, 0, 0);
+      }
       setScheduledDate(newDate);
+      // Mark as custom time (hide presets), clear preset selection
+      setIsCustomTime(true);
+      setSelectedPreset(null);
       setTimeout(() => setShowTimePicker(true), 300);
     }
   };
   
   const onTimeChange = (event, selected) => {
     setShowTimePicker(false);
-    if (selected) {
+    if (selected && scheduledDate) {
       const newDate = new Date(scheduledDate);
       newDate.setHours(selected.getHours());
       newDate.setMinutes(selected.getMinutes());
@@ -161,12 +327,15 @@ export function ReminderFormContent({ editingReminder, onSave, onClose }) {
     }
   };
   
+  // Check if save is allowed
+  const canSave = title.trim() && scheduledDate && scheduledDate > new Date();
+  
   return (
     <>
       <View style={[styles.subContainer, styles.content]}>
         {/* Title */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Title</Text>
+          <Text style={styles.sectionTitle}>Reminder Title</Text>
           <TextInput
             style={styles.input}
             value={title}
@@ -203,52 +372,100 @@ export function ReminderFormContent({ editingReminder, onSave, onClose }) {
             placeholderTextColor={COLORS.fgMuted}
             maxLength={200}
           />
-          <Text style={styles.hint}>Leave empty to use title as notification text.</Text>
         </View>
         
-        {/* When - Presets */}
+        {/* Schedule Time - Presets (hide if user used custom picker) */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>When</Text>
-          <View style={styles.presetGrid}>
-            {TIME_PRESETS.map((preset, index) => (
-              <Pressable
-                key={index}
-                style={[styles.presetBtn, selectedPreset === index && styles.presetBtnActive]}
-                onPress={() => requestAnimationFrame(() => handlePresetSelect(preset, index))}
-                android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
-                delayPressIn={0}
-              >
-                <Text style={[styles.presetText, selectedPreset === index && styles.presetTextActive]}>
-                  {preset.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <Text style={styles.sectionTitle}>Schedule</Text>
           
-          {/* Selected Time Display */}
+          {/* Show preset shortcuts only if user hasn't used custom picker */}
+          {!isCustomTime && (
+            <View style={[styles.presetGrid, {marginBottom: 10}]}>
+              {TIME_PRESETS.map((preset, index) => (
+                <Pressable
+                  key={index}
+                  style={[styles.presetBtn, selectedPreset === index && styles.presetBtnActive]}
+                  onPress={() => requestAnimationFrame(() => handlePresetSelect(preset, index))}
+                  android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+                  delayPressIn={0}
+                >
+                  <Text style={[styles.presetText, selectedPreset === index && styles.presetTextActive]}>
+                    {preset.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          
+          {/* Time Display - always clickable (for custom time selection) */}
           <Pressable 
-            style={styles.timeDisplay} 
-            onPress={() => requestAnimationFrame(() => setShowDatePicker(true))} 
+            style={[styles.timeDisplay, !scheduledDate && styles.timeDisplayEmpty]} 
+            onPress={() => requestAnimationFrame(() => handleCustomTimePress())} 
             android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
             delayPressIn={0}
           >
-            <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
-            <Text style={styles.timeText}>
-              {scheduledDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-            </Text>
-            <Ionicons name="time-outline" size={18} color={COLORS.primary} />
-            <Text style={styles.timeText}>
-              {scheduledDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-            </Text>
+            {scheduledDate ? (
+              <>
+                <View style={styles.timeRowIcon}>
+                  <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.timeText}>
+                    {scheduledDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </Text>
+                </View>
+                <View style={styles.timeRowIcon}>
+                  <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+                  <Text style={styles.timeText}>
+                    {scheduledDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <Ionicons name="calendar-outline" size={18} color={COLORS.fgMuted} />
+                <Text style={styles.noTimeText}>Tap to select date & time</Text>
+              </>
+            )}
           </Pressable>
         </View>
+        
+        {/* Remind Me Before - Only show if time is set and options available */}
+        {scheduledDate && whenOptions.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Remind me before (optional)</Text>
+            <View style={styles.presetGrid}>
+              {whenOptions.map((option, index) => (
+                <Pressable
+                  key={index}
+                  style={[
+                    styles.presetBtn, 
+                    styles.whenBtn,
+                    selectedWhen === option.minutes && styles.presetBtnActive
+                  ]}
+                  onPress={() => {
+                    // Toggle selection
+                    setSelectedWhen(selectedWhen === option.minutes ? null : option.minutes);
+                  }}
+                  android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+                  delayPressIn={0}
+                >
+                  <Text style={[
+                    styles.presetText, 
+                    selectedWhen === option.minutes && styles.presetTextActive
+                  ]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
         
         {/* Save Button */}
         <View style={styles.section}>
           <Pressable 
-            style={[styles.saveBtn, (!title.trim() || saving) && styles.saveBtnDisabled]}
+            style={[styles.saveBtn, !canSave && styles.saveBtnDisabled]}
             onPress={handleSave}
-            disabled={!title.trim() || saving}
+            disabled={!canSave || saving}
             android_ripple={{ color: 'rgba(255,255,255,0.2)' }}
           >
             {saving ? (
@@ -259,14 +476,28 @@ export function ReminderFormContent({ editingReminder, onSave, onClose }) {
               </Text>
             )}
           </Pressable>
+          {/* {!scheduledDate && (
+            <Text style={styles.hintCenter}>Please select a schedule time first</Text>
+          )} */}
         </View>
       </View>
       
       {showDatePicker && (
-        <DateTimePicker value={scheduledDate} mode="date" display="default" onChange={onDateChange} minimumDate={new Date()} />
+        <DateTimePicker 
+          value={scheduledDate || new Date()} 
+          mode="date" 
+          display="default" 
+          onChange={onDateChange} 
+          minimumDate={new Date()} 
+        />
       )}
-      {showTimePicker && (
-        <DateTimePicker value={scheduledDate} mode="time" display="default" onChange={onTimeChange} />
+      {showTimePicker && scheduledDate && (
+        <DateTimePicker 
+          value={scheduledDate} 
+          mode="time" 
+          display="default" 
+          onChange={onTimeChange} 
+        />
       )}
     </>
   );
@@ -452,7 +683,7 @@ export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm
             android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
             delayPressIn={0}
           >
-            <Ionicons name="add-circle-outline" size={20} color={COLORS.primary} />
+            <BellPlus strokeWidth={1.5} size={20} color={COLORS.primary} />
             <Text style={styles.addBtnText}>Add Reminder</Text>
           </Pressable>
         </View>
@@ -463,7 +694,7 @@ export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm
           </View>
         ) : reminders.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-off-outline" size={40} color={COLORS.fgMuted} />
+            <BellOff strokeWidth={1.5} size={45} color={COLORS.fgMuted} />
             <Text style={styles.emptyTitle}>No Reminders</Text>
             <Text style={styles.emptyText}>Tap above to create one.</Text>
           </View>
@@ -598,11 +829,11 @@ const styles = StyleSheet.create({
   presetGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
+    rowGap: 8,
+    gap: 7,
   },
   presetBtn: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: COLORS.inputBg,
@@ -620,25 +851,47 @@ const styles = StyleSheet.create({
   },
   presetTextActive: {
     color: COLORS.primary,
-    fontFamily: FONTS.display,
   },
   timeDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 16,
     backgroundColor: COLORS.inputBg,
     borderRadius: 15,
     padding: 14,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
+  timeDisplayEmpty: {
+    gap: 10,
+  },
+  timeRowIcon: {
+    gap: 10,
+    display: 'flex',
+    flexDirection: 'row',
+  },
   timeText: {
     color: COLORS.fg,
     fontSize: 14,
+    fontFamily: FONTS.displayItalic,
+  },
+  noTimeText: {
+    color: COLORS.fgMuted,
+    fontSize: 14,
     fontFamily: FONTS.sans,
+    fontStyle: 'italic',
+  },
+  whenBtn: {
+    backgroundColor: COLORS.inputBg,
+  },
+  hintCenter: {
+    color: COLORS.fgMuted,
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: 'center',
   },
   saveBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.accent,
     borderRadius: 15,
     padding: 14,
     alignItems: 'center',
@@ -665,7 +918,7 @@ const styles = StyleSheet.create({
   addBtnText: {
     color: COLORS.primary,
     fontSize: 14,
-    fontFamily: FONTS.display,
+    fontFamily: FONTS.displayItalic,
   },
   loadingContainer: {
     paddingVertical: 40,

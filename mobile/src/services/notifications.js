@@ -168,7 +168,21 @@ export async function scheduleNotification({ title, message, scheduledDate, meta
     // Calculate seconds until trigger (for logging)
     const secondsUntilTrigger = Math.floor((triggerDate.getTime() - Date.now()) / 1000);
     
-    // Schedule notification using date trigger
+    // Use seconds-based trigger for more precision on short delays
+    // DATE trigger can have slight delays on some Android versions
+    const triggerConfig = secondsUntilTrigger < 3600 
+      ? {
+          // For notifications < 1 hour away, use seconds trigger (more precise)
+          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+          seconds: Math.max(1, secondsUntilTrigger),
+        }
+      : {
+          // For notifications > 1 hour away, use date trigger
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: triggerDate,
+        };
+    
+    // Schedule notification
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title,
@@ -181,10 +195,7 @@ export async function scheduleNotification({ title, message, scheduledDate, meta
           channelId: REMINDER_CHANNEL_ID,
         }),
       },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: triggerDate,
-      },
+      trigger: triggerConfig,
     });
     
     console.log(`[Notifications] Scheduled notification ${notificationId} for ${triggerDate.toISOString()} (in ${secondsUntilTrigger}s)`);

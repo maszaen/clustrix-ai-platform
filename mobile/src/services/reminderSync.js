@@ -13,7 +13,7 @@ let notificationsAvailable = false;
 let isInitialized = false;
 let foregroundUnsub = null;
 
-// Dynamic imports for notification functions (graceful fallback if notifee not available)
+// Dynamic imports for notification functions (graceful fallback if expo-notifications not available)
 let notificationFunctions = null;
 
 async function loadNotificationModule() {
@@ -21,10 +21,10 @@ async function loadNotificationModule() {
     const notifications = await import('./notifications');
     notificationFunctions = notifications;
     notificationsAvailable = true;
-    console.log('[ReminderSync] @notifee/react-native loaded successfully');
+    console.log('[ReminderSync] expo-notifications loaded successfully');
     return true;
   } catch (err) {
-    console.warn('[ReminderSync] @notifee/react-native not available, notifications disabled:', err.message);
+    console.warn('[ReminderSync] expo-notifications not available, notifications disabled:', err.message);
     notificationsAvailable = false;
     return false;
   }
@@ -41,7 +41,7 @@ export async function initializeNotifications() {
   }
   
   try {
-    // Try to load notifee module
+    // Try to load expo-notifications module
     const loaded = await loadNotificationModule();
     
     if (loaded && notificationFunctions) {
@@ -82,11 +82,12 @@ export async function syncUserReminders() {
     // Dynamic import database functions
     const { getReminders, cleanupPastReminders } = await import('../database/db');
     
-    // 1. Clean up past reminders from database
-    const cleanedCount = await cleanupPastReminders(userId);
-    if (cleanedCount > 0) {
-      console.log(`[ReminderSync] Cleaned ${cleanedCount} past reminders from DB`);
-    }
+    // 1. Clean up past reminders from database - DISABLED to keep overdue reminders visible
+    // const cleanedCount = await cleanupPastReminders(userId);
+    // if (cleanedCount > 0) {
+    //   console.log(`[ReminderSync] Cleaned ${cleanedCount} past reminders from DB`);
+    // }
+    const cleanedCount = 0;
     
     // 2. Get remaining active reminders
     const reminders = await getReminders(userId);

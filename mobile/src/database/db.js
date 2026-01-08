@@ -906,7 +906,7 @@ export async function cleanupPastReminders(userId) {
 /**
  * Update reminder's notificationId (for re-scheduling)
  * @param {string} id - Reminder ID
- * @param {string} notificationId - New notification ID from @notifee
+ * @param {string} notificationId - New notification ID from expo-notifications
  */
 export async function updateReminderNotificationId(id, notificationId) {
   await db.runAsync(

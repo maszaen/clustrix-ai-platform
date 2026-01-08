@@ -52,6 +52,7 @@ import { PENCIL, LOGO_SVG, DIAMOND_LOGO_HTML_LOADER } from './src/constants/stri
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { setupNotificationChannel } from './src/services/notifications';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Base sidebar width sits at ~83% of the screen so users can peek the main page
@@ -141,6 +142,11 @@ function WelcomeOverlay({ message, accentColor, visible, onFadeComplete }) {
 
 function MainApp() {
   const insets = useSafeAreaInsets();
+  
+  // Initialize notification channel
+  useEffect(() => {
+    setupNotificationChannel();
+  }, []);
   const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime, settings, updateSettings, splashMessage, setSplashComplete, setIsLoadingSession } = useApp();
   const [showPersonalization, setShowPersonalization] = useState(false);
   const [showModels, setShowModels] = useState(false);

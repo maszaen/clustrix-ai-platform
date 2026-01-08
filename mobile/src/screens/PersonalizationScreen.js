@@ -99,13 +99,14 @@ function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved })
 
 // Settings Menu Content
 function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenAgenticTools, onOpenImageModels, onOpenReminders, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout }) {
+  const { isLoggedIn } = useApp();
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuContent}>
       <SlideLeftModal.Category
         title="Preferences"
         items={[
           { icon: 'receipt-outline', title: 'Custom Instructions', description: 'Persona and preferences', onPress: onOpenCustomInstructions },
-          { icon: 'notifications-outline', title: 'Manage Reminders', description: 'View and edit scheduled reminders', onPress: onOpenReminders },
+          { icon: 'notifications-outline', title: 'Manage Reminders', description: 'View and edit scheduled reminders', onPress: () => isLoggedIn ? onOpenReminders() : onOpenAccount() },
           { icon: 'search-outline', title: 'Web Search', description: 'Configure search API for Agentic Mode', onPress: onOpenAgenticTools },
           { icon: 'images-outline', title: 'Image Model', description: 'Configure image model for image gen', onPress: onOpenImageModels },
           { icon: 'person-outline', title: 'Account', description: 'Backup/restore chats', onPress: onOpenAccount },

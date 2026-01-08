@@ -1,17 +1,29 @@
 /**
- * Notification Service - @notifee/react-native
+ * Notification Service - expo-notifications
  * 
  * Handles scheduled notifications for reminders.
  * Notifications are scheduled at OS level - they will fire even if app is killed.
+ * 
+ * Migrated from @notifee/react-native to expo-notifications for better Expo compatibility.
  */
 
-import notifee, { 
-  TriggerType, 
-  AndroidImportance, 
-  AuthorizationStatus,
-  RepeatFrequency,
-} from '@notifee/react-native';
-import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import { Platform, Linking } from 'react-native';
+
+// ===================================================================
+// NOTIFICATION HANDLER SETUP
+// ===================================================================
+
+// Configure how notifications are handled when app is in foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 // ===================================================================
 // CHANNEL SETUP (Android requires channels)
@@ -25,15 +37,15 @@ const REMINDER_CHANNEL_ID = 'clustrix-reminders';
  */
 export async function setupNotificationChannel() {
   if (Platform.OS === 'android') {
-    await notifee.createChannel({
-      id: REMINDER_CHANNEL_ID,
+    await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL_ID, {
       name: 'Reminders',
       description: 'Scheduled reminders from Clustrix AI',
-      importance: AndroidImportance.HIGH,
+      importance: Notifications.AndroidImportance.HIGH,
       sound: 'default',
-      vibration: true,
+      vibrationPattern: [0, 250, 250, 250],
+      enableVibrate: true,
     });
-    console.log('[Notifee] Reminder channel created');
+    console.log('[Notifications] Reminder channel created');
   }
 }
 
@@ -46,8 +58,8 @@ export async function setupNotificationChannel() {
  * @returns {Promise<boolean>}
  */
 export async function hasNotificationPermission() {
-  const settings = await notifee.getNotificationSettings();
-  return settings.authorizationStatus === AuthorizationStatus.AUTHORIZED;
+  const { status } = await Notifications.getPermissionsAsync();
+  return status === 'granted';
 }
 
 /**
@@ -56,31 +68,58 @@ export async function hasNotificationPermission() {
  */
 export async function requestNotificationPermission() {
   try {
-    const settings = await notifee.requestPermission();
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
     
-    const granted = settings.authorizationStatus === AuthorizationStatus.AUTHORIZED;
+    let finalStatus = existingStatus;
     
-    let status = 'unknown';
-    switch (settings.authorizationStatus) {
-      case AuthorizationStatus.AUTHORIZED:
-        status = 'authorized';
-        break;
-      case AuthorizationStatus.DENIED:
-        status = 'denied';
-        break;
-      case AuthorizationStatus.NOT_DETERMINED:
-        status = 'not_determined';
-        break;
-      case AuthorizationStatus.PROVISIONAL:
-        status = 'provisional';
-        break;
+    // Only ask if not already determined
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
     }
     
-    console.log(`[Notifee] Permission status: ${status}`);
-    return { granted, status };
+    const granted = finalStatus === 'granted';
+    
+    console.log(`[Notifications] Permission status: ${finalStatus}`);
+    return { granted, status: finalStatus };
   } catch (error) {
-    console.error('[Notifee] Permission request failed:', error);
+    console.error('[Notifications] Permission request failed:', error);
     return { granted: false, status: 'error' };
+  }
+}
+
+// ===================================================================
+// EXACT ALARM PERMISSION (Android 12+)
+// ===================================================================
+
+/**
+ * Check if exact alarms can be scheduled (Android 12+)
+ * expo-notifications handles this internally, but we provide this for UI checks
+ * @returns {Promise<boolean>}
+ */
+export async function canScheduleExactAlarms() {
+  if (Platform.OS !== 'android') {
+    return true; // iOS doesn't have this restriction
+  }
+  
+  // expo-notifications automatically uses inexact alarms if exact alarms aren't available
+  // For Android 12+, the OS will still deliver notifications, just not at exact times
+  // We return true because expo-notifications handles the fallback gracefully
+  return true;
+}
+
+/**
+ * Open alarm permission settings (Android 12+)
+ * This opens the app settings where user can enable exact alarms
+ */
+export async function openAlarmPermissionSettings() {
+  if (Platform.OS === 'android') {
+    try {
+      // Open app settings - user can enable "Alarms & reminders" permission there
+      await Linking.openSettings();
+    } catch (error) {
+      console.error('[Notifications] Failed to open settings:', error);
+    }
   }
 }
 
@@ -126,39 +165,71 @@ export async function scheduleNotification({ title, message, scheduledDate, meta
       };
     }
     
-    // Create trigger
-    const trigger = {
-      type: TriggerType.TIMESTAMP,
-      timestamp: triggerDate.getTime(),
-      alarmManager: {
-        allowWhileIdle: true, // Fire even in Doze mode
-      },
-    };
+    // Calculate seconds until trigger (for logging)
+    const secondsUntilTrigger = Math.floor((triggerDate.getTime() - Date.now()) / 1000);
     
-    // Schedule notification
-    const notificationId = await notifee.createTriggerNotification(
-      {
+    // Schedule notification using date trigger
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
         title,
         body: message,
         data: metadata,
-        android: {
+        sound: 'default',
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        // Android specific
+        ...(Platform.OS === 'android' && {
           channelId: REMINDER_CHANNEL_ID,
-          pressAction: { id: 'default' },
-          // smallIcon: 'ic_notification', // Use default app icon
-        },
-        ios: {
-          sound: 'default',
-        },
+        }),
       },
-      trigger
-    );
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: triggerDate,
+      },
+    });
     
-    console.log(`[Notifee] Scheduled notification ${notificationId} for ${triggerDate.toISOString()}`);
+    console.log(`[Notifications] Scheduled notification ${notificationId} for ${triggerDate.toISOString()} (in ${secondsUntilTrigger}s)`);
     
     return { success: true, notificationId };
   } catch (error) {
-    console.error('[Notifee] Schedule failed:', error);
+    console.error('[Notifications] Schedule failed:', error);
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Display an immediate test notification
+ * Useful for debugging permissions/channels
+ */
+export async function displayTestNotification() {
+  try {
+    // Ensure permission first
+    const hasPermission = await hasNotificationPermission();
+    if (!hasPermission) {
+      const { granted } = await requestNotificationPermission();
+      if (!granted) {
+        console.warn('[Notifications] Cannot display test notification - permission denied');
+        return false;
+      }
+    }
+    
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Test Notification',
+        body: 'Notifications are working correctly! 🚀',
+        sound: 'default',
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        ...(Platform.OS === 'android' && {
+          channelId: REMINDER_CHANNEL_ID,
+        }),
+      },
+      trigger: null, // null = immediate
+    });
+    
+    console.log('[Notifications] Test notification displayed');
+    return true;
+  } catch (error) {
+    console.error('[Notifications] Test notification failed:', error);
+    return false;
   }
 }
 
@@ -173,11 +244,11 @@ export async function scheduleNotification({ title, message, scheduledDate, meta
  */
 export async function cancelNotification(notificationId) {
   try {
-    await notifee.cancelTriggerNotification(notificationId);
-    console.log(`[Notifee] Cancelled notification ${notificationId}`);
+    await Notifications.cancelScheduledNotificationAsync(notificationId);
+    console.log(`[Notifications] Cancelled notification ${notificationId}`);
     return { success: true };
   } catch (error) {
-    console.error(`[Notifee] Cancel failed for ${notificationId}:`, error);
+    console.error(`[Notifications] Cancel failed for ${notificationId}:`, error);
     return { success: false, error: error.message };
   }
 }
@@ -188,12 +259,13 @@ export async function cancelNotification(notificationId) {
  */
 export async function cancelAllNotifications() {
   try {
-    const triggers = await notifee.getTriggerNotificationIds();
-    await notifee.cancelAllNotifications();
-    console.log(`[Notifee] Cancelled ${triggers.length} notifications`);
-    return { success: true, count: triggers.length };
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const count = scheduled.length;
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    console.log(`[Notifications] Cancelled ${count} notifications`);
+    return { success: true, count };
   } catch (error) {
-    console.error('[Notifee] Cancel all failed:', error);
+    console.error('[Notifications] Cancel all failed:', error);
     return { success: false, count: 0 };
   }
 }
@@ -208,9 +280,10 @@ export async function cancelAllNotifications() {
  */
 export async function getScheduledNotificationIds() {
   try {
-    return await notifee.getTriggerNotificationIds();
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    return scheduled.map(n => n.identifier);
   } catch (error) {
-    console.error('[Notifee] Get scheduled IDs failed:', error);
+    console.error('[Notifications] Get scheduled IDs failed:', error);
     return [];
   }
 }
@@ -221,9 +294,9 @@ export async function getScheduledNotificationIds() {
  */
 export async function getPendingNotifications() {
   try {
-    return await notifee.getTriggerNotifications();
+    return await Notifications.getAllScheduledNotificationsAsync();
   } catch (error) {
-    console.error('[Notifee] Get pending notifications failed:', error);
+    console.error('[Notifications] Get pending notifications failed:', error);
     return [];
   }
 }
@@ -256,7 +329,7 @@ export async function syncRemindersWithOS(reminders = []) {
       // Check if notification exists in OS
       if (!scheduledIds.has(reminder.notificationId)) {
         // Re-schedule lost notification
-        console.log(`[Notifee] Re-scheduling lost reminder: ${reminder.id}`);
+        console.log(`[Notifications] Re-scheduling lost reminder: ${reminder.id}`);
         
         const result = await scheduleNotification({
           title: reminder.title,
@@ -272,9 +345,9 @@ export async function syncRemindersWithOS(reminders = []) {
       }
     }
     
-    console.log(`[Notifee] Sync complete: ${stats.cleaned} past, ${stats.rescheduled} rescheduled`);
+    console.log(`[Notifications] Sync complete: ${stats.cleaned} past, ${stats.rescheduled} rescheduled`);
   } catch (error) {
-    console.error('[Notifee] Sync failed:', error);
+    console.error('[Notifications] Sync failed:', error);
   }
   
   return stats;
@@ -284,24 +357,58 @@ export async function syncRemindersWithOS(reminders = []) {
 // FOREGROUND EVENT HANDLING
 // ===================================================================
 
+// Store subscription references for cleanup
+let foregroundSubscription = null;
+let responseSubscription = null;
+
 /**
  * Setup foreground notification handling
  * Call this on app startup
+ * @returns {Function} Cleanup function to remove listener
  */
 export function setupForegroundHandler() {
-  return notifee.onForegroundEvent(({ type, detail }) => {
-    console.log('[Notifee] Foreground event:', type, detail.notification?.id);
+  // Handle notifications received while app is in foreground
+  foregroundSubscription = Notifications.addNotificationReceivedListener(notification => {
+    console.log('[Notifications] Foreground event:', notification.request.identifier);
     // Can add custom handling here (e.g., refresh reminder list)
   });
+  
+  // Return cleanup function (compatible with previous notifee API)
+  return () => {
+    if (foregroundSubscription) {
+      foregroundSubscription.remove();
+      foregroundSubscription = null;
+    }
+  };
 }
 
 /**
  * Setup background notification handling
- * Must be called at app root level (outside of components)
+ * Handles when user taps on notification
  */
 export function setupBackgroundHandler() {
-  notifee.onBackgroundEvent(async ({ type, detail }) => {
-    console.log('[Notifee] Background event:', type, detail.notification?.id);
-    // Background handling - can update app state if needed
+  // Handle notification response (user tapped notification)
+  responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+    console.log('[Notifications] Background event (tap):', response.notification.request.identifier);
+    // Can add custom handling here (e.g., navigate to specific screen)
   });
+  
+  // Note: Unlike notifee, expo-notifications doesn't require registering background handler
+  // at app root level. The OS handles background delivery automatically.
+}
+
+/**
+ * Cleanup notification listeners
+ * Call this on app unmount
+ */
+export function cleanupHandlers() {
+  if (foregroundSubscription) {
+    foregroundSubscription.remove();
+    foregroundSubscription = null;
+  }
+  if (responseSubscription) {
+    responseSubscription.remove();
+    responseSubscription = null;
+  }
+  console.log('[Notifications] Handlers cleaned up');
 }

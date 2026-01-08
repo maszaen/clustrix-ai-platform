@@ -35,7 +35,12 @@ function getCardRadius(index, total) {
  */
 function MenuCard({ icon, title, description, onPress, style }) {
   return (
-    <Pressable style={[styles.card, style]} onPress={onPress} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+    <Pressable 
+      style={[styles.card, style]} 
+      onPress={() => requestAnimationFrame(onPress)} 
+      android_ripple={{ color: 'rgba(255,255,255,0.08)', foreground: true }}
+      delayPressIn={0}
+    >
       <View style={styles.cardLeft}>
         <Ionicons name={icon} size={22} color={COLORS.fgMuted} />
         <View style={styles.cardText}>

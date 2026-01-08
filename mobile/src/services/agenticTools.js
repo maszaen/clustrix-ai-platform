@@ -1202,7 +1202,7 @@ export async function executeSetReminder(input, config) {
     const finalNotifTitle = notificationTitle || title;
     const finalNotifBody = notificationBody || message || title;
     
-    // Try to schedule notification via @notifee (graceful fallback if not available)
+    // Try to schedule notification via expo-notifications (graceful fallback if not available)
     let notificationId = '';
     let notificationScheduled = false;
     
@@ -1222,7 +1222,7 @@ export async function executeSetReminder(input, config) {
         console.warn('[REMINDER] Notification scheduling failed:', scheduleResult.error);
       }
     } catch (notifError) {
-      console.warn('[REMINDER] @notifee not available, saving reminder without notification:', notifError.message);
+      console.warn('[REMINDER] expo-notifications not available, saving reminder without notification:', notifError.message);
     }
     
     // Generate reminder ID

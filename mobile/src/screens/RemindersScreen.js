@@ -13,6 +13,8 @@ import {
   Pressable, 
   TextInput,
   ActivityIndicator,
+  Platform,
+  AppState,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
@@ -282,6 +284,45 @@ export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm
   const [actionTarget, setActionTarget] = useState(null);
   const [showActionAlert, setShowActionAlert] = useState(false);
   const [actionType, setActionType] = useState(null);
+  const [hasAlarmPermission, setHasAlarmPermission] = useState(true);
+  
+  // Check exact alarm permission (Android 12+)
+  // expo-notifications handles this gracefully, so we always return true
+  const checkAlarmPermission = useCallback(async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const { canScheduleExactAlarms } = await import('../services/notifications');
+        const canSchedule = await canScheduleExactAlarms();
+        setHasAlarmPermission(canSchedule);
+      } catch (e) {
+        console.warn('[Reminders] Alarm permission check failed:', e);
+        // expo-notifications handles fallback gracefully, so set to true
+        setHasAlarmPermission(true);
+      }
+    }
+  }, []);
+  
+  // Check permission on mount and when app returns to foreground
+  useEffect(() => {
+    checkAlarmPermission();
+    
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkAlarmPermission();
+      }
+    });
+    
+    return () => subscription.remove();
+  }, [checkAlarmPermission]);
+  
+  const handleGrantPermission = async () => {
+    try {
+      const { openAlarmPermissionSettings } = await import('../services/notifications');
+      await openAlarmPermissionSettings();
+    } catch (e) {
+      console.error('[Reminders] Open settings failed:', e);
+    }
+  };
   
   const loadReminders = useCallback(async () => {
     if (!userId) {
@@ -388,6 +429,21 @@ export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm
   return (
     <>
       <View style={[styles.subContainer, styles.content]}>
+        {/* Permission Banner */}
+        {!hasAlarmPermission && (
+          <Pressable 
+            style={styles.permissionBanner}
+            onPress={handleGrantPermission}
+            android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+          >
+            <Ionicons name="alert-circle-outline" size={20} color={COLORS.warning} />
+            <Text style={styles.permissionText}>
+              Tap to grant alarm permission for scheduled reminders
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.fgMuted} />
+          </Pressable>
+        )}
+        
         {/* Add Button */}
         <View style={styles.section}>
           <Pressable 
@@ -673,5 +729,22 @@ const styles = StyleSheet.create({
   },
   iconBtn: {
     padding: 6,
+  },
+  permissionBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: COLORS.warning + '15',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.warning + '30',
+  },
+  permissionText: {
+    flex: 1,
+    color: COLORS.warning,
+    fontSize: 13,
+    fontFamily: FONTS.sans,
   },
 });

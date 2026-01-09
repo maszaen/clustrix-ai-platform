@@ -929,11 +929,13 @@ async function getDaytonaClient() {
  * Value: { sandboxId, createdAt, lastUsedAt }
  */
 const sessionSandboxes = new Map();
+// In-flight sandbox creations to avoid duplicates per session.
+const sandboxCreateLocks = new Map();
 
 // Cleanup interval - check every 5 minutes
 const SANDBOX_CLEANUP_INTERVAL = 5 * 60 * 1000;
-// Delete sandbox after 1 hour of inactivity
-const SANDBOX_TTL = 60 * 60 * 1000;
+// Delete sandbox after 24 hours of inactivity
+const SANDBOX_TTL = 24 * 60 * 60 * 1000;
 // Auto-stop sandbox after 15 min idle (Daytona-level)
 const SANDBOX_AUTO_STOP = 15;
 
@@ -995,23 +997,37 @@ async function getOrCreateSandbox(sessionId) {
     }
   }
   
-  // Create new sandbox
-  console.log(`[SANDBOX] Creating new sandbox for session ${sessionId}`);
-  const daytona = await getDaytonaClient();
-  const sandbox = await daytona.create({
-    language: 'python', // Default, supports multi-lang
-    autoStopInterval: SANDBOX_AUTO_STOP,
-  });
+  // Prevent duplicate sandbox creation for the same session.
+  if (sandboxCreateLocks.has(sessionId)) {
+    return sandboxCreateLocks.get(sessionId);
+  }
   
-  // Store sandbox mapping
-  sessionSandboxes.set(sessionId, {
-    sandboxId: sandbox.id,
-    createdAt: now,
-    lastUsedAt: now,
-  });
+  const createPromise = (async () => {
+    // Create new sandbox
+    console.log(`[SANDBOX] Creating new sandbox for session ${sessionId}`);
+    const daytona = await getDaytonaClient();
+    const sandbox = await daytona.create({
+      language: 'python', // Default, supports multi-lang
+      autoStopInterval: SANDBOX_AUTO_STOP,
+    });
+    
+    // Store sandbox mapping
+    sessionSandboxes.set(sessionId, {
+      sandboxId: sandbox.id,
+      createdAt: now,
+      lastUsedAt: now,
+    });
+    
+    console.log(`[SANDBOX] Created sandbox ${sandbox.id} for session ${sessionId}`);
+    return sandbox;
+  })();
   
-  console.log(`[SANDBOX] Created sandbox ${sandbox.id} for session ${sessionId}`);
-  return sandbox;
+  sandboxCreateLocks.set(sessionId, createPromise);
+  try {
+    return await createPromise;
+  } finally {
+    sandboxCreateLocks.delete(sessionId);
+  }
 }
 
 /**

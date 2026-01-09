@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import { LinearGradient } from 'expo-linear-gradient';
-import { LineSquiggle, LucideCombine, LucideImage, LucideX } from 'lucide-react-native';
+import { LineSquiggle, LucideCombine, LucideX } from 'lucide-react-native';
 import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, FadeOut, FadeIn, LinearTransition } from 'react-native-reanimated';
 import AttachmentPreview from './AttachmentPreview';
 

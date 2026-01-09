@@ -7,11 +7,11 @@
  * Only OpenAI and Google support image generation.
  */
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { Check, Sparkles, AlertCircle } from 'lucide-react-native';
+import { Check, AlertCircle } from 'lucide-react-native';
 import DropdownSelect from '../components/DropdownSelect';
 
 // Image models by provider (2025 latest)

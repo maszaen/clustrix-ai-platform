@@ -1,11 +1,10 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { InteractionManager } from 'react-native';
-import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessages, getMessagesPaginated, getOlderMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey, exportAllData, importAllData, getDraft, saveDraft, deleteDraft, updateMessageMetadata, deleteMessage, getPersonaDraft, savePersonaDraft, addBackupHistory, getBackupHistory } from '../database/db';
+import { initDatabase, getAllSessions, saveSession, deleteSession as dbDeleteSession, getMessagesPaginated, getOlderMessages, addMessage, getSetting, saveSetting, getAllCustomModels, saveCustomModel, deleteCustomModel as dbDeleteCustomModel, getAllCustomProviders, saveCustomProvider, deleteCustomProvider as dbDeleteCustomProvider, getAllProviderApiKeys, saveProviderApiKey, exportAllData, importAllData, getDraft, saveDraft, deleteDraft, updateMessageMetadata, deleteMessage, getPersonaDraft, savePersonaDraft, addBackupHistory, getBackupHistory } from '../database/db';
 import { generateSessionId } from '../utils/ids';
 import { loginWithGoogle, logout as authLogout, getStoredAuth, getLastBackupTime } from '../services/auth';
 import { backupToCloud, restoreFromCloud, checkCloudBackup } from '../services/backup';
 import { WELCOME_MESSAGES } from '../constants/strings';
-import { initializeNotifications, syncUserReminders, cleanupNotifications } from '../services/reminderSync';
+import { initializeNotifications, syncUserReminders } from '../services/reminderSync';
 
 // PERF: Debug flag - set to false in production
 const __DEV_DEBUG__ = false;

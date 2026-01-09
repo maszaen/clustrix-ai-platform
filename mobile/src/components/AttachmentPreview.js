@@ -8,7 +8,7 @@ import { FONTS } from '../constants/fonts';
 
 // Animation config
 const ANIM_DURATION = 100;
-const LAYOUT_SPRING_CONFIG = { damping: 30, stiffness: 350, mass: 1 };
+// const LAYOUT_SPRING_CONFIG = { damping: 30, stiffness: 350, mass: 1 };
 
 /**
  * Get file icon based on mime type or extension

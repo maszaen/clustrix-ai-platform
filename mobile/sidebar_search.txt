@@ -1,6 +1,0 @@
-fd0e0a8 feat: sidebar stretch performance fix
-747b05b feat: sidebar
-a72ee4d feat: sidebar
-8107460 feat: sidebar color
-daa37ba feat: fix sidebar stretch when user sliding while sidebar expanded
-2d20584 feat: mobile sidebar fix (chatGPT 100% haha)

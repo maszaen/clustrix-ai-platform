@@ -9,7 +9,7 @@ import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Linking } fro
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { Eye, EyeClosed, ExternalLink, Check } from 'lucide-react-native';
+import { Eye, EyeClosed, ExternalLink } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DropdownSelect from '../components/DropdownSelect';
 

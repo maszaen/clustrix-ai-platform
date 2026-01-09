@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, Modal, FlatList, TouchableWithoutFeedback, Pressable, Switch, ActivityIndicator } from 'react-native';
-import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { DEFAULT_PROVIDERS } from '../services/api';
@@ -11,7 +10,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import AlertModal from '../components/AlertModal';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { Eye, EyeClosed, Pencil, Trash2, Cloud, CloudOff, Unplug, PlugZap, Server, ServerOff, DnaOff, Dna } from 'lucide-react-native';
+import { Eye, EyeClosed, Pencil, Trash2, DnaOff, Dna } from 'lucide-react-native';
 import { DEFAULT_PROVIDERS_LIST, DEFAULT_MODELS } from '../constants/providers';
 
 

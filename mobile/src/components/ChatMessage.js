@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Keyboard, Easing, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Keyboard, Easing } from 'react-native';
 import { Pressable, LongPressGestureHandler, State } from 'react-native-gesture-handler';
 import { StreamdownRN } from '../lib/streamdown';
 import { parseThinkingBlocks } from '../utils/markdown';

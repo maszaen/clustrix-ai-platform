@@ -4,11 +4,11 @@
  */
 
 import { useState, memo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, Pressable, Linking, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, Pressable, Linking, Dimensions } from 'react-native';
 // Use gesture-handler components to prevent sidebar swipe conflicts on horizontal scroll
 import { ScrollView, PanGestureHandler } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ExternalLink, Image as ImageIcon, Search, Download, Sparkles, Maximize2 } from 'lucide-react-native';
+import { ExternalLink, Image as ImageIcon, Search, Sparkles } from 'lucide-react-native';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
 import * as FileSystem from 'expo-file-system/legacy';

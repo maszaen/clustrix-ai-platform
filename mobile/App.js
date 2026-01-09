@@ -351,6 +351,8 @@ function MainApp() {
 
   const openSidebar = useCallback(() => {
     Keyboard.dismiss();
+    // Always open collapsed; expand only when search is actively focused.
+    setSidebarHasQuery(false);
     currentPage.value = 0;
     const config = { duration: 200, easing: Easing.out(Easing.cubic) };
     // Animate first, then update state after animation completes
@@ -383,18 +385,13 @@ function MainApp() {
   useEffect(() => {
     if (!sidebarOpen) return;
     
-    // Defer slightly (one frame) to let heavy state updates (keyboard/search) clear first
-    const timer = setTimeout(() => {
-        // Optimized Spring for auto-stretch (system driven) - softer stiffness prevents 60fps locking feels
-        sidebarStretch.value = withSpring(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { 
-          damping: 35,    // Slightly higher damping for stability
-          stiffness: 440, // Lower stiffness (softer) consumes less processing power per frame visually
-          mass: 1,
-          velocity: 400   // Initial kick to make it feel responsive immediately
-        });
-    }, 10);
-    
-    return () => clearTimeout(timer);
+    // Optimized Spring for auto-stretch (system driven) - softer stiffness prevents 60fps locking feels
+    sidebarStretch.value = withSpring(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { 
+      damping: 35,    // Slightly higher damping for stability
+      stiffness: 440, // Lower stiffness (softer) consumes less processing power per frame visually
+      mass: 1,
+      velocity: 500   // Initial kick to make it feel responsive immediately
+    });
   }, [sidebarHasQuery, sidebarOpen, sidebarStretch]);
 
   const openPersonalization = useCallback(() => {

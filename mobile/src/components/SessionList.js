@@ -134,13 +134,19 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
       <View style={styles.headerRow}>
         <Pressable 
           style={styles.searchContainer} 
-          onPress={() => {
-            // Only expand when collapsed
+          onPressIn={() => {
+            // Expand immediately (avoid press delay), focus follows on press.
             if (!isExpanded) {
               onSearchQueryChange?.(true);
+            }
+          }}
+          onPress={() => {
+            // Only focus when collapsed
+            if (!isExpanded) {
               searchInputRef.current?.focus();
             }
           }}
+          delayPressIn={0}
         >
           {isExpanded ? (
             <Pressable 
@@ -152,6 +158,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
               style={[styles.xButton, { borderRadius: 40, overflow: 'hidden' }]} 
               
               android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}
+              delayPressIn={0}
             >
               <LucideArrowLeft size={23} color={COLORS.icon} />
             </Pressable>
@@ -204,7 +211,8 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
       {/* Sessions */}
       <FlatList
         data={displayedSessions}
-        extraData={[currentSession?.id, displayedSessions.map(s => `${s.id}-${s.is_favorite}`).join(',')]}
+        // Keep extraData stable to avoid full list re-render on sidebar expand/collapse.
+        extraData={currentSession?.id}
         keyExtractor={(item) => item.id}
         style={displayedSessions.length > 0 ? { width: SCREEN_WIDTH } : undefined}
         renderItem={({ item, index }) => {

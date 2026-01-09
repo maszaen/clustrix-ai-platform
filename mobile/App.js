@@ -188,18 +188,14 @@ function MainApp() {
     }).start();
   }, [showRightBtns, rightBtnOpacity]);
 
-  // Trigger fadeout when app becomes ready
+  // Always hide splash after 1s (independent of isReady).
   useEffect(() => {
-    if (!isReady) {
-      setTimeout(() => {
-        setSplashComplete(true);
-      }, 2000);
-    }
-    if (isReady) {
+    const timer = setTimeout(() => {
       setShowLoadingOverlay(false);
-    }
-
-  }, [isReady]);
+      setSplashComplete(true);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Keep modal open ref in sync
   useEffect(() => {

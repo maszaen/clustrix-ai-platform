@@ -11,9 +11,9 @@
     "newArchEnabled": true,
     "jsEngine": "hermes",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash-transparent.png",
       "resizeMode": "contain",
-      "backgroundColor": "#1a1a1a"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true
@@ -23,9 +23,18 @@
         "icon": "./assets/notification-icon.png",
         "color": "#FFFFFF"
       },
+      "splash": {
+        "image": "./assets/splash-transparent.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#000000",
+        "dark": {
+          "image": "./assets/splash-transparent.png",
+          "backgroundColor": "#000000"
+        }
+      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1a1a1a"
+        "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.zaen.clustrix.mobile",

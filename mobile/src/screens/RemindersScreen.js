@@ -684,7 +684,7 @@ export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm
             delayPressIn={0}
           >
             <BellPlus strokeWidth={1.5} size={20} color={COLORS.primary} />
-            <Text style={styles.addBtnText}>Add Reminder</Text>
+            <Text style={styles.addBtnText}>Schedule Reminder</Text>
           </Pressable>
         </View>
         
@@ -694,9 +694,8 @@ export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm
           </View>
         ) : reminders.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <BellOff strokeWidth={1.5} size={45} color={COLORS.fgMuted} />
+            <BellOff strokeWidth={1} size={45} color={COLORS.fgMuted} />
             <Text style={styles.emptyTitle}>No Reminders</Text>
-            <Text style={styles.emptyText}>Tap above to create one.</Text>
           </View>
         ) : (
           <>

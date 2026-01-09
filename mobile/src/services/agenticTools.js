@@ -2042,6 +2042,7 @@ export async function streamAgenticChat({
           model,
           messages: conversationMessages,
           sessionAttachments, // Pass attachments for list_attachments and reattach_file tools
+          sessionId: agenticConfig?.sessionId, // Pass sessionId for sandbox isolation
           signal,
           onChunk,
           onThink,

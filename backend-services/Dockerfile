@@ -4,10 +4,10 @@ FROM node:18-slim
 WORKDIR /app
 
 # Copy package files first
-COPY package.json package-lock.json ./
+COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install dependencies (use npm install if lock file might be outdated)
+RUN npm install --only=production
 
 # Copy source code
 COPY src/ ./src/

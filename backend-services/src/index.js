@@ -21,6 +21,7 @@ const userRouter = require('./routes/user');
 const adminRouter = require('./routes/admin');
 const agenticRouter = require('./routes/agentic');
 const imageGenRouter = require('./routes/imageGen');
+const sandboxRouter = require('./routes/sandbox');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -65,6 +66,7 @@ app.use('/api/chat', verifyGoogleToken, rateLimiter, validateChatRequest, chatRo
 app.use('/api/agentic', verifyGoogleToken, rateLimiter, validateChatRequest, agenticRouter);
 app.use('/api/image-gen', verifyGoogleToken, rateLimiter, validateImageGenRequest, imageGenRouter);
 app.use('/api/user', verifyGoogleToken, userRouter);
+app.use('/api/sandbox', verifyGoogleToken, rateLimiter, sandboxRouter);
 
 // Admin routes (require admin secret)
 app.use('/admin', adminRouter);

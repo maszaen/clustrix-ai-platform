@@ -20,7 +20,6 @@ if (Platform.OS === 'android' && !global?.nativeFabricUIManager) {
 }
 
 const CommandBlock = ({ command, expanded, onToggle }) => {
-    
     const toggleExpand = () => {
         onToggle && onToggle();
     };

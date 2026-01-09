@@ -35,11 +35,28 @@ src/
 │   ├── chat.js         # Chat completions
 │   ├── imageGen.js     # Image generation mode
 │   ├── models.js       # Available models list
+│   ├── sandbox.js      # Daytona sandbox API
 │   └── user.js         # User info
 ├── services/
 │   └── analytics.js    # Usage analytics
 └── index.js            # Express server entry
 ```
+
+## 🤖 AI Tools (Agentic Mode)
+
+AI models have access to these tools when using `/api/agentic`:
+
+| Tool | Description |
+|------|-------------|
+| `web_search` | Search the web for current information |
+| `list_attachments` | List files attached to the session |
+| `reattach_file` | Retrieve a previously attached file |
+| `view_reminder` | View all scheduled reminders |
+| `set_reminder` | Schedule a new reminder |
+| `complete_reminder` | Mark reminder as done |
+| `remove_reminder` | Delete a reminder |
+| `run_code` | Execute code in Daytona sandbox (Python, JS, TS, etc.) |
+| `run_command` | Run shell command in sandbox |
 
 ## 🔑 Required API Keys
 
@@ -61,6 +78,32 @@ src/
 | Tavily | `TAVILY_API_KEY` | [tavily.com](https://tavily.com/) |
 | SerpAPI | `SERPAPI_API_KEY` | [serpapi.com](https://serpapi.com/) |
 | Google CSE | `GOOGLE_SEARCH_API_KEY` + `GOOGLE_CSE_ID` | [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) |
+
+### Sandbox API (Daytona)
+
+| Provider | Env Variable | Get Key |
+|----------|-------------|---------|
+| Daytona | `DAYTONA_API_KEY` | [app.daytona.io/dashboard/keys](https://app.daytona.io/dashboard/keys) |
+| Daytona Target | `DAYTONA_TARGET` | `us` or `eu` (default: `us`) |
+
+## 🖥️ Sandbox API Endpoints
+
+Secure code execution in isolated Daytona sandboxes:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/sandbox/create` | POST | Create new sandbox |
+| `/api/sandbox/:id/run-code` | POST | Execute Python/JS/TS code |
+| `/api/sandbox/:id/run-command` | POST | Run shell command |
+| `/api/sandbox/:id/upload` | POST | Upload file |
+| `/api/sandbox/:id/download` | GET | Download file |
+| `/api/sandbox/:id/files` | GET | List directory |
+| `/api/sandbox/:id/preview` | GET | Get preview URL |
+| `/api/sandbox/:id/status` | GET | Get sandbox info |
+| `/api/sandbox/:id/start` | POST | Start sandbox |
+| `/api/sandbox/:id/stop` | POST | Stop sandbox |
+| `/api/sandbox/:id` | DELETE | Delete sandbox |
+| `/api/sandbox/list` | GET | List sandboxes |
 
 ## ☁️ Deploy to Google Cloud Run
 

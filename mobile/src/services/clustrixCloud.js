@@ -369,6 +369,7 @@ export async function streamCloudAgentic({
   model,
   messages,
   sessionAttachments, // For list_attachments and reattach_file tools
+  sessionId, // For sandbox isolation per chat session
   signal,
   onChunk,
   onThink,
@@ -462,7 +463,10 @@ export async function streamCloudAgentic({
             onChunk?.(content);
           }
         } catch (e) {
-          // ignore
+          // DEBUG: Log parse errors in dev mode instead of silently ignoring
+          if (__DEV__) {
+            console.warn('[CloudAgentic] SSE JSON parse error:', e.message, 'Data (first 300):', data.substring(0, 300));
+          }
         }
       }
     };
@@ -490,6 +494,7 @@ export async function streamCloudAgentic({
       model,
       messages: formatMessagesForCloud(messages),
       sessionAttachments: sessionAttachments || [], // For file recall tools
+      sessionId: sessionId || null, // For sandbox isolation per chat session
       stream: true,
       temperature,
       max_tokens,

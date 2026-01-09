@@ -200,6 +200,59 @@ const COMPLETE_REMINDER_TOOL = {
   },
 };
 
+// ===================================================================
+// DAYTONA SANDBOX TOOL DEFINITIONS
+// ===================================================================
+
+const RUN_CODE_TOOL = {
+  type: 'function',
+  function: {
+    name: 'run_code',
+    description: `Execute code in a secure cloud sandbox. Supports Python, JavaScript, TypeScript, Bash, and other languages. Use this when user asks to run, execute, or test code. The code runs in an isolated environment with full package support. Returns stdout, stderr, and exit code.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        language: {
+          type: 'string',
+          enum: ['python', 'javascript', 'typescript', 'bash', 'ruby', 'go', 'rust', 'java', 'php'],
+          description: 'Programming language of the code',
+        },
+        code: {
+          type: 'string',
+          description: 'The code to execute. For Python, you can use pip packages. For JS/TS, you can use npm packages.',
+        },
+        commentary: {
+          type: 'string',
+          description: 'Brief explanation shown to user (e.g., "Running your Python script...")',
+        },
+      },
+      required: ['language', 'code'],
+    },
+  },
+};
+
+const RUN_COMMAND_TOOL = {
+  type: 'function',
+  function: {
+    name: 'run_command',
+    description: `Execute a shell command in the sandbox environment. Use for: installing packages (pip install, npm install), file operations, system commands, etc. Returns command output and exit code.`,
+    parameters: {
+      type: 'object',
+      properties: {
+        command: {
+          type: 'string',
+          description: 'Shell command to execute (e.g., "pip install pandas", "ls -la", "npm install axios")',
+        },
+        commentary: {
+          type: 'string',
+          description: 'Brief explanation shown to user (e.g., "Installing required packages...")',
+        },
+      },
+      required: ['command'],
+    },
+  },
+};
+
 // Claude format
 const WEB_SEARCH_TOOL_CLAUDE = {
   name: 'web_search',
@@ -243,6 +296,18 @@ const COMPLETE_REMINDER_TOOL_CLAUDE = {
   input_schema: COMPLETE_REMINDER_TOOL.function.parameters,
 };
 
+const RUN_CODE_TOOL_CLAUDE = {
+  name: 'run_code',
+  description: RUN_CODE_TOOL.function.description,
+  input_schema: RUN_CODE_TOOL.function.parameters,
+};
+
+const RUN_COMMAND_TOOL_CLAUDE = {
+  name: 'run_command',
+  description: RUN_COMMAND_TOOL.function.description,
+  input_schema: RUN_COMMAND_TOOL.function.parameters,
+};
+
 // Gemini format
 const WEB_SEARCH_TOOL_GEMINI = {
   functionDeclarations: [
@@ -281,12 +346,22 @@ const WEB_SEARCH_TOOL_GEMINI = {
       description: COMPLETE_REMINDER_TOOL.function.description,
       parameters: COMPLETE_REMINDER_TOOL.function.parameters,
     },
+    {
+      name: 'run_code',
+      description: RUN_CODE_TOOL.function.description,
+      parameters: RUN_CODE_TOOL.function.parameters,
+    },
+    {
+      name: 'run_command',
+      description: RUN_COMMAND_TOOL.function.description,
+      parameters: RUN_COMMAND_TOOL.function.parameters,
+    },
   ],
 };
 
 // All OpenAI-format tools
-const OPENAI_TOOLS = [WEB_SEARCH_TOOL, LIST_ATTACHMENTS_TOOL, REATTACH_FILE_TOOL, VIEW_REMINDER_TOOL, SET_REMINDER_TOOL, COMPLETE_REMINDER_TOOL, REMOVE_REMINDER_TOOL];
-const CLAUDE_TOOLS = [WEB_SEARCH_TOOL_CLAUDE, LIST_ATTACHMENTS_TOOL_CLAUDE, REATTACH_FILE_TOOL_CLAUDE, VIEW_REMINDER_TOOL_CLAUDE, SET_REMINDER_TOOL_CLAUDE, COMPLETE_REMINDER_TOOL_CLAUDE, REMOVE_REMINDER_TOOL_CLAUDE];
+const OPENAI_TOOLS = [WEB_SEARCH_TOOL, LIST_ATTACHMENTS_TOOL, REATTACH_FILE_TOOL, VIEW_REMINDER_TOOL, SET_REMINDER_TOOL, COMPLETE_REMINDER_TOOL, REMOVE_REMINDER_TOOL, RUN_CODE_TOOL, RUN_COMMAND_TOOL];
+const CLAUDE_TOOLS = [WEB_SEARCH_TOOL_CLAUDE, LIST_ATTACHMENTS_TOOL_CLAUDE, REATTACH_FILE_TOOL_CLAUDE, VIEW_REMINDER_TOOL_CLAUDE, SET_REMINDER_TOOL_CLAUDE, COMPLETE_REMINDER_TOOL_CLAUDE, REMOVE_REMINDER_TOOL_CLAUDE, RUN_CODE_TOOL_CLAUDE, RUN_COMMAND_TOOL_CLAUDE];
 
 
 // ===================================================================
@@ -794,6 +869,367 @@ async function executeCompleteReminder(input, userId) {
   }
 }
 
+// ===================================================================
+// DAYTONA SANDBOX EXECUTION
+// ===================================================================
+
+// Daytona SDK - loaded dynamically since it's ESM-only
+let Daytona = null;
+let daytonaSdkAvailable = null; // null = not checked, true/false = checked
+let daytonaSdk = null;
+
+/**
+ * Check if Daytona SDK is available
+ */
+async function isDaytonaAvailable() {
+  if (daytonaSdkAvailable !== null) return daytonaSdkAvailable;
+  
+  try {
+    const sdk = await import('@daytonaio/sdk');
+    Daytona = sdk.Daytona;
+    daytonaSdkAvailable = true;
+    console.log('[SANDBOX] Daytona SDK loaded successfully');
+    return true;
+  } catch (e) {
+    console.warn('[SANDBOX] Daytona SDK not available:', e.message);
+    daytonaSdkAvailable = false;
+    return false;
+  }
+}
+
+/**
+ * Initialize Daytona SDK client
+ */
+async function getDaytonaClient() {
+  if (daytonaSdk) return daytonaSdk;
+  
+  const available = await isDaytonaAvailable();
+  if (!available) {
+    throw new Error('Daytona SDK not installed. Run: npm install @daytonaio/sdk');
+  }
+  
+  const apiKey = process.env.DAYTONA_API_KEY;
+  const target = process.env.DAYTONA_TARGET || 'us';
+  
+  if (!apiKey) {
+    throw new Error('DAYTONA_API_KEY not configured');
+  }
+  
+  daytonaSdk = new Daytona({ apiKey, target });
+  return daytonaSdk;
+}
+
+// ===================================================================
+// SESSION SANDBOX MANAGEMENT
+// ===================================================================
+
+/**
+ * Store active sandboxes per session
+ * Key: sessionId
+ * Value: { sandboxId, createdAt, lastUsedAt }
+ */
+const sessionSandboxes = new Map();
+
+// Cleanup interval - check every 5 minutes
+const SANDBOX_CLEANUP_INTERVAL = 5 * 60 * 1000;
+// Delete sandbox after 1 hour of inactivity
+const SANDBOX_TTL = 60 * 60 * 1000;
+// Auto-stop sandbox after 15 min idle (Daytona-level)
+const SANDBOX_AUTO_STOP = 15;
+
+/**
+ * Background cleanup - delete expired sandboxes
+ */
+setInterval(async () => {
+  const now = Date.now();
+  const expiredSessions = [];
+  
+  for (const [sessionId, data] of sessionSandboxes.entries()) {
+    if (now - data.lastUsedAt > SANDBOX_TTL) {
+      expiredSessions.push({ sessionId, sandboxId: data.sandboxId });
+    }
+  }
+  
+  if (expiredSessions.length > 0) {
+    console.log(`[SANDBOX] Cleaning up ${expiredSessions.length} expired sandboxes`);
+    
+    for (const { sessionId, sandboxId } of expiredSessions) {
+      try {
+        const daytona = await getDaytonaClient();
+        await daytona.delete(sandboxId);
+        sessionSandboxes.delete(sessionId);
+        console.log(`[SANDBOX] Deleted sandbox ${sandboxId} for session ${sessionId}`);
+      } catch (e) {
+        // Sandbox might already be deleted
+        sessionSandboxes.delete(sessionId);
+      }
+    }
+  }
+}, SANDBOX_CLEANUP_INTERVAL);
+
+/**
+ * Get or create sandbox for session
+ * @param {string} sessionId - Chat session ID
+ * @returns {Promise<Sandbox>} Daytona sandbox instance
+ */
+async function getOrCreateSandbox(sessionId) {
+  const now = Date.now();
+  
+  // Check if session has active sandbox
+  if (sessionSandboxes.has(sessionId)) {
+    const data = sessionSandboxes.get(sessionId);
+    try {
+      const daytona = await getDaytonaClient();
+      const sandbox = await daytona.get(data.sandboxId);
+      if (sandbox) {
+        // Update last used time
+        data.lastUsedAt = now;
+        sessionSandboxes.set(sessionId, data);
+        console.log(`[SANDBOX] Reusing sandbox ${data.sandboxId} for session ${sessionId}`);
+        return sandbox;
+      }
+    } catch (e) {
+      // Sandbox expired or deleted, create new one
+      console.log(`[SANDBOX] Sandbox ${data.sandboxId} expired, creating new one`);
+      sessionSandboxes.delete(sessionId);
+    }
+  }
+  
+  // Create new sandbox
+  console.log(`[SANDBOX] Creating new sandbox for session ${sessionId}`);
+  const daytona = await getDaytonaClient();
+  const sandbox = await daytona.create({
+    language: 'python', // Default, supports multi-lang
+    autoStopInterval: SANDBOX_AUTO_STOP,
+  });
+  
+  // Store sandbox mapping
+  sessionSandboxes.set(sessionId, {
+    sandboxId: sandbox.id,
+    createdAt: now,
+    lastUsedAt: now,
+  });
+  
+  console.log(`[SANDBOX] Created sandbox ${sandbox.id} for session ${sessionId}`);
+  return sandbox;
+}
+
+/**
+ * Manually delete sandbox for session (e.g., when session is deleted)
+ * @param {string} sessionId - Chat session ID
+ */
+async function deleteSandboxForSession(sessionId) {
+  if (!sessionSandboxes.has(sessionId)) return;
+  
+  const data = sessionSandboxes.get(sessionId);
+  try {
+    const daytona = await getDaytonaClient();
+    await daytona.delete(data.sandboxId);
+    console.log(`[SANDBOX] Manually deleted sandbox ${data.sandboxId} for session ${sessionId}`);
+  } catch (e) {
+    console.log(`[SANDBOX] Failed to delete sandbox ${data.sandboxId}:`, e.message);
+  }
+  sessionSandboxes.delete(sessionId);
+}
+
+/**
+ * Get sandbox stats (for monitoring)
+ */
+function getSandboxStats() {
+  return {
+    activeSandboxes: sessionSandboxes.size,
+    sandboxes: Array.from(sessionSandboxes.entries()).map(([sessionId, data]) => ({
+      sessionId,
+      sandboxId: data.sandboxId,
+      createdAt: new Date(data.createdAt).toISOString(),
+      lastUsedAt: new Date(data.lastUsedAt).toISOString(),
+      ageMinutes: Math.round((Date.now() - data.createdAt) / 60000),
+      idleMinutes: Math.round((Date.now() - data.lastUsedAt) / 60000),
+    })),
+  };
+}
+
+/**
+ * Execute run_code tool - run code in sandbox
+ * Uses Daytona SDK's codeRun for direct code execution
+ * @param {Object} input - Tool input (language, code)
+ * @param {string} sessionId - Chat session ID for sandbox isolation
+ */
+async function executeRunCode(input, sessionId) {
+  const { language, code } = input;
+  
+  if (!code) {
+    return { success: false, output: 'No code provided to execute.' };
+  }
+  
+  if (!process.env.DAYTONA_API_KEY) {
+    return { 
+      success: false, 
+      output: 'Code execution is not available. DAYTONA_API_KEY not configured.' 
+    };
+  }
+  
+  try {
+    const sandbox = await getOrCreateSandbox(sessionId || 'anonymous');
+    
+    // Use codeRun API for direct code execution
+    console.log(`[SANDBOX] Running ${language} code (${code.length} chars)...`);
+    const result = await sandbox.process.codeRun(code, {
+      timeout: 60, // 60 second timeout
+    });
+    
+    // Debug: log raw result from Daytona
+    console.log('[SANDBOX] codeRun raw result:', JSON.stringify(result, null, 2));
+    
+    // Format output - check all possible fields from Daytona SDK
+    let output = '';
+    // Daytona SDK may return: result, output, stdout, logs, text, etc.
+    if (result.result !== undefined && result.result !== null && result.result !== '') {
+      output = String(result.result);
+    } else if (result.output !== undefined && result.output !== null && result.output !== '') {
+      output = String(result.output);
+    } else if (result.stdout !== undefined && result.stdout !== null && result.stdout !== '') {
+      output = String(result.stdout);
+    } else if (result.logs !== undefined && result.logs !== null && result.logs !== '') {
+      output = String(result.logs);
+    } else if (result.text !== undefined && result.text !== null && result.text !== '') {
+      output = String(result.text);
+    }
+    
+    // Add stderr if present
+    const stderr = result.stderr || result.error || result.errors;
+    if (stderr) {
+      output += (output ? '\n\nStderr:\n' : 'Stderr:\n') + String(stderr);
+    }
+    
+    // If still no output, stringify the whole result
+    if (!output) {
+      // Maybe the entire result object IS the output
+      if (typeof result === 'string') {
+        output = result;
+      } else if (result && Object.keys(result).length > 0) {
+        output = JSON.stringify(result, null, 2);
+      } else {
+        output = '(No output)';
+      }
+    }
+    
+    // Add exit code info if non-zero
+    const exitCode = result.exitCode ?? result.code ?? result.exit_code ?? 0;
+    if (exitCode !== 0) {
+      output += `\n\n[Exit code: ${exitCode}]`;
+    }
+    
+    console.log(`[SANDBOX] Final output (${output.length} chars): ${output.substring(0, 200)}...`);
+    
+    return {
+      success: exitCode === 0,
+      output: output.trim(),
+      data: {
+        exitCode,
+        language,
+        sandboxId: sandbox.id,
+      },
+    };
+  } catch (error) {
+    console.error('[AGENTIC] Daytona run_code error:', error);
+    return {
+      success: false,
+      output: `Code execution failed: ${error.message}`,
+    };
+  }
+}
+
+/**
+ * Execute run_command tool - run shell command in sandbox
+ * @param {Object} input - Tool input (command)
+ * @param {string} sessionId - Chat session ID for sandbox isolation
+ */
+async function executeRunCommand(input, sessionId) {
+  const { command } = input;
+  
+  if (!command) {
+    return { success: false, output: 'No command provided to execute.' };
+  }
+  
+  if (!process.env.DAYTONA_API_KEY) {
+    return { 
+      success: false, 
+      output: 'Command execution is not available. DAYTONA_API_KEY not configured.' 
+    };
+  }
+  
+  try {
+    const sandbox = await getOrCreateSandbox(sessionId || 'anonymous');
+    
+    // Execute command using executeCommand API
+    console.log(`[SANDBOX] Running command: ${command}`);
+    const result = await sandbox.process.executeCommand(command, {
+      timeout: 120, // 2 minute timeout for installs (in seconds)
+    });
+    
+    // Debug: log raw result from Daytona
+    console.log('[SANDBOX] executeCommand raw result:', JSON.stringify(result, null, 2));
+    
+    // Format output - check all possible fields from Daytona SDK
+    let output = '';
+    // Daytona SDK may return: result, output, stdout, logs, text, etc.
+    if (result.result !== undefined && result.result !== null && result.result !== '') {
+      output = String(result.result);
+    } else if (result.output !== undefined && result.output !== null && result.output !== '') {
+      output = String(result.output);
+    } else if (result.stdout !== undefined && result.stdout !== null && result.stdout !== '') {
+      output = String(result.stdout);
+    } else if (result.logs !== undefined && result.logs !== null && result.logs !== '') {
+      output = String(result.logs);
+    } else if (result.text !== undefined && result.text !== null && result.text !== '') {
+      output = String(result.text);
+    }
+    
+    // Add stderr if present
+    const stderr = result.stderr || result.error || result.errors;
+    if (stderr) {
+      output += (output ? '\n\nStderr:\n' : 'Stderr:\n') + String(stderr);
+    }
+    
+    // If still no output, stringify the whole result
+    if (!output) {
+      // Maybe the entire result object IS the output
+      if (typeof result === 'string') {
+        output = result;
+      } else if (result && Object.keys(result).length > 0) {
+        output = JSON.stringify(result, null, 2);
+      } else {
+        output = '(No output)';
+      }
+    }
+    
+    // Add exit code info if non-zero
+    const exitCode = result.exitCode ?? result.code ?? result.exit_code ?? 0;
+    if (exitCode !== 0) {
+      output += `\n\n[Exit code: ${exitCode}]`;
+    }
+    
+    console.log(`[SANDBOX] Final command output (${output.length} chars): ${output.substring(0, 200)}...`);
+    
+    return {
+      success: exitCode === 0,
+      output: output.trim(),
+      data: {
+        exitCode,
+        command,
+        sandboxId: sandbox.id,
+      },
+    };
+  } catch (error) {
+    console.error('[AGENTIC] Daytona run_command error:', error);
+    return {
+      success: false,
+      output: `Command execution failed: ${error.message}`,
+    };
+  }
+}
+
 // Helper to generate default commentary for tool calls
 function getDefaultCommentary(toolName, input) {
   if (toolName === 'web_search' && input.queries) {
@@ -820,6 +1256,12 @@ function getDefaultCommentary(toolName, input) {
   if (toolName === 'remove_reminder') {
     return 'Removing reminder...';
   }
+  if (toolName === 'run_code' && input.language) {
+    return `Running ${input.language} code...`;
+  }
+  if (toolName === 'run_command' && input.command) {
+    return `Executing: ${input.command.slice(0, 40)}...`;
+  }
   return `Executing ${toolName || 'tool'}...`;
 }
 
@@ -834,13 +1276,13 @@ const MAX_ITERATIONS = 10;
 /**
  * POST /api/agentic
  * 
- * Body: { model, messages, stream?, temperature?, max_tokens?, sessionAttachments? }
+ * Body: { model, messages, stream?, temperature?, max_tokens?, sessionAttachments?, sessionId? }
  */
 router.post('/', async (req, res) => {
   const startTime = Date.now();
   
   try {
-    const { model, messages, stream = true, temperature, max_tokens, sessionAttachments = [] } = req.body;
+    const { model, messages, stream = true, temperature, max_tokens, sessionAttachments = [], sessionId } = req.body;
     
     if (!model) {
       return res.status(400).json({ error: 'Model is required', code: 'MISSING_MODEL' });
@@ -887,11 +1329,45 @@ router.post('/', async (req, res) => {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx/proxy buffering
+      res.flushHeaders(); // Send headers immediately
     }
     
-    // Agentic loop
-    let conversationMessages = [...messages];
-    let totalInputTokens = Math.ceil(JSON.stringify(messages).length / 4);
+    // Build tools system prompt for code execution
+    const toolsSystemPrompt = `
+## CODE EXECUTION TOOLS:
+You have access to run_code and run_command tools to execute code in a secure cloud sandbox.
+
+### run_code tool:
+- Execute code snippets in isolated sandbox
+- Supported: python, javascript, typescript, bash, ruby, go, rust, java, php
+- Use when user asks to run, execute, test, or see output from code
+- Returns stdout, stderr, exit code
+
+### run_command tool:
+- Execute shell commands (pip install, npm install, ls, etc.)
+- Use to install packages before running code that needs them
+
+### Usage:
+- User says "run this python code" → call run_code with language="python"
+- User needs pandas → call run_command "pip install pandas" first
+- Always show execution output to user
+`;
+
+    // Inject tools prompt into system message
+    let conversationMessages = messages.map((m, i) => {
+      if (i === 0 && m.role === 'system') {
+        return { ...m, content: m.content + '\n\n' + toolsSystemPrompt };
+      }
+      return m;
+    });
+    
+    // If no system message, prepend one
+    if (!messages[0] || messages[0].role !== 'system') {
+      conversationMessages = [{ role: 'system', content: toolsSystemPrompt.trim() }, ...messages];
+    }
+    
+    let totalInputTokens = Math.ceil(JSON.stringify(conversationMessages).length / 4);
     let totalOutputTokens = 0;
     let fullContent = '';
     
@@ -1003,8 +1479,20 @@ router.post('/', async (req, res) => {
           result = await executeCompleteReminder(input, req.user?.uid);
         } else if (toolName === 'remove_reminder') {
           result = await executeRemoveReminder(input, req.user?.uid);
+        } else if (toolName === 'run_code') {
+          result = await executeRunCode(input, sessionId);
+        } else if (toolName === 'run_command') {
+          result = await executeRunCommand(input, sessionId);
         } else {
           result = { success: false, output: `Unknown tool: ${toolName}` };
+        }
+        
+        // Ensure result has output string
+        if (!result) {
+          result = { success: false, output: 'Tool returned no result' };
+        }
+        if (typeof result.output !== 'string') {
+          result.output = result.output ? JSON.stringify(result.output) : '(No output)';
         }
         
         // Track tool result tokens
@@ -1029,7 +1517,9 @@ router.post('/', async (req, res) => {
               input: input,
               success: result.success,
               output: result.output,
-              data: result,
+              // Flatten data for mobile UI - result.data contains { results } for web_search
+              // Mobile expects result.data.results, so pass result.data directly (not nested)
+              data: result.data || { output: result.output },
             } 
           })}\n\n`);
         }
@@ -1524,4 +2014,7 @@ async function callGeminiWithTools(config, messages, options, res) {
   };
 }
 
+// Export router and sandbox utilities
 module.exports = router;
+module.exports.deleteSandboxForSession = deleteSandboxForSession;
+module.exports.getSandboxStats = getSandboxStats;

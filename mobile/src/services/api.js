@@ -37,11 +37,11 @@ export function normalizeUsage(provider, usage) {
  * Build system prompt like renderer's personaSystem()
  */
 export function buildSystemPrompt(settings = {}) {
-  const { persona = {}, language = 'autodetect', model = '' } = settings;
+  const { persona = {}, language = 'autodetect', model = '', useClustrixCloud = false } = settings;
   const { name, work, prefs } = persona;
   
   // Simple hash for caching
-  const hash = JSON.stringify({ persona, language, model });
+  const hash = JSON.stringify({ persona, language, model, useClustrixCloud });
   if (cachedPersonaHash === hash && cachedSystemPrompt) {
     return cachedSystemPrompt;
   }
@@ -96,6 +96,15 @@ export function buildSystemPrompt(settings = {}) {
   prompt += `- **What it does**: When Agentic Mode is ON, you can recall previously attached files using reattach_file tool.\n`;
   prompt += `- **When to use**: If user references an earlier attachment (e.g., "explain that image again", "what was in that PDF?").\n`;
   prompt += `- **If you forgot a file**: Guide user to enable Agentic Mode via Plus button (+), then you can recall any file attached in this session.\n\n`;
+
+  // Code Execution - only show when Cloud Mode is OFF
+  if (!useClustrixCloud) {
+    prompt += `## CODE EXECUTION:\n`;
+    prompt += `- **Requirements**: Enable Cloud Mode (Settings) AND Agentic Mode (Plus button).\n`;
+    prompt += `- **What it does**: Execute code in a secure cloud sandbox (Python, JavaScript, TypeScript, Bash, etc.).\n`;
+    prompt += `- **When to suggest**: If user asks to run, execute, or test code.\n`;
+    prompt += `- **How to guide**: "To run code, enable Cloud Mode in Settings (tap Clustrix logo) and Agentic Mode via Plus button (+)."\n\n`;
+  }
 
   // ERROR HANDLING & TROUBLESHOOTING
   prompt += `# ERROR HANDLING PROTOCOL:\n`;

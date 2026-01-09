@@ -2,6 +2,11 @@
 export const parseAgentContent = (content) => {
   if (!content) return [{ type: 'text', content: '' }];
 
+  // DEBUG: Log raw content received
+  if (__DEV__ && content.includes('<!--command-')) {
+    console.log('[AgenticParser] Raw content (first 500):', content.substring(0, 500));
+  }
+
   // Regex matches generic command tags
   const tagRegex = /<!--command-(input|output)-->([\s\S]*?)<!--\/command-\1-->/gi;
   
@@ -19,14 +24,48 @@ export const parseAgentContent = (content) => {
 
       const type = match[1]; // 'input' or 'output'
       const rawPayload = match[2];
+      
+      // DEBUG: Log extracted payload
+      if (__DEV__) {
+        console.log(`[AgenticParser] Extracted ${type} payload (first 200):`, rawPayload.substring(0, 200));
+      }
+      
       let payload = null;
       try {
-          // Sanitize: remove control characters (U+0000 to U+001F) except valid whitespace
-          const sanitized = rawPayload.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+          // Fix: Escape literal newlines, carriage returns, and tabs that break JSON parsing
+          // These appear as actual control characters after the outer SSE JSON is parsed
+          let sanitized = rawPayload
+            .replace(/\r\n/g, '\\n')  // Windows newlines
+            .replace(/\n/g, '\\n')    // Unix newlines  
+            .replace(/\r/g, '\\r')    // Carriage returns
+            .replace(/\t/g, '\\t');   // Tabs
+          // Also remove other control characters (U+0000 to U+001F) except the ones we just escaped
+          sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
           payload = JSON.parse(sanitized);
+          if (__DEV__) {
+            console.log(`[AgenticParser] Parsed ${type} successfully:`, { command: payload.command, hasArgs: !!payload.args, hasOutput: !!payload.output });
+          }
       } catch (e) {
-          // If still fails, don't log warning - just use raw
-          payload = { raw: rawPayload.trim() };
+          // First parse failed, try trimming whitespace
+          try {
+              payload = JSON.parse(rawPayload.trim());
+          } catch (e2) {
+              // Still failed - store as raw for debugging
+              if (__DEV__) {
+                console.warn(`[AgenticParser] JSON parse failed for ${type}:`, e.message, 'Raw (first 100):', rawPayload.substring(0, 100));
+              }
+              payload = { raw: rawPayload.trim() };
+          }
+      }
+      
+      // If payload has 'raw' field that looks like JSON, try to parse it
+      if (payload?.raw && typeof payload.raw === 'string' && payload.raw.startsWith('{')) {
+          try {
+              const innerParsed = JSON.parse(payload.raw);
+              payload = innerParsed;
+          } catch (e) {
+              // Keep original raw payload
+          }
       }
 
       blocks.push({
@@ -290,8 +329,16 @@ export const transformCommandText = (cmdName, args) => {
         return 'Complete Reminder';
     }
     
+    // Code execution tools
+    if (cmdName === 'run_code') {
+        const lang = args?.language || 'code';
+        return `Run ${lang.charAt(0).toUpperCase() + lang.slice(1)} Code`;
+    }
+    
     if (cmdName === 'run_command') {
-        const cmd = String(args || '');
+        // args is an object with { command: '...', commentary: '...' }
+        const cmd = args?.command || '';
+        if (!cmd) return 'Run Command';
         // Naive split for now to catch simple grouped commands
         if (cmd.includes(';') || cmd.includes('&&')) {
            const parts = cmd.split(/[;&]+/).map(s => s.trim()).filter(Boolean);

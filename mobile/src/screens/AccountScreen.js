@@ -23,7 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import GoogleLogo from '../../assets/cloud-database.png';
 import { GOOGLE_FAVICON } from '../constants/strings';
 
-export default function AccountScreen({ visible, onClose }) {
+export default function AccountScreen({ visible, onClose, triggerOpen }) {
   const {
     currentUser,
     isLoggedIn,
@@ -184,7 +184,7 @@ export default function AccountScreen({ visible, onClose }) {
 
   return (
     <>
-      <SlideLeftModal visible={visible} onClose={onClose} title="Account">
+      <SlideLeftModal visible={visible} onClose={onClose} title="Account" triggerOpen={triggerOpen}>
         <View style={styles.container}>
           {isLoggedIn ? (
             // Logged in state

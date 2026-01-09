@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
@@ -19,7 +19,8 @@ const LANGUAGES = [
 ];
 
 // Bullet List Component for proper ul/li styling
-function BulletList({ items }) {
+// Memoized to avoid re-rendering large static blocks on menu state changes.
+const BulletList = memo(function BulletList({ items }) {
   return (
     <View style={styles.bulletList}>
       {items.map((item, index) => (
@@ -30,10 +31,10 @@ function BulletList({ items }) {
       ))}
     </View>
   );
-}
+});
 
 // Custom Instructions Content (rendered inside SlideLeftModal)
-function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved }) {
+const CustomInstructionsContent = memo(function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved }) {
   const [persona, setPersona] = useState(settings.persona || { name: '', work: '', prefs: '' });
   const [language, setLanguage] = useState(settings.language || 'autodetect');
 
@@ -95,10 +96,10 @@ function CustomInstructionsContent({ settings, onUpdate, onClose, onShowSaved })
       </Pressable>
     </ScrollView>
   );
-}
+});
 
 // Settings Menu Content
-function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenAgenticTools, onOpenImageModels, onOpenReminders, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout }) {
+const SettingsMenuContent = memo(function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenAgenticTools, onOpenImageModels, onOpenReminders, onOpenPrivacyPolicy, onOpenLicense, onOpenAbout }) {
   const { isLoggedIn } = useApp();
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.menuContent}>
@@ -141,10 +142,10 @@ function SettingsMenuContent({ onOpenCustomInstructions, onOpenAccount, onOpenAg
       />
     </ScrollView>
   );
-}
+});
 
 // Privacy Policy Content
-function PrivacyPolicyContent() {
+const PrivacyPolicyContent = memo(function PrivacyPolicyContent() {
   return (
     <ScrollView showsVerticalScrollIndicator={false} style={styles.subContainer} contentContainerStyle={styles.content}>
       <View style={styles.section}>
@@ -188,10 +189,10 @@ function PrivacyPolicyContent() {
       
     </ScrollView>
   );
-}
+});
 
 // License Content
-function LicenseContent() {
+const LicenseContent = memo(function LicenseContent() {
   return (
     <ScrollView showsVerticalScrollIndicator={false} style={styles.subContainer} contentContainerStyle={styles.content}>
       <View style={styles.section}>
@@ -229,10 +230,10 @@ function LicenseContent() {
       </View>
     </ScrollView>
   );
-}
+});
 
 // About Clustrix Content
-function AboutClustrixContent() {
+const AboutClustrixContent = memo(function AboutClustrixContent() {
   return (
     <ScrollView
       showsVerticalScrollIndicator={false}
@@ -335,7 +336,7 @@ function AboutClustrixContent() {
       </View>
     </ScrollView>
   );
-}
+});
 
 
 export default function PersonalizationScreen({ visible, onClose }) {
@@ -353,6 +354,58 @@ export default function PersonalizationScreen({ visible, onClose }) {
   const [showAbout, setShowAbout] = useState(false);
   const [reminderRefreshKey, setReminderRefreshKey] = useState(0);
   const [reminderFormTrigger, setReminderFormTrigger] = useState(0);
+  // Triggers force re-open even if a modal is mid-close (same pattern as reminders form).
+  const [customInstructionsTrigger, setCustomInstructionsTrigger] = useState(0);
+  const [accountTrigger, setAccountTrigger] = useState(0);
+  const [agenticToolsTrigger, setAgenticToolsTrigger] = useState(0);
+  const [imageModelsTrigger, setImageModelsTrigger] = useState(0);
+  const [remindersTrigger, setRemindersTrigger] = useState(0);
+  const [privacyPolicyTrigger, setPrivacyPolicyTrigger] = useState(0);
+  const [licenseTrigger, setLicenseTrigger] = useState(0);
+  const [aboutTrigger, setAboutTrigger] = useState(0);
+  
+  // Stable handlers to keep memoized menu content snappy.
+  const handleOpenCustomInstructions = useCallback(() => {
+    setShowCustomInstructions(true);
+    setCustomInstructionsTrigger(prev => prev + 1);
+  }, []);
+  const handleOpenAccount = useCallback(() => {
+    setShowAccount(true);
+    setAccountTrigger(prev => prev + 1);
+  }, []);
+  const handleOpenAgenticTools = useCallback(() => {
+    setShowAgenticTools(true);
+    setAgenticToolsTrigger(prev => prev + 1);
+  }, []);
+  const handleOpenImageModels = useCallback(() => {
+    setShowImageModels(true);
+    setImageModelsTrigger(prev => prev + 1);
+  }, []);
+  const handleOpenReminders = useCallback(() => {
+    setShowReminders(true);
+    setRemindersTrigger(prev => prev + 1);
+  }, []);
+  const handleOpenPrivacyPolicy = useCallback(() => {
+    setShowPrivacyPolicy(true);
+    setPrivacyPolicyTrigger(prev => prev + 1);
+  }, []);
+  const handleOpenLicense = useCallback(() => {
+    setShowLicense(true);
+    setLicenseTrigger(prev => prev + 1);
+  }, []);
+  const handleOpenAbout = useCallback(() => {
+    setShowAbout(true);
+    setAboutTrigger(prev => prev + 1);
+  }, []);
+  
+  const handleCloseCustomInstructions = useCallback(() => setShowCustomInstructions(false), []);
+  const handleCloseAccount = useCallback(() => setShowAccount(false), []);
+  const handleCloseAgenticTools = useCallback(() => setShowAgenticTools(false), []);
+  const handleCloseImageModels = useCallback(() => setShowImageModels(false), []);
+  const handleCloseReminders = useCallback(() => setShowReminders(false), []);
+  const handleClosePrivacyPolicy = useCallback(() => setShowPrivacyPolicy(false), []);
+  const handleCloseLicense = useCallback(() => setShowLicense(false), []);
+  const handleCloseAbout = useCallback(() => setShowAbout(false), []);
   
   // Reminder form handlers
   const handleOpenAddReminder = useCallback(() => {
@@ -382,27 +435,28 @@ export default function PersonalizationScreen({ visible, onClose }) {
       {/* Main Settings Modal */}
       <SlideLeftModal visible={visible} onClose={onClose} title="Settings">
         <SettingsMenuContent 
-          onOpenCustomInstructions={() => setShowCustomInstructions(true)} 
-          onOpenAgenticTools={() => setShowAgenticTools(true)}
-          onOpenImageModels={() => setShowImageModels(true)}
-          onOpenReminders={() => setShowReminders(true)}
-          onOpenAccount={() => setShowAccount(true)}
-          onOpenPrivacyPolicy={() => setShowPrivacyPolicy(true)}
-          onOpenLicense={() => setShowLicense(true)}
-          onOpenAbout={() => setShowAbout(true)}
+          onOpenCustomInstructions={handleOpenCustomInstructions} 
+          onOpenAgenticTools={handleOpenAgenticTools}
+          onOpenImageModels={handleOpenImageModels}
+          onOpenReminders={handleOpenReminders}
+          onOpenAccount={handleOpenAccount}
+          onOpenPrivacyPolicy={handleOpenPrivacyPolicy}
+          onOpenLicense={handleOpenLicense}
+          onOpenAbout={handleOpenAbout}
         />
       </SlideLeftModal>
 
       {/* Custom Instructions Submenu */}
       <SlideLeftModal 
         visible={showCustomInstructions} 
-        onClose={() => setShowCustomInstructions(false)} 
+        onClose={handleCloseCustomInstructions} 
         title="Custom Instructions"
+        triggerOpen={customInstructionsTrigger}
       >
         <CustomInstructionsContent 
           settings={settings} 
           onUpdate={updateSettings} 
-          onClose={() => setShowCustomInstructions(false)}
+          onClose={handleCloseCustomInstructions}
           onShowSaved={() => setShowSavedAlert(true)}
         />
       </SlideLeftModal>
@@ -410,35 +464,38 @@ export default function PersonalizationScreen({ visible, onClose }) {
       {/* Web Search Config Screen */}
       <SlideLeftModal 
         visible={showAgenticTools} 
-        onClose={() => setShowAgenticTools(false)} 
+        onClose={handleCloseAgenticTools} 
         title="Web Search"
         showGradients={false}
+        triggerOpen={agenticToolsTrigger}
       >
-        <AgenticToolsScreen onClose={() => setShowAgenticTools(false)} />
+        <AgenticToolsScreen onClose={handleCloseAgenticTools} />
       </SlideLeftModal>
 
       {/* Image Models Screen */}
       <SlideLeftModal 
         visible={showImageModels} 
-        onClose={() => setShowImageModels(false)} 
+        onClose={handleCloseImageModels} 
         title="Image Model"
         showGradients={false}
+        triggerOpen={imageModelsTrigger}
       >
-        <ImageModelsScreen onClose={() => setShowImageModels(false)} />
+        <ImageModelsScreen onClose={handleCloseImageModels} />
       </SlideLeftModal>
 
       {/* Account Screen */}
-      <AccountScreen visible={showAccount} onClose={() => setShowAccount(false)} />
+      <AccountScreen visible={showAccount} onClose={handleCloseAccount} triggerOpen={accountTrigger} />
 
       {/* Reminders Screen */}
       <SlideLeftModal 
         visible={showReminders} 
-        onClose={() => setShowReminders(false)} 
+        onClose={handleCloseReminders} 
         title="Manage Reminders"
         showGradients={false}
+        triggerOpen={remindersTrigger}
       >
         <RemindersScreen 
-          onClose={() => setShowReminders(false)}
+          onClose={handleCloseReminders}
           onOpenAddForm={handleOpenAddReminder}
           onOpenEditForm={handleOpenEditReminder}
           refreshKey={reminderRefreshKey}
@@ -463,8 +520,9 @@ export default function PersonalizationScreen({ visible, onClose }) {
       {/* Privacy Policy */}
       <SlideLeftModal 
         visible={showPrivacyPolicy} 
-        onClose={() => setShowPrivacyPolicy(false)} 
+        onClose={handleClosePrivacyPolicy} 
         title="Privacy Policy"
+        triggerOpen={privacyPolicyTrigger}
       >
         <PrivacyPolicyContent />
       </SlideLeftModal>
@@ -472,8 +530,9 @@ export default function PersonalizationScreen({ visible, onClose }) {
       {/* License */}
       <SlideLeftModal 
         visible={showLicense} 
-        onClose={() => setShowLicense(false)} 
+        onClose={handleCloseLicense} 
         title="License"
+        triggerOpen={licenseTrigger}
       >
         <LicenseContent />
       </SlideLeftModal>
@@ -481,8 +540,9 @@ export default function PersonalizationScreen({ visible, onClose }) {
       {/* About Clustrix */}
       <SlideLeftModal 
         visible={showAbout} 
-        onClose={() => setShowAbout(false)} 
+        onClose={handleCloseAbout} 
         title="About Clustrix"
+        triggerOpen={aboutTrigger}
       >
        
         <AboutClustrixContent />

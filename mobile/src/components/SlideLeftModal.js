@@ -1,6 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions, BackHandler, ScrollView } from 'react-native';
-import { Pressable } from 'react-native-gesture-handler';
+import { View, Text, StyleSheet, Animated, Dimensions, BackHandler, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors';
@@ -35,9 +34,10 @@ function getCardRadius(index, total) {
  */
 function MenuCard({ icon, title, description, onPress, style }) {
   return (
+    // Use RN Pressable for immediate tap response (no gesture-handler delay).
     <Pressable 
       style={[styles.card, style]} 
-      onPress={() => requestAnimationFrame(onPress)} 
+      onPress={() => requestAnimationFrame(() => onPress?.())} 
       android_ripple={{ color: 'rgba(255,255,255,0.08)', foreground: true }}
       delayPressIn={0}
     >

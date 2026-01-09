@@ -339,7 +339,7 @@ const AboutClustrixContent = memo(function AboutClustrixContent() {
 });
 
 
-export default function PersonalizationScreen({ visible, onClose }) {
+export default function PersonalizationScreen({ visible, onClose, triggerOpen }) {
   const { settings, updateSettings } = useApp();
   const [showCustomInstructions, setShowCustomInstructions] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
@@ -433,7 +433,7 @@ export default function PersonalizationScreen({ visible, onClose }) {
   return (
     <>
       {/* Main Settings Modal */}
-      <SlideLeftModal visible={visible} onClose={onClose} title="Settings">
+      <SlideLeftModal visible={visible} onClose={onClose} title="Settings" triggerOpen={triggerOpen}>
         <SettingsMenuContent 
           onOpenCustomInstructions={handleOpenCustomInstructions} 
           onOpenAgenticTools={handleOpenAgenticTools}

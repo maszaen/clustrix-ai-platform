@@ -149,6 +149,8 @@ function MainApp() {
   }, []);
   const { isReady, sessions, currentSession, messages, selectSession, deleteSession, clearCurrentSession, toggleFavorite, renameSession, currentUser, isLoggedIn, lastBackupTime, settings, updateSettings, splashMessage, setSplashComplete, setIsLoadingSession } = useApp();
   const [showPersonalization, setShowPersonalization] = useState(false);
+  // Trigger force re-open even if personalization modal is mid-close.
+  const [personalizationTrigger, setPersonalizationTrigger] = useState(0);
   const [showModels, setShowModels] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -395,7 +397,10 @@ function MainApp() {
     return () => clearTimeout(timer);
   }, [sidebarHasQuery, sidebarOpen, sidebarStretch]);
 
-  const openPersonalization = useCallback(() => setShowPersonalization(true), []);
+  const openPersonalization = useCallback(() => {
+    setShowPersonalization(true);
+    setPersonalizationTrigger(prev => prev + 1);
+  }, []);
   const closePersonalization = useCallback(() => setShowPersonalization(false), []);
   const handleShowThinking = useCallback((content) => {
     setThinkingModal({ visible: true, content, isStreaming: false });
@@ -867,7 +872,11 @@ function MainApp() {
         </Reanimated.View>
 
       {/* Personalization Modal */}
-      <PersonalizationScreen visible={showPersonalization} onClose={closePersonalization} />
+      <PersonalizationScreen
+        visible={showPersonalization}
+        onClose={closePersonalization}
+        triggerOpen={personalizationTrigger}
+      />
 
       {/* Account Modal */}
 
@@ -1440,4 +1449,3 @@ const loadingOverlayStyles = StyleSheet.create({
     paddingHorizontal: 20,
   },
 });
-

@@ -13,23 +13,27 @@ import { FONTS } from '../constants/fonts';
 import { LucideSearch, LucideArrowLeft, Pencil, Trash2, Star, LucideX } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PENCIL } from '../constants/strings';
+import LongPressGuard from './LongPressGuard';
 
 const SessionItem = memo(function SessionItem({ session, isActive, onSelect, onLongPress, onToggleFavorite }) {
   return (
-    <Pressable
-      style={[styles.sessionItem, isActive && styles.sessionItemActive]}
-      onPress={() => onSelect(session)}
-      onLongPress={(e) => onLongPress(session, e.nativeEvent)}
-      delayLongPress={300}
-      android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
+    <LongPressGuard
+      onLongPress={(event) => onLongPress?.(session, event.nativeEvent)}
+      disabled={!onLongPress}
     >
-      <Text 
-        style={[styles.sessionTitle, isActive && styles.sessionTitleActive]} 
-        numberOfLines={1}
+      <Pressable
+        style={[styles.sessionItem, isActive && styles.sessionItemActive]}
+        onPress={() => onSelect(session)}
+        android_ripple={{ color: 'rgba(255,255,255,0.1)' }}
       >
-        {session.name || 'Untitled'}
-      </Text>
-    </Pressable>
+        <Text 
+          style={[styles.sessionTitle, isActive && styles.sessionTitleActive]} 
+          numberOfLines={1}
+        >
+          {session.name || 'Untitled'}
+        </Text>
+      </Pressable>
+    </LongPressGuard>
   );
 });
 

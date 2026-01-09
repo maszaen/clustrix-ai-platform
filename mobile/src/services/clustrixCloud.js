@@ -463,10 +463,7 @@ export async function streamCloudAgentic({
             onChunk?.(content);
           }
         } catch (e) {
-          // DEBUG: Log parse errors in dev mode instead of silently ignoring
-          if (__DEV__) {
-            console.warn('[CloudAgentic] SSE JSON parse error:', e.message, 'Data (first 300):', data.substring(0, 300));
-          }
+          // Ignore parse errors (incomplete chunks, etc.)
         }
       }
     };

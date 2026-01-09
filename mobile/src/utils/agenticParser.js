@@ -2,11 +2,6 @@
 export const parseAgentContent = (content) => {
   if (!content) return [{ type: 'text', content: '' }];
 
-  // DEBUG: Log raw content received
-  if (__DEV__ && content.includes('<!--command-')) {
-    console.log('[AgenticParser] Raw content (first 500):', content.substring(0, 500));
-  }
-
   // Regex matches generic command tags
   const tagRegex = /<!--command-(input|output)-->([\s\S]*?)<!--\/command-\1-->/gi;
   
@@ -25,11 +20,6 @@ export const parseAgentContent = (content) => {
       const type = match[1]; // 'input' or 'output'
       const rawPayload = match[2];
       
-      // DEBUG: Log extracted payload
-      if (__DEV__) {
-        console.log(`[AgenticParser] Extracted ${type} payload (first 200):`, rawPayload.substring(0, 200));
-      }
-      
       let payload = null;
       try {
           // Fix: Escape literal newlines, carriage returns, and tabs that break JSON parsing
@@ -42,18 +32,12 @@ export const parseAgentContent = (content) => {
           // Also remove other control characters (U+0000 to U+001F) except the ones we just escaped
           sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
           payload = JSON.parse(sanitized);
-          if (__DEV__) {
-            console.log(`[AgenticParser] Parsed ${type} successfully:`, { command: payload.command, hasArgs: !!payload.args, hasOutput: !!payload.output });
-          }
       } catch (e) {
           // First parse failed, try trimming whitespace
           try {
               payload = JSON.parse(rawPayload.trim());
           } catch (e2) {
               // Still failed - store as raw for debugging
-              if (__DEV__) {
-                console.warn(`[AgenticParser] JSON parse failed for ${type}:`, e.message, 'Raw (first 100):', rawPayload.substring(0, 100));
-              }
               payload = { raw: rawPayload.trim() };
           }
       }

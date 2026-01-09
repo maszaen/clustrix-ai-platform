@@ -12,6 +12,7 @@ import { ChevronRight, CheckCircle, XCircle, Loader2 } from 'lucide-react-native
 import { transformCommandText } from '../utils/agenticParser';
 import { GeneratedImageView } from './ToolResultView';
 import { COLORS } from '../constants/colors';
+import { FONTS } from '../constants/fonts';
 
 if (Platform.OS === 'android' && !global?.nativeFabricUIManager) {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -94,18 +95,20 @@ const CommandBlock = ({ command, expanded, onToggle }) => {
             {expanded && (
                 <Animated.View 
                     entering={FadeIn.duration(200)}
-                    style={{ paddingBottom: 0 }}
+                    style={{ paddingBottom: 0, backgroundColor: COLORS.surface }}
                 > 
                     {/* Commentary */}
                     {input.commentary && (
                         <View style={styles.commentary}>
-                            <Text style={styles.commentaryLabel}>Reasoning:</Text>
+                            <Text style={styles.commentaryLabel}>Reasoning</Text>
                             <Text style={styles.commentaryText}>{input.commentary}</Text>
                         </View>
                     )}
         
                     {/* Image Output */}
                     {(output?.imageBase64 || output?.imageUrl) && (
+                      <>
+                          <View style={styles.separator} />
                         <View style={styles.imageOutputContainer}>
                             <GeneratedImageView
                                 imageBase64={output.imageBase64}
@@ -114,18 +117,23 @@ const CommandBlock = ({ command, expanded, onToggle }) => {
                                 style={input.args?.style}
                             />
                         </View>
+                        </>
                     )}
         
                     {/* Text Output */}
                     {!(output?.imageBase64 || output?.imageUrl) && !['reattach_file', 'list_attachments'].includes(input.command) && (
+                          <>
+                          <View style={styles.separator} />
                         <View style={styles.outputContainer}>
+
                             <View style={styles.outputHeader}>
                                 <Text style={styles.outputLabel}>OUTPUT</Text>
                             </View>
                             <Text style={styles.outputText}>
-                                {output?.output ? (typeof output.output === 'string' ? output.output : JSON.stringify(output.output, null, 2)) : (isRunning ? 'Waiting for output...' : 'Completed')}
+                                {output?.output ? (typeof output.output === 'string' ? output.output : JSON.stringify(output.output, null, 2)) : (isRunning ? 'Waiting for output...' : 'Command executed')}
                             </Text>
                         </View>
+                        </>
                     )}
                 </Animated.View>
             )}
@@ -134,84 +142,91 @@ const CommandBlock = ({ command, expanded, onToggle }) => {
 };
 
 const styles = StyleSheet.create({
-    container: {
-        marginVertical: 0,
-        borderRadius: 18,
-        borderWidth: 0,
-        backgroundColor: 'transparent',
-        overflow: 'hidden',
-        width: '100%',
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-    },
-    left: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        paddingRight: 29,
-    },
-    iconContainer: {
-        marginRight: 8,
-        width: 18,
-        alignItems: 'center',
-    },
-    title: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: COLORS.fg,
-        fontFamily: 'System',
-    },
-    commentary: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        backgroundColor: COLORS.surface,
-        borderTopWidth: 1,
-        borderTopColor: COLORS.borderLight,
-    },
-    commentaryLabel: {
-        fontSize: 10,
-        color: COLORS.fgMuted,
-        marginBottom: 2,
-        fontWeight: '700',
-        textTransform: 'uppercase',
-    },
-    commentaryText: {
-        fontSize: 13,
-        color: COLORS.fgMuted,
-        lineHeight: 18,
-    },
-    outputContainer: {
-        borderTopWidth: 1,
-        borderTopColor: COLORS.borderLight,
-        backgroundColor: COLORS.bg,
-        padding: 12,
-    },
-    outputHeader: {
-        marginBottom: 6,
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    outputLabel: {
-        fontSize: 10,
-        color: COLORS.fgMuted,
-        fontWeight: '700',
-    },
-    outputText: {
-        fontFamily: 'monospace',
-        fontSize: 12,
-        color: COLORS.fg,
-        lineHeight: 16,
-    },
-    imageOutputContainer: {
-        borderTopWidth: 1,
-        borderTopColor: COLORS.borderLight,
-        overflow: 'hidden',
-    },
+  container: {
+    marginVertical: 0,
+    borderRadius: 18,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+    width: '100%',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  left: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 29,
+  },
+  iconContainer: {
+    marginRight: 8,
+    width: 18,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.fg,
+    fontFamily: 'System',
+  },
+  commentary: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: COLORS.surface,
+    // borderTopWidth: 1,
+    // borderTopColor: COLORS.borderLight,
+  },
+  commentaryLabel: {
+    fontSize: 10,
+    color: COLORS.fgMuted,
+    fontFamily: FONTS.displayItalic,
+    marginBottom: 2,
+    textTransform: 'uppercase',
+  },
+  commentaryText: {
+    fontSize: 13,
+    color: COLORS.fgMuted,
+    lineHeight: 18,
+  },
+  outputContainer: {
+    // borderTopWidth: 1,
+    // borderTopColor: COLORS.borderLight,
+    backgroundColor: COLORS.surface,
+    padding: 12,
+    paddingHorizontal: 16,
+  },
+  outputHeader: {
+    marginBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  outputLabel: {
+    fontSize: 10,
+    color: COLORS.fgMuted,
+    fontFamily: FONTS.displayItalic
+  },
+  outputText: {
+    fontFamily: 'monospace',
+    fontSize: 12,
+    color: COLORS.fgMuted,
+    lineHeight: 16,
+  },
+  imageOutputContainer: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    overflow: 'hidden',
+  },
+  // Horizontal separator line
+  separator: {
+    height: 1,
+    marginHorizontal: 14,
+    backgroundColor: COLORS.borderLight,
+  },
 });
 
 export default CommandBlock;

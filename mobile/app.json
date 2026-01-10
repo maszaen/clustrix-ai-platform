@@ -7,16 +7,15 @@
     "version": "3.2.59",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "jsEngine": "hermes",
     "backgroundColor": "#000000",
     "splash": {
-      "image": "./assets/splash-transparent.png",
+      "image": "./assets/adaptive-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000",
       "dark": {
-        "image": "./assets/splash-transparent.png",
+        "image": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000",
         "resizeMode": "contain"
       }
@@ -26,16 +25,12 @@
     },
     "android": {
       "backgroundColor": "#000000",
-      "notification": {
-        "icon": "./assets/notification-icon.png",
-        "color": "#FFFFFF"
-      },
       "splash": {
-        "image": "./assets/splash-transparent.png",
+        "image": "./assets/adaptive-icon.png",
         "resizeMode": "contain",
         "backgroundColor": "#000000",
         "dark": {
-          "image": "./assets/splash-transparent.png",
+          "image": "./assets/adaptive-icon.png",
           "backgroundColor": "#000000"
         }
       },
@@ -70,6 +65,8 @@
       [
         "expo-notifications",
         {
+          "icon": "./assets/notification-icon.png",
+          "color": "#FFFFFF",
           "sounds": []
         }
       ]

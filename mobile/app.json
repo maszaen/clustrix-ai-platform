@@ -13,7 +13,12 @@
     "splash": {
       "image": "./assets/splash-transparent.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#000000",
+      "dark": {
+        "image": "./assets/splash-transparent.png",
+        "backgroundColor": "#000000",
+        "resizeMode": "contain"
+      }
     },
     "ios": {
       "supportsTablet": true
@@ -56,6 +61,14 @@
       }
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-transparent.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        }
+      ],
       "expo-secure-store",
       "expo-web-browser",
       "@react-native-google-signin/google-signin",

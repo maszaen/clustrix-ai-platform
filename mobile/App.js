@@ -232,16 +232,16 @@ function MainApp() {
   }));
 
   // Keep RN Animated interpolations for non-gesture related UI
-  const sidebarOverlayOpacity = scrollXAnimated.interpolate({
-    inputRange: [0, SIDEBAR_WIDTH],
-    outputRange: [0, 0.5],
-    extrapolate: 'clamp',
-  });
-  const mainOverlayOpacity = scrollXAnimated.interpolate({
-    inputRange: [0, SIDEBAR_WIDTH],
-    outputRange: [0.5, 0],
-    extrapolate: 'clamp',
-  });
+  // const sidebarOverlayOpacity = scrollXAnimated.interpolate({
+  //   inputRange: [0, SIDEBAR_WIDTH],
+  //   outputRange: [0, 0.5],
+  //   extrapolate: 'clamp',
+  // });
+  // const mainOverlayOpacity = scrollXAnimated.interpolate({
+  //   inputRange: [0, SIDEBAR_WIDTH],
+  //   outputRange: [0.5, 0],
+  //   extrapolate: 'clamp',
+  // });
 
   // Helper to sync RN Animated with Reanimated for non-gesture UI
   // const syncAnimatedValues = useCallback((targetPage) => {

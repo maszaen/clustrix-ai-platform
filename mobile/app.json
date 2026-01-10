@@ -10,6 +10,7 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "jsEngine": "hermes",
+    "backgroundColor": "#000000",
     "splash": {
       "image": "./assets/splash-transparent.png",
       "resizeMode": "contain",
@@ -24,6 +25,7 @@
       "supportsTablet": true
     },
     "android": {
+      "backgroundColor": "#000000",
       "notification": {
         "icon": "./assets/notification-icon.png",
         "color": "#FFFFFF"

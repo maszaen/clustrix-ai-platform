@@ -764,6 +764,7 @@ function MainApp() {
               image: img, 
               isDownloadable: img?.isDownloadable || false, 
             })} 
+            onOpenModels={openModels}
             chatInputRef={chatInputRef} 
           />
 

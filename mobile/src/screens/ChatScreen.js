@@ -14,10 +14,12 @@ import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import ContextMenuFixed from '../components/ContextMenuFixed';
 import InputModal from '../components/InputModal';
+import ConfirmModal from '../components/ConfirmModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors'; 
 import { FONTS } from '../constants/fonts';
 import { DIAMOND_LOGO_HTML } from '../constants/strings';
+import { DEFAULT_PROVIDERS_LIST } from '../constants/providers';
 
 // PERF: Debug flag - set to false in production to disable all debug logs
 // This prevents console.log overhead during streaming
@@ -100,7 +102,7 @@ function WelcomeScreen({ message, shouldAnimate }) {
   );
 }
 
-const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false, onShowThinking, onStreamingThinking, onSelectText, onOpenAttachmentModal, onImagePress, chatInputRef }) {
+const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false, onShowThinking, onStreamingThinking, onSelectText, onOpenAttachmentModal, onImagePress, chatInputRef, onOpenModels }) {
   const { 
     currentSession, 
     messages, 
@@ -123,6 +125,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     saveWelcomeDraft,
     isLoadingSession,
     expectedMessageCount,
+    customProviders,
     providerApiKeys,
     // Pagination from context
     hasMoreMessages,
@@ -157,6 +160,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const [metadataMenu, setMetadataMenu] = useState({ visible: false, message: null, position: null });
   const [toolStatus, setToolStatus] = useState(null); // { name, commentary } - for tool execution indicator
   const [isWaitingForIteration, setIsWaitingForIteration] = useState(false); // True when waiting for next agentic iteration
+  const [apiKeyModal, setApiKeyModal] = useState({ visible: false, providerName: '' }); // Missing API key alert
   const sessionAttachmentsRef = useRef([]); // Track all attachments sent in current session for reattach_file tool
   const lastHapticTime = useRef(0);
   
@@ -219,7 +223,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const isNearBottomRef = useRef(true); // Track if user is near bottom
   const streamEndedRef = useRef(false); // Track if stream just ended
   const SPACER_HEIGHT = Dimensions.get('window').height - 335; // Full device height - 145
-  const SPACER_HIDE_BUFFER = 30; // Extra buffer before hiding spacer
+  const SPACER_HIDE_BUFFER = 100; // Extra buffer before hiding spacer from bottom
   
   // Dismiss chat input keyboard when sidebar opens (to avoid conflict with search bar)
   useEffect(() => {
@@ -722,6 +726,18 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   }, [inputText, currentSession, persistDraft, clearDraft, saveWelcomeDraft]);
 
   const handleSend = useCallback(async (text, attachments = []) => {
+    // Block sending when local mode is active but the current provider API key is missing
+    const activeProviderId = settings.provider || 'openrouter';
+    const providerApiKey = providerApiKeys[activeProviderId] || settings.apiKey || '';
+    const isCloudMode = settings.useClustrixCloud ?? false;
+    
+    if (!isCloudMode && !providerApiKey.trim()) {
+      const providerList = [...DEFAULT_PROVIDERS_LIST, ...customProviders.map(p => ({ id: p.id, name: p.name }))];
+      const providerName = providerList.find(p => p.id === activeProviderId)?.name || activeProviderId;
+      setApiKeyModal({ visible: true, providerName });
+      return;
+    }
+
     // DEBUG: Log attachments received
     log('[handleSend] text:', text.substring(0, 50), 'attachments:', attachments.length);
     log('[handleSend] attachments detail:', attachments.map(a => ({ type: a.type, name: a.name, hasBase64: !!a.base64, hasTextContent: !!a.textContent })));
@@ -1283,7 +1299,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         onSearchResults: handleSearchResults, // Perplexity built-in search
       });
     }
-  }, [currentSession, clearDraft, saveWelcomeDraft, messages, createSession, appendMessage, settings, removeMessage, updateSession, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, setInputText, setNewMessageId, onStreamingThinking, triggerHaptic]);
+  }, [currentSession, clearDraft, saveWelcomeDraft, messages, createSession, appendMessage, settings, providerApiKeys, customProviders, removeMessage, updateSession, setIsStreaming, setStreamingContent, setThinkingContent, setStreamingMessageId, setInputText, setNewMessageId, onStreamingThinking, triggerHaptic]);
 
   const handleStop = async () => {
     // 1. Abort network request
@@ -1749,8 +1765,11 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     isNearBottomRef.current = nearBottom;
     
     // Hide spacer when scrolled up after stream ends
-    if (streamEndedRef.current && showSpacer && !nearBottom) {
-      setShowSpacer(false);
+    if (streamEndedRef.current && showSpacer) {
+      // Hide only after user scrolls above spacer height + buffer from bottom
+      if (distanceFromBottom > SPACER_HEIGHT + SPACER_HIDE_BUFFER) {
+        setShowSpacer(false);
+      }
     }
     
     // Logic 1: User Scroll = Fade Out (Hide immediately)
@@ -2029,6 +2048,20 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
           setRetryReasonVisible(false);
           setRetryReason('');
         }}
+      />
+
+      {/* Missing API key modal */}
+      <ConfirmModal
+        visible={apiKeyModal.visible}
+        title="Api key not configured"
+        message={`Please configure the ${apiKeyModal.providerName} api key to continue chatting, or switch to cloud mode`}
+        confirmText="OK"
+        cancelText="Cancel"
+        onConfirm={() => {
+          setApiKeyModal({ visible: false, providerName: '' });
+          onOpenModels?.();
+        }}
+        onCancel={() => setApiKeyModal({ visible: false, providerName: '' })}
       />
 
       {/* Metadata context menu */}

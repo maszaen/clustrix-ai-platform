@@ -360,11 +360,15 @@ function MainApp() {
         runOnJS(setSidebarOpen)(true);
       }
     });
-    sidebarStretch.value = withTiming(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, config);
-  }, [scrollX, sidebarHasQuery, sidebarStretch]);
+    // Always animate to 0 (collapsed) - we explicitly set sidebarHasQuery to false above
+    // Using the closure value would cause stale state bug (value not updated yet)
+    sidebarStretch.value = withTiming(0, config);
+  }, [scrollX, sidebarStretch]);
 
   const closeSidebar = useCallback(() => {
     Keyboard.dismiss();
+    // Reset query state immediately to prevent stale state on rapid open/close
+    setSidebarHasQuery(false);
     currentPage.value = 1;
     const config = { duration: 200, easing: Easing.out(Easing.cubic) };
     // Animate first, then update state after animation completes
@@ -372,6 +376,7 @@ function MainApp() {
       'worklet';
       if (finished) {
         runOnJS(setSidebarOpen)(false);
+        // Redundant but safe - ensures query is false even if animation was interrupted
         runOnJS(setSidebarHasQuery)(false);
       }
     });
@@ -380,16 +385,33 @@ function MainApp() {
 
   // Smoothly adjust sidebar extent when search text toggles a full-width request
   // State updates immediately for instant icon switch, animation follows
+  // IMPORTANT: Only expand if sidebarHasQuery is explicitly true
+  // This prevents race conditions where stale state causes unwanted expansion on sidebar open
+  const prevSidebarHasQueryRef = useRef(sidebarHasQuery);
   useEffect(() => {
-    if (!sidebarOpen) return;
+    if (!sidebarOpen) {
+      prevSidebarHasQueryRef.current = false;
+      return;
+    }
     
-    // Optimized Spring for auto-stretch (system driven) - softer stiffness prevents 60fps locking feels
-    sidebarStretch.value = withSpring(sidebarHasQuery ? SIDEBAR_STRETCH_DISTANCE : 0, { 
-      damping: 35,    // Slightly higher damping for stability
-      stiffness: 440, // Lower stiffness (softer) consumes less processing power per frame visually
-      mass: 1,
-      velocity: 500   // Initial kick to make it feel responsive immediately
-    });
+    // Only animate stretch when sidebarHasQuery actively changes
+    // Skip animation on initial sidebar open (prevents flash of expansion)
+    const queryChanged = prevSidebarHasQueryRef.current !== sidebarHasQuery;
+    prevSidebarHasQueryRef.current = sidebarHasQuery;
+    
+    // If sidebarHasQuery is false, always ensure we're collapsed
+    // If sidebarHasQuery is true AND it just changed, expand
+    if (!sidebarHasQuery) {
+      sidebarStretch.value = withSpring(0, { damping: 35, stiffness: 440, mass: 1, velocity: 500 });
+    } else if (queryChanged) {
+      // Optimized Spring for auto-stretch (system driven) - softer stiffness prevents 60fps locking feels
+      sidebarStretch.value = withSpring(SIDEBAR_STRETCH_DISTANCE, { 
+        damping: 35,    // Slightly higher damping for stability
+        stiffness: 440, // Lower stiffness (softer) consumes less processing power per frame visually
+        mass: 1,
+        velocity: 500   // Initial kick to make it feel responsive immediately
+      });
+    }
   }, [sidebarHasQuery, sidebarOpen, sidebarStretch]);
 
   const openPersonalization = useCallback(() => {

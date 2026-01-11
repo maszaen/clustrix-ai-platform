@@ -10,7 +10,6 @@ import AccountScreen from './AccountScreen';
 import AgenticToolsScreen from './AgenticToolsScreen';
 import ImageModelsScreen from './ImageModelsScreen';
 import RemindersScreen, { ReminderFormContent } from './RemindersScreen';
-import { LinearGradient } from 'expo-linear-gradient';
 
 const LANGUAGES = [
   { id: 'autodetect', name: 'Auto-detect' },
@@ -551,8 +550,8 @@ export default function PersonalizationScreen({ visible, onClose, triggerOpen })
       {/* Saved Alert */}
       <AlertModal
         visible={showSavedAlert}
-        title="Saved"
-        message="Custom instructions saved"
+        title="Custom Instruction Saved"
+        message="Your preferences will be applied to new chats going forward. Some changes may not affect messages that were already generated in this conversation"
         primaryText="Okay"
         onPrimary={() => setShowSavedAlert(false)}
       />

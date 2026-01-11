@@ -34,10 +34,13 @@ export const COLORS = {
   // Accents
   accent: '#0e4bae',
   primary: '#68b2f8',
+  primary40: '#68b2f866',
   primaryLight: '#1f3760',
 
   // Status
   danger: '#ef4444',
+  danger30: '#ef44444d',
+  danger40: '#ef444474',
   error: '#ef4444', // alias for danger
   success: '#22c55e',
   warning: '#f59e0b',

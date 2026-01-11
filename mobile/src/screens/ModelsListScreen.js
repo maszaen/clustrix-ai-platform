@@ -320,13 +320,13 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
           onClose={() => setContextMenu({ ...contextMenu, visible: false })}
         />
 
-        <ConfirmModal
+        <AlertModal
           visible={confirmDelete.visible}
           title={`Delete ${confirmDelete.type === 'provider' ? 'Provider' : 'Model'}`}
           message={`Delete "${confirmDelete.item?.name || confirmDelete.item?.label}"?`}
-          confirmText="Delete"
-          danger
-          onConfirm={() => {
+          primaryText="Delete"
+          secondaryText="Cancel"
+          onPrimary={() => {
             if (confirmDelete.type === 'provider') {
               deleteCustomProvider(confirmDelete.item.id);
             } else {
@@ -334,7 +334,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
             }
             setConfirmDelete({ visible: false, item: null, type: null });
           }}
-          onCancel={() => setConfirmDelete({ visible: false, item: null, type: null })}
+          onSecondary={() => setConfirmDelete({ visible: false, item: null, type: null })}
         />
 
         <InputModal

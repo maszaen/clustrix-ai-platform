@@ -1,6 +1,7 @@
-import { View, Text, StyleSheet, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Modal } from 'react-native';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
+import RipplePressable from './RipplePressable';
 
 /**
  * Reusable Alert Modal - replaces native Alert.alert
@@ -14,6 +15,8 @@ export default function AlertModal({
   onPrimary,
   secondaryText,
   onSecondary,
+  danger,
+  funcOnPress
 }) {
   const hasSecondary = !!secondaryText && !!onSecondary;
   
@@ -30,13 +33,25 @@ export default function AlertModal({
           {/* Buttons - aligned right */}
           <View style={styles.buttons}>
             {hasSecondary && (
-              <Pressable style={styles.secondaryBtn} onPress={onSecondary} android_ripple={{ color: 'rgba(255,255,255,0.1)' }}>
+              <RipplePressable
+                style={styles.secondaryBtn}
+                onPress={onSecondary}
+                // Foreground ripple keeps feedback visible on transparent buttons.
+                android_ripple={{ color: 'rgba(255,255,255,0.12)', borderless: false, foreground: true }}
+                clipRipple
+              >
                 <Text style={styles.secondaryText}>{secondaryText}</Text>
-              </Pressable>
+              </RipplePressable>
             )}
-            <Pressable style={styles.primaryBtn} onPress={onPrimary} android_ripple={{ color: 'rgba(255,255,255,0.2)' }}>
-              <Text style={styles.primaryText}>{primaryText}</Text>
-            </Pressable>
+            <RipplePressable
+              style={[styles.primaryBtn, danger ? {backgroundColor: COLORS.danger30, borderColor: COLORS.danger40, } : funcOnPress ?  {backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary40, } : {backgroundColor: 'transparent', borderColor: COLORS.borderLight, }]}
+              onPress={onPrimary}
+              // Foreground ripple keeps feedback visible on transparent buttons.
+              android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: false, foreground: true }}
+              clipRipple
+            >
+              <Text style={[styles.primaryText, danger ? {color: COLORS.fgMuted } : {color: COLORS.fgMuted }]}>{primaryText}</Text>
+            </RipplePressable>
           </View>
         </View>
       </View>
@@ -57,13 +72,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bgSecondary,
     borderRadius: 16,
     padding: 20,
+    paddingTop: 16,
     paddingBottom: 12,
   },
   title: {
     color: COLORS.fg,
     fontSize: 16,
-    fontFamily: FONTS.display,
-    marginBottom: 6,
+    fontFamily: FONTS.displayItalic,
+    borderBottomWidth: 1,
+    paddingBottom: 8,
+    borderBottomColor: COLORS.borderLight,
+    marginBottom: 8,
   },
   message: {
     color: COLORS.fgMuted,
@@ -75,11 +94,15 @@ const styles = StyleSheet.create({
   buttons: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 12,
+    gap: 6,
   },
   secondaryBtn: {
     paddingVertical: 8,
     paddingHorizontal: 16,
+    backgroundColor: 'transparent',
+    borderRadius: 50,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
   },
   secondaryText: {
     color: COLORS.fgMuted,
@@ -89,13 +112,10 @@ const styles = StyleSheet.create({
   primaryBtn: {
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: 'transparent',
-    borderRadius: 8,
+    borderRadius: 50,
     borderWidth: 1,
-    borderColor: COLORS.borderLight,
   },
   primaryText: {
-    color: COLORS.fg,
     fontSize: 14,
     fontFamily: FONTS.sans,
   },

@@ -4,7 +4,6 @@ import {
   StyleSheet,
   StatusBar,
   Text,
-  ActivityIndicator,
   Animated,
   Dimensions,
   TouchableWithoutFeedback,
@@ -40,7 +39,6 @@ import SlideUpModal from './src/components/SlideUpModal';
 import SlideLeftModal from './src/components/SlideLeftModal';
 import ContextMenuFixed from './src/components/ContextMenuFixed';
 import InputModal from './src/components/InputModal';
-import ConfirmModal from './src/components/ConfirmModal';
 import LoadingScreen from './src/components/LoadingScreen';
 import ImageViewerModal from './src/components/ImageViewerModal';
 import { SvgXml } from 'react-native-svg';
@@ -53,6 +51,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { setupNotificationChannel } from './src/services/notifications';
+import AlertModal from './src/components/AlertModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 // Base sidebar width sits at ~83% of the screen so users can peek the main page
@@ -898,17 +897,18 @@ function MainApp() {
       />
 
       {/* Confirm Delete Modal */}
-      <ConfirmModal
+      <AlertModal
         visible={confirmDelete.visible}
-        title="Delete Chat"
+        title="Confirm Delete"
         message={`Are you sure you want to delete "${confirmDelete.session?.name}"?`}
-        confirmText="Delete"
+        primaryText="Delete"
+        secondaryText="Cancel"
         danger
-        onConfirm={() => {
+        onPrimary={() => {
           if (confirmDelete.session) deleteSession(confirmDelete.session.id);
           setConfirmDelete({ visible: false, session: null });
         }}
-        onCancel={() => setConfirmDelete({ visible: false, session: null })}
+        onSecondary={() => setConfirmDelete({ visible: false, session: null })}
       />
 
       {/* Thinking Modal */}

@@ -779,12 +779,18 @@ export default function RemindersScreen({ onClose, onOpenAddForm, onOpenEditForm
       <AlertModal
         visible={showActionAlert}
         title={actionType === 'complete' ? 'Complete Reminder' : 'Delete Reminder'}
-        message={actionType === 'complete' ? `Mark "${actionTarget?.title}" as done?` : `Delete "${actionTarget?.title}"?`}
+        message={
+          actionType === 'complete'
+            ? `Mark "${actionTarget?.title}" as done? This will move it to your completed reminders.`
+            : `Delete "${actionTarget?.title}"? This action can’t be undone.`
+        }
         icon={actionType === 'complete' ? 'checkmark-circle' : 'trash'}
         iconColor={actionType === 'complete' ? COLORS.success : COLORS.danger}
         primaryText={actionType === 'complete' ? 'Complete' : 'Delete'}
         secondaryText="Cancel"
         onPrimary={confirmAction}
+        danger={actionType === 'delete'}
+        funcOnPress={actionType === 'complete'}
         onSecondary={() => { setShowActionAlert(false); setActionTarget(null); setActionType(null); }}
         destructive={actionType === 'delete'}
       />

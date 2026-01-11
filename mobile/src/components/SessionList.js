@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TextInput, Animated, Dimensions, FlatList } fro
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 import { Pressable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
 import { SvgXml } from 'react-native-svg';
 import ContextMenu from './ContextMenu';
 import ConfirmModal from './ConfirmModal';
@@ -14,6 +13,7 @@ import { LucideSearch, LucideArrowLeft, Pencil, Trash2, Star, LucideX } from 'lu
 import { LinearGradient } from 'expo-linear-gradient';
 import { PENCIL } from '../constants/strings';
 import LongPressGuard from './LongPressGuard';
+import AlertModal from './AlertModal';
 
 const SessionItem = memo(function SessionItem({ session, isActive, onSelect, onLongPress, onToggleFavorite }) {
   return (
@@ -111,7 +111,7 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
         options={getContextOptions()}
         onClose={() => { setContextMenu({ ...contextMenu, visible: false }); onContextMenuChange?.(false); }}
       />
-      <ConfirmModal
+      {/* <ConfirmModal
         visible={confirmDelete.visible}
         title="Delete Chat"
         message={`Are you sure you want to delete "${confirmDelete.session?.name}"?`}
@@ -122,7 +122,20 @@ const SessionList = memo(function SessionList({ sessions, currentSession, onSele
           setConfirmDelete({ visible: false, session: null });
         }}
         onCancel={() => setConfirmDelete({ visible: false, session: null })}
-      />
+      /> */}
+       <AlertModal
+          visible={confirmDelete.visible}
+          title="Confirm Delete"
+          message={`Are you sure you want to delete "${confirmDelete.session?.name}"?`}
+          primaryText="Delete"
+          secondaryText="Cancel"
+          danger
+          onPrimary={() => {
+            if (confirmDelete.session) onDelete(confirmDelete.session.id);
+            setConfirmDelete({ visible: false, session: null });
+          }}
+          onSecondary={() => setConfirmDelete({ visible: false, session: null })}
+        />
 
       <LinearGradient
         colors={[COLORS.bgv2, COLORS.bgv2, 'transparent']}

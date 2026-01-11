@@ -14,7 +14,7 @@ import ChatMessage from '../components/ChatMessage';
 import ChatInput from '../components/ChatInput';
 import ContextMenuFixed from '../components/ContextMenuFixed';
 import InputModal from '../components/InputModal';
-import ConfirmModal from '../components/ConfirmModal';
+import AlertModal from '../components/AlertModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../constants/colors'; 
 import { FONTS } from '../constants/fonts';
@@ -223,7 +223,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const isNearBottomRef = useRef(true); // Track if user is near bottom
   const streamEndedRef = useRef(false); // Track if stream just ended
   const SPACER_HEIGHT = Dimensions.get('window').height - 335; // Full device height - 145
-  const SPACER_HIDE_BUFFER = 100; // Extra buffer before hiding spacer from bottom
+  const SPACER_HIDE_BUFFER = 30; // Extra buffer before hiding spacer from bottom
   
   // Dismiss chat input keyboard when sidebar opens (to avoid conflict with search bar)
   useEffect(() => {
@@ -2051,7 +2051,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       />
 
       {/* Missing API key modal */}
-      <ConfirmModal
+      {/* <ConfirmModal
         visible={apiKeyModal.visible}
         title="Api key not configured"
         message={`Please configure the ${apiKeyModal.providerName} api key to continue chatting, or switch to cloud mode`}
@@ -2062,6 +2062,20 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
           onOpenModels?.();
         }}
         onCancel={() => setApiKeyModal({ visible: false, providerName: '' })}
+      /> */}
+
+      <AlertModal
+        visible={apiKeyModal.visible}
+        title="Api key not configured"
+        message={`You’re using BYOK mode, but no API key is configured, so requests can’t be sent. Add your API key in Settings and try again, or switch to Cloud Mode to continue.`}
+        primaryText="Open Settings"
+        secondaryText="Close"
+        onPrimary={() => {
+          setApiKeyModal({ visible: false, providerName: '' });
+          onOpenModels?.();
+        }}
+        funcOnPress
+        onSecondary={() => setApiKeyModal({ visible: false, providerName: '' })}
       />
 
       {/* Metadata context menu */}

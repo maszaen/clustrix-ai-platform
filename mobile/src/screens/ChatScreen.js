@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable, ScrollView, InteractionManager } from 'react-native';
-import ReanimatedModule, { useAnimatedStyle } from 'react-native-reanimated';
+import ReanimatedModule, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -102,7 +102,7 @@ function WelcomeScreen({ message, shouldAnimate }) {
   );
 }
 
-const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false, onShowThinking, onStreamingThinking, onSelectText, onOpenAttachmentModal, onImagePress, chatInputRef, onOpenModels }) {
+const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false, sessionSelectTick = 0, onShowThinking, onStreamingThinking, onSelectText, onOpenAttachmentModal, onImagePress, chatInputRef, onOpenModels }) {
   const { 
     currentSession, 
     messages, 
@@ -148,6 +148,79 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const [attachmentCount, setAttachmentCount] = useState(0); // Track attachment count for layout adjustments
   const [inputExtraHeight, setInputExtraHeight] = useState(0); // Track multiline input expansion
   const [pillCount, setPillCount] = useState(0); // Track pills count for layout adjustments
+  const footerMeasureKey = `footer-measure-${sessionSelectTick}`;
+  const [measuredContentHeight, setMeasuredContentHeight] = useState(0);
+  const measuredTotalHeightRef = useRef(0);
+
+  // Track when session switch reset happened - used to detect if we need fallback height estimation
+  const sessionSwitchPendingRef = useRef(false);
+
+  // Recalculate list measurements when user selects a session (no list remount).
+  useEffect(() => {
+    setListContentHeight(0);
+    setListLayoutHeight(0);
+    lastContentHeight.current = 0;
+    lastLayoutHeight.current = 0;
+    itemHeights.current = {};
+    measuredTotalHeightRef.current = 0;
+    setMeasuredContentHeight(0);
+    sessionSwitchPendingRef.current = true;
+  }, [sessionSelectTick]);
+
+  // Fallback height estimation after session switch.
+  // FlashList's onContentSizeChange may not fire reliably for short lists.
+  // When messages load after a session switch, compute an estimated height from message count.
+  // This ensures the keyboard animation gate updates immediately without waiting for layout events.
+  const ESTIMATED_ITEM_HEIGHT = 440; // Match FlashList's estimatedItemSize
+  useEffect(() => {
+    // Only run after a session switch and when messages have loaded
+    if (!sessionSwitchPendingRef.current || messages.length === 0) return;
+    
+    // Wait a frame for FlashList to potentially fire its events first
+    const timeoutId = setTimeout(() => {
+      // If FlashList events haven't updated the heights yet, use estimation
+      if (measuredContentHeight === 0 && listContentHeight === 0 && messages.length > 0) {
+        // Calculate estimated total height from message count
+        // Factor in: paddingTop (topInset + 66) and footer (~85)
+        const estimatedHeight = messages.length * ESTIMATED_ITEM_HEIGHT;
+        setMeasuredContentHeight(estimatedHeight);
+        measuredTotalHeightRef.current = estimatedHeight;
+        
+        // Also try to capture layout height from screen dimensions if not set
+        if (listLayoutHeight === 0) {
+          const screenHeight = Dimensions.get('window').height - topInset - 85;
+          setListLayoutHeight(screenHeight);
+          lastLayoutHeight.current = screenHeight;
+        }
+      }
+      sessionSwitchPendingRef.current = false;
+    }, 150); // Small delay to let FlashList events fire first
+    
+    return () => clearTimeout(timeoutId);
+  }, [messages.length, topInset, measuredContentHeight, listContentHeight, listLayoutHeight]);
+
+  // Force FlashList to fire onScroll after remount to capture accurate dimensions.
+  // This addresses the case where onContentSizeChange doesn't fire reliably for short lists.
+  // By doing a tiny programmatic scroll and then scrolling back, we trigger the onScroll
+  // event which has fallback logic to capture contentSize and layoutMeasurement.
+  useEffect(() => {
+    // Only run when FlashList remounts (listMountKey changes) and we have messages
+    if (!listMountKey || messages.length === 0) return;
+    
+    const timeoutId = setTimeout(() => {
+      // Only nudge if heights are still 0 (FlashList events didn't fire)
+      if (listContentHeight === 0 && flatListRef.current) {
+        // Scroll to a tiny offset to trigger onScroll, then scroll to end
+        flatListRef.current.scrollToOffset({ offset: 1, animated: false });
+        // Use requestAnimationFrame to ensure the first scroll registered
+        requestAnimationFrame(() => {
+          flatListRef.current?.scrollToEnd({ animated: false });
+        });
+      }
+    }, 200); // Wait for FlashList to fully render
+    
+    return () => clearTimeout(timeoutId);
+  }, [listMountKey, messages.length, listContentHeight]);
   // Pagination is now handled by context (hasMoreMessages, loadMoreMessages, isLoadingMore)
   const loadingTimeoutRef = useRef(null);
   // Track if initial scroll has been applied - prevents re-applying on data changes
@@ -217,13 +290,18 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const lastContentHeight = useRef(0);
   const lastScrollOffset = useRef(0);
   const lastLayoutHeight = useRef(0);
+  const autoCloseArmedRef = useRef(true);
   
   // Spacer visibility tracking for simpler approach
   const [showSpacer, setShowSpacer] = useState(false);
+  // Shared value so the worklet sees gate changes immediately.
+  const shouldAnimateKeyboard = useSharedValue(false);
   const isNearBottomRef = useRef(true); // Track if user is near bottom
   const streamEndedRef = useRef(false); // Track if stream just ended
   const SPACER_HEIGHT = Dimensions.get('window').height - 335; // Full device height - 145
   const SPACER_HIDE_BUFFER = 30; // Extra buffer before hiding spacer from bottom
+  const ATTACHMENT_EXTRA_HEIGHT = 150; // Match attachment preview spacing
+  const PILL_EXTRA_HEIGHT = 48; // Match AGENTIC_SECTION_HEIGHT in ChatInput
   
   // Dismiss chat input keyboard when sidebar opens (to avoid conflict with search bar)
   useEffect(() => {
@@ -312,12 +390,17 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     if (sidebarOpen) {
       return { transform: [{ translateY: 0 }] };
     }
+    if (!shouldAnimateKeyboard.value) {
+      return { transform: [{ translateY: 0 }] };
+    }
+
     // keyboardAnimatedHeight.value is negative when keyboard open (e.g. -300)
     // Use full keyboard height for transform - footer padding will be reduced accordingly
     return {
       transform: [{ translateY: keyboardAnimatedHeight.value }],
     };
-  });
+  // Depend on JS state so the worklet re-runs when the gate changes.
+  }, [sidebarOpen]);
   
   // Fade in/out scroll button with auto-hide
 
@@ -399,6 +482,37 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     }
   }, [isStreaming, listContentHeight, listLayoutHeight]); // Removed showSpacer from deps
 
+  // Compute keyboard animation gate based on effective content height.
+  useEffect(() => {
+    const footerExtraHeight =
+      (attachmentCount > 0 ? ATTACHMENT_EXTRA_HEIGHT : 0) +
+      (pillCount > 0 ? PILL_EXTRA_HEIGHT : 0) +
+      inputExtraHeight;
+    const footerHeight = 85 + footerExtraHeight;
+    const paddingTop = topInset + 66;
+    const usingMeasured = measuredContentHeight > 0;
+    const baseContentHeight = usingMeasured ? measuredContentHeight : listContentHeight;
+    const contentWithoutSpacer = Math.max(
+      0,
+      baseContentHeight - (showSpacer ? SPACER_HEIGHT : 0)
+    );
+    const contentForGate = usingMeasured
+      ? contentWithoutSpacer + paddingTop + footerHeight
+      : contentWithoutSpacer;
+    const shouldAnimate =
+      listLayoutHeight > 0 && contentForGate >= listLayoutHeight * 0.9;
+    shouldAnimateKeyboard.value = shouldAnimate;
+  }, [
+    measuredContentHeight,
+    listContentHeight,
+    listLayoutHeight,
+    showSpacer,
+    topInset,
+    attachmentCount,
+    pillCount,
+    inputExtraHeight,
+  ]);
+
   // Clear streaming state when saved assistant message appears
   // This prevents blink by keeping streaming message visible until saved message is in state
   // Flow: stream ends → isStreaming=false → appendMessage saves → messages updates → 
@@ -434,6 +548,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       shouldScrollOnSizeChange.current = true;
     }
   }, [isLoadingSession, skeletonOpacity]);
+
 
   // When all messages loaded AND at bottom, disable scroll flag and hide skeleton
   // NOTE: Added proper cleanup for interval/timeout to prevent memory leaks and potential loops
@@ -531,26 +646,29 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     return () => pulse.stop();
   }, [pulseAnim]);
 
-  // Keyboard listeners
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    
-    const showSub = Keyboard.addListener(showEvent, (e) => {
-      setKeyboardVisible(true);
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    
-    const hideSub = Keyboard.addListener(hideEvent, () => {
-      setKeyboardVisible(false);
-      setKeyboardHeight(0);
-    });
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, [keyboardVisible]);
+    // Keyboard listeners
+    useEffect(() => {
+      const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+      const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+      
+      const showSub = Keyboard.addListener(showEvent, (e) => {
+        setKeyboardVisible(true);
+        setKeyboardHeight(e.endCoordinates.height);
+        // If keyboard opens near top, require user to scroll down before auto-close.
+        autoCloseArmedRef.current = lastScrollOffset.current > 100;
+      });
+      
+      const hideSub = Keyboard.addListener(hideEvent, () => {
+        setKeyboardVisible(false);
+        setKeyboardHeight(0);
+        autoCloseArmedRef.current = true;
+      });
+  
+      return () => {
+        showSub.remove();
+        hideSub.remove();
+      };
+    }, [keyboardVisible]);
 
   const [listContentHeight, setListContentHeight] = useState(0);
   const [listLayoutHeight, setListLayoutHeight] = useState(0);
@@ -1593,21 +1711,37 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     setMetadataMenu({ visible: true, message, position: buttonPosition });
   }, []);
 
+  // Track per-item heights so short sessions update immediately on session switch.
+  // Recalculate total from all tracked items on each measurement to ensure accuracy
+  // even after fallback estimation was used.
+  const handleMessageLayout = useCallback((key, height) => {
+    const prev = itemHeights.current[key] || 0;
+    if (prev === height) return;
+    itemHeights.current[key] = height;
+    
+    // Recalculate total from all tracked heights (more accurate than delta updates)
+    const totalMeasured = Object.values(itemHeights.current).reduce((sum, h) => sum + h, 0);
+    measuredTotalHeightRef.current = totalMeasured;
+    setMeasuredContentHeight(totalMeasured);
+  }, []);
+
   // PERF: useCallback to prevent renderMessage recreation on every render
   // This is critical for LegendList/FlatList performance during streaming
   const renderMessage = useCallback(({ item }) => (
-    <ChatMessage
-      message={item}
-      isUser={item.role === 'user'}
-      isNew={item._key === newMessageId}
-      onShowThinking={onShowThinking}
-      onRetry={item.isLastAiMessage ? (msg, pos) => handleRetryModal(msg || item, pos) : null}
-      onSelectText={onSelectText}
-      onReact={(liked) => handleReaction(item, liked)}
-      onShowMetadata={(msg, pos) => handleMetadataOpen(msg || item, pos)}
-      onImagePress={onImagePress}
-    />
-  ), [newMessageId, onShowThinking, onSelectText, onImagePress, handleRetryModal, handleReaction, handleMetadataOpen]);
+    <View onLayout={(e) => handleMessageLayout(item._key, e.nativeEvent.layout.height)}>
+      <ChatMessage
+        message={item}
+        isUser={item.role === 'user'}
+        isNew={item._key === newMessageId}
+        onShowThinking={onShowThinking}
+        onRetry={item.isLastAiMessage ? (msg, pos) => handleRetryModal(msg || item, pos) : null}
+        onSelectText={onSelectText}
+        onReact={(liked) => handleReaction(item, liked)}
+        onShowMetadata={(msg, pos) => handleMetadataOpen(msg || item, pos)}
+        onImagePress={onImagePress}
+      />
+    </View>
+  ), [newMessageId, onShowThinking, onSelectText, onImagePress, handleRetryModal, handleReaction, handleMetadataOpen, handleMessageLayout]);
 
   // Messages are already paginated from context - just add keys
   // Key must be STABLE across prepends - use message_index only (not array index!)
@@ -1821,18 +1955,36 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
 
   // Footer component for bottom spacing (appears at BOTTOM)
   // Simpler approach: fixed size during stream, conditional removal based on visibility
-  const ATTACHMENT_EXTRA_HEIGHT = 150; // Increased to match new preview size (129 + margins) // Extra space when attachments are shown
-  const PILL_EXTRA_HEIGHT = 48; // Match AGENTIC_SECTION_HEIGHT in ChatInput
+  const handleFooterLayout = useCallback((e) => {
+    const { y, height } = e.nativeEvent.layout;
+    const nextHeight = y + height;
+    // Update content height from footer position to avoid stale size on session switch.
+    setListContentHeight(prev => (prev === nextHeight ? prev : nextHeight));
+    lastContentHeight.current = nextHeight;
+  }, []);
+
   const ListFooter = useCallback(() => {
     const dynamicOffset = (attachmentCount > 0 ? ATTACHMENT_EXTRA_HEIGHT : 0) + (pillCount > 0 ? PILL_EXTRA_HEIGHT : 0) + inputExtraHeight;
     // Show spacer during streaming OR if stream ended but user still near bottom
     if (showSpacer) {
-      return <View style={{ height: SPACER_HEIGHT + dynamicOffset }} />;
+      return (
+        <View
+          key={footerMeasureKey}
+          onLayout={handleFooterLayout}
+          style={{ height: SPACER_HEIGHT + dynamicOffset }}
+        />
+      );
     }
     // Default minimal footer - keyboard height handled by container transform, not padding
     // Only add base padding for input area
-    return <View style={{ height: 85 + dynamicOffset }} />;
-  }, [showSpacer, attachmentCount, pillCount, inputExtraHeight]);
+    return (
+      <View
+        key={footerMeasureKey}
+        onLayout={handleFooterLayout}
+        style={{ height: 85 + dynamicOffset }}
+      />
+    );
+  }, [showSpacer, attachmentCount, pillCount, inputExtraHeight, handleFooterLayout, footerMeasureKey]);
 
   // const onItemLayout = useCallback((index, height) => {
   // itemHeights.current[index] = height;
@@ -1911,21 +2063,38 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
                   }
                 }}
                 onLayout={(e) => {
-                  setListLayoutHeight(e.nativeEvent.layout.height);
-                  lastLayoutHeight.current = e.nativeEvent.layout.height;
+                  const layoutHeight = e.nativeEvent.layout.height;
+                  setListLayoutHeight(layoutHeight);
+                  lastLayoutHeight.current = layoutHeight;
                 }}
-                onScroll={(e) => {
-                  const contentOffset = e.nativeEvent?.contentOffset || { x: 0, y: 0 };
-                  const contentSize = e.nativeEvent?.contentSize || { width: 0, height: 0 };
-                  const layoutMeasurement = e.nativeEvent?.layoutMeasurement || { width: 0, height: 0 };
-                  if (layoutMeasurement.height === 0) return;
-                  lastScrollOffset.current = contentOffset.y;
-                  lastContentHeight.current = contentSize.height;
-                  lastLayoutHeight.current = layoutMeasurement.height;
-                  const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-                  const nearBottom = distanceFromBottom < 400;
-                  handleScrollState(contentOffset.y, distanceFromBottom, nearBottom, contentSize.height, layoutMeasurement.height);
-                }}
+                  onScroll={(e) => {
+                    const contentOffset = e.nativeEvent?.contentOffset || { x: 0, y: 0 };
+                    const contentSize = e.nativeEvent?.contentSize || { width: 0, height: 0 };
+                    const layoutMeasurement = e.nativeEvent?.layoutMeasurement || { width: 0, height: 0 };
+                    if (layoutMeasurement.height === 0) return;
+                    // Fallback: capture list dimensions from scroll events when layout events do not fire.
+                    if (layoutMeasurement.height !== listLayoutHeight) {
+                      setListLayoutHeight(layoutMeasurement.height);
+                    }
+                    if (contentSize.height !== listContentHeight) {
+                      setListContentHeight(contentSize.height);
+                    }
+                    lastScrollOffset.current = contentOffset.y;
+                    lastContentHeight.current = contentSize.height;
+                    lastLayoutHeight.current = layoutMeasurement.height;
+                    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+                    const nearBottom = distanceFromBottom < 400;
+                    if (keyboardVisible) {
+                      if (!autoCloseArmedRef.current && contentOffset.y > 100) {
+                        autoCloseArmedRef.current = true;
+                      }
+                      if (autoCloseArmedRef.current && contentOffset.y <= 0) {
+                        autoCloseArmedRef.current = false;
+                        Keyboard.dismiss();
+                      }
+                    }
+                    handleScrollState(contentOffset.y, distanceFromBottom, nearBottom, contentSize.height, layoutMeasurement.height);
+                  }}
                 scrollEventThrottle={16}
               />
             )}

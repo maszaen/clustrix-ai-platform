@@ -21,9 +21,9 @@ import Reanimated, {
   withTiming,
   Easing,
   interpolate,
-  runOnJS,
   cancelAnimation
 } from 'react-native-reanimated';
+import { runOnJS } from 'react-native-worklets';
 import { StreamdownRN } from './src/lib/streamdown';
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -153,6 +153,7 @@ function MainApp() {
   // Trigger to open Account modal from other screens.
   const [accountTriggerExternal, setAccountTriggerExternal] = useState(0);
   const [showModels, setShowModels] = useState(false);
+  const [sessionSelectTick, setSessionSelectTick] = useState(0);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHasQuery, setSidebarHasQuery] = useState(false);
@@ -694,6 +695,7 @@ function MainApp() {
               onSelect={(session) => { 
                 // 1. Show skeleton FIRST
                 setIsLoadingSession(true);
+                setSessionSelectTick(prev => prev + 1);
                 
                 // 2. Wait 100ms for skeleton to appear, THEN slide
                 setTimeout(() => {
@@ -762,6 +764,7 @@ function MainApp() {
           <ChatScreen 
             topInset={insets.top} 
             sidebarOpen={sidebarOpen} 
+            sessionSelectTick={sessionSelectTick}
             onShowThinking={handleShowThinking} 
             onStreamingThinking={handleStreamingThinking} 
             onSelectText={handleSelectText} 

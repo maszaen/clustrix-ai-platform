@@ -5,59 +5,13 @@
  */
 
 const express = require('express');
-const crypto = require('crypto');
 const router = express.Router();
 const { getLogs } = require('../middleware/logger');
 const { getAvailableModels, getAvailableProviders, getAllModelsStatus, setModelEnabled, PROVIDER_NAMES } = require('../config/models');
-
-/**
- * Admin auth middleware with security improvements
- */
-function adminAuth(req, res, next) {
-  const secret = req.headers['x-admin-secret'] || req.query.secret;
-  const validSecret = process.env.ADMIN_SECRET;
-  
-  // Check if ADMIN_SECRET is configured
-  if (!validSecret) {
-    console.error('[AdminAuth] Error: ADMIN_SECRET not found in env!');
-    return res.status(500).json({ error: 'Admin secret not configured', code: 'CONFIG_ERROR' });
-  }
-  
-  // Warn if using default secret (security risk)
-  if (validSecret === 'your-super-secret-admin-key-change-this') {
-    console.warn('[AdminAuth] WARNING: Using default ADMIN_SECRET! Change this in production!');
-  }
-  
-  // Check if secret is provided
-  if (!secret) {
-    return res.status(403).json({ error: 'Admin secret required', code: 'FORBIDDEN' });
-  }
-  
-  // Timing-safe comparison to prevent timing attacks
-  try {
-    const secretBuffer = Buffer.from(String(secret));
-    const validBuffer = Buffer.from(validSecret);
-    
-    // Length check (timingSafeEqual requires same length)
-    if (secretBuffer.length !== validBuffer.length) {
-      console.warn(`[AdminAuth] Access Denied. Invalid secret length.`);
-      return res.status(403).json({ error: 'Invalid admin secret', code: 'FORBIDDEN' });
-    }
-    
-    if (!crypto.timingSafeEqual(secretBuffer, validBuffer)) {
-      console.warn(`[AdminAuth] Access Denied. Invalid secret.`);
-      return res.status(403).json({ error: 'Invalid admin secret', code: 'FORBIDDEN' });
-    }
-  } catch (err) {
-    console.warn(`[AdminAuth] Access Denied. Comparison error.`);
-    return res.status(403).json({ error: 'Invalid admin secret', code: 'FORBIDDEN' });
-  }
-  
-  next();
-}
+const { validateAdminSecret } = require('../middleware/validation');
 
 // Apply admin auth to all routes
-router.use(adminAuth);
+router.use(validateAdminSecret);
 
 /**
  * GET /admin/stats
@@ -379,8 +333,6 @@ router.get('/', (req, res) => {
   const availableModels = models.filter(m => m.available);
   const providers = getAvailableProviders();
   const { logs } = getLogs(20);
-  const secret = req.query.secret || '';
-  
   // Group models for SSR
   const grouped = {};
   models.forEach(m => {
@@ -734,8 +686,7 @@ router.get('/', (req, res) => {
   </div>
 
   <script>
-    const SECRET = "${secret}";
-    const SECRET_PARAM = '?secret=' + encodeURIComponent(SECRET);
+    // Admin auth is handled via headers (e.g., Basic auth).
     
     // Search Logic
     let searchQuery = '';
@@ -790,7 +741,7 @@ router.get('/', (req, res) => {
     // 1. No-Reload Toggle Model
     async function toggleModel(modelId, enabled, checkbox) {
       try {
-        const res = await fetch('/admin/toggle-model' + SECRET_PARAM, {
+        const res = await fetch('/admin/toggle-model', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ modelId, enabled })
@@ -816,7 +767,7 @@ router.get('/', (req, res) => {
       });
 
       try {
-        const res = await fetch('/admin/toggle-provider' + SECRET_PARAM, {
+        const res = await fetch('/admin/toggle-provider', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ providerId, enabled })
@@ -895,7 +846,7 @@ router.get('/', (req, res) => {
       
       updateStatus(true); // Ensure active visual
       try {
-        const res = await fetch('/admin/logs' + SECRET_PARAM + '&limit=20');
+        const res = await fetch('/admin/logs?limit=20');
         if (!res.ok) return;
         const data = await res.json();
         
@@ -929,7 +880,7 @@ router.get('/', (req, res) => {
     // Analytics polling
     async function refreshAnalytics() {
       try {
-        const res = await fetch('/admin/analytics/dashboard?secret=' + SECRET);
+        const res = await fetch('/admin/analytics/dashboard');
         if (!res.ok) throw new Error('Failed to fetch analytics');
         const data = await res.json();
         
@@ -982,7 +933,7 @@ router.get('/', (req, res) => {
     
     async function loadUsers() {
       try {
-        const res = await fetch('/admin/users' + SECRET_PARAM);
+        const res = await fetch('/admin/users');
         if (!res.ok) throw new Error('Failed to load users');
         const data = await res.json();
         
@@ -1019,7 +970,7 @@ router.get('/', (req, res) => {
       document.getElementById('user-modal').style.display = 'block';
       
       try {
-        const res = await fetch('/admin/users/' + userId + SECRET_PARAM);
+        const res = await fetch('/admin/users/' + userId);
         if (!res.ok) throw new Error('Failed to load user');
         const u = await res.json();
         
@@ -1088,7 +1039,7 @@ router.get('/', (req, res) => {
     async function resetUserLimitAction() {
       if (!currentUserId) return;
       try {
-        const res = await fetch('/admin/users/' + currentUserId + '/reset-limit' + SECRET_PARAM, { method: 'POST' });
+        const res = await fetch('/admin/users/' + currentUserId + '/reset-limit', { method: 'POST' });
         if (!res.ok) throw new Error('Failed to reset limit');
         alert('Limit reset successfully!');
         showUserDetail(currentUserId);
@@ -1102,7 +1053,7 @@ router.get('/', (req, res) => {
       if (!currentUserId) return;
       const endpoint = currentUserUnlimited ? 'revoke-unlimited' : 'grant-unlimited';
       try {
-        const res = await fetch('/admin/users/' + currentUserId + '/' + endpoint + SECRET_PARAM, { method: 'POST' });
+        const res = await fetch('/admin/users/' + currentUserId + '/' + endpoint, { method: 'POST' });
         if (!res.ok) throw new Error('Failed to toggle unlimited');
         alert(currentUserUnlimited ? 'Unlimited revoked!' : 'Unlimited granted!');
         showUserDetail(currentUserId);

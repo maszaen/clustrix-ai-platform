@@ -13,7 +13,7 @@ const path = require('path');
 const { verifyGoogleToken } = require('./middleware/auth');
 const { rateLimiter } = require('./middleware/rateLimit');
 const { requestLogger } = require('./middleware/logger');
-const { validateChatRequest, validateImageGenRequest } = require('./middleware/validation');
+const { validateChatRequest, validateImageGenRequest, validateAdminSecret } = require('./middleware/validation');
 
 const chatRouter = require('./routes/chat');
 const modelsRouter = require('./routes/models');
@@ -30,11 +30,12 @@ const PORT = process.env.PORT || 8080;
 app.use(helmet({
   contentSecurityPolicy: false, // Allow inline scripts for Admin Panel
 }));
-app.use(cors({
+// CORS only for API routes (admin routes are same-origin)
+const apiCors = cors({
   origin: '*', // Allow all origins (mobile app)
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-Name', 'X-User-Email'],
-}));
+});
 app.use(express.json({ limit: '10mb' })); // For large PDF/image payloads
 
 // Serve static files from public folder
@@ -48,19 +49,13 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// New admin console (sidebar version) - requires admin secret via query param
-app.get('/console', (req, res) => {
-  const secret = req.query.secret;
-  const validSecret = process.env.ADMIN_SECRET;
-  
-  if (!secret || secret !== validSecret) {
-    return res.status(403).send('Access denied. Append ?secret=YOUR_ADMIN_SECRET to the URL.');
-  }
-  
+// New admin console (sidebar version) - requires admin auth header
+app.get('/console', validateAdminSecret, (req, res) => {
   res.sendFile(path.join(__dirname, '../public/admin.html'));
 });
 
 // Protected routes (require Google auth + validation)
+app.use('/api', apiCors);
 app.use('/api/models', verifyGoogleToken, modelsRouter);
 app.use('/api/chat', verifyGoogleToken, rateLimiter, validateChatRequest, chatRouter);
 app.use('/api/agentic', verifyGoogleToken, rateLimiter, validateChatRequest, agenticRouter);

@@ -33,6 +33,39 @@ function getDaytona() {
 }
 
 /**
+ * Require authenticated user and return uid
+ */
+function requireUserId(req, res) {
+  const userId = req.user?.uid;
+  if (!userId) {
+    res.status(401).json({ error: 'User not authenticated', code: 'AUTH_REQUIRED' });
+    return null;
+  }
+  return userId;
+}
+
+/**
+ * Load sandbox from cache and enforce ownership
+ */
+function getOwnedSandbox(req, res, id) {
+  const userId = requireUserId(req, res);
+  if (!userId) return null;
+
+  const sandboxData = sandboxCache.get(id);
+  if (!sandboxData) {
+    res.status(404).json({ error: 'Sandbox not found', code: 'SANDBOX_NOT_FOUND' });
+    return null;
+  }
+
+  if (sandboxData.userId !== userId) {
+    res.status(403).json({ error: 'Sandbox access denied', code: 'SANDBOX_FORBIDDEN' });
+    return null;
+  }
+
+  return sandboxData;
+}
+
+/**
  * POST /api/sandbox/create
  * 
  * Create a new sandbox instance
@@ -40,6 +73,9 @@ function getDaytona() {
  */
 router.post('/create', async (req, res) => {
   try {
+    const userId = requireUserId(req, res);
+    if (!userId) return;
+
     const { 
       language = 'python', 
       name,
@@ -60,7 +96,7 @@ router.post('/create', async (req, res) => {
     // Cache sandbox reference
     sandboxCache.set(sandbox.id, {
       sandbox,
-      userId: req.user?.userId,
+      userId,
       createdAt: Date.now(),
     });
     
@@ -95,22 +131,10 @@ router.post('/:id/run-code', async (req, res) => {
       return res.status(400).json({ error: 'Code is required', code: 'MISSING_CODE' });
     }
     
-    // Get sandbox from cache or fetch it
-    let sandboxData = sandboxCache.get(id);
-    let sandbox;
-    
-    if (sandboxData) {
-      sandbox = sandboxData.sandbox;
-    } else {
-      // Fetch existing sandbox by ID
-      const client = getDaytona();
-      sandbox = await client.get(id);
-      sandboxCache.set(id, {
-        sandbox,
-        userId: req.user?.userId,
-        createdAt: Date.now(),
-      });
-    }
+    // Only allow access to cached, owned sandboxes
+    const sandboxData = getOwnedSandbox(req, res, id);
+    if (!sandboxData) return;
+    const sandbox = sandboxData.sandbox;
     
     // Execute code
     const response = await sandbox.process.codeRun(code, {}, timeout * 1000);
@@ -146,13 +170,8 @@ router.post('/:id/run-command', async (req, res) => {
       return res.status(400).json({ error: 'Command is required', code: 'MISSING_COMMAND' });
     }
     
-    let sandboxData = sandboxCache.get(id);
-    if (!sandboxData) {
-      const client = getDaytona();
-      const sandbox = await client.get(id);
-      sandboxData = { sandbox };
-      sandboxCache.set(id, sandboxData);
-    }
+    const sandboxData = getOwnedSandbox(req, res, id);
+    if (!sandboxData) return;
     
     const response = await sandboxData.sandbox.process.executeCommand(
       command, 
@@ -193,13 +212,8 @@ router.post('/:id/upload', async (req, res) => {
       });
     }
     
-    let sandboxData = sandboxCache.get(id);
-    if (!sandboxData) {
-      const client = getDaytona();
-      const sandbox = await client.get(id);
-      sandboxData = { sandbox };
-      sandboxCache.set(id, sandboxData);
-    }
+    const sandboxData = getOwnedSandbox(req, res, id);
+    if (!sandboxData) return;
     
     // Convert content to Buffer
     const buffer = Buffer.from(content, encoding === 'base64' ? 'base64' : 'utf-8');
@@ -234,13 +248,8 @@ router.get('/:id/download', async (req, res) => {
       return res.status(400).json({ error: 'Path is required', code: 'MISSING_PATH' });
     }
     
-    let sandboxData = sandboxCache.get(id);
-    if (!sandboxData) {
-      const client = getDaytona();
-      const sandbox = await client.get(id);
-      sandboxData = { sandbox };
-      sandboxCache.set(id, sandboxData);
-    }
+    const sandboxData = getOwnedSandbox(req, res, id);
+    if (!sandboxData) return;
     
     const content = await sandboxData.sandbox.fs.downloadFile(remotePath);
     
@@ -277,13 +286,8 @@ router.get('/:id/files', async (req, res) => {
     const { id } = req.params;
     const { path: dirPath = '.' } = req.query;
     
-    let sandboxData = sandboxCache.get(id);
-    if (!sandboxData) {
-      const client = getDaytona();
-      const sandbox = await client.get(id);
-      sandboxData = { sandbox };
-      sandboxCache.set(id, sandboxData);
-    }
+    const sandboxData = getOwnedSandbox(req, res, id);
+    if (!sandboxData) return;
     
     const files = await sandboxData.sandbox.fs.listFiles(dirPath);
     
@@ -321,13 +325,8 @@ router.get('/:id/preview', async (req, res) => {
       return res.status(400).json({ error: 'Port is required', code: 'MISSING_PORT' });
     }
     
-    let sandboxData = sandboxCache.get(id);
-    if (!sandboxData) {
-      const client = getDaytona();
-      const sandbox = await client.get(id);
-      sandboxData = { sandbox };
-      sandboxCache.set(id, sandboxData);
-    }
+    const sandboxData = getOwnedSandbox(req, res, id);
+    if (!sandboxData) return;
     
     const preview = await sandboxData.sandbox.getPreviewLink(parseInt(port, 10));
     
@@ -354,15 +353,8 @@ router.get('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
     
-    const client = getDaytona();
-    const sandbox = await client.get(id);
-    
-    // Update cache
-    sandboxCache.set(id, {
-      sandbox,
-      userId: req.user?.userId,
-      createdAt: sandboxCache.get(id)?.createdAt || Date.now(),
-    });
+    const sandboxData = getOwnedSandbox(req, res, id);
+    if (!sandboxData) return;
     
     res.json({
       success: true,
@@ -391,12 +383,8 @@ router.post('/:id/stop', async (req, res) => {
   try {
     const { id } = req.params;
     
-    let sandboxData = sandboxCache.get(id);
-    if (!sandboxData) {
-      const client = getDaytona();
-      const sandbox = await client.get(id);
-      sandboxData = { sandbox };
-    }
+    const sandboxData = getOwnedSandbox(req, res, id);
+    if (!sandboxData) return;
     
     await sandboxData.sandbox.stop();
     
@@ -423,13 +411,8 @@ router.post('/:id/start', async (req, res) => {
     const { id } = req.params;
     const { timeout = 60 } = req.body;
     
-    let sandboxData = sandboxCache.get(id);
-    if (!sandboxData) {
-      const client = getDaytona();
-      const sandbox = await client.get(id);
-      sandboxData = { sandbox };
-      sandboxCache.set(id, sandboxData);
-    }
+    const sandboxData = getOwnedSandbox(req, res, id);
+    if (!sandboxData) return;
     
     await sandboxData.sandbox.start(timeout);
     
@@ -455,12 +438,8 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    let sandboxData = sandboxCache.get(id);
-    if (!sandboxData) {
-      const client = getDaytona();
-      const sandbox = await client.get(id);
-      sandboxData = { sandbox };
-    }
+    const sandboxData = getOwnedSandbox(req, res, id);
+    if (!sandboxData) return;
     
     await sandboxData.sandbox.delete();
     
@@ -487,11 +466,12 @@ router.delete('/:id', async (req, res) => {
  */
 router.get('/list', async (req, res) => {
   try {
-    const userId = req.user?.userId;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
     const sandboxes = [];
     
     for (const [id, data] of sandboxCache) {
-      if (!userId || data.userId === userId) {
+      if (data.userId === userId) {
         sandboxes.push({
           id,
           createdAt: data.createdAt,

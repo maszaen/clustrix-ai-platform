@@ -165,7 +165,9 @@ gcloud run deploy clustrix-backend \
 
 ## 📊 Admin Panel
 
-Access at: `https://YOUR_URL/admin?secret=YOUR_ADMIN_SECRET`
+Access:
+- API/admin routes: send `x-admin-secret: YOUR_ADMIN_SECRET` (recommended) or Basic auth (password = `ADMIN_SECRET`).
+- Console: open `https://admin:YOUR_ADMIN_SECRET@YOUR_URL/console` (uses Basic auth).
 
 Features:
 - Model enable/disable toggles

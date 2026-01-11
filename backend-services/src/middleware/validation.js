@@ -4,11 +4,46 @@
  * Sanitizes and validates user input to prevent injection attacks
  */
 
+const crypto = require('crypto');
+
 // Maximum message sizes
 const MAX_MESSAGE_LENGTH = 100000; // 100k chars per text message
 const MAX_MESSAGES_COUNT = 100; // Max messages in conversation
 const MAX_PROMPT_LENGTH = 10000; // Max image prompt length
 const MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20MB per image (base64)
+
+/**
+ * Extract admin secret from headers (no query params for safety)
+ */
+function extractAdminSecret(req) {
+  const headerSecret = req.headers['x-admin-secret'];
+  if (headerSecret) return String(headerSecret);
+
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Basic ')) return null;
+
+  try {
+    const decoded = Buffer.from(auth.split('Basic ')[1], 'base64').toString('utf-8');
+    const [, password] = decoded.split(':');
+    return password ? String(password) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Timing-safe comparison for secrets
+ */
+function timingSafeEqual(provided, valid) {
+  try {
+    const providedBuffer = Buffer.from(String(provided));
+    const validBuffer = Buffer.from(String(valid));
+    if (providedBuffer.length !== validBuffer.length) return false;
+    return crypto.timingSafeEqual(providedBuffer, validBuffer);
+  } catch (err) {
+    return false;
+  }
+}
 
 /**
  * Calculate content length excluding image data
@@ -165,23 +200,29 @@ function sanitizeString(str) {
  * Validate admin secret
  */
 function validateAdminSecret(req, res, next) {
-  const secret = req.headers['x-admin-secret'] || req.query.secret;
   const validSecret = process.env.ADMIN_SECRET;
-  
   if (!validSecret || validSecret === 'your-super-secret-admin-key-change-this') {
     return res.status(500).json({
       error: 'Admin secret not configured properly',
       code: 'ADMIN_NOT_CONFIGURED',
     });
   }
-  
-  if (!secret || secret !== validSecret) {
+
+  const secret = extractAdminSecret(req);
+  if (!secret) {
+    return res.status(403).json({
+      error: 'Admin secret required',
+      code: 'FORBIDDEN',
+    });
+  }
+
+  if (!timingSafeEqual(secret, validSecret)) {
     return res.status(403).json({
       error: 'Invalid admin secret',
       code: 'FORBIDDEN',
     });
   }
-  
+
   next();
 }
 
@@ -189,6 +230,7 @@ module.exports = {
   validateChatRequest,
   validateImageGenRequest,
   validateAdminSecret,
+  extractAdminSecret,
   sanitizeString,
   MAX_MESSAGE_LENGTH,
   MAX_MESSAGES_COUNT,

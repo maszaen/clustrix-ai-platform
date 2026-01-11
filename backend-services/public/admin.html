@@ -1019,8 +1019,7 @@
   </div>
 
   <script>
-    const SECRET = new URLSearchParams(location.search).get('secret') || '';
-    const API = p => p + (p.includes('?') ? '&' : '?') + 'secret=' + encodeURIComponent(SECRET);
+    const API = p => p;
     let currentUser = null, userUnlimited = false, userBlocked = false;
 
     // Nav

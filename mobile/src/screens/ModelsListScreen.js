@@ -526,7 +526,8 @@ export default function ModelsListScreen({ onClose, dragHandlers, onOpenAccount 
         <View style={styles.section}>
           <View style={styles.toggleCard}>
             <Pressable 
-              style={styles.toggleRowTop}
+              style={[styles.toggleRowTop, isLoadingCloud && styles.toggleRowDisabled]}
+              disabled={isLoadingCloud}
               onPress={() => {
                 handleCloudToggle(!useCloudMode);
               }}
@@ -550,6 +551,7 @@ export default function ModelsListScreen({ onClose, dragHandlers, onOpenAccount 
               </View>
               <Switch
                 value={useCloudMode}
+                disabled={isLoadingCloud}
                 onValueChange={(val) => {
                   handleCloudToggle(val);
                 }}
@@ -707,6 +709,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
+  },
+  toggleRowDisabled: {
+    opacity: 0.6,
   },
   toggleRowBottom: {
     flexDirection: 'row',

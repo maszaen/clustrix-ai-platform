@@ -9,9 +9,11 @@ import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Linking } fro
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { Eye, EyeClosed, ExternalLink } from 'lucide-react-native';
+import { ExternalLink } from 'lucide-react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DropdownSelect from '../components/DropdownSelect';
+import InputModal from '../components/InputModal';
+import ApiKeyField from '../components/ApiKeyField';
 
 const SEARCH_PROVIDERS = [
   { id: 'tavily', name: 'Tavily', desc: 'AI-optimized search', url: 'https://app.tavily.com/home' },
@@ -31,7 +33,7 @@ export default function AgenticToolsScreen({ onClose }) {
   });
 
   const [googleCseId, setGoogleCseId] = useState(settings.agenticTools?.webSearch?.googleCseId || '');
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeyModalVisible, setApiKeyModalVisible] = useState(false);
   
   // Get current key safely
   const currentApiKey = keys[provider] || '';
@@ -80,21 +82,12 @@ export default function AgenticToolsScreen({ onClose }) {
       {/* API Key */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>API Key</Text>
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.inputFlex}
-            value={currentApiKey}
-            onChangeText={updateKey}
-            placeholder={`Enter ${selectedProvider?.name} API key`}
-            placeholderTextColor={COLORS.fgMuted}
-            secureTextEntry={!showApiKey}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Pressable style={styles.eyeBtn} onPress={() => setShowApiKey(!showApiKey)}>
-            {showApiKey ? <EyeClosed size={20} color={COLORS.fgMuted} /> : <Eye size={20} color={COLORS.fgMuted} />}
-          </Pressable>
-        </View>
+        {/* Read-only field for safety; editing happens in a secure modal. */}
+        <ApiKeyField
+          valuePresent={!!currentApiKey}
+          placeholder={`Tap to set ${selectedProvider?.name} API key`}
+          onPress={() => setApiKeyModalVisible(true)}
+        />
         <Pressable 
           style={styles.linkRow}
           onPress={() => Linking.openURL(selectedProvider?.url)}
@@ -103,6 +96,30 @@ export default function AgenticToolsScreen({ onClose }) {
           <Text style={styles.linkText}>Get {selectedProvider?.name} API Key</Text>
         </Pressable>
       </View>
+
+      <InputModal
+        visible={apiKeyModalVisible}
+        title="Update API Key"
+        fields={[{
+          key: 'apiKey',
+          label: 'API Key',
+          placeholder: `Enter ${selectedProvider?.name} API key`,
+          value: '',
+          required: true,
+          secureTextEntry: true,
+          autoCapitalize: 'none',
+          autoCorrect: false,
+        }]}
+        submitText="Save"
+        cancelText="Cancel"
+        haveEyes
+        onSubmit={(values) => {
+          // Replace saved key without showing existing value.
+          updateKey(values.apiKey);
+          setApiKeyModalVisible(false);
+        }}
+        onCancel={() => setApiKeyModalVisible(false)}
+      />
 
       {/* Google CSE ID (only for Google) */}
       {provider === 'google' && (
@@ -160,24 +177,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.sans,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.inputBg,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  inputFlex: {
-    flex: 1,
-    padding: 14,
-    color: COLORS.fg,
-    fontSize: 14,
-    fontFamily: FONTS.mono,
-  },
-  eyeBtn: {
-    padding: 14,
   },
   linkRow: {
     flexDirection: 'row',

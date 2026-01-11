@@ -8,9 +8,10 @@ import ContextMenu from '../components/ContextMenu';
 import InputModal from '../components/InputModal';
 import ConfirmModal from '../components/ConfirmModal';
 import AlertModal from '../components/AlertModal';
+import ApiKeyField from '../components/ApiKeyField';
 import { COLORS } from '../constants/colors';
 import { FONTS } from '../constants/fonts';
-import { Eye, EyeClosed, Pencil, Trash2, DnaOff, Dna } from 'lucide-react-native';
+import { Pencil, Trash2, DnaOff, Dna } from 'lucide-react-native';
 import { DEFAULT_PROVIDERS_LIST, DEFAULT_MODELS } from '../constants/providers';
 
 
@@ -186,7 +187,7 @@ export default function ModelsListScreen({ onClose, dragHandlers, onOpenAccount 
     }));
   }, [settings.agenticMode, settings.generateImage]);
 
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeyModalVisible, setApiKeyModalVisible] = useState(false);
   const [contextMenu, setContextMenu] = useState({ visible: false, item: null, type: null, position: { x: 0, y: 0 } });
   const [addModelModal, setAddModelModal] = useState(false);
   const [addProviderModal, setAddProviderModal] = useState(false);
@@ -392,6 +393,30 @@ export default function ModelsListScreen({ onClose, dragHandlers, onOpenAccount 
           onCancel={() => setAddProviderModal(false)}
         />
 
+        <InputModal
+          visible={apiKeyModalVisible}
+          title="Update API Key"
+          fields={[{
+            key: 'apiKey',
+            label: 'API Key',
+            placeholder: `Enter ${localSettings.provider} API key`,
+            value: '',
+            required: true,
+            secureTextEntry: true,
+            autoCapitalize: 'none',
+          }]}
+          submitText="Save"
+          cancelText="Cancel"
+          haveEyes
+          onSubmit={(values) => {
+            // Replace saved key without showing existing value.
+            setHasUserInteracted(true);
+            setLocalSettings({ ...localSettings, apiKey: values.apiKey });
+            setApiKeyModalVisible(false);
+          }}
+          onCancel={() => setApiKeyModalVisible(false)}
+        />
+
         
 
         {/* Provider Dropdown */}
@@ -430,22 +455,12 @@ export default function ModelsListScreen({ onClose, dragHandlers, onOpenAccount 
         {!useCloudMode && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>API Key</Text>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.inputApiKey}
-                value={localSettings.apiKey}
-                onChangeText={(text) => { setHasUserInteracted(true); setLocalSettings({ ...localSettings, apiKey: text }); }}
-                placeholder="Enter your API key"
-                placeholderTextColor={COLORS.fgMuted}
-                secureTextEntry={!showApiKey}
-                autoCapitalize="none"
-              />
-              <Pressable style={styles.eyeBtn} onPress={() => setShowApiKey(!showApiKey)} android_ripple={{ color: 'rgba(255,255,255,0.2)', borderless: true }}>
-                {showApiKey ? <EyeClosed size={20} color={COLORS.fgMuted} /> :
-                  <Eye size={20} color={COLORS.fgMuted} />
-                }
-              </Pressable>
-            </View>
+            {/* Read-only field for safety; editing happens in a secure modal. */}
+            <ApiKeyField
+              valuePresent={!!localSettings.apiKey}
+              placeholder="Tap to set API key"
+              onPress={() => setApiKeyModalVisible(true)}
+            />
           </View>
         )}
 
@@ -604,20 +619,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
-  inputApiKey: {
-    backgroundColor: COLORS.inputBg,
-    borderRadius: 15,
-    padding: 14,
-    color: COLORS.fg,
-    fontSize: 14,
-    fontFamily: FONTS.mono,
-    paddingRight: 50,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  inputRow: { position: 'relative', alignItems: 'center', },
-  eyeBtn: { position: 'absolute', right: 15, top: 16 },
   dropdown: {
     flexDirection: 'row',
     alignItems: 'center',

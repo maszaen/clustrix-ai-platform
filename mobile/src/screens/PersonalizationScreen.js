@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { COLORS } from '../constants/colors';
@@ -338,7 +338,7 @@ const AboutClustrixContent = memo(function AboutClustrixContent() {
 });
 
 
-export default function PersonalizationScreen({ visible, onClose, triggerOpen }) {
+export default function PersonalizationScreen({ visible, onClose, triggerOpen, accountTriggerExternal }) {
   const { settings, updateSettings } = useApp();
   const [showCustomInstructions, setShowCustomInstructions] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
@@ -399,6 +399,13 @@ export default function PersonalizationScreen({ visible, onClose, triggerOpen })
   
   const handleCloseCustomInstructions = useCallback(() => setShowCustomInstructions(false), []);
   const handleCloseAccount = useCallback(() => setShowAccount(false), []);
+
+  // Allow parent screens to request the Account modal to open.
+  useEffect(() => {
+    if (!accountTriggerExternal) return;
+    setShowAccount(true);
+    setAccountTrigger(prev => prev + 1);
+  }, [accountTriggerExternal]);
   const handleCloseAgenticTools = useCallback(() => setShowAgenticTools(false), []);
   const handleCloseImageModels = useCallback(() => setShowImageModels(false), []);
   const handleCloseReminders = useCallback(() => setShowReminders(false), []);

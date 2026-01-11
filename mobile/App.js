@@ -150,6 +150,8 @@ function MainApp() {
   const [showPersonalization, setShowPersonalization] = useState(false);
   // Trigger force re-open even if personalization modal is mid-close.
   const [personalizationTrigger, setPersonalizationTrigger] = useState(0);
+  // Trigger to open Account modal from other screens.
+  const [accountTriggerExternal, setAccountTriggerExternal] = useState(0);
   const [showModels, setShowModels] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -392,6 +394,12 @@ function MainApp() {
   const openPersonalization = useCallback(() => {
     setShowPersonalization(true);
     setPersonalizationTrigger(prev => prev + 1);
+  }, []);
+  // Open Account modal through Personalization screen.
+  const openAccountFromModels = useCallback(() => {
+    setShowPersonalization(true);
+    setPersonalizationTrigger(prev => prev + 1);
+    setAccountTriggerExternal(prev => prev + 1);
   }, []);
   const closePersonalization = useCallback(() => setShowPersonalization(false), []);
   const handleShowThinking = useCallback((content) => {
@@ -869,19 +877,21 @@ function MainApp() {
         visible={showPersonalization}
         onClose={closePersonalization}
         triggerOpen={personalizationTrigger}
+        accountTriggerExternal={accountTriggerExternal}
       />
 
       {/* Account Modal */}
 
       {/* Models List Modal */}
-      <SlideUpModal ref={modelsModalRef} visible={showModels} onClose={closeModels} showBottomGradient autoExpanded>
-        {({ dragHandlers }) => (
-          <ModelsListScreen 
-            onClose={() => modelsModalRef.current?.close() || closeModels()} 
-            dragHandlers={dragHandlers}
-          />
-        )}
-      </SlideUpModal>
+        <SlideUpModal ref={modelsModalRef} visible={showModels} onClose={closeModels} showBottomGradient autoExpanded>
+          {({ dragHandlers }) => (
+            <ModelsListScreen 
+              onClose={() => modelsModalRef.current?.close() || closeModels()} 
+              dragHandlers={dragHandlers}
+              onOpenAccount={openAccountFromModels}
+            />
+          )}
+        </SlideUpModal>
 
       {/* Rename Modal */}
       <InputModal

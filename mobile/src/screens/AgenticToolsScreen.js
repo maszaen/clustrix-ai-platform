@@ -183,6 +183,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    paddingLeft: 5,
     marginTop: 8,
   },
   linkText: {

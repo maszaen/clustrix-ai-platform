@@ -90,8 +90,8 @@ function DropdownSelect({ label, value, options, onSelect, renderOption, onAddNe
   );
 }
 
-export default function ModelsListScreen({ onClose, dragHandlers }) {
-  const { settings, updateSettings, customModels, addCustomModel, updateCustomModel, deleteCustomModel, customProviders, addCustomProvider, updateCustomProvider, deleteCustomProvider, providerApiKeys, updateProviderApiKey, accessToken, currentUser } = useApp();
+export default function ModelsListScreen({ onClose, dragHandlers, onOpenAccount }) {
+  const { settings, updateSettings, customModels, addCustomModel, updateCustomModel, deleteCustomModel, customProviders, addCustomProvider, updateCustomProvider, deleteCustomProvider, providerApiKeys, updateProviderApiKey, accessToken, currentUser, isLoggedIn } = useApp();
 
   // Cloud mode state
   const [useCloudMode, setUseCloudMode] = useState(settings.useClustrixCloud ?? false);
@@ -260,6 +260,17 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
     setLocalSettings(newSettings);
     // Immediate save for provider change
     updateSettings(newSettings);
+  };
+
+  // Guard cloud toggle when user is not logged in (open account modal instead).
+  const handleCloudToggle = (nextValue) => {
+    if (nextValue && !isLoggedIn) {
+      onClose?.();
+      onOpenAccount?.();
+      return;
+    }
+    setUseCloudMode(nextValue);
+    updateSettings({ useClustrixCloud: nextValue });
   };
 
 
@@ -502,9 +513,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
             <Pressable 
               style={styles.toggleRowTop}
               onPress={() => {
-                const val = !useCloudMode;
-                setUseCloudMode(val);
-                updateSettings({ useClustrixCloud: val });
+                handleCloudToggle(!useCloudMode);
               }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -527,8 +536,7 @@ export default function ModelsListScreen({ onClose, dragHandlers }) {
               <Switch
                 value={useCloudMode}
                 onValueChange={(val) => {
-                  setUseCloudMode(val);
-                  updateSettings({ useClustrixCloud: val });
+                  handleCloudToggle(val);
                 }}
                 trackColor={{ false: COLORS.borderLight, true: COLORS.primary }}
                 thumbColor={COLORS.fg}

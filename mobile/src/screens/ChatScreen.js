@@ -749,6 +749,29 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     const isWelcomeToSession = !wasSession && currentSession?.id;
     const isSessionToWelcome = wasSession && (currentSession?.id === undefined || currentSession?.id === null);
 
+    // BUG FIX #1: Clear streaming state when navigating AWAY from a session
+    // This prevents streaming content from showing on welcome screen or other sessions
+    if (isSessionToSession || isSessionToWelcome) {
+      setStreamingContent('');
+      setThinkingContent('');
+      setStreamingMessageId(null);
+      setStreamingMessageIndex(null);
+      setToolStatus(null);
+      setIsWaitingForIteration(false);
+    }
+
+    // BUG FIX #3: Reset list height measurements on ANY session change
+    // This ensures keyboard transform gate recalculates correctly for new session
+    if (isSessionToSession || isWelcomeToSession || isSessionToWelcome) {
+      setListContentHeight(0);
+      setListLayoutHeight(0);
+      lastContentHeight.current = 0;
+      lastLayoutHeight.current = 0;
+      measuredTotalHeightRef.current = 0;
+      setMeasuredContentHeight(0);
+      shouldAnimateKeyboard.value = false; // Reset transform gate immediately
+    }
+
     // FlashList unmount delay - set key to null first, then to new session after delay
     // This ensures FlashList fully unmounts before remounting with new data
     if (isSessionToSession || isWelcomeToSession || isSessionToWelcome) {

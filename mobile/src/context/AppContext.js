@@ -305,14 +305,16 @@ export function AppProvider({ children }) {
   }, [currentSession]);
 
   // Update session (accepts optional targetSession for welcome screen flow)
+  // BUG FIX: Use latestSessionIdRef to check active session, not stale closure!
   const updateSession = useCallback(async (updates, targetSession = null) => {
     const session = targetSession || currentSession;
     if (!session) return;
     const updated = { ...session, ...updates, updated_at: Date.now() };
     await saveSession(updated);
-    // Only update currentSession state if this is still the active session
-    // This prevents navigation back to a session when user has already switched away
-    if (currentSession?.id === session.id) {
+    // Only update currentSession state if this is STILL the active session
+    // Use ref instead of closure to get the CURRENT active session ID
+    // This prevents navigation back when user has switched away (e.g. title finishes generating)
+    if (latestSessionIdRef.current === session.id) {
       setCurrentSession(updated);
     }
     setSessions(prev => prev.map(s => s.id === updated.id ? updated : s));

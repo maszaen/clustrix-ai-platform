@@ -267,6 +267,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   const prevSessionIdRef = useRef(currentSession?.id);
   const isSendingFromWelcome = useRef(false);
   const abortControllerRef = useRef(null);
+  const streamingSessionIdRef = useRef(null); // Track which session is streaming - for per-session stop button
   const lastCreatedSessionId = useRef(null);
   const isGeneratingTitleRef = useRef(false); // Prevent duplicate title generation requests
   const shouldScrollOnSizeChange = useRef(false); // Flag: scroll to bottom on every content size change
@@ -1031,6 +1032,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
         ];
 
     setIsStreaming(true);
+    streamingSessionIdRef.current = session.id; // Track which session is streaming
     setStreamingContent('');
     setThinkingContent('');
     
@@ -1099,6 +1101,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       if (!fullContent.trim()) {
         await removeMessage(session.id, userMessageIndex);
         setIsStreaming(false);
+        streamingSessionIdRef.current = null;
         setStreamingContent('');
         setThinkingContent('');
         setStreamingMessageId(null);
@@ -1134,6 +1137,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       // Only set isStreaming to false to indicate stream is complete
       // streamingContent will be cleared by useEffect when saved message appears
       setIsStreaming(false);
+      streamingSessionIdRef.current = null;
 
       // Generate title if needed (new session OR existing session with default title)
       // Use ref to prevent duplicate requests if already generating
@@ -1261,6 +1265,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
             }
 
             setIsStreaming(false);
+            streamingSessionIdRef.current = null;
             setStreamingContent('');
             setThinkingContent('');
             setStreamingMessageId(null);
@@ -1381,6 +1386,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       // Normal error handling - show error to user
       setToolStatus(null);
       setIsStreaming(false);
+      streamingSessionIdRef.current = null;
       
       const errorMessage = `\n\n**Error:** ${errorMsg}`;
       const finalContent = fullThinking 
@@ -1502,6 +1508,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     
     // 2. Clear visual streaming state
     setIsStreaming(false);
+    streamingSessionIdRef.current = null;
     setStreamingContent('');
     setThinkingContent('');
     setStreamingMessageId(null);
@@ -1689,6 +1696,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
 
     // Start streaming - SAMA PERSIS seperti handleSend
     setIsStreaming(true);
+    streamingSessionIdRef.current = currentSession?.id; // Track which session is streaming
     setStreamingContent('');
     setThinkingContent('');
     
@@ -1755,6 +1763,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
 
         // Clear streaming states
         setIsStreaming(false);
+        streamingSessionIdRef.current = null;
         setStreamingContent('');
         setThinkingContent('');
         setStreamingMessageId(null);
@@ -1764,6 +1773,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       onError: async (error) => {
         log('[Retry] Error:', error);
         setIsStreaming(false);
+        streamingSessionIdRef.current = null;
         setStreamingContent('');
         setThinkingContent('');
         setStreamingMessageId(null);
@@ -1844,7 +1854,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       .filter((m, idx) => {
         // If streaming content exists and this message has same index as streaming, hide it
         // The streaming message will show instead (with same content)
-        if (streamingContent && streamingMessageIndex !== null && m.role === 'assistant' && m.message_index === streamingMessageIndex) {
+        // IMPORTANT: Only filter if streaming is for THIS session
+        const isStreamingThisSession = streamingSessionIdRef.current === currentSession?.id;
+        if (isStreamingThisSession && streamingContent && streamingMessageIndex !== null && m.role === 'assistant' && m.message_index === streamingMessageIndex) {
           return false;
         }
         return true;
@@ -1876,7 +1888,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   // Show streaming message while we have streaming content
   // Hide when streamingContent is cleared (by useEffect after saved message renders)
   // This ensures streaming message stays visible until saved message is fully rendered
-  const shouldShowStreamingMessage = !!streamingContent || isStreaming;
+  // IMPORTANT: Only show streaming for the session that's actually streaming (per-session state)
+  const isStreamingThisSession = streamingSessionIdRef.current === currentSession?.id;
+  const shouldShowStreamingMessage = (!!streamingContent || isStreaming) && isStreamingThisSession;
   
   if (shouldShowStreamingMessage && streamingMessageIndex !== null) {
     // Use STABLE streamingMessageIndex set at stream start - NOT messages.length!
@@ -2233,7 +2247,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
           <ChatInput
             ref={inputRef}
             onSend={handleSend}
-            isStreaming={isStreaming}
+            isStreaming={isStreaming && streamingSessionIdRef.current === currentSession?.id}
             onStop={handleStop}
             placeholder={!currentSession && messages.length === 0 ? 'How can I help you today?' : 'Reply...'}
             value={inputText}

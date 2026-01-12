@@ -456,7 +456,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
           useNativeDriver: true,
         }).start();
         // Use InteractionManager to batch state update after animation
-        InteractionManager.runAfterInteractions(() => {
+        requestAnimationFrame(() => {
           setScrollButtonVisible(false);
         });
       }, 3000);

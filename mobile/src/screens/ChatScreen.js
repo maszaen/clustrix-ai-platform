@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, StyleSheet, Text, Platform, Keyboard, TouchableWithoutFeedback, ActivityIndicator, Animated, Dimensions, Modal, Pressable, ScrollView, InteractionManager } from 'react-native';
-import ReanimatedModule, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import ReanimatedModule, { useAnimatedStyle, useSharedValue, interpolate, Extrapolation, useAnimatedReaction } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +25,6 @@ import { DEFAULT_PROVIDERS_LIST } from '../constants/providers';
 // This prevents console.log overhead during streaming
 const __DEV_DEBUG__ = false;
 const log = __DEV_DEBUG__ ? console.log : () => {};
-
 
 // Welcome Screen with diamond logo and typewriter effect
 function DiamondLogo({ accentColor, shouldAnimate }) {
@@ -356,19 +355,52 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   
   // Smooth keyboard animation for INPUT ONLY using react-native-keyboard-controller
   const { height: keyboardAnimatedHeight } = useReanimatedKeyboardAnimation();
+  const maxOpenAmt = useSharedValue(1); // biar ga divide by 0
+
+  useAnimatedReaction(
+    () => keyboardAnimatedHeight.value,
+    (h, prev) => {
+      const openAmt = -h;          // 0..besar
+      const isClosed = openAmt < 1; // threshold kecil anti noise
+
+      if (isClosed) {
+        // reset ketika keyboard beneran nutup
+        maxOpenAmt.value = 1;
+        return;
+      }
+
+      // update maksimum selama sesi keyboard open
+      if (openAmt > maxOpenAmt.value) {
+        maxOpenAmt.value = openAmt;
+      }
+    }
+  );
+
   const inputAnimatedStyle = useAnimatedStyle(() => {
-    // Skip animation when sidebar is open (search bar focused - don't move chat input)
-    if (sidebarOpen) {
+    if (sidebarOpen) return { transform: [{ translateY: 0 }] };
+
+    const h = keyboardAnimatedHeight.value;
+    const openAmt = -h;
+
+    const isClosed = openAmt < 1;
+    if (isClosed) {
+      // pastikan collapsed selalu 0
       return { transform: [{ translateY: 0 }] };
     }
-    // Proportional offset - reduce movement by ~10% for tighter keyboard gap
-    // height.value goes from 0 (closed) to negative (open, e.g. -300)
-    // This smoothly scales with keyboard height
-    const offset = -keyboardAnimatedHeight.value * 0.001;
+
+    // offset realtime 0..15 yang selalu jadi 15 saat mencapai maxOpenAmt sesi ini
+    const offset = interpolate(
+      openAmt,
+      [0, maxOpenAmt.value],
+      [0, 15],
+      Extrapolation.CLAMP
+    );
+
     return {
-      transform: [{ translateY: keyboardAnimatedHeight.value + offset }],
+      transform: [{ translateY: h + offset }],
     };
   });
+
   
   // Animated paddingBottom for content area (welcome screen only)
   const contentPaddingAnimatedStyle = useAnimatedStyle(() => {
@@ -377,9 +409,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       return { paddingBottom: 85 };
     }
     // Convert negative keyboard height to positive padding
-    const paddingValue = -keyboardAnimatedHeight.value;
+    const paddingValue = -keyboardAnimatedHeight.value * 0.9;
     return {
-      paddingBottom: paddingValue > 0 ? paddingValue + 75 : 85,
+      paddingBottom: paddingValue > 0 ? paddingValue + 85 : 85,
     };
   });
   
@@ -397,7 +429,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     // keyboardAnimatedHeight.value is negative when keyboard open (e.g. -300)
     // Use full keyboard height for transform - footer padding will be reduced accordingly
     return {
-      transform: [{ translateY: keyboardAnimatedHeight.value }],
+      transform: [{ translateY: keyboardAnimatedHeight.value * 0.95 }],
     };
   // Depend on JS state so the worklet re-runs when the gate changes.
   }, [sidebarOpen]);

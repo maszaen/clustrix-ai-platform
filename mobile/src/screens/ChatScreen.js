@@ -356,23 +356,31 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   // Smooth keyboard animation for INPUT ONLY using react-native-keyboard-controller
   const { height: keyboardAnimatedHeight } = useReanimatedKeyboardAnimation();
   
-  // Threshold-based offset approach:
+  // PERFORMANCE OPTIMIZED - Threshold-based offset approach:
   // - Track peak keyboard height for reference
   // - When keyboard is above SNAP_THRESHOLD (40%) of peak, offset = 15
   // - When keyboard is below threshold (opening/closing), animate smoothly
-  // - This makes resize completely irrelevant for offset (always 15 when open)
+  // - Debounce: skip updates if change < 2 pixels (reduces worklet calls)
   const peakOpenAmt = useSharedValue(1); // Minimum 1 to prevent divide-by-zero
+  const prevOpenAmt = useSharedValue(0); // For debounce tracking
   const SNAP_THRESHOLD = 0.4; // 40% of peak = considered "open"
+  const DEBOUNCE_THRESHOLD = 2; // Skip updates smaller than 2 pixels
 
   useAnimatedReaction(
     () => keyboardAnimatedHeight.value,
     (h) => {
       'worklet';
-      const openAmt = -h; // Convert negative to positive
-      const isClosed = openAmt < 1;
-
-      if (isClosed) {
-        // Full reset when keyboard closes
+      const openAmt = -h;
+      
+      // Debounce: skip if change is too small (reduces CPU on low-end devices)
+      const delta = Math.abs(openAmt - prevOpenAmt.value);
+      if (delta < DEBOUNCE_THRESHOLD && openAmt > 1 && prevOpenAmt.value > 1) {
+        return;
+      }
+      prevOpenAmt.value = openAmt;
+      
+      // Reset when closed
+      if (openAmt < 1) {
         peakOpenAmt.value = 1;
         return;
       }
@@ -386,29 +394,26 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
 
   const inputAnimatedStyle = useAnimatedStyle(() => {
     'worklet';
-    if (sidebarOpen) return { transform: [{ translateY: 0 }] };
-
     const h = keyboardAnimatedHeight.value;
     const openAmt = -h;
+    
+    // Early exit for closed keyboard or sidebar open - single expression
+    if (openAmt < 1 || sidebarOpen) {
+      return { transform: [{ translateY: 0 }] };
+    }
 
-    // Keyboard closed: no transform
-    if (openAmt < 1) return { transform: [{ translateY: 0 }] };
-
-    // Threshold = 40% of peak
-    // If above threshold: keyboard is "open" → offset = 15
-    // If below threshold: keyboard is "animating" → smooth interpolation
+    // PERFORMANCE: Use interpolate with CLAMP instead of branching
+    // Threshold = 40% of peak, interpolate from 0 to threshold → 0 to 15
     const threshold = peakOpenAmt.value * SNAP_THRESHOLD;
     
-    let offset;
-    if (openAmt >= threshold) {
-      // Keyboard is clearly open (above 40% of peak) - always 15
-      // This handles resize: even if keyboard shrinks, it stays above 40%
-      offset = 15;
-    } else {
-      // Opening/closing animation (0-40% of peak)
-      // Interpolate: 0 at openAmt=0, 15 at openAmt=threshold
-      offset = (openAmt / threshold) * 15;
-    }
+    // interpolate with CLAMP: clamps output to [0, 15] automatically
+    // When openAmt >= threshold, output is clamped to 15
+    const offset = interpolate(
+      openAmt,
+      [0, threshold],
+      [0, 15],
+      Extrapolation.CLAMP
+    );
 
     return {
       transform: [{ translateY: h + offset }],
@@ -2199,6 +2204,7 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
       )}
       
       {/* Keyboard-animated Input Container */}
+      {/* Note: Cannot use renderToHardwareTextureAndroid here because it clips the gradient overlay */}
       <ReanimatedModule.View style={[styles.inputContainer, inputAnimatedStyle]}>
         <View style={styles.inputContainer2}>
           <ChatInput

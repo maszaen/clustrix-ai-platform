@@ -750,16 +750,9 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
     const isWelcomeToSession = !wasSession && currentSession?.id;
     const isSessionToWelcome = wasSession && (currentSession?.id === undefined || currentSession?.id === null);
 
-    // BUG FIX #1: Clear streaming state when navigating AWAY from a session
-    // This prevents streaming content from showing on welcome screen or other sessions
-    if (isSessionToSession || isSessionToWelcome) {
-      setStreamingContent('');
-      setThinkingContent('');
-      setStreamingMessageId(null);
-      setStreamingMessageIndex(null);
-      setToolStatus(null);
-      setIsWaitingForIteration(false);
-    }
+    // NOTE: Streaming state (streamingContent, etc.) is NOT cleared on session switch.
+    // The per-session rendering checks (isStreamingThisSession) handle visibility.
+    // State persists so user can navigate back to streaming session and see content.
 
     // BUG FIX #3: Reset list height measurements on ANY session change
     // This ensures keyboard transform gate recalculates correctly for new session

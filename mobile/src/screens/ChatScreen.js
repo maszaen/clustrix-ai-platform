@@ -355,46 +355,60 @@ const ChatScreen = memo(function ChatScreen({ topInset = 0, sidebarOpen = false,
   
   // Smooth keyboard animation for INPUT ONLY using react-native-keyboard-controller
   const { height: keyboardAnimatedHeight } = useReanimatedKeyboardAnimation();
-  const maxOpenAmt = useSharedValue(1); // biar ga divide by 0
+  
+  // Threshold-based offset approach:
+  // - Track peak keyboard height for reference
+  // - When keyboard is above SNAP_THRESHOLD (40%) of peak, offset = 15
+  // - When keyboard is below threshold (opening/closing), animate smoothly
+  // - This makes resize completely irrelevant for offset (always 15 when open)
+  const peakOpenAmt = useSharedValue(1); // Minimum 1 to prevent divide-by-zero
+  const SNAP_THRESHOLD = 0.4; // 40% of peak = considered "open"
 
   useAnimatedReaction(
     () => keyboardAnimatedHeight.value,
-    (h, prev) => {
-      const openAmt = -h;          // 0..besar
-      const isClosed = openAmt < 1; // threshold kecil anti noise
+    (h) => {
+      'worklet';
+      const openAmt = -h; // Convert negative to positive
+      const isClosed = openAmt < 1;
 
       if (isClosed) {
-        // reset ketika keyboard beneran nutup
-        maxOpenAmt.value = 1;
+        // Full reset when keyboard closes
+        peakOpenAmt.value = 1;
         return;
       }
 
-      // update maksimum selama sesi keyboard open
-      if (openAmt > maxOpenAmt.value) {
-        maxOpenAmt.value = openAmt;
+      // Track peak for threshold calculation
+      if (openAmt > peakOpenAmt.value) {
+        peakOpenAmt.value = openAmt;
       }
     }
   );
 
   const inputAnimatedStyle = useAnimatedStyle(() => {
+    'worklet';
     if (sidebarOpen) return { transform: [{ translateY: 0 }] };
 
     const h = keyboardAnimatedHeight.value;
     const openAmt = -h;
 
-    const isClosed = openAmt < 1;
-    if (isClosed) {
-      // pastikan collapsed selalu 0
-      return { transform: [{ translateY: 0 }] };
-    }
+    // Keyboard closed: no transform
+    if (openAmt < 1) return { transform: [{ translateY: 0 }] };
 
-    // offset realtime 0..15 yang selalu jadi 15 saat mencapai maxOpenAmt sesi ini
-    const offset = interpolate(
-      openAmt,
-      [0, maxOpenAmt.value],
-      [0, 15],
-      Extrapolation.CLAMP
-    );
+    // Threshold = 40% of peak
+    // If above threshold: keyboard is "open" → offset = 15
+    // If below threshold: keyboard is "animating" → smooth interpolation
+    const threshold = peakOpenAmt.value * SNAP_THRESHOLD;
+    
+    let offset;
+    if (openAmt >= threshold) {
+      // Keyboard is clearly open (above 40% of peak) - always 15
+      // This handles resize: even if keyboard shrinks, it stays above 40%
+      offset = 15;
+    } else {
+      // Opening/closing animation (0-40% of peak)
+      // Interpolate: 0 at openAmt=0, 15 at openAmt=threshold
+      offset = (openAmt / threshold) * 15;
+    }
 
     return {
       transform: [{ translateY: h + offset }],

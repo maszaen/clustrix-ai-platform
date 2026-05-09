@@ -7,7 +7,7 @@ import * as SecureStore from 'expo-secure-store';
 
 // Google OAuth configuration
 const GOOGLE_CONFIG = {
-  webClientId: '50765975600-07gl5g8f1gai0rt22n2jpp03rjsbmnm0.apps.googleusercontent.com',
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
   scopes: ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
 };
 
@@ -158,9 +158,9 @@ export async function getValidAccessToken() {
     
     // Configure if not already
     GoogleSignin.configure({
-      webClientId: '50765975600-07gl5g8f1gai0rt22n2jpp03rjsbmnm0.apps.googleusercontent.com',
+      webClientId: GOOGLE_CONFIG.webClientId,
       offlineAccess: true,
-      scopes: ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
+      scopes: GOOGLE_CONFIG.scopes,
     });
     
     // Check if signed in
@@ -191,9 +191,9 @@ export async function getValidDriveToken() {
     
     // Configure if not already
     GoogleSignin.configure({
-      webClientId: '50765975600-07gl5g8f1gai0rt22n2jpp03rjsbmnm0.apps.googleusercontent.com',
+      webClientId: GOOGLE_CONFIG.webClientId,
       offlineAccess: true,
-      scopes: ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'],
+      scopes: GOOGLE_CONFIG.scopes,
     });
     
     // Check if signed in

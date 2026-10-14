@@ -101,6 +101,7 @@ class PowerShellSession {
     this.process.stdout.on('data', (chunk) => this._handleStdout(chunk));
     this.process.stderr.on('data', (chunk) => this._handleStderr(chunk));
     this.process.on('error', (error) => {
+      this.isDisposed = true;
       console.log('PowerShell process error', {
         error: error?.message || error
       });
@@ -148,8 +149,10 @@ class PowerShellSession {
     const beforeSentinel = this.stdoutBuffer.slice(0, sentinelIndex);
     const afterSentinel = this.stdoutBuffer.slice(sentinelIndex + this.sentinel.length);
 
-    const exitMatch = afterSentinel.match(/EXIT_CODE:(-?\d+)/);
-    const exitCode = exitMatch ? parseInt(exitMatch[1], 10) : 0;
+    // Sentinel and status can arrive in separate pipe chunks. Never invent a successful exit.
+    const exitMatch = afterSentinel.match(/EXIT_CODE:(-?\d+)\r?\n/);
+    if (!exitMatch) return;
+    const exitCode = parseInt(exitMatch[1], 10);
 
     const cleanedStdout = beforeSentinel.replace(/\r?\n$/, '');
     const stderr = this.stderrBuffer.trimEnd();

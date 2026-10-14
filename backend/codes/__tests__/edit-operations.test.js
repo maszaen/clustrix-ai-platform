@@ -78,7 +78,7 @@ gamma
 
   test('inserts new content before a line', () => {
     const command = `
-<set file="${sourceFile}" range={5}>
+<set file="${sourceFile}" add={5}>
 <![CDATA[
 insert-a
 insert-b
@@ -133,7 +133,8 @@ unique-line-for-diff
 <![CDATA[new content]]>
 </set>`;
 
-    expect(() => applySetOperations(command, { workspacePath: workspace })).toThrow('exceeds file length');
+    expect(() => applySetOperations(command, { workspacePath: workspace })).toThrow('outside of file bounds');
+    expect(readLines(path.join(workspace, sourceFile))).toHaveLength(50);
   });
 
   test('rejects ranges where start is greater than end', () => {

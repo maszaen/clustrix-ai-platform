@@ -1,3 +1,5 @@
+> **Runtime update (2026-10-14):** This document describes the retained legacy implementation. The default Codes path now uses `runtime/`. Read [the audit](../../docs/CODING-AGENT-AUDIT.md) and [runtime guide](../../docs/CODING-AGENT-RUNTIME.md) for current tools, protocols, skills, configuration and rollback.
+
 # Codes Agent Editing Pipeline
 
 This document describes the new `<set>`-based editing system used by the Codes agent.

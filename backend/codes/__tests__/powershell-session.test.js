@@ -1,141 +1,90 @@
-const { PowerShellSession } = require('../powershell-session');
+/** Legacy rollback terminal: deterministic stream fixtures, not a dependency on a local PowerShell install. */
+const { EventEmitter } = require('events');
+const { PassThrough } = require('stream');
+jest.mock('child_process', () => ({ spawn: jest.fn() }));
+const { spawn } = require('child_process');
+const { PowerShellSession, detectExecutable } = require('../powershell-session');
 
-describe('PowerShell Session - Command Execution', () => {
-  let session;
+let child;
+let session;
+beforeEach(() => {
+  jest.spyOn(console, 'log').mockImplementation(() => {});
+  child = new EventEmitter();
+  child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough();
+  child.kill = jest.fn();
+  spawn.mockReturnValue(child);
+  session = new PowerShellSession({ workspacePath: process.cwd(), log: jest.fn() });
+});
+afterEach(() => { session.dispose(); jest.restoreAllMocks(); jest.useRealTimers(); });
 
-  beforeEach(() => {
-    const mockLog = jest.fn();
-    session = new PowerShellSession({
-      workspacePath: '/test/workspace',
-      log: mockLog,
-    });
-  });
+function complete(output = 'hello', exitCode = 0) {
+  child.stdout.write(`${output}\n${session.sentinel}\nEXIT_CODE:${exitCode}\n`);
+}
 
-  afterEach(() => {
-    try {
-      session?.dispose();
-    } catch (e) {
-      // Ignore disposal errors in tests
-    }
-  });
-
-  test('should initialize session with workspace path', () => {
-    expect(session).toBeDefined();
-    expect(session.isDisposed).toBe(false);
-  });
-
-  test('should execute simple commands', async () => {
-    const result = await session.run('Get-Location');
-    
-    expect(result).toHaveProperty('stdout');
-    expect(result).toHaveProperty('stderr');
-    expect(result).toHaveProperty('exitCode');
-  });
-
-  test('should handle command output', async () => {
-    const result = await session.run('Write-Host "test output"');
-    
-    expect(result.exitCode).toBeGreaterThanOrEqual(0);
-  });
-
-  test('should handle errors', async () => {
-    // This test verifies error handling
-    const result = await session.run('Get-Item "non-existent-file.txt" 2>&1');
-    
-    expect(result).toHaveProperty('exitCode');
-  });
-
-  test('should execute multi-line commands', async () => {
-    const multiLineCmd = `
-$test = 5
-$result = $test * 2
-Write-Host $result
-    `;
-    
-    const result = await session.run(multiLineCmd);
-    expect(result).toHaveProperty('stdout');
-  });
-
-  test('should handle base64 encoded commands', async () => {
-    // Test that base64 encoding works for special chars
-    const cmd = 'Write-Host "Hello World"';
-    const result = await session.run(cmd);
-    
-    expect(result.exitCode).toBeGreaterThanOrEqual(0);
-  });
-
-  test('should dispose session properly', () => {
-    session.dispose();
-    expect(session.isDisposed).toBe(true);
-  });
-
-  test('should not execute commands after disposal', async () => {
-    session.dispose();
-    
-    expect(async () => {
-      await session.run('Get-Location');
-    }).rejects.toThrow();
-  });
+test('spawns in the requested workspace and loads helper definitions', () => {
+  expect(spawn).toHaveBeenCalledWith(detectExecutable(), expect.any(Array), expect.objectContaining({ cwd: process.cwd() }));
+  expect(child.stdin.read().toString()).toContain('function');
 });
 
-describe('PowerShell Session - Error Handling', () => {
-  let session;
-
-  beforeEach(() => {
-    const mockLog = jest.fn();
-    session = new PowerShellSession({
-      workspacePath: '/test/workspace',
-      log: mockLog,
-    });
-  });
-
-  afterEach(() => {
-    try {
-      session?.dispose();
-    } catch (e) {
-      // Ignore
-    }
-  });
-
-  test('should capture stderr', async () => {
-    const result = await session.run('Write-Error "test error"');
-    
-    expect(result).toHaveProperty('stderr');
-  });
-
-  test('should set correct exit code on error', async () => {
-    const result = await session.run('exit 1');
-    
-    // Note: actual exit code depends on PowerShell behavior
-    expect(result).toHaveProperty('exitCode');
-  });
+test('captures stdout, stderr and nonzero exit status', async () => {
+  const pending = session.run('Get-Location');
+  child.stderr.write('problem\n');
+  complete('output', 7);
+  await expect(pending).resolves.toEqual({ stdout: 'output', stderr: 'problem', exitCode: 7 });
 });
 
-describe('PowerShell Session - Workspace Context', () => {
-  test('should execute in specified workspace', async () => {
-    const mockLog = jest.fn();
-    const session = new PowerShellSession({
-      workspacePath: '/test/workspace',
-      log: mockLog,
-    });
+test('waits for complete exit-code line when sentinel and status arrive separately', async () => {
+  const pending = session.run('Get-Location');
+  const sentinel = session.sentinel;
+  child.stdout.write(`hello\n${sentinel}\n`);
+  expect(session.currentCommand).not.toBeNull();
+  child.stdout.write('EXIT_CODE:1');
+  expect(session.currentCommand).not.toBeNull();
+  child.stdout.write('2\n');
+  await expect(pending).resolves.toMatchObject({ exitCode: 12, stdout: 'hello' });
+});
 
-    const result = await session.run('Get-Location');
-    
-    expect(result.stdout).toBeDefined();
-    session.dispose();
-  });
+test('rejects empty, concurrent and disposed commands', async () => {
+  await expect(session.run('')).rejects.toThrow('non-empty');
+  const pending = session.run('pwd');
+  await expect(session.run('pwd')).rejects.toThrow('busy');
+  const rejected = expect(pending).rejects.toThrow('disposed');
+  session.dispose();
+  await rejected;
+  await expect(session.run('pwd')).rejects.toThrow('disposed');
+  expect(child.kill).toHaveBeenCalledTimes(1);
+});
 
-  test('should handle workspace path changes', async () => {
-    const mockLog = jest.fn();
-    const session = new PowerShellSession({
-      workspacePath: '/test/workspace',
-      log: mockLog,
-    });
+test('encodes special characters without shell interpolation', async () => {
+  child.stdin.read();
+  const command = 'Write-Host "hello; world"';
+  const pending = session.run(command);
+  expect(child.stdin.read().toString()).toContain(Buffer.from(command).toString('base64'));
+  complete();
+  await pending;
+});
 
-    // Commands should run in context
-    const result = await session.run('pwd');
-    expect(result).toHaveProperty('stdout');
+test('propagates spawn errors and marks unusable terminal disposed', async () => {
+  const pending = session.run('pwd');
+  const rejected = expect(pending).rejects.toThrow('spawn failed');
+  child.emit('error', new Error('spawn failed'));
+  await rejected;
+  expect(session.isDisposed).toBe(true);
+});
 
-    session.dispose();
-  });
+test('rejects a command if the shell exits before completion', async () => {
+  const pending = session.run('pwd');
+  const rejected = expect(pending).rejects.toThrow('exited before');
+  child.emit('exit', 1, null);
+  await rejected;
+  expect(session.isDisposed).toBe(true);
+});
+
+test('legacy timeout settles the pending command', async () => {
+  jest.useFakeTimers();
+  const pending = session.run('pwd', { timeout: 1000 });
+  const rejected = expect(pending).rejects.toThrow('timed out');
+  jest.advanceTimersByTime(1001);
+  await rejected;
+  expect(session.currentCommand).toBeNull();
 });

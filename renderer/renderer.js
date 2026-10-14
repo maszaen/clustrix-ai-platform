@@ -14015,7 +14015,7 @@ async function startStream(
       });
 
       // Use real controller from runCodeChatStream
-      const controller = resultPromise?.controller || { cancel() {} };
+      const controller = resultPromise?.controller || { cancel: cancelActiveCodeStream };
 
       streamManager.startStream(streamId, {
         controller,

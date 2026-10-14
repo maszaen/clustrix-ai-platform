@@ -1,3 +1,4 @@
+const runtime = require('./runtime/agent');
 const https = require('https');
 const { URL } = require('url');
 const fs = require('fs');
@@ -290,6 +291,7 @@ function waitForUserConfirmation(sessionId, iteration) {
 }
 
 function resolveUserConfirmation(sessionId, iteration, allowed) {
+  if (runtime.resolveApproval(sessionId, iteration, allowed)) return true;
   const key = `${sessionId}-${iteration}`;
   const entry = confirmationPromises.get(key);
 
@@ -2163,10 +2165,22 @@ async function processCodeRequest({
   const codeRecord = deps.getCodeById?.(codeId);
   const workspacePath = codeRecord?.workspace_path || codeRecord?.workspacePath || require('os').homedir();
   const instruction = codeRecord?.instruction || '';
+
+  // Modern runtime is the default for every provider. Legacy is an explicit rollback only.
+  // Settings are stored locally, not read from untrusted project files.
+  const agentSettings = db?.getSetting?.('codes.agent') || {};
+  if (agentSettings.runtime !== 'legacy') {
+    return runtime.processRequest({
+      sessionId, userPrompt, provider, model, baseUrl, apiKey,
+      workspacePath: codeRecord?.workspace_path || codeRecord?.workspacePath,
+      instruction, onChunk, shouldCancel, db,
+      options: { ...agentSettings, ...(agentSettings.providers?.[provider] || {}) },
+    });
+  }
   
   // Route to Claude native agent
   if (providerLower === 'anthropic' || modelLower.includes('claude')) {
-    console.log('[CODE-AGENT] Routing to Claude native agent');
+    log('CODES', 1, 'processCodeRequest', 'Routing to Claude native agent');
     
     return processClaudeCodeRequest({
       sessionId,
@@ -2186,7 +2200,7 @@ async function processCodeRequest({
   if (providerLower === 'google' ||
       providerLower === 'gemini' ||
       modelLower.includes('gemini')) {
-    console.log('[CODE-AGENT] Routing to Gemini native agent');
+    log('CODES', 1, 'processCodeRequest', 'Routing to Gemini native agent');
     return processGeminiCodeRequest({
       sessionId,
       userPrompt,
@@ -2207,7 +2221,7 @@ async function processCodeRequest({
       modelLower.includes('gpt') || 
       modelLower.includes('glm') || 
       modelLower.includes('deepseek')) {
-    console.log('[CODE-AGENT] Routing to OpenAI-style agent');
+    log('CODES', 1, 'processCodeRequest', 'Routing to OpenAI-style agent');
     return processOpenAICodeRequest({
       sessionId,
       userPrompt,
@@ -2223,7 +2237,7 @@ async function processCodeRequest({
   }
   
   // Fallback to legacy manual memory system
-  console.log('[CODE-AGENT] Using legacy manual memory system (fallback)');
+  log('CODES', 1, 'processCodeRequest', 'Using legacy manual memory system (fallback)');
 
   const state = getSessionState(sessionId, codeId);
   if (codeRecord) {
@@ -2743,6 +2757,7 @@ function initializeCodeAgent(options = {}) {
 }
 
 function disposeAllCodeSessions() {
+  runtime.disposeSessions();
   log('CODES', 1, 'disposeAllCodeSessions', 'Disposing all PowerShell sessions', {
     sessionCount: sessionStates.size,
   });
@@ -2766,6 +2781,7 @@ function disposeAllCodeSessions() {
 }
 
 function cancelCodeSession(sessionId) {
+  if (runtime.cancelSession(sessionId)) return true;
   log('CODES', 1, 'cancelCodeSession', 'Cancelling code session', { sessionId });
 
   const state = sessionStates.get(sessionId);

@@ -3131,6 +3131,7 @@ ipcMain.on('codes:stream-cancel', (_event, reqId) => {
 
 ipcMain.handle('codes:set-interrupt', async (_event, sessionId) => {
   try {
+    cancelCodeSession(sessionId); // Abort model I/O, pending approval and owned processes immediately.
     // Find and cancel the active codes stream for this session
     let cancelled = false;
     for (const [reqId, controller] of codeStreamControllers.entries()) {

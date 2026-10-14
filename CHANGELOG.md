@@ -1,3 +1,17 @@
+# Unreleased — 2026-10-14: Coding runtime modernization
+
+- Default Codes execution now uses a shared native-tool runtime across OpenAI-compatible gateways, Anthropic, Gemini and OpenAI Responses.
+- Added revision-guarded exact edits, bounded native file tools, explicit process lifecycle, scoped repository instructions and on-demand project skills.
+- Added abortable model/search/image requests, action-scoped approval, usage accounting, context budgets and durable factual checkpoints.
+- Fixed stored `ai` history normalization, real cancellation wiring, renderer promise settlement and legacy PowerShell split-status handling.
+- Preserved existing UI layout, command-card/approval formats and database schema. Legacy runtime remains an explicit rollback option.
+- Added offline protocol integration and regression tests. See [audit](docs/CODING-AGENT-AUDIT.md) and [runtime guide](docs/CODING-AGENT-RUNTIME.md).
+- Hardened cross-session cancellation, Windows termination failure reporting, path aliases, malformed tool input and context eviction.
+- Verified real SQLite persistence/reopen via `npm run test:agent:sqlite`; full offline suite: 108 passing tests.
+- Release validation pending: real Electron/Windows/macOS, Electron-native ABI and live providers. No performance/quality parity claim.
+
+---
+
 # Changelog v35.3.0: Code Agent Integration & UI Enhancements
 
 ## Features
